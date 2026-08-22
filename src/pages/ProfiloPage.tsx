@@ -1,0 +1,333 @@
+import { useMemo, useState } from 'react';
+import {
+  Save, Check, MapPin, Send, Mail, Search, GraduationCap, School, BookOpen, Baby, Users, Moon, Briefcase, Wrench, Plus,
+} from 'lucide-react';
+import { useApp } from '@/contexts/AppContext';
+import { ordiniScuola, materie, type OrdineScuola } from '@/data/ordiniMaterie';
+import { classiConcorso } from '@/data/classiConcorso';
+import { province } from '@/data/province';
+import { Pill } from '@/components/Pill';
+
+const ordineIcons: Record<OrdineScuola, React.ReactNode> = {
+  infanzia: <Baby className="h-5 w-5" />,
+  primaria: <School className="h-5 w-5" />,
+  secondaria1: <BookOpen className="h-5 w-5" />,
+  secondaria2: <GraduationCap className="h-5 w-5" />,
+  cpia: <Users className="h-5 w-5" />,
+  serali: <Moon className="h-5 w-5" />,
+  pon: <Briefcase className="h-5 w-5" />,
+  ata: <Wrench className="h-5 w-5" />,
+};
+
+export function ProfiloPage() {
+  const { preferenze, setPreferenze } = useApp();
+
+  const [ordini, setOrdini] = useState<OrdineScuola[]>(preferenze.ordini);
+  const [classiCodici, setClassiCodici] = useState<string[]>(preferenze.classiCodici);
+  const [materieId, setMaterieId] = useState<string[]>(preferenze.materieId);
+  const [materieCustom, setMaterieCustom] = useState<string[]>(preferenze.materieCustom);
+  const [provinceCodici, setProvinceCodici] = useState<string[]>(preferenze.provinceCodici);
+  const [telegramUsername, setTelegramUsername] = useState(preferenze.telegramUsername);
+  const [emailNotifica, setEmailNotifica] = useState(preferenze.emailNotifica);
+
+  const [queryClasse, setQueryClasse] = useState('');
+  const [materiaFilter, setMateriaFilter] = useState('');
+  const [customMateriaInput, setCustomMateriaInput] = useState('');
+  const [salvato, setSalvato] = useState(false);
+
+  const provinceSorted = useMemo(() => [...province].sort((a, b) => a.nome.localeCompare(b.nome)), []);
+
+  const classiFiltrate = useMemo(() => {
+    let list = classiConcorso;
+    if (materiaFilter) list = list.filter((c) => c.materie.includes(materiaFilter));
+    if (queryClasse.trim()) {
+      const q = queryClasse.toLowerCase();
+      list = list.filter(
+        (c) => c.codice.toLowerCase().includes(q) || c.denominazione.toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [queryClasse, materiaFilter]);
+
+  const toggleOrdine = (id: OrdineScuola) =>
+    setOrdini((prev) => (prev.includes(id) ? prev.filter((o) => o !== id) : [...prev, id]));
+
+  const toggleClasse = (codice: string) =>
+    setClassiCodici((prev) => (prev.includes(codice) ? prev.filter((c) => c !== codice) : [...prev, codice]));
+
+  const toggleMateria = (id: string) =>
+    setMaterieId((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
+
+  const addCustomMateria = () => {
+    const val = customMateriaInput.trim();
+    if (!val) return;
+    if (!materieCustom.some((m) => m.toLowerCase() === val.toLowerCase())) {
+      setMaterieCustom((prev) => [...prev, val]);
+    }
+    setCustomMateriaInput('');
+  };
+
+  const removeCustomMateria = (m: string) =>
+    setMaterieCustom((prev) => prev.filter((x) => x !== m));
+
+  const toggleProvincia = (codice: string) =>
+    setProvinceCodici((prev) => (prev.includes(codice) ? prev.filter((c) => c !== codice) : [...prev, codice]));
+
+  const handleSalva = () => {
+    setPreferenze({
+      ordini,
+      classiCodici,
+      materieId,
+      materieCustom,
+      provinceCodici,
+      telegramUsername: telegramUsername.trim(),
+      emailNotifica: emailNotifica.trim(),
+    });
+    setSalvato(true);
+    setTimeout(() => setSalvato(false), 3000);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-primary-800">Il mio profilo</h2>
+        <button
+          onClick={handleSalva}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
+        >
+          {salvato ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+          {salvato ? 'Salvato' : 'Salva modifiche'}
+        </button>
+      </div>
+
+      {/* Ordini */}
+      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
+        <h3 className="text-sm font-bold text-primary-800">Ordini e tipologie</h3>
+        <p className="mt-1 text-xs text-primary-500">Puoi selezionare più opzioni.</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {ordiniScuola.map((o) => {
+            const selected = ordini.includes(o.id);
+            return (
+              <button
+                key={o.id}
+                onClick={() => toggleOrdine(o.id)}
+                className={`flex items-center gap-2 rounded-xl border p-3 text-left text-sm transition ${
+                  selected
+                    ? 'border-primary-500 bg-primary-50'
+                    : 'border-primary-200 hover:border-primary-300'
+                }`}
+              >
+                <span className="text-primary-600">{ordineIcons[o.id]}</span>
+                <span className="flex-1 font-medium text-primary-800">{o.nome}</span>
+                {selected && <Check className="h-4 w-4 text-primary-600" />}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Classi */}
+      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
+        <h3 className="text-sm font-bold text-primary-800">Classi di concorso</h3>
+
+        {classiCodici.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {classiCodici.map((c) => (
+              <Pill key={c} label={c} onRemove={() => toggleClasse(c)} color="accent" />
+            ))}
+          </div>
+        )}
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <select
+            value={materiaFilter}
+            onChange={(e) => setMateriaFilter(e.target.value)}
+            className="input"
+          >
+            <option value="">Filtra per materia</option>
+            {materie.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.nome}
+              </option>
+            ))}
+          </select>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary-400" />
+            <input
+              type="text"
+              value={queryClasse}
+              onChange={(e) => setQueryClasse(e.target.value)}
+              placeholder="Cerca classe (es. A-12)"
+              className="input pl-10"
+            />
+          </div>
+        </div>
+
+        <div className="mt-3 max-h-56 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-2">
+          {classiFiltrate.map((c) => {
+            const selected = classiCodici.includes(c.codice);
+            return (
+              <button
+                key={c.codice}
+                onClick={() => toggleClasse(c.codice)}
+                className={`flex w-full items-center justify-between gap-2 rounded-lg p-2.5 text-left text-sm transition ${
+                  selected ? 'bg-accent-50 text-accent-800' : 'hover:bg-primary-50 text-primary-700'
+                }`}
+              >
+                <span>
+                  <strong>{c.codice}</strong> – {c.denominazione}
+                </span>
+                {selected && <Check className="h-4 w-4 text-accent-600" />}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Materie */}
+      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
+        <h3 className="text-sm font-bold text-primary-800">Materie e competenze</h3>
+        <p className="mt-1 text-xs text-primary-500">
+          Seleziona le materie in cui sei competente, anche non collegate a una classe specifica.
+        </p>
+
+        {materieId.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {materieId.map((id) => (
+              <Pill
+                key={id}
+                label={materie.find((m) => m.id === id)?.nome ?? id}
+                onRemove={() => toggleMateria(id)}
+                color="primary"
+              />
+            ))}
+          </div>
+        )}
+
+        <div className="mt-3 max-h-44 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-2">
+          {materie.map((m) => {
+            const selected = materieId.includes(m.id);
+            return (
+              <button
+                key={m.id}
+                onClick={() => toggleMateria(m.id)}
+                className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
+                  selected ? 'bg-primary-50 text-primary-800' : 'text-primary-700 hover:bg-primary-50'
+                }`}
+              >
+                <span>{m.nome}</span>
+                {selected && <Check className="h-4 w-4 text-primary-600" />}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Custom materie */}
+        <h4 className="mt-5 text-sm font-bold text-primary-700">Materie personalizzate</h4>
+        {materieCustom.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {materieCustom.map((m) => (
+              <Pill key={m} label={m} onRemove={() => removeCustomMateria(m)} color="secondary" />
+            ))}
+          </div>
+        )}
+        <div className="mt-3 flex gap-2">
+          <input
+            type="text"
+            value={customMateriaInput}
+            onChange={(e) => setCustomMateriaInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addCustomMateria();
+              }
+            }}
+            placeholder="Es. Robotica educativa, Dizione…"
+            className="input"
+          />
+          <button
+            onClick={addCustomMateria}
+            disabled={!customMateriaInput.trim()}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600 disabled:opacity-50"
+          >
+            <Plus className="h-4 w-4" />
+            Aggiungi
+          </button>
+        </div>
+      </section>
+
+      {/* Province */}
+      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
+        <h3 className="text-sm font-bold text-primary-800">Province di interesse</h3>
+
+        {provinceCodici.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {provinceCodici.map((c) => (
+              <Pill
+                key={c}
+                label={province.find((p) => p.codice === c)?.nome ?? c}
+                onRemove={() => toggleProvincia(c)}
+                color="primary"
+              />
+            ))}
+          </div>
+        )}
+
+        <div className="mt-4 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-2">
+          {provinceSorted.map((p) => {
+            const selected = provinceCodici.includes(p.codice);
+            return (
+              <label
+                key={p.codice}
+                className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition hover:bg-primary-50 ${
+                  selected ? 'bg-primary-50' : ''
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={() => toggleProvincia(p.codice)}
+                  className="h-4 w-4 rounded border-primary-300 text-primary-500"
+                />
+                <MapPin className="h-4 w-4 text-primary-400" />
+                <span className="text-sm text-primary-800">{p.nome}</span>
+                <span className="ml-auto text-xs text-primary-400">{p.codice}</span>
+              </label>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Canali */}
+      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
+        <h3 className="text-sm font-bold text-primary-800">Canali di notifica</h3>
+        <div className="mt-4 space-y-4">
+          <label className="block">
+            <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-primary-700">
+              <Send className="h-4 w-4 text-primary-500" />
+              Username Telegram
+            </span>
+            <input
+              type="text"
+              value={telegramUsername}
+              onChange={(e) => setTelegramUsername(e.target.value)}
+              className="input"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-primary-700">
+              <Mail className="h-4 w-4 text-primary-500" />
+              Email (backup)
+            </span>
+            <input
+              type="email"
+              value={emailNotifica}
+              onChange={(e) => setEmailNotifica(e.target.value)}
+              className="input"
+            />
+          </label>
+        </div>
+      </section>
+    </div>
+  );
+}
