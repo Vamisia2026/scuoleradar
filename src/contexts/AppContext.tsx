@@ -350,6 +350,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const client = supabase;
 
     const { data: subscription } = client.auth.onAuthStateChange((event, session) => {
+      console.log('[AUTH EVENT]', event, session);
       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
         const meta = (session.user.user_metadata ?? {}) as Record<string, unknown>;
         const fullName = String(meta.full_name ?? meta.name ?? '').trim();

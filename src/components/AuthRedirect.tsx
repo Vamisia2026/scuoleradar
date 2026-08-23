@@ -15,9 +15,19 @@ export function AuthRedirect() {
 
   useEffect(() => {
     if (!supabase) return;
-    const { data: subscription } = supabase.auth.onAuthStateChange((event) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[AUTH EVENT]', event, session);
+
       if (event === 'SIGNED_IN') {
+        // Naviga UNA SOLA VOLTA per sessione: il flag evita loop di reindirizzamento OAuth.
+        if (sessionStorage.getItem('oauth_done') === 'true') return;
+        sessionStorage.setItem('oauth_done', 'true');
         navigate(preferenze.onboarded ? '/dashboard/radar' : '/onboarding');
+      }
+
+      if (event === 'SIGNED_OUT') {
+        // Ripristina il flag così il prossimo login può navigare di nuovo.
+        sessionStorage.removeItem('oauth_done');
       }
     });
     return () => subscription.subscription.unsubscribe();
