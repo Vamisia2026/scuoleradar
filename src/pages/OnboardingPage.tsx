@@ -23,7 +23,7 @@ const ordineIcons: Record<OrdineScuola, React.ReactNode> = {
 
 export function OnboardingPage() {
   const navigate = useNavigate();
-  const { user, completaOnboarding } = useApp();
+  const { user, completaOnboarding, salvaProfilo } = useApp();
   const [step, setStep] = useState(1);
 
   const [ordini, setOrdini] = useState<OrdineScuola[]>([]);
@@ -96,7 +96,7 @@ export function OnboardingPage() {
   };
 
   const handleFinish = () => {
-    completaOnboarding({
+    const preferenzeFinali = {
       ordini,
       classiCodici,
       materieId,
@@ -104,7 +104,13 @@ export function OnboardingPage() {
       provinceCodici,
       telegramUsername: telegramUsername.trim(),
       emailNotifica: emailNotifica.trim(),
-    });
+      onboarded: true,
+      favoriteSchools: [],
+      ignoredSchools: [],
+    };
+    completaOnboarding(preferenzeFinali);
+    // PASSO 3: persiste province e classi di concorso su Supabase (tabella profiles)
+    void salvaProfilo(preferenzeFinali);
     navigate('/dashboard/radar');
   };
 

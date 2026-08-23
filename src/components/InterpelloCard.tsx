@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, MapPin, GraduationCap, ArrowRight, AlertTriangle, BadgeCheck, BellRing } from 'lucide-react';
+import { Clock, MapPin, GraduationCap, ArrowRight, AlertTriangle, BadgeCheck, BellRing, Star } from 'lucide-react';
 import type { Interpello } from '@/data/interpelli';
 import { Modal } from './Modal';
 import { useApp } from '@/contexts/AppContext';
@@ -14,11 +14,14 @@ function giorniRimanenti(iso: string): number {
 
 export function InterpelloCard({ interpello }: { interpello: Interpello }) {
   const [open, setOpen] = useState(false);
-  const { incrementaNotifica, notificheUsate, abbonato, interpelliNotificati } = useApp();
+  const { incrementaNotifica, notificheUsate, abbonato, interpelliNotificati, preferenze } = useApp();
   const giorni = giorniRimanenti(interpello.dataScadenza);
   const inScadenza = giorni >= 0 && giorni <= 3;
   const classe = classeByCodice(interpello.classeCodice);
   const giaNotificato = interpelliNotificati.includes(interpello.id);
+  const isPreferita = preferenze.favoriteSchools.some(
+    (s) => s && interpello.istituto.toLowerCase().includes(s.toLowerCase()),
+  );
 
   const handleVediDettaglio = () => {
     setOpen(true);
@@ -36,6 +39,12 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
               {interpello.istituto}
             </p>
           </div>
+          {isPreferita && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-accent-500 px-2.5 py-1 text-xs font-semibold text-white shadow-soft">
+              <Star className="h-3.5 w-3.5" />
+              Scuola Preferita
+            </span>
+          )}
           {interpello.compatibilita === 100 && (
             <span className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-2.5 py-1 text-xs font-semibold text-accent-700">
               <BadgeCheck className="h-3.5 w-3.5" />

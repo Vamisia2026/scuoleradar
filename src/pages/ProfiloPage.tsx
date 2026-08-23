@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Save, Check, MapPin, Send, Mail, Search, GraduationCap, School, BookOpen, Baby, Users, Moon, Briefcase, Wrench, Plus,
+  SlidersHorizontal, Star, Ban,
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { ordiniScuola, materie, type OrdineScuola } from '@/data/ordiniMaterie';
@@ -20,7 +21,7 @@ const ordineIcons: Record<OrdineScuola, React.ReactNode> = {
 };
 
 export function ProfiloPage() {
-  const { preferenze, setPreferenze } = useApp();
+  const { preferenze, setPreferenze, salvaProfilo } = useApp();
 
   const [ordini, setOrdini] = useState<OrdineScuola[]>(preferenze.ordini);
   const [classiCodici, setClassiCodici] = useState<string[]>(preferenze.classiCodici);
@@ -29,6 +30,10 @@ export function ProfiloPage() {
   const [provinceCodici, setProvinceCodici] = useState<string[]>(preferenze.provinceCodici);
   const [telegramUsername, setTelegramUsername] = useState(preferenze.telegramUsername);
   const [emailNotifica, setEmailNotifica] = useState(preferenze.emailNotifica);
+  const [favoriteSchools, setFavoriteSchools] = useState<string[]>(preferenze.favoriteSchools);
+  const [ignoredSchools, setIgnoredSchools] = useState<string[]>(preferenze.ignoredSchools);
+  const [favoriteScuolaInput, setFavoriteScuolaInput] = useState('');
+  const [ignoredScuolaInput, setIgnoredScuolaInput] = useState('');
 
   const [queryClasse, setQueryClasse] = useState('');
   const [materiaFilter, setMateriaFilter] = useState('');
@@ -73,8 +78,32 @@ export function ProfiloPage() {
   const toggleProvincia = (codice: string) =>
     setProvinceCodici((prev) => (prev.includes(codice) ? prev.filter((c) => c !== codice) : [...prev, codice]));
 
+  const addFavoriteScuola = () => {
+    const val = favoriteScuolaInput.trim();
+    if (!val) return;
+    if (!favoriteSchools.some((s) => s.toLowerCase() === val.toLowerCase())) {
+      setFavoriteSchools((prev) => [...prev, val]);
+    }
+    setFavoriteScuolaInput('');
+  };
+
+  const removeFavoriteScuola = (s: string) =>
+    setFavoriteSchools((prev) => prev.filter((x) => x !== s));
+
+  const addIgnoredScuola = () => {
+    const val = ignoredScuolaInput.trim();
+    if (!val) return;
+    if (!ignoredSchools.some((s) => s.toLowerCase() === val.toLowerCase())) {
+      setIgnoredSchools((prev) => [...prev, val]);
+    }
+    setIgnoredScuolaInput('');
+  };
+
+  const removeIgnoredScuola = (s: string) =>
+    setIgnoredSchools((prev) => prev.filter((x) => x !== s));
+
   const handleSalva = () => {
-    setPreferenze({
+    const modifiche = {
       ordini,
       classiCodici,
       materieId,
@@ -82,7 +111,12 @@ export function ProfiloPage() {
       provinceCodici,
       telegramUsername: telegramUsername.trim(),
       emailNotifica: emailNotifica.trim(),
-    });
+      favoriteSchools,
+      ignoredSchools,
+    };
+    setPreferenze(modifiche);
+    // PASSO 3: persiste province e classi di concorso su Supabase (tabella profiles)
+    void salvaProfilo({ ...modifiche, onboarded: preferenze.onboarded });
     setSalvato(true);
     setTimeout(() => setSalvato(false), 3000);
   };
@@ -295,6 +329,90 @@ export function ProfiloPage() {
               </label>
             );
           })}
+        </div>
+      </section>
+
+      {/* Filtri Avanzati Scuole */}
+      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal className="h-4 w-4 text-primary-600" />
+          <h3 className="text-sm font-bold text-primary-800">Filtri Avanzati Scuole</h3>
+        </div>
+        <p className="mt-1 text-sm text-primary-500">
+          Le scuole preferite ricevono notifiche prioritarie e un badge dedicato; quelle escluse
+          vengono nascoste dalla dashboard.
+        </p>
+
+        <div className="mt-4 space-y-4">
+          {/* Preferite (whitelist) */}
+          <div className="rounded-xl border border-accent-200 bg-accent-50/50 p-4">
+            <h4 className="flex items-center gap-1.5 text-sm font-semibold text-accent-800">
+              <Star className="h-4 w-4 text-accent-500" />
+              Preferite (Notifiche Prioritarie)
+            </h4>
+            <div className="mt-3 flex gap-2">
+              <input
+                type="text"
+                value={favoriteScuolaInput}
+                onChange={(e) => setFavoriteScuolaInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addFavoriteScuola()}
+                placeholder="Es. Media Jona Asti, ITIS Artom Asti"
+                className="input"
+              />
+              <button
+                onClick={addFavoriteScuola}
+                disabled={!favoriteScuolaInput.trim()}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-accent-600 disabled:opacity-50"
+              >
+                <Plus className="h-4 w-4" />
+                Aggiungi
+              </button>
+            </div>
+            {favoriteSchools.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {favoriteSchools.map((s) => (
+                  <Pill key={s} label={s} onRemove={() => removeFavoriteScuola(s)} color="accent" />
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-primary-400">Nessuna scuola preferita.</p>
+            )}
+          </div>
+
+          {/* Escluse (blacklist) */}
+          <div className="rounded-xl border border-secondary-200 bg-secondary-50/50 p-4">
+            <h4 className="flex items-center gap-1.5 text-sm font-semibold text-secondary-800">
+              <Ban className="h-4 w-4 text-secondary-500" />
+              Escluse (Nascondi Avvisi)
+            </h4>
+            <div className="mt-3 flex gap-2">
+              <input
+                type="text"
+                value={ignoredScuolaInput}
+                onChange={(e) => setIgnoredScuolaInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addIgnoredScuola()}
+                placeholder="Es. IC Castell'Alfero, IC Incisa Scapaccino"
+                className="input"
+              />
+              <button
+                onClick={addIgnoredScuola}
+                disabled={!ignoredScuolaInput.trim()}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-secondary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600 disabled:opacity-50"
+              >
+                <Plus className="h-4 w-4" />
+                Aggiungi
+              </button>
+            </div>
+            {ignoredSchools.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {ignoredSchools.map((s) => (
+                  <Pill key={s} label={s} onRemove={() => removeIgnoredScuola(s)} color="secondary" />
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-primary-400">Nessuna scuola esclusa.</p>
+            )}
+          </div>
         </div>
       </section>
 

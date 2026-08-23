@@ -15,6 +15,8 @@ create table if not exists public.profiles (
   materie_id        text[]      default '{}',
   materie_custom    text[]      default '{}',
   province_attive   text[]      default '{}',
+  favorite_schools  text[]      default '{}',
+  ignored_schools   text[]      default '{}',
   telegram_username text        default '',
   email_notifica    text        default '',
   onboarded         boolean     default false,

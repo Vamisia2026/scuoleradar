@@ -42,6 +42,8 @@
   - ✅ Fonti reali attive (Fase 1): `scuolainterpelli.it` per MI e TO — pipeline a 2 salti (regione → post → interpelli) con verifica raggiungibilità dei link
   - ✅ Primi 5 interpelli reali salvati in `notices` su Supabase (2026-08-22)
   - ✅ **FASE 2** — tabella `profiles` su Supabase (`province_attive`, `classi_concorso`); lo scraper legge le province dal DB (fallback di test se nessun profilo)
+  - ✅ **PASSO 3** — onboarding/profilo frontend persistono su `profiles` via client Supabase (auth reale cablata in AppContext)
+  - ✅ **Filtri Avanzati Scuole** — `favorite_schools` / `ignored_schools` (whitelist/blacklist): badge "Scuola Preferita" e nascita avvisi esclusi
   - ⏳ Integrazione dati nella dashboard · PNRR (da definire)
 
 ---

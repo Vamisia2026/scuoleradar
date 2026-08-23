@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { supabase } from '@/lib/supabase';
 import { interpelli, type Interpello } from '@/data/interpelli';
 import type { OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso } from '@/data/classiConcorso';
@@ -21,6 +22,10 @@ export interface Preferenze {
   telegramUsername: string;
   emailNotifica: string;
   onboarded: boolean;
+  /** Whitelist scuole: notifiche prioritarie / badge "Scuola Preferita" */
+  favoriteSchools: string[];
+  /** Blacklist scuole: nascondi gli avvisi */
+  ignoredSchools: string[];
 }
 
 export interface Esame {
@@ -58,6 +63,7 @@ interface AppContextValue extends AppState {
   closeAuthModal: () => void;
   simulaStato: (ruolo: RuoloSimulato) => void;
   resettaTutto: () => void;
+  salvaProfilo: (p?: Preferenze) => Promise<void>;
 }
 
 const defaultPreferenze: Preferenze = {
@@ -69,6 +75,8 @@ const defaultPreferenze: Preferenze = {
   telegramUsername: '',
   emailNotifica: '',
   onboarded: false,
+  favoriteSchools: [],
+  ignoredSchools: [],
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -91,19 +99,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const closeAuthModal = useCallback(() => setAuthModalOpen(false), []);
 
-  const register = useCallback((u: User) => setUser(u), [setUser]);
+  const register = useCallback(
+    (u: User) => {
+      setUser(u);
+      // PASSO 3: crea anche l'utente reale su Supabase Auth (non bloccante per la demo).
+      if (supabase) {
+        // Password demo generata se assente (es. login Google simulato).
+        const password = u.password || `Demo!${crypto.randomUUID()}`;
+        void supabase.auth.signUp({ email: u.email, password }).then(({ error }) => {
+          if (error && !/already registered/i.test(error.message)) {
+            console.warn('Supabase signUp:', error.message);
+          }
+        });
+      }
+    },
+    [setUser],
+  );
 
   const login = useCallback(
     (email: string, password: string): boolean => {
-      if (user && user.email.toLowerCase() === email.toLowerCase() && user.password === password) {
-        return true;
+      const ok = Boolean(
+        user && user.email.toLowerCase() === email.toLowerCase() && user.password === password,
+      );
+      // PASSO 3: autenticazione reale su Supabase Auth (non bloccante per la demo).
+      if (ok && supabase) {
+        void supabase.auth.signInWithPassword({ email, password }).then(({ error }) => {
+          if (error) console.warn('Supabase signIn:', error.message);
+        });
       }
-      return false;
+      return ok;
     },
     [user],
   );
 
   const logout = useCallback(() => {
+    void supabase?.auth.signOut();
     setUser(null);
     setPref(defaultPreferenze);
     setNotificheUsate(0);
@@ -179,6 +209,89 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotificati([]);
   }, [setUser, setPref, setNotificheUsate, setAbbonato, setEsamiState, setNotificati]);
 
+  /**
+   * PASSO 3 — Persiste le preferenze utente (province di interesse e classi di concorso)
+   * direttamente nella tabella `profiles` di Supabase.
+   * Richiede una sessione Supabase Auth attiva; altrimenti logga un avviso.
+   */
+  const salvaProfilo = useCallback(
+    async (p?: Preferenze) => {
+      if (!supabase) {
+        console.warn('Supabase non configurato: profilo non salvato sul database.');
+        return;
+      }
+      const {
+        data: { user: authUser },
+        error: errUser,
+      } = await supabase.auth.getUser();
+      if (errUser || !authUser) {
+        console.warn('Nessuna sessione Supabase Auth: profilo non salvato (serve un login reale).');
+        return;
+      }
+      const dati = p ?? preferenze;
+      const { error } = await supabase
+        .from('profiles')
+        .upsert(
+          {
+            id: authUser.id,
+            email: authUser.email ?? dati.emailNotifica,
+            province_attive: dati.provinceCodici,
+            classi_concorso: dati.classiCodici,
+            favorite_schools: dati.favoriteSchools,
+            ignored_schools: dati.ignoredSchools,
+          },
+          { onConflict: 'id' },
+        );
+      if (error) {
+        console.error('Errore salvataggio profilo su Supabase:', error.message);
+      } else {
+        console.log('✓ Profilo salvato su Supabase (tabella profiles).');
+      }
+    },
+    [preferenze],
+  );
+
+  // All'avvio, se esiste una sessione Supabase, carica le preferenze salvate nel DB.
+  useEffect(() => {
+    if (!supabase) return;
+    (async () => {
+      try {
+        const {
+          data: { user: au },
+        } = await supabase.auth.getUser();
+        if (!au) return;
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('province_attive, classi_concorso, favorite_schools, ignored_schools')
+          .eq('id', au.id)
+          .maybeSingle();
+        if (!error && data) {
+          setPref((prev) => ({
+            ...prev,
+            provinceCodici:
+              data.province_attive && data.province_attive.length > 0
+                ? data.province_attive
+                : prev.provinceCodici,
+            classiCodici:
+              data.classi_concorso && data.classi_concorso.length > 0
+                ? data.classi_concorso
+                : prev.classiCodici,
+            favoriteSchools:
+              data.favorite_schools && data.favorite_schools.length > 0
+                ? data.favorite_schools
+                : prev.favoriteSchools,
+            ignoredSchools:
+              data.ignored_schools && data.ignored_schools.length > 0
+                ? data.ignored_schools
+                : prev.ignoredSchools,
+          }));
+        }
+      } catch (err) {
+        console.warn('Caricamento profilo da Supabase non riuscito:', (err as Error).message);
+      }
+    })();
+  }, [setPref]);
+
   const setEsami = useCallback((e: Esame[]) => setEsamiState(e), [setEsamiState]);
 
   const interpelliFiltrati = useMemo<Interpello[]>(() => {
@@ -205,7 +318,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const matchMaterieDelleClassi =
         materieDelleClassi.size === 0 ||
         (classe ? classe.materie.some((m) => materieDelleClassi.has(m)) : false);
-      return matchProvincia && matchOrdine && (matchClasse || matchMateria || matchMaterieDelleClassi);
+      // Blacklist scuole: nascondi gli avvisi degli istituti in ignoredSchools
+      const matchScuolaNonEsclusa =
+        preferenze.ignoredSchools.length === 0 ||
+        !preferenze.ignoredSchools.some(
+          (s) => s && i.istituto.toLowerCase().includes(s.toLowerCase()),
+        );
+      return (
+        matchProvincia &&
+        matchOrdine &&
+        (matchClasse || matchMateria || matchMaterieDelleClassi) &&
+        matchScuolaNonEsclusa
+      );
     });
   }, [preferenze]);
 
@@ -231,6 +355,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     closeAuthModal,
     simulaStato,
     resettaTutto,
+    salvaProfilo,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
