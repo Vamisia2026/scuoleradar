@@ -19,8 +19,8 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
   const inScadenza = giorni >= 0 && giorni <= 3;
   const classe = classeByCodice(interpello.classeCodice);
   const giaNotificato = interpelliNotificati.includes(interpello.id);
-  const isPreferita = preferenze.favoriteSchools.some(
-    (s) => s && interpello.istituto.toLowerCase().includes(s.toLowerCase()),
+  const isPreferita = preferenze.favoriteSchools.some((s) =>
+    s && `${interpello.istituto} ${interpello.titolo}`.toLowerCase().includes(s.toLowerCase()),
   );
 
   const handleVediDettaglio = () => {

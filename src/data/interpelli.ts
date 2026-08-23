@@ -5,6 +5,8 @@ export interface Interpello {
   provinciaCodice: string;
   provinciaNome: string;
   classeCodice: string;
+  /** Tutti i codici di classe rilevati (popolato dai dati reali di `notices`) */
+  classiCodes?: string[];
   ordine: OrdineScuola;
   dataScadenza: string; // ISO date
   descrizione: string;

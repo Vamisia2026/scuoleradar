@@ -44,6 +44,7 @@
   - ✅ **FASE 2** — tabella `profiles` su Supabase (`province_attive`, `classi_concorso`); lo scraper legge le province dal DB (fallback di test se nessun profilo)
   - ✅ **PASSO 3** — onboarding/profilo frontend persistono su `profiles` via client Supabase (auth reale cablata in AppContext)
   - ✅ **Filtri Avanzati Scuole** — `favorite_schools` / `ignored_schools` (whitelist/blacklist): badge "Scuola Preferita" e nascita avvisi esclusi
+  - ✅ **Dashboard dati reali** — AppContext legge `notices` da Supabase con mapping → `Interpello`, filtri profilo+scuole applicati, fallback ai dati mock se tabella vuota/non raggiungibile
   - ⏳ Integrazione dati nella dashboard · PNRR (da definire)
 
 ---

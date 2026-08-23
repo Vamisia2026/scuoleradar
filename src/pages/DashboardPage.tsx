@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { BellRing, Sparkles, CheckCircle2, CreditCard, Radar, Heart } from 'lucide-react';
+import { BellRing, Sparkles, CheckCircle2, CreditCard, Radar, Heart, Database } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { Modal } from '@/components/Modal';
 import { InterpelloCard } from '@/components/InterpelloCard';
@@ -49,7 +49,7 @@ export function DashboardLayout() {
 }
 
 export function DashboardPage() {
-  const { interpelliFiltrati, notificheUsate, abbonato, abbonati } = useApp();
+  const { interpelliFiltrati, notificheUsate, abbonato, abbonati, origineDati } = useApp();
   const [showAbbonamento, setShowAbbonamento] = useState(false);
 
   const limiteRaggiunto = !abbonato && notificheUsate >= 3;
@@ -108,12 +108,22 @@ export function DashboardPage() {
 
       {/* Feed */}
       <div>
-        <div className="mb-4 flex items-center gap-2">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           <Radar className="h-5 w-5 text-primary-600" />
           <h2 className="text-lg font-bold text-primary-800">Opportunità mappate</h2>
           <span className="rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-medium text-primary-600">
             {interpelliFiltrati.length}
           </span>
+          {origineDati === 'supabase' ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-2.5 py-0.5 text-xs font-semibold text-accent-700">
+              <Database className="h-3 w-3" />
+              Dati reali da Supabase
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-medium text-primary-500">
+              Dati di esempio (fallback)
+            </span>
+          )}
         </div>
 
         {interpelliFiltrati.length === 0 ? (

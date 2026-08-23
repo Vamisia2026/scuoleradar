@@ -3,7 +3,8 @@ import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { supabase } from '@/lib/supabase';
 import { interpelli, type Interpello } from '@/data/interpelli';
 import type { OrdineScuola } from '@/data/ordiniMaterie';
-import { classiConcorso } from '@/data/classiConcorso';
+import { classiConcorso, classeByCodice } from '@/data/classiConcorso';
+import { province } from '@/data/province';
 
 export interface User {
   nome: string;
@@ -57,6 +58,7 @@ interface AppContextValue extends AppState {
   abbonati: () => void;
   setEsami: (e: Esame[]) => void;
   interpelliFiltrati: Interpello[];
+  origineDati: 'mock' | 'supabase';
   authModalOpen: boolean;
   authModalMode: 'login' | 'registrazione';
   openAuthModal: (mode?: 'login' | 'registrazione') => void;
@@ -78,6 +80,35 @@ const defaultPreferenze: Preferenze = {
   favoriteSchools: [],
   ignoredSchools: [],
 };
+
+/** Converte una riga della tabella `notices` nel tipo `Interpello` usato dalla dashboard. */
+function mapNoticiaToInterpello(r: {
+  id: string;
+  title: string | null;
+  source_url: string | null;
+  province: string | null;
+  class_codes: string[] | null;
+  expiration_date: string | null;
+}): Interpello {
+  const codici = (r.class_codes ?? []).filter(Boolean);
+  const primaClasse = codici[0] ?? '';
+  const classe = classeByCodice(primaClasse);
+  const provinciaCodice = (r.province ?? '').toUpperCase();
+  return {
+    id: r.id,
+    titolo: r.title ?? 'Avviso non classificato',
+    istituto: '', // `notices` non ha un campo scuola dedicato: il match filtri scuole avviene sul titolo
+    provinciaCodice,
+    provinciaNome: province.find((p) => p.codice === provinciaCodice)?.nome ?? provinciaCodice,
+    classeCodice: primaClasse,
+    classiCodes: codici,
+    ordine: classe?.ordine ?? 'secondaria2',
+    dataScadenza: r.expiration_date ?? '',
+    descrizione: r.title ?? '',
+    linkFonte: r.source_url ?? '',
+    compatibilita: 100,
+  };
+}
 
 const AppContext = createContext<AppContextValue | null>(null);
 
@@ -294,6 +325,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setEsami = useCallback((e: Esame[]) => setEsamiState(e), [setEsamiState]);
 
+  // Fonte degli interpelli: dati reali da Supabase (notices) con fallback ai dati di esempio.
+  const [fontiInterpelli, setFontiInterpelli] = useState<Interpello[]>(interpelli);
+  const [origineDati, setOrigineDati] = useState<'mock' | 'supabase'>('mock');
+
+  useEffect(() => {
+    if (!supabase) return;
+    let attivo = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('notices')
+          .select('*')
+          .order('expiration_date', { ascending: true })
+          .limit(100);
+        if (!attivo) return;
+        if (!error && data && data.length > 0) {
+          setFontiInterpelli(data.map(mapNoticiaToInterpello));
+          setOrigineDati('supabase');
+          console.log(`✓ Dashboard: ${data.length} interpelli reali caricati da Supabase (notices).`);
+        } else {
+          console.warn(
+            error ? `Errore lettura notices: ${error.message}` : 'Tabella notices vuota: uso i dati di esempio.',
+          );
+          setFontiInterpelli(interpelli);
+          setOrigineDati('mock');
+        }
+      } catch (err) {
+        if (!attivo) return;
+        console.warn('Fetch notices non riuscito, uso i dati di esempio:', (err as Error).message);
+        setFontiInterpelli(interpelli);
+        setOrigineDati('mock');
+      }
+    })();
+    return () => {
+      attivo = false;
+    };
+  }, []);
+
   const interpelliFiltrati = useMemo<Interpello[]>(() => {
     if (!preferenze.onboarded) return [];
     const classiSelezionate = preferenze.classiCodici
@@ -304,26 +373,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...preferenze.materieId,
       ...preferenze.materieCustom.map((m) => m.toLowerCase()),
     ]);
-    return interpelli.filter((i) => {
+    return fontiInterpelli.filter((i) => {
       const matchProvincia =
         preferenze.provinceCodici.length === 0 || preferenze.provinceCodici.includes(i.provinciaCodice);
       const matchOrdine =
         preferenze.ordini.length === 0 || preferenze.ordini.includes(i.ordine);
       const classe = classiConcorso.find((c) => c.codice === i.classeCodice);
+      // Match per tutte le classi rilevate (i dati reali di notices hanno class_codes[])
       const matchClasse =
-        preferenze.classiCodici.length === 0 || preferenze.classiCodici.includes(i.classeCodice);
+        preferenze.classiCodici.length === 0 ||
+        preferenze.classiCodici.some(
+          (c) => (i.classiCodes?.includes(c) ?? false) || i.classeCodice === c,
+        );
       const matchMateria =
         tutteLeMaterie.size === 0 ||
         (classe ? classe.materie.some((m) => tutteLeMaterie.has(m)) : false);
       const matchMaterieDelleClassi =
         materieDelleClassi.size === 0 ||
         (classe ? classe.materie.some((m) => materieDelleClassi.has(m)) : false);
-      // Blacklist scuole: nascondi gli avvisi degli istituti in ignoredSchools
+      // Filtri Avanzati Scuole: nascondi gli avvisi delle scuole in ignoredSchools.
+      // Il match considera istituto + titolo (i dati reali di notices non hanno un campo scuola).
+      const scuolaTesto = `${i.istituto} ${i.titolo}`.toLowerCase();
       const matchScuolaNonEsclusa =
         preferenze.ignoredSchools.length === 0 ||
-        !preferenze.ignoredSchools.some(
-          (s) => s && i.istituto.toLowerCase().includes(s.toLowerCase()),
-        );
+        !preferenze.ignoredSchools.some((s) => s && scuolaTesto.includes(s.toLowerCase()));
       return (
         matchProvincia &&
         matchOrdine &&
@@ -331,7 +404,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         matchScuolaNonEsclusa
       );
     });
-  }, [preferenze]);
+  }, [preferenze, fontiInterpelli]);
 
   const value: AppContextValue = {
     user,
@@ -349,6 +422,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     abbonati,
     setEsami,
     interpelliFiltrati,
+    origineDati,
     authModalOpen,
     authModalMode,
     openAuthModal,
