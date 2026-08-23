@@ -342,13 +342,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })();
   }, [setPref]);
 
-  // Sincronizza la sessione Supabase Auth (es. redirect di ritorno da Google OAuth):
-  // aggiorna l'utente locale e mantiene allineata la riga `profiles`.
+  // Sincronizza la sessione Supabase Auth (es. redirect di ritorno da Google OAuth).
+  // Qui NON forziamo cambi di rotta: la navigazione interna avviene nel componente
+  // <AuthRedirect />, solo su SIGNED_IN, per evitare loop di reindirizzamento OAuth.
   useEffect(() => {
     if (!supabase) return;
     const client = supabase;
+
     const { data: subscription } = client.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
         const meta = (session.user.user_metadata ?? {}) as Record<string, unknown>;
         const fullName = String(meta.full_name ?? meta.name ?? '').trim();
         if (fullName) {
@@ -360,13 +362,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
             password: '',
           });
         }
-        // Crea/aggiorna la riga profilo così province/classi restano sincronizzate.
-        void client
-          .from('profiles')
-          .upsert({ id: session.user.id, email: session.user.email ?? '' }, { onConflict: 'id' })
-          .then(({ error }) => {
-            if (error) console.warn('Sincronizzazione profilo (profiles):', error.message);
-          });
+        // Alla prima autenticazione crea/aggiorna la riga profilo (province/classi sincronizzate).
+        if (event === 'SIGNED_IN') {
+          void client
+            .from('profiles')
+            .upsert({ id: session.user.id, email: session.user.email ?? '' }, { onConflict: 'id' })
+            .then(({ error }) => {
+              if (error) console.warn('Sincronizzazione profilo (profiles):', error.message);
+            });
+        }
       }
       if (event === 'SIGNED_OUT') {
         setUser(null);

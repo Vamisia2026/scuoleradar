@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from '@/contexts/AppContext';
 import { AuthModal } from '@/components/AuthModal';
+import { AuthRedirect } from '@/components/AuthRedirect';
 import { DevToolbar } from '@/components/DevToolbar';
 import { LandingPage } from '@/pages/LandingPage';
 import { OnboardingPage } from '@/pages/OnboardingPage';
@@ -76,6 +77,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <AuthModal />
+        <AuthRedirect />
         <DevToolbar />
       </BrowserRouter>
     </AppProvider>
