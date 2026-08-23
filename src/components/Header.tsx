@@ -86,7 +86,7 @@ export function Header() {
                 onClick={() => openAuthModal('registrazione')}
                 className="inline-flex items-center gap-1.5 rounded-full bg-primary-500 px-4 py-2 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
               >
-                Inizia gratis
+                Inizia ora
               </button>
             </>
           )}
@@ -156,7 +156,7 @@ export function Header() {
                   }}
                   className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
                 >
-                  Inizia gratis
+                  Inizia ora
                 </button>
                 <button
                   onClick={() => {

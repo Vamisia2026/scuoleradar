@@ -72,7 +72,7 @@ export function AssistenteAIPage() {
             type="text"
             value={testo}
             onChange={(e) => setTesto(e.target.value)}
-            placeholder="Fai una domanda sull\u2019assistente AI…"
+            placeholder="Fai una domanda sull&apos;assistente AI…"
             className="input"
           />
           <button

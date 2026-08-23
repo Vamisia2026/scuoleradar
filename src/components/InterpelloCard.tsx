@@ -151,8 +151,8 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
 
           {!abbonato && notificheUsate >= 3 && !giaNotificato && (
             <div className="rounded-xl border border-secondary-200 bg-secondary-50 px-4 py-3 text-sm text-secondary-800">
-              Hai esaurito le 3 notifiche gratuite. Per continuare a ricevere nuove notifiche,
-              abbonati a 29€ all'anno.
+              Hai esaurito le 3 notifiche incluse nell'Offerta. Per continuare a ricevere nuove notifiche,
+              passa al piano PRO.
             </div>
           )}
         </div>

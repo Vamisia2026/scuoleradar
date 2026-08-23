@@ -1,28 +1,7 @@
-import { BellRing, ShieldCheck, Heart, Radar } from 'lucide-react';
+import { Radar } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { Header } from '@/components/Header';
 import { Footer } from './LandingPage';
-
-const valori = [
-  {
-    icon: <BellRing className="h-6 w-6" />,
-    titolo: 'Solo ciò che conta',
-    testo:
-      'Nessun contatore aggressivo, nessun risultato sfocato. Se oggi non c\u2019è nulla di rilevante per te, te lo diciamo.',
-  },
-  {
-    icon: <ShieldCheck className="h-6 w-6" />,
-    titolo: 'Trasparenza prima di tutto',
-    testo:
-      'Niente sorprese in fattura, niente rinnovi automatici nascosti. Il prezzo è chiaro e lo resta.',
-  },
-  {
-    icon: <Heart className="h-6 w-6" />,
-    titolo: 'Rispetto per il tuo tempo',
-    testo:
-      'Pensiamo noi alla ricerca. Tu pensa a insegnare. È questo il rispetto che meriti.',
-  },
-];
 
 export function ChiSiamoPage() {
   const { openAuthModal } = useApp();
@@ -31,87 +10,61 @@ export function ChiSiamoPage() {
     <div className="min-h-screen">
       <Header />
 
+      {/* Manifesto */}
       <section className="bg-gradient-to-b from-primary-50 to-white">
-        <div className="mx-auto max-w-4xl px-4 py-16 sm:px-6 sm:py-20">
-          <h1 className="text-3xl font-bold text-primary-900 sm:text-4xl">
-            Facciamo risparmiare tempo ai docenti
+        <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-24">
+          <span className="inline-flex items-center rounded-full bg-secondary-50 px-3 py-1 text-sm font-semibold uppercase tracking-wide text-secondary-700">
+            Manifesto
+          </span>
+
+          <h1 className="mt-6 text-3xl font-bold leading-tight text-primary-900 sm:text-4xl">
+            ScuoleRadar nasce dalla collaborazione di persone che lavorano nella scuola e che sono{' '}
+            <span className="text-secondary-500">stufe di essere trattate come vacche da mungere</span>.
           </h1>
-          <p className="mt-4 text-lg leading-relaxed text-primary-700">
-            ScuoleRadar.it nasce da una frustrazione semplice: ogni giorno centinaia di interpelli,
-            bandi per esperti, progetti CPIA e PON vengono pubblicati in luoghi diversi, in orari
-            diversi, senza un filo logico. Chi insegna — o vorrebbe insegnare — è costretto a
-            spulciare siti e circolari per ore, spesso perdendosi la notizia che conta.
-          </p>
-          <p className="mt-4 text-lg leading-relaxed text-primary-700">
-            Noi raccogliamo queste opportunità, le puliamo, le classifichiamo e le confrontiamo con
-            il profilo di ogni iscritto. Alla fine ricevi solo ciò che ti riguarda davvero: su
-            Telegram o via email, quando serve.
-          </p>
-          <p className="mt-4 text-lg leading-relaxed text-primary-700">
-            Siamo un progetto indipendente, piccolo e artigianale. Crediamo che il tempo di un
-            docente valga più di 29€ all\u2019anno, e ci comportiamo di conseguenza.
-          </p>
-        </div>
-      </section>
 
-      <section className="bg-white py-16 sm:py-20">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <h2 className="text-center text-3xl font-bold text-primary-900">I nostri valori</h2>
-          <div className="mt-10 grid gap-8 md:grid-cols-3">
-            {valori.map((v) => (
-              <div key={v.titolo}>
-                <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
-                  {v.icon}
-                </span>
-                <h3 className="mt-4 text-lg font-bold text-primary-800">{v.titolo}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-primary-600">{v.testo}</p>
-              </div>
-            ))}
+          <p className="mt-8 text-lg leading-relaxed text-primary-700">
+            Abbiamo speso <strong>soldi, energia e tempo</strong>, sacrificando la nostra vita per
+            qualificarci e poi scoprire che <strong>le regole erano cambiate</strong> e che un titolo
+            non valeva più quello che valeva ieri.
+          </p>
+
+          <p className="mt-6 text-lg leading-relaxed text-primary-700">
+            Cerchiamo di sopravvivere professionalmente in{' '}
+            <strong>un Sistema che sembra costruito per farci affogare</strong> (e se hai mai cercato
+            di usare la Carta del Docente, sai di cosa parliamo).
+          </p>
+
+          <p className="mt-6 text-lg leading-relaxed text-primary-700">
+            Per questo motivo stiamo costruendo{' '}
+            <strong>sistemi che facciano ordine nella confusione</strong>. Potremmo tenerli per noi e
+            avere un vantaggio personale, ma vogliamo metterli a disposizione di tutti,{' '}
+            <strong>a un prezzo onesto</strong>, affinché le persone smettano di sacrificare la propria
+            vita.
+          </p>
+
+          {/* Finale in evidenza */}
+          <div className="mt-10 rounded-2xl border-l-4 border-secondary-500 bg-white p-6 shadow-card sm:p-8">
+            <p className="text-xl font-semibold leading-relaxed text-primary-800">
+              Perché insegnanti, personale ATA e tutti quelli che lavorano nella scuola meritano di
+              meglio:
+            </p>
+            <p className="mt-2 text-xl font-bold leading-relaxed text-primary-900 sm:text-2xl">
+              meno tempo sprecato a combattere contro il Sistema,{' '}
+              <span className="text-secondary-500">più tempo per vivere</span>.
+            </p>
           </div>
-        </div>
-      </section>
 
-      <section className="bg-primary-50 py-16 sm:py-20">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="grid items-center gap-10 lg:grid-cols-2">
-            <div>
-              <h2 className="text-2xl font-bold text-primary-900 sm:text-3xl">
-                Un prototipo costruito in trasparenza
-              </h2>
-              <p className="mt-4 leading-relaxed text-primary-700">
-                Quello che vedi è un prototipo dimostrativo: i dati di esempio restano sul tuo
-                dispositivo e i pagamenti sono simulati. È il nostro modo di mostrarti il prodotto
-                prima di chiederti un centesimo. Se ti piace, lo portiamo avanti insieme.
-              </p>
-              <button
-                onClick={() => openAuthModal('registrazione')}
-                className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary-500 px-6 py-3 text-base font-semibold text-white shadow-soft transition hover:bg-primary-600"
-              >
-                <Radar className="h-5 w-5" />
-                Prova il Radar gratis
-              </button>
-            </div>
-            <div className="rounded-2xl border border-primary-100 bg-white p-6 shadow-card">
-              <h3 className="text-sm font-bold text-primary-800">Dove siamo oggi</h3>
-              <ul className="mt-4 space-y-3 text-sm text-primary-700">
-                <li className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-accent-500" />
-                  Radar Interpelli: in produzione (prototipo)
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-accent-500" />
-                  Il mio CV: in produzione (prototipo)
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-secondary-500" />
-                  Check CFU e Assistente AI: in sperimentazione su invito
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-secondary-500" />
-                  Pagamenti reali: in arrivo
-                </li>
-              </ul>
-            </div>
+          <div className="mt-12 text-center">
+            <button
+              onClick={() => openAuthModal('registrazione')}
+              className="inline-flex items-center gap-2 rounded-xl bg-primary-500 px-8 py-4 text-base font-semibold text-white shadow-soft transition hover:bg-primary-600"
+            >
+              <Radar className="h-5 w-5" />
+              Unisciti a noi
+            </button>
+            <p className="mt-3 text-sm text-primary-500">
+              3 segnalazioni incluse nell&apos;Offerta, senza carta di credito.
+            </p>
           </div>
         </div>
       </section>
@@ -120,3 +73,4 @@ export function ChiSiamoPage() {
     </div>
   );
 }
+

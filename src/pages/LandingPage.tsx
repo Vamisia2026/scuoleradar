@@ -61,7 +61,7 @@ export function LandingPage() {
                 </button>
               </div>
               <p className="mt-4 text-sm text-primary-500">
-                3 notifiche gratuite per provare. Nessuna carta richiesta.
+                3 notifiche incluse nell&apos;Offerta per provare. Nessuna carta richiesta.
               </p>
             </div>
 
@@ -89,13 +89,13 @@ export function LandingPage() {
             <StepCard
               icon={<Send className="h-6 w-6" />}
               step="2"
-              title="Ricevi 3 notifiche gratuite"
+              title="Ricevi 3 notifiche incluse"
               text="Ti avvisiamo su Telegram e via email solo quando c'è un interpello, un bando o un progetto in linea con te."
             />
             <StepCard
               icon={<CreditCard className="h-6 w-6" />}
               step="3"
-              title="Se vuoi continuare, 29€ all'anno"
+              title="Se vuoi continuare, 49€ all'anno"
               text="Si ripaga con un'ora di lavoro. Se trovi posto grazie a noi, ci raccomandi. Tutto qui."
             />
           </div>
@@ -157,8 +157,8 @@ export function LandingPage() {
             Inizia il tuo Radar
           </h2>
           <p className="mt-4 text-lg text-primary-600">
-            3 notifiche gratis per provare. Se trovi lavoro grazie a noi, ci raccomandi.
-            Altrimenti, se vuoi continuare, 29€ all'anno.
+            3 notifiche incluse nell&apos;Offerta per provare. Se trovi lavoro grazie a noi, ci raccomandi.
+            Altrimenti, se vuoi continuare, 49€ all&apos;anno con PureFocus incluso.
           </p>
           <button
             onClick={handleInizia}

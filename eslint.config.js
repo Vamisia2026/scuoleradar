@@ -24,5 +24,17 @@ export default tseslint.config(
         { allowConstantExport: true },
       ],
     },
+  },
+  // Script Node.js (scraper): globals di Node, niente regole React
+  {
+    files: ['src/scraper/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: globals.node,
+    },
+    rules: {
+      'react-refresh/only-export-components': 'off',
+      'react-hooks/rules-of-hooks': 'off',
+      'react-hooks/exhaustive-deps': 'off',
+    },
   }
 );

@@ -79,12 +79,12 @@ export function DashboardPage() {
               <p className="text-sm font-semibold text-primary-800">
                 {abbonato
                   ? 'Sei abbonato: notifiche illimitate.'
-                  : `Notifiche gratuite utilizzate: ${notificheUsate} / 3`}
+                  : `Notifiche incluse utilizzate: ${notificheUsate} / 3`}
               </p>
               <p className="text-xs text-primary-500">
                 {abbonato
                   ? 'Riceverai tutte le notifiche pertinenti, senza limiti.'
-                  : 'Hai 3 notifiche gratuite per provare il servizio.'}
+                  : 'Hai 3 notifiche incluse nell\u2019Offerta per provare il servizio.'}
               </p>
             </div>
           </div>
@@ -94,13 +94,13 @@ export function DashboardPage() {
               className="inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-4 py-2 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
             >
               <CreditCard className="h-4 w-4" />
-              Abbonati 29€/anno
+              Abbonati 49€/anno
             </button>
           )}
         </div>
         {limiteRaggiunto && (
           <p className="mt-3 text-sm text-secondary-800">
-            Hai usato le tue 3 notifiche gratuite. I contenuti restano accessibili, ma per ricevere
+            Hai usato le tue 3 notifiche incluse nell'Offerta. I contenuti restano accessibili, ma per ricevere
             nuove notifiche ti serve l'abbonamento.
           </p>
         )}
@@ -192,9 +192,9 @@ function AbbonamentoModal({
           <div className="rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 p-5 text-white">
             <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5" />
-              <span className="text-sm font-medium">Piano annuale</span>
+              <span className="text-sm font-medium">Piano PRO annuale</span>
             </div>
-            <p className="mt-2 text-3xl font-bold">29€<span className="text-base font-normal">/anno</span></p>
+            <p className="mt-2 text-3xl font-bold">49€<span className="text-base font-normal">/anno</span></p>
             <p className="mt-1 text-sm text-primary-100">Si ripaga con un'ora di lavoro.</p>
           </div>
 
@@ -206,6 +206,10 @@ function AbbonamentoModal({
             <li className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-accent-500" />
               Accesso agli Strumenti Docente (CV e Verifica CFU)
+            </li>
+            <li className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-accent-500" />
+              Incluso nel piano PRO: Accesso completo a PureFocus
             </li>
             <li className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-accent-500" />

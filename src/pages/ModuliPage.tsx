@@ -64,7 +64,7 @@ export function ModuliPage() {
 
       <div className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
         <p className="text-sm text-primary-600">
-          Modelli e documenti pronti all\u2019uso per la tua vita professionale. Scaricali, compilali e inviali.
+          Modelli e documenti pronti all&apos;uso per la tua vita professionale. Scaricali, compilali e inviali.
         </p>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">

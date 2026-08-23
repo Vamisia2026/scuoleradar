@@ -30,6 +30,9 @@ export interface Esame {
   settore: string;
 }
 
+/** Ruoli simulabili dalla DevToolbar (solo ambiente di sviluppo) */
+export type RuoloSimulato = 'guest' | 'base' | 'pro';
+
 interface AppState {
   user: User | null;
   preferenze: Preferenze;
@@ -53,6 +56,8 @@ interface AppContextValue extends AppState {
   authModalMode: 'login' | 'registrazione';
   openAuthModal: (mode?: 'login' | 'registrazione') => void;
   closeAuthModal: () => void;
+  simulaStato: (ruolo: RuoloSimulato) => void;
+  resettaTutto: () => void;
 }
 
 const defaultPreferenze: Preferenze = {
@@ -132,6 +137,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotificheUsate(0);
   }, [setAbbonato, setNotificheUsate]);
 
+  // Stato simulato per la DevToolbar (solo sviluppo). Aggiorna all'istante context + UI.
+  const simulaStato = useCallback(
+    (ruolo: RuoloSimulato) => {
+      if (ruolo === 'guest') {
+        setUser(null);
+        setPref(defaultPreferenze);
+        setNotificheUsate(0);
+        setAbbonato(false);
+        return;
+      }
+      const utenteDemo: User = {
+        nome: 'Mario',
+        cognome: 'Rossi',
+        email: 'mario.rossi@gmail.com',
+        password: '',
+      };
+      setUser(utenteDemo);
+      setAbbonato(ruolo === 'pro');
+      setNotificheUsate(0);
+      setPref((prev) => ({
+        ...prev,
+        ordini: prev.ordini.length > 0 ? prev.ordini : ['secondaria1', 'secondaria2'],
+        provinceCodici:
+          prev.provinceCodici.length > 0 ? prev.provinceCodici : ['RM', 'TO', 'MI', 'NA'],
+        onboarded: true,
+      }));
+    },
+    [setUser, setPref, setNotificheUsate, setAbbonato],
+  );
+
+  const resettaTutto = useCallback(() => {
+    ['sr_user', 'sr_preferenze', 'sr_notifiche', 'sr_abbonato', 'sr_esami', 'sr_notificati'].forEach(
+      (k) => localStorage.removeItem(k),
+    );
+    setUser(null);
+    setPref(defaultPreferenze);
+    setNotificheUsate(0);
+    setAbbonato(false);
+    setEsamiState([]);
+    setNotificati([]);
+  }, [setUser, setPref, setNotificheUsate, setAbbonato, setEsamiState, setNotificati]);
+
   const setEsami = useCallback((e: Esame[]) => setEsamiState(e), [setEsamiState]);
 
   const interpelliFiltrati = useMemo<Interpello[]>(() => {
@@ -182,6 +229,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     authModalMode,
     openAuthModal,
     closeAuthModal,
+    simulaStato,
+    resettaTutto,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
