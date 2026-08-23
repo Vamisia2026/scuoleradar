@@ -41,6 +41,7 @@
   - ✅ Modulo scraping on-demand: `src/scraper/index.ts` (test: `npm run scrape -- --fixture --dry-run`)
   - ✅ Fonti reali attive (Fase 1): `scuolainterpelli.it` per MI e TO — pipeline a 2 salti (regione → post → interpelli) con verifica raggiungibilità dei link
   - ✅ Primi 5 interpelli reali salvati in `notices` su Supabase (2026-08-22)
+  - ✅ **FASE 2** — tabella `profiles` su Supabase (`province_attive`, `classi_concorso`); lo scraper legge le province dal DB (fallback di test se nessun profilo)
   - ⏳ Integrazione dati nella dashboard · PNRR (da definire)
 
 ---

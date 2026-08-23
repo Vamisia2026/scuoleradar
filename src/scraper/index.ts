@@ -52,12 +52,39 @@ function caricaEnv(): Env {
 }
 
 /**
- * Province di interesse attive.
- * TODO Fase 2: leggere le province attive dalla tabella `profiles` in Supabase
- * (es. SELECT province FROM profiles WHERE onboarded = true).
- * Per la Fase 1 usiamo un valore di test configurabile via env (default: MI,TO).
+ * Province di interesse attive, lette direttamente dalla tabella `profiles` (FASE 2):
+ * raccoglie le `province_attive` dei profili esistenti.
+ * Se non ci sono profili (o la tabella non è ancora pronta), usa il fallback di test da env.
  */
-function ottieniProvinceAttive(env: Env): string[] {
+async function ottieniProvinceAttive(env: Env, supabase: SupabaseClient | null): Promise<string[]> {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('province_attive');
+
+      if (error) {
+        console.warn(`⚠ Lettura profiles: ${error.message} — uso il fallback di test.`);
+      } else if (data && data.length > 0) {
+        const province = new Set<string>();
+        for (const riga of data) {
+          for (const p of (riga.province_attive ?? []) as string[]) {
+            if (typeof p === 'string' && p.trim()) province.add(p.trim().toUpperCase());
+          }
+        }
+        if (province.size > 0) {
+          console.log(`• Province attive lette da profiles: ${[...province].join(', ')}`);
+          return [...province];
+        }
+        console.warn('⚠ Profili presenti ma senza province attive: uso il fallback di test.');
+      } else {
+        console.warn('⚠ Nessun profilo onboarded con province attive: uso il fallback di test.');
+      }
+    } catch (err) {
+      console.warn(`⚠ Lettura province da profiles non riuscita: ${(err as Error).message} — uso il fallback di test.`);
+    }
+  }
+
   const raw = env.SCRAPER_PROVINCE_TEST ?? 'MI,TO';
   return raw
     .split(',')
@@ -265,31 +292,39 @@ async function verificaLink(url: string): Promise<boolean> {
 }
 
 /** Raccolta interpelli dalle fonti reali: pagina regione → post del giorno → link ufficiali. */
-async function raccogliAvvisiReali(env: Env): Promise<{ avvisi: AvvisoRilevato[]; fonti: string }> {
-  const fonti = [...FONTI_REALI];
-  if (env.FONTE_TEST_URL) fonti[0] = { ...fonti[0], url: env.FONTE_TEST_URL };
-
+async function raccogliAvvisiReali(
+  env: Env,
+  province: string[],
+): Promise<{ avvisi: AvvisoRilevato[]; fonti: string }> {
   const avvisi: AvvisoRilevato[] = [];
   const descrizioneFonti: string[] = [];
 
-  for (const f of fonti) {
-    descrizioneFonti.push(`${f.provincia}→${f.url}`);
+  for (const provincia of province) {
+    let fonte = FONTI_REALI.find((f) => f.provincia === provincia);
+    if (!fonte && env.FONTE_TEST_URL) {
+      fonte = { provincia, url: env.FONTE_TEST_URL };
+    }
+    if (!fonte) {
+      console.warn(`⚠ Nessuna fonte configurata per la provincia ${provincia} (aggiungila a FONTI_REALI)`);
+      continue;
+    }
+    descrizioneFonti.push(`${fonte.provincia}→${fonte.url}`);
 
     let lista: string;
     try {
-      lista = await scaricaPagina(f.url);
+      lista = await scaricaPagina(fonte.url);
     } catch (err) {
-      console.warn(`⚠ Fetch pagina regione [${f.provincia}] non riuscito: ${(err as Error).message}`);
+      console.warn(`⚠ Fetch pagina regione [${fonte.provincia}] non riuscito: ${(err as Error).message}`);
       continue;
     }
 
     const postUrl = parsePostUrl(lista);
     if (postUrl.length === 0) {
-      console.warn(`⚠ Nessun post giornaliero trovato per [${f.provincia}]`);
+      console.warn(`⚠ Nessun post giornaliero trovato per [${fonte.provincia}]`);
       continue;
     }
     const primoPost = postUrl[0];
-    console.log(`• [${f.provincia}] ultimo post: ${primoPost}`);
+    console.log(`• [${fonte.provincia}] ultimo post: ${primoPost}`);
 
     let postHtml: string;
     try {
@@ -299,8 +334,8 @@ async function raccogliAvvisiReali(env: Env): Promise<{ avvisi: AvvisoRilevato[]
       continue;
     }
 
-    const estratti = parsePostInterpelli(postHtml, f.provincia, primoPost);
-    console.log(`• [${f.provincia}] interpelli estratti dal post: ${estratti.length}`);
+    const estratti = parsePostInterpelli(postHtml, fonte.provincia, primoPost);
+    console.log(`• [${fonte.provincia}] interpelli estratti dal post: ${estratti.length}`);
     avvisi.push(...estratti);
   }
 
@@ -374,10 +409,15 @@ async function main() {
   const env = caricaEnv();
   const isDryRun = process.argv.includes('--dry-run');
   const useFixture = process.argv.includes('--fixture');
-  const province = ottieniProvinceAttive(env);
+
+  const url = env.SUPABASE_URL;
+  const key = env.SUPABASE_SERVICE_ROLE_KEY ?? env.SUPABASE_ANON_KEY;
+  const supabase = url && key ? clientSupabase(url, key) : null;
+
+  const province = await ottieniProvinceAttive(env, supabase);
 
   console.log('━━ ScuoleRadar Scraper (Fase 1 · BLOCCO 1) ━━');
-  console.log(`• Province: ${province.join(', ')}`);
+  console.log(`• Province attive: ${province.join(', ')}`);
   console.log(`• Modalità: ${useFixture ? 'fixture offline' : 'fonti reali (web)'} · inserimento: ${isDryRun ? 'DISATTIVATO (dry-run)' : 'Supabase'}`);
 
   let trovati: AvvisoRilevato[] = [];
@@ -385,7 +425,7 @@ async function main() {
     console.log('• Fonte: fixture HTML di test (offline)');
     trovati = province.flatMap((p) => parseAvvisi(FIXTURE_HTML, p, 'fixture'));
   } else {
-    const { avvisi, fonti } = await raccogliAvvisiReali(env);
+    const { avvisi, fonti } = await raccogliAvvisiReali(env, province);
     trovati = avvisi;
     console.log(`• Fonti reali: ${fonti}`);
     console.log('• Verifica raggiungibilità dei link…');
@@ -425,16 +465,13 @@ async function main() {
     return;
   }
 
-  const url = env.SUPABASE_URL;
-  const key = env.SUPABASE_SERVICE_ROLE_KEY ?? env.SUPABASE_ANON_KEY;
-  if (!url || !key) {
+  if (!supabase) {
     console.error('✗ Mancano SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY nel file .env');
     console.error('  Copia .env.example in .env e compila le credenziali.');
     process.exitCode = 1;
     return;
   }
 
-  const supabase = clientSupabase(url, key);
   const righe = unici.map(mappaRiga);
 
   const { error } = (await supabase
