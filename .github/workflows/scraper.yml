@@ -1,0 +1,45 @@
+# ============================================================
+# Scraper Interpelli — automazione inserimento in Supabase
+#
+# - Pianificazione: ogni 2 ore dalle 07:00 alle 20:00 UTC
+# - Trigger manuale: workflow_dispatch (da GitHub → Actions → Run workflow)
+#
+# Secrets richiesti (repo Settings → Secrets and variables → Actions):
+#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+# ============================================================
+name: Scraper Interpelli
+
+on:
+  schedule:
+    - cron: '0 7,9,11,13,15,17,19,20 * * *'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    name: Scraping interpelli → Supabase (notices)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Installazione dipendenze
+        run: npm ci
+
+      - name: Validazione TypeScript dello scraper
+        run: npm run scrape:check
+
+      - name: Esecuzione scraper e inserimento in Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          FONTE_TEST_URL: ''
+          SCRAPER_PROVINCE_TEST: MI,TO
+        run: npm run scrape
