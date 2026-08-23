@@ -25,6 +25,9 @@
 >
 > 📝 Sempre il 2026-08-22 la ChiSiamoPage è stata **esplicitamente sbloccata** per sostituire il
 > contenuto con il **Manifesto ScuoleRadar** e **ri-bloccata** a lavori ultimati.
+>
+> 📝 Il 2026-08-22 l'AuthModal è stata **esplicitamente sbloccata** per integrare il **Google OAuth
+> reale** via Supabase Auth (pulsante "Accedi con Google") e **ri-bloccata** a lavori ultimati.
 
 ## Componenti DEV (esclusi dal blocco)
 

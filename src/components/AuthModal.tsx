@@ -46,6 +46,7 @@ export function AuthModal() {
     register,
     login,
     preferenze,
+    loginConGoogle,
   } = useApp();
 
   const isRegister = authModalMode === 'registrazione';
@@ -107,16 +108,18 @@ export function AuthModal() {
     }
   };
 
-  const handleGoogle = () => {
+  const handleGoogle = async () => {
     if (googleLoading) return;
     setErrore('');
     setGoogleLoading(true);
-    // Login Google simulato per il prototipo
-    window.setTimeout(() => {
-      register({ nome: 'Mario', cognome: 'Rossi', email: 'mario.rossi@gmail.com', password: '' });
+    try {
+      await loginConGoogle();
+      // Il browser viene reindirizzato a Google; se il flusso fallisce mostriamo l'errore.
+    } catch (err) {
+      setErrore(`Google OAuth non riuscito: ${(err as Error).message}`);
+    } finally {
       setGoogleLoading(false);
-      dopoLogin();
-    }, 1200);
+    }
   };
 
   return (
@@ -142,7 +145,7 @@ export function AuthModal() {
           ) : (
             <>
               <GoogleIcon className="h-4 w-4" />
-              Continua con Google
+              Accedi con Google
             </>
           )}
         </button>
@@ -261,7 +264,7 @@ export function AuthModal() {
         </p>
 
         <p className="text-center text-xs text-primary-400">
-          Prototipo dimostrativo: login Google simulato, i dati restano sul tuo dispositivo.
+          Login email/Google reale via Supabase Auth. Prototipo dimostrativo: i dati restano sul tuo dispositivo.
         </p>
       </div>
     </Modal>
