@@ -6,36 +6,32 @@
  *   2. Legge le province di interesse attive (per ora: valore di test da env, default MI,TO).
  *   3. Scarica le fonti reali per provincia (pagina regione → post del giorno → interpelli
  *      ufficiali), oppure usa una fixture offline per il test (`--fixture`).
- *   4. Estrae: titolo, link, provincia, data di scadenza e classi di concorso (via Regex).
- *   5. Calcola un hash_id SHA256 univoco (provincia + titolo + data) per evitare duplicati.
- *   6. Salva i nuovi interpelli nella tabella `notices` di Supabase (upsert su hash_id).
+ *   4. Passa ogni avviso al parser (src/scraper/parser.ts) che estrae:
+ *      classi di concorso/sostegno (via Regex), data di scadenza e hash_id SHA-256 univoco.
+ *   5. Effettua l'UPSERT nella tabella `interpelli` di Supabase usando `hash_id`
+ *      (onConflict) per ignorare i duplicati; fallback sulla tabella legacy `notices`.
+ *   6. Invia le notifiche email (Resend) agli utenti qualificati per i soli
+ *      interpelli NUOVI (hash_id non già presenti nel DB) — vedi src/lib/resend.ts.
  *
  * Uso:
- *   npm run scrape                # esegue la pipeline completa (serve .env valido)
- *   npm run scrape -- --dry-run   # solo estrazione + hash, nessun inserimento
- *   npm run scrape -- --fixture   # usa la fixture HTML offline (test senza rete)
+ *   npm run scrape                       # pipeline completa (serve .env valido)
+ *   npm run scrape -- --dry-run          # solo estrazione + hash, nessun inserimento
+ *   npm run scrape -- --fixture          # fixture HTML offline (test senza rete)
+ *   npm run scrape -- --no-email         # disattiva le notifiche email
  *   npm run scrape -- --fixture --dry-run
  */
 
-import { createHash } from 'node:crypto';
 import process from 'node:process';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { parseInterpello, estraiDataScadenza, type InterpelloParsato } from './parser.ts';
+import { notificaNuoviInterpelli } from '../lib/notifier.ts';
 
 /* ------------------------------- Tipi ------------------------------- */
 
-export interface AvvisoRilevato {
-  title: string;
-  link: string | null;
-  province: string;
-  /** Data di scadenza normalizzata YYYY-MM-DD, se presente */
-  expiresAt: string | null;
-  classCodes: string[];
-  source: string;
-  /** SHA256 di `provincia|titolo|data` — chiave anti-duplicato */
-  hashId: string;
-}
+/** Alias per retro-compatibilità: gli avvisi parsati dal nuovo parser.ts. */
+export type AvvisoRilevato = InterpelloParsato;
 
 type Env = Record<string, string>;
 
@@ -92,40 +88,10 @@ async function ottieniProvinceAttive(env: Env, supabase: SupabaseClient | null):
     .filter(Boolean);
 }
 
-/* -------------------- Regex per classi di concorso -------------------- */
-/**
- * Rileva i codici di classe di concorso nei testi:
- *  - formato classico: A-12, A-026, B-02, B-001
- *  - speciali (sostegno): ADEE, ADSS, ADMM, AD24, ...
- */
-const RE_CLASSI = /\b(?:[A-Z]{1,2}-\d{2,3}|AD[A-Z]{2,3})\b/g;
+/* -------------------- Parsing (delegato a parser.ts) -------------------- */
 
-function rilevaClassi(testo: string): string[] {
-  const trovate = testo.match(RE_CLASSI) ?? [];
-  return [...new Set(trovate.map((c) => c.toUpperCase()))];
-}
-
-/* ------------------------------ Hashing ------------------------------ */
-
-export function generaHash(province: string, title: string, data: string | null): string {
-  const payload = `${province}|${title.trim()}|${data ?? ''}`;
-  return createHash('sha256').update(payload).digest('hex');
-}
-
-/* --------------------------- Date e normalizzazione --------------------------- */
-
-/** Estrae una data italiana (gg/mm/aaaa o gg-mm-aaaa) e la normalizza in YYYY-MM-DD. */
-function estraiData(testo: string): string | null {
-  const match = testo.match(/\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})\b/);
-  if (!match) return null;
-  const [, gg, mm, aa] = match;
-  const anno = aa.length === 2 ? `20${aa}` : aa;
-  const giorno = gg.padStart(2, '0');
-  const mese = mm.padStart(2, '0');
-  if (Number(mese) < 1 || Number(mese) > 12) return null;
-  if (Number(giorno) < 1 || Number(giorno) > 31) return null;
-  return `${anno}-${mese}-${giorno}`;
-}
+// Estrazione di classi di concorso, date di scadenza e hash_id:
+// vedi `parseInterpello` in src/scraper/parser.ts (modulo puro e testabile).
 
 /* ------------------------------ Parsing ------------------------------ */
 
@@ -150,7 +116,7 @@ export function parseAvvisi(html: string, provincia: string, source: string): Av
 
     // Data di scadenza: cerca nel link e nel contenitore (li / article / entry)
     const contenitore = $el.closest('li, article, .entry, .post, .avviso').text().replace(/\s+/g, ' ');
-    const data = estraiData(`${testo} ${contenitore}`);
+    const data = estraiDataScadenza(`${testo} ${contenitore}`);
 
     let link = href;
     if (href && !href.startsWith('http')) {
@@ -161,15 +127,16 @@ export function parseAvvisi(html: string, provincia: string, source: string): Av
       }
     }
 
-    risultati.push({
-      title: testo,
-      link: link || null,
-      province: provincia,
-      expiresAt: data,
-      classCodes: rilevaClassi(`${testo} ${contenitore}`),
-      source,
-      hashId: generaHash(provincia, testo, data),
-    });
+    risultati.push(
+      parseInterpello({
+        title: testo,
+        link: link || null,
+        provincia,
+        source,
+        corpo: contenitore,
+        dataNota: data,
+      }),
+    );
   });
 
   return risultati;
@@ -240,40 +207,27 @@ export function parsePostInterpelli(
     if (/facebook|linkedin|t\.me|altervista|iubenda|freepik|pinterest|instagram|twitter/.test(href)) return;
 
     const contesto = $el.closest('li, p, td, div').text().replace(/\s+/g, ' ');
-    const data = estraiDataTesto(`${testo} ${contesto}`) ?? estraiDataTesto(titoloPost);
+    const data = estraiDataScadenza(`${testo} ${contesto}`) ?? estraiDataScadenza(titoloPost);
     // Ripulisce il titolo da annotazioni tipo "[478 KB]"
     const titolo = testo.replace(/\s*\[\d+(?:[.,]\d+)?\s*(?:KB|MB)\]\s*$/i, '').trim() || testo;
 
-    risultato.push({
-      title: titolo,
-      link: href,
-      province: provincia,
-      expiresAt: data,
-      classCodes: rilevaClassi(`${titolo} ${contesto}`),
-      source,
-      hashId: generaHash(provincia, titolo, data),
-    });
+    risultato.push(
+      parseInterpello({
+        title: titolo,
+        link: href,
+        provincia,
+        source,
+        corpo: contesto,
+        dataNota: data,
+      }),
+    );
   });
 
   return risultato;
 }
 
-/** Mesi italiani per la conversione delle date testuali. */
-const MESI_IT: Record<string, string> = {
-  gennaio: '01', febbraio: '02', marzo: '03', aprile: '04', maggio: '05', giugno: '06',
-  luglio: '07', agosto: '08', settembre: '09', ottobre: '10', novembre: '11', dicembre: '12',
-};
-
-/** Data in formato italiano ("22 agosto 2026") o numerico (gg/mm/aaaa) → YYYY-MM-DD. */
-function estraiDataTesto(testo: string): string | null {
-  const m = testo
-    .toLowerCase()
-    .match(
-      /\b(\d{1,2})\s+(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)\s+(\d{4})\b/,
-    );
-  if (m) return `${m[3]}-${MESI_IT[m[2]]}-${m[1].padStart(2, '0')}`;
-  return estraiData(testo);
-}
+// Conversione delle date testuali italiane ("22 agosto 2026") e numeriche:
+// gestita dal parser in src/scraper/parser.ts (estraiDataScadenza).
 
 /** Verifica che un link sia raggiungibile (HEAD con fallback GET). */
 async function verificaLink(url: string): Promise<boolean> {
@@ -391,17 +345,37 @@ function clientSupabase(url: string, key: string): SupabaseClient {
   return createClient(url, key);
 }
 
-/** Mappa un avviso sulle colonne della tabella `notices` (schema verificato sul progetto). */
-function mappaRiga(a: AvvisoRilevato) {
+/** Mappa un avviso parsato sulle colonne della tabella `interpelli` (FASE 2 schema). */
+function mappaRigaInterpelli(a: InterpelloParsato) {
+  return {
+    hash_id: a.hashId,
+    title: a.title,
+    province: a.province,
+    class_codes: a.classCodes,
+    school_name: a.schoolName,
+    school_code: a.schoolCode,
+    source_url: a.link,
+    expiration_date: a.expirationDate,
+  };
+}
+
+/** Mappa un avviso parsato sulle colonne della tabella legacy `notices`. */
+function mappaRigaNotices(a: InterpelloParsato) {
   return {
     hash_id: a.hashId,
     title: a.title,
     source_url: a.link,
     province: a.province,
     class_codes: a.classCodes,
-    expiration_date: a.expiresAt,
+    expiration_date: a.expirationDate,
   };
 }
+
+/* ------------------------------ Notifiche email (FASE 4) ------------------------------ */
+
+// L'invio delle notifiche email è gestito dal modulo condiviso src/lib/notifier.ts:
+// riceve i nuovi interpelli, interroga il Matching Engine (findUtentiCompatibili)
+// per trovare gli utenti con preferenze compatibili e invia le mail via Resend.
 
 /* -------------------------------- main -------------------------------- */
 
@@ -409,6 +383,7 @@ async function main() {
   const env = caricaEnv();
   const isDryRun = process.argv.includes('--dry-run');
   const useFixture = process.argv.includes('--fixture');
+  const noEmail = process.argv.includes('--no-email');
 
   const url = env.SUPABASE_URL;
   const key = env.SUPABASE_SERVICE_ROLE_KEY ?? env.SUPABASE_ANON_KEY;
@@ -418,7 +393,7 @@ async function main() {
 
   console.log('━━ ScuoleRadar Scraper (Fase 1 · BLOCCO 1) ━━');
   console.log(`• Province attive: ${province.join(', ')}`);
-  console.log(`• Modalità: ${useFixture ? 'fixture offline' : 'fonti reali (web)'} · inserimento: ${isDryRun ? 'DISATTIVATO (dry-run)' : 'Supabase'}`);
+  console.log(`• Modalità: ${useFixture ? 'fixture offline' : 'fonti reali (web)'} · inserimento: ${isDryRun ? 'DISATTIVATO (dry-run)' : 'Supabase'} · email: ${noEmail ? 'DISATTIVATE' : 'attive (Resend)'}`);
 
   let trovati: AvvisoRilevato[] = [];
   if (useFixture) {
@@ -449,7 +424,7 @@ async function main() {
 
   unici.forEach((n) => {
     console.log(
-      `  [${n.province}] ${n.title.slice(0, 70)} | scad: ${n.expiresAt ?? 'n/d'} | classi: ${
+      `  [${n.province}] ${n.title.slice(0, 70)} | scad: ${n.expirationDate ?? 'n/d'} | classi: ${
         n.classCodes.length ? n.classCodes.join(', ') : 'n/d'
       } | hash: ${n.hashId.slice(0, 12)}…`,
     );
@@ -472,22 +447,62 @@ async function main() {
     return;
   }
 
-  const righe = unici.map(mappaRiga);
+  // FASE 4 — determina quali interpelli sono realmente NUOVI (per le notifiche email)
+  const { data: righeEsistenti } = (await supabase
+    .from('interpelli')
+    .select('hash_id')
+    .in('hash_id', unici.map((u) => u.hashId))) as {
+    data: { hash_id: string }[] | null;
+    error: { message: string } | null;
+  };
+  const hashEsistenti = new Set((righeEsistenti ?? []).map((r) => r.hash_id));
+  const nuovi = unici.filter((u) => !hashEsistenti.has(u.hashId));
+  console.log(`• Interpelli NUOVI nel DB: ${nuovi.length} (candidati alle notifiche email)`);
+
+  // Upsert nella tabella `interpelli` (nuovo schema FASE 2, con school_name/school_code).
+  // `onConflict: 'hash_id'` + `ignoreDuplicates` evita di reinserire gli stessi avvisi.
+  const righeInterpelli = unici.map(mappaRigaInterpelli);
+  const righeNotices = unici.map(mappaRigaNotices);
 
   const { error } = (await supabase
-    .from('notices')
-    .upsert(righe, { onConflict: 'hash_id', ignoreDuplicates: true })) as {
+    .from('interpelli')
+    .upsert(righeInterpelli, { onConflict: 'hash_id', ignoreDuplicates: true })) as {
     data: unknown[] | null;
     error: { message: string } | null;
   };
 
   if (error) {
-    console.error(`✗ Errore Supabase: ${error.message}`);
-    process.exitCode = 1;
+    // Fallback per retro-compatibilità: se la tabella `interpelli` non esiste ancora
+    // (migration non eseguita), si scrive sulla tabella legacy `notices`.
+    console.warn(
+      `⚠ Tabella interpelli non disponibile (${error.message}) — fallback sulla tabella notices.`,
+    );
+    const { error: errNotices } = (await supabase
+      .from('notices')
+      .upsert(righeNotices, { onConflict: 'hash_id', ignoreDuplicates: true })) as {
+      data: unknown[] | null;
+      error: { message: string } | null;
+    };
+    if (errNotices) {
+      console.error(`✗ Errore Supabase (notices): ${errNotices.message}`);
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`✓ Upsert completato su notices (fallback · righe inviate: ${righeNotices.length}).`);
+
+    // FASE 4 — notifiche email per i soli interpelli nuovi
+    if (!noEmail) {
+      await notificaNuoviInterpelli(supabase, nuovi);
+    }
     return;
   }
 
-  console.log(`✓ Upsert completato su notices (righe inviate: ${righe.length}).`);
+  console.log(`✓ Upsert completato su interpelli (righe inviate: ${righeInterpelli.length}).`);
+
+  // FASE 4 — notifiche email per i soli interpelli nuovi
+  if (!noEmail) {
+    await notificaNuoviInterpelli(supabase, nuovi);
+  }
 }
 
 main().catch((err) => {

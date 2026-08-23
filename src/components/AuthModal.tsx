@@ -130,7 +130,7 @@ export function AuthModal() {
       size="sm"
     >
       <div className="space-y-5">
-        {/* Google (simulato) */}
+        {/* Google OAuth reale: il redirect avviene via URL diretto, nessun preventDefault */}
         <button
           type="button"
           onClick={handleGoogle}

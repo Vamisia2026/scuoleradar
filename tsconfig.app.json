@@ -27,5 +27,5 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
-  "exclude": ["src/scraper"]
+  "exclude": ["src/scraper", "src/lib/resend.ts", "src/lib/notifier.ts"]
 }

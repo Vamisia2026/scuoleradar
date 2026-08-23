@@ -1,9 +1,16 @@
 import { useMemo, useState } from 'react';
 import {
   Save, Check, MapPin, Send, Mail, Search, GraduationCap, School, BookOpen, Baby, Users, Moon, Briefcase, Wrench, Plus,
-  SlidersHorizontal, Star, Ban,
+  SlidersHorizontal, Star, Ban, Download, Trash2, FileText,
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { interpelli } from '@/data/interpelli';
+import {
+  conAggiuntaInCima,
+  STORAGE_KEY_MODULI_SCARICATI,
+  type ModuloScaricato,
+} from '@/data/moduli';
 import { ordiniScuola, materie, type OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso } from '@/data/classiConcorso';
 import { province } from '@/data/province';
@@ -40,7 +47,19 @@ export function ProfiloPage() {
   const [customMateriaInput, setCustomMateriaInput] = useState('');
   const [salvato, setSalvato] = useState(false);
 
+  // Storico dei modelli scaricati (condiviso con la pagina Moduli via localStorage)
+  const [moduliScaricati, setModuliScaricati] = useLocalStorage<ModuloScaricato[]>(
+    STORAGE_KEY_MODULI_SCARICATI,
+    [],
+  );
+
   const provinceSorted = useMemo(() => [...province].sort((a, b) => a.nome.localeCompare(b.nome)), []);
+
+  // Scuole note dai dati disponibili: suggerimenti per i Filtri Avanzati Scuole.
+  const scuoleConosciute = useMemo(
+    () => [...new Set(interpelli.map((i) => i.istituto).filter(Boolean))],
+    [],
+  );
 
   const classiFiltrate = useMemo(() => {
     let list = classiConcorso;
@@ -120,6 +139,28 @@ export function ProfiloPage() {
     setSalvato(true);
     setTimeout(() => setSalvato(false), 3000);
   };
+
+  const formatDataScaricato = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleDateString('it-IT', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch {
+      return iso;
+    }
+  };
+
+  const riscaricaModulo = (m: ModuloScaricato) => {
+    setModuliScaricati(conAggiuntaInCima(moduliScaricati, m));
+    alert(`Download simulato di "${m.nome}" (${m.tipo}).`);
+  };
+
+  const rimuoviModulo = (id: string) =>
+    setModuliScaricati(moduliScaricati.filter((m) => m.id !== id));
+
+  const svuotaStorico = () => setModuliScaricati([]);
 
   return (
     <div className="space-y-6">
@@ -343,6 +384,13 @@ export function ProfiloPage() {
           vengono nascoste dalla dashboard.
         </p>
 
+        {/* Suggerimenti per la ricerca di Istituti (struttura pronta per il catalogo scuole) */}
+        <datalist id="scuole-conosciute">
+          {scuoleConosciute.map((s) => (
+            <option key={s} value={s} />
+          ))}
+        </datalist>
+
         <div className="mt-4 space-y-4">
           {/* Preferite (whitelist) */}
           <div className="rounded-xl border border-accent-200 bg-accent-50/50 p-4">
@@ -357,6 +405,7 @@ export function ProfiloPage() {
                 onChange={(e) => setFavoriteScuolaInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addFavoriteScuola()}
                 placeholder="Es. Media Jona Asti, ITIS Artom Asti"
+                list="scuole-conosciute"
                 className="input"
               />
               <button
@@ -392,6 +441,7 @@ export function ProfiloPage() {
                 onChange={(e) => setIgnoredScuolaInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addIgnoredScuola()}
                 placeholder="Es. IC Castell'Alfero, IC Incisa Scapaccino"
+                list="scuole-conosciute"
                 className="input"
               />
               <button
@@ -445,6 +495,64 @@ export function ProfiloPage() {
             />
           </label>
         </div>
+      </section>
+
+      {/* Modelli scaricati di recente */}
+      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="flex items-center gap-1.5 text-sm font-bold text-primary-800">
+            <FileText className="h-4 w-4 text-primary-500" />
+            Modelli Scaricati di Recente
+          </h3>
+          {moduliScaricati.length > 0 && (
+            <button
+              onClick={svuotaStorico}
+              className="text-xs font-medium text-primary-400 transition hover:text-error-600"
+            >
+              Svuota storico
+            </button>
+          )}
+        </div>
+
+        {moduliScaricati.length === 0 ? (
+          <p className="mt-4 text-sm text-primary-400">
+            Non hai ancora scaricato modelli. Visita la sezione <strong>Moduli</strong> per trovare
+            documenti e template pronti all&apos;uso.
+          </p>
+        ) : (
+          <ul className="mt-4 space-y-2">
+            {moduliScaricati.map((m) => (
+              <li
+                key={m.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-primary-100 bg-slate-50 px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-primary-800">{m.nome}</p>
+                  <p className="text-xs text-primary-400">
+                    {m.tipo} · scaricato il {formatDataScaricato(m.scaricatoIl)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    onClick={() => riscaricaModulo(m)}
+                    aria-label={`Scarica di nuovo ${m.nome}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-white px-3 py-2 text-xs font-semibold text-primary-700 transition hover:bg-primary-50"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Scarica
+                  </button>
+                  <button
+                    onClick={() => rimuoviModulo(m.id)}
+                    aria-label={`Rimuovi ${m.nome} dallo storico`}
+                    className="rounded-lg p-2 text-primary-400 transition hover:bg-error-50 hover:text-error-600"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );

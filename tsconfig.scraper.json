@@ -2,8 +2,9 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
     "types": ["node"],
     "strict": true,
     "skipLibCheck": true,
@@ -14,5 +15,10 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/scraper/**/*.ts"]
+  "include": [
+    "src/scraper/**/*.ts",
+    "src/lib/resend.ts",
+    "src/lib/notifier.ts",
+    "src/lib/matchingEngine.ts"
+  ]
 }

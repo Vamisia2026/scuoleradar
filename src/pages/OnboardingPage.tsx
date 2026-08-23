@@ -2,13 +2,21 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Baby, School, BookOpen, GraduationCap, Search, Check, MapPin, Send, Mail, Radar, ArrowRight, ArrowLeft,
-  Plus, Users, Moon, Briefcase, Wrench,
+  Plus, Users, Moon, Briefcase, Wrench, AlertCircle,
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { ordiniScuola, materie, type OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import { Pill } from '@/components/Pill';
+
+/** Alias codici di laurea (LM) → classi di concorso correlate, per la ricerca CDC. */
+const ALIAS_LAUREA_CLASSI: Record<string, string[]> = {
+  lm85: ['A-18'], // Scienze pedagogiche → Filosofia e scienze umane
+  lm14: ['A-12'], // Filologia moderna → Discipline letterarie
+  lm40: ['A-28'], // Matematica → Matematica e fisica
+  lm37: ['A-22'], // Lingue e letterature moderne → Inglese
+};
 
 const ordineIcons: Record<OrdineScuola, React.ReactNode> = {
   infanzia: <Baby className="h-6 w-6" />,
@@ -39,16 +47,43 @@ export function OnboardingPage() {
   const [materiaFilter, setMateriaFilter] = useState('');
   // custom materia input
   const [customMateriaInput, setCustomMateriaInput] = useState('');
+  // ricerca materie (Passo 2) e province (Passo 3)
+  const [queryMateria, setQueryMateria] = useState('');
+  const [queryProvincia, setQueryProvincia] = useState('');
+  const [provinceWarning, setProvinceWarning] = useState(false);
 
   const provinceSorted = useMemo(() => [...province].sort((a, b) => a.nome.localeCompare(b.nome)), []);
+
+  /** Fair use: massimo 4 province selezionabili nel piano attuale. */
+  const LIMITE_PROVINCE = 4;
+
+  const materieFiltrate = useMemo(() => {
+    const q = queryMateria.trim().toLowerCase();
+    if (!q) return materie;
+    return materie.filter((m) => m.nome.toLowerCase().includes(q));
+  }, [queryMateria]);
+
+  const provinceFiltrate = useMemo(() => {
+    const q = queryProvincia.trim().toLowerCase();
+    if (!q) return provinceSorted;
+    return provinceSorted.filter(
+      (p) => p.nome.toLowerCase().includes(q) || p.codice.toLowerCase().includes(q),
+    );
+  }, [queryProvincia, provinceSorted]);
 
   const classiFiltrate = useMemo(() => {
     let list = classiConcorso;
     if (materiaFilter) list = list.filter((c) => c.materie.includes(materiaFilter));
     if (queryClasse.trim()) {
       const q = queryClasse.toLowerCase();
+      // Normalizza "LM-85"/"LM85" → "lm85" per il match sugli alias di laurea.
+      const qAlias = q.replace(/[\s-]/g, '');
+      const classiDaAlias = ALIAS_LAUREA_CLASSI[qAlias] ?? [];
       list = list.filter(
-        (c) => c.codice.toLowerCase().includes(q) || c.denominazione.toLowerCase().includes(q),
+        (c) =>
+          c.codice.toLowerCase().includes(q) ||
+          c.denominazione.toLowerCase().includes(q) ||
+          classiDaAlias.includes(c.codice),
       );
     }
     return list;
@@ -82,9 +117,18 @@ export function OnboardingPage() {
   };
 
   const toggleProvincia = (codice: string) => {
-    setProvinceCodici((prev) =>
-      prev.includes(codice) ? prev.filter((c) => c !== codice) : [...prev, codice],
-    );
+    if (provinceCodici.includes(codice)) {
+      setProvinceCodici((prev) => prev.filter((c) => c !== codice));
+      setProvinceWarning(false);
+      return;
+    }
+    // Fair use: blocca la 5ª selezione oltre il limite.
+    if (provinceCodici.length >= LIMITE_PROVINCE) {
+      setProvinceWarning(true);
+      return;
+    }
+    setProvinceCodici((prev) => [...prev, codice]);
+    setProvinceWarning(false);
   };
 
   const canNext = () => {
@@ -214,7 +258,7 @@ export function OnboardingPage() {
                         type="text"
                         value={queryClasse}
                         onChange={(e) => setQueryClasse(e.target.value)}
-                        placeholder="Es. A-12, Matematica…"
+                        placeholder="Es. A-18, A-22, Filosofia..."
                         className="w-full rounded-xl border border-primary-200 bg-white py-2.5 pl-10 pr-4 text-sm text-primary-800"
                       />
                     </div>
@@ -280,22 +324,36 @@ export function OnboardingPage() {
                       ))}
                     </div>
                   )}
+                  <div className="relative mb-3">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary-400" />
+                    <input
+                      type="text"
+                      value={queryMateria}
+                      onChange={(e) => setQueryMateria(e.target.value)}
+                      placeholder="Cerca materia…"
+                      className="w-full rounded-xl border border-primary-200 bg-white py-2.5 pl-10 pr-4 text-sm text-primary-800"
+                    />
+                  </div>
                   <div className="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-2">
-                    {materie.map((m) => {
-                      const selected = materieId.includes(m.id);
-                      return (
-                        <button
-                          key={m.id}
-                          onClick={() => toggleMateria(m.id)}
-                          className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
-                            selected ? 'bg-primary-50 text-primary-800' : 'text-primary-700 hover:bg-primary-50'
-                          }`}
-                        >
-                          <span>{m.nome}</span>
-                          {selected && <Check className="h-4 w-4 text-primary-600" />}
-                        </button>
-                      );
-                    })}
+                    {materieFiltrate.length === 0 ? (
+                      <p className="p-4 text-center text-sm text-primary-400">Nessuna materia trovata.</p>
+                    ) : (
+                      materieFiltrate.map((m) => {
+                        const selected = materieId.includes(m.id);
+                        return (
+                          <button
+                            key={m.id}
+                            onClick={() => toggleMateria(m.id)}
+                            className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
+                              selected ? 'bg-primary-50 text-primary-800' : 'text-primary-700 hover:bg-primary-50'
+                            }`}
+                          >
+                            <span>{m.nome}</span>
+                            {selected && <Check className="h-4 w-4 text-primary-600" />}
+                          </button>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 
@@ -362,28 +420,64 @@ export function OnboardingPage() {
                 </div>
               )}
 
-              <div className="mt-5 max-h-80 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-2">
-                {provinceSorted.map((p) => {
-                  const selected = provinceCodici.includes(p.codice);
-                  return (
-                    <label
-                      key={p.codice}
-                      className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition hover:bg-primary-50 ${
-                        selected ? 'bg-primary-50' : ''
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        onChange={() => toggleProvincia(p.codice)}
-                        className="h-4 w-4 rounded border-primary-300 text-primary-500"
-                      />
-                      <MapPin className="h-4 w-4 text-primary-400" />
-                      <span className="text-sm text-primary-800">{p.nome}</span>
-                      <span className="ml-auto text-xs text-primary-400">{p.codice}</span>
-                    </label>
-                  );
-                })}
+              {/* Ricerca + contatore fair use */}
+              <div className="mt-4 flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary-400" />
+                  <input
+                    type="text"
+                    value={queryProvincia}
+                    onChange={(e) => setQueryProvincia(e.target.value)}
+                    placeholder="Cerca provincia (nome o sigla)…"
+                    className="w-full rounded-xl border border-primary-200 bg-white py-2.5 pl-10 pr-4 text-sm text-primary-800"
+                  />
+                </div>
+                <span
+                  className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    provinceCodici.length >= LIMITE_PROVINCE
+                      ? 'bg-secondary-100 text-secondary-700'
+                      : 'bg-primary-50 text-primary-600'
+                  }`}
+                >
+                  {provinceCodici.length}/{LIMITE_PROVINCE} province
+                </span>
+              </div>
+
+              {(provinceWarning || provinceCodici.length >= LIMITE_PROVINCE) && (
+                <div className="mt-3 flex items-start gap-2 rounded-xl border border-secondary-200 bg-secondary-50 px-4 py-3 text-sm text-secondary-800">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  Puoi selezionare fino a {LIMITE_PROVINCE} province col tuo piano attuale.
+                </div>
+              )}
+
+              <div className="mt-3 max-h-80 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-2">
+                {provinceFiltrate.length === 0 ? (
+                  <p className="p-4 text-center text-sm text-primary-400">Nessuna provincia trovata.</p>
+                ) : (
+                  provinceFiltrate.map((p) => {
+                    const selected = provinceCodici.includes(p.codice);
+                    const atLimit = provinceCodici.length >= LIMITE_PROVINCE && !selected;
+                    return (
+                      <label
+                        key={p.codice}
+                        className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition hover:bg-primary-50 ${
+                          selected ? 'bg-primary-50' : atLimit ? 'opacity-50' : ''
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          disabled={atLimit}
+                          onChange={() => toggleProvincia(p.codice)}
+                          className="h-4 w-4 rounded border-primary-300 text-primary-500"
+                        />
+                        <MapPin className="h-4 w-4 text-primary-400" />
+                        <span className="text-sm text-primary-800">{p.nome}</span>
+                        <span className="ml-auto text-xs text-primary-400">{p.codice}</span>
+                      </label>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}

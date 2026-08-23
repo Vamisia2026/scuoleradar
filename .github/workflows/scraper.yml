@@ -7,7 +7,7 @@
 # - Trigger manuale: workflow_dispatch (GitHub → Actions → Run workflow)
 #
 # Secrets richiesti (repo Settings → Secrets and variables → Actions):
-#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY
 # ============================================================
 name: Scraper Interpelli
 
@@ -18,7 +18,7 @@ on:
 
 jobs:
   scrape:
-    name: Scraping interpelli → Supabase (notices)
+    name: Scraping interpelli → Supabase (interpelli, fallback notices)
     runs-on: ubuntu-latest
 
     steps:
@@ -42,6 +42,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           FONTE_TEST_URL: ''
           SCRAPER_PROVINCE_TEST: MI,TO
         run: npm run scrape

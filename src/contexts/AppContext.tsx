@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { supabase } from '@/lib/supabase';
 import { interpelli, type Interpello } from '@/data/interpelli';
+import { getModuliScaricati } from '@/data/moduli';
+import { getFeedInterpelli } from '@/lib/matchingEngine';
 import type { OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso, classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
@@ -59,6 +61,7 @@ interface AppContextValue extends AppState {
   setEsami: (e: Esame[]) => void;
   interpelliFiltrati: Interpello[];
   origineDati: 'mock' | 'supabase';
+  loading: boolean;
   authModalOpen: boolean;
   authModalMode: 'login' | 'registrazione';
   openAuthModal: (mode?: 'login' | 'registrazione') => void;
@@ -268,7 +271,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             id: authUser.id,
             email: authUser.email ?? dati.emailNotifica,
             province_attive: dati.provinceCodici,
+            province_interesse: dati.provinceCodici,
             classi_concorso: dati.classiCodici,
+            ordini_scuola: dati.ordini,
+            moduli_scaricati: getModuliScaricati().map((m) => m.id),
             favorite_schools: dati.favoriteSchools,
             ignored_schools: dati.ignoredSchools,
           },
@@ -283,45 +289,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [preferenze],
   );
 
-  /** Avvia l'autenticazione Google OAuth via Supabase Auth. */
+  /** Avvia Google OAuth con redirect diretto all'URL generato da Supabase (niente One Tap). */
   const loginConGoogle = useCallback(async () => {
-    if (!supabase) {
-      console.warn('Supabase non configurato: impossibile avviare Google OAuth.');
-      return;
-    }
-    const { error } = await supabase.auth.signInWithOAuth({
+    if (!supabase) return;
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/dashboard`,
+        redirectTo: `${window.location.origin}/auth/callback`,
+        skipBrowserRedirect: true, // Non far gestire il redirect al client JS
+        queryParams: {
+          prompt: 'select_account', // Forza il flusso OAuth classico (niente One Tap)
+        },
       },
     });
-    if (error) {
-      console.error('Google OAuth non riuscito:', error.message);
-      throw error;
+
+    if (error) throw error;
+
+    if (data?.url) {
+      window.location.href = data.url; // Forza il browser ad andare direttamente su Google
     }
   }, []);
 
   // All'avvio, se esiste una sessione Supabase, carica le preferenze salvate nel DB.
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+    let attivo = true;
     (async () => {
       try {
         const {
           data: { user: au },
         } = await supabase.auth.getUser();
+        if (!attivo) return;
+        setLoading(false);
         if (!au) return;
         const { data, error } = await supabase
           .from('profiles')
-          .select('province_attive, classi_concorso, favorite_schools, ignored_schools')
+          .select('province_attive, province_interesse, classi_concorso, ordini_scuola, favorite_schools, ignored_schools')
           .eq('id', au.id)
           .maybeSingle();
         if (!error && data) {
           setPref((prev) => ({
             ...prev,
+            ordini:
+              data.ordini_scuola && data.ordini_scuola.length > 0 ? data.ordini_scuola : prev.ordini,
             provinceCodici:
-              data.province_attive && data.province_attive.length > 0
-                ? data.province_attive
-                : prev.provinceCodici,
+              data.province_interesse && data.province_interesse.length > 0
+                ? data.province_interesse
+                : data.province_attive && data.province_attive.length > 0
+                  ? data.province_attive
+                  : prev.provinceCodici,
             classiCodici:
               data.classi_concorso && data.classi_concorso.length > 0
                 ? data.classi_concorso
@@ -337,20 +357,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }));
         }
       } catch (err) {
+        if (attivo) setLoading(false);
         console.warn('Caricamento profilo da Supabase non riuscito:', (err as Error).message);
       }
     })();
+    return () => {
+      attivo = false;
+    };
   }, [setPref]);
 
   // Sincronizza la sessione Supabase Auth (es. redirect di ritorno da Google OAuth).
-  // Qui NON forziamo cambi di rotta: la navigazione interna avviene nel componente
-  // <AuthRedirect />, solo su SIGNED_IN, per evitare loop di reindirizzamento OAuth.
+  // Qui NON forziamo cambi di rotta: la navigazione di ritorno è gestita unicamente
+  // dalla rotta dedicata <AuthCallback />, evitando loop di reindirizzamento OAuth.
   useEffect(() => {
     if (!supabase) return;
     const client = supabase;
 
     const { data: subscription } = client.auth.onAuthStateChange((event, session) => {
       console.log('[AUTH EVENT]', event, session);
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        setLoading(false);
+      }
       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
         const meta = (session.user.user_metadata ?? {}) as Record<string, unknown>;
         const fullName = String(meta.full_name ?? meta.name ?? '').trim();
@@ -382,15 +409,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setEsami = useCallback((e: Esame[]) => setEsamiState(e), [setEsamiState]);
 
-  // Fonte degli interpelli: dati reali da Supabase (notices) con fallback ai dati di esempio.
+  // Fonte degli interpelli (FASE 3 — Matching Engine):
+  // 1. tabella `interpelli` filtrata per province/classi del profilo,
+  // 2. fallback sulla tabella legacy `notices`,
+  // 3. fallback sui dati di esempio.
   const [fontiInterpelli, setFontiInterpelli] = useState<Interpello[]>(interpelli);
   const [origineDati, setOrigineDati] = useState<'mock' | 'supabase'>('mock');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!supabase) return;
     let attivo = true;
     (async () => {
       try {
+        // Matching Engine: query `interpelli` per le province e le classi del profilo
+        const feed = await getFeedInterpelli(supabase, {
+          province: preferenze.provinceCodici,
+          classi: preferenze.classiCodici,
+        });
+        if (!attivo) return;
+        if (feed && feed.length > 0) {
+          setFontiInterpelli(feed);
+          setOrigineDati('supabase');
+          console.log(
+            `✓ Dashboard: ${feed.length} interpelli reali dal Matching Engine (tabella interpelli).`,
+          );
+          return;
+        }
+
+        // Fallback: tabella legacy `notices` (popolata dallo scraper)
         const { data, error } = await supabase
           .from('notices')
           .select('*')
@@ -403,14 +450,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
           console.log(`✓ Dashboard: ${data.length} interpelli reali caricati da Supabase (notices).`);
         } else {
           console.warn(
-            error ? `Errore lettura notices: ${error.message}` : 'Tabella notices vuota: uso i dati di esempio.',
+            error
+              ? `Errore lettura notices: ${error.message}`
+              : 'Nessun interpello nel DB: uso i dati di esempio.',
           );
           setFontiInterpelli(interpelli);
           setOrigineDati('mock');
         }
       } catch (err) {
         if (!attivo) return;
-        console.warn('Fetch notices non riuscito, uso i dati di esempio:', (err as Error).message);
+        console.warn('Fetch interpelli non riuscito, uso i dati di esempio:', (err as Error).message);
         setFontiInterpelli(interpelli);
         setOrigineDati('mock');
       }
@@ -418,7 +467,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       attivo = false;
     };
-  }, []);
+  }, [preferenze.provinceCodici, preferenze.classiCodici]);
 
   const interpelliFiltrati = useMemo<Interpello[]>(() => {
     if (!preferenze.onboarded) return [];
@@ -480,6 +529,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setEsami,
     interpelliFiltrati,
     origineDati,
+    loading,
     authModalOpen,
     authModalMode,
     openAuthModal,
