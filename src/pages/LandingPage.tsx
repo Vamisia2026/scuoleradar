@@ -1,5 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Radar, BellRing, ShieldCheck, Heart, ArrowRight, UserPlus, Send, CreditCard } from 'lucide-react';
+import {
+  Radar, BellRing, ShieldCheck, Heart, ArrowRight, UserPlus, Send, CreditCard, MapPin, Calendar,
+} from 'lucide-react';
 import { Header } from '@/components/Header';
 import { SimulatorRadar } from '@/components/SimulatorRadar';
 import { useApp } from '@/contexts/AppContext';
@@ -79,7 +81,7 @@ export function LandingPage() {
             <h2 className="text-3xl font-bold text-primary-900">Come funziona</h2>
             <p className="mt-3 text-primary-600">Tre passi. Semplice e onesto.</p>
           </div>
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="animate-fade-in grid gap-6 md:grid-cols-3">
             <StepCard
               icon={<UserPlus className="h-6 w-6" />}
               step="1"
@@ -150,6 +152,62 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* Vetrina dimostrativa */}
+      <section className="bg-primary-50 py-16 sm:py-20">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="mb-10 text-center">
+            <h2 className="text-3xl font-bold text-primary-900">Ecco cosa riceverai</h2>
+            <p className="mt-3 text-primary-600">
+              Un assaggio degli avvisi che il radar ti segnala, filtrati per il tuo profilo.
+            </p>
+          </div>
+          <div className="animate-fade-in grid gap-5 md:grid-cols-3">
+            <VetrinaCard
+              tipo="Supplenza"
+              tipoClasse="bg-primary-50 text-primary-600"
+              classe="A-18"
+              titolo="Interpello supplenza Filosofia e Scienze Umane"
+              scuola="Liceo Classico A. Manzoni"
+              provincia="AT"
+              scadenza="30/09/2026"
+            />
+            <VetrinaCard
+              tipo="Bando PNRR"
+              tipoClasse="bg-secondary-50 text-secondary-700"
+              classe="A-050"
+              titolo="Esperto esterno Biologia e Chimica"
+              scuola="IIS G. Carducci"
+              provincia="RM"
+              scadenza="12/09/2026"
+            />
+            <VetrinaCard
+              tipo="Sostegno"
+              tipoClasse="bg-accent-50 text-accent-700"
+              classe="ADEE"
+              titolo="Supplenza sostegno scuola primaria"
+              scuola="IC Incisa Scapaccino"
+              provincia="AL"
+              scadenza="05/10/2026"
+            />
+          </div>
+          <p className="mt-6 text-center text-sm text-primary-500">
+            Inserisci il tuo profilo e vedrai solo le opportunità davvero pertinenti per te.
+          </p>
+        </div>
+      </section>
+
+      {/* Stats / social proof */}
+      <section className="bg-primary-900 py-16 sm:py-20">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="grid gap-10 text-center md:grid-cols-4">
+            <Stat numero="100+" label="Interpelli e bandi mappati ogni mese" />
+            <Stat numero="3" label="Notifiche incluse per provare gratis" />
+            <Stat numero="49€" label="All'anno per il piano PRO, PureFocus incluso" />
+            <Stat numero="0" label="Dark pattern: onestà prima di tutto" />
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="bg-white py-16 sm:py-24">
         <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
@@ -216,6 +274,56 @@ function ValueCard({
       </span>
       <h3 className="mt-4 text-lg font-bold text-primary-800">{title}</h3>
       <p className="mt-2 text-sm leading-relaxed text-primary-600">{text}</p>
+    </div>
+  );
+}
+
+function VetrinaCard({
+  tipo,
+  tipoClasse,
+  classe,
+  titolo,
+  scuola,
+  provincia,
+  scadenza,
+}: {
+  tipo: string;
+  tipoClasse: string;
+  classe: string;
+  titolo: string;
+  scuola: string;
+  provincia: string;
+  scadenza: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card transition hover:-translate-y-0.5 hover:shadow-soft">
+      <div className="flex items-center justify-between gap-2">
+        <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${tipoClasse}`}>{tipo}</span>
+        <span className="rounded-md bg-primary-100 px-2 py-0.5 text-xs font-bold text-primary-700">
+          {classe}
+        </span>
+      </div>
+      <h3 className="mt-3 text-base font-bold text-primary-800">{titolo}</h3>
+      <p className="mt-1 truncate text-sm text-primary-500">{scuola}</p>
+      <div className="mt-3 flex items-center gap-3 text-xs text-primary-500">
+        <span className="inline-flex items-center gap-1">
+          <MapPin className="h-3.5 w-3.5" />
+          {provincia}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Calendar className="h-3.5 w-3.5" />
+          Scade il {scadenza}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ numero, label }: { numero: string; label: string }) {
+  return (
+    <div>
+      <p className="text-4xl font-bold text-white">{numero}</p>
+      <p className="mx-auto mt-2 max-w-[220px] text-sm text-primary-200">{label}</p>
     </div>
   );
 }
