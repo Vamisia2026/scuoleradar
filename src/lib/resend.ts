@@ -32,12 +32,15 @@ export interface DestinatarioNotifica {
 }
 
 export interface DettagliNotifica {
+  /** Identificativo dell'interpello (per il link di fallback `/interpello/:id`). */
+  id?: string;
   title: string;
   schoolName: string | null;
   province: string;
   /** Classi di concorso dell'interpello (es. ['A-22', 'ADEE']) */
   classi: string[];
   scadenza: string | null;
+  /** URL del bando/interpello originale della scuola */
   link: string | null;
 }
 

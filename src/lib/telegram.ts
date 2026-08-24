@@ -36,6 +36,15 @@ function formatDataScadenza(data: string | null): string {
   return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
 }
 
+/** Base assoluta dell'app (origin) derivata dall'URL della dashboard. */
+function baseUrl(dashboardUrl: string): string {
+  try {
+    return new URL('/', dashboardUrl).toString();
+  } catch {
+    return 'https://scuoleradar.it/';
+  }
+}
+
 /** Restituisce il token del bot o `null` se non configurato (o placeholder). */
 export function getTelegramBotToken(): string | null {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -55,7 +64,14 @@ export function formattaMessaggioInterpello(
   const scuola = escapeHtml(interpello.schoolName || 'Scuola non indicata');
   const provincia = escapeHtml(interpello.province);
   const scadenza = formatDataScadenza(interpello.scadenza);
-  const link = interpello.link ? escapeHtml(interpello.link) : dashboardUrl;
+
+  // Link diretto al bando/interpello originale della scuola;
+  // fallback: pagina di dettaglio dell'interpello sulla nostra app.
+  const linkOrigine = interpello.link
+    ? interpello.link
+    : interpello.id
+      ? `${baseUrl(dashboardUrl)}interpello/${encodeURIComponent(interpello.id)}`
+      : dashboardUrl;
 
   return (
     '🎯 <b>Nuovo Interpello Trovato!</b>\n' +
@@ -63,7 +79,7 @@ export function formattaMessaggioInterpello(
     `📍 <b>Provincia:</b> ${provincia}\n` +
     `📚 <b>Classe di Concorso:</b> ${escapeHtml(classe)}\n` +
     `⏳ <b>Scadenza:</b> ${scadenza}\n` +
-    `🔗 <a href="${link}">Apri su ScuoleRadar</a>`
+    `🔗 <a href="${escapeHtml(linkOrigine)}">Apri Interpello Originale</a>`
   );
 }
 

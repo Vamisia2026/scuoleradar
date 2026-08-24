@@ -72,6 +72,7 @@ export async function notificaNuoviInterpelli(
     }
 
     const dettagli: DettagliNotifica = {
+      id: interpello.hashId,
       title: interpello.title,
       schoolName: interpello.schoolName,
       province: interpello.province,
