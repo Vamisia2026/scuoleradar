@@ -84,6 +84,24 @@ export async function notificaNuoviInterpelli(
     // Email + Telegram in parallelo per ogni utente qualificato
     const risultati = await Promise.all(
       utenti.map(async (utente) => {
+        // FASE 6 — guardia server-side: RPC atomica del contatore notifiche.
+        // base → max 3/mese (skip oltre il limite); pro → sempre consentito.
+        if (client) {
+          const { data: rpcData, error: rpcError } = await client.rpc('incrementa_notifiche_utente', {
+            p_user_id: utente.id,
+          });
+          if (rpcError) {
+            console.warn(
+              `  ⚠ RPC contatore notifiche fallita per ${utente.id.slice(0, 8)}… (${rpcError.message}) — invio comunque.`,
+            );
+          } else if (rpcData?.[0]?.consentito === false) {
+            console.log(
+              `  ℹ Utente ${utente.id.slice(0, 8)}… al limite notifiche (${rpcData[0].notifiche_usate}/3): notifica saltata.`,
+            );
+            return [] as Array<{ tipo: 'email' | 'telegram'; valore: EsitoJob }>;
+          }
+        }
+
         const jobs: Array<{ tipo: 'email' | 'telegram'; promessa: Promise<EsitoJob> }> = [];
 
         if (utente.email && resend) {

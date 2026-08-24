@@ -110,6 +110,8 @@ export async function getFeedInterpelli(
 
 /** Utente (profilo) compatibile con un interpello, pronto per la notifica. */
 export interface UtenteCompatibile {
+  /** UUID dell'utente (chiave per la RPC del contatore notifiche). */
+  id: string;
   email: string;
   nome?: string;
   province: string[];
@@ -131,7 +133,7 @@ export async function findUtentiCompatibili(
   try {
     const { data, error } = await client
       .from('profiles')
-      .select('email, email_notifica, nome, province_interesse, province_attive, classi_concorso, telegram_chat_id');
+      .select('id, email, email_notifica, nome, province_interesse, province_attive, classi_concorso, telegram_chat_id');
 
     if (error) {
       console.warn('MatchingEngine — lettura profiles (utenti compatibili):', error.message);
@@ -156,6 +158,7 @@ export async function findUtentiCompatibili(
       if (!matchProvincia || !matchClasse) continue;
 
       compatibili.push({
+        id: String(riga.id),
         email: emailValida ? email : '',
         nome: riga.nome ? String(riga.nome) : undefined,
         province: provinceProfilo,

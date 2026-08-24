@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet } from 'react-router-dom';
 import { BellRing, Sparkles, CheckCircle2, CreditCard, Radar, Heart, Database } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { Modal } from '@/components/Modal';
@@ -49,7 +49,7 @@ export function DashboardLayout() {
 }
 
 export function DashboardPage() {
-  const { interpelliFiltrati, notificheUsate, abbonato, abbonati, origineDati } = useApp();
+  const { interpelliFiltrati, notificheUsate, abbonato, avviaCheckout, origineDati } = useApp();
   const [showAbbonamento, setShowAbbonamento] = useState(false);
 
   const limiteRaggiunto = !abbonato && notificheUsate >= 3;
@@ -149,7 +149,13 @@ export function DashboardPage() {
         </p>
       </div>
 
-      <AbbonamentoModal open={showAbbonamento} onClose={() => setShowAbbonamento(false)} onConfirm={abbonati} />
+      <AbbonamentoModal
+        open={showAbbonamento}
+        onClose={() => setShowAbbonamento(false)}
+        onConfirm={() => {
+          void avviaCheckout('pro_annuale');
+        }}
+      />
     </div>
   );
 }
@@ -163,82 +169,60 @@ function AbbonamentoModal({
   onClose: () => void;
   onConfirm: () => void;
 }) {
-  const [pagato, setPagato] = useState(false);
-  const navigate = useNavigate();
+  const [invio, setInvio] = useState(false);
 
-  const handleSimula = () => {
-    setPagato(true);
-    onConfirm();
-  };
-
-  const handleClose = () => {
-    setPagato(false);
-    onClose();
+  const handleProcedi = () => {
+    setInvio(true);
+    // Avvia il checkout Lemon Squeezy (la Edge Function ritorna l'URL di redirect)
+    Promise.resolve(onConfirm()).finally(() => setInvio(false));
   };
 
   return (
-    <Modal open={open} onClose={handleClose} title="Abbonati a ScuoleRadar" size="sm">
-      {pagato ? (
-        <div className="text-center">
-          <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-accent-500 text-white">
-            <CheckCircle2 className="h-7 w-7" />
-          </span>
-          <h3 className="mt-4 text-lg font-bold text-primary-800">Pagamento simulato!</h3>
-          <p className="mt-2 text-sm text-primary-600">
-            Da ora riceverai tutte le notifiche pertinenti, senza limiti. Il contatore è stato azzerato.
-          </p>
-          <button
-            onClick={() => {
-              handleClose();
-              navigate('/dashboard/radar');
-            }}
-            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
-          >
-            Vai alla dashboard
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 p-5 text-white">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5" />
-              <span className="text-sm font-medium">Piano PRO annuale</span>
-            </div>
-            <p className="mt-2 text-3xl font-bold">49€<span className="text-base font-normal">/anno</span></p>
-            <p className="mt-1 text-sm text-primary-100">Si ripaga con un'ora di lavoro.</p>
+    <Modal open={open} onClose={onClose} title="Abbonati a ScuoleRadar" size="sm">
+      <div className="space-y-4">
+        <div className="rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 p-5 text-white">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5" />
+            <span className="text-sm font-medium">Piano PRO annuale</span>
           </div>
-
-          <ul className="space-y-2 text-sm text-primary-700">
-            <li className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-accent-500" />
-              Notifiche illimitate su Telegram ed email
-            </li>
-            <li className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-accent-500" />
-              Accesso agli Strumenti Docente (CV e Verifica CFU)
-            </li>
-            <li className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-accent-500" />
-              Incluso nel piano PRO: Accesso completo a PureFocus
-            </li>
-            <li className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-accent-500" />
-              Niente rinnovi automatici nascosti
-            </li>
-          </ul>
-
-          <button
-            onClick={handleSimula}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-secondary-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
-          >
-            <CreditCard className="h-4 w-4" />
-            Simula pagamento
-          </button>
-          <p className="text-center text-xs text-primary-400">
-            Pagamento simulato a scopo dimostrativo. Nessun addebito reale.
+          <p className="mt-2 text-3xl font-bold">
+            49€<span className="text-base font-normal">/anno</span>
           </p>
+          <p className="mt-1 text-sm text-primary-100">Si ripaga con un&apos;ora di lavoro.</p>
         </div>
-      )}
+
+        <ul className="space-y-2 text-sm text-primary-700">
+          <li className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-accent-500" />
+            Notifiche illimitate su Telegram ed email
+          </li>
+          <li className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-accent-500" />
+            Accesso agli Strumenti Docente (CV e Verifica CFU)
+          </li>
+          <li className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-accent-500" />
+            Incluso nel piano PRO: Accesso completo a PureFocus
+          </li>
+          <li className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-accent-500" />
+            Niente rinnovi automatici nascosti
+          </li>
+        </ul>
+
+        <button
+          onClick={handleProcedi}
+          disabled={invio}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-secondary-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600 disabled:opacity-50"
+        >
+          <CreditCard className="h-4 w-4" />
+          {invio ? 'Reindirizzamento al pagamento…' : 'Procedi al pagamento (Lemon Squeezy)'}
+        </button>
+        <p className="text-center text-xs text-primary-400">
+          Pagamento sicuro gestito da Lemon Squeezy (Merchant of Record): IVA e pagamenti inclusi.
+          Nessun addebito automatico nascosto.
+        </p>
+      </div>
     </Modal>
   );
 }

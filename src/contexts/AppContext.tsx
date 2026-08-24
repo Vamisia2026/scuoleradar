@@ -48,6 +48,8 @@ interface AppState {
   preferenze: Preferenze;
   notificheUsate: number;
   abbonato: boolean;
+  /** Crediti A la Carte disponibili (FASE 6) */
+  crediti: number;
   esami: Esame[];
   interpelliNotificati: string[]; // ids
 }
@@ -59,7 +61,7 @@ interface AppContextValue extends AppState {
   setPreferenze: (p: Partial<Preferenze>) => void;
   completaOnboarding: (p: Partial<Preferenze>) => void;
   incrementaNotifica: (interpelloId: string) => void;
-  abbonati: () => void;
+  avviaCheckout: (plan: string) => Promise<void>;
   setEsami: (e: Esame[]) => void;
   interpelliFiltrati: Interpello[];
   origineDati: 'mock' | 'supabase';
@@ -122,10 +124,14 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useLocalStorage<User | null>('sr_user', null);
   const [preferenze, setPref] = useLocalStorage<Preferenze>('sr_preferenze', defaultPreferenze);
-  const [notificheUsate, setNotificheUsate] = useLocalStorage<number>('sr_notifiche', 0);
-  const [abbonato, setAbbonato] = useLocalStorage<boolean>('sr_abbonato', false);
   const [esami, setEsamiState] = useLocalStorage<Esame[]>('sr_esami', []);
   const [interpelliNotificati, setNotificati] = useLocalStorage<string[]>('sr_notificati', []);
+
+  // FASE 6 — piano e contatori letti da Supabase (non più localStorage)
+  const [abbonato, setAbbonato] = useState(false);
+  const [notificheUsate, setNotificheUsate] = useState(0);
+  const [crediti, setCrediti] = useState(0);
+  const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
 
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'registrazione'>('login');
@@ -176,9 +182,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPref(defaultPreferenze);
     setNotificheUsate(0);
     setAbbonato(false);
+    setCrediti(0);
+    setSupabaseUserId(null);
     setEsamiState([]);
     setNotificati([]);
-  }, [setUser, setPref, setNotificheUsate, setAbbonato, setEsamiState, setNotificati]);
+  }, [setUser, setPref, setNotificheUsate, setAbbonato, setCrediti, setSupabaseUserId, setEsamiState, setNotificati]);
 
   const setPreferenze = useCallback(
     (p: Partial<Preferenze>) => setPref((prev) => ({ ...prev, ...p })),
@@ -193,17 +201,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const incrementaNotifica = useCallback(
     (interpelloId: string) => {
       setNotificati((prev) => (prev.includes(interpelloId) ? prev : [...prev, interpelloId]));
-      if (!abbonato) {
+      // FASE 6 — contatore server-side via RPC (se l'utente è autenticato su Supabase)
+      if (supabaseUserId) {
+        void supabase?.rpc('incrementa_notifiche_utente', { p_user_id: supabaseUserId }).then(
+          ({ data, error }) => {
+            if (!error && Array.isArray(data) && data[0]) {
+              setNotificheUsate(Number(data[0].notifiche_usate));
+            }
+          },
+        );
+      } else if (!abbonato) {
+        // modalità demo (Supabase non configurato): comportamento locale di backup
         setNotificheUsate((n) => Math.min(n + 1, 3));
       }
     },
-    [abbonato, setNotificati, setNotificheUsate],
+    [supabaseUserId, abbonato, setNotificati],
   );
 
-  const abbonati = useCallback(() => {
-    setAbbonato(true);
-    setNotificheUsate(0);
-  }, [setAbbonato, setNotificheUsate]);
+  /** FASE 6 — avvia il checkout Lemon Squeezy per il piano richiesto e redirige l'utente. */
+  const avviaCheckout = useCallback(async (plan: string) => {
+    if (!supabase) {
+      console.warn('Supabase non configurato: checkout non disponibile in modalità demo.');
+      return;
+    }
+    const { data, error } = await supabase.functions.invoke('ls-checkout', { body: { plan } });
+    if (error) {
+      console.error('Errore avvio checkout:', error.message);
+      return;
+    }
+    const url = (data as { url?: string } | null)?.url;
+    if (url) window.location.href = url;
+  }, []);
 
   // Stato simulato per la DevToolbar (solo sviluppo). Aggiorna all'istante context + UI.
   const simulaStato = useCallback(
@@ -236,16 +264,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const resettaTutto = useCallback(() => {
-    ['sr_user', 'sr_preferenze', 'sr_notifiche', 'sr_abbonato', 'sr_esami', 'sr_notificati'].forEach(
-      (k) => localStorage.removeItem(k),
+    ['sr_user', 'sr_preferenze', 'sr_esami', 'sr_notificati'].forEach((k) =>
+      localStorage.removeItem(k),
     );
     setUser(null);
     setPref(defaultPreferenze);
     setNotificheUsate(0);
     setAbbonato(false);
+    setCrediti(0);
+    setSupabaseUserId(null);
     setEsamiState([]);
     setNotificati([]);
-  }, [setUser, setPref, setNotificheUsate, setAbbonato, setEsamiState, setNotificati]);
+  }, [setUser, setPref, setNotificheUsate, setAbbonato, setCrediti, setSupabaseUserId, setEsamiState, setNotificati]);
 
   /**
    * PASSO 3 — Persiste le preferenze utente (province di interesse e classi di concorso)
@@ -332,7 +362,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!au) return;
         const { data, error } = await supabase
           .from('profiles')
-          .select('province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, favorite_schools, ignored_schools')
+          .select('province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, abbonamento_scade_il, crediti, notifiche_usate, notifiche_mese, favorite_schools, ignored_schools')
           .eq('id', au.id)
           .maybeSingle();
         if (!error && data) {
@@ -360,6 +390,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 ? data.ignored_schools
                 : prev.ignoredSchools,
           }));
+          // FASE 6 — piano e contatori dal profilo (server-side)
+          setAbbonato(
+            data.piano === 'pro' &&
+              (!data.abbonamento_scade_il || new Date(data.abbonamento_scade_il) > new Date()),
+          );
+          setCrediti(Number(data.crediti ?? 0));
+          setNotificheUsate(Number(data.notifiche_usate ?? 0));
         }
       } catch (err) {
         if (attivo) setLoading(false);
@@ -384,6 +421,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
+        setSupabaseUserId(session.user.id);
         const meta = (session.user.user_metadata ?? {}) as Record<string, unknown>;
         const fullName = String(meta.full_name ?? meta.name ?? '').trim();
         if (fullName) {
@@ -407,10 +445,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       if (event === 'SIGNED_OUT') {
         setUser(null);
+        setSupabaseUserId(null);
       }
     });
     return () => subscription.subscription.unsubscribe();
-  }, [setUser]);
+  }, [setUser, setSupabaseUserId]);
 
   const setEsami = useCallback((e: Esame[]) => setEsamiState(e), [setEsamiState]);
 
@@ -522,6 +561,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     preferenze,
     notificheUsate,
     abbonato,
+    crediti,
     esami,
     interpelliNotificati,
     register,
@@ -530,7 +570,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPreferenze,
     completaOnboarding,
     incrementaNotifica,
-    abbonati,
+    avviaCheckout,
     setEsami,
     interpelliFiltrati,
     origineDati,
