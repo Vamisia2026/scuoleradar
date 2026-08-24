@@ -7,7 +7,7 @@
 # - Trigger manuale: workflow_dispatch (GitHub → Actions → Run workflow)
 #
 # Secrets richiesti (repo Settings → Secrets and variables → Actions):
-#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY
+#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, TELEGRAM_BOT_TOKEN
 # ============================================================
 name: Scraper Interpelli
 
@@ -16,10 +16,15 @@ on:
     - cron: '0 7,12,15 * * 1-5'
   workflow_dispatch:
 
+concurrency:
+  group: scraper-interpelli
+  cancel-in-progress: false
+
 jobs:
   scrape:
     name: Scraping interpelli → Supabase (interpelli, fallback notices)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout del codice
@@ -43,6 +48,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           FONTE_TEST_URL: ''
           SCRAPER_PROVINCE_TEST: MI,TO
         run: npm run scrape
