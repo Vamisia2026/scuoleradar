@@ -35,9 +35,12 @@ const MESSAGGIO_CONFERMA =
   'Riceverai qui le notifiche per le classi di concorso selezionate.';
 
 const MESSAGGIO_ISTRUZIONI =
-  '👋 Benvenuto su ScuoleRadar!\n' +
-  'Per collegare il tuo account Telegram vai nella pagina Profilo del sito e premi il pulsante ' +
-  '"Collega Telegram": si aprirà questa chat con il tuo account già riconosciuto.';
+  '👋 <b>Benvenuto su ScuoleRadar!</b>\n\n' +
+  'Per ricevere le notifiche personalizzate sugli interpelli scolastici devi prima configurare ' +
+  'il tuo profilo (classi di concorso e province desiderate).\n\n' +
+  '1️⃣ Vai su <a href="https://scuoleradar.it">ScuoleRadar.it</a> e crea o accedi al tuo account.\n' +
+  '2️⃣ Dalla sezione <b>Profilo</b>, clicca sul pulsante <b>Collega Telegram</b>.\n\n' +
+  'In questo modo il bot saprà esattamente quali avvisi inviarti!';
 
 const MESSAGGIO_ERRORE =
   '❌ Impossibile collegare l\'account. Riprova aprendo il link "Collega Telegram" dalla pagina Profilo.';
