@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { LogOut, User as UserIcon, Menu, X, LayoutDashboard } from 'lucide-react';
+import { LogOut, User as UserIcon, Menu, X, LayoutDashboard, Sparkles } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 
 const navLinks = [
@@ -10,7 +10,7 @@ const navLinks = [
 ];
 
 export function Header() {
-  const { user, logout, openAuthModal } = useApp();
+  const { user, abbonato, logout, openAuthModal } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const chiudiMenu = () => setMenuOpen(false);
@@ -54,6 +54,15 @@ export function Header() {
                 <UserIcon className="h-4 w-4" />
                 {user.nome}
               </span>
+              {abbonato ? (
+                <span className="hidden items-center gap-1 rounded-full bg-accent-500 px-2.5 py-1 text-xs font-bold text-white shadow-soft lg:inline-flex">
+                  <Sparkles className="h-3 w-3" /> PRO
+                </span>
+              ) : (
+                <span className="hidden items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-500 lg:inline-flex">
+                  Base
+                </span>
+              )}
               <button
                 onClick={logout}
                 className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 px-3 py-1.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"

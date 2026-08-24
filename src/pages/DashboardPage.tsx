@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
-import { BellRing, Sparkles, CheckCircle2, CreditCard, Radar, Heart, Database } from 'lucide-react';
+import { Link, NavLink, Outlet } from 'react-router-dom';
+import { BellRing, Sparkles, CheckCircle2, CreditCard, Radar, Database, SlidersHorizontal } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { Modal } from '@/components/Modal';
 import { InterpelloCard } from '@/components/InterpelloCard';
@@ -49,8 +49,15 @@ export function DashboardLayout() {
 }
 
 export function DashboardPage() {
-  const { interpelliFiltrati, notificheUsate, abbonato, crediti, avviaCheckout, origineDati } =
-    useApp();
+  const {
+    interpelliFiltrati,
+    preferenze,
+    notificheUsate,
+    abbonato,
+    crediti,
+    avviaCheckout,
+    origineDati,
+  } = useApp();
   const [showAbbonamento, setShowAbbonamento] = useState(false);
 
   const limiteRaggiunto = !abbonato && notificheUsate >= 3;
@@ -134,17 +141,46 @@ export function DashboardPage() {
         </div>
 
         {interpelliFiltrati.length === 0 ? (
-          <div className="rounded-2xl border border-primary-100 bg-white p-8 text-center shadow-card">
-            <Heart className="mx-auto h-10 w-10 text-primary-300" />
-            <p className="mt-3 text-base font-medium text-primary-700">
-              Se oggi non ti arriva niente, significa che non c'è nulla di rilevante.
-            </p>
-            <p className="mt-1 text-sm text-primary-500">
-              Puoi dedicarti ad altro in tranquillità. Torna domani.
-            </p>
+          <div className="animate-fade-in rounded-2xl border border-primary-100 bg-white p-10 text-center shadow-card">
+            <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary-50">
+              <Radar className="h-7 w-7 text-primary-400" />
+            </span>
+            {!preferenze.onboarded ? (
+              <>
+                <h3 className="mt-4 text-lg font-bold text-primary-800">Configura il tuo profilo</h3>
+                <p className="mx-auto mt-1 max-w-md text-sm text-primary-500">
+                  Scegli province, classi di concorso e materie per vedere solo le opportunità che ti
+                  riguardano davvero.
+                </p>
+                <Link
+                  to="/dashboard/profilo"
+                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Completa il profilo
+                </Link>
+              </>
+            ) : (
+              <>
+                <h3 className="mt-4 text-lg font-bold text-primary-800">
+                  Se oggi non arriva niente, non c&apos;è nulla di rilevante.
+                </h3>
+                <p className="mx-auto mt-1 max-w-md text-sm text-primary-500">
+                  I nostri radar controllano continuamente albi e interpelli per te. Torna domani,
+                  oppure amplia le tue preferenze per ricevere più segnalazioni.
+                </p>
+                <Link
+                  to="/dashboard/profilo"
+                  className="mt-5 inline-flex items-center gap-2 rounded-xl border border-primary-200 px-5 py-2.5 text-sm font-semibold text-primary-700 transition hover:bg-primary-50"
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Rivedi le preferenze
+                </Link>
+              </>
+            )}
           </div>
         ) : (
-          <div className="grid gap-4">
+          <div className="animate-fade-in grid gap-4">
             {interpelliFiltrati.map((i) => (
               <InterpelloCard key={i.id} interpello={i} />
             ))}
