@@ -147,6 +147,7 @@ export function OnboardingPage() {
       materieCustom,
       provinceCodici,
       telegramUsername: telegramUsername.trim(),
+      telegramChatId: '',
       emailNotifica: emailNotifica.trim(),
       onboarded: true,
       favoriteSchools: [],

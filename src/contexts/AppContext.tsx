@@ -23,6 +23,8 @@ export interface Preferenze {
   materieCustom: string[];
   provinceCodici: string[];
   telegramUsername: string;
+  /** Chat ID Telegram dell'utente per le notifiche del bot (FASE 5) */
+  telegramChatId: string;
   emailNotifica: string;
   onboarded: boolean;
   /** Whitelist scuole: notifiche prioritarie / badge "Scuola Preferita" */
@@ -79,6 +81,7 @@ const defaultPreferenze: Preferenze = {
   materieCustom: [],
   provinceCodici: [],
   telegramUsername: '',
+  telegramChatId: '',
   emailNotifica: '',
   onboarded: false,
   favoriteSchools: [],
@@ -275,6 +278,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             classi_concorso: dati.classiCodici,
             ordini_scuola: dati.ordini,
             moduli_scaricati: getModuliScaricati().map((m) => m.id),
+            telegram_chat_id: dati.telegramChatId || null,
             favorite_schools: dati.favoriteSchools,
             ignored_schools: dati.ignoredSchools,
           },
@@ -328,7 +332,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!au) return;
         const { data, error } = await supabase
           .from('profiles')
-          .select('province_attive, province_interesse, classi_concorso, ordini_scuola, favorite_schools, ignored_schools')
+          .select('province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, favorite_schools, ignored_schools')
           .eq('id', au.id)
           .maybeSingle();
         if (!error && data) {
@@ -346,6 +350,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               data.classi_concorso && data.classi_concorso.length > 0
                 ? data.classi_concorso
                 : prev.classiCodici,
+            telegramChatId: data.telegram_chat_id ? String(data.telegram_chat_id) : prev.telegramChatId,
             favoriteSchools:
               data.favorite_schools && data.favorite_schools.length > 0
                 ? data.favorite_schools

@@ -215,6 +215,43 @@ export function renderEmailHtml(
 /* ------------------------------ Invio email ------------------------------ */
 
 /**
+ * Invia la notifica email di un interpello a un singolo destinatario.
+ * Usata dal Notifier per inviare email e Telegram in parallelo per utente.
+ */
+export async function inviaNotificaEmail(
+  client: Resend | null,
+  interpello: DettagliNotifica,
+  destinatario: DestinatarioNotifica,
+  opts: { dryRun?: boolean; dashboardUrl?: string } = {},
+): Promise<{ inviata: boolean; error?: string }> {
+  if (!client) return { inviata: false, error: 'Client Resend non configurato' };
+
+  const { dryRun = false, dashboardUrl = DASHBOARD_URL } = opts;
+  const subject = subjectNotifica(interpello, destinatario);
+  const html = renderEmailHtml(interpello, destinatario, dashboardUrl);
+
+  if (dryRun) {
+    console.log(`  ✉ [DRY-RUN] → ${destinatario.email} | ${subject}`);
+    return { inviata: true };
+  }
+
+  const { error } = await client.emails.send({
+    from: RESEND_FROM_EMAIL,
+    to: [destinatario.email],
+    subject,
+    html,
+    tags: RESEND_TAGS,
+  });
+
+  if (error) {
+    console.warn(`  ✗ Invio email a ${destinatario.email} fallito: ${error.message}`);
+    return { inviata: false, error: error.message };
+  }
+  console.log(`  ✓ Email inviata a ${destinatario.email}`);
+  return { inviata: true };
+}
+
+/**
  * Invia la notifica email di un interpello alla lista di utenti qualificati.
  * - `client`: client Resend (da `getResendClient()`); se `null` restituisce 0/0.
  * - `dryRun`: logga le email senza inviarle (per test).
@@ -229,35 +266,12 @@ export async function inviaNotificheInterpello(
     return { inviate: 0, fallite: 0 };
   }
 
-  const { dryRun = false, dashboardUrl = DASHBOARD_URL } = opts;
   let inviate = 0;
   let fallite = 0;
-
   for (const destinatario of destinatari) {
-    const subject = subjectNotifica(interpello, destinatario);
-    const html = renderEmailHtml(interpello, destinatario, dashboardUrl);
-
-    if (dryRun) {
-      console.log(`  ✉ [DRY-RUN] → ${destinatario.email} | ${subject}`);
-      continue;
-    }
-
-    const { error } = await client.emails.send({
-      from: RESEND_FROM_EMAIL,
-      to: [destinatario.email],
-      subject,
-      html,
-      tags: RESEND_TAGS,
-    });
-
-    if (error) {
-      fallite += 1;
-      console.warn(`  ✗ Invio email a ${destinatario.email} fallito: ${error.message}`);
-    } else {
-      inviate += 1;
-      console.log(`  ✓ Email inviata a ${destinatario.email}`);
-    }
+    const esito = await inviaNotificaEmail(client, interpello, destinatario, opts);
+    if (esito.inviata) inviate += 1;
+    else fallite += 1;
   }
-
   return { inviate, fallite };
 }

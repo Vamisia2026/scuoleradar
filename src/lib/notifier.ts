@@ -12,14 +12,15 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { InterpelloParsato } from '../scraper/parser.ts';
 import {
   getResendClient,
-  inviaNotificheInterpello,
+  inviaNotificaEmail,
   type DettagliNotifica,
   type DestinatarioNotifica,
 } from './resend.ts';
-import { findUtentiCompatibili, type UtenteCompatibile } from './matchingEngine.ts';
+import { inviaNotificaTelegram } from './telegram.ts';
+import { findUtentiCompatibili } from './matchingEngine.ts';
 
 export interface NotificheOptions {
-  /** Logga le email senza inviarle (per test). */
+  /** Logga le notifiche senza inviarle (per test). */
   dryRun?: boolean;
   /** URL della dashboard per il pulsante CTA (default da env). */
   dashboardUrl?: string;
@@ -28,10 +29,17 @@ export interface NotificheOptions {
 export interface EsitoNotifiche {
   inviate: number;
   fallite: number;
+  telegramInviate: number;
+  telegramFallite: number;
 }
 
+type EsitoJob = { ok: boolean };
+
 /**
- * Invia le notifiche email per i nuovi interpelli agli utenti compatibili.
+ * Invia le notifiche per i nuovi interpelli agli utenti compatibili:
+ * - email via Resend (se l'utente ha un indirizzo valido)
+ * - messaggio Telegram (se l'utente ha collegato il bot con il proprio chat_id)
+ * Email e Telegram partono in parallelo per ogni utente.
  * Non lancia eccezioni: eventuali errori vengono loggati e conteggiati.
  */
 export async function notificaNuoviInterpelli(
@@ -39,18 +47,17 @@ export async function notificaNuoviInterpelli(
   nuovi: InterpelloParsato[],
   opts: NotificheOptions = {},
 ): Promise<EsitoNotifiche> {
+  const esito: EsitoNotifiche = { inviate: 0, fallite: 0, telegramInviate: 0, telegramFallite: 0 };
   const resend = getResendClient();
   if (!resend) {
     console.log('ℹ Notifiche email disattivate: RESEND_API_KEY non configurata.');
-    return { inviate: 0, fallite: 0 };
   }
   if (nuovi.length === 0) {
-    console.log('ℹ Nessun interpello nuovo: nessuna notifica email da inviare.');
-    return { inviate: 0, fallite: 0 };
+    console.log('ℹ Nessun interpello nuovo: nessuna notifica da inviare.');
+    return esito;
   }
 
-  let totInviate = 0;
-  let totFallite = 0;
+  const { dryRun = false, dashboardUrl } = opts;
 
   for (const interpello of nuovi) {
     // Matching Engine: utenti con provincia e almeno una classe in comune
@@ -72,18 +79,76 @@ export async function notificaNuoviInterpelli(
       scadenza: interpello.expirationDate,
       link: interpello.link,
     };
-    const destinatari: DestinatarioNotifica[] = utenti.map((u: UtenteCompatibile) => ({
-      email: u.email,
-      nome: u.nome,
-      province: u.province,
-      classi: u.classi,
-    }));
 
-    const esito = await inviaNotificheInterpello(resend, dettagli, destinatari, opts);
-    totInviate += esito.inviate;
-    totFallite += esito.fallite;
+    // Email + Telegram in parallelo per ogni utente qualificato
+    const risultati = await Promise.all(
+      utenti.map(async (utente) => {
+        const jobs: Array<{ tipo: 'email' | 'telegram'; promessa: Promise<EsitoJob> }> = [];
+
+        if (utente.email && resend) {
+          const destinatario: DestinatarioNotifica = {
+            email: utente.email,
+            nome: utente.nome,
+            province: utente.province,
+            classi: utente.classi,
+          };
+          jobs.push({
+            tipo: 'email',
+            promessa: inviaNotificaEmail(resend, dettagli, destinatario, {
+              dryRun,
+              dashboardUrl,
+            }).then((e) => ({ ok: e.inviata })),
+          });
+        }
+
+        const chatId = utente.telegramChatId;
+        if (chatId) {
+          jobs.push({
+            tipo: 'telegram',
+            promessa: (async () => {
+              if (dryRun) {
+                console.log(`  ✈ [DRY-RUN] → Telegram ${chatId}`);
+                return { ok: true };
+              }
+              const r = await inviaNotificaTelegram(chatId, dettagli, {
+                classiUtente: utente.classi,
+                dashboardUrl,
+              });
+              if (r.ok) console.log(`  ✓ Telegram inviato a chat ${chatId}`);
+              else console.warn(`  ✗ Telegram a ${chatId} fallito: ${r.error ?? 'errore'}`);
+              return { ok: r.ok };
+            })(),
+          });
+        }
+
+        const completati = await Promise.all(
+          jobs.map((j) =>
+            j.promessa
+              .then((valore) => ({ tipo: j.tipo, valore }))
+              .catch(() => ({ tipo: j.tipo, valore: { ok: false } })),
+          ),
+        );
+        return completati;
+      }),
+    );
+
+    for (const gruppo of risultati) {
+      for (const r of gruppo) {
+        if (r.valore.ok) {
+          if (r.tipo === 'email') esito.inviate += 1;
+          else esito.telegramInviate += 1;
+        } else if (r.tipo === 'email') {
+          esito.fallite += 1;
+        } else {
+          esito.telegramFallite += 1;
+        }
+      }
+    }
   }
 
-  console.log(`✓ Notifiche email elaborate: ${totInviate} inviate · ${totFallite} fallite.`);
-  return { inviate: totInviate, fallite: totFallite };
+  console.log(
+    `✓ Notifiche elaborate: ${esito.inviate} email inviate · ${esito.fallite} email fallite · ` +
+      `${esito.telegramInviate} Telegram inviati · ${esito.telegramFallite} Telegram falliti.`,
+  );
+  return esito;
 }

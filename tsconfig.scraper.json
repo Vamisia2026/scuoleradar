@@ -19,6 +19,7 @@
     "src/scraper/**/*.ts",
     "src/lib/resend.ts",
     "src/lib/notifier.ts",
+    "src/lib/telegram.ts",
     "src/lib/matchingEngine.ts"
   ]
 }

@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import {
   Save, Check, MapPin, Send, Mail, Search, GraduationCap, School, BookOpen, Baby, Users, Moon, Briefcase, Wrench, Plus,
   SlidersHorizontal, Star, Ban, Download, Trash2, FileText,
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { supabase } from '@/lib/supabase';
 import { interpelli } from '@/data/interpelli';
 import {
   conAggiuntaInCima,
@@ -36,6 +37,25 @@ export function ProfiloPage() {
   const [materieCustom, setMaterieCustom] = useState<string[]>(preferenze.materieCustom);
   const [provinceCodici, setProvinceCodici] = useState<string[]>(preferenze.provinceCodici);
   const [telegramUsername, setTelegramUsername] = useState(preferenze.telegramUsername);
+  const [telegramChatIdInput, setTelegramChatIdInput] = useState(preferenze.telegramChatId ?? '');
+
+  // Deeplink Telegram: https://t.me/ScuoleRadar_bot?start=<user_id> (collega automaticamente l'account)
+  const [telegramDeepLink, setTelegramDeepLink] = useState('https://t.me/ScuoleRadar_bot');
+  useEffect(() => {
+    if (!supabase) return;
+    let attivo = true;
+    supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (attivo && data.user) {
+          setTelegramDeepLink(`https://t.me/ScuoleRadar_bot?start=${data.user.id}`);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      attivo = false;
+    };
+  }, []);
   const [emailNotifica, setEmailNotifica] = useState(preferenze.emailNotifica);
   const [favoriteSchools, setFavoriteSchools] = useState<string[]>(preferenze.favoriteSchools);
   const [ignoredSchools, setIgnoredSchools] = useState<string[]>(preferenze.ignoredSchools);
@@ -129,6 +149,7 @@ export function ProfiloPage() {
       materieCustom,
       provinceCodici,
       telegramUsername: telegramUsername.trim(),
+      telegramChatId: telegramChatIdInput.trim(),
       emailNotifica: emailNotifica.trim(),
       favoriteSchools,
       ignoredSchools,
@@ -495,6 +516,64 @@ export function ProfiloPage() {
             />
           </label>
         </div>
+      </section>
+
+      {/* Collega Telegram */}
+      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
+        <h3 className="flex items-center gap-1.5 text-sm font-bold text-primary-800">
+          <Send className="h-4 w-4 text-primary-500" />
+          Collega Telegram
+        </h3>
+        <p className="mt-1 text-sm text-primary-600">
+          Ricevi le notifiche dei nuovi interpelli direttamente su Telegram, in tempo reale.
+        </p>
+
+        <div className="mt-4 rounded-xl border border-primary-100 bg-primary-50 p-4 text-sm text-primary-700">
+          <ol className="list-decimal space-y-1 pl-4">
+            <li>
+              Premi <strong>Collega Telegram</strong>: si aprirà il bot{' '}
+              <a
+                href="https://t.me/ScuoleRadar_bot"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-primary-700 underline"
+              >
+                @ScuoleRadar_bot
+              </a>{' '}
+              con il tuo account già riconosciuto.
+            </li>
+            <li>
+              Nel bot premi <strong>Start</strong> (o invia il comando <code>/start</code>): il
+              collegamento avviene automaticamente.
+            </li>
+            <li>
+              Riceverai il messaggio di conferma e, da quel momento, le notifiche dei nuovi
+              interpelli.
+            </li>
+          </ol>
+          <div className="mt-3 flex gap-2">
+            <input
+              type="text"
+              value={telegramChatIdInput}
+              onChange={(e) => setTelegramChatIdInput(e.target.value)}
+              placeholder="Chat ID (solo se preferisci il collegamento manuale)"
+              className="input"
+            />
+            <a
+              href={telegramDeepLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
+            >
+              <Send className="h-4 w-4" />
+              Collega Telegram
+            </a>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-primary-400">
+          Con il pulsante "Collega Telegram" il tuo Chat ID viene salvato automaticamente nel profilo
+          e usato per inviarti le notifiche Telegram.
+        </p>
       </section>
 
       {/* Modelli scaricati di recente */}

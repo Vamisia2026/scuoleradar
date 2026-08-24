@@ -114,6 +114,8 @@ export interface UtenteCompatibile {
   nome?: string;
   province: string[];
   classi: string[];
+  /** Chat ID Telegram del profilo (FASE 5) — presente se l'utente ha collegato il bot. */
+  telegramChatId?: string | null;
 }
 
 /**
@@ -129,7 +131,7 @@ export async function findUtentiCompatibili(
   try {
     const { data, error } = await client
       .from('profiles')
-      .select('email, email_notifica, nome, province_interesse, province_attive, classi_concorso');
+      .select('email, email_notifica, nome, province_interesse, province_attive, classi_concorso, telegram_chat_id');
 
     if (error) {
       console.warn('MatchingEngine — lettura profiles (utenti compatibili):', error.message);
@@ -139,7 +141,10 @@ export async function findUtentiCompatibili(
     const compatibili: UtenteCompatibile[] = [];
     for (const riga of data ?? []) {
       const email = String(riga.email_notifica ?? riga.email ?? '').trim();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
+      const emailValida = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      const chatId = riga.telegram_chat_id ? String(riga.telegram_chat_id).trim() : '';
+      // Ammesso se ha almeno un canale di notifica (email valida o Telegram collegato)
+      if (!emailValida && !chatId) continue;
 
       const provinceProfilo: string[] = riga.province_interesse ?? riga.province_attive ?? [];
       const classiProfilo: string[] = riga.classi_concorso ?? [];
@@ -151,10 +156,11 @@ export async function findUtentiCompatibili(
       if (!matchProvincia || !matchClasse) continue;
 
       compatibili.push({
-        email,
+        email: emailValida ? email : '',
         nome: riga.nome ? String(riga.nome) : undefined,
         province: provinceProfilo,
         classi: classiProfilo,
+        telegramChatId: chatId || null,
       });
     }
     return compatibili;

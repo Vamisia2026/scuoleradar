@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { Radar, LogOut, User as UserIcon, Menu, X, LayoutDashboard } from 'lucide-react';
+import { LogOut, User as UserIcon, Menu, X, LayoutDashboard } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 
 const navLinks = [
@@ -8,20 +8,6 @@ const navLinks = [
   { to: '/prezzi', label: 'Prezzi' },
   { to: '/chi-siamo', label: 'Chi siamo' },
 ];
-
-export function Logo({ to = '/' }: { to?: string }) {
-  return (
-    <Link to={to} className="flex items-center gap-2 group">
-      <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary-500 text-white shadow-soft transition-transform group-hover:scale-105">
-        <Radar className="h-5 w-5" />
-      </span>
-      <span className="text-lg font-bold tracking-tight text-primary-700">
-        Scuole<span className="text-secondary-500">Radar</span>
-        <span className="text-primary-400">.it</span>
-      </span>
-    </Link>
-  );
-}
 
 export function Header() {
   const { user, logout, openAuthModal } = useApp();
@@ -32,7 +18,9 @@ export function Header() {
   return (
     <header className="sticky top-0 z-30 border-b border-primary-100 bg-white/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <Logo to={user ? '/dashboard/radar' : '/'} />
+        <a href="/" className="inline-block focus:outline-none">
+          <img src="/logo.png" alt="ScuoleRadar.it" className="h-10 w-auto object-contain" />
+        </a>
 
         {/* Nav pubblica (desktop) */}
         <nav className="hidden items-center gap-1 md:flex">
