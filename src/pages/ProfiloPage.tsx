@@ -1,7 +1,7 @@
 import { useMemo, useEffect, useState } from 'react';
 import {
   Save, Check, MapPin, Send, Mail, Search, GraduationCap, School, BookOpen, Baby, Users, Moon, Briefcase, Wrench, Plus,
-  SlidersHorizontal, Star, Ban, Download, Trash2, FileText,
+  SlidersHorizontal, Star, Ban, Download, Trash2, FileText, Sparkles,
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -29,7 +29,7 @@ const ordineIcons: Record<OrdineScuola, React.ReactNode> = {
 };
 
 export function ProfiloPage() {
-  const { preferenze, setPreferenze, salvaProfilo } = useApp();
+  const { preferenze, setPreferenze, salvaProfilo, crediti, avviaCheckout } = useApp();
 
   const [ordini, setOrdini] = useState<OrdineScuola[]>(preferenze.ordini);
   const [classiCodici, setClassiCodici] = useState<string[]>(preferenze.classiCodici);
@@ -574,6 +574,30 @@ export function ProfiloPage() {
           Con il pulsante "Collega Telegram" il tuo Chat ID viene salvato automaticamente nel profilo
           e usato per inviarti le notifiche Telegram.
         </p>
+      </section>
+
+      {/* Sblocchi A la Carte (FASE 6) */}
+      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="flex items-center gap-1.5 text-sm font-bold text-primary-800">
+            <Sparkles className="h-4 w-4 text-secondary-500" />
+            Sblocchi A la Carte
+          </h3>
+          <span className="rounded-full bg-secondary-50 px-3 py-1 text-sm font-bold text-secondary-700">
+            {crediti} disponibili
+          </span>
+        </div>
+        <p className="mt-1 text-sm text-primary-600">
+          Usa gli sblocchi per i servizi singoli (CV, Check CFU, modelli) oppure acquistane di nuovi
+          quando ti servono. Nessun abbonamento automatico.
+        </p>
+        <button
+          onClick={() => void avviaCheckout('alacarte')}
+          className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
+        >
+          <Sparkles className="h-4 w-4" />
+          Acquista uno sblocco (5€)
+        </button>
       </section>
 
       {/* Modelli scaricati di recente */}

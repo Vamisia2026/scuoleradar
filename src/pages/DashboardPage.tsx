@@ -49,7 +49,8 @@ export function DashboardLayout() {
 }
 
 export function DashboardPage() {
-  const { interpelliFiltrati, notificheUsate, abbonato, avviaCheckout, origineDati } = useApp();
+  const { interpelliFiltrati, notificheUsate, abbonato, crediti, avviaCheckout, origineDati } =
+    useApp();
   const [showAbbonamento, setShowAbbonamento] = useState(false);
 
   const limiteRaggiunto = !abbonato && notificheUsate >= 3;
@@ -86,6 +87,12 @@ export function DashboardPage() {
                   ? 'Riceverai tutte le notifiche pertinenti, senza limiti.'
                   : 'Hai 3 notifiche incluse nell\u2019Offerta per provare il servizio.'}
               </p>
+              {crediti > 0 && (
+                <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-secondary-50 px-2 py-0.5 text-xs font-semibold text-secondary-700">
+                  <Sparkles className="h-3 w-3" />
+                  {crediti} sblocco{crediti > 1 ? 'i' : ''} A la Carte
+                </span>
+              )}
             </div>
           </div>
           {!abbonato && (
