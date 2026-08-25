@@ -76,6 +76,20 @@ async function aggiornaProfilo(userId: string, campi: Record<string, unknown>): 
   return res.ok;
 }
 
+/** Incrementa i crediti via RPC (PostgREST non supporta { inc } sulle colonne integer). */
+async function incrementaCrediti(userId: string, delta: number): Promise<boolean> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/incrementa_crediti_utente`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_user_id: userId, p_delta: delta }),
+  });
+  return res.ok;
+}
+
 /** Converte un timestamp epoch (secondi) in data ISO, o null. */
 function epochToIso(epoch: number | null | undefined): string | null {
   if (!epoch) return null;
@@ -121,8 +135,8 @@ serve(async (req: Request) => {
     case 'checkout.session.completed': {
       if (!userId) break;
       if (obj.mode === 'payment' && obj.payment_status === 'paid') {
-        // A la Carte → +1 sblocco
-        const ok = await aggiornaProfilo(userId, { crediti: { inc: 1 } });
+        // A la Carte → +1 sblocco (via RPC atomica)
+        const ok = await incrementaCrediti(userId, 1);
         console.log(`  → crediti +1: ${ok}`);
       } else if (obj.mode === 'subscription') {
         // PRO → piano attivo (scadenza gestita da subscription.*)
