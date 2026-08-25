@@ -259,10 +259,10 @@ function AbbonamentoModal({
           className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-secondary-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600 disabled:opacity-50"
         >
           <CreditCard className="h-4 w-4" />
-          {invio ? 'Reindirizzamento al pagamento…' : 'Procedi al pagamento (Lemon Squeezy)'}
+          {invio ? 'Reindirizzamento al pagamento…' : 'Procedi al pagamento (Stripe)'}
         </button>
         <p className="text-center text-xs text-primary-400">
-          Pagamento sicuro gestito da Lemon Squeezy (Merchant of Record): IVA e pagamenti inclusi.
+          Pagamento sicuro gestito da Stripe: i tuoi dati non transitano mai da ScuoleRadar.
           Nessun addebito automatico nascosto.
         </p>
       </div>

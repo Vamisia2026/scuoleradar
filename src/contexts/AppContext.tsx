@@ -218,13 +218,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [supabaseUserId, abbonato, setNotificati],
   );
 
-  /** FASE 6 — avvia il checkout Lemon Squeezy per il piano richiesto e redirige l'utente. */
+  /** FASE 6 — avvia il checkout Stripe per il piano richiesto e redirige l'utente. */
   const avviaCheckout = useCallback(async (plan: string) => {
     if (!supabase) {
       console.warn('Supabase non configurato: checkout non disponibile in modalità demo.');
       return;
     }
-    const { data, error } = await supabase.functions.invoke('ls-checkout', { body: { plan } });
+    const { data, error } = await supabase.functions.invoke('stripe-checkout', { body: { plan } });
     if (error) {
       console.error('Errore avvio checkout:', error.message);
       return;
