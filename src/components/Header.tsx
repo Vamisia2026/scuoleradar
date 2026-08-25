@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { LogOut, User as UserIcon, Menu, X, LayoutDashboard, Sparkles } from 'lucide-react';
+import { LogOut, User as UserIcon, Menu, X, LayoutDashboard, Sparkles, ChevronDown, CreditCard } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 
 const navLinks = [
@@ -12,8 +12,10 @@ const navLinks = [
 export function Header() {
   const { user, abbonato, logout, openAuthModal } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuUtenteOpen, setMenuUtenteOpen] = useState(false);
 
   const chiudiMenu = () => setMenuOpen(false);
+  const chiudiMenuUtente = () => setMenuUtenteOpen(false);
 
   return (
     <header className="sticky top-0 z-30 border-b border-primary-100 bg-white/90 backdrop-blur">
@@ -42,35 +44,96 @@ export function Header() {
         {/* Azioni (desktop) */}
         <div className="hidden items-center gap-2 md:flex">
           {user ? (
-            <>
-              <Link
-                to="/dashboard/radar"
-                className="inline-flex items-center gap-1.5 rounded-full bg-primary-500 px-4 py-2 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
-              >
-                <LayoutDashboard className="h-4 w-4" />
-                Dashboard
-              </Link>
-              <span className="hidden items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1.5 text-sm font-medium text-primary-700 lg:flex">
-                <UserIcon className="h-4 w-4" />
-                {user.nome}
-              </span>
-              {abbonato ? (
-                <span className="hidden items-center gap-1 rounded-full bg-accent-500 px-2.5 py-1 text-xs font-bold text-white shadow-soft lg:inline-flex">
-                  <Sparkles className="h-3 w-3" /> PRO
-                </span>
-              ) : (
-                <span className="hidden items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-500 lg:inline-flex">
-                  Base
-                </span>
-              )}
+            <div className="relative">
               <button
-                onClick={logout}
-                className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 px-3 py-1.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
+                onClick={() => setMenuUtenteOpen((o) => !o)}
+                aria-expanded={menuUtenteOpen}
+                aria-haspopup="menu"
+                className="flex items-center gap-2 rounded-full border border-primary-200 bg-white py-1 pl-1 pr-3 shadow-soft transition hover:bg-primary-50"
               >
-                <LogOut className="h-4 w-4" />
-                Esci
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-500 text-white">
+                  <UserIcon className="h-4 w-4" />
+                </span>
+                <span className="max-w-[110px] truncate text-sm font-semibold text-primary-800">
+                  {user.nome}
+                </span>
+                {abbonato ? (
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-500 px-2 py-0.5 text-[11px] font-bold text-white">
+                    <Sparkles className="h-3 w-3" /> PRO
+                  </span>
+                ) : (
+                  <span className="inline-flex shrink-0 items-center rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-semibold text-primary-500">
+                    Base
+                  </span>
+                )}
+                <ChevronDown
+                  className={`h-4 w-4 text-primary-400 transition-transform ${menuUtenteOpen ? 'rotate-180' : ''}`}
+                />
               </button>
-            </>
+
+              {menuUtenteOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={chiudiMenuUtente} />
+                  <div
+                    role="menu"
+                    className="absolute right-0 z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-primary-100 bg-white shadow-card"
+                  >
+                    <div className="border-b border-primary-100 bg-primary-50/60 px-4 py-3">
+                      <p className="truncate text-sm font-bold text-primary-800">
+                        {user.nome} {user.cognome}
+                      </p>
+                      <p className="truncate text-xs text-primary-500">{user.email}</p>
+                      <span
+                        className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                          abbonato ? 'bg-accent-500 text-white' : 'bg-primary-50 text-primary-600'
+                        }`}
+                      >
+                        {abbonato ? (
+                          <>
+                            <Sparkles className="h-3 w-3" /> Piano PRO
+                          </>
+                        ) : (
+                          'Piano Base'
+                        )}
+                      </span>
+                    </div>
+                    <nav className="p-1.5">
+                      <Link
+                        to="/dashboard/radar"
+                        onClick={chiudiMenuUtente}
+                        className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
+                      >
+                        <LayoutDashboard className="h-4 w-4 text-primary-400" />
+                        Area Personale
+                      </Link>
+                      <Link
+                        to="/dashboard/profilo"
+                        onClick={chiudiMenuUtente}
+                        className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
+                      >
+                        <UserIcon className="h-4 w-4 text-primary-400" />
+                        Il mio profilo
+                      </Link>
+                      <Link
+                        to="/prezzi"
+                        onClick={chiudiMenuUtente}
+                        className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
+                      >
+                        <CreditCard className="h-4 w-4 text-primary-400" />
+                        Prezzi e abbonamento
+                      </Link>
+                      <button
+                        onClick={logout}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-error-600 transition hover:bg-error-50"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Esci
+                      </button>
+                    </nav>
+                  </div>
+                </>
+              )}
+            </div>
           ) : (
             <>
               <button
@@ -121,24 +184,55 @@ export function Header() {
           <div className="mt-3 flex flex-col gap-2 border-t border-primary-100 pt-3">
             {user ? (
               <>
-                <span className="px-3 text-sm font-medium text-primary-700">
-                  <UserIcon className="mr-1.5 inline h-4 w-4" />
-                  {user.nome}
-                </span>
+                <div className="flex items-center justify-between px-3">
+                  <span className="truncate text-sm font-medium text-primary-700">
+                    <UserIcon className="mr-1.5 inline h-4 w-4" />
+                    {user.nome} {user.cognome}
+                  </span>
+                  <span
+                    className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                      abbonato ? 'bg-accent-500 text-white' : 'bg-primary-50 text-primary-600'
+                    }`}
+                  >
+                    {abbonato ? (
+                      <>
+                        <Sparkles className="h-3 w-3" /> PRO
+                      </>
+                    ) : (
+                      'Base'
+                    )}
+                  </span>
+                </div>
                 <Link
                   to="/dashboard/radar"
                   onClick={chiudiMenu}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
                 >
                   <LayoutDashboard className="h-4 w-4" />
-                  Dashboard
+                  Area Personale
+                </Link>
+                <Link
+                  to="/dashboard/profilo"
+                  onClick={chiudiMenu}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-primary-200 px-4 py-2.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
+                >
+                  <UserIcon className="h-4 w-4" />
+                  Il mio profilo
+                </Link>
+                <Link
+                  to="/prezzi"
+                  onClick={chiudiMenu}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-primary-200 px-4 py-2.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
+                >
+                  <CreditCard className="h-4 w-4" />
+                  Prezzi e abbonamento
                 </Link>
                 <button
                   onClick={() => {
                     logout();
                     chiudiMenu();
                   }}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-primary-200 px-4 py-2.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-error-200 px-4 py-2.5 text-sm font-medium text-error-600 transition hover:bg-error-50"
                 >
                   <LogOut className="h-4 w-4" />
                   Esci

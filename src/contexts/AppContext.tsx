@@ -7,6 +7,7 @@ import { getFeedInterpelli } from '@/lib/matchingEngine';
 import type { OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso, classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
+import { priceIdPerPiano } from '@/lib/pricing';
 
 export interface User {
   nome: string;
@@ -61,7 +62,7 @@ interface AppContextValue extends AppState {
   setPreferenze: (p: Partial<Preferenze>) => void;
   completaOnboarding: (p: Partial<Preferenze>) => void;
   incrementaNotifica: (interpelloId: string) => void;
-  avviaCheckout: (plan: string, promo?: string) => Promise<void>;
+  avviaCheckout: (plan: string, promo?: string) => Promise<{ ok: boolean; errore?: string }>;
   setEsami: (e: Esame[]) => void;
   interpelliFiltrati: Interpello[];
   origineDati: 'mock' | 'supabase';
@@ -219,21 +220,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   /** FASE 6 — avvia il checkout Stripe per il piano richiesto e redirige l'utente. */
-  const avviaCheckout = useCallback(async (plan: string, promo?: string) => {
-    if (!supabase) {
-      console.warn('Supabase non configurato: checkout non disponibile in modalità demo.');
-      return;
-    }
-    const { data, error } = await supabase.functions.invoke('checkout', {
-      body: { plan, promo: promo || undefined },
-    });
-    if (error) {
-      console.error('Errore avvio checkout:', error.message);
-      return;
-    }
-    const url = (data as { url?: string } | null)?.url;
-    if (url) window.location.href = url;
-  }, []);
+  const avviaCheckout = useCallback(
+    async (plan: string, promo?: string): Promise<{ ok: boolean; errore?: string }> => {
+      if (!supabase) {
+        return {
+          ok: false,
+          errore:
+            'Pagamenti non disponibili: mancano VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY nel file .env. Riavvia il dev server dopo averle aggiunte.',
+        };
+      }
+      const { data, error } = await supabase.functions.invoke('checkout', {
+        body: {
+          plan,
+          promo: promo || undefined,
+          // priceId dal frontend (VITE_STRIPE_*): solo verifica/debug, la Edge Function
+          // usa come fonte autorevole i secrets server-side.
+          priceId: priceIdPerPiano(plan),
+        },
+      });
+      if (error) {
+        console.error('Errore avvio checkout:', error.message);
+        return {
+          ok: false,
+          errore: `Impossibile avviare il pagamento (${error.message}). Controlla la connessione e riprova.`,
+        };
+      }
+      const payload = data as { url?: string; error?: string } | null;
+      if (!payload?.url) {
+        return {
+          ok: false,
+          errore: payload?.error ?? 'La sessione di pagamento non è stata creata. Riprova.',
+        };
+      }
+      window.location.href = payload.url;
+      return { ok: true };
+    },
+    [],
+  );
 
   // Stato simulato per la DevToolbar (solo sviluppo). Aggiorna all'istante context + UI.
   const simulaStato = useCallback(

@@ -6,6 +6,7 @@ import { Modal } from '@/components/Modal';
 import { InterpelloCard } from '@/components/InterpelloCard';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/supabase';
+import { useToast } from '@/components/Toast';
 import { Footer } from './LandingPage';
 
 interface TabNav {
@@ -211,9 +212,7 @@ export function DashboardPage() {
       <AbbonamentoModal
         open={showAbbonamento}
         onClose={() => setShowAbbonamento(false)}
-        onConfirm={(promo) => {
-          void avviaCheckout('pro_annuale', promo);
-        }}
+        onConfirm={(promo) => avviaCheckout('pro_annuale', promo)}
       />
     </div>
   );
@@ -226,8 +225,9 @@ function AbbonamentoModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onConfirm: (promo?: string) => void;
+  onConfirm: (promo?: string) => Promise<{ ok: boolean; errore?: string }>;
 }) {
+  const { mostraToast } = useToast();
   const [invio, setInvio] = useState(false);
   const [promo, setPromo] = useState('');
   const [promoStato, setPromoStato] = useState<'idle' | 'verifica' | 'applicato' | 'errore'>('idle');
@@ -284,11 +284,18 @@ function AbbonamentoModal({
     }
   };
 
-  const handleProcedi = () => {
+  const handleProcedi = async () => {
     setInvio(true);
-    Promise.resolve(onConfirm(promoStato === 'applicato' ? promo : undefined)).finally(() =>
-      setInvio(false),
-    );
+    try {
+      const esito = await onConfirm(promoStato === 'applicato' ? promo : undefined);
+      if (!esito.ok) {
+        mostraToast('errore', esito.errore ?? 'Errore durante il pagamento. Riprova.');
+      }
+    } catch (err) {
+      mostraToast('errore', (err as Error).message ?? 'Errore durante il pagamento. Riprova.');
+    } finally {
+      setInvio(false);
+    }
   };
 
   return (
@@ -311,7 +318,9 @@ function AbbonamentoModal({
               </>
             )}
           </p>
-          <p className="mt-1 text-sm text-primary-100">Si ripaga con un&apos;ora di lavoro.</p>
+          <p className="mt-1 text-sm text-primary-100">
+            Ti ripaghi l&apos;abbonamento annuale con meno di due ore di lavoro.
+          </p>
         </div>
 
         {/* Codice promo / sconto */}
@@ -370,31 +379,33 @@ function AbbonamentoModal({
         </div>
 
         <ul className="space-y-2 text-sm text-primary-700">
-          <li className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-accent-500" />
-            Notifiche illimitate su Telegram ed email
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent-500" />
+            Notifiche mirate e personalizzate su Telegram ed Email (zero spam: solo ciò che ti
+            serve, attivo tutto l&apos;anno e disattivabile in qualsiasi momento).
           </li>
-          <li className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-accent-500" />
-            Accesso agli Strumenti Docente (CV e Verifica CFU)
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent-500" />
+            Accesso completo agli Strumenti Docente (CV, Verifica CFU, Modulistica ufficiale e
+            Normativa).
           </li>
-          <li className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-accent-500" />
-            Incluso nel piano PRO: Accesso completo a PureFocus
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent-500" />
+            Incluso nel piano PRO: Accesso completo a PureFocus (valore commerciale $29/anno).
           </li>
-          <li className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-accent-500" />
-            Niente rinnovi automatici nascosti
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent-500" />
+            Rinnovo automatico trasparente, disdicibile in qualsiasi momento dal tuo profilo.
           </li>
         </ul>
 
         <button
-          onClick={handleProcedi}
+          onClick={() => void handleProcedi()}
           disabled={invio}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-secondary-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600 disabled:opacity-50"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-secondary-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <CreditCard className="h-4 w-4" />
-          {invio ? 'Reindirizzamento al pagamento…' : 'Procedi al pagamento (Stripe)'}
+          {invio ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+          {invio ? 'Creazione sessione di pagamento…' : 'Procedi al pagamento (Stripe)'}
         </button>
         <p className="text-center text-xs text-primary-400">
           Pagamento sicuro gestito da Stripe: i tuoi dati non transitano mai da ScuoleRadar.

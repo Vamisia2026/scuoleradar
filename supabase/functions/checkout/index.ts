@@ -5,9 +5,11 @@
 // l'URL a cui redirigere il browser dell'utente.
 //
 // Autenticazione: --verify-jwt (deve essere un utente loggato).
-// Body: { "plan": "pro_annuale" | "pro_mensile" | "alacarte", "promo": "CODICE" }
+// Body: { "plan": "pro_annuale" | "pro_mensile" | "alacarte", "promo": "CODICE", "priceId": "..." }
 //   "promo" (opzionale): codice referral → validato via RPC valida_codice_promo;
 //   se valido applica il coupon -10€ (solo PRO annuale) e traccia il referrer nei metadata.
+//   "priceId" (opzionale, frontend VITE_STRIPE_*): solo verifica/debug, la fonte
+//   autorevole del prezzo è sempre il secret server-side.
 //
 // Secrets richiesti:
 //   STRIPE_SECRET_KEY              (obbligatoria)
@@ -114,7 +116,7 @@ serve(async (req: Request) => {
     });
   }
 
-  let body: { plan?: string; promo?: string };
+  let body: { plan?: string; promo?: string; priceId?: string };
   try {
     body = await req.json();
   } catch {
@@ -131,6 +133,11 @@ serve(async (req: Request) => {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
+  }
+  // Il priceId dal frontend (VITE_STRIPE_*) è solo di verifica/debug:
+  // la fonte autorevole resta il secret server-side (anti tampering).
+  if (body.priceId && body.priceId !== priceId) {
+    console.warn(`PriceId frontend non corrisponde al piano ${plan}: ${body.priceId} (uso ${priceId})`);
   }
 
   // mode: subscription per i PRO, payment (one-time) per l'A la Carte

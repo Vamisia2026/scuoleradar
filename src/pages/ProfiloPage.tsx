@@ -1,7 +1,7 @@
 import { useMemo, useEffect, useState, type ReactNode } from 'react';
 import {
   Save, Check, MapPin, Send, Mail, Search, GraduationCap, School, BookOpen, Baby, Users, Moon, Briefcase, Wrench, Plus,
-  Star, Ban, Download, Trash2, FileText, Sparkles, ChevronDown,
+  Star, Ban, Download, Trash2, FileText, Sparkles, ChevronDown, AlertTriangle, Loader2,
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -16,6 +16,7 @@ import { ordiniScuola, materie, type OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import { Pill } from '@/components/Pill';
+import { Modal } from '@/components/Modal';
 
 const ordineIcons: Record<OrdineScuola, React.ReactNode> = {
   infanzia: <Baby className="h-5 w-5" />,
@@ -110,6 +111,12 @@ export function ProfiloPage() {
   const [accordionAperti, setAccordionAperti] = useState<Record<string, boolean>>({});
   const toggleAccordion = (chiave: string) =>
     setAccordionAperti((prev) => ({ ...prev, [chiave]: !prev[chiave] }));
+
+  // Disdetta / cancellazione account
+  const [mostraModaleElimina, setMostraModaleElimina] = useState(false);
+  const [testoConferma, setTestoConferma] = useState('');
+  const [cancellando, setCancellando] = useState(false);
+  const [erroreElimina, setErroreElimina] = useState('');
 
   // Storico dei modelli scaricati (condiviso con la pagina Moduli via localStorage)
   const [moduliScaricati, setModuliScaricati] = useLocalStorage<ModuloScaricato[]>(
@@ -226,6 +233,33 @@ export function ProfiloPage() {
     setModuliScaricati(moduliScaricati.filter((m) => m.id !== id));
 
   const svuotaStorico = () => setModuliScaricati([]);
+
+  /** Cancellazione definitiva: Edge Function elimina-account (cascata su profiles/referrals). */
+  const handleEliminaAccount = async () => {
+    setCancellando(true);
+    setErroreElimina('');
+    try {
+      if (supabase) {
+        const { error } = await supabase.functions.invoke('elimina-account');
+        if (error) {
+          setErroreElimina(error.message);
+          return;
+        }
+        await supabase.auth.signOut();
+      }
+      // Pulizia di eventuali dati demo/locali e redirect alla home
+      try {
+        localStorage.clear();
+      } catch {
+        // localStorage non disponibile
+      }
+      window.location.href = '/';
+    } catch (err) {
+      setErroreElimina((err as Error).message ?? 'Errore durante la cancellazione. Riprova.');
+    } finally {
+      setCancellando(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -735,6 +769,79 @@ export function ProfiloPage() {
           </ul>
         )}
       </section>
+
+      {/* Disdetta / cancellazione account */}
+      <section className="rounded-2xl border border-error-200 bg-error-50/40 p-5">
+        <h3 className="flex items-center gap-1.5 text-sm font-bold text-error-700">
+          <AlertTriangle className="h-4 w-4" />
+          Disdetta e cancellazione account
+        </h3>
+        <p className="mt-1 text-sm text-primary-600">
+          La disdetta elimina definitivamente profilo, preferenze, moduli scaricati e accesso a
+          PureFocus. L&apos;operazione è irreversibile.
+        </p>
+        <button
+          onClick={() => setMostraModaleElimina(true)}
+          className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-error-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-error-600"
+        >
+          <Trash2 className="h-4 w-4" />
+          Cancella il mio account
+        </button>
+      </section>
+
+      <Modal
+        open={mostraModaleElimina}
+        onClose={() => setMostraModaleElimina(false)}
+        title="Cancellazione definitiva"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl border border-error-200 bg-error-50 p-4 text-sm text-error-700">
+            <p className="font-semibold">Attenzione: azione irreversibile.</p>
+            <ul className="mt-2 list-disc space-y-1 pl-4 text-xs">
+              <li>Il tuo profilo e le preferenze saranno cancellati per sempre.</li>
+              <li>I moduli scaricati e gli accessi agli strumenti andranno persi.</li>
+              <li>L&apos;accesso a PureFocus (incluso nel PRO) sarà revocato.</li>
+              <li>L&apos;abbonamento attivo verrà disdetto.</li>
+            </ul>
+          </div>
+          <div>
+            <label htmlFor="conferma-delete" className="mb-1.5 block text-sm font-medium text-primary-700">
+              Digita <strong>DELETE</strong> per confermare
+            </label>
+            <input
+              id="conferma-delete"
+              type="text"
+              value={testoConferma}
+              onChange={(e) => setTestoConferma(e.target.value)}
+              placeholder="DELETE"
+              className="input font-mono"
+            />
+          </div>
+          {erroreElimina && <p className="text-xs text-error-600">{erroreElimina}</p>}
+          <div className="flex flex-col gap-2 sm:flex-row-reverse">
+            <button
+              onClick={() => void handleEliminaAccount()}
+              disabled={testoConferma !== 'DELETE' || cancellando}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-error-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-error-600 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            >
+              {cancellando ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              {cancellando ? 'Eliminazione…' : 'Cancella definitivamente'}
+            </button>
+            <button
+              onClick={() => setMostraModaleElimina(false)}
+              disabled={cancellando}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-primary-200 px-5 py-3 text-sm font-medium text-primary-700 transition hover:bg-primary-50 disabled:opacity-50 sm:w-auto"
+            >
+              Annulla
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

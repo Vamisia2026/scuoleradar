@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from '@/contexts/AppContext';
 import { AuthModal } from '@/components/AuthModal';
 import { DevToolbar } from '@/components/DevToolbar';
+import { ToastProvider } from '@/components/Toast';
 import { AuthCallback } from '@/pages/AuthCallback';
 import { LandingPage } from '@/pages/LandingPage';
 import { OnboardingPage } from '@/pages/OnboardingPage';
@@ -40,48 +41,50 @@ function RequireOnboarding({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <AppProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Sito vetrina pubblico */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/prezzi" element={<PrezziPage />} />
-          <Route path="/chi-siamo" element={<ChiSiamoPage />} />
-          <Route path="/servizi" element={<ServiziPage />} />
-          <Route path="/servizi/:slug" element={<ServizioPage />} />
-          <Route path="/auth/callback" element={<AuthCallback />} />
+      <ToastProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Sito vetrina pubblico */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/prezzi" element={<PrezziPage />} />
+            <Route path="/chi-siamo" element={<ChiSiamoPage />} />
+            <Route path="/servizi" element={<ServiziPage />} />
+            <Route path="/servizi/:slug" element={<ServizioPage />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
 
-          {/* Area riservata */}
-          <Route
-            path="/onboarding"
-            element={
-              <RequireAuth>
-                <OnboardingPage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/dashboard"
-            element={
-              <RequireOnboarding>
-                <DashboardLayout />
-              </RequireOnboarding>
-            }
-          >
-            <Route index element={<Navigate to="radar" replace />} />
-            <Route path="radar" element={<DashboardPage />} />
-            <Route path="cv" element={<CvPage />} />
-            <Route path="cfu" element={<CfuPage />} />
-            <Route path="assistente-ai" element={<AssistenteAIPage />} />
-            <Route path="moduli" element={<ModuliPage />} />
-            <Route path="profilo" element={<ProfiloPage />} />
-            <Route path="invita" element={<InvitaPage />} />
-          </Route>
+            {/* Area riservata */}
+            <Route
+              path="/onboarding"
+              element={
+                <RequireAuth>
+                  <OnboardingPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/dashboard"
+              element={
+                <RequireOnboarding>
+                  <DashboardLayout />
+                </RequireOnboarding>
+              }
+            >
+              <Route index element={<Navigate to="radar" replace />} />
+              <Route path="radar" element={<DashboardPage />} />
+              <Route path="cv" element={<CvPage />} />
+              <Route path="cfu" element={<CfuPage />} />
+              <Route path="assistente-ai" element={<AssistenteAIPage />} />
+              <Route path="moduli" element={<ModuliPage />} />
+              <Route path="profilo" element={<ProfiloPage />} />
+              <Route path="invita" element={<InvitaPage />} />
+            </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-        <AuthModal />
-        <DevToolbar />
-      </BrowserRouter>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+          <AuthModal />
+          <DevToolbar />
+        </BrowserRouter>
+      </ToastProvider>
     </AppProvider>
   );
 }
