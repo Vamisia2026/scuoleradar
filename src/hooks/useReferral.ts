@@ -16,6 +16,35 @@ export interface ReferralEntry {
 }
 
 /**
+ * Genera il codice referral di fallback client-side con la stessa regola del trigger DB:
+ * UPPERCASE(NOME + COGNOME), fallback sulla parte locale dell'email, infine "DOCENTE".
+ */
+function generaCodiceBase(p: {
+  nome?: string | null;
+  cognome?: string | null;
+  email?: string | null;
+}): string {
+  const base = String(p.nome ?? '').replace(/\s/g, '') + String(p.cognome ?? '').replace(/\s/g, '');
+  let cand = base.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!cand && p.email) {
+    cand = String(p.email).split('@')[0].toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+  return cand || 'DOCENTE';
+}
+
+/** Salva il codice sul profilo; in caso di collisione di unicità riprova con suffisso numerico. */
+async function assicuraCodice(uid: string, base: string): Promise<string> {
+  if (!supabase) return base;
+  let cod = base;
+  for (let i = 0; i < 10; i++) {
+    const { error } = await supabase.from('profiles').update({ referral_code: cod }).eq('id', uid);
+    if (!error) return cod;
+    cod = `${base}${i + 1}`;
+  }
+  return cod;
+}
+
+/**
  * Hook del programma "Invita un Collega" & Affiliazione.
  * Legge il codice promo dell'utente, le statistiche anonime dei referral
  * e permette di modificare il codice con validazione di unicità in tempo reale.
@@ -44,10 +73,17 @@ export function useReferral() {
 
         const { data: profilo } = await supabase
           .from('profiles')
-          .select('referral_code')
+          .select('referral_code, nome, cognome, email')
           .eq('id', user.id)
           .maybeSingle();
-        if (attivo && profilo?.referral_code) setCodice(String(profilo.referral_code));
+        if (attivo && profilo) {
+          let cod = profilo.referral_code ? String(profilo.referral_code) : '';
+          // Fallback: genera automaticamente UPPERCASE(NOME+COGNOME) se il codice non esiste ancora
+          if (!cod) {
+            cod = await assicuraCodice(user.id, generaCodiceBase(profilo));
+          }
+          setCodice(cod);
+        }
 
         const { data: righe } = await supabase
           .from('referrals')

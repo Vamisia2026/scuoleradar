@@ -1,7 +1,7 @@
-import { useMemo, useEffect, useState } from 'react';
+import { useMemo, useEffect, useState, type ReactNode } from 'react';
 import {
   Save, Check, MapPin, Send, Mail, Search, GraduationCap, School, BookOpen, Baby, Users, Moon, Briefcase, Wrench, Plus,
-  SlidersHorizontal, Star, Ban, Download, Trash2, FileText, Sparkles,
+  Star, Ban, Download, Trash2, FileText, Sparkles, ChevronDown,
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -16,7 +16,6 @@ import { ordiniScuola, materie, type OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import { Pill } from '@/components/Pill';
-import { ReferralSection } from '@/components/profile/ReferralSection';
 
 const ordineIcons: Record<OrdineScuola, React.ReactNode> = {
   infanzia: <Baby className="h-5 w-5" />,
@@ -28,6 +27,45 @@ const ordineIcons: Record<OrdineScuola, React.ReactNode> = {
   pon: <Briefcase className="h-5 w-5" />,
   ata: <Wrench className="h-5 w-5" />,
 };
+
+/** Card collassabile del Profilo: riduce lo scroll raggruppando le impostazioni. */
+function Accordion({
+  icona,
+  titolo,
+  badge,
+  aperto,
+  onToggle,
+  children,
+}: {
+  icona: ReactNode;
+  titolo: string;
+  badge?: string;
+  aperto: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-primary-100 bg-white shadow-card">
+      <button
+        onClick={onToggle}
+        aria-expanded={aperto}
+        className="flex w-full items-center gap-2.5 px-5 py-4 text-left transition hover:bg-primary-50/50"
+      >
+        <span className="text-lg leading-none">{icona}</span>
+        <h3 className="flex-1 text-sm font-bold text-primary-800">{titolo}</h3>
+        {badge ? (
+          <span className="rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-semibold text-primary-600">
+            {badge}
+          </span>
+        ) : null}
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-primary-400 transition-transform ${aperto ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {aperto && <div className="border-t border-primary-100 px-5 py-4">{children}</div>}
+    </section>
+  );
+}
 
 export function ProfiloPage() {
   const { preferenze, setPreferenze, salvaProfilo, crediti, avviaCheckout } = useApp();
@@ -67,6 +105,11 @@ export function ProfiloPage() {
   const [materiaFilter, setMateriaFilter] = useState('');
   const [customMateriaInput, setCustomMateriaInput] = useState('');
   const [salvato, setSalvato] = useState(false);
+
+  // Sezioni collassabili del Profilo (accordion) per eliminare lo scroll infinito
+  const [accordionAperti, setAccordionAperti] = useState<Record<string, boolean>>({});
+  const toggleAccordion = (chiave: string) =>
+    setAccordionAperti((prev) => ({ ...prev, [chiave]: !prev[chiave] }));
 
   // Storico dei modelli scaricati (condiviso con la pagina Moduli via localStorage)
   const [moduliScaricati, setModuliScaricati] = useLocalStorage<ModuloScaricato[]>(
@@ -197,10 +240,15 @@ export function ProfiloPage() {
         </button>
       </div>
 
-      {/* Ordini */}
-      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
-        <h3 className="text-sm font-bold text-primary-800">Ordini e tipologie</h3>
-        <p className="mt-1 text-xs text-primary-500">Puoi selezionare più opzioni.</p>
+      {/* Ordini e Tipologie di Scuola — accordion */}
+      <Accordion
+        icona="📂"
+        titolo="Ordini e Tipologie di Scuola"
+        badge={ordini.length ? `${ordini.length} selezionati` : undefined}
+        aperto={!!accordionAperti.ordini}
+        onToggle={() => toggleAccordion('ordini')}
+      >
+        <p className="text-xs text-primary-500">Puoi selezionare più opzioni.</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {ordiniScuola.map((o) => {
             const selected = ordini.includes(o.id);
@@ -221,11 +269,16 @@ export function ProfiloPage() {
             );
           })}
         </div>
-      </section>
+      </Accordion>
 
-      {/* Classi */}
-      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
-        <h3 className="text-sm font-bold text-primary-800">Classi di concorso</h3>
+      {/* Classi di Concorso — accordion */}
+      <Accordion
+        icona="🎓"
+        titolo="Classi di Concorso"
+        badge={classiCodici.length ? `${classiCodici.length} selezionate` : undefined}
+        aperto={!!accordionAperti.classi}
+        onToggle={() => toggleAccordion('classi')}
+      >
 
         {classiCodici.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
@@ -279,11 +332,20 @@ export function ProfiloPage() {
             );
           })}
         </div>
-      </section>
+      </Accordion>
 
-      {/* Materie */}
-      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
-        <h3 className="text-sm font-bold text-primary-800">Materie e competenze</h3>
+      {/* Materie e Competenze — accordion */}
+      <Accordion
+        icona="📚"
+        titolo="Materie e Competenze"
+        badge={
+          materieId.length + materieCustom.length
+            ? `${materieId.length + materieCustom.length} selezionate`
+            : undefined
+        }
+        aperto={!!accordionAperti.materie}
+        onToggle={() => toggleAccordion('materie')}
+      >
         <p className="mt-1 text-xs text-primary-500">
           Seleziona le materie in cui sei competente, anche non collegate a una classe specifica.
         </p>
@@ -351,11 +413,16 @@ export function ProfiloPage() {
             Aggiungi
           </button>
         </div>
-      </section>
+      </Accordion>
 
-      {/* Province */}
-      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
-        <h3 className="text-sm font-bold text-primary-800">Province di interesse</h3>
+      {/* Province di Interesse — accordion */}
+      <Accordion
+        icona="📍"
+        titolo="Province di Interesse"
+        badge={provinceCodici.length ? `${provinceCodici.length} selezionate` : undefined}
+        aperto={!!accordionAperti.province}
+        onToggle={() => toggleAccordion('province')}
+      >
 
         {provinceCodici.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
@@ -393,15 +460,21 @@ export function ProfiloPage() {
             );
           })}
         </div>
-      </section>
+      </Accordion>
 
-      {/* Filtri Avanzati Scuole */}
-      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
-        <div className="flex items-center gap-2">
-          <SlidersHorizontal className="h-4 w-4 text-primary-600" />
-          <h3 className="text-sm font-bold text-primary-800">Filtri Avanzati Scuole</h3>
-        </div>
-        <p className="mt-1 text-sm text-primary-500">
+      {/* Filtri Avanzati Scuole — accordion */}
+      <Accordion
+        icona="🏫"
+        titolo="Filtri Avanzati Scuole"
+        badge={
+          favoriteSchools.length + ignoredSchools.length
+            ? `${favoriteSchools.length + ignoredSchools.length} scuole`
+            : undefined
+        }
+        aperto={!!accordionAperti.filtri}
+        onToggle={() => toggleAccordion('filtri')}
+      >
+        <p className="text-sm text-primary-500">
           Le scuole preferite ricevono notifiche prioritarie e un badge dedicato; quelle escluse
           vengono nascoste dalla dashboard.
         </p>
@@ -418,7 +491,7 @@ export function ProfiloPage() {
           <div className="rounded-xl border border-accent-200 bg-accent-50/50 p-4">
             <h4 className="flex items-center gap-1.5 text-sm font-semibold text-accent-800">
               <Star className="h-4 w-4 text-accent-500" />
-              Preferite (Notifiche Prioritarie)
+              Scuole preferite (Notifiche Prioritarie)
             </h4>
             <div className="mt-3 flex gap-2">
               <input
@@ -454,7 +527,7 @@ export function ProfiloPage() {
           <div className="rounded-xl border border-secondary-200 bg-secondary-50/50 p-4">
             <h4 className="flex items-center gap-1.5 text-sm font-semibold text-secondary-800">
               <Ban className="h-4 w-4 text-secondary-500" />
-              Escluse (Nascondi Avvisi)
+              Scuole escluse (Nascondi Avvisi)
             </h4>
             <div className="mt-3 flex gap-2">
               <input
@@ -486,11 +559,23 @@ export function ProfiloPage() {
             )}
           </div>
         </div>
-      </section>
+      </Accordion>
 
-      {/* Canali */}
-      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
-        <h3 className="text-sm font-bold text-primary-800">Canali di notifica</h3>
+      {/* Canali di Notifica e Telegram — accordion */}
+      <Accordion
+        icona="🔔"
+        titolo="Canali di Notifica e Telegram"
+        badge={
+          [telegramUsername, telegramChatIdInput, emailNotifica].some(Boolean)
+            ? 'configurati'
+            : undefined
+        }
+        aperto={!!accordionAperti.canali}
+        onToggle={() => toggleAccordion('canali')}
+      >
+        <p className="text-sm text-primary-500">
+          Configura i canali su cui ricevere gli avvisi dei nuovi interpelli in tempo reale.
+        </p>
         <div className="mt-4 space-y-4">
           <label className="block">
             <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-primary-700">
@@ -517,19 +602,11 @@ export function ProfiloPage() {
             />
           </label>
         </div>
-      </section>
 
-      {/* Collega Telegram */}
-      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
-        <h3 className="flex items-center gap-1.5 text-sm font-bold text-primary-800">
-          <Send className="h-4 w-4 text-primary-500" />
-          Collega Telegram
-        </h3>
-        <p className="mt-1 text-sm text-primary-600">
-          Ricevi le notifiche dei nuovi interpelli direttamente su Telegram, in tempo reale.
-        </p>
-
-        <div className="mt-4 rounded-xl border border-primary-100 bg-primary-50 p-4 text-sm text-primary-700">
+        <div className="mt-5 rounded-xl border border-primary-100 bg-primary-50 p-4 text-sm text-primary-700">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary-500">
+            Collega Telegram
+          </p>
           <ol className="list-decimal space-y-1 pl-4">
             <li>
               Premi <strong>Collega Telegram</strong>: si aprirà il bot{' '}
@@ -575,7 +652,7 @@ export function ProfiloPage() {
           Con il pulsante "Collega Telegram" il tuo Chat ID viene salvato automaticamente nel profilo
           e usato per inviarti le notifiche Telegram.
         </p>
-      </section>
+      </Accordion>
 
       {/* Sblocchi A la Carte (FASE 6) */}
       <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
@@ -658,9 +735,6 @@ export function ProfiloPage() {
           </ul>
         )}
       </section>
-
-      {/* Programma 'Invita un Collega' & Affiliazione (FASE referral) */}
-      <ReferralSection />
     </div>
   );
 }

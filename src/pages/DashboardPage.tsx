@@ -8,14 +8,22 @@ import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/supabase';
 import { Footer } from './LandingPage';
 
+interface TabNav {
+  to: string;
+  label: string;
+  end?: boolean;
+  accent?: boolean;
+}
+
 export function DashboardLayout() {
-  const tabs = [
+  const tabs: TabNav[] = [
     { to: '/dashboard/radar', label: '📡 Radar Interpelli', end: true },
     { to: '/dashboard/cv', label: '📄 Il mio CV' },
     { to: '/dashboard/cfu', label: '🎓 Check CFU' },
     { to: '/dashboard/assistente-ai', label: '🤖 Assistente AI' },
     { to: '/dashboard/moduli', label: '📁 Moduli' },
     { to: '/dashboard/profilo', label: '⚙️ Profilo' },
+    { to: '/dashboard/invita', label: '🎁 Invita un Collega', accent: true },
   ];
 
   return (
@@ -32,11 +40,18 @@ export function DashboardLayout() {
                 `inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
                   isActive
                     ? 'bg-primary-500 text-white shadow-soft'
-                    : 'text-primary-700 hover:bg-primary-50'
+                    : t.accent
+                      ? 'bg-accent-50 text-accent-700 ring-1 ring-accent-200 hover:bg-accent-100'
+                      : 'text-primary-700 hover:bg-primary-50'
                 }`
               }
             >
               {t.label}
+              {t.accent && (
+                <span className="rounded-full bg-accent-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                  10€
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

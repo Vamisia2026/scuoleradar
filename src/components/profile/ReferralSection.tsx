@@ -186,11 +186,11 @@ export function ReferralSection() {
 
       {/* KPI */}
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <Kpi icon={<Users className="h-4 w-4" />} value={String(stats.totaleUsi)} label="Total Uses" />
+        <Kpi icon={<Users className="h-4 w-4" />} value={String(stats.totaleUsi)} label="Utilizzi Totali" />
         <Kpi
           icon={<CheckCircle2 className="h-4 w-4" />}
           value={String(stats.completati)}
-          label="Abbonamenti completati"
+          label="Abbonamenti sottoscritti"
         />
         <Kpi
           icon={<Euro className="h-4 w-4" />}

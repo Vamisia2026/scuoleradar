@@ -12,6 +12,7 @@ import { CfuPage } from '@/pages/CfuPage';
 import { AssistenteAIPage } from '@/pages/AssistenteAIPage';
 import { ModuliPage } from '@/pages/ModuliPage';
 import { ProfiloPage } from '@/pages/ProfiloPage';
+import { InvitaPage } from '@/pages/InvitaPage';
 import { PrezziPage } from '@/pages/PrezziPage';
 import { ChiSiamoPage } from '@/pages/ChiSiamoPage';
 import { ServiziPage } from '@/pages/ServiziPage';
@@ -73,6 +74,7 @@ export default function App() {
             <Route path="assistente-ai" element={<AssistenteAIPage />} />
             <Route path="moduli" element={<ModuliPage />} />
             <Route path="profilo" element={<ProfiloPage />} />
+            <Route path="invita" element={<InvitaPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
