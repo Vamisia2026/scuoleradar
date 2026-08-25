@@ -37,5 +37,6 @@ grant select on table public.interpelli to anon;
 grant select on table public.interpelli to authenticated;
 
 -- Gli interpelli sono dati pubblici (lettura consentita a tutti)
+drop policy if exists "read interpelli" on public.interpelli;
 create policy "read interpelli" on public.interpelli
   for select using (true);

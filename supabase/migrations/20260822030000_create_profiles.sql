@@ -31,10 +31,13 @@ grant select on table public.profiles to anon;
 grant select, insert, update on table public.profiles to authenticated;
 
 -- RLS: ogni utente legge e modifica solo il proprio profilo
+drop policy if exists "read own profile" on public.profiles;
 create policy "read own profile" on public.profiles
   for select to authenticated using (auth.uid() = id);
+drop policy if exists "insert own profile" on public.profiles;
 create policy "insert own profile" on public.profiles
   for insert to authenticated with check (auth.uid() = id);
+drop policy if exists "update own profile" on public.profiles;
 create policy "update own profile" on public.profiles
   for update to authenticated using (auth.uid() = id) with check (auth.uid() = id);
 
