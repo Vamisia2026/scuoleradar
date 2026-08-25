@@ -208,7 +208,7 @@ export function Header() {
                   onClick={chiudiMenu}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
                 >
-                  <LayoutDashboard className="h-4 w-4" />
+                  <UserIcon className="h-4 w-4" />
                   Area Personale
                 </Link>
                 <Link
