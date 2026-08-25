@@ -239,7 +239,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         },
       });
       if (error) {
-        console.error('Errore avvio checkout:', error.message);
+        // Log completo del payload restituito dalla Edge Function in caso di errore
+        console.error(
+          'Checkout fallito:',
+          error.message,
+          '— risposta Edge Function:',
+          JSON.stringify(data),
+        );
         return {
           ok: false,
           errore: `Impossibile avviare il pagamento (${error.message}). Controlla la connessione e riprova.`,
@@ -247,6 +253,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       const payload = data as { url?: string; error?: string } | null;
       if (!payload?.url) {
+        console.error(
+          'Checkout senza URL — payload ricevuto dalla Edge Function:',
+          JSON.stringify(data),
+        );
         return {
           ok: false,
           errore: payload?.error ?? 'La sessione di pagamento non è stata creata. Riprova.',
