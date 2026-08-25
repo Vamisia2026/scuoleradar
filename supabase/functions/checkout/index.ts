@@ -110,7 +110,8 @@ serve(async (req: Request) => {
     'line_items[0][price]': priceId,
     'line_items[0][quantity]': '1',
     // Stripe Managed Payments: i metodi di pagamento gestiti da Stripe sono abilitati
-    'managed_payments': 'true',
+    // (parametro `managed_payments` è un oggetto { enabled: boolean } nelle API aggiornate)
+    'managed_payments[enabled]': 'true',
     'client_reference_id': userId,
     'metadata[user_id]': userId,
   };
