@@ -5,13 +5,16 @@
 // l'URL a cui redirigere il browser dell'utente.
 //
 // Autenticazione: --verify-jwt (deve essere un utente loggato).
-// Body: { "plan": "pro_annuale" | "pro_mensile" | "alacarte" }
+// Body: { "plan": "pro_annuale" | "pro_mensile" | "alacarte", "promo": "CODICE" }
+//   "promo" (opzionale): codice referral → validato via RPC valida_codice_promo;
+//   se valido applica il coupon -10€ (solo PRO annuale) e traccia il referrer nei metadata.
 //
 // Secrets richiesti:
 //   STRIPE_SECRET_KEY              (obbligatoria)
 //   STRIPE_PRICE_PRO_ANNUALE       (id price PRO annuale)
 //   STRIPE_PRICE_PRO_MENSILE       (id price PRO mensile)
 //   STRIPE_PRICE_ALACARTE          (id price A la Carte / sblocco)
+//   STRIPE_COUPON_REFERRAL_10      (opzionale — coupon amount_off 10€ per i referral)
 //
 // Deploy:
 //   supabase functions deploy checkout --project-ref <ref>   (JWT verificato di default)
