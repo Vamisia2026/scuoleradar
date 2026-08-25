@@ -90,6 +90,32 @@ async function incrementaCrediti(userId: string, delta: number): Promise<boolean
   return res.ok;
 }
 
+/** Registra la riga referral (sconto applicato + ricompensa del referrer). */
+async function registraReferral(
+  referrerId: string,
+  referredUserId: string,
+  discount: number,
+  reward: number,
+): Promise<boolean> {
+  if (!referrerId || referrerId === referredUserId) return false; // niente auto-referral
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/referrals`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      referrer_id: referrerId,
+      referred_user_id: referredUserId || null,
+      discount_applied: discount,
+      reward_amount: reward,
+      status: 'completed',
+    }),
+  });
+  return res.ok;
+}
+
 /** Converte un timestamp epoch (secondi) in data ISO, o null. */
 function epochToIso(epoch: number | null | undefined): string | null {
   if (!epoch) return null;
@@ -110,7 +136,7 @@ serve(async (req: Request) => {
     data?: {
       object?: {
         id?: string;
-        metadata?: { user_id?: string };
+        metadata?: { user_id?: string; promo?: string; promo_referrer?: string };
         mode?: string;
         payment_status?: string;
         status?: string;
@@ -145,6 +171,12 @@ serve(async (req: Request) => {
           stripe_subscription_id: obj.id ?? null,
         });
         console.log(`  → piano pro (subscription ${obj.id ?? '?'}): ${ok}`);
+      }
+
+      // Referral: se il checkout usava un codice promo, registra la ricompensa del referrer
+      if (obj.metadata?.promo && obj.metadata.promo_referrer && obj.payment_status === 'paid') {
+        const ok = await registraReferral(obj.metadata.promo_referrer, userId, 10, 10);
+        console.log(`  → referral registrato (${obj.metadata.promo}): ${ok}`);
       }
       break;
     }

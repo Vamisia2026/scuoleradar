@@ -1,4 +1,5 @@
-import { Check, Sparkles, Send, ShieldCheck } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Check, Sparkles, Send, ShieldCheck, Gift } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { Header } from '@/components/Header';
 import { Footer } from './LandingPage';
@@ -85,12 +86,35 @@ const faq = [
 
 export function PrezziPage() {
   const { openAuthModal } = useApp();
+  const [promoUrl, setPromoUrl] = useState<string | null>(null);
+
+  // Se arrivi da un link referral (?promo=CODE), salva il codice per il checkout
+  useEffect(() => {
+    const promo = new URLSearchParams(window.location.search).get('promo');
+    if (promo) {
+      const upp = promo.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      setPromoUrl(upp);
+      try {
+        localStorage.setItem('sr_promo', upp);
+      } catch {
+        // localStorage non disponibile
+      }
+    }
+  }, []);
 
   const handleCta = () => openAuthModal('registrazione');
 
   return (
     <div className="min-h-screen">
       <Header />
+
+      {promoUrl && (
+        <div className="border-b border-accent-200 bg-accent-500/10 px-4 py-2.5 text-center text-sm text-accent-800">
+          <Gift className="mr-1.5 inline h-4 w-4" />
+          Hai un invito! Il codice <strong>{promoUrl}</strong> verrà applicato automaticamente al
+          checkout (-10€ sul piano PRO annuale).
+        </div>
+      )}
 
       <section className="bg-gradient-to-b from-primary-50 to-white">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">

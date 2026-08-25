@@ -21,6 +21,10 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
 const STRIPE_API = 'https://api.stripe.com/v1';
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+/** Coupon Stripe (amount_off 10€, una tantum) per il programma referral. */
+const COUPON_REFERRAL = Deno.env.get('STRIPE_COUPON_REFERRAL_10') ?? '';
 
 const STRIPE_PRICE_IDS: Record<string, string> = {
   pro_annuale: Deno.env.get('STRIPE_PRICE_PRO_ANNUALE') ?? '',
@@ -64,6 +68,32 @@ async function postStripe<T>(path: string, campi: Record<string, string>): Promi
   return (await res.json()) as T;
 }
 
+/** Valida il codice promo contro profiles.referral_code (via RPC). */
+async function validaPromo(
+  codice: string,
+): Promise<{ valido: boolean; referrer_id?: string; codice?: string } | null> {
+  if (!codice.trim()) return { valido: false };
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/valida_codice_promo`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_codice: codice.trim() }),
+  });
+  if (!res.ok) {
+    console.error('valida_codice_promo fallita:', res.status, await res.text());
+    return null;
+  }
+  const righe = (await res.json()) as Array<{
+    valido: boolean;
+    referrer_id: string;
+    codice: string;
+  }>;
+  return righe[0] ?? { valido: false };
+}
+
 serve(async (req: Request) => {
   if (req.method !== 'POST') {
     return new Response('Method Not Allowed', { status: 405 });
@@ -81,7 +111,7 @@ serve(async (req: Request) => {
     });
   }
 
-  let body: { plan?: string };
+  let body: { plan?: string; promo?: string };
   try {
     body = await req.json();
   } catch {
@@ -116,6 +146,18 @@ serve(async (req: Request) => {
     'metadata[user_id]': userId,
   };
   if (jwt?.email) campi.customer_email = jwt.email;
+
+  // Codice promo / referral: valida e applica il coupon (-10€ sul piano PRO annuale)
+  if (body.promo) {
+    const promo = await validaPromo(body.promo);
+    if (promo?.valido && promo.referrer_id) {
+      campi['metadata[promo]'] = promo.codice ?? body.promo;
+      campi['metadata[promo_referrer]'] = promo.referrer_id;
+      if (COUPON_REFERRAL && plan === 'pro_annuale') {
+        campi['discounts[0][coupon]'] = COUPON_REFERRAL;
+      }
+    }
+  }
 
   const session = await postStripe<{ url?: string; id?: string }>('/checkout/sessions', campi);
   if (!session?.url) {

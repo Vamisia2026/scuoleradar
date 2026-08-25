@@ -61,7 +61,7 @@ interface AppContextValue extends AppState {
   setPreferenze: (p: Partial<Preferenze>) => void;
   completaOnboarding: (p: Partial<Preferenze>) => void;
   incrementaNotifica: (interpelloId: string) => void;
-  avviaCheckout: (plan: string) => Promise<void>;
+  avviaCheckout: (plan: string, promo?: string) => Promise<void>;
   setEsami: (e: Esame[]) => void;
   interpelliFiltrati: Interpello[];
   origineDati: 'mock' | 'supabase';
@@ -219,12 +219,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   /** FASE 6 — avvia il checkout Stripe per il piano richiesto e redirige l'utente. */
-  const avviaCheckout = useCallback(async (plan: string) => {
+  const avviaCheckout = useCallback(async (plan: string, promo?: string) => {
     if (!supabase) {
       console.warn('Supabase non configurato: checkout non disponibile in modalità demo.');
       return;
     }
-    const { data, error } = await supabase.functions.invoke('checkout', { body: { plan } });
+    const { data, error } = await supabase.functions.invoke('checkout', {
+      body: { plan, promo: promo || undefined },
+    });
     if (error) {
       console.error('Errore avvio checkout:', error.message);
       return;

@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { BellRing, Sparkles, CheckCircle2, CreditCard, Radar, Database, SlidersHorizontal } from 'lucide-react';
+import { BellRing, Sparkles, CheckCircle2, CreditCard, Radar, Database, SlidersHorizontal, Tag, Loader2, X } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { Modal } from '@/components/Modal';
 import { InterpelloCard } from '@/components/InterpelloCard';
 import { useApp } from '@/contexts/AppContext';
+import { supabase } from '@/lib/supabase';
 import { Footer } from './LandingPage';
 
 export function DashboardLayout() {
@@ -195,8 +196,8 @@ export function DashboardPage() {
       <AbbonamentoModal
         open={showAbbonamento}
         onClose={() => setShowAbbonamento(false)}
-        onConfirm={() => {
-          void avviaCheckout('pro_annuale');
+        onConfirm={(promo) => {
+          void avviaCheckout('pro_annuale', promo);
         }}
       />
     </div>
@@ -210,14 +211,69 @@ function AbbonamentoModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (promo?: string) => void;
 }) {
   const [invio, setInvio] = useState(false);
+  const [promo, setPromo] = useState('');
+  const [promoStato, setPromoStato] = useState<'idle' | 'verifica' | 'applicato' | 'errore'>('idle');
+  const [promoMsg, setPromoMsg] = useState('');
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // Pre-fill + auto-apply del promo da ?promo= (link referral salvato da PrezziPage)
+  useEffect(() => {
+    if (!open) return;
+    const salvato = (() => {
+      try {
+        return localStorage.getItem('sr_promo') ?? '';
+      } catch {
+        return '';
+      }
+    })();
+    if (salvato) {
+      setPromo(salvato);
+      void applicaPromo(salvato);
+      try {
+        localStorage.removeItem('sr_promo');
+      } catch {
+        // ignore
+      }
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    void supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+  }, []);
+
+  const applicaPromo = async (codice: string) => {
+    if (!supabase) return;
+    const upp = codice.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!upp) {
+      setPromoStato('idle');
+      setPromoMsg('');
+      return;
+    }
+    setPromoStato('verifica');
+    const { data } = await supabase.rpc('valida_codice_promo', { p_codice: upp });
+    const riga = Array.isArray(data) && data.length > 0
+      ? (data[0] as { valido?: boolean; referrer_id?: string })
+      : null;
+    // Valido SOLO se appartiene a un altro utente (niente auto-promo)
+    if (riga?.valido && riga.referrer_id && riga.referrer_id !== userId) {
+      setPromo(upp);
+      setPromoStato('applicato');
+      setPromoMsg('Codice sconto applicato (-10€)');
+    } else {
+      setPromoStato('errore');
+      setPromoMsg('Codice promo non valido o non applicabile');
+    }
+  };
 
   const handleProcedi = () => {
     setInvio(true);
-    // Avvia il checkout Lemon Squeezy (la Edge Function ritorna l'URL di redirect)
-    Promise.resolve(onConfirm()).finally(() => setInvio(false));
+    Promise.resolve(onConfirm(promoStato === 'applicato' ? promo : undefined)).finally(() =>
+      setInvio(false),
+    );
   };
 
   return (
@@ -229,9 +285,73 @@ function AbbonamentoModal({
             <span className="text-sm font-medium">Piano PRO annuale</span>
           </div>
           <p className="mt-2 text-3xl font-bold">
-            49€<span className="text-base font-normal">/anno</span>
+            {promoStato === 'applicato' ? (
+              <>
+                <span className="mr-1 text-lg font-normal text-white/60 line-through">49€</span>
+                39€<span className="text-base font-normal">/anno</span>
+              </>
+            ) : (
+              <>
+                49€<span className="text-base font-normal">/anno</span>
+              </>
+            )}
           </p>
           <p className="mt-1 text-sm text-primary-100">Si ripaga con un&apos;ora di lavoro.</p>
+        </div>
+
+        {/* Codice promo / sconto */}
+        <div className="rounded-xl border border-primary-100 bg-slate-50 p-3">
+          <label
+            htmlFor="promo-input"
+            className="text-xs font-semibold uppercase tracking-wide text-primary-500"
+          >
+            Codice promo / sconto
+          </label>
+          <div className="mt-1.5 flex items-center gap-2">
+            <input
+              id="promo-input"
+              type="text"
+              value={promo}
+              onChange={(e) => {
+                setPromo(e.target.value.toUpperCase());
+                setPromoStato('idle');
+                setPromoMsg('');
+              }}
+              placeholder="ES. BARTOLOANSALDI"
+              className="input font-mono text-sm"
+              disabled={promoStato === 'applicato'}
+            />
+            {promoStato === 'applicato' ? (
+              <button
+                onClick={() => {
+                  setPromo('');
+                  setPromoStato('idle');
+                  setPromoMsg('');
+                }}
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-primary-200 bg-white px-3 py-2 text-xs font-semibold text-primary-600 transition hover:bg-primary-50"
+              >
+                <X className="h-3.5 w-3.5" />
+                Rimuovi
+              </button>
+            ) : (
+              <button
+                onClick={() => void applicaPromo(promo)}
+                disabled={promoStato === 'verifica' || !promo}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-600 disabled:opacity-50"
+              >
+                {promoStato === 'verifica' ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Tag className="h-3.5 w-3.5" />
+                )}
+                Applica
+              </button>
+            )}
+          </div>
+          {promoStato === 'applicato' && (
+            <p className="mt-1.5 text-xs font-semibold text-accent-600">✓ {promoMsg}</p>
+          )}
+          {promoStato === 'errore' && <p className="mt-1.5 text-xs text-error-600">{promoMsg}</p>}
         </div>
 
         <ul className="space-y-2 text-sm text-primary-700">

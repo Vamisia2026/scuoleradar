@@ -16,6 +16,7 @@ import { ordiniScuola, materie, type OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import { Pill } from '@/components/Pill';
+import { ReferralSection } from '@/components/profile/ReferralSection';
 
 const ordineIcons: Record<OrdineScuola, React.ReactNode> = {
   infanzia: <Baby className="h-5 w-5" />,
@@ -657,6 +658,9 @@ export function ProfiloPage() {
           </ul>
         )}
       </section>
+
+      {/* Programma 'Invita un Collega' & Affiliazione (FASE referral) */}
+      <ReferralSection />
     </div>
   );
 }
