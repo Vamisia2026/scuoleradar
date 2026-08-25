@@ -224,7 +224,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.warn('Supabase non configurato: checkout non disponibile in modalità demo.');
       return;
     }
-    const { data, error } = await supabase.functions.invoke('stripe-checkout', { body: { plan } });
+    const { data, error } = await supabase.functions.invoke('checkout', { body: { plan } });
     if (error) {
       console.error('Errore avvio checkout:', error.message);
       return;

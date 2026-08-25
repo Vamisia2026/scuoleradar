@@ -14,7 +14,7 @@
 //   STRIPE_PRICE_ALACARTE          (id price A la Carte / sblocco)
 //
 // Deploy:
-//   supabase functions deploy stripe-checkout --project-ref <ref> --verify-jwt
+//   supabase functions deploy checkout --project-ref <ref>   (JWT verificato di default)
 // ============================================================
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
@@ -109,6 +109,8 @@ serve(async (req: Request) => {
     cancel_url: CANCEL_URL,
     'line_items[0][price]': priceId,
     'line_items[0][quantity]': '1',
+    // Stripe Managed Payments: i metodi di pagamento gestiti da Stripe sono abilitati
+    'managed_payments': 'true',
     'client_reference_id': userId,
     'metadata[user_id]': userId,
   };

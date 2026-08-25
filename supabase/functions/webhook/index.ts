@@ -16,7 +16,7 @@
 //   STRIPE_WEBHOOK_SECRET  (dal pannello Stripe → Webhooks → signing secret)
 //
 // Deploy:
-//   supabase functions deploy stripe-webhook --project-ref <ref> --no-verify-jwt
+//   supabase functions deploy webhook --project-ref <ref> --no-verify-jwt
 // ============================================================
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
