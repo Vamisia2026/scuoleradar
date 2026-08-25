@@ -5,11 +5,12 @@
 // l'URL a cui redirigere il browser dell'utente.
 //
 // Autenticazione: --verify-jwt (deve essere un utente loggato).
-// Body: { "plan": "pro_annuale" | "pro_mensile" | "alacarte", "promo": "CODICE", "priceId": "..." }
+// Body: { "plan": "pro_annuale" | "pro_mensile" | "alacarte", "promo": "CODICE", "priceId": "...", "quantita": 3 }
 //   "promo" (opzionale): codice referral → validato via RPC valida_codice_promo;
-//   se valido applica il coupon -10€ (solo PRO annuale) e traccia il referrer nei metadata.
+//   se valido applica il coupon -10€ (PRO annuale e crediti a consumo) e traccia il referrer.
 //   "priceId" (opzionale, frontend VITE_STRIPE_*): solo verifica/debug, la fonte
 //   autorevole del prezzo è sempre il secret server-side.
+//   "quantita" (opzionale, default 1): numero di crediti a consumo (5€/cad).
 //
 // Secrets richiesti:
 //   STRIPE_SECRET_KEY              (obbligatoria)
@@ -116,7 +117,7 @@ serve(async (req: Request) => {
     });
   }
 
-  let body: { plan?: string; promo?: string; priceId?: string };
+  let body: { plan?: string; promo?: string; priceId?: string; quantita?: number };
   try {
     body = await req.json();
   } catch {
@@ -140,15 +141,16 @@ serve(async (req: Request) => {
     console.warn(`PriceId frontend non corrisponde al piano ${plan}: ${body.priceId} (uso ${priceId})`);
   }
 
-  // mode: subscription per i PRO, payment (one-time) per l'A la Carte
+  // mode: subscription per i PRO, payment (one-time) per i crediti a consumo
   const mode = plan === 'alacarte' ? 'payment' : 'subscription';
+  const quantita = Math.max(1, Math.min(100, Math.floor(body.quantita ?? 1)));
 
   const campi: Record<string, string> = {
     mode,
     success_url: SUCCESS_URL,
     cancel_url: CANCEL_URL,
     'line_items[0][price]': priceId,
-    'line_items[0][quantity]': '1',
+    'line_items[0][quantity]': String(quantita),
     // Stripe Managed Payments: i metodi di pagamento gestiti da Stripe sono abilitati
     // (parametro `managed_payments` è un oggetto { enabled: boolean } nelle API aggiornate)
     'managed_payments[enabled]': 'true',
@@ -157,13 +159,13 @@ serve(async (req: Request) => {
   };
   if (jwt?.email) campi.customer_email = jwt.email;
 
-  // Codice promo / referral: valida e applica il coupon (-10€ sul piano PRO annuale)
+  // Codice promo / referral: valida e applica il coupon (-10€ su PRO annuale e crediti a consumo)
   if (body.promo) {
     const promo = await validaPromo(body.promo);
     if (promo?.valido && promo.referrer_id) {
       campi['metadata[promo]'] = promo.codice ?? body.promo;
       campi['metadata[promo_referrer]'] = promo.referrer_id;
-      if (COUPON_REFERRAL && plan === 'pro_annuale') {
+      if (COUPON_REFERRAL && (plan === 'pro_annuale' || plan === 'alacarte')) {
         campi['discounts[0][coupon]'] = COUPON_REFERRAL;
       }
     }

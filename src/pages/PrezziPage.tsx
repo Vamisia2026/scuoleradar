@@ -49,19 +49,19 @@ const piani: Piano[] = [
     cta: 'Scegli PRO Mensile',
   },
   {
-    nome: 'A la Carte',
+    nome: 'A consumo',
     prezzo: '5€',
     periodo: 'per singolo servizio',
-    descrizione: 'Paghi solo quando ti serve: uno sblocco, un servizio.',
+    descrizione: 'Paghi solo quando ti serve: un credito, un servizio.',
     evidenziato: false,
     sottotitolo:
-      'Con 2 sblocchi a la carte copri il costo di un mese intero di PRO Illimitato',
+      'Con 2 crediti a consumo copri il costo di un mese intero di PRO Illimitato',
     caratteristiche: [
-      'Singolo sblocco per ogni servizio',
+      'Un credito per ogni servizio',
       'Nessun abbonamento automatico',
-      'Sblocco valido 12 mesi dall\u2019acquisto',
+      'Credito valido 12 mesi dall\u2019acquisto',
     ],
-    cta: 'Compra uno sblocco',
+    cta: 'Acquista crediti a consumo',
   },
 ];
 

@@ -18,7 +18,7 @@ const ruoli: { id: RuoloSimulato; label: string; desc: string; icon: React.React
   {
     id: 'pro',
     label: 'PRO',
-    desc: 'Abbonamento completo · Sblocchi illimitati · PureFocus incluso',
+    desc: 'Abbonamento completo · Tutto illimitato · PureFocus incluso',
     icon: <Crown className="h-4 w-4" />,
   },
 ];

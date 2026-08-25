@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { LogOut, User as UserIcon, Menu, X, LayoutDashboard, Sparkles, ChevronDown, CreditCard } from 'lucide-react';
+import { LogOut, User as UserIcon, Menu, X, Sparkles, ChevronDown, CreditCard } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 
 const navLinks = [
@@ -45,31 +45,39 @@ export function Header() {
         <div className="hidden items-center gap-2 md:flex">
           {user ? (
             <div className="relative">
-              <button
-                onClick={() => setMenuUtenteOpen((o) => !o)}
-                aria-expanded={menuUtenteOpen}
-                aria-haspopup="menu"
-                className="flex items-center gap-2 rounded-full border border-primary-200 bg-white py-1 pl-1 pr-3 shadow-soft transition hover:bg-primary-50"
-              >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-500 text-white">
-                  <UserIcon className="h-4 w-4" />
-                </span>
-                <span className="max-w-[110px] truncate text-sm font-semibold text-primary-800">
-                  {user.nome}
-                </span>
-                {abbonato ? (
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-500 px-2 py-0.5 text-[11px] font-bold text-white">
-                    <Sparkles className="h-3 w-3" /> PRO
+              <div className="flex items-center gap-0.5 rounded-full border border-primary-200 bg-white py-1 pl-1 pr-1 shadow-soft">
+                <Link
+                  to="/dashboard/radar"
+                  aria-label="Torna al Radar interpelli"
+                  className="flex items-center gap-2 rounded-full pr-2 transition hover:opacity-90"
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-500 text-white">
+                    <UserIcon className="h-4 w-4" />
                   </span>
-                ) : (
-                  <span className="inline-flex shrink-0 items-center rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-semibold text-primary-500">
-                    Base
+                  <span className="max-w-[110px] truncate text-sm font-semibold text-primary-800">
+                    {user.nome}
                   </span>
-                )}
-                <ChevronDown
-                  className={`h-4 w-4 text-primary-400 transition-transform ${menuUtenteOpen ? 'rotate-180' : ''}`}
-                />
-              </button>
+                  {abbonato ? (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-500 px-2 py-0.5 text-[11px] font-bold text-white">
+                      <Sparkles className="h-3 w-3" /> PRO
+                    </span>
+                  ) : (
+                    <span className="inline-flex shrink-0 items-center rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-semibold text-primary-500">
+                      Base
+                    </span>
+                  )}
+                </Link>
+                <button
+                  onClick={() => setMenuUtenteOpen((o) => !o)}
+                  aria-expanded={menuUtenteOpen}
+                  aria-label="Menu utente"
+                  className="inline-flex h-8 w-6 items-center justify-center rounded-full text-primary-400 transition hover:bg-primary-50"
+                >
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${menuUtenteOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+              </div>
 
               {menuUtenteOpen && (
                 <>
@@ -98,14 +106,6 @@ export function Header() {
                       </span>
                     </div>
                     <nav className="p-1.5">
-                      <Link
-                        to="/dashboard/radar"
-                        onClick={chiudiMenuUtente}
-                        className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
-                      >
-                        <LayoutDashboard className="h-4 w-4 text-primary-400" />
-                        Area Personale
-                      </Link>
                       <Link
                         to="/dashboard/profilo"
                         onClick={chiudiMenuUtente}

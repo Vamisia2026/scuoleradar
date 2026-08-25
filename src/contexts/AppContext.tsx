@@ -62,7 +62,7 @@ interface AppContextValue extends AppState {
   setPreferenze: (p: Partial<Preferenze>) => void;
   completaOnboarding: (p: Partial<Preferenze>) => void;
   incrementaNotifica: (interpelloId: string) => void;
-  avviaCheckout: (plan: string, promo?: string) => Promise<{ ok: boolean; errore?: string }>;
+  avviaCheckout: (plan: string, promo?: string, quantita?: number) => Promise<{ ok: boolean; errore?: string }>;
   setEsami: (e: Esame[]) => void;
   interpelliFiltrati: Interpello[];
   origineDati: 'mock' | 'supabase';
@@ -221,7 +221,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   /** FASE 6 — avvia il checkout Stripe per il piano richiesto e redirige l'utente. */
   const avviaCheckout = useCallback(
-    async (plan: string, promo?: string): Promise<{ ok: boolean; errore?: string }> => {
+    async (plan: string, promo?: string, quantita?: number): Promise<{ ok: boolean; errore?: string }> => {
       if (!supabase) {
         return {
           ok: false,
@@ -233,6 +233,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         body: {
           plan,
           promo: promo || undefined,
+          quantita,
           // priceId dal frontend (VITE_STRIPE_*): solo verifica/debug, la Edge Function
           // usa come fonte autorevole i secrets server-side.
           priceId: priceIdPerPiano(plan),

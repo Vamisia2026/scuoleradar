@@ -17,6 +17,7 @@ import { classiConcorso } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import { Pill } from '@/components/Pill';
 import { Modal } from '@/components/Modal';
+import { CreditiModal } from '@/components/CreditiModal';
 
 const ordineIcons: Record<OrdineScuola, React.ReactNode> = {
   infanzia: <Baby className="h-5 w-5" />,
@@ -69,7 +70,7 @@ function Accordion({
 }
 
 export function ProfiloPage() {
-  const { preferenze, setPreferenze, salvaProfilo, crediti, avviaCheckout } = useApp();
+  const { preferenze, setPreferenze, salvaProfilo, crediti } = useApp();
 
   const [ordini, setOrdini] = useState<OrdineScuola[]>(preferenze.ordini);
   const [classiCodici, setClassiCodici] = useState<string[]>(preferenze.classiCodici);
@@ -117,6 +118,9 @@ export function ProfiloPage() {
   const [testoConferma, setTestoConferma] = useState('');
   const [cancellando, setCancellando] = useState(false);
   const [erroreElimina, setErroreElimina] = useState('');
+
+  // Modal acquisto "Crediti a consumo"
+  const [mostraCreditiModal, setMostraCreditiModal] = useState(false);
 
   // Storico dei modelli scaricati (condiviso con la pagina Moduli via localStorage)
   const [moduliScaricati, setModuliScaricati] = useLocalStorage<ModuloScaricato[]>(
@@ -688,29 +692,31 @@ export function ProfiloPage() {
         </p>
       </Accordion>
 
-      {/* Sblocchi A la Carte (FASE 6) */}
+      {/* Crediti a consumo (FASE 6) */}
       <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
         <div className="flex items-center justify-between gap-3">
           <h3 className="flex items-center gap-1.5 text-sm font-bold text-primary-800">
             <Sparkles className="h-4 w-4 text-secondary-500" />
-            Sblocchi A la Carte
+            Crediti a consumo
           </h3>
           <span className="rounded-full bg-secondary-50 px-3 py-1 text-sm font-bold text-secondary-700">
             {crediti} disponibili
           </span>
         </div>
         <p className="mt-1 text-sm text-primary-600">
-          Usa gli sblocchi per i servizi singoli (CV, Check CFU, modelli) oppure acquistane di nuovi
+          Usa i crediti per i servizi singoli (CV, Check CFU, modelli) oppure acquistane di nuovi
           quando ti servono. Nessun abbonamento automatico.
         </p>
         <button
-          onClick={() => void avviaCheckout('alacarte')}
+          onClick={() => setMostraCreditiModal(true)}
           className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
         >
           <Sparkles className="h-4 w-4" />
-          Acquista uno sblocco (5€)
+          Acquista crediti a consumo
         </button>
       </section>
+
+      <CreditiModal open={mostraCreditiModal} onClose={() => setMostraCreditiModal(false)} />
 
       {/* Modelli scaricati di recente */}
       <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">

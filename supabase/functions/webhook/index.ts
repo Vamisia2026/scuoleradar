@@ -161,7 +161,7 @@ serve(async (req: Request) => {
     case 'checkout.session.completed': {
       if (!userId) break;
       if (obj.mode === 'payment' && obj.payment_status === 'paid') {
-        // A la Carte → +1 sblocco (via RPC atomica)
+        // A consumo → +1 credito (via RPC atomica)
         const ok = await incrementaCrediti(userId, 1);
         console.log(`  → crediti +1: ${ok}`);
       } else if (obj.mode === 'subscription') {

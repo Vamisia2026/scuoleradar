@@ -114,7 +114,7 @@ export function DashboardPage() {
               {crediti > 0 && (
                 <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-secondary-50 px-2 py-0.5 text-xs font-semibold text-secondary-700">
                   <Sparkles className="h-3 w-3" />
-                  {crediti} sblocco{crediti > 1 ? 'i' : ''} A la Carte
+                  {crediti} credito{crediti > 1 ? 'i' : ''} a consumo
                 </span>
               )}
             </div>
