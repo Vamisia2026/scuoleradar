@@ -81,23 +81,29 @@ export function CreditiModal({ open, onClose }: { open: boolean; onClose: () => 
 
   return (
     <Modal open={open} onClose={onClose} title="Crediti a consumo" size="sm">
-      <div className="space-y-4">
-        <div className="rounded-xl bg-gradient-to-br from-secondary-500 to-secondary-600 p-5 text-white">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5" />
-            <span className="text-sm font-medium">Crediti a consumo</span>
+      <div className="flex max-h-[calc(90vh-5.5rem)] flex-col gap-3">
+        {/* Banner compatto */}
+        <div className="shrink-0 rounded-xl bg-gradient-to-br from-secondary-500 to-secondary-600 px-4 py-3 text-white">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="h-4 w-4" />
+              <span className="text-xs font-medium">Crediti a consumo</span>
+            </div>
+            <p className="text-xl font-bold">
+              {totaleFinale}€
+              {sconto > 0 && (
+                <span className="ml-1 text-sm font-normal text-white/60 line-through">{totale}€</span>
+              )}
+            </p>
           </div>
-          <p className="mt-2 text-3xl font-bold">
-            {totaleFinale}€
-            {sconto > 0 && (
-              <span className="ml-1 text-lg font-normal text-white/60 line-through">{totale}€</span>
-            )}
-          </p>
-          <p className="mt-1 text-sm text-white/80">
-            {quantita} credito{quantita > 1 ? 'i' : ''} × {PREZZO_CREDITO}€ — ogni credito vale un
-            servizio singolo (CV, Check CFU, modelli).
+          <p className="mt-0.5 text-xs text-white/80">
+            {quantita} credito{quantita > 1 ? 'i' : ''} × {PREZZO_CREDITO}€ — un servizio singolo per
+            ogni credito.
           </p>
         </div>
+
+        {/* Contenuto scrollabile */}
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
 
         {/* Quantità */}
         <div>
@@ -207,15 +213,19 @@ export function CreditiModal({ open, onClose }: { open: boolean; onClose: () => 
             rimborsabile.
           </p>
         </div>
+        </div>
 
-        <button
-          onClick={() => void handleProcedi()}
-          disabled={invio}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-secondary-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {invio ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-          {invio ? 'Creazione sessione di pagamento…' : `Procedi al pagamento (${totaleFinale}€)`}
-        </button>
+        {/* Footer fisso: il pulsante resta sempre visibile senza scroll */}
+        <div className="shrink-0 border-t border-primary-100 pt-3">
+          <button
+            onClick={() => void handleProcedi()}
+            disabled={invio}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-secondary-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {invio ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+            {invio ? 'Creazione sessione di pagamento…' : `Procedi al pagamento (${totaleFinale}€)`}
+          </button>
+        </div>
       </div>
     </Modal>
   );

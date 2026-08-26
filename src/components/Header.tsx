@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { LogOut, User as UserIcon, Menu, X, Sparkles, ChevronDown, CreditCard } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
+import { CreditiModal } from '@/components/CreditiModal';
 
 const navLinks = [
   { to: '/servizi', label: 'Servizi' },
@@ -13,6 +14,7 @@ export function Header() {
   const { user, abbonato, crediti, logout, openAuthModal } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuUtenteOpen, setMenuUtenteOpen] = useState(false);
+  const [apriCrediti, setApriCrediti] = useState(false);
 
   const chiudiMenu = () => setMenuOpen(false);
   const chiudiMenuUtente = () => setMenuUtenteOpen(false);
@@ -66,11 +68,15 @@ export function Header() {
                       Base
                     </span>
                   )}
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary-50 px-2 py-0.5 text-[11px] font-semibold text-secondary-700">
-                    <Sparkles className="h-3 w-3" />
-                    Crediti: {crediti}
-                  </span>
                 </Link>
+                <button
+                  onClick={() => setApriCrediti(true)}
+                  aria-label="Acquista crediti a consumo"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary-50 px-2 py-0.5 text-[11px] font-semibold text-secondary-700 transition hover:bg-secondary-100"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  Crediti: {crediti}
+                </button>
                 <button
                   onClick={() => setMenuUtenteOpen((o) => !o)}
                   aria-expanded={menuUtenteOpen}
@@ -267,6 +273,8 @@ export function Header() {
           </div>
         </div>
       )}
+
+      <CreditiModal open={apriCrediti} onClose={() => setApriCrediti(false)} />
     </header>
   );
 }

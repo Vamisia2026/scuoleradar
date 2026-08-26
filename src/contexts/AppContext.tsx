@@ -249,17 +249,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         },
       });
       if (error) {
-        // Log COMPLETO dell'errore SDK (oggetto intero) + payload ricevuto
-        console.error('Checkout SDK error:', error);
-        console.error('Checkout fallito:', error.message, '— risposta Edge Function:', JSON.stringify(data));
+        // Log COMPLETO: errore SDK e payload ricevuto dalla Edge Function
+        console.error('Checkout SDK error (oggetto intero):', error);
+        console.error('Checkout — data ricevuti dalla Edge Function:', JSON.stringify(data));
         const msgServer = (data as { error?: string } | null)?.error;
         return {
           ok: false,
-          errore: msgServer ?? `Impossibile avviare il pagamento (${error.message}). Controlla la connessione e riprova.`,
+          errore:
+            msgServer ??
+            `Impossibile avviare il pagamento (${error.message}). Controlla la connessione e riprova.`,
         };
       }
-      const payload = data as { url?: string; error?: string } | null;
-      if (!payload?.url) {
+      const payload = data as { success?: boolean; url?: string; error?: string } | null;
+      if (!payload?.url || payload.success === false) {
         console.error(
           'Checkout senza URL — payload ricevuto dalla Edge Function:',
           JSON.stringify(data),

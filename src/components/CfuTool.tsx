@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  Plus, Trash2, CheckCircle2, XCircle, AlertTriangle, BookOpen, Sparkles, Search, X, GraduationCap, Lock,
+  Plus, Trash2, CheckCircle2, XCircle, AlertTriangle, BookOpen, Sparkles, Search, X, GraduationCap,
 } from 'lucide-react';
 import { useApp, type Esame } from '@/contexts/AppContext';
 import { classiConcorso, type ClasseConcorso } from '@/data/classiConcorso';
@@ -123,27 +123,11 @@ export function CfuTool() {
   const [titoloSelezionato, setTitoloSelezionato] = useState<TitoloStudio | null>(null);
   const [sbloccato, setSbloccato] = useState(false);
 
-  // Paywall: Check CFU richiede il piano PRO oppure il consumo di 1 credito.
-  if (!abbonato && !sbloccato) {
-    return crediti > 0 ? (
-      <div className="rounded-2xl border border-primary-100 bg-white p-8 text-center shadow-card">
-        <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary-50">
-          <Lock className="h-7 w-7 text-primary-400" />
-        </span>
-        <h3 className="mt-4 text-lg font-bold text-primary-800">Check CFU</h3>
-        <p className="mx-auto mt-1 max-w-md text-sm text-primary-500">
-          La verifica delle classi di concorso consumerà <strong>1 credito a consumo</strong> (ne
-          hai {crediti}). Con il piano PRO è incluso senza limiti.
-        </p>
-        <button
-          onClick={() => void consumaCredito().then((esito) => esito.ok && setSbloccato(true))}
-          className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
-        >
-          <Sparkles className="h-4 w-4" />
-          Consuma 1 credito e verifica
-        </button>
-      </div>
-    ) : (
+  // Paywall: SOLO gli utenti Base senza crediti vengono bloccati.
+  // Gli utenti PRO hanno accesso illimitato; i Base con crediti usano il tool
+  // attivo e consumano 1 credito per sbloccare la verifica.
+  if (!abbonato && crediti === 0) {
+    return (
       <ServiziPaywall
         titolo="Check CFU riservato"
         messaggio="La verifica delle classi di concorso richiede il piano PRO oppure 1 credito a consumo."
@@ -336,12 +320,32 @@ export function CfuTool() {
           <h3 className="text-base font-bold text-primary-800">
             Classi di concorso accessibili / da integrare
           </h3>
-          <span className="rounded-full bg-accent-50 px-3 py-1 text-sm font-semibold text-accent-700">
-            {ammissibili.length} ammissibili
-          </span>
+          {!abbonato ? (
+            <span className="rounded-full bg-secondary-50 px-3 py-1 text-xs font-semibold text-secondary-700">
+              Bloccata · usa 1 credito
+            </span>
+          ) : (
+            <span className="rounded-full bg-accent-50 px-3 py-1 text-sm font-semibold text-accent-700">
+              {ammissibili.length} ammissibili
+            </span>
+          )}
         </div>
 
-        {esami.length === 0 ? (
+        {!abbonato && !sbloccato ? (
+          <div className="mt-4 rounded-xl border border-secondary-200 bg-secondary-50 p-4 text-center">
+            <p className="text-sm text-secondary-800">
+              La verifica consumerà <strong>1 credito a consumo</strong> (ne hai {crediti}). Con il
+              piano PRO è inclusa senza limiti.
+            </p>
+            <button
+              onClick={() => void consumaCredito().then((esito) => esito.ok && setSbloccato(true))}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
+            >
+              <Sparkles className="h-4 w-4" />
+              Consuma 1 credito per verificare i CFU
+            </button>
+          </div>
+        ) : esami.length === 0 ? (
           <p className="mt-4 text-sm text-primary-400">
             Aggiungi almeno un esame per vedere le classi di concorso accessibili.
           </p>

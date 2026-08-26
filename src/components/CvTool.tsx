@@ -90,11 +90,16 @@ export function CvTool() {
             </button>
           )}
         </div>
-        {!abbonato && (
-          <p className="mt-3 flex items-center gap-1.5 text-xs text-primary-400">
+        {abbonato ? (
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-accent-700">
             <FileDown className="h-3.5 w-3.5" />
-            Il PDF gratuito include il watermark &quot;ScuoleRadar.it&quot;. Rimuovilo con il piano
-            PRO.
+            Incluso nel piano PRO: scarichi il PDF senza logo.
+          </p>
+        ) : (
+          <p className="mt-3 flex items-start gap-1.5 text-xs text-primary-400">
+            <FileDown className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            Incluso gratuitamente nella registrazione (con logo ScuoleRadar.it nel PDF). Passa a PRO
+            o usa 1 credito per la versione senza logo.
           </p>
         )}
       </div>

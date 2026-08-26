@@ -1,7 +1,8 @@
 import { useMemo, useEffect, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Save, Check, MapPin, Send, Mail, Search, GraduationCap, School, BookOpen, Baby, Users, Moon, Briefcase, Wrench, Plus,
-  Star, Ban, Download, Trash2, FileText, Sparkles, ChevronDown, AlertTriangle, Loader2,
+  Star, Ban, Download, Trash2, FileText, Sparkles, ChevronDown, AlertTriangle, Loader2, ShieldCheck,
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -721,10 +722,14 @@ export function ProfiloPage() {
       {/* Modelli scaricati di recente */}
       <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="flex items-center gap-1.5 text-sm font-bold text-primary-800">
+          <Link
+            to="/dashboard/moduli?tab=miei"
+            title="Apri i tuoi modelli scaricati nella pagina Moduli"
+            className="flex items-center gap-1.5 text-sm font-bold text-primary-800 transition hover:text-primary-600"
+          >
             <FileText className="h-4 w-4 text-primary-500" />
             Modelli Scaricati di Recente
-          </h3>
+          </Link>
           {moduliScaricati.length > 0 && (
             <button
               onClick={svuotaStorico}
@@ -774,6 +779,20 @@ export function ProfiloPage() {
             ))}
           </ul>
         )}
+      </section>
+
+      {/* Note legali e gestione dati */}
+      <section className="rounded-2xl border border-primary-100 bg-primary-50/50 p-5">
+        <h3 className="flex items-center gap-1.5 text-sm font-bold text-primary-800">
+          <ShieldCheck className="h-4 w-4 text-primary-500" />
+          Note legali e gestione dati
+        </h3>
+        <p className="mt-1 text-xs leading-relaxed text-primary-600">
+          I tuoi dati personali sono trattati in conformità con il GDPR. Puoi esportare o cancellare
+          i tuoi dati in qualsiasi momento. La disdetta dell&apos;abbonamento è disponibile qui sotto;
+          la cancellazione dell&apos;account è irreversibile e comporta la perdita di profilo,
+          preferenze, moduli scaricati e accesso a PureFocus.
+        </p>
       </section>
 
       {/* Disdetta / cancellazione account */}

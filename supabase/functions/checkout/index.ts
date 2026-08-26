@@ -56,8 +56,11 @@ function decodeJwt(token: string): { sub?: string; email?: string } | null {
   }
 }
 
-/** POST form-urlencoded a un endpoint Stripe. */
-async function postStripe<T>(path: string, campi: Record<string, string>): Promise<T | null> {
+/** POST form-urlencoded a un endpoint Stripe con dettaglio dell'errore. */
+async function postStripe<T>(
+  path: string,
+  campi: Record<string, string>,
+): Promise<{ ok: true; data: T } | { ok: false; errore: string }> {
   const body = new URLSearchParams(campi).toString();
   const res = await fetch(`${STRIPE_API}${path}`, {
     method: 'POST',
@@ -68,10 +71,18 @@ async function postStripe<T>(path: string, campi: Record<string, string>): Promi
     body,
   });
   if (!res.ok) {
-    console.error(`Stripe ${path} fallito:`, res.status, await res.text());
-    return null;
+    const testo = await res.text();
+    console.error(`Stripe ${path} fallito (${res.status}):`, testo);
+    let dettaglio = testo;
+    try {
+      const json = JSON.parse(testo) as { error?: { message?: string } };
+      dettaglio = json.error?.message ?? testo;
+    } catch {
+      // corpo non JSON: lo riportiamo comunque
+    }
+    return { ok: false, errore: dettaglio };
   }
-  return (await res.json()) as T;
+  return { ok: true, data: (await res.json()) as T };
 }
 
 /** Valida il codice promo contro profiles.referral_code (via RPC). */
@@ -107,9 +118,10 @@ const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-/** Risposta JSON uniforme: evita che la funzione vada in crash senza rispondere. */
-function risposta(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
+/** Risposta JSON uniforme con flag `success` — mai crash senza risposta. */
+function risposta(data: Record<string, unknown>, status = 200): Response {
+  const body = { success: status >= 200 && status < 300, ...data };
+  return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
   });
@@ -126,6 +138,14 @@ serve(async (req: Request) => {
   }
 
   try {
+    // Verifica della chiave Stripe (letto dai secrets Supabase)
+    if (!STRIPE_SECRET_KEY) {
+      return risposta(
+        { error: 'Configurazione mancante: STRIPE_SECRET_KEY non è impostato nei secrets Supabase.' },
+        500,
+      );
+    }
+
     // Utente dal JWT (già verificato dal runtime grazie a --verify-jwt)
     const auth = req.headers.get('authorization') ?? '';
     const token = auth.replace(/^Bearer\s+/i, '').trim();
@@ -190,16 +210,20 @@ serve(async (req: Request) => {
       }
     }
 
-    const session = await postStripe<{ url?: string; id?: string }>('/checkout/sessions', campi);
-    if (!session?.url) {
-      return risposta({ error: 'Impossibile creare la sessione di checkout' }, 502);
+    const esito = await postStripe<{ url?: string }>('/checkout/sessions', campi);
+    if (!esito.ok) {
+      return risposta({ error: `Stripe ha rifiutato la richiesta: ${esito.errore}` }, 400);
+    }
+    if (!esito.data.url) {
+      return risposta({ error: 'Stripe non ha restituito un URL di checkout' }, 400);
     }
 
-    return risposta({ url: session.url });
+    return risposta({ url: esito.data.url });
   } catch (err) {
-    // Non lasciare MAI la richiesta senza risposta: log e JSON di errore
+    // Non lasciare MAI la richiesta senza risposta: log e JSON di errore esplicito
     console.error('checkout — errore non gestito:', err);
-    return risposta({ error: 'Errore interno nella creazione del checkout' }, 500);
+    const messaggio = err instanceof Error ? err.message : 'Errore interno sconosciuto';
+    return risposta({ error: messaggio }, 400);
   }
 });
 
