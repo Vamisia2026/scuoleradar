@@ -10,14 +10,10 @@ export function ChiSiamoPage() {
     <div className="min-h-screen">
       <Header />
 
-      {/* Manifesto */}
+      {/* Chi siamo */}
       <section className="bg-gradient-to-b from-primary-50 to-white">
-        <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-24">
-          <span className="inline-flex items-center rounded-full bg-secondary-50 px-3 py-1 text-sm font-semibold uppercase tracking-wide text-secondary-700">
-            Manifesto
-          </span>
-
-          <h1 className="mt-6 text-3xl font-bold leading-tight text-primary-900 sm:text-4xl">
+        <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
+          <h1 className="text-3xl font-bold leading-tight text-primary-900 sm:text-4xl">
             ScuoleRadar nasce dalla collaborazione di persone che lavorano nella scuola e che sono{' '}
             <span className="text-secondary-500">stufe di essere trattate come vacche da mungere</span>.
           </h1>

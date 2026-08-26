@@ -13,4 +13,10 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  // Porta fissa per ScuoleRadar: l'app gira SEMPRE e solo su http://localhost:5174,
+  // senza saltare a porte successive né sovrapporsi ad altri progetti (es. PureFocus).
+  server: {
+    port: 5174,
+    strictPort: true,
+  },
 });

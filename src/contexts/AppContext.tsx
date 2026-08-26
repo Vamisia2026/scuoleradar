@@ -7,7 +7,7 @@ import { getFeedInterpelli } from '@/lib/matchingEngine';
 import type { OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso, classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
-import { priceIdPerPiano } from '@/lib/pricing';
+import { STORAGE_KEY_INTENDED_PLAN, STORAGE_KEY_INTENDED_PLAN_DATA, type PianoId } from '@/lib/pricing';
 
 export interface User {
   nome: string;
@@ -62,7 +62,7 @@ interface AppContextValue extends AppState {
   setPreferenze: (p: Partial<Preferenze>) => void;
   completaOnboarding: (p: Partial<Preferenze>) => void;
   incrementaNotifica: (interpelloId: string) => void;
-  avviaCheckout: (plan: string, promo?: string, quantita?: number) => Promise<{ ok: boolean; errore?: string }>;
+  avviaCheckout: (plan: PianoId, promo?: string, quantita?: number) => Promise<{ ok: boolean; errore?: string }>;
   setEsami: (e: Esame[]) => void;
   interpelliFiltrati: Interpello[];
   origineDati: 'mock' | 'supabase';
@@ -71,6 +71,11 @@ interface AppContextValue extends AppState {
   authModalMode: 'login' | 'registrazione';
   openAuthModal: (mode?: 'login' | 'registrazione') => void;
   closeAuthModal: () => void;
+  /** Vetrina Freemium: modal di conversione per gli utenti non autenticati. */
+  vetrinaAperta: boolean;
+  vetrinaSezione: string | null;
+  openVetrina: (sezione: string) => void;
+  closeVetrina: () => void;
   simulaStato: (ruolo: RuoloSimulato) => void;
   resettaTutto: () => void;
   salvaProfilo: (p?: Preferenze) => Promise<void>;
@@ -145,6 +150,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const closeAuthModal = useCallback(() => setAuthModalOpen(false), []);
+
+  // Vetrina Freemium: modal di conversione per gli utenti non autenticati.
+  const [vetrinaAperta, setVetrinaAperta] = useState(false);
+  const [vetrinaSezione, setVetrinaSezione] = useState<string | null>(null);
+  const openVetrina = useCallback((sezione: string) => {
+    setVetrinaSezione(sezione);
+    setVetrinaAperta(true);
+  }, []);
+  const closeVetrina = useCallback(() => setVetrinaAperta(false), []);
 
   const register = useCallback(
     (u: User) => {
@@ -221,9 +235,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [supabaseUserId, abbonato, setNotificati],
   );
 
+  /** Salva il piano scelto da un utente non autenticato (ripresa checkout dopo il login). */
+  const salvaIntendedPlan = useCallback((piano: PianoId, promo?: string, quantita?: number) => {
+    try {
+      localStorage.setItem(STORAGE_KEY_INTENDED_PLAN, piano);
+      if (promo || quantita !== undefined) {
+        localStorage.setItem(
+          STORAGE_KEY_INTENDED_PLAN_DATA,
+          JSON.stringify({ promo: promo ?? '', quantita: quantita ?? 1 }),
+        );
+      } else {
+        localStorage.removeItem(STORAGE_KEY_INTENDED_PLAN_DATA);
+      }
+    } catch {
+      // localStorage non disponibile: si ripiega sul flusso standard (modal di Auth)
+    }
+  }, []);
+
   /** FASE 6 — avvia il checkout Stripe per il piano richiesto e redirige l'utente. */
   const avviaCheckout = useCallback(
-    async (plan: string, promo?: string, quantita?: number): Promise<{ ok: boolean; errore?: string }> => {
+    async (plan: PianoId, promo?: string, quantita?: number): Promise<{ ok: boolean; errore?: string }> => {
       if (!supabase) {
         return {
           ok: false,
@@ -234,30 +265,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Il checkout richiede un utente autenticato su Supabase Auth (JWT nella richiesta).
       const { data: sessione } = await supabase.auth.getSession();
       if (!sessione.session) {
+        // Utente non autenticato: salva il piano come "intended plan" così al termine del
+        // login/registrazione il checkout ripartirà da solo (niente loop sul modal di Auth).
+        salvaIntendedPlan(plan, promo, quantita);
         openAuthModal('login');
         return { ok: false, errore: 'Accedi al tuo account per procedere al pagamento.' };
       }
       const { data, error } = await supabase.functions.invoke('checkout', {
         body: {
           plan,
-          tipo: plan === 'alacarte' ? 'credits' : 'subscription',
           promo: promo || undefined,
           quantita,
-          // priceId dal frontend (VITE_STRIPE_*): solo verifica/debug, la Edge Function
-          // usa come fonte autorevole i secrets server-side.
-          priceId: priceIdPerPiano(plan),
+          // URL di ritorno dinamici: la Edge Function usa questa origin
+          // (mai un fallback rigido su localhost).
+          origin: window.location.origin,
         },
       });
       if (error) {
         // Log COMPLETO: errore SDK e payload ricevuto dalla Edge Function
         console.error('Checkout SDK error (oggetto intero):', error);
         console.error('Checkout — data ricevuti dalla Edge Function:', JSON.stringify(data));
-        const msgServer = (data as { error?: string } | null)?.error;
+        // Estrai il messaggio esatto restituito dalla Edge Function/Stripe (per il toast).
+        let msgServer: string | undefined;
+        const corpo = data as { error?: string | { message?: string } } | null;
+        if (typeof corpo?.error === 'string') {
+          msgServer = corpo.error;
+        } else if (corpo?.error && typeof corpo.error === 'object') {
+          msgServer = (corpo.error as { message?: string }).message;
+        }
+        // Se `data` è null, prova a leggere il body della Response HTTP esposta dall'SDK.
+        if (!msgServer) {
+          const ctx = (error as { context?: Response }).context;
+          if (ctx) {
+            try {
+              const parsed = (await ctx.clone().json()) as {
+                error?: string | { message?: string };
+              } | null;
+              msgServer =
+                typeof parsed?.error === 'string' ? parsed.error : parsed?.error?.message;
+            } catch {
+              // corpo non JSON: ignorato
+            }
+          }
+        }
         return {
           ok: false,
           errore:
             msgServer ??
-            `Impossibile avviare il pagamento (${error.message}). Controlla la connessione e riprova.`,
+            `Impossibile avviare il pagamento (${(error as Error).message}). Controlla la connessione e riprova.`,
         };
       }
       const payload = data as { success?: boolean; url?: string; error?: string } | null;
@@ -271,10 +326,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
           errore: payload?.error ?? 'La sessione di pagamento non è stata creata. Riprova.',
         };
       }
-      window.location.href = payload.url;
+      // Apre il checkout Stripe in una NUOVA scheda, mantenendo l'app ScuoleRadar aperta
+      // e attiva nel tab principale. Se il popup viene bloccato, fallback sul tab corrente.
+      const nuovaScheda = window.open(payload.url, '_blank', 'noopener,noreferrer');
+      if (!nuovaScheda) {
+        window.location.href = payload.url;
+      }
       return { ok: true };
     },
-    [openAuthModal],
+    [openAuthModal, salvaIntendedPlan],
   );
 
   // Stato simulato per la DevToolbar (solo sviluppo). Aggiorna all'istante context + UI.
@@ -367,14 +427,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [preferenze],
   );
 
-  /** Avvia Google OAuth con redirect diretto all'URL generato da Supabase (niente One Tap). */
+  /**
+   * Avvia Google OAuth con redirect diretto all'URL generato da Supabase (niente One Tap).
+   * Il redirect di ritorno usa SEMPRE window.location.origin (mai un fallback rigido su
+   * localhost): deve però essere incluso nei Site URL / Redirect URLs configurati nel
+   * Supabase Dashboard (Auth → URL Configuration) per l'ambiente in uso.
+   */
   const loginConGoogle = useCallback(async () => {
     if (!supabase) return;
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/dashboard`,
         skipBrowserRedirect: true, // Non far gestire il redirect al client JS
         queryParams: {
           prompt: 'select_account', // Forza il flusso OAuth classico (niente One Tap)
@@ -513,6 +578,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => subscription.subscription.unsubscribe();
   }, [setUser, setSupabaseUserId]);
 
+  // FASE 7 — Ripresa automatica del checkout ("intended plan").
+  // Se un utente anonimo aveva scelto un piano prima del login, appena la sessione
+  // Supabase è disponibile si riprende il checkout per quel piano (localStorage).
+  useEffect(() => {
+    if (!supabaseUserId) return;
+    let piano = '';
+    try {
+      piano = localStorage.getItem(STORAGE_KEY_INTENDED_PLAN) ?? '';
+    } catch {
+      return;
+    }
+    if (!piano) return;
+
+    try {
+      localStorage.removeItem(STORAGE_KEY_INTENDED_PLAN);
+    } catch {
+      // ignore
+    }
+    let promo: string | undefined;
+    let quantita = 1;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_INTENDED_PLAN_DATA);
+      localStorage.removeItem(STORAGE_KEY_INTENDED_PLAN_DATA);
+      if (raw) {
+        const dati = JSON.parse(raw) as { promo?: string; quantita?: number };
+        if (dati.promo) promo = dati.promo;
+        if (typeof dati.quantita === 'number') quantita = dati.quantita;
+      }
+    } catch {
+      // payload non valido: si procede con quantità 1 e senza promo
+    }
+
+    void avviaCheckout(piano as PianoId, promo, quantita);
+  }, [supabaseUserId, avviaCheckout]);
+
   const setEsami = useCallback((e: Esame[]) => setEsamiState(e), [setEsamiState]);
 
   // Fonte degli interpelli (FASE 3 — Matching Engine):
@@ -641,6 +741,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     authModalMode,
     openAuthModal,
     closeAuthModal,
+    vetrinaAperta,
+    vetrinaSezione,
+    openVetrina,
+    closeVetrina,
     simulaStato,
     resettaTutto,
     salvaProfilo,

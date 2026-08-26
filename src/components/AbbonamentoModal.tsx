@@ -78,6 +78,10 @@ export function AbbonamentoModal({ open, onClose, onConfirm }: AbbonamentoModalP
       const esito = await onConfirm(promoStato === 'applicato' ? promo : undefined);
       if (!esito.ok) {
         mostraToast('errore', esito.errore ?? 'Errore durante il pagamento. Riprova.');
+      } else {
+        // Checkout aperto in una nuova scheda: chiudi il modal e tieni l'app attiva.
+        mostraToast('successo', 'Checkout aperto in una nuova scheda.');
+        onClose();
       }
     } catch (err) {
       mostraToast('errore', (err as Error).message ?? 'Errore durante il pagamento. Riprova.');

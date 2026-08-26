@@ -38,16 +38,26 @@ function parseCv(testo: string): SezioneCv[] {
 }
 
 export function CvTool() {
-  const { abbonato } = useApp();
+  const { abbonato, user, openVetrina } = useApp();
   const [testo, setTesto] = useState('');
   const [anteprima, setAnteprima] = useState<SezioneCv[] | null>(null);
 
-  const handleGenera = () => {
+  const handleCrea = () => {
     if (!testo.trim()) return;
+    // Vetrina: per creare e salvare il CV serve un account (registrazione/login).
+    if (!user) {
+      openVetrina('cv');
+      return;
+    }
     setAnteprima(parseCv(testo));
   };
 
   const handlePdf = () => {
+    // Vetrina: al download serve un account (Free con logo) oppure PRO (senza logo).
+    if (!user) {
+      openVetrina('cv');
+      return;
+    }
     if (abbonato) {
       alert('Download PDF simulato senza logo: versione pulita per gli abbonati PRO.');
     } else {
@@ -60,9 +70,12 @@ export function CvTool() {
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <div className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
-        <h3 className="text-base font-bold text-primary-800">Incolla il tuo vecchio CV</h3>
-        <p className="mt-1 text-sm text-primary-600">
-          Incolla il testo del tuo CV. Lo trasformiamo in un layout ordinato.
+        <h3 className="text-base font-bold text-primary-800">Crea il tuo CV</h3>
+        <p className="mt-2 text-lg leading-relaxed text-primary-600">
+          Che succede se ti troviamo un interpello, ma non hai un CV pronto? Perdi questa possibilità
+          di lavoro? No, ti aiutiamo noi a costruirlo, rinfrescarlo o adattarlo. Il servizio è gratis.
+          Il CV gratuito ha il nostro logo, se hai un abbonamento ScuoleRadar è senza logo e puoi usare
+          tutti i nostri servizi per insegnanti senza limiti. La qualità, comunque, è la stessa.
         </p>
         <textarea
           value={testo}
@@ -73,12 +86,12 @@ export function CvTool() {
         />
         <div className="mt-4 flex gap-2">
           <button
-            onClick={handleGenera}
+            onClick={handleCrea}
             disabled={!testo.trim()}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600 disabled:opacity-50"
           >
             <Sparkles className="h-4 w-4" />
-            Genera anteprima
+            Crea il tuo CV
           </button>
           {anteprima && (
             <button

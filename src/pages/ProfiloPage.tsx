@@ -1,10 +1,10 @@
-import { useMemo, useEffect, useState, type ReactNode } from 'react';
+import { useMemo, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Save, Check, MapPin, Send, Mail, Search, GraduationCap, School, BookOpen, Baby, Users, Moon, Briefcase, Wrench, Plus,
-  Star, Ban, Download, Trash2, FileText, Sparkles, ChevronDown, AlertTriangle, Loader2, ShieldCheck,
+  Check, MapPin, Send, Mail, Search, GraduationCap, School, BookOpen, Baby, Users, Moon, Briefcase, Wrench, Plus,
+  Star, Ban, Download, Trash2, Sparkles, ChevronDown, AlertTriangle, Loader2, ShieldCheck, FolderOpen,
 } from 'lucide-react';
-import { useApp } from '@/contexts/AppContext';
+import { useApp, type Preferenze } from '@/contexts/AppContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { supabase } from '@/lib/supabase';
 import { interpelli } from '@/data/interpelli';
@@ -107,10 +107,14 @@ export function ProfiloPage() {
   const [queryClasse, setQueryClasse] = useState('');
   const [materiaFilter, setMateriaFilter] = useState('');
   const [customMateriaInput, setCustomMateriaInput] = useState('');
-  const [salvato, setSalvato] = useState(false);
+  // Stato dell'autosave: 'idle' → 'salvataggio' (debounce/upsert in corso) → 'salvato'.
+  const [statoSalvataggio, setStatoSalvataggio] = useState<'idle' | 'salvataggio' | 'salvato'>('idle');
+  // Evita un salvataggio al primo mount (i valori iniziali vengono solo letti).
+  const primaEsecuzione = useRef(true);
 
   // Sezioni collassabili del Profilo (accordion) per eliminare lo scroll infinito
-  const [accordionAperti, setAccordionAperti] = useState<Record<string, boolean>>({});
+  // Il drop-down "Modelli Scaricati di Recente" parte APERTO per mostrare subito l'elenco.
+  const [accordionAperti, setAccordionAperti] = useState<Record<string, boolean>>({ modelli: true });
   const toggleAccordion = (chiave: string) =>
     setAccordionAperti((prev) => ({ ...prev, [chiave]: !prev[chiave] }));
 
@@ -197,8 +201,18 @@ export function ProfiloPage() {
   const removeIgnoredScuola = (s: string) =>
     setIgnoredSchools((prev) => prev.filter((x) => x !== s));
 
-  const handleSalva = () => {
-    const modifiche = {
+  /**
+   * AUTOSAVE con debounce (500ms): ad ogni modifica di campi, checkbox e sezioni
+   * compone le preferenze aggiornate, sincronizza il context e le persiste su Supabase.
+   * `salvaProfilo` riceve sempre dati espliciti, quindi viene escluso dai deps
+   * per evitare un loop di salvataggio quando il context preferenze si aggiorna.
+   */
+  useEffect(() => {
+    if (primaEsecuzione.current) {
+      primaEsecuzione.current = false;
+      return;
+    }
+    const modifiche: Preferenze = {
       ordini,
       classiCodici,
       materieId,
@@ -207,15 +221,33 @@ export function ProfiloPage() {
       telegramUsername: telegramUsername.trim(),
       telegramChatId: telegramChatIdInput.trim(),
       emailNotifica: emailNotifica.trim(),
+      onboarded: preferenze.onboarded,
       favoriteSchools,
       ignoredSchools,
     };
-    setPreferenze(modifiche);
-    // PASSO 3: persiste province e classi di concorso su Supabase (tabella profiles)
-    void salvaProfilo({ ...modifiche, onboarded: preferenze.onboarded });
-    setSalvato(true);
-    setTimeout(() => setSalvato(false), 3000);
-  };
+    setStatoSalvataggio('salvataggio');
+    const timeout = setTimeout(() => {
+      setPreferenze(modifiche);
+      void salvaProfilo(modifiche).then(() => {
+        setStatoSalvataggio('salvato');
+        setTimeout(() => setStatoSalvataggio('idle'), 2500);
+      });
+    }, 500);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- autosave intenzionale: salvaProfilo/setPreferenze esclusi di proposito
+  }, [
+    ordini,
+    classiCodici,
+    materieId,
+    materieCustom,
+    provinceCodici,
+    telegramUsername,
+    telegramChatIdInput,
+    emailNotifica,
+    favoriteSchools,
+    ignoredSchools,
+    moduliScaricati,
+  ]);
 
   const formatDataScaricato = (iso: string) => {
     try {
@@ -270,14 +302,110 @@ export function ProfiloPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-primary-800">Il mio profilo</h2>
-        <button
-          onClick={handleSalva}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
-        >
-          {salvato ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-          {salvato ? 'Salvato' : 'Salva modifiche'}
-        </button>
+        {statoSalvataggio === 'salvataggio' ? (
+          <span className="inline-flex items-center gap-1.5 text-sm text-primary-400">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Salvataggio in corso...
+          </span>
+        ) : statoSalvataggio === 'salvato' ? (
+          <span className="inline-flex items-center gap-1.5 text-sm font-medium text-accent-600">
+            <Check className="h-4 w-4 text-accent-500" />
+            Salvato ✓
+          </span>
+        ) : null}
       </div>
+
+      {/* Crediti a consumo — parte alta (FASE 6) */}
+      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="flex items-center gap-1.5 text-sm font-bold text-primary-800">
+            <Sparkles className="h-4 w-4 text-secondary-500" />
+            Crediti a consumo
+          </h3>
+          <span className="rounded-full bg-secondary-50 px-3 py-1 text-sm font-bold text-secondary-700">
+            {crediti} disponibili
+          </span>
+        </div>
+        <p className="mt-1 text-sm text-primary-600">
+          Usa i crediti per i servizi singoli (CV, Check CFU, modelli) oppure acquistane di nuovi
+          quando ti servono. Nessun abbonamento automatico.
+        </p>
+        <button
+          onClick={() => setMostraCreditiModal(true)}
+          className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
+        >
+          <Sparkles className="h-4 w-4" />
+          Acquista crediti a consumo
+        </button>
+      </section>
+
+      <CreditiModal open={mostraCreditiModal} onClose={() => setMostraCreditiModal(false)} />
+
+      {/* Modelli Scaricati di Recente — drop-down */}
+      <Accordion
+        icona="📁"
+        titolo="Modelli Scaricati di Recente"
+        badge={moduliScaricati.length ? `${moduliScaricati.length} scaricati` : undefined}
+        aperto={!!accordionAperti.modelli}
+        onToggle={() => toggleAccordion('modelli')}
+      >
+        {moduliScaricati.length === 0 ? (
+          <p className="text-sm text-primary-400">
+            Non hai ancora scaricato modelli. Visita la pagina Moduli per trovare documenti e
+            template pronti all&apos;uso.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {moduliScaricati.map((m) => (
+              <li
+                key={m.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-primary-100 bg-slate-50 px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-primary-800">{m.nome}</p>
+                  <p className="text-xs text-primary-400">
+                    {m.tipo} · scaricato il {formatDataScaricato(m.scaricatoIl)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    onClick={() => riscaricaModulo(m)}
+                    aria-label={`Scarica di nuovo ${m.nome}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-white px-3 py-2 text-xs font-semibold text-primary-700 transition hover:bg-primary-50"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Scarica
+                  </button>
+                  <button
+                    onClick={() => rimuoviModulo(m.id)}
+                    aria-label={`Rimuovi ${m.nome} dallo storico`}
+                    className="rounded-lg p-2 text-primary-400 transition hover:bg-error-50 hover:text-error-600"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-primary-100 pt-3">
+          <Link
+            to="/dashboard/moduli?tab=miei"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-600"
+          >
+            <FolderOpen className="h-3.5 w-3.5" />
+            Vai alla pagina Moduli
+          </Link>
+          {moduliScaricati.length > 0 && (
+            <button
+              onClick={svuotaStorico}
+              className="text-xs font-medium text-primary-400 transition hover:text-error-600"
+            >
+              Svuota storico
+            </button>
+          )}
+        </div>
+      </Accordion>
 
       {/* Ordini e Tipologie di Scuola — accordion */}
       <Accordion
@@ -692,94 +820,6 @@ export function ProfiloPage() {
           e usato per inviarti le notifiche Telegram.
         </p>
       </Accordion>
-
-      {/* Crediti a consumo (FASE 6) */}
-      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="flex items-center gap-1.5 text-sm font-bold text-primary-800">
-            <Sparkles className="h-4 w-4 text-secondary-500" />
-            Crediti a consumo
-          </h3>
-          <span className="rounded-full bg-secondary-50 px-3 py-1 text-sm font-bold text-secondary-700">
-            {crediti} disponibili
-          </span>
-        </div>
-        <p className="mt-1 text-sm text-primary-600">
-          Usa i crediti per i servizi singoli (CV, Check CFU, modelli) oppure acquistane di nuovi
-          quando ti servono. Nessun abbonamento automatico.
-        </p>
-        <button
-          onClick={() => setMostraCreditiModal(true)}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
-        >
-          <Sparkles className="h-4 w-4" />
-          Acquista crediti a consumo
-        </button>
-      </section>
-
-      <CreditiModal open={mostraCreditiModal} onClose={() => setMostraCreditiModal(false)} />
-
-      {/* Modelli scaricati di recente */}
-      <section className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
-        <div className="flex items-center justify-between gap-3">
-          <Link
-            to="/dashboard/moduli?tab=miei"
-            title="Apri i tuoi modelli scaricati nella pagina Moduli"
-            className="flex items-center gap-1.5 text-sm font-bold text-primary-800 transition hover:text-primary-600"
-          >
-            <FileText className="h-4 w-4 text-primary-500" />
-            Modelli Scaricati di Recente
-          </Link>
-          {moduliScaricati.length > 0 && (
-            <button
-              onClick={svuotaStorico}
-              className="text-xs font-medium text-primary-400 transition hover:text-error-600"
-            >
-              Svuota storico
-            </button>
-          )}
-        </div>
-
-        {moduliScaricati.length === 0 ? (
-          <p className="mt-4 text-sm text-primary-400">
-            Non hai ancora scaricato modelli. Visita la sezione <strong>Moduli</strong> per trovare
-            documenti e template pronti all&apos;uso.
-          </p>
-        ) : (
-          <ul className="mt-4 space-y-2">
-            {moduliScaricati.map((m) => (
-              <li
-                key={m.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-primary-100 bg-slate-50 px-4 py-3"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-primary-800">{m.nome}</p>
-                  <p className="text-xs text-primary-400">
-                    {m.tipo} · scaricato il {formatDataScaricato(m.scaricatoIl)}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    onClick={() => riscaricaModulo(m)}
-                    aria-label={`Scarica di nuovo ${m.nome}`}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-white px-3 py-2 text-xs font-semibold text-primary-700 transition hover:bg-primary-50"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    Scarica
-                  </button>
-                  <button
-                    onClick={() => rimuoviModulo(m.id)}
-                    aria-label={`Rimuovi ${m.nome} dallo storico`}
-                    className="rounded-lg p-2 text-primary-400 transition hover:bg-error-50 hover:text-error-600"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
 
       {/* Note legali e gestione dati */}
       <section className="rounded-2xl border border-primary-100 bg-primary-50/50 p-5">

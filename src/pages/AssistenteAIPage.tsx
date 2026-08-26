@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import { Sparkles, Send, Bot, User as UserIcon } from 'lucide-react';
+import { Sparkles, Send, Bot, User as UserIcon, Lock, Mail } from 'lucide-react';
 import { ExperimentalBanner } from '@/components/ExperimentalBanner';
 import { useApp } from '@/contexts/AppContext';
-import { ServiziPaywall } from '@/components/ServiziPaywall';
+import { AbbonamentoModal } from '@/components/AbbonamentoModal';
+import { useToast } from '@/components/Toast';
 
 interface Messaggio {
   autore: 'bot' | 'utente';
@@ -16,9 +17,27 @@ const benvenuto: Messaggio = {
 };
 
 export function AssistenteAIPage() {
-  const { abbonato } = useApp();
+  const { abbonato, user, avviaCheckout, openVetrina } = useApp();
+  const { mostraToast } = useToast();
   const [messaggi, setMessaggi] = useState<Messaggio[]>([benvenuto]);
   const [testo, setTesto] = useState('');
+  const [emailAccesso, setEmailAccesso] = useState('');
+  const [apriPro, setApriPro] = useState(false);
+
+  const handleRichiediAccesso = (e: FormEvent) => {
+    e.preventDefault();
+    if (!emailAccesso.trim()) return;
+    try {
+      localStorage.setItem('scuoleradar:richiesta_assistente', emailAccesso.trim());
+    } catch {
+      // localStorage non disponibile
+    }
+    setEmailAccesso('');
+    mostraToast(
+      'successo',
+      'Richiesta inviata: ti faremo sapere appena l\u2019accesso in prova sarà disponibile.',
+    );
+  };
 
   // Riservato ESCLUSIVAMENTE agli abbonati PRO (piano annuo o mensile).
   if (!abbonato) {
@@ -26,11 +45,63 @@ export function AssistenteAIPage() {
       <div className="space-y-6">
         <div className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-primary-600" />
-          <h2 className="text-lg font-bold text-primary-800">Assistente AI</h2>
+          <h2 className="text-3xl font-bold text-primary-800">Assistente AI</h2>
         </div>
-        <ServiziPaywall
-          titolo="Assistente AI riservato ai PRO"
-          messaggio="L'Assistente AI è incluso esclusivamente nel piano PRO (annuo o mensile). È la leva per i docenti: passa a PRO per usarlo senza limiti."
+
+        <div className="rounded-2xl border border-primary-100 bg-white p-8 text-center shadow-card">
+          <span className="mx-auto inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1 text-xs font-bold text-primary-600">
+            <Lock className="h-3.5 w-3.5" />
+            Beta · solo su invito · riservato ai PRO
+          </span>
+          <h3 className="mt-4 text-2xl font-bold text-primary-800">Sindacalista Virtuale</h3>
+          <p className="mx-auto mt-1 max-w-2xl text-lg leading-relaxed text-primary-500">
+            Il Sindacalista Virtuale risponde alle domande che normalmente faresti a un sindacalista:
+            ti aiuta a capire le leggi che riguardano il tuo lavoro, i tuoi diritti e gli adempimenti
+            da fare, indicandoti anche i moduli che ti servono. È un servizio di consulenza pensato
+            per darti una risposta chiara per non perdere tempo. Il servizio è riservato agli abbonati
+            annuali e mensili ed è attualmente in fase sperimentale, disponibile in versione Beta,
+            solo su invito.
+          </p>
+
+          <form
+            onSubmit={handleRichiediAccesso}
+            className="mx-auto mt-5 flex max-w-md flex-col gap-2 sm:flex-row"
+          >
+            <div className="relative flex-1">
+              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary-400" />
+              <input
+                type="email"
+                required
+                value={emailAccesso}
+                onChange={(e) => setEmailAccesso(e.target.value)}
+                placeholder="La tua email per la lista d'attesa"
+                className="input pl-9"
+              />
+            </div>
+            <button
+              type="submit"
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
+            >
+              <Send className="h-4 w-4" />
+              Richiedi accesso
+            </button>
+          </form>
+
+          <div className="mt-5">
+            <button
+              onClick={() => (user ? setApriPro(true) : openVetrina('assistente'))}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-secondary-300 px-5 py-2.5 text-sm font-semibold text-secondary-700 transition hover:bg-secondary-50"
+            >
+              <Sparkles className="h-4 w-4" />
+              {user ? 'Passa a PRO' : 'Registrati'}
+            </button>
+          </div>
+        </div>
+
+        <AbbonamentoModal
+          open={apriPro}
+          onClose={() => setApriPro(false)}
+          onConfirm={(promo) => avviaCheckout('pro_annuale', promo)}
         />
       </div>
     );

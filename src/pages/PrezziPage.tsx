@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Check, Sparkles, Send, ShieldCheck, Gift } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
+import { STORAGE_KEY_INTENDED_PLAN, type PianoId } from '@/lib/pricing';
 import { Header } from '@/components/Header';
 import { Footer } from './LandingPage';
 
 interface Piano {
+  plan: PianoId;
   nome: string;
   prezzo: string;
   periodo: string;
@@ -19,6 +22,7 @@ interface Piano {
 
 const piani: Piano[] = [
   {
+    plan: 'pro_annuale',
     nome: 'PRO Annuale',
     prezzo: '49€',
     periodo: 'all\u2019anno',
@@ -35,6 +39,7 @@ const piani: Piano[] = [
     cta: 'Passa a PRO Annuale',
   },
   {
+    plan: 'pro_mensile',
     nome: 'PRO Mensile',
     prezzo: '9€',
     periodo: 'al mese · 108€/anno',
@@ -49,6 +54,7 @@ const piani: Piano[] = [
     cta: 'Scegli PRO Mensile',
   },
   {
+    plan: 'a_consumo',
     nome: 'A consumo',
     prezzo: '5€',
     periodo: 'per singolo servizio',
@@ -85,7 +91,8 @@ const faq = [
 ];
 
 export function PrezziPage() {
-  const { openAuthModal } = useApp();
+  const navigate = useNavigate();
+  const { user, openAuthModal, avviaCheckout } = useApp();
   const [promoUrl, setPromoUrl] = useState<string | null>(null);
 
   // Se arrivi da un link referral (?promo=CODE), salva il codice per il checkout
@@ -102,7 +109,20 @@ export function PrezziPage() {
     }
   }, []);
 
-  const handleCta = () => openAuthModal('registrazione');
+  const handleCta = (piano: PianoId) => {
+    if (user) {
+      // Già autenticato: avvia subito il checkout, MAI il modal di login/registrazione.
+      void avviaCheckout(piano);
+      return;
+    }
+    // Utente anonimo: salva il piano desiderato e apri l'Auth modal.
+    try {
+      localStorage.setItem(STORAGE_KEY_INTENDED_PLAN, piano);
+    } catch {
+      // localStorage non disponibile
+    }
+    openAuthModal('registrazione');
+  };
 
   return (
     <div className="min-h-screen">
@@ -166,7 +186,7 @@ export function PrezziPage() {
                   ))}
                 </ul>
                 <button
-                  onClick={handleCta}
+                  onClick={() => handleCta(p.plan)}
                   className={`mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-soft transition ${
                     p.evidenziato
                       ? 'bg-secondary-500 hover:bg-secondary-600'
@@ -230,7 +250,7 @@ export function PrezziPage() {
             suite di concentrazione ed editoria senza distrazioni per docenti.
           </p>
           <button
-            onClick={() => openAuthModal('registrazione')}
+            onClick={() => (user ? navigate('/dashboard/radar') : openAuthModal('registrazione'))}
             className="mt-8 inline-flex items-center gap-2 rounded-xl bg-accent-500 px-8 py-4 text-base font-semibold text-white shadow-soft transition hover:bg-accent-600"
           >
             <Send className="h-5 w-5" />

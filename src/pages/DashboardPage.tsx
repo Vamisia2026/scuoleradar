@@ -6,6 +6,7 @@ import { InterpelloCard } from '@/components/InterpelloCard';
 import { useApp } from '@/contexts/AppContext';
 import { AbbonamentoModal } from '@/components/AbbonamentoModal';
 import { CreditiModal } from '@/components/CreditiModal';
+import { interpelli } from '@/data/interpelli';
 import { Footer } from './LandingPage';
 
 interface TabNav {
@@ -22,6 +23,7 @@ export function DashboardLayout() {
     { to: '/dashboard/cfu', label: '🎓 Check CFU' },
     { to: '/dashboard/assistente-ai', label: '🤖 Assistente AI' },
     { to: '/dashboard/moduli', label: '📁 Moduli' },
+    { to: '/dashboard/purefocus', label: '🧘 Pure Focus' },
     { to: '/dashboard/profilo', label: '⚙️ Profilo' },
     { to: '/dashboard/invita', label: '🎁 Invita un Collega', accent: true },
   ];
@@ -29,7 +31,7 @@ export function DashboardLayout() {
   return (
     <div className="min-h-screen bg-slate-50">
       <Header />
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         <nav className="flex gap-1 overflow-x-auto rounded-2xl border border-primary-100 bg-white p-1.5 shadow-card">
           {tabs.map((t) => (
             <NavLink
@@ -66,6 +68,7 @@ export function DashboardLayout() {
 
 export function DashboardPage() {
   const {
+    user,
     interpelliFiltrati,
     preferenze,
     notificheUsate,
@@ -73,24 +76,57 @@ export function DashboardPage() {
     crediti,
     avviaCheckout,
     origineDati,
+    openVetrina,
   } = useApp();
   const [showAbbonamento, setShowAbbonamento] = useState(false);
   const [showCrediti, setShowCrediti] = useState(false);
 
   const limiteRaggiunto = !abbonato && notificheUsate >= 3;
 
+  // Vetrina Freemium: gli utenti non loggati vedono un campione dell'offerta
+  // (max 3 interpelli) prima di essere invitati a registrarsi.
+  const feedVetrina = !user && interpelliFiltrati.length === 0 ? interpelli : interpelliFiltrati;
+  const interpelliVisibili = abbonato ? feedVetrina : feedVetrina.slice(0, 3);
+  const limiteFeedRaggiunto = !abbonato && feedVetrina.length > 3;
+
   return (
     <div className="space-y-6">
-      {/* Notification counter */}
-      <div
-        className={`rounded-2xl border p-5 shadow-card ${
-          abbonato
-            ? 'border-accent-200 bg-accent-50'
-            : limiteRaggiunto
-              ? 'border-secondary-200 bg-secondary-50'
-              : 'border-primary-100 bg-white'
-        }`}
-      >
+      {/* Vetrina Freemium: copy di conversione per gli utenti non loggati */}
+      {!user ? (
+        <div className="rounded-2xl border border-secondary-200 bg-secondary-50 p-6 shadow-card">
+          <h3 className="text-2xl font-bold text-primary-900">
+            Smetti di cercare. Cerchiamo noi per te.
+          </h3>
+          <p className="mt-2 text-lg leading-relaxed text-primary-700">
+            Imposta qui le tue ricerche e Scuole Radar ti avviserà appena troviamo un interpello
+            interessante per te, via email e Telegram. Se non ricevi nulla, è perché non c&apos;è
+            nulla di interessante.
+          </p>
+          <p className="mt-3 text-base leading-relaxed text-primary-700">
+            Puoi provare il servizio gratis: ti mandiamo 3 interpelli selezionati apposta per te. Se
+            trovi lavoro grazie a noi e non vuoi pagare, va bene così. Dillo ai tuoi amici e siamo
+            pari. Se vuoi continuare con noi, l&apos;abbonamento annuale da €49 è la scelta più
+            conveniente, ti costa meno di due ore di lavoro all&apos;anno e include tutti i nostri
+            servizi per insegnanti, senza limiti.
+          </p>
+          <button
+            onClick={() => openVetrina('radar')}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Imposta le tue ricerche
+          </button>
+        </div>
+      ) : (
+        <div
+          className={`rounded-2xl border p-5 shadow-card ${
+            abbonato
+              ? 'border-accent-200 bg-accent-50'
+              : limiteRaggiunto
+                ? 'border-secondary-200 bg-secondary-50'
+                : 'border-primary-100 bg-white'
+          }`}
+        >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <span
@@ -129,28 +165,31 @@ export function DashboardPage() {
                 Abbonati 49€/anno
               </button>
             )}
-            <button
-              onClick={() => setShowCrediti(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-secondary-300 px-4 py-2 text-sm font-semibold text-secondary-700 transition hover:bg-secondary-50"
-            >
-              <Sparkles className="h-4 w-4" />
-              Acquista crediti
-            </button>
+            {user && (
+              <button
+                onClick={() => setShowCrediti(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-secondary-300 px-4 py-2 text-sm font-semibold text-secondary-700 transition hover:bg-secondary-50"
+              >
+                <Sparkles className="h-4 w-4" />
+                Acquista crediti
+              </button>
+            )}
           </div>
         </div>
-        {limiteRaggiunto && (
+        {(limiteRaggiunto || limiteFeedRaggiunto) && (
           <p className="mt-3 text-sm text-secondary-800">
-            Hai usato le tue 3 notifiche incluse nell'Offerta. I contenuti restano accessibili, ma per ricevere
-            nuove notifiche ti serve l'abbonamento.
+            Hai usato le tue 3 notifiche incluse nell&apos;Offerta. I contenuti restano accessibili,
+            ma per ricevere nuove notifiche ti serve l&apos;abbonamento.
           </p>
         )}
-      </div>
+        </div>
+      )}
 
       {/* Feed */}
       <div>
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <Radar className="h-5 w-5 text-primary-600" />
-          <h2 className="text-lg font-bold text-primary-800">Opportunità mappate</h2>
+          <h2 className="text-2xl font-bold text-primary-800">Opportunità mappate</h2>
           <span className="rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-medium text-primary-600">
             {interpelliFiltrati.length}
           </span>
@@ -207,7 +246,7 @@ export function DashboardPage() {
           </div>
         ) : (
           <div className="animate-fade-in grid gap-4">
-            {interpelliFiltrati.map((i) => (
+            {interpelliVisibili.map((i) => (
               <InterpelloCard key={i.id} interpello={i} />
             ))}
           </div>

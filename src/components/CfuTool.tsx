@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  Plus, Trash2, CheckCircle2, XCircle, AlertTriangle, BookOpen, Sparkles, Search, X, GraduationCap,
+  Plus, Trash2, CheckCircle2, XCircle, AlertTriangle, BookOpen, Calculator, Sparkles, Search, X, GraduationCap,
 } from 'lucide-react';
 import { useApp, type Esame } from '@/contexts/AppContext';
 import { classiConcorso, type ClasseConcorso } from '@/data/classiConcorso';
@@ -115,13 +115,64 @@ function valutaCfu(esami: Esame[]): RisultatoClasse[] {
 }
 
 export function CfuTool() {
-  const { esami, setEsami, abbonato, crediti, consumaCredito } = useApp();
+  const { esami, setEsami, abbonato, crediti, consumaCredito, user, openVetrina } = useApp();
   const [materia, setMateria] = useState('');
   const [cfu, setCfu] = useState(6);
   const [settore, setSettore] = useState('');
   const [titoloInput, setTitoloInput] = useState('');
   const [titoloSelezionato, setTitoloSelezionato] = useState<TitoloStudio | null>(null);
   const [sbloccato, setSbloccato] = useState(false);
+
+  // Computazione dei risultati SEMPRE (prima di ogni early-return): rispetta le
+  // Rules of Hooks (useMemo non può stare dopo un return condizionale, altrimenti
+  // al passaggio vetrina→account React lancerebbe "Rendered more hooks...").
+  const risultati = valutaCfu(esami);
+  const ammissibili = risultati.filter((r) => r.ammissibile);
+
+  /** Aggregazione dei CFU mancanti per ambito (SSD), con le classi interessate. */
+  const cfuMancanti = useMemo(() => {
+    const perAmbito = new Map<string, number>();
+    const classiPerAmbito = new Map<string, string[]>();
+    risultati.forEach((r) => {
+      if (r.ammissibile) return;
+      r.dettagli
+        .filter((d) => d.mancante > 0)
+        .forEach((d) => {
+          perAmbito.set(d.ambito, (perAmbito.get(d.ambito) ?? 0) + d.mancante);
+          const classi = classiPerAmbito.get(d.ambito) ?? [];
+          if (!classi.includes(r.classe.codice)) classi.push(r.classe.codice);
+          classiPerAmbito.set(d.ambito, classi);
+        });
+    });
+    return [...perAmbito.entries()]
+      .map(([ambito, cfu]) => ({ ambito, cfu, classi: classiPerAmbito.get(ambito) ?? [] }))
+      .sort((a, b) => b.cfu - a.cfu);
+  }, [risultati]);
+
+  const totaleCfuMancanti = cfuMancanti.reduce((sum, x) => sum + x.cfu, 0);
+
+  // Vetrina Freemium: gli utenti non autenticati vengono invitati a registrarsi.
+  if (!user) {
+    return (
+      <div className="rounded-2xl border border-primary-100 bg-white p-8 text-center shadow-card">
+        <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary-50">
+          <Calculator className="h-7 w-7 text-primary-400" />
+        </span>
+        <h3 className="mt-4 text-lg font-bold text-primary-800">Check CFU riservato</h3>
+        <p className="mx-auto mt-1 max-w-md text-sm text-primary-500">
+          La verifica delle classi di concorso richiede un account gratuito e poi 1 credito a
+          consumo oppure il piano PRO.
+        </p>
+        <button
+          onClick={() => openVetrina('cfu')}
+          className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
+        >
+          <Sparkles className="h-4 w-4" />
+          Crea un account per continuare
+        </button>
+      </div>
+    );
+  }
 
   // Paywall: SOLO gli utenti Base senza crediti vengono bloccati.
   // Gli utenti PRO hanno accesso illimitato; i Base con crediti usano il tool
@@ -176,31 +227,6 @@ export function CfuTool() {
   };
 
   const rimuovi = (id: string) => setEsami(esami.filter((e) => e.id !== id));
-
-  const risultati = valutaCfu(esami);
-  const ammissibili = risultati.filter((r) => r.ammissibile);
-
-  /** Aggregazione dei CFU mancanti per ambito (SSD), con le classi interessate. */
-  const cfuMancanti = useMemo(() => {
-    const perAmbito = new Map<string, number>();
-    const classiPerAmbito = new Map<string, string[]>();
-    risultati.forEach((r) => {
-      if (r.ammissibile) return;
-      r.dettagli
-        .filter((d) => d.mancante > 0)
-        .forEach((d) => {
-          perAmbito.set(d.ambito, (perAmbito.get(d.ambito) ?? 0) + d.mancante);
-          const classi = classiPerAmbito.get(d.ambito) ?? [];
-          if (!classi.includes(r.classe.codice)) classi.push(r.classe.codice);
-          classiPerAmbito.set(d.ambito, classi);
-        });
-    });
-    return [...perAmbito.entries()]
-      .map(([ambito, cfu]) => ({ ambito, cfu, classi: classiPerAmbito.get(ambito) ?? [] }))
-      .sort((a, b) => b.cfu - a.cfu);
-  }, [risultati]);
-
-  const totaleCfuMancanti = cfuMancanti.reduce((sum, x) => sum + x.cfu, 0);
 
   return (
     <div className="space-y-6">

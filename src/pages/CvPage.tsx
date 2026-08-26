@@ -6,7 +6,7 @@ export function CvPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <FileText className="h-5 w-5 text-primary-600" />
-        <h2 className="text-lg font-bold text-primary-800">Il mio CV</h2>
+        <h2 className="text-3xl font-bold text-primary-800">Crea il tuo CV</h2>
       </div>
       <CvTool />
     </div>

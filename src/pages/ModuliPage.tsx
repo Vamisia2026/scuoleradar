@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FolderOpen, Download, CheckCircle2, Search, Info, ImageDown, Trash2 } from 'lucide-react';
+import { FolderOpen, Download, CheckCircle2, Search, Trash2 } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useApp } from '@/contexts/AppContext';
 import {
@@ -14,7 +14,7 @@ import {
 } from '@/data/moduli';
 
 export function ModuliPage() {
-  const { abbonato } = useApp();
+  const { user, openVetrina } = useApp();
   const [searchParams, setSearchParams] = useSearchParams();
   const [vista, setVista] = useState<'catalogo' | 'miei'>(() =>
     searchParams.get('tab') === 'miei' ? 'miei' : 'catalogo',
@@ -36,17 +36,16 @@ export function ModuliPage() {
     });
   }, [macroArea, query]);
 
-  const handleDownload = (m: Modulo) => {
+  const handleDownload = (m: Pick<Modulo, 'id' | 'nome' | 'tipo'>) => {
+    // Vetrina: i download sono riservati agli account registrati (Free o PRO).
+    if (!user) {
+      openVetrina('moduli');
+      return;
+    }
     setScaricato(m.nome);
     // Salva il modulo nello storico del profilo (localStorage condiviso con la pagina Profilo)
     setModuliScaricati(conAggiuntaInCima(moduliScaricati, m));
-    if (abbonato) {
-      alert(`Download simulato di "${m.nome}" (${m.tipo}) senza logo/branding per gli abbonati PRO.`);
-    } else {
-      alert(
-        `Download simulato di "${m.nome}" (${m.tipo}) con logo/branding ScuoleRadar.it. Passa al piano PRO per scaricare i documenti puliti.`,
-      );
-    }
+    alert(`Download simulato di "${m.nome}" (${m.tipo}).`);
   };
 
   const rimuoviModulo = (id: string) =>
@@ -66,23 +65,26 @@ export function ModuliPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <FolderOpen className="h-5 w-5 text-primary-600" />
-        <h2 className="text-lg font-bold text-primary-800">Moduli</h2>
-      </div>
-
-      {/* Disclaimer legale */}
-      <div className="flex items-start gap-3 rounded-2xl border border-primary-100 bg-primary-50 px-4 py-3">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary-500" />
-        <p className="text-sm leading-relaxed text-primary-700">
-          I modelli sono messi a disposizione gratuitamente per tutti gli utenti. Non costituiscono
-          documento ufficiale né hanno valore legale; verificare sempre le specifiche richieste della
-          scuola.
-        </p>
+        <h2 className="text-2xl font-bold text-primary-800">
+          Tutti i moduli che ti servono, senza cercarli ogni volta.
+        </h2>
       </div>
 
       <div className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
-        <p className="text-sm text-primary-600">
-          Modelli e documenti pronti all&apos;uso per la tua vita professionale. Scaricali, compilali e inviali.
+        <p className="text-lg leading-relaxed text-primary-600">
+          Qui trovi la modulistica per il tuo lavoro a scuola. Il servizio è gratis: devi solo
+          registrarti, così teniamo in memoria i moduli che hai già scaricato, e quando ti serviranno
+          di nuovo (o serviranno a un collega) saprai dove trovarli, senza perdere tempo a cercarli da
+          capo.
         </p>
+        {!user && (
+          <button
+            onClick={() => openVetrina('moduli')}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
+          >
+            Registrati qui
+          </button>
+        )}
 
         {/* Ricerca rapida */}
         <div className="relative mt-4">
@@ -135,36 +137,40 @@ export function ModuliPage() {
               </p>
             ) : (
               <ul className="space-y-2">
-                {moduliScaricati.map((m) => (
-                  <li
-                    key={m.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-primary-100 bg-slate-50 px-4 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-primary-800">{m.nome}</p>
-                      <p className="text-xs text-primary-400">
-                        {m.tipo} · {m.categoria}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <button
-                        onClick={() => handleDownload(m)}
-                        aria-label={`Scarica di nuovo ${m.nome}`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-white px-3 py-2 text-xs font-semibold text-primary-700 transition hover:bg-primary-50"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        Scarica
-                      </button>
-                      <button
-                        onClick={() => rimuoviModulo(m.id)}
-                        aria-label={`Rimuovi ${m.nome} dalla cronologia`}
-                        className="rounded-lg p-2 text-primary-400 transition hover:bg-error-50 hover:text-error-600"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                {moduliScaricati.map((m) => {
+                  const catalogo = moduli.find((x) => x.id === m.id);
+                  return (
+                    <li
+                      key={m.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-primary-100 bg-slate-50 px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-primary-800">{m.nome}</p>
+                        <p className="text-xs text-primary-400">
+                          {m.tipo}
+                          {catalogo?.categoria ? ` · ${catalogo.categoria}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          onClick={() => handleDownload(m)}
+                          aria-label={`Scarica di nuovo ${m.nome}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-white px-3 py-2 text-xs font-semibold text-primary-700 transition hover:bg-primary-50"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Scarica
+                        </button>
+                        <button
+                          onClick={() => rimuoviModulo(m.id)}
+                          aria-label={`Rimuovi ${m.nome} dalla cronologia`}
+                          className="rounded-lg p-2 text-primary-400 transition hover:bg-error-50 hover:text-error-600"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
             <p className="mt-3 text-xs text-primary-400">
@@ -211,17 +217,6 @@ export function ModuliPage() {
             ))
           )}
         </div>
-        )}
-
-        <p className="mt-4 text-xs text-primary-400">
-          I moduli sono forniti a scopo dimostrativo. Verifica sempre la modulistica vigente presso gli enti competenti.
-        </p>
-        {!abbonato && (
-          <p className="mt-2 flex items-center gap-1.5 text-xs text-primary-400">
-            <ImageDown className="h-3.5 w-3.5" />
-            I documenti scaricati in versione gratuita includono il logo/branding ScuoleRadar.it —
-            rimuovilo con il piano PRO.
-          </p>
         )}
       </div>
     </div>

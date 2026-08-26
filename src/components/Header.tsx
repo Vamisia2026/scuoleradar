@@ -1,32 +1,47 @@
 import { useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { LogOut, User as UserIcon, Menu, X, Sparkles, ChevronDown, CreditCard } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { CreditiModal } from '@/components/CreditiModal';
 
+/** Link istituzionali / di supporto (barra superiore). */
 const navLinks = [
-  { to: '/servizi', label: 'Servizi' },
+  { to: '/notizie', label: 'Notizie' },
   { to: '/prezzi', label: 'Prezzi' },
   { to: '/chi-siamo', label: 'Chi siamo' },
 ];
 
+/** Strumenti principali: barra a pillole uniforme anche da utente non loggato. */
+const strumentiLinks = [
+  { to: '/dashboard/radar', label: '📡 Radar Interpelli' },
+  { to: '/dashboard/cv', label: '📄 Crea il tuo CV' },
+  { to: '/dashboard/cfu', label: '🎓 Calcolatore CFU' },
+  { to: '/dashboard/moduli', label: '📁 Modulistica' },
+  { to: '/dashboard/assistente-ai', label: '🤖 Sindacalista Virtuale' },
+  { to: '/dashboard/purefocus', label: '🧘 PureFocus' },
+];
+
 export function Header() {
   const { user, abbonato, crediti, logout, openAuthModal } = useApp();
+  const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuUtenteOpen, setMenuUtenteOpen] = useState(false);
   const [apriCrediti, setApriCrediti] = useState(false);
 
   const chiudiMenu = () => setMenuOpen(false);
   const chiudiMenuUtente = () => setMenuUtenteOpen(false);
+  // Su /dashboard la navigazione a pillole è già fornita dalla barra del DashboardLayout.
+  const isDashboard = pathname.startsWith('/dashboard');
 
   return (
     <header className="sticky top-0 z-30 border-b border-primary-100 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <a href="/" className="inline-block focus:outline-none">
+      {/* Livello superiore (Top Bar): Logo | link istituzionali (centro) | Accedi */}
+      <div className="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 sm:px-6">
+        <a href="/" className="justify-self-start focus:outline-none">
           <img src="/logo.png" alt="ScuoleRadar.it" className="h-10 w-auto object-contain" />
         </a>
 
-        {/* Nav pubblica (desktop) */}
+        {/* Link istituzionali/informativi — sempre centrati (desktop) */}
         <nav className="hidden items-center gap-1 md:flex">
           {navLinks.map((l) => (
             <NavLink
@@ -43,10 +58,10 @@ export function Header() {
           ))}
         </nav>
 
-        {/* Azioni (desktop) */}
-        <div className="hidden items-center gap-2 md:flex">
+        {/* Azioni (destra, allineate a fine riga) */}
+        <div className="flex items-center justify-self-end gap-2">
           {user ? (
-            <div className="relative">
+            <div className="relative hidden md:block">
               <div className="flex items-center gap-0.5 rounded-full border border-primary-200 bg-white py-1 pl-1 pr-1 shadow-soft">
                 <Link
                   to="/dashboard/radar"
@@ -145,37 +160,66 @@ export function Header() {
               )}
             </div>
           ) : (
-            <>
-              <button
-                onClick={() => openAuthModal('login')}
-                className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 px-4 py-2 text-sm font-semibold text-primary-700 transition hover:bg-primary-50"
-              >
-                Accedi
-              </button>
-              <button
-                onClick={() => openAuthModal('registrazione')}
-                className="inline-flex items-center gap-1.5 rounded-full bg-primary-500 px-4 py-2 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
-              >
-                Inizia ora
-              </button>
-            </>
+            <button
+              onClick={() => openAuthModal('login')}
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary-500 px-5 py-2 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
+            >
+              Accedi
+            </button>
           )}
-        </div>
 
-        {/* Toggle menu mobile */}
-        <button
-          onClick={() => setMenuOpen((o) => !o)}
-          aria-label={menuOpen ? 'Chiudi menu' : 'Apri menu'}
-          className="inline-flex items-center justify-center rounded-lg p-2 text-primary-700 transition hover:bg-primary-50 md:hidden"
-        >
-          {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+          {/* Toggle menu mobile */}
+          <button
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-label={menuOpen ? 'Chiudi menu' : 'Apri menu'}
+            className="inline-flex items-center justify-center rounded-lg p-2 text-primary-700 transition hover:bg-primary-50 md:hidden"
+          >
+            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
+
+      {/* Livello inferiore (Barra Servizi/Strumenti) — sempre centrata */}
+      {!isDashboard && (
+        <div className="hidden border-t border-primary-100 bg-white md:block">
+          <nav className="mx-auto flex w-max items-center justify-center gap-1 overflow-x-auto px-4 py-2 sm:px-6">
+            {strumentiLinks.map((l) => (
+              <NavLink
+                key={l.to}
+                to={l.to}
+                className={({ isActive }) =>
+                  `inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-sm font-semibold transition ${
+                    isActive
+                      ? 'bg-primary-500 text-white shadow-soft'
+                      : 'text-primary-700 hover:bg-primary-50'
+                  }`
+                }
+              >
+                {l.label}
+              </NavLink>
+            ))}
+          </nav>
+        </div>
+      )}
 
       {/* Menu mobile */}
       {menuOpen && (
         <div className="border-t border-primary-100 bg-white px-4 py-4 md:hidden">
           <nav className="flex flex-col gap-1">
+            <p className="px-3 pt-1 text-xs font-bold uppercase tracking-wide text-primary-400">
+              Strumenti
+            </p>
+            {strumentiLinks.map((l) => (
+              <Link
+                key={l.to}
+                to={l.to}
+                onClick={chiudiMenu}
+                className="rounded-lg px-3 py-2.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
+              >
+                {l.label}
+              </Link>
+            ))}
+            <p className="px-3 pt-2 text-xs font-bold uppercase tracking-wide text-primary-400">Info</p>
             {navLinks.map((l) => (
               <NavLink
                 key={l.to}
@@ -252,19 +296,10 @@ export function Header() {
               <>
                 <button
                   onClick={() => {
-                    openAuthModal('registrazione');
-                    chiudiMenu();
-                  }}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
-                >
-                  Inizia ora
-                </button>
-                <button
-                  onClick={() => {
                     openAuthModal('login');
                     chiudiMenu();
                   }}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-primary-200 px-4 py-2.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
                 >
                   Accedi
                 </button>

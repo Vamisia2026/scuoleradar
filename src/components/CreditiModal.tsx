@@ -65,12 +65,16 @@ export function CreditiModal({ open, onClose }: { open: boolean; onClose: () => 
     setInvio(true);
     try {
       const esito = await avviaCheckout(
-        'alacarte',
+        'a_consumo',
         promoStato === 'applicato' ? promo : undefined,
         quantita,
       );
       if (!esito.ok) {
         mostraToast('errore', esito.errore ?? 'Errore durante il pagamento. Riprova.');
+      } else {
+        // Checkout aperto in una nuova scheda: chiudi il modal e tieni l'app attiva.
+        mostraToast('successo', 'Checkout aperto in una nuova scheda.');
+        onClose();
       }
     } catch (err) {
       mostraToast('errore', (err as Error).message ?? 'Errore durante il pagamento. Riprova.');
@@ -81,7 +85,7 @@ export function CreditiModal({ open, onClose }: { open: boolean; onClose: () => 
 
   return (
     <Modal open={open} onClose={onClose} title="Crediti a consumo" size="sm">
-      <div className="flex max-h-[calc(90vh-5.5rem)] flex-col gap-3">
+      <div className="flex max-h-[85vh] flex-col gap-3">
         {/* Banner compatto */}
         <div className="shrink-0 rounded-xl bg-gradient-to-br from-secondary-500 to-secondary-600 px-4 py-3 text-white">
           <div className="flex items-center justify-between gap-2">
@@ -215,8 +219,8 @@ export function CreditiModal({ open, onClose }: { open: boolean; onClose: () => 
         </div>
         </div>
 
-        {/* Footer fisso: il pulsante resta sempre visibile senza scroll */}
-        <div className="shrink-0 border-t border-primary-100 pt-3">
+        {/* Footer sticky: il pulsante resta sempre visibile senza scroll */}
+        <div className="sticky bottom-0 z-10 shrink-0 border-t border-primary-100 bg-white p-4">
           <button
             onClick={() => void handleProcedi()}
             disabled={invio}

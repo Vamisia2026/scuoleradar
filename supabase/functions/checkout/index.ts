@@ -5,18 +5,20 @@
 // l'URL a cui redirigere il browser dell'utente.
 //
 // Autenticazione: --verify-jwt (deve essere un utente loggato).
-// Body: { "plan": "pro_annuale" | "pro_mensile" | "alacarte", "promo": "CODICE", "priceId": "...", "quantita": 3 }
+// Body: { "plan": "pro_annuale" | "pro_mensile" | "a_consumo", "promo": "CODICE", "quantita": 3 }
+//   "plan" (obbligatorio): piano richiesto. La Edge Function accetta anche le varianti
+//   inglesi (pro_annual, pro_monthly, alacarte) e le normalizza ai nomi canonici italiani.
+//   Il mapping ai Price ID usa SOLO i secrets server-side (STRIPE_PRICE_*):
+//   MAI fidarsi di priceId inviati dal client.
 //   "promo" (opzionale): codice referral → validato via RPC valida_codice_promo;
 //   se valido applica il coupon -10€ (PRO annuale e crediti a consumo) e traccia il referrer.
-//   "priceId" (opzionale, frontend VITE_STRIPE_*): solo verifica/debug, la fonte
-//   autorevole del prezzo è sempre il secret server-side.
 //   "quantita" (opzionale, default 1): numero di crediti a consumo (5€/cad).
 //
 // Secrets richiesti:
 //   STRIPE_SECRET_KEY              (obbligatoria)
 //   STRIPE_PRICE_PRO_ANNUALE       (id price PRO annuale)
 //   STRIPE_PRICE_PRO_MENSILE       (id price PRO mensile)
-//   STRIPE_PRICE_ALACARTE          (id price A la Carte / sblocco)
+//   STRIPE_PRICE_A_CONSUMO         (id price A la Carte / a consumo; fallback: STRIPE_PRICE_CONSUMO, STRIPE_PRICE_ALACARTE)
 //   STRIPE_COUPON_REFERRAL_10      (opzionale — coupon amount_off 10€ per i referral)
 //
 // Deploy:
@@ -32,18 +34,32 @@ const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 /** Coupon Stripe (amount_off 10€, una tantum) per il programma referral. */
 const COUPON_REFERRAL = Deno.env.get('STRIPE_COUPON_REFERRAL_10') ?? '';
 
+/**
+ * Normalizza un piano ricevuto nel body (anche le varianti inglesi) al nome canonico italiano.
+ * Varianti accettate: pro_annuale/pro_annual, pro_mensile/pro_monthly, a_consumo/alacarte.
+ */
+function normalizzaPiano(plan: string): string {
+  switch (plan) {
+    case 'pro_annual':
+      return 'pro_annuale';
+    case 'pro_monthly':
+      return 'pro_mensile';
+    case 'alacarte':
+      return 'a_consumo';
+    default:
+      return plan;
+  }
+}
+
 const STRIPE_PRICE_IDS: Record<string, string> = {
   pro_annuale: Deno.env.get('STRIPE_PRICE_PRO_ANNUALE') ?? '',
   pro_mensile: Deno.env.get('STRIPE_PRICE_PRO_MENSILE') ?? '',
-  alacarte: Deno.env.get('STRIPE_PRICE_ALACARTE') ?? '',
+  a_consumo:
+    Deno.env.get('STRIPE_PRICE_A_CONSUMO') ??
+    Deno.env.get('STRIPE_PRICE_CONSUMO') ??
+    Deno.env.get('STRIPE_PRICE_ALACARTE') ??
+    '',
 };
-
-type Piano = keyof typeof STRIPE_PRICE_IDS;
-
-const SUCCESS_URL =
-  Deno.env.get('APP_URL') ?? 'https://scuoleradar.it/dashboard/radar?esito=successo';
-const CANCEL_URL =
-  Deno.env.get('APP_URL') ?? 'https://scuoleradar.it/dashboard/radar?esito=annullato';
 
 /** Decodifica il payload (base64url) di un JWT senza verificarne la firma (il runtime la verifica con --verify-jwt). */
 function decodeJwt(token: string): { sub?: string; email?: string } | null {
@@ -158,9 +174,8 @@ serve(async (req: Request) => {
     let body: {
       plan?: string;
       promo?: string;
-      priceId?: string;
       quantita?: number;
-      tipo?: 'subscription' | 'credits';
+      origin?: string;
     };
     try {
       body = await req.json();
@@ -168,31 +183,42 @@ serve(async (req: Request) => {
       return risposta({ error: 'Body JSON non valido' }, 400);
     }
 
-    const plan = (body.plan ?? '') as Piano;
+    const plan = normalizzaPiano((body.plan ?? '').trim());
     const priceId = STRIPE_PRICE_IDS[plan];
     if (!priceId) {
-      return risposta({ error: `Piano non valido: ${plan}` }, 400);
-    }
-    // Il priceId dal frontend (VITE_STRIPE_*) è solo di verifica/debug:
-    // la fonte autorevole resta il secret server-side (anti tampering).
-    if (body.priceId && body.priceId !== priceId) {
-      console.warn(`PriceId frontend non corrisponde al piano ${plan}: ${body.priceId} (uso ${priceId})`);
+      // Piano inesistente OPPURE secret non configurato: risposta esplicita (mai 500).
+      return risposta({ success: false, error: 'Secret non configurato per il piano selezionato' }, 400);
     }
 
-    // mode: "subscription" per il piano PRO, "payment" (credits) per i crediti a consumo.
-    // Il tipo può arrivare esplicito dal frontend oppure essere derivato dal piano.
-    const mode = body.tipo === 'credits' || plan === 'alacarte' ? 'payment' : 'subscription';
+    // mode Stripe: "payment" per i crediti a consumo (a_consumo/alacarte NON è un
+    // abbonamento: con mode="subscription" Stripe risponderebbe 400), "subscription"
+    // solo per i piani PRO (pro_annuale / pro_mensile).
+    const mode =
+      plan === 'a_consumo' || plan === 'alacarte' ? 'payment' : 'subscription';
     const quantita = Math.max(1, Math.min(100, Math.floor(body.quantita ?? 1)));
+
+    // URL di ritorno DINAMICI: usiamo l'origin inviata dal client (body.origin), con fallback
+    // sull'header Origin della richiesta HTTP. In locale i redirect puntano quindi a
+    // http://localhost:<porta>/dashboard/radar (e mai a produzione): fallback finale su
+    // env APP_URL o sul dominio di produzione. NB: il frontend invia SEMPRE window.location.origin.
+    const originHeader = req.headers.get('origin')?.trim();
+    const origin = (
+      body.origin?.trim() ||
+      originHeader ||
+      Deno.env.get('APP_URL') ||
+      'https://scuoleradar.it'
+    ).replace(/\/+$/, ''); // rimuove eventuali slash finali prima di comporre le URL
+    const successUrl = `${origin}/dashboard/radar?esito=successo`;
+    const cancelUrl = `${origin}/dashboard/radar?esito=annullato`;
 
     const campi: Record<string, string> = {
       mode,
-      success_url: SUCCESS_URL,
-      cancel_url: CANCEL_URL,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      // Lingua italiana forzata per il checkout hosted di Stripe.
+      locale: 'it',
       'line_items[0][price]': priceId,
       'line_items[0][quantity]': String(quantita),
-      // Stripe Managed Payments: i metodi di pagamento gestiti da Stripe sono abilitati
-      // (parametro `managed_payments` è un oggetto { enabled: boolean } nelle API aggiornate)
-      'managed_payments[enabled]': 'true',
       'client_reference_id': userId,
       'metadata[user_id]': userId,
     };
@@ -204,7 +230,7 @@ serve(async (req: Request) => {
       if (promo?.valido && promo.referrer_id) {
         campi['metadata[promo]'] = promo.codice ?? body.promo;
         campi['metadata[promo_referrer]'] = promo.referrer_id;
-        if (COUPON_REFERRAL && (plan === 'pro_annuale' || plan === 'alacarte')) {
+        if (COUPON_REFERRAL && (plan === 'pro_annuale' || plan === 'a_consumo')) {
           campi['discounts[0][coupon]'] = COUPON_REFERRAL;
         }
       }
@@ -212,18 +238,29 @@ serve(async (req: Request) => {
 
     const esito = await postStripe<{ url?: string }>('/checkout/sessions', campi);
     if (!esito.ok) {
-      return risposta({ error: `Stripe ha rifiutato la richiesta: ${esito.errore}` }, 400);
+      // Messaggio ESATTO di Stripe inoltrato al client (per il toast): niente errori generici.
+      return new Response(JSON.stringify({ success: false, error: esito.errore }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+      });
     }
     if (!esito.data.url) {
       return risposta({ error: 'Stripe non ha restituito un URL di checkout' }, 400);
     }
 
+    console.log(
+      `✓ Sessione di checkout creata: plan=${plan} mode=${mode} user=${userId.slice(0, 8)}… url=${esito.data.url.slice(0, 40)}…`,
+    );
     return risposta({ url: esito.data.url });
   } catch (err) {
-    // Non lasciare MAI la richiesta senza risposta: log e JSON di errore esplicito
+    // Non lasciare MAI la richiesta senza risposta: log completo + messaggio esatto di Stripe.
     console.error('checkout — errore non gestito:', err);
-    const messaggio = err instanceof Error ? err.message : 'Errore interno sconosciuto';
-    return risposta({ error: messaggio }, 400);
+    const rawError = err as { raw?: { message?: string }; message?: string } | null;
+    const stripeError = rawError?.raw?.message || rawError?.message || 'Errore interno sconosciuto';
+    return new Response(JSON.stringify({ success: false, error: stripeError }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+    });
   }
 });
 

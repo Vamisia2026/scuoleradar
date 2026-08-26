@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Radar, BellRing, ShieldCheck, Heart, ArrowRight, UserPlus, Send, CreditCard, MapPin, Calendar,
+  Radar, BellRing, ShieldCheck, Heart, ArrowRight, UserPlus, Send, CreditCard, MapPin, Calendar, Sparkles,
 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { SimulatorRadar } from '@/components/SimulatorRadar';
@@ -8,7 +8,7 @@ import { useApp } from '@/contexts/AppContext';
 import { servizi } from '@/data/servizi';
 
 export function LandingPage() {
-  const { user, openAuthModal } = useApp();
+  const { user, openAuthModal, openVetrina } = useApp();
   const navigate = useNavigate();
 
   const handleInizia = () => {
@@ -29,7 +29,7 @@ export function LandingPage() {
       <section className="relative overflow-hidden bg-gradient-to-b from-primary-50 via-white to-white">
         <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-secondary-100/60 blur-3xl" />
         <div className="pointer-events-none absolute top-40 -left-24 h-72 w-72 rounded-full bg-primary-100/60 blur-3xl" />
-        <div className="relative mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
+        <div className="relative mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
           <div className="grid items-center gap-10 lg:grid-cols-2">
             <div className="animate-fade-in">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-50 px-3 py-1 text-sm font-medium text-accent-700">
@@ -75,9 +75,9 @@ export function LandingPage() {
       </section>
 
       {/* Plan explanation */}
-      <section className="bg-white py-16 sm:py-20">
+      <section className="bg-white py-10">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="mb-10 text-center">
+          <div className="mb-6 text-center">
             <h2 className="text-3xl font-bold text-primary-900">Come funziona</h2>
             <p className="mt-3 text-primary-600">Tre passi. Semplice e onesto.</p>
           </div>
@@ -105,7 +105,7 @@ export function LandingPage() {
       </section>
 
       {/* Values */}
-      <section className="bg-primary-50 py-16 sm:py-20">
+      <section className="bg-primary-50 py-10">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="grid gap-8 md:grid-cols-3">
             <ValueCard
@@ -128,9 +128,9 @@ export function LandingPage() {
       </section>
 
       {/* Servizi */}
-      <section className="bg-white py-16 sm:py-20">
+      <section className="bg-white py-10">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="mb-10 text-center">
+          <div className="mb-6 text-center">
             <h2 className="text-3xl font-bold text-primary-900">I nostri strumenti</h2>
             <p className="mt-3 text-primary-600">Tutto in un&apos;unica dashboard, per non perdere tempo.</p>
           </div>
@@ -153,9 +153,9 @@ export function LandingPage() {
       </section>
 
       {/* Vetrina dimostrativa */}
-      <section className="bg-primary-50 py-16 sm:py-20">
+      <section className="bg-primary-50 py-10">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="mb-10 text-center">
+          <div className="mb-6 text-center">
             <h2 className="text-3xl font-bold text-primary-900">Ecco cosa riceverai</h2>
             <p className="mt-3 text-primary-600">
               Un assaggio degli avvisi che il radar ti segnala, filtrati per il tuo profilo.
@@ -196,10 +196,55 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* PureFocus */}
+      <section className="bg-white py-10">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6">
+          <div className="rounded-2xl bg-gradient-to-br from-primary-700 to-primary-900 p-8 text-white shadow-card sm:p-10">
+            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+              <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/10 text-2xl">
+                🧘
+              </span>
+              <div className="min-w-0">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-sm font-medium text-primary-100">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Incluso nel piano PRO
+                </span>
+                <h2 className="mt-2 text-2xl font-bold sm:text-3xl">PureFocus</h2>
+              </div>
+            </div>
+            <p className="mt-4 leading-relaxed text-primary-100">
+              PureFocus è una piattaforma straordinaria che trasforma YouTube in un ambiente di studio
+              e lavoro: elimina distrazioni, suggerimenti e contenuti irrilevanti, lasciandoti solo ciò
+              che ti serve per ottimizzare il tuo tempo. PureFocus costa 29$ all&apos;anno ed è incluso nel
+              tuo abbonamento a Scuole Radar.
+            </p>
+            <div className="mt-6">
+              {user ? (
+                <Link
+                  to="/dashboard/purefocus"
+                  className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-primary-800 shadow-soft transition hover:bg-primary-50"
+                >
+                  Scopri PureFocus
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              ) : (
+                <button
+                  onClick={() => openVetrina('purefocus')}
+                  className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-primary-800 shadow-soft transition hover:bg-primary-50"
+                >
+                  Registrati qui
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Stats / social proof */}
-      <section className="bg-primary-900 py-16 sm:py-20">
+      <section className="bg-primary-900 py-10">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="grid gap-10 text-center md:grid-cols-4">
+          <div className="grid gap-6 text-center md:grid-cols-4">
             <Stat numero="100+" label="Interpelli e bandi mappati ogni mese" />
             <Stat numero="3" label="Notifiche incluse per provare gratis" />
             <Stat numero="49€" label="All'anno per il piano PRO, PureFocus incluso" />
@@ -209,7 +254,7 @@ export function LandingPage() {
       </section>
 
       {/* CTA */}
-      <section className="bg-white py-16 sm:py-24">
+      <section className="bg-white py-10 sm:py-14">
         <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
           <h2 className="text-3xl font-bold text-primary-900 sm:text-4xl">
             Inizia il tuo Radar

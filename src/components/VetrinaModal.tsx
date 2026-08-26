@@ -1,0 +1,120 @@
+import type { ReactNode } from 'react';
+import { Bot, Calculator, FileText, FolderOpen, PenLine, Radar, Sparkles, UserPlus } from 'lucide-react';
+import { Modal } from '@/components/Modal';
+import { useApp } from '@/contexts/AppContext';
+import { STORAGE_KEY_INTENDED_PLAN } from '@/lib/pricing';
+
+interface DettaglioVetrina {
+  icona: ReactNode;
+  titolo: string;
+  testo: string;
+}
+
+/** Descrizioni per sezione: valore del servizio mostrato nel modal di conversione. */
+const dettagli: Record<string, DettaglioVetrina> = {
+  radar: {
+    icona: <Radar className="h-6 w-6" />,
+    titolo: 'Radar Interpelli',
+    testo:
+      'Interpelli, supplenze e bandi mappati per te: i primi 3 sono gratuiti. Con un account continui a monitorare le opportunità e attivi le notifiche.',
+  },
+  cv: {
+    icona: <FileText className="h-6 w-6" />,
+    titolo: 'CV Builder',
+    testo:
+      'Trasforma il tuo CV in un layout ordinato. Registrandoti gratuitamente scarichi il PDF (con logo), con il PRO senza logo.',
+  },
+  cfu: {
+    icona: <Calculator className="h-6 w-6" />,
+    titolo: 'Check CFU',
+    testo:
+      'Verifica le classi di concorso accessibili dal tuo percorso di studi: la verifica richiede 1 credito a consumo oppure il piano PRO.',
+  },
+  moduli: {
+    icona: <FolderOpen className="h-6 w-6" />,
+    titolo: 'Modulistica',
+    testo:
+      'Modelli e documenti pronti all\u2019uso (domande, autocertificazioni, lettere di presentazione). I download sono riservati agli account registrati.',
+  },
+  assistente: {
+    icona: <Bot className="h-6 w-6" />,
+    titolo: 'Assistente AI',
+    testo:
+      'Risposte su graduatorie, mobilità e supplenze. Il servizio è riservato ai PRO: registrati e richiedi l\u2019accesso in prova.',
+  },
+  purefocus: {
+    icona: <PenLine className="h-6 w-6" />,
+    titolo: 'PureFocus',
+    testo:
+      'PureFocus è una piattaforma straordinaria che trasforma YouTube in un ambiente di studio e lavoro: elimina distrazioni, suggerimenti e contenuti irrilevanti, lasciandoti solo ciò che ti serve per ottimizzare il tuo tempo. PureFocus costa 29$ all\u2019anno ed è incluso nel tuo abbonamento a Scuole Radar.',
+  },
+};
+
+/** Modal di conversione "Vetrina Freemium": scelta tra Free, PRO Mensile, PRO Annuale. */
+export function VetrinaModal() {
+  const { vetrinaAperta, vetrinaSezione, closeVetrina, openAuthModal } = useApp();
+  const dettaglio = (vetrinaSezione && dettagli[vetrinaSezione]) || null;
+
+  const scegliPiano = (piano: 'free' | 'pro_mensile' | 'pro_annuale') => {
+    if (piano !== 'free') {
+      try {
+        // Il checkout del piano scelto ripartirà automaticamente dopo il login.
+        localStorage.setItem(STORAGE_KEY_INTENDED_PLAN, piano);
+      } catch {
+        // localStorage non disponibile
+      }
+    }
+    closeVetrina();
+    openAuthModal('registrazione');
+  };
+
+  return (
+    <Modal open={vetrinaAperta} onClose={closeVetrina} title="Sblocca ScuoleRadar" size="sm">
+      <div className="space-y-4">
+        {dettaglio && (
+          <div className="flex items-start gap-3 rounded-xl bg-primary-50 p-4">
+            <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-500 text-white">
+              {dettaglio.icona}
+            </span>
+            <div>
+              <p className="font-bold text-primary-800">{dettaglio.titolo}</p>
+              <p className="mt-0.5 text-sm leading-relaxed text-primary-600">{dettaglio.testo}</p>
+            </div>
+          </div>
+        )}
+
+        <p className="text-sm text-primary-600">
+          Crea il tuo account gratuito per iniziare. Scegli il piano che preferisci:
+        </p>
+
+        <div className="space-y-2">
+          <button
+            onClick={() => scegliPiano('free')}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-primary-200 px-5 py-3 text-sm font-semibold text-primary-700 transition hover:bg-primary-50"
+          >
+            <UserPlus className="h-4 w-4" />
+            Registrati gratis (Free)
+          </button>
+          <button
+            onClick={() => scegliPiano('pro_mensile')}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-secondary-200 px-5 py-3 text-sm font-semibold text-secondary-700 transition hover:bg-secondary-50"
+          >
+            <Sparkles className="h-4 w-4" />
+            PRO Mensile · 9€/mese
+          </button>
+          <button
+            onClick={() => scegliPiano('pro_annuale')}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-secondary-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
+          >
+            <Sparkles className="h-4 w-4" />
+            PRO Annuale · 49€/anno (consigliato)
+          </button>
+        </div>
+
+        <p className="text-center text-xs text-primary-400">
+          Iscrizione gratuita in 2 minuti. Nessun dark pattern: disdici quando vuoi.
+        </p>
+      </div>
+    </Modal>
+  );
+}

@@ -1,16 +1,17 @@
 /**
- * Price IDs Stripe visibili al frontend (da VITE_STRIPE_*).
- * Nota: la fonte autorevole è server-side (secrets Supabase STRIPE_PRICE_*);
- * questi valori servono solo per verifica/debug e sono passati alla Edge
- * Function `checkout` come parametro `priceId`.
+ * Catalogo piani di pagamento (FASE 6/7).
+ * La fonte autorevole dei prezzi è server-side (secrets Supabase STRIPE_PRICE_*):
+ * il frontend invia SOLO il nome del piano alla Edge Function `checkout`,
+ * che lo mappa ai Price ID di Stripe. Nessun Price ID lato client.
  */
-export const STRIPE_PRICE_IDS: Record<string, string> = {
-  pro_annuale: import.meta.env.VITE_STRIPE_PRICE_PRO_ANNUALE ?? '',
-  pro_mensile: import.meta.env.VITE_STRIPE_PRICE_PRO_MENSILE ?? '',
-  alacarte: import.meta.env.VITE_STRIPE_PRICE_ALACARTE ?? '',
-};
 
-/** Ritorna il priceId configurato per il piano, o undefined se non valorizzato. */
-export function priceIdPerPiano(plan: string): string | undefined {
-  return STRIPE_PRICE_IDS[plan] || undefined;
-}
+export type PianoId = 'pro_annuale' | 'pro_mensile' | 'a_consumo';
+
+/** Piani disponibili (in ordine di presentazione). */
+export const PIANI: PianoId[] = ['pro_annuale', 'pro_mensile', 'a_consumo'];
+
+/** Chiave localStorage: piano scelto da un utente anonimo (ripresa checkout dopo il login). */
+export const STORAGE_KEY_INTENDED_PLAN = 'scuoleradar:intended_plan';
+
+/** Chiave localStorage: payload aggiuntivo del piano (promo, quantità) per la ripresa checkout. */
+export const STORAGE_KEY_INTENDED_PLAN_DATA = 'scuoleradar:intended_plan_data';
