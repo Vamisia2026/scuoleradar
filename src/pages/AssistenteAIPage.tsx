@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react';
-import { Sparkles, Send, Bot, User as UserIcon } from 'lucide-react';
+import { Sparkles, Send, Bot, User as UserIcon, Lock } from 'lucide-react';
 import { ExperimentalBanner } from '@/components/ExperimentalBanner';
+import { useApp } from '@/contexts/AppContext';
+import { ServiziPaywall } from '@/components/ServiziPaywall';
 
 interface Messaggio {
   autore: 'bot' | 'utente';
@@ -14,8 +16,44 @@ const benvenuto: Messaggio = {
 };
 
 export function AssistenteAIPage() {
+  const { abbonato, crediti, consumaCredito } = useApp();
   const [messaggi, setMessaggi] = useState<Messaggio[]>([benvenuto]);
   const [testo, setTesto] = useState('');
+  const [sbloccato, setSbloccato] = useState(false);
+
+  // Riservato agli abbonati PRO, oppure sbloccabile a consumo con 1 credito per sessione.
+  if (!abbonato && !sbloccato) {
+    return crediti > 0 ? (
+      <div className="space-y-6">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-primary-600" />
+          <h2 className="text-lg font-bold text-primary-800">Assistente AI</h2>
+        </div>
+        <div className="rounded-2xl border border-primary-100 bg-white p-8 text-center shadow-card">
+          <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary-50">
+            <Lock className="h-7 w-7 text-primary-400" />
+          </span>
+          <h3 className="mt-4 text-lg font-bold text-primary-800">Sessione riservata</h3>
+          <p className="mx-auto mt-1 max-w-md text-sm text-primary-500">
+            L&apos;Assistente AI è riservato agli abbonati PRO oppure sbloccabile a consumo con{' '}
+            <strong>1 credito per sessione</strong> (ne hai {crediti}).
+          </p>
+          <button
+            onClick={() => void consumaCredito().then((esito) => esito.ok && setSbloccato(true))}
+            className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
+          >
+            <Sparkles className="h-4 w-4" />
+            Consuma 1 credito e avvia la sessione
+          </button>
+        </div>
+      </div>
+    ) : (
+      <ServiziPaywall
+        titolo="Assistente AI riservato"
+        messaggio="L'Assistente AI richiede il piano PRO oppure 1 credito a consumo per sessione."
+      />
+    );
+  }
 
   const handleInvia = (e: FormEvent) => {
     e.preventDefault();

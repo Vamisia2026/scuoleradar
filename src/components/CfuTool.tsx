@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import {
-  Plus, Trash2, CheckCircle2, XCircle, AlertTriangle, BookOpen, Sparkles, Search, X, GraduationCap,
+  Plus, Trash2, CheckCircle2, XCircle, AlertTriangle, BookOpen, Sparkles, Search, X, GraduationCap, Lock,
 } from 'lucide-react';
 import { useApp, type Esame } from '@/contexts/AppContext';
 import { classiConcorso, type ClasseConcorso } from '@/data/classiConcorso';
+import { ServiziPaywall } from '@/components/ServiziPaywall';
 
 /** Preset dei titoli di studio: selezionando un titolo si caricano gli esami tipici del corso. */
 interface TitoloStudio {
@@ -114,12 +115,41 @@ function valutaCfu(esami: Esame[]): RisultatoClasse[] {
 }
 
 export function CfuTool() {
-  const { esami, setEsami } = useApp();
+  const { esami, setEsami, abbonato, crediti, consumaCredito } = useApp();
   const [materia, setMateria] = useState('');
   const [cfu, setCfu] = useState(6);
   const [settore, setSettore] = useState('');
   const [titoloInput, setTitoloInput] = useState('');
   const [titoloSelezionato, setTitoloSelezionato] = useState<TitoloStudio | null>(null);
+  const [sbloccato, setSbloccato] = useState(false);
+
+  // Paywall: Check CFU richiede il piano PRO oppure il consumo di 1 credito.
+  if (!abbonato && !sbloccato) {
+    return crediti > 0 ? (
+      <div className="rounded-2xl border border-primary-100 bg-white p-8 text-center shadow-card">
+        <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary-50">
+          <Lock className="h-7 w-7 text-primary-400" />
+        </span>
+        <h3 className="mt-4 text-lg font-bold text-primary-800">Check CFU</h3>
+        <p className="mx-auto mt-1 max-w-md text-sm text-primary-500">
+          La verifica delle classi di concorso consumerà <strong>1 credito a consumo</strong> (ne
+          hai {crediti}). Con il piano PRO è incluso senza limiti.
+        </p>
+        <button
+          onClick={() => void consumaCredito().then((esito) => esito.ok && setSbloccato(true))}
+          className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
+        >
+          <Sparkles className="h-4 w-4" />
+          Consuma 1 credito e verifica
+        </button>
+      </div>
+    ) : (
+      <ServiziPaywall
+        titolo="Check CFU riservato"
+        messaggio="La verifica delle classi di concorso richiede il piano PRO oppure 1 credito a consumo."
+      />
+    );
+  }
 
   const applicaTitolo = (titolo: TitoloStudio) => {
     setTitoloSelezionato(titolo);

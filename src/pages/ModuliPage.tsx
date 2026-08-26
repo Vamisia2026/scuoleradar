@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { FolderOpen, Download, CheckCircle2, Search, Info } from 'lucide-react';
+import { FolderOpen, Download, CheckCircle2, Search, Info, ImageDown } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useApp } from '@/contexts/AppContext';
 import {
   moduli,
   macroAree,
@@ -12,6 +13,7 @@ import {
 } from '@/data/moduli';
 
 export function ModuliPage() {
+  const { abbonato } = useApp();
   const [scaricato, setScaricato] = useState<string | null>(null);
   const [macroArea, setMacroArea] = useState<MacroArea>('Tutti');
   const [query, setQuery] = useState('');
@@ -33,7 +35,13 @@ export function ModuliPage() {
     setScaricato(m.nome);
     // Salva il modulo nello storico del profilo (localStorage condiviso con la pagina Profilo)
     setModuliScaricati(conAggiuntaInCima(moduliScaricati, m));
-    alert(`Download simulato di "${m.nome}" (${m.tipo}). In una versione completa il file verrebbe scaricato realmente.`);
+    if (abbonato) {
+      alert(`Download simulato di "${m.nome}" (${m.tipo}) senza logo/branding per gli abbonati PRO.`);
+    } else {
+      alert(
+        `Download simulato di "${m.nome}" (${m.tipo}) con logo/branding ScuoleRadar.it. Passa al piano PRO per scaricare i documenti puliti.`,
+      );
+    }
   };
 
   return (
@@ -129,6 +137,13 @@ export function ModuliPage() {
         <p className="mt-4 text-xs text-primary-400">
           I moduli sono forniti a scopo dimostrativo. Verifica sempre la modulistica vigente presso gli enti competenti.
         </p>
+        {!abbonato && (
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-primary-400">
+            <ImageDown className="h-3.5 w-3.5" />
+            I documenti scaricati in versione gratuita includono il logo/branding ScuoleRadar.it —
+            rimuovilo con il piano PRO.
+          </p>
+        )}
       </div>
     </div>
   );

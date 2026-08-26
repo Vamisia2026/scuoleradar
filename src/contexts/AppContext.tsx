@@ -75,6 +75,8 @@ interface AppContextValue extends AppState {
   resettaTutto: () => void;
   salvaProfilo: (p?: Preferenze) => Promise<void>;
   loginConGoogle: () => Promise<void>;
+  /** Consuma 1 credito a consumo (RPC atomica) e aggiorna il saldo nel context. */
+  consumaCredito: () => Promise<{ ok: boolean; crediti: number }>;
 }
 
 const defaultPreferenze: Preferenze = {
@@ -232,6 +234,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.functions.invoke('checkout', {
         body: {
           plan,
+          tipo: plan === 'alacarte' ? 'credits' : 'subscription',
           promo: promo || undefined,
           quantita,
           // priceId dal frontend (VITE_STRIPE_*): solo verifica/debug, la Edge Function
@@ -247,9 +250,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           '— risposta Edge Function:',
           JSON.stringify(data),
         );
+        const msgServer = (data as { error?: string } | null)?.error;
         return {
           ok: false,
-          errore: `Impossibile avviare il pagamento (${error.message}). Controlla la connessione e riprova.`,
+          errore: msgServer ?? `Impossibile avviare il pagamento (${error.message}). Controlla la connessione e riprova.`,
         };
       }
       const payload = data as { url?: string; error?: string } | null;
@@ -380,6 +384,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.location.href = data.url; // Forza il browser ad andare direttamente su Google
     }
   }, []);
+
+  /** Consuma 1 credito a consumo (RPC atomica server-side) e aggiorna il saldo. */
+  const consumaCredito = useCallback(async () => {
+    if (!supabase || !supabaseUserId) return { ok: false, crediti: crediti };
+    const { data, error } = await supabase.rpc('consuma_credito_utente', {
+      p_user_id: supabaseUserId,
+    });
+    if (error) {
+      console.error('consumaCredito:', error.message);
+      return { ok: false, crediti: crediti };
+    }
+    const riga =
+      Array.isArray(data) && data.length > 0
+        ? (data[0] as { ok?: boolean; crediti?: number })
+        : null;
+    if (riga?.ok) setCrediti(Number(riga.crediti));
+    return { ok: Boolean(riga?.ok), crediti: Number(riga?.crediti ?? crediti) };
+  }, [supabaseUserId, crediti]);
 
   // All'avvio, se esiste una sessione Supabase, carica le preferenze salvate nel DB.
   useEffect(() => {
@@ -619,6 +641,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     resettaTutto,
     salvaProfilo,
     loginConGoogle,
+    consumaCredito,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Sparkles, Download } from 'lucide-react';
+import { Sparkles, Download, FileDown } from 'lucide-react';
+import { useApp } from '@/contexts/AppContext';
 
 interface SezioneCv {
   titolo: string;
@@ -37,6 +38,7 @@ function parseCv(testo: string): SezioneCv[] {
 }
 
 export function CvTool() {
+  const { abbonato } = useApp();
   const [testo, setTesto] = useState('');
   const [anteprima, setAnteprima] = useState<SezioneCv[] | null>(null);
 
@@ -46,7 +48,13 @@ export function CvTool() {
   };
 
   const handlePdf = () => {
-    alert('Download PDF simulato. In una versione completa, qui verrebbe generato un PDF del tuo CV.');
+    if (abbonato) {
+      alert('Download PDF simulato senza logo: versione pulita per gli abbonati PRO.');
+    } else {
+      alert(
+        'Download PDF simulato con watermark "ScuoleRadar.it" sul documento. Passa al piano PRO per scaricare senza logo.',
+      );
+    }
   };
 
   return (
@@ -82,6 +90,13 @@ export function CvTool() {
             </button>
           )}
         </div>
+        {!abbonato && (
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-primary-400">
+            <FileDown className="h-3.5 w-3.5" />
+            Il PDF gratuito include il watermark &quot;ScuoleRadar.it&quot;. Rimuovilo con il piano
+            PRO.
+          </p>
+        )}
       </div>
 
       <div className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">

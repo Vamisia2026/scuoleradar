@@ -10,7 +10,7 @@ const navLinks = [
 ];
 
 export function Header() {
-  const { user, abbonato, logout, openAuthModal } = useApp();
+  const { user, abbonato, crediti, logout, openAuthModal } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuUtenteOpen, setMenuUtenteOpen] = useState(false);
 
@@ -66,6 +66,10 @@ export function Header() {
                       Base
                     </span>
                   )}
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary-50 px-2 py-0.5 text-[11px] font-semibold text-secondary-700">
+                    <Sparkles className="h-3 w-3" />
+                    Crediti: {crediti}
+                  </span>
                 </Link>
                 <button
                   onClick={() => setMenuUtenteOpen((o) => !o)}

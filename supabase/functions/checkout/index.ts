@@ -100,88 +100,105 @@ async function validaPromo(
   return righe[0] ?? { valido: false };
 }
 
+/** Header CORS per richieste dal browser (l'app gira su un origin diverso da *.supabase.co). */
+const CORS_HEADERS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+/** Risposta JSON uniforme: evita che la funzione vada in crash senza rispondere. */
+function risposta(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+  });
+}
+
 serve(async (req: Request) => {
+  // Preflight CORS (OPTIONS) — richiesto dalle chiamate fetch del browser
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { status: 204, headers: CORS_HEADERS });
+  }
   if (req.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405 });
+    return risposta({ error: 'Metodo non consentito' }, 405);
   }
 
-  // Utente dal JWT (già verificato dal runtime grazie a --verify-jwt)
-  const auth = req.headers.get('authorization') ?? '';
-  const token = auth.replace(/^Bearer\s+/i, '').trim();
-  const jwt = decodeJwt(token);
-  const userId = jwt?.sub;
-  if (!userId) {
-    return new Response(JSON.stringify({ error: 'Non autorizzato' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  let body: { plan?: string; promo?: string; priceId?: string; quantita?: number };
   try {
-    body = await req.json();
-  } catch {
-    return new Response(JSON.stringify({ error: 'Body JSON non valido' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+    // Utente dal JWT (già verificato dal runtime grazie a --verify-jwt)
+    const auth = req.headers.get('authorization') ?? '';
+    const token = auth.replace(/^Bearer\s+/i, '').trim();
+    const jwt = decodeJwt(token);
+    const userId = jwt?.sub;
+    if (!userId) {
+      return risposta({ error: 'Non autorizzato' }, 401);
+    }
 
-  const plan = (body.plan ?? '') as Piano;
-  const priceId = STRIPE_PRICE_IDS[plan];
-  if (!priceId) {
-    return new Response(JSON.stringify({ error: `Piano non valido: ${plan}` }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-  // Il priceId dal frontend (VITE_STRIPE_*) è solo di verifica/debug:
-  // la fonte autorevole resta il secret server-side (anti tampering).
-  if (body.priceId && body.priceId !== priceId) {
-    console.warn(`PriceId frontend non corrisponde al piano ${plan}: ${body.priceId} (uso ${priceId})`);
-  }
+    let body: {
+      plan?: string;
+      promo?: string;
+      priceId?: string;
+      quantita?: number;
+      tipo?: 'subscription' | 'credits';
+    };
+    try {
+      body = await req.json();
+    } catch {
+      return risposta({ error: 'Body JSON non valido' }, 400);
+    }
 
-  // mode: subscription per i PRO, payment (one-time) per i crediti a consumo
-  const mode = plan === 'alacarte' ? 'payment' : 'subscription';
-  const quantita = Math.max(1, Math.min(100, Math.floor(body.quantita ?? 1)));
+    const plan = (body.plan ?? '') as Piano;
+    const priceId = STRIPE_PRICE_IDS[plan];
+    if (!priceId) {
+      return risposta({ error: `Piano non valido: ${plan}` }, 400);
+    }
+    // Il priceId dal frontend (VITE_STRIPE_*) è solo di verifica/debug:
+    // la fonte autorevole resta il secret server-side (anti tampering).
+    if (body.priceId && body.priceId !== priceId) {
+      console.warn(`PriceId frontend non corrisponde al piano ${plan}: ${body.priceId} (uso ${priceId})`);
+    }
 
-  const campi: Record<string, string> = {
-    mode,
-    success_url: SUCCESS_URL,
-    cancel_url: CANCEL_URL,
-    'line_items[0][price]': priceId,
-    'line_items[0][quantity]': String(quantita),
-    // Stripe Managed Payments: i metodi di pagamento gestiti da Stripe sono abilitati
-    // (parametro `managed_payments` è un oggetto { enabled: boolean } nelle API aggiornate)
-    'managed_payments[enabled]': 'true',
-    'client_reference_id': userId,
-    'metadata[user_id]': userId,
-  };
-  if (jwt?.email) campi.customer_email = jwt.email;
+    // mode: "subscription" per il piano PRO, "payment" (credits) per i crediti a consumo.
+    // Il tipo può arrivare esplicito dal frontend oppure essere derivato dal piano.
+    const mode = body.tipo === 'credits' || plan === 'alacarte' ? 'payment' : 'subscription';
+    const quantita = Math.max(1, Math.min(100, Math.floor(body.quantita ?? 1)));
 
-  // Codice promo / referral: valida e applica il coupon (-10€ su PRO annuale e crediti a consumo)
-  if (body.promo) {
-    const promo = await validaPromo(body.promo);
-    if (promo?.valido && promo.referrer_id) {
-      campi['metadata[promo]'] = promo.codice ?? body.promo;
-      campi['metadata[promo_referrer]'] = promo.referrer_id;
-      if (COUPON_REFERRAL && (plan === 'pro_annuale' || plan === 'alacarte')) {
-        campi['discounts[0][coupon]'] = COUPON_REFERRAL;
+    const campi: Record<string, string> = {
+      mode,
+      success_url: SUCCESS_URL,
+      cancel_url: CANCEL_URL,
+      'line_items[0][price]': priceId,
+      'line_items[0][quantity]': String(quantita),
+      // Stripe Managed Payments: i metodi di pagamento gestiti da Stripe sono abilitati
+      // (parametro `managed_payments` è un oggetto { enabled: boolean } nelle API aggiornate)
+      'managed_payments[enabled]': 'true',
+      'client_reference_id': userId,
+      'metadata[user_id]': userId,
+    };
+    if (jwt?.email) campi.customer_email = jwt.email;
+
+    // Codice promo / referral: valida e applica il coupon (-10€ su PRO annuale e crediti a consumo)
+    if (body.promo) {
+      const promo = await validaPromo(body.promo);
+      if (promo?.valido && promo.referrer_id) {
+        campi['metadata[promo]'] = promo.codice ?? body.promo;
+        campi['metadata[promo_referrer]'] = promo.referrer_id;
+        if (COUPON_REFERRAL && (plan === 'pro_annuale' || plan === 'alacarte')) {
+          campi['discounts[0][coupon]'] = COUPON_REFERRAL;
+        }
       }
     }
-  }
 
-  const session = await postStripe<{ url?: string; id?: string }>('/checkout/sessions', campi);
-  if (!session?.url) {
-    return new Response(JSON.stringify({ error: 'Impossibile creare la sessione di checkout' }), {
-      status: 502,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+    const session = await postStripe<{ url?: string; id?: string }>('/checkout/sessions', campi);
+    if (!session?.url) {
+      return risposta({ error: 'Impossibile creare la sessione di checkout' }, 502);
+    }
 
-  return new Response(JSON.stringify({ url: session.url }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+    return risposta({ url: session.url });
+  } catch (err) {
+    // Non lasciare MAI la richiesta senza risposta: log e JSON di errore
+    console.error('checkout — errore non gestito:', err);
+    return risposta({ error: 'Errore interno nella creazione del checkout' }, 500);
+  }
 });
 
