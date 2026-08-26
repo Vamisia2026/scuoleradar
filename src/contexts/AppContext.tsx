@@ -231,6 +231,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             'Pagamenti non disponibili: mancano VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY nel file .env. Riavvia il dev server dopo averle aggiunte.',
         };
       }
+      // Il checkout richiede un utente autenticato su Supabase Auth (JWT nella richiesta).
+      const { data: sessione } = await supabase.auth.getSession();
+      if (!sessione.session) {
+        openAuthModal('login');
+        return { ok: false, errore: 'Accedi al tuo account per procedere al pagamento.' };
+      }
       const { data, error } = await supabase.functions.invoke('checkout', {
         body: {
           plan,
@@ -243,13 +249,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         },
       });
       if (error) {
-        // Log completo del payload restituito dalla Edge Function in caso di errore
-        console.error(
-          'Checkout fallito:',
-          error.message,
-          '— risposta Edge Function:',
-          JSON.stringify(data),
-        );
+        // Log COMPLETO dell'errore SDK (oggetto intero) + payload ricevuto
+        console.error('Checkout SDK error:', error);
+        console.error('Checkout fallito:', error.message, '— risposta Edge Function:', JSON.stringify(data));
         const msgServer = (data as { error?: string } | null)?.error;
         return {
           ok: false,
@@ -270,7 +272,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.location.href = payload.url;
       return { ok: true };
     },
-    [],
+    [openAuthModal],
   );
 
   // Stato simulato per la DevToolbar (solo sviluppo). Aggiorna all'istante context + UI.

@@ -24,43 +24,57 @@ function decodeJwt(token: string): { sub?: string } | null {
   }
 }
 
-serve(async (req) => {
-  const auth = req.headers.get('Authorization') ?? '';
-  const token = auth.replace('Bearer ', '').trim();
-  if (!token) {
-    return new Response(JSON.stringify({ error: 'Non autorizzato' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+/** Header CORS per richieste dal browser. */
+const CORS_HEADERS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
-  const jwt = decodeJwt(token);
-  const userId = jwt?.sub;
-  if (!userId) {
-    return new Response(JSON.stringify({ error: 'Token non valido' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  const admin = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  );
-
-  const { error } = await admin.auth.admin.deleteUser(userId);
-  if (error) {
-    console.error('elimina-account:', error.message);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  console.log(`[elimina-account] utente ${userId.slice(0, 8)}… eliminato`);
-  return new Response(JSON.stringify({ ok: true }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
+function risposta(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
   });
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+  if (req.method !== 'POST') {
+    return risposta({ error: 'Metodo non consentito' }, 405);
+  }
+
+  try {
+    const auth = req.headers.get('Authorization') ?? '';
+    const token = auth.replace('Bearer ', '').trim();
+    if (!token) {
+      return risposta({ error: 'Non autorizzato' }, 401);
+    }
+
+    const jwt = decodeJwt(token);
+    const userId = jwt?.sub;
+    if (!userId) {
+      return risposta({ error: 'Token non valido' }, 401);
+    }
+
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    );
+
+    const { error } = await admin.auth.admin.deleteUser(userId);
+    if (error) {
+      console.error('elimina-account:', error.message);
+      return risposta({ error: error.message }, 500);
+    }
+
+    console.log(`[elimina-account] utente ${userId.slice(0, 8)}… eliminato`);
+    return risposta({ ok: true });
+  } catch (err) {
+    console.error('elimina-account — errore non gestito:', err);
+    return risposta({ error: 'Errore interno nella cancellazione dell account' }, 500);
+  }
 });

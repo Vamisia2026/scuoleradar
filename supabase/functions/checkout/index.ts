@@ -116,9 +116,10 @@ function risposta(data: unknown, status = 200): Response {
 }
 
 serve(async (req: Request) => {
-  // Preflight CORS (OPTIONS) — richiesto dalle chiamate fetch del browser
+  // Preflight CORS (OPTIONS) — richiesto dalle chiamate fetch del browser.
+  // NB: 204 No Content non deve avere body (causerebbe un errore runtime → 500).
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { status: 204, headers: CORS_HEADERS });
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
   if (req.method !== 'POST') {
     return risposta({ error: 'Metodo non consentito' }, 405);

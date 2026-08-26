@@ -199,12 +199,12 @@ export function CreditiModal({ open, onClose }: { open: boolean; onClose: () => 
         <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-4 text-sm text-secondary-800">
           <p className="flex items-center gap-1.5 font-semibold">
             <AlertTriangle className="h-4 w-4" />
-            La scelta è tua (ma ascolta)
+            La scelta è tua!
           </p>
           <p className="mt-1 text-xs leading-relaxed">
-            Con 10 crediti spendi 50€ ed è una tantum. Il piano PRO costa 49€/anno e include tutto
-            illimitato + PureFocus (valore 29$). Se fai questa scelta sei libero di farlo, ma non
-            conviene ed è a fondo perduto (nessun rimborso).
+            Con 10 crediti spendi 50€ ed è a servizio. Il piano PRO costa 49€/anno e include tutto
+            illimitato + PureFocus (valore 29$). Sei libero di procedere, ma non conviene e non è
+            rimborsabile.
           </p>
         </div>
 
