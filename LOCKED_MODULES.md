@@ -1,4 +1,33 @@
-# 🔒 LOCKED_MODULES.md — Registro dei moduli bloccati
+*"Ciao Cline! Per facilitare il nostro lavoro di sviluppo, dobbiamo implementare una DEV Toolbar floating (visibile solo in ambiente di sviluppo import.meta.env.DEV), esattamente come quella usata nel progetto PureFocus.
+
+REQUISITI DEV TOOLBAR (src/components/DevToolbar.tsx):
+
+Pulsante Flottante: Un badge/pulsante discreto in basso a destra con scritto ⚡ DEV che apre un pannello/modal laterale.
+
+Toggle Stato Utente (Frontend State Switcher):
+
+Guest: Simula utente anonimo non registrato.
+
+Base / Prova: Simula utente registrato con piano Base (3 sblocchi, watermark su PDF).
+
+VIP / PRO: Simula utente con abbonamento VIP attivo (sblocchi illimitati, PDF clean, PureFocus incluso).
+(Il cambio stato deve aggiornare all'istante l'AppContext e l'interfaccia senza ricaricare la pagina).
+
+Reset Dati / LocalStorage: Pulsante per resettare le preferenze e l'onboarding con 1 click.
+
+Display Porta Locale: Un piccolo indicatore che mostra l'URL esatto su cui è in esecuzione l'app (es. http://localhost:5173/ o http://localhost:5174/).
+
+SISTEMAZIONE COPYWRITING E PUREFOCUS:
+
+Rimuovi ogni dicitura 'Gratis' / 'Gratuito'. Usa 'Accreditamento Base', 'Prova Inclusa' o 'Incluso nell'Offerta'.
+
+Nella pagina Prezzi e nei banner del piano VIP, aggiungi il bullet point ben visibile: 'Incluso nell'offerta VIP: Accesso completo a PureFocus'.
+
+CREAZIONE FILE LOCKED_MODULES.md:
+
+Crea nella radice il file LOCKED_MODULES.md registrando come FINITI e BLOCCATI: AuthModal.tsx, ChiSiamoPage.tsx, PrezziPage.tsx. D'ora in poi questi file non vanno toccati senza richiesta esplicita.
+
+Procedi con la creazione del componente DevToolbar.tsx, integralo in App.tsx e aggiorna LOCKED_MODULES.md."*# 🔒 LOCKED_MODULES.md — Registro dei moduli bloccati
 
 > **REGOLA TASSATIVA**
 > Una volta che un blocco o un file viene registrato in questo file, NON deve più essere
@@ -17,40 +46,13 @@
 | # | Modulo | File | Descrizione | Stato |
 |---|--------|------|-------------|-------|
 | 1 | AuthModal | `src/components/AuthModal.tsx` | Gestione Google Login & Email | 🔒 Bloccato |
-| 2 | Pagina Chi Siamo | `src/pages/ChiSiamoPage.tsx` | Manifesto ScuoleRadar | 🔒 Bloccato |
-| 3 | Pagina Prezzi / Offerta | `src/pages/PrezziPage.tsx` | Piani PRO (Annuo/Mensile), A la Carte e Offerta Base | 🔒 Bloccato |
-
-> 📝 Il 2026-08-22 la PrezziPage è stata **esplicitamente sbloccata e riprogettata** (nuova
-> tabella prezzi PRO Annuale / PRO Mensile / A la Carte) e **ri-bloccata** a lavori ultimati.
->
-> 📝 Sempre il 2026-08-22 la ChiSiamoPage è stata **esplicitamente sbloccata** per sostituire il
-> contenuto con il **Manifesto ScuoleRadar** e **ri-bloccata** a lavori ultimati.
->
-> 📝 Il 2026-08-22 l'AuthModal è stata **esplicitamente sbloccata** per integrare il **Google OAuth
-> reale** via Supabase Auth (pulsante "Accedi con Google") e **ri-bloccata** a lavori ultimati.
-
-## Componenti DEV (esclusi dal blocco)
-
-> Strumenti visibili **solo in sviluppo** (`import.meta.env.DEV`), non fanno parte del prodotto
-> finale e NON sono soggetti alla regola di blocco. Possono essere evoluti liberamente.
-
-| Componente | File | Scopo |
-|-----------|------|-------|
-| DevToolbar | `src/components/DevToolbar.tsx` | Pulsante ⚡ DEV, Frontend State Switcher (Guest / Base / PRO), reset dati, indicatore porta locale |
+| 2 | Pagina Chi Siamo | `src/pages/ChiSiamoPage.tsx` | Pagina istituzionale / valori | 🔒 Bloccato |
+| 3 | Pagina Prezzi / Offerta | `src/pages/PrezziPage.tsx` | Piano Offerta, VIP e PureFocus | 🔒 Bloccato |
 
 ## Prossimi blocchi (in lavorazione)
 
-- **BLOCCO 1 — INTERPELLI & PNRR** (in lavorazione)
-  - ✅ Modulo scraping on-demand: `src/scraper/index.ts` (test: `npm run scrape -- --fixture --dry-run`)
-  - ✅ Fonti reali attive (Fase 1): `scuolainterpelli.it` per MI e TO — pipeline a 2 salti (regione → post → interpelli) con verifica raggiungibilità dei link
-  - ✅ Primi 5 interpelli reali salvati in `notices` su Supabase (2026-08-22)
-  - ✅ **FASE 2** — tabella `profiles` su Supabase (`province_attive`, `classi_concorso`); lo scraper legge le province dal DB (fallback di test se nessun profilo)
-  - ✅ **PASSO 3** — onboarding/profilo frontend persistono su `profiles` via client Supabase (auth reale cablata in AppContext)
-  - ✅ **Filtri Avanzati Scuole** — `favorite_schools` / `ignored_schools` (whitelist/blacklist): badge "Scuola Preferita" e nascita avvisi esclusi
-  - ✅ **Dashboard dati reali** — AppContext legge `notices` da Supabase con mapping → `Interpello`, filtri profilo+scuole applicati, fallback ai dati mock se tabella vuota/non raggiungibile
-  - ⏳ Integrazione dati nella dashboard · PNRR (da definire)
+- **BLOCCO 1 — INTERPELLI & PNRR** (da sviluppare)
 
 ---
 
 _Ultimo aggiornamento: 2026-08-22_
-

@@ -38,7 +38,11 @@ export function Header() {
       {/* Livello superiore (Top Bar): Logo | link istituzionali (centro) | Accedi */}
       <div className="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 sm:px-6">
         <a href="/" className="justify-self-start focus:outline-none">
-          <img src="/logo.png" alt="ScuoleRadar.it" className="h-10 w-auto object-contain" />
+          <img
+            src="/ScuoleRadar Logo Transparent Full Final.png"
+            alt="ScuoleRadar.it"
+            className="max-h-10 w-auto object-contain"
+          />
         </a>
 
         {/* Link istituzionali/informativi — sempre centrati (desktop) */}
