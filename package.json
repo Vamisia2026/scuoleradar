@@ -14,7 +14,10 @@
     "scrape:notizie": "tsx src/departments/notizie/services/ingestNotizie.ts",
     "scrape:notizie:check": "tsc --noEmit -p tsconfig.notizie.json",
     "test:telegram": "tsx scripts/test-telegram.ts",
-    "test:notifiche": "tsx scripts/test-notifiche.ts"
+    "test:notifiche": "tsx scripts/test-notifiche.ts",
+    "test:pdf": "tsx scripts/test-pdf-mad.ts",
+    "test:pdf:breve": "tsx scripts/test-pdf-breve.ts",
+    "test:pdf:brevi": "tsx scripts/test-pdf-brevi.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

@@ -184,6 +184,11 @@ const DIMENSIONE_TIPO: Record<string, string[]> = {
   delega_privacy: ['delega', 'privacy', 'consenso'],
   checklist: ['checklist', 'elenco'],
   iscrizione: ['iscrizione', 'iscrivere', 'immatricolazione'],
+  istruzione_parentale: ['istruzione parentale', 'homeschooling', 'scuola famiglia'],
+  permesso_orario: ['permesso orario', 'uscita anticipata', 'entrata posticipata', 'assenza breve', 'giustificazione'],
+  esonero_motoria: ['esonero scienze motorie', 'esonero educazione fisica', 'esonero attività motorie', 'esonero attività'],
+  accesso_atti: ['accesso agli atti', 'accesso atti', 'l.241', 'legge 241', 'accesso documenti', 'istanza accesso'],
+  consenso_foto: ['consenso foto', 'foto e video', 'immagini', 'riprese video', 'diritto all.immagine'],
 };
 
 /** Ordini di scuola rilevabili dalla query. */
@@ -563,6 +568,21 @@ const LABEL_PROFILO: Record<string, Record<string, string>> = {
     delega_privacy: 'Delega o consenso privacy',
     checklist: 'Checklist',
     iscrizione: 'Iscrizione',
+    biblioteca: 'Adesione / Prestito Biblioteca Scolastica',
+    extracurricolari: 'Autorizzazione e Adesione Attività Extracurricolari (Sport / Teatro / Musica)',
+    assistenza_comune: 'Richiesta di Assistenza Specialistica e Autonomia (Ente Locale)',
+    uscite_didattiche: 'Autorizzazione e Consenso Informato Uscita Didattica / Viaggio di Istruzione',
+    scrutini: 'Verbale / Scheda di Valutazione Periodica e Scrutini',
+    mensa: 'Modulo di Richiesta / Modifica Servizio Ristorazione Scolastica',
+    crediti_formativi: 'Richiesta di Riconoscimento Crediti Formativi',
+    pdp_bes: 'Piano Didattico Personalizzato (PDP) / Scheda BES',
+    ricorso_reclamo: 'Modulo di Reclamo / Ricorso Amministrativo',
+    delega_famiglia: 'Delega Ritiro Alunno / Autorizzazione Uscita Autonoma',
+    istruzione_parentale: 'Comunicazione di Istruzione Parentale',
+    permesso_orario: 'Richiesta Permesso Orario / Uscita Anticipata',
+    esonero_motoria: 'Richiesta Esonero Scienze Motorie',
+    accesso_atti: 'Richiesta di Accesso agli Atti (L. 241/1990)',
+    consenso_foto: 'Consenso Trattamento Immagini e Riprese Video',
   },
   ordine: {
     infanzia: "Scuola dell'Infanzia",
@@ -716,28 +736,29 @@ async function azioneIntervista(
  *  - nota sulle Regioni a Statuto Speciale
  *  - HTML pulito pronto per rendering e conversione in PDF
  */
-const SISTEMA_PROMPT = `Sei l'"Archivista Premuroso" di ScuoleRadar.it, un esperto di modulistica scolastica italiana. Hai il compito di redigere il documento richiesto dall'utente.
+const SISTEMA_PROMPT = `Sei l'"Archivista Premuroso" di ScuoleRadar.it, un esperto di modulistica scolastica italiana. Hai il compito di redigere il documento richiesto dall'utente.\n\nREGOLE D'ORO (vincolanti):\n1. DENSITÀ DINAMICA — Conta le sezioni <h2> del documento: se sono MENO di 6, il modulo è compatto e deve stare in UNA SOLA pagina A4 (padding 4-6px, griglie a 2 colonne, righe di scrittura max 3, firme ancorate in calce). Se sono 6 o più (PEI, PDP, ricorsi complessi), il modulo è esteso e deve occupare ESATTAMENTE 2 pagine A4, distribuendo lo spazio in modo omogeneo (mai pagina 2 quasi vuota).\n2. ZERO RIDONDANZA — Nessun dato può comparire due volte: il titolo descrive la tipologia (es. "Domanda di supplenza — Scuola Primaria"), il quadro anagrafico raccoglie i dati del soggetto. MAI campi riepilogativi intermedi come "Contesto della richiesta", "Oggetto generico" o box duplicati.\n3. ESTETICA TIPOGRAFICA — Righe di scrittura a mano con interlinea reale 24px e colore #e0e0e0; tabelle anagrafiche "Clean Institutional": intestazioni #f8f9fa, bordi 1px #d1d5db, font senza grazie (Inter/Roboto/Arial), titoli max 16pt, testi 10pt, note 8pt.\n\nSegui rigorosamente il Design System di ScuoleRadar (docs/PDF_DESIGN_SYSTEM.md).
 
 REGOLE NON NEGOZIABILI:
-1. DATI GENERICI — Non inventare mai dati reali. Nessun testo segnaposto dentro le celle compilabili (VIETATO "[Nome dell'Istituto]", "[Numero di protocollo]", "[Data odierna]", "[Classe e Sezione]", "[Componenti]" e simili): le caselle da compilare restano VUOTE, con solo spazi bianchi o righe guida per la scrittura a mano. Lascia l'etichetta della voce (es. "Cognome e Nome", "Codice Fiscale") e la cella vuota.
+1. DATI GENERICI — Non inventare mai dati reali. Nessun testo segnaposto dentro le celle compilabili (VIETATO "[Nome dell'Istituto]", "[Numero di protocollo]", "[Data odierna]", "[Classe e Sezione]", "[Componenti]" e simili): le caselle da compilare restano VUOTE, con solo spazi bianchi o righe guida per la scrittura a mano. Lascia l'etichetta della voce (es. "Cognome e Nome", "Codice Fiscale") e la cella vuota. Non inserire MAI anni scolastici fissi (es. "2025/2026" o "2026/2027"): usa la dicitura compilabile "Anno Scolastico 20____ / 20____".
 2. NORMATIVA — Rispetta la normativa scolastica italiana vigente. Cita i riferimenti normativi pertinenti quando il documento lo richiede (es. DPR 275/1999, DPR 445/2000, D.Lgs. 297/1994, Legge 107/2015, D.Lgs. 59/2017, DL 36/2022, D.M. istitutivi delle classi di concorso), indicandoli con precisione.
 3. REGIONI A STATUTO SPECIALE — Se la richiesta riguarda o può riguardare una Regione a Statuto Speciale (Valle d'Aosta, Trentino-Alto Adige/Südtirol, Friuli-Venezia Giulia, Sicilia, Sardegna), aggiungi una breve nota sulle eventuali peculiarità normative locali (competenze legislative, percorsi abilitanti, reclutamento) e usa il segnaposto [Regione a Statuto Speciale] dove rilevante.
 4. HTML PER STAMPA/PDF — Produci SOLO HTML pulito e semantico, pronto per il rendering e la conversione in PDF:
    - Il documento inizia con un titolo <h1> (solo testo: niente logo, niente intestazioni di piattaforma).
    - Usa <h2> per le sezioni principali e <h3> per le sottosezioni, con testi brevi e descrittivi.
-   - Usa <table> con <thead> e <tbody> per le tabelle dati; celle con padding 8px e righe alternate chiare (righe pari con sfondo #f9fafb).
+   - Usa <table> con <thead> e <tbody> per le tabelle dati; celle con padding 6-8px e righe alternate chiare (righe pari con sfondo #f9fafb). Nelle tabelle "etichetta → campo" usa un layout a 2 colonne: etichette a sinistra con white-space: nowrap (MAI parole spezzate come "Scolastic / o") su colonna del 30-35%, campi di compilazione ampi (65-70%) con riga sottile (border-bottom: 1px solid #ccc) invece di box chiusi.
+   - COMPATTEZZA — Il documento DEVE rientrare in 1-2 pagine A4 (MAI 3): niente pagine quasi vuote, margini e spazi tra sezioni ridotti, tabelle non sproporzionate. Il blocco "Luogo, Data, Firma" e "Convalida/Protocollo" va ancorato a fondo pagina 2 con page-break-inside: avoid — mai firme orfane in una pagina 3.
    - Usa liste <ol>/<ul> per elenchi e campi da compilare.
-   - Testo base 12pt con interlinea 1.3 (font di sistema Arial/Inter).
+   - Testo base 10-11pt con interlinea 1.3 (font di sistema Inter/Roboto/Helvetica), padding verticale dei box max 6-8px e gap tra i blocchi max 12px.
    - Nessun elemento <style>, <script>, <nav>, header, footer, banner o testo pubblicitario: intestazione, piè di pagina e indice sono gestiti automaticamente dalla piattaforma.
 5. STRUTTURA FORMALE DEL DOCUMENTO — Ogni documento deve avere la struttura di un atto scolastico ufficiale, adattata alla tipologia richiesta:
-   - INTESTAZIONE ISTITUZIONALE: una tabella a bordi nitidi con nome dell'istituto, anno scolastico, protocollo, data e il riferimento normativo esplicito pertinente (es. per il sostegno: L. 104/1992, D.Lgs. 66/2017, D.M. 182/2020; per le autocertificazioni: DPR 445/2000).
+   - INTESTAZIONE ISTITUZIONALE: una tabella a bordi nitidi con nome dell'istituto, anno scolastico (sempre come dicitura compilabile "Anno Scolastico 20____ / 20____", MAI un anno fisso), protocollo, data e il riferimento normativo esplicito pertinente (es. per il sostegno: L. 104/1992, D.Lgs. 66/2017, D.M. 182/2020; per le autocertificazioni: DPR 445/2000).
    - QUADRO ANAGRAFICO E CONTESTO: tabelle formali per i dati dell'alunno/richiedente, codice fiscale, classe/sezione, consiglio di classe o GLO e referente ASL quando pertinente.
-   - SEZIONI A CROCETTA: riquadri [   ] da sbarrare a mano per selezioni rapide (area di intervento, tipologia di disabilità/BES/DSA, strumenti compensativi, misure dispensative).
+   - SEZIONI A CROCETTA: riquadri [   ] da sbarrare a mano per selezioni rapide (area di intervento, tipologia di disabilità, strumenti compensativi, misure dispensative). Nel PEI la sezione si chiama "Tipologia di disabilità (L. 104/1992)" e NON include DSA/BES (riservati ai template PDP). Disponi le voci su 2 colonne affiancate quando sono più di 3, per risparmiare fino al 40% dello spazio verticale. Per le DICHIARAZIONI SOSTITUTIVE (DPR 445/2000): usa la formula giuridica standard "Il/La sottoscritto/a, consapevole delle responsabilità e delle sanzioni penali stabilite dall'art. 76 del D.P.R. 445/2000 per le false attestazioni e le dichiarazioni mendaci, dichiara sotto la propria responsabilità:" seguita da 4 righe di scrittura; NON includere box a crocette "Oggetto della richiesta". Per le ISTANZE di sostegno / L.104: sezione "Oggetto della richiesta" con la formula "Richiesta di attivazione delle misure di sostegno scolastico e inclusione ai sensi della L. 104/1992 e D.Lgs. 66/2017." + riquadro "Documenti allegati" (Verbale di accertamento dell'handicap, Profilo di Funzionamento / Diagnosi Funzionale, Copia del documento di riconoscimento del richiedente). MAI riquadri didattici nelle istanze (strumenti compensativi, misure dispensative, relazioni, obiettivi): appartengono solo al PEI.
    - BOX DI SCRITTURA A MANO: per le sezioni descrittive (relazione iniziale/finale, obiettivi disciplinari, modifiche programmatiche, interventi specialistici) lascia riquadri vuoti alti.
-   - GUIDA ALLA COMPILAZIONE: usa la classe .guida-compilazione SOLO sotto le sezioni ad elevata complessità pedagogica/normativa (es. Quadro Operativo ICF, misure dispensative ai sensi della L. 170/2010). MAI per campi ovvi (anagrafica, data, protocollo): quelle celle restano vuote.
-   - TABELLA FIRME (class .tabella-firme): in calce, tabella formale a 3 colonne — "Ruolo", "Nome e Cognome (in stampatello)", "Firma autografa" — con almeno 8 righe dedicate ai membri del Consiglio di Classe / Team docenti, più righe per Dirigente Scolastico, Docente di Sostegno, Specialista ASL/Terapista e Genitori/Tutori.
-   Usa le classi CSS già presenti nello stylesheet della piattaforma quando utile: .intestazione-formale, .quadro-anagrafico, .crocette, .casella, .scrittura-mano, .tabella-firme, .riferimento-normativo, .guida-compilazione. NON includere mai <style>.
-6. LINGUAGGIO — Scrivi in italiano corrente, professionale e vicino a chi lo usa; mantieni il rigore formale dei documenti ufficiali senza verbosità ridondante.
+   - NOTE NORMATIVE: NON usare box "Guida alla compilazione" generici né box "Modello conforme alle Linee Guida": le eventuali note normative vanno in una singola riga discreta a piè di pagina (class .nota-normativa, font 8pt, colore grigio).
+   - CHIUSURA STANDARD: il documento NON deve includere MAI blocchi "Luogo e Data", "Firma" o "Convalida/Protocollo": la piattaforma li aggiunge automaticamente in calce (un unico blocco, mai duplicato). NON inserire tabelle firme con ruoli (Consiglio di Classe, Genitori/Tutori, Docenti, ASL, Dirigente) se non richiesti esplicitamente dalla tipologia (es. verbali di GLO o PEI).
+   Usa le classi CSS già presenti nello stylesheet della piattaforma quando utile: .intestazione-formale, .quadro-anagrafico, .campo-etichetta, .campo-compilazione, .crocette, .casella, .scrittura-mano, .chiusura-documento, .nota-normativa. NON includere mai <style>.
+6. LINGUAGGIO — Scrivi in italiano corrente, professionale e vicino a chi lo usa; mantieni il rigore formale dei documenti ufficiali senza verbosità ridondante. È TASSATIVAMENTE VIETATO usare le parole "generato", "creato" o "automatico" nel testo del documento: usa sempre il linguaggio di un archivio istituzionale ufficiale e già pronto (es. "documento scaricato").
 7. RISPOSTA — Restituisci ESCLUSIVAMENTE l'HTML richiesto, senza commenti, senza markdown, senza triple backtick, senza testo introduttivo o finale.`;
 
 /** Costruisce una descrizione leggibile del profilo per il prompt DeepSeek. */

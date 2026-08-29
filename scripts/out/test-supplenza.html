@@ -1,21 +1,10 @@
-/**
- * ScuoleRadar.it — PDF Generator (layout del documento stampabile).
- *
- * Riferimento permanente: docs/PDF_DESIGN_SYSTEM.md
- *
- * Wrappa l'HTML generato da DeepSeek in un documento completo con:
- *  - logo in alto a sinistra (42px) + linea divisoria 1px (#e5e7eb)
- *  - solo logo e titolo: nessun testo pubblicitario o marchi aggiuntivi
- *  - piè di pagina: "Documento scaricato gratuitamente da ScuoleRadar.it — Strumenti e risorse per la scuola" (sinistra)
- *    e numerazione "Pagina X di Y" (destra), via @page margin boxes
- *  - font Arial/Inter 11pt/12pt, interlinea 1.3, tabelle padding 8px e
- *    righe alternate chiarissime
- *  - indice automatico (TOC) solo per documenti stimati > 3 pagine
- */
-
-export const LOGO_DOCUMENTO = '/ScuoleRadar Logo Transparent Full Final.png';
-
-const STILI_DOCUMENTO = `
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Domanda di supplenza (breve) — Documento ScuoleRadar.it</title>
+<style>
   @page {
     size: A4;
     margin: 12mm 12mm 16mm 12mm;
@@ -237,40 +226,19 @@ const STILI_DOCUMENTO = `
     font-style: italic;
     margin: 0 0 6px;
   }
-  /* Formula giuridica delle dichiarazioni sostitutive (DPR 445/2000). */
-  .formula-dichiarazione {
-    font-size: 10pt;
-    line-height: 1.5;
-    color: #1f2937;
-    margin: 0 0 8px;
-  }
-  /* Firme con ruoli (verbali, scrutini): righe compatte distinte dal blocco richiedente. */
-  .firme-ruoli {
-    border: 1px solid #333;
-    padding: 8px 10px;
-    margin: 0 0 8px;
-    page-break-inside: avoid;
-  }
-  .firme-ruoli p { margin: 0 0 8px; font-size: 10.5pt; }
-  .firme-ruoli .riga-firma { height: 20px; }
 
   /* ------- Regola d'oro 1 — Densità dinamica (A4 single vs double page) ------- */
   /* Modulo compatto (<6 sezioni): 1 pagina, padding minimi, righe di scrittura max 3. */
-  body.layout-compatto h2 { margin: 6px 0 3px; }
   body.layout-compatto .crocette { padding: 4px 6px; }
   body.layout-compatto .intestazione-formale td,
   body.layout-compatto .quadro-anagrafico td { padding: 3px 5px; }
-  body.layout-compatto .righe-scrittura div { margin-bottom: 2px; }
+  body.layout-compatto .righe-scrittura div { margin-bottom: 4px; }
   body.layout-compatto .righe-scrittura div:nth-child(n+4) { display: none; }
   body.layout-compatto .scrittura-mano { min-height: 56px; }
   body.layout-compatto .scrittura-mano--media { min-height: 64px; }
   body.layout-compatto .scrittura-mano--alta { min-height: 80px; }
   body.layout-compatto .chiusura-documento,
-  body.layout-compatto .convalida { padding: 5px 8px; }
-  body.layout-compatto .chiusura-documento .riga-firma,
-  body.layout-compatto .convalida .riga-firma,
-  body.layout-compatto .firme-ruoli .riga-firma { height: 18px; }
-  body.layout-compatto .campo-scrittura { height: 14px; }
+  body.layout-compatto .convalida { padding: 6px 8px; }
   /* Modulo esteso (≥6 sezioni, es. PEI/PDP/Ricorsi): 2 pagine con spazio omogeneo. */
   body.layout-esteso .scrittura-mano { min-height: 110px; }
   body.layout-esteso .scrittura-mano--media { min-height: 170px; }
@@ -307,107 +275,76 @@ const STILI_DOCUMENTO = `
   @media screen {
     body { padding: 24px; }
   }
-`;
-
-export interface DocumentoPronto {
-  html: string;
-  pagineStimate: number;
-  conIndice: boolean;
-  /** Regola d'oro 1 — densità dinamica: 'compatto' (1 pagina) o 'esteso' (2 pagine). */
-  layout: 'compatto' | 'esteso';
-}
-
-/**
- * Regola d'oro 1 — Algoritmo di densità dinamica:
- * pesa il modulo contando le sezioni <h2> e decide il layout.
- *  - meno di 6 sezioni → `layout-compatto` (DEVE stare in 1 pagina A4);
- *  - 6 o più sezioni (PEI, PDP, Ricorsi complessi) → `layout-esteso` (2 pagine omogenee).
- */
-export function calcolaLayout(contenutoHtml: string): 'compatto' | 'esteso' {
-  const sezioni = (contenutoHtml.match(/<h2[\s>]/gi) ?? []).length;
-  return sezioni < 6 ? 'compatto' : 'esteso';
-}
-
-export function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-/**
- * Stima indicativa delle pagine A4 (layout compatto 10-11pt):
- *  - ~600 parole/pagina
- *  - ~6 sezioni <h2> per pagina (griglie, righe sottili, spazi ridotti)
- * Usata per decidere l'inserimento automatico dell'indice (solo > 3 pagine).
- */
-export function stimaPagine(contenutoHtml: string): number {
-  const senzaScript = contenutoHtml
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ');
-  const testo = senzaScript
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  const parole = testo ? testo.split(' ').length : 0;
-  const pagineDaParole = Math.max(1, Math.ceil(parole / 600));
-
-  const sezioni = (contenutoHtml.match(/<h2[\s>]/gi) ?? []).length;
-  const pagineDaSezioni = Math.max(1, Math.ceil(sezioni / 6));
-
-  return Math.max(pagineDaParole, pagineDaSezioni);
-}
-
-/** Inietta un indice con collegamenti interni (ancore sui titoli h2/h3). */
-function aggiungiIndice(contenutoHtml: string): string {
-  const doc = new DOMParser().parseFromString(contenutoHtml, 'text/html');
-  const titoli = Array.from(doc.querySelectorAll('h2, h3'));
-  if (titoli.length < 3) return contenutoHtml;
-
-  const voci: string[] = [];
-  titoli.forEach((h, i) => {
-    const testo = (h.textContent ?? '').replace(/\s+/g, ' ').trim() || `Sezione ${i + 1}`;
-    h.id = `sezione-${i + 1}`;
-    const rientro = h.tagName.toLowerCase() === 'h3' ? ' style="padding-left:12px"' : '';
-    voci.push(`<li${rientro}><a href="#sezione-${i + 1}">${escapeHtml(testo)}</a></li>`);
-  });
-
-  const indice = `<nav class="indice" aria-label="Indice dei contenuti"><h2>Indice dei contenuti</h2><ol>${voci.join('')}</ol></nav>`;
-  doc.body.insertAdjacentHTML('afterbegin', indice);
-  return doc.body.innerHTML;
-}
-
-/**
- * Costruisce il documento HTML completo (header + titolo + indice + contenuto),
- * pronto per l'anteprima e per la stampa/conversione in PDF.
- */
-export function costruisciDocumento(titolo: string, contenutoHtml: string): DocumentoPronto {
-  const titoloPulito = (titolo ?? '').trim() || 'Documento ScuoleRadar';
-  const pagineStimate = stimaPagine(contenutoHtml);
-  const conIndice = pagineStimate > 3;
-  const corpo = conIndice ? aggiungiIndice(contenutoHtml) : contenutoHtml;
-  const layout = calcolaLayout(contenutoHtml);
-
-  const html = `<!doctype html>
-<html lang="it">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${escapeHtml(titoloPulito)} — Documento ScuoleRadar.it</title>
-<style>${STILI_DOCUMENTO}</style>
+</style>
 </head>
-<body class="${layout}">
+<body class="compatto">
 <header class="intestazione-documento">
-  <img src="${LOGO_DOCUMENTO}" alt="ScuoleRadar.it" />
+  <img src="/ScuoleRadar Logo Transparent Full Final.png" alt="ScuoleRadar.it" />
 </header>
 <hr class="divisore" />
-<h1 class="titolo-documento">${escapeHtml(titoloPulito)}</h1>
-<div class="contenuto-documento">${corpo}</div>
-</body>
-</html>`;
+<h1 class="titolo-documento">Domanda di supplenza (breve)</h1>
+<div class="contenuto-documento">
+  <table class="intestazione-formale">
+    <tr><td class="campo-etichetta">Istituto Scolastico</td><td class="campo-compilazione"><div class="campo-scrittura"></div><div class="campo-scrittura"></div></td></tr>
+    <tr><td class="campo-etichetta">Anno Scolastico</td><td class="campo-compilazione">20____ / 20____</td></tr>
+    <tr><td class="campo-etichetta">Protocollo n.</td><td class="campo-compilazione"><div class="campo-scrittura"></div></td></tr>
+    <tr><td class="campo-etichetta">Data</td><td class="campo-compilazione"><div class="campo-scrittura"></div></td></tr>
+  </table>
 
-  return { html, pagineStimate, conIndice, layout };
-}
+  <h2>Quadro anagrafico del richiedente</h2>
+  <table class="quadro-anagrafico">
+    <tr><td class="campo-etichetta">Cognome e Nome</td><td class="campo-compilazione"><div class="campo-scrittura"></div></td></tr>
+    <tr><td class="campo-etichetta">Codice Fiscale</td><td class="campo-compilazione"><div class="campo-scrittura"></div></td></tr>
+    <tr><td class="campo-etichetta">Data e luogo di nascita</td><td class="campo-compilazione"><div class="campo-scrittura"></div></td></tr>
+    <tr><td class="campo-etichetta">Residenza</td><td class="campo-compilazione"><div class="campo-scrittura"></div></td></tr>
+    <tr><td class="campo-etichetta">Titolo di studio</td><td class="campo-compilazione"><div class="campo-scrittura"></div></td></tr>
+    <tr><td class="campo-etichetta">Classe di concorso</td><td class="campo-compilazione"><div class="campo-scrittura"></div></td></tr>
+    <tr><td class="campo-etichetta">Contatto (email / telefono)</td><td class="campo-compilazione"><div class="campo-scrittura"></div></td></tr>
+    <tr><td class="campo-etichetta">Scuola destinataria</td><td class="campo-compilazione"><div class="campo-scrittura"></div></td></tr>
+  </table>
+
+  <div class="griglia-2">
+    <div>
+      <h2>Tipologia di contratto richiesta</h2>
+      <div class="crocette">
+        <p class="voce"><span class="casella"></span>Supplenza breve / fino al termine delle lezioni</p>
+        <p class="voce"><span class="casella"></span>Supplenza annuale</p>
+        <p class="voce"><span class="casella"></span>Incarico a tempo determinato</p>
+        <p class="voce"><span class="casella"></span>Messa a disposizione (MAD)</p>
+      </div>
+    </div>
+    <div>
+      <h2>Disponibilità oraria</h2>
+      <div class="crocette">
+        <p class="voce"><span class="casella"></span>Tempo pieno</p>
+        <p class="voce"><span class="casella"></span>Part-time (indicare le ore)</p>
+        <p class="voce"><span class="casella"></span>Solo mattino</p>
+        <p class="voce"><span class="casella"></span>Solo pomeriggio</p>
+      </div>
+    </div>
+  </div>
+
+  <h2>Oggetto e Motivazione della Richiesta</h2>
+  <div class="righe-scrittura"><div></div><div></div><div></div><div></div></div>
+
+  <div class="blocco-firme">
+    <h2>Luogo e Data</h2>
+    <p class="micro-copy">Da sottoscrivere a cura del richiedente. Allegare eventuale documentazione integrativa.</p>
+    <div class="chiusura-documento">
+      <p>Luogo e data: <span class="riga-firma"></span></p>
+      <p>Firma del richiedente (leggibile): <span class="riga-firma"></span></p>
+    </div>
+    <div class="convalida">
+      <p><strong>Convalida dell&apos;Istituzione Scolastica</strong> — spazio per il sigillo e le iniziali di convalida.</p>
+      <div class="riga-firma"></div>
+      <p>Luogo e data di protocollo:</p>
+      <div class="riga-firma"></div>
+      <p>Firma del funzionario incaricato:</p>
+      <div class="riga-firma"></div>
+    </div>
+  </div>
+
+  <p class="nota-normativa">Modello conforme alle Linee Guida del Ministero dell&apos;Istruzione e del Merito — Riferimenti normativi: DPR 275/1999, O.M. 88/2024. Documento scaricato gratuitamente da ScuoleRadar.it.</p>
+</div>
+</body>
+</html>
