@@ -1,0 +1,72 @@
+# ============================================================
+# Scraper Notizie — automazione quotidiana dell'ingestione MIM
+#
+# - Pianificazione: ogni giorno alle 06:00 UTC
+#   (= 07:00 italiane in inverno, 08:00 in estate)
+# - Trigger manuale: workflow_dispatch (GitHub → Actions → Run workflow)
+# - Esegue `npm run scrape:notizie`: raccoglie le notizie reali dal MIM,
+#   applica il motore di rilevanza e redazione (`relevanceEngine.ts`:
+#   filtro anti-fluff, date esatte, acronimi spiegati, link reali via
+#   URL_PORTALI, brand "ScuoleRadar") e riscrive
+#   `src/departments/notizie/data/notizieIngestite.ts`.
+# - Commit automatico dei dati aggiornati: il push usa GITHUB_TOKEN e
+#   non rigenera il workflow (nessun loop); il deploy (Vercel ecc.)
+#   riparte automaticamente dal push sul ramo predefinito.
+# ============================================================
+name: Scraper Notizie
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scraper-notizie
+  cancel-in-progress: false
+
+jobs:
+  scrape-notizie:
+    name: Ingestione Notizie MIM → dati committati
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Installazione dipendenze
+        run: npm ci
+
+      - name: Validazione TypeScript del pipeline Notizie
+        run: npm run scrape:notizie:check
+
+      - name: Esecuzione ingestione Notizie (MIM)
+        run: |
+          if npm run scrape:notizie; then
+            echo "Ingestione Notizie completata."
+          else
+            echo "::warning::Ingestione Notizie non riuscita (fonte MIM non raggiungibile?). Il workflow continua per committare i dati eventualmente prodotti."
+          fi
+
+      - name: Commit e push dei dati aggiornati
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/departments/notizie/data/notizieIngestite.ts
+          if git diff --cached --quiet; then
+            echo "Nessuna modifica ai dati Notizie: nessun commit necessario."
+          else
+            git commit -m "chore(notizie): aggiornamento automatico dati ingestiti [skip ci]"
+            git push
+            echo "Dati Notizie aggiornati e committati: il deploy parte automaticamente dal push."
+          fi

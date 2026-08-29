@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom';
 import { BellRing, Sparkles, CheckCircle2, CreditCard, Radar, Database, SlidersHorizontal } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { InterpelloCard } from '@/components/InterpelloCard';
-import { useApp } from '@/contexts/AppContext';
+import { useApp, LIMITE_NOTIFICHE_PROVA } from '@/contexts/AppContext';
 import { AbbonamentoModal } from '@/components/AbbonamentoModal';
 import { CreditiModal } from '@/components/CreditiModal';
 import { interpelli } from '@/data/interpelli';
@@ -81,7 +81,8 @@ export function DashboardPage() {
   const [showAbbonamento, setShowAbbonamento] = useState(false);
   const [showCrediti, setShowCrediti] = useState(false);
 
-  const limiteRaggiunto = !abbonato && notificheUsate >= 3;
+  const limiteRaggiunto = !abbonato && notificheUsate >= LIMITE_NOTIFICHE_PROVA;
+  const notificheRimanenti = Math.max(LIMITE_NOTIFICHE_PROVA - notificheUsate, 0);
 
   // Vetrina Freemium: gli utenti non loggati vedono un campione dell'offerta
   // (max 3 interpelli) prima di essere invitati a registrarsi.
@@ -140,12 +141,16 @@ export function DashboardPage() {
               <p className="text-sm font-semibold text-primary-800">
                 {abbonato
                   ? 'Sei abbonato: notifiche illimitate.'
-                  : `Notifiche incluse utilizzate: ${notificheUsate} / 3`}
+                  : notificheRimanenti > 0
+                    ? `Ti restano ${notificheRimanenti} di ${LIMITE_NOTIFICHE_PROVA} notifiche di prova`
+                    : 'Hai esaurito le tue notifiche di prova'}
               </p>
               <p className="text-xs text-primary-500">
                 {abbonato
                   ? 'Riceverai tutte le notifiche pertinenti, senza limiti.'
-                  : 'Hai 3 notifiche incluse nell\u2019Offerta per provare il servizio.'}
+                  : notificheRimanenti > 0
+                    ? 'Notifiche di prova totali: le usi una volta sola, in assoluto.'
+                    : 'Passa a PRO per continuare a ricevere notifiche.'}
               </p>
               {crediti > 0 && (
                 <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-secondary-50 px-2 py-0.5 text-xs font-semibold text-secondary-700">
@@ -178,8 +183,8 @@ export function DashboardPage() {
         </div>
         {(limiteRaggiunto || limiteFeedRaggiunto) && (
           <p className="mt-3 text-sm text-secondary-800">
-            Hai usato le tue 3 notifiche incluse nell&apos;Offerta. I contenuti restano accessibili,
-            ma per ricevere nuove notifiche ti serve l&apos;abbonamento.
+            Hai usato le tue {LIMITE_NOTIFICHE_PROVA} notifiche di prova in assoluto. I contenuti
+            restano accessibili, ma per ricevere nuove notifiche ti serve l&apos;abbonamento.
           </p>
         )}
         </div>

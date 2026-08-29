@@ -1,25 +1,28 @@
 // ============================================================
 // Edge Function Supabase — Generatore Modulistica (DeepSeek + Cache)
 //
-// Sistema dinamico di ricerca, generazione e caching dei documenti
-// scolastici ("Archivista Premuroso").
+// Sistema di ricerca, intervista guidata, generazione e caching dei
+// documenti scolastici ("Archivista Capo").
 //
 // Azioni (body JSON):
-//   { azione: 'ricerca', query }             → cerca nel catalogo + cache;
-//       risponde con esito 'prosegui' (con eventuale modello catalogo) oppure
-//       esito 'chiarimento' con domande del tipo "Consigliamo di precisare se…".
-//   { azione: 'genera', query, catalogoId? } → genera via DeepSeek con cache:
-//       query_hash SHA-256 → se già presente in generated_modules restituisce
-//       il documento salvato a costo API zero; altrimenti chiama DeepSeek e
-//       salva il risultato in generated_modules.
+//   { azione: 'intervista', query, risposte } → intervista chirurgica:
+//       una domanda alla volta (solo le dimensioni strettamente necessarie);
+//       quando il profilo è completo risponde 'pronto' con l'impronta
+//       dell'intervista (SHA-256 del profilo canonico) e, se già in cache
+//       su generated_modules, il documento a costo API zero.
+//   { azione: 'genera', query, profilo, catalogoId? } → genera via DeepSeek
+//       con cache: la chiave di cache è l'impronta dell'intervista; se già
+//       presente restituisce il documento salvato a costo API zero.
+//   { azione: 'ricerca', query }             → ricerca nel catalogo + cache
+//       (compatibilità legacy, con chiarimenti se ambigua).
 //   { azione: 'salva', module_key, module_source, title, tipo } → inserisce
 //       il modulo in user_saved_modules (per la tab "I miei Modelli Scaricati").
 //   { azione: 'rimuovi', module_key }        → rimuove un modulo salvato.
 //   { azione: 'miei' }                       → elenco dei moduli salvati dell'utente.
 //
-// Autenticazione: JWT verificato (default --verify-jwt). 'ricerca' funziona
-// anche con token anonimo; 'genera'/'salva'/'rimuovi'/'miei' richiedono un
-// utente autenticato (protegge il budget API DeepSeek).
+// Autenticazione: JWT verificato (default --verify-jwt). 'intervista' e
+// 'ricerca' funzionano anche con token anonimo; 'genera'/'salva'/'rimuovi'/'miei'
+// richiedono un utente autenticato (protegge il budget API DeepSeek).
 //
 // Secrets richiesti:
 //   DEEPSEEK_API_KEY   (obbligatoria) — chiave API DeepSeek
@@ -66,7 +69,11 @@ function risposta(data: unknown, status = 200): Response {
 
 /** Normalizza una query per matching e hash (minuscole, spazi collassati). */
 function normalizza(testo: string): string {
-  return testo.toLowerCase().replace(/\s+/g, ' ').trim();
+  return testo
+    .toLowerCase()
+    .replace(/[’‘]/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /** Hash SHA-256 (Web Crypto) della query normalizzata — chiave di cache. */
@@ -160,14 +167,23 @@ const CATALOGO: CatalogoModulo[] = [
 
 /** Tipologie di documento rilevabili dalla query. */
 const DIMENSIONE_TIPO: Record<string, string[]> = {
+  sostegno: [
+    'richiesta di sostegno',
+    'richiesta sostegno',
+    'sostegno',
+    'assegnazione sostegno',
+    'ore di sostegno',
+  ],
   mad: ['messa a disposizione', 'mad'],
   supplenza: ['supplenza', 'interpello', 'incarico', 'supplente'],
+  pei: ['pei', 'osservazioni', 'inclusione', 'piano educativo individualizzato', 'glho', 'glo'],
+  certificazione: ['certificazione', 'l.104', 'legge 104', 'handicap', 'disabilità', 'disabilita'],
   autocertificazione: ['autocertificazione', 'dichiarazione sostitutiva', 'dpr 445', 'titoli di studio'],
   lettera: ['lettera', 'presentazione'],
-  pei: ['pei', 'osservazioni', 'inclusione', 'piano educativo individualizzato'],
   mobilita: ['mobilità', 'mobilita', 'trasferimento'],
   delega_privacy: ['delega', 'privacy', 'consenso'],
   checklist: ['checklist', 'elenco'],
+  iscrizione: ['iscrizione', 'iscrivere', 'immatricolazione'],
 };
 
 /** Ordini di scuola rilevabili dalla query. */
@@ -175,10 +191,74 @@ const DIMENSIONE_ORDINE: Record<string, string[]> = {
   infanzia: ['infanzia', 'asilo', 'materna', "scuola dell'infanzia"],
   primaria: ['primaria', 'elementare'],
   secondaria1: ['secondaria di i grado', 'secondaria i', 'scuola media', 'medie', 'i grado'],
-  secondaria2: ['secondaria di ii grado', 'secondaria ii', 'superiori', 'liceo', 'istituto tecnico', 'professionale', 'ii grado'],
+  secondaria2: [
+    'secondaria di ii grado',
+    'secondaria ii',
+    'superiori',
+    'liceo',
+    'istituto tecnico',
+    'professionale',
+    'ii grado',
+  ],
+  universita: ['università', 'universita', 'ateneo', 'universitario', 'laurea'],
+  enti: ['enti', 'ente locale', 'provincia', 'regione', 'segreteria', 'ufficio scolastico'],
   cpia: ['cpia', 'adulti', 'adulto', 'alfabetizzazione', 'italiano l2', 'serale', 'primo livello'],
-  pon: ['pon', 'pnrr', 'esperto esterno', 'progetto'],
   ata: ['ata', 'collaboratore scolastico', 'assistente tecnico', 'assistente amministrativo', 'dsga'],
+};
+
+/** Scopo della richiesta quando il documento è di tipo 'sostegno'. */
+const DIMENSIONE_SCOPO_SOSTEGNO: Record<string, string[]> = {
+  richiesta: ['richiesta', 'accertamento', 'assegnazione', 'richiedere'],
+  incarico: ['incarico', 'disponibilità', 'disponibilita', 'adee', 'adss'],
+  pei: ['pei', 'osservazioni', 'piano educativo', 'glho', 'glo', 'verbale'],
+  autonomia: ['assistente', 'autonomia', 'educatore', 'comunicazione'],
+};
+
+/** Destinatario della richiesta (rilevante per il sostegno). */
+const DIMENSIONE_DESTINATARIO: Record<string, string[]> = {
+  istituzione_scolastica: [
+    'istituzione scolastica',
+    'istituto scolastico',
+    'dirigente scolastico',
+    'segreteria scolastica',
+    'istituzione',
+  ],
+  npia_asl: ['npia', 'asl', 'neuropsichiatria', 'ausl', 'sanitaria'],
+  comune: ["assistente all'autonomia", 'comune'],
+};
+
+/** Modello normativo: Regione a Statuto Speciale vs nazionale standard. */
+const DIMENSIONE_REGIONE: Record<string, string[]> = {
+  speciale: [
+    'statuto speciale',
+    'regione a statuto',
+    "valle d'aosta",
+    'trentino',
+    'alto adige',
+    'südtirol',
+    'sudtirol',
+    'friuli',
+    'sicilia',
+    'sardegna',
+  ],
+  nazionale: ['nazionale', 'standard', 'ordinario', 'modello nazionale'],
+};
+
+/** Tutte le dimensioni dell'intervista, in ordine di "necessità chirurgica". */
+export const DIMENSIONI_INTERVISTA = [
+  'tipo',
+  'ordine',
+  'scopo_sostegno',
+  'destinatario',
+  'regione',
+] as const;
+
+type Dimensione = {
+  tipo: string | null;
+  ordine: string | null;
+  scopo_sostegno: string | null;
+  destinatario: string | null;
+  regione: string | null;
 };
 
 const STOPWORD = new Set([
@@ -187,34 +267,50 @@ const STOPWORD = new Set([
   'quale', 'quali', 'mia', 'tuo',
 ]);
 
-/** Verifica se la frase chiave p è contenuta nella query normalizzata q. */
+/**
+ * Verifica se la frase chiave p compare nella query normalizzata q
+ * rispettando i confini di parola: "i grado" non deve matchare "ii grado"
+ * e "ata" non deve matchare "data".
+ */
 function matchParole(q: string, p: string): boolean {
   const chiave = normalizza(p);
-  if (q.includes(chiave)) return true;
-  const paroleChiave = chiave.split(' ').filter((w) => w.length > 1);
-  if (paroleChiave.length < 2) return false;
-  const token = new Set(q.split(' '));
-  return paroleChiave.every((w) => token.has(w));
+  if (!chiave) return false;
+  const escaped = chiave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^a-zà-ù0-9])${escaped}([^a-zà-ù0-9]|$)`, 'i').test(q);
 }
 
-/** Estrae le dimensioni rilevanti dalla query (tipo di documento e ordine di scuola). */
-function trovaDimensioni(query: string): { tipo: string | null; ordine: string | null } {
-  const q = normalizza(query);
-  let tipo: string | null = null;
-  for (const [key, parole] of Object.entries(DIMENSIONE_TIPO)) {
-    if (parole.some((p) => matchParole(q, p))) {
-      tipo = key;
-      break;
-    }
+/** Restituisce la prima chiave della mappa le cui parole chiave combaciano. */
+function matchMappa(mappa: Record<string, string[]>, q: string): string | null {
+  for (const [key, parole] of Object.entries(mappa)) {
+    if (parole.some((p) => matchParole(q, p))) return key;
   }
-  let ordine: string | null = null;
-  for (const [key, parole] of Object.entries(DIMENSIONE_ORDINE)) {
-    if (parole.some((p) => matchParole(q, p))) {
-      ordine = key;
-      break;
-    }
-  }
-  return { tipo, ordine };
+  return null;
+}
+
+/** Estrae tutte le dimensioni rilevabili da un testo (query o risposta). */
+function trovaDimensioni(testo: string): Dimensione {
+  const q = normalizza(testo);
+  return {
+    tipo: matchMappa(DIMENSIONE_TIPO, q),
+    ordine: matchMappa(DIMENSIONE_ORDINE, q),
+    scopo_sostegno: matchMappa(DIMENSIONE_SCOPO_SOSTEGNO, q),
+    destinatario: matchMappa(DIMENSIONE_DESTINATARIO, q),
+    regione: matchMappa(DIMENSIONE_REGIONE, q),
+  };
+}
+
+/** Risolve il valore di una dimensione a partire dal testo della risposta. */
+function parseValoreDimensione(dimensione: string, testo: string): string | null {
+  const mappe: Record<string, Record<string, string[]>> = {
+    tipo: DIMENSIONE_TIPO,
+    ordine: DIMENSIONE_ORDINE,
+    scopo_sostegno: DIMENSIONE_SCOPO_SOSTEGNO,
+    destinatario: DIMENSIONE_DESTINATARIO,
+    regione: DIMENSIONE_REGIONE,
+  };
+  const mappa = mappe[dimensione];
+  if (!mappa) return null;
+  return matchMappa(mappa, normalizza(testo));
 }
 
 /* ------------------------------- Matching ------------------------------- */
@@ -367,6 +463,250 @@ async function azioneRicerca(supabase: ReturnType<typeof createClient>, query: s
   return { esito: 'prosegui', catalogo: null };
 }
 
+/* ------------------- Intervista dell'Archivista Capo ------------------- */
+
+interface PassoIntervista {
+  id: string;
+  testo: string;
+  opzioni: string[];
+}
+
+/** Passi dell'intervista chirurgica: una domanda alla volta, solo se serve. */
+const PASSI_INTERVISTA: Array<{
+  id: string;
+  serve: (ctx: Dimensione) => boolean;
+  testo: string;
+  opzioni: string[];
+}> = [
+  {
+    id: 'tipo',
+    serve: (ctx) => !ctx.tipo,
+    testo: 'Buongiorno, di che modulo hai bisogno?',
+    opzioni: [
+      'Richiesta di sostegno',
+      'Messa a disposizione (MAD)',
+      'Domanda di supplenza',
+      'Modulo PEI / inclusione',
+      'Certificazione (L.104/92)',
+      'Autocertificazione titoli (DPR 445/2000)',
+      'Lettera di presentazione',
+      'Checklist mobilità',
+      'Delega o consenso privacy',
+      'Altro documento',
+    ],
+  },
+  {
+    id: 'ordine',
+    serve: (ctx) => !ctx.ordine,
+    testo:
+      'Certo. Per quale ordine di scuola? (Infanzia, Primaria, Secondaria di I Grado, Secondaria di II Grado, Università, Enti)',
+    opzioni: [
+      "Scuola dell'Infanzia",
+      'Scuola Primaria',
+      'Scuola Secondaria di I Grado',
+      'Scuola Secondaria di II Grado',
+      'Università',
+      'Enti / Istituzioni',
+    ],
+  },
+  {
+    id: 'scopo_sostegno',
+    serve: (ctx) => ctx.tipo === 'sostegno' && !ctx.scopo_sostegno,
+    testo:
+      'Capito. Di cosa hai bisogno esattamente: una richiesta di accertamento/assegnazione del sostegno, la disponibilità a un incarico di sostegno o la documentazione PEI?',
+    opzioni: [
+      'Richiesta di accertamento / assegnazione del sostegno',
+      'Disponibilità a incarico di sostegno (ADEE/ADSS)',
+      'Documentazione PEI / inclusione',
+      "Assistente all'Autonomia (Comune)",
+    ],
+  },
+  {
+    id: 'destinatario',
+    serve: (ctx) =>
+      ctx.tipo === 'sostegno' && ctx.scopo_sostegno !== 'incarico' && !ctx.destinatario,
+    testo:
+      "Il destinatario della richiesta è l'Istituzione Scolastica, la NPIA/ASL o il Comune per l'Assistente all'Autonomia?",
+    opzioni: ['Istituzione Scolastica', 'NPIA/ASL', "Comune – Assistente all'Autonomia"],
+  },
+  {
+    id: 'regione',
+    serve: (ctx) => {
+      const RILEVANTE: Record<string, boolean> = {
+        sostegno: true,
+        mad: true,
+        supplenza: true,
+        pei: true,
+        certificazione: true,
+        iscrizione: true,
+      };
+      return RILEVANTE[ctx.tipo ?? ''] === true && !ctx.regione;
+    },
+    testo:
+      'La scuola si trova in una Regione a Statuto Speciale con normativa locale o serve il modello nazionale standard?',
+    opzioni: ['Regione a Statuto Speciale', 'Modello nazionale standard'],
+  },
+];
+
+
+/** Etichette leggibili per il prompt DeepSeek a partire dal profilo. */
+const LABEL_PROFILO: Record<string, Record<string, string>> = {
+  tipo: {
+    sostegno: 'Richiesta di sostegno',
+    mad: 'Messa a disposizione (MAD)',
+    supplenza: 'Domanda di supplenza',
+    pei: 'Documentazione PEI / inclusione',
+    certificazione: 'Certificazione (L.104/92)',
+    autocertificazione: 'Autocertificazione titoli (DPR 445/2000)',
+    lettera: 'Lettera di presentazione',
+    mobilita: 'Mobilità / trasferimento',
+    delega_privacy: 'Delega o consenso privacy',
+    checklist: 'Checklist',
+    iscrizione: 'Iscrizione',
+  },
+  ordine: {
+    infanzia: "Scuola dell'Infanzia",
+    primaria: 'Scuola Primaria',
+    secondaria1: 'Scuola Secondaria di I Grado',
+    secondaria2: 'Scuola Secondaria di II Grado',
+    universita: 'Università',
+    enti: 'Enti / Istituzioni',
+    cpia: 'CPIA / educazione degli adulti',
+    ata: 'Personale ATA',
+  },
+  scopo_sostegno: {
+    richiesta: 'richiesta di accertamento/assegnazione del sostegno',
+    incarico: 'disponibilità a un incarico di sostegno',
+    pei: 'documentazione PEI',
+    autonomia: "assistente all'autonomia",
+  },
+  destinatario: {
+    istituzione_scolastica: "l'Istituzione Scolastica",
+    npia_asl: 'la NPIA/ASL',
+    comune: "il Comune (Assistente all'Autonomia)",
+  },
+  regione: {
+    speciale: 'Regione a Statuto Speciale con normativa locale',
+    nazionale: 'modello nazionale standard',
+  },
+};
+
+function etichettaDimensione(dimensione: string, valore: string): string {
+  const label = LABEL_PROFILO[dimensione]?.[valore];
+  if (label) return label;
+  // Fallback: humanizza lo slug (es. "mensa_diete" → "Mensa diete").
+  return valore
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Canonicalizza il profilo → stringa stabile per l'impronta SHA-256. */
+function profiloCanonico(profilo: Record<string, string>): string {
+  return Object.entries(profilo)
+    .filter(([, v]) => Boolean(v))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${v}`)
+    .join('|');
+}
+
+/** Impronta dell'intervista: SHA-256 del profilo canonico (o della query se profilo vuoto). */
+async function improntaDocumento(
+  query: string,
+  profilo: Record<string, string> | undefined,
+): Promise<string> {
+  const canonica = profiloCanonico(profilo ?? {});
+  if (!canonica) return hashQuery(query);
+  return hashQuery(`intervista:${canonica}`);
+}
+
+/** Associa il profilo a un eventuale modello statico del catalogo (bias del prompt). */
+function catalogoDaProfilo(profilo: Record<string, string>): CatalogoModulo | null {
+  const mappa: Record<string, string> = {
+    mad: 'mad',
+    supplenza: 'supplenza-breve',
+    autocertificazione: 'autocertificazione-titoli',
+    lettera: 'lettera-presentazione',
+    mobilita: 'checklist-mobilita',
+    delega_privacy: 'deleghe-privacy',
+  };
+  const id = mappa[profilo.tipo ?? ''];
+  if (id) return CATALOGO.find((c) => c.id === id) ?? null;
+  if (profilo.tipo === 'pei' || profilo.scopo_sostegno === 'pei') {
+    return CATALOGO.find((c) => c.id === 'pei-osservazioni') ?? null;
+  }
+  if (profilo.scopo_sostegno === 'incarico') {
+    return CATALOGO.find((c) => c.id === 'sostegno-disponibilita') ?? null;
+  }
+  return null;
+}
+
+/**
+ * Azione `intervista`: una domanda alla volta.
+ * - raccoglie il contesto (query + risposte già date)
+ * - se manca una dimensione rilevante → risponde `domanda` (il prossimo passo)
+ * - se il profilo è completo → risponde `pronto` con l'impronta dell'intervista
+ *   e, se già in cache (`generated_modules`), il documento a costo API zero.
+ */
+async function azioneIntervista(
+  supabase: ReturnType<typeof createClient>,
+  query: string,
+  risposteRaw: Record<string, unknown> | undefined,
+) {
+  const q = normalizza(query);
+  const risposte = (risposteRaw ?? {}) as Record<string, string>;
+
+  // Contesto iniziale: dimensioni rilevate dal testo della richiesta.
+  const ctx: Dimensione = trovaDimensioni(q);
+
+  // Applica le risposte strutturate (passo → testo della risposta).
+  for (const passoId of DIMENSIONI_INTERVISTA) {
+    const testoRisposta = risposte[passoId]?.trim();
+    if (!testoRisposta) continue;
+    const valore = parseValoreDimensione(passoId, testoRisposta);
+    const target = ctx as unknown as Record<string, string | null>;
+    if (valore) {
+      target[passoId] = valore;
+    } else if (normalizza(testoRisposta).length >= 2) {
+      // Risposta libera non riconosciuta dalle mappe: fidati dell'utente,
+      // la variante resta comunque tracciata nel profilo.
+      target[passoId] = normalizza(testoRisposta);
+    }
+  }
+
+  // Prossimo passo necessario (intervista chirurgica: una domanda alla volta).
+  for (const passo of PASSI_INTERVISTA) {
+    if (passo.serve(ctx)) {
+      return { esito: 'domanda', passo: { id: passo.id, testo: passo.testo, opzioni: passo.opzioni } };
+    }
+  }
+
+  // Profilo completo → impronta dell'intervista.
+  const ctxMap = ctx as unknown as Record<string, string | null>;
+  const profilo: Record<string, string> = {};
+  for (const dim of DIMENSIONI_INTERVISTA) {
+    const valore = ctxMap[dim];
+    if (valore) profilo[dim] = valore;
+  }
+
+  const impronta = await improntaDocumento(q, profilo);
+
+  // Cache hit → documento a costo zero.
+  try {
+    const { data: esistente, error: errCache } = await supabase
+      .from('generated_modules')
+      .select('*')
+      .eq('query_hash', impronta)
+      .maybeSingle();
+    if (!errCache && esistente) {
+      return { esito: 'pronto', profilo, modulo: esistente, cache: true };
+    }
+  } catch (err) {
+    console.warn('genera-modulo — lookup cache intervista:', (err as Error).message);
+  }
+
+  return { esito: 'pronto', profilo, modulo: null, cache: false };
+}
+
 /* ------------------------------ DeepSeek ------------------------------ */
 
 /**
@@ -379,7 +719,7 @@ async function azioneRicerca(supabase: ReturnType<typeof createClient>, query: s
 const SISTEMA_PROMPT = `Sei l'"Archivista Premuroso" di ScuoleRadar.it, un esperto di modulistica scolastica italiana. Hai il compito di redigere il documento richiesto dall'utente.
 
 REGOLE NON NEGOZIABILI:
-1. DATI GENERICI — Non inventare mai dati reali. Ogni dato personale o variabile va inserito SOLO come segnaposto tra parentesi quadre, es. [Nome e Cognome], [Data di nascita], [Luogo di nascita], [Codice Fiscale], [Residenza], [Indirizzo Email], [Telefono], [Data odierna], [Nome Scuola], [Codice Meccanografico], [Comune], [Provincia]. Scegli i segnaposto in base al contesto del documento.
+1. DATI GENERICI — Non inventare mai dati reali. Nessun testo segnaposto dentro le celle compilabili (VIETATO "[Nome dell'Istituto]", "[Numero di protocollo]", "[Data odierna]", "[Classe e Sezione]", "[Componenti]" e simili): le caselle da compilare restano VUOTE, con solo spazi bianchi o righe guida per la scrittura a mano. Lascia l'etichetta della voce (es. "Cognome e Nome", "Codice Fiscale") e la cella vuota.
 2. NORMATIVA — Rispetta la normativa scolastica italiana vigente. Cita i riferimenti normativi pertinenti quando il documento lo richiede (es. DPR 275/1999, DPR 445/2000, D.Lgs. 297/1994, Legge 107/2015, D.Lgs. 59/2017, DL 36/2022, D.M. istitutivi delle classi di concorso), indicandoli con precisione.
 3. REGIONI A STATUTO SPECIALE — Se la richiesta riguarda o può riguardare una Regione a Statuto Speciale (Valle d'Aosta, Trentino-Alto Adige/Südtirol, Friuli-Venezia Giulia, Sicilia, Sardegna), aggiungi una breve nota sulle eventuali peculiarità normative locali (competenze legislative, percorsi abilitanti, reclutamento) e usa il segnaposto [Regione a Statuto Speciale] dove rilevante.
 4. HTML PER STAMPA/PDF — Produci SOLO HTML pulito e semantico, pronto per il rendering e la conversione in PDF:
@@ -389,19 +729,48 @@ REGOLE NON NEGOZIABILI:
    - Usa liste <ol>/<ul> per elenchi e campi da compilare.
    - Testo base 12pt con interlinea 1.3 (font di sistema Arial/Inter).
    - Nessun elemento <style>, <script>, <nav>, header, footer, banner o testo pubblicitario: intestazione, piè di pagina e indice sono gestiti automaticamente dalla piattaforma.
-5. LINGUAGGIO — Scrivi in italiano corrente, professionale e vicino a chi lo usa; mantieni il rigore formale dei documenti ufficiali senza burocratese inutile.
-6. RISPOSTA — Restituisci ESCLUSIVAMENTE l'HTML richiesto, senza commenti, senza markdown, senza triple backtick, senza testo introduttivo o finale.`;
+5. STRUTTURA FORMALE DEL DOCUMENTO — Ogni documento deve avere la struttura di un atto scolastico ufficiale, adattata alla tipologia richiesta:
+   - INTESTAZIONE ISTITUZIONALE: una tabella a bordi nitidi con nome dell'istituto, anno scolastico, protocollo, data e il riferimento normativo esplicito pertinente (es. per il sostegno: L. 104/1992, D.Lgs. 66/2017, D.M. 182/2020; per le autocertificazioni: DPR 445/2000).
+   - QUADRO ANAGRAFICO E CONTESTO: tabelle formali per i dati dell'alunno/richiedente, codice fiscale, classe/sezione, consiglio di classe o GLO e referente ASL quando pertinente.
+   - SEZIONI A CROCETTA: riquadri [   ] da sbarrare a mano per selezioni rapide (area di intervento, tipologia di disabilità/BES/DSA, strumenti compensativi, misure dispensative).
+   - BOX DI SCRITTURA A MANO: per le sezioni descrittive (relazione iniziale/finale, obiettivi disciplinari, modifiche programmatiche, interventi specialistici) lascia riquadri vuoti alti.
+   - GUIDA ALLA COMPILAZIONE: usa la classe .guida-compilazione SOLO sotto le sezioni ad elevata complessità pedagogica/normativa (es. Quadro Operativo ICF, misure dispensative ai sensi della L. 170/2010). MAI per campi ovvi (anagrafica, data, protocollo): quelle celle restano vuote.
+   - TABELLA FIRME (class .tabella-firme): in calce, tabella formale a 3 colonne — "Ruolo", "Nome e Cognome (in stampatello)", "Firma autografa" — con almeno 8 righe dedicate ai membri del Consiglio di Classe / Team docenti, più righe per Dirigente Scolastico, Docente di Sostegno, Specialista ASL/Terapista e Genitori/Tutori.
+   Usa le classi CSS già presenti nello stylesheet della piattaforma quando utile: .intestazione-formale, .quadro-anagrafico, .crocette, .casella, .scrittura-mano, .tabella-firme, .riferimento-normativo, .guida-compilazione. NON includere mai <style>.
+6. LINGUAGGIO — Scrivi in italiano corrente, professionale e vicino a chi lo usa; mantieni il rigore formale dei documenti ufficiali senza verbosità ridondante.
+7. RISPOSTA — Restituisci ESCLUSIVAMENTE l'HTML richiesto, senza commenti, senza markdown, senza triple backtick, senza testo introduttivo o finale.`;
 
-/** Costruisce il prompt utente per DeepSeek a partire dalla query e dal modello di catalogo. */
-function costruisciPromptUtente(query: string, catalogo: CatalogoModulo | null): string {
-  const dim = trovaDimensioni(query);
+/** Costruisce una descrizione leggibile del profilo per il prompt DeepSeek. */
+function descriviProfilo(profilo: Record<string, string>): string[] {
+  const righe: string[] = [];
+  for (const [dimensione, valore] of Object.entries(profilo)) {
+    if (!valore) continue;
+    righe.push(etichettaDimensione(dimensione, valore));
+  }
+  return righe;
+}
+
+/**
+ * Costruisce il prompt utente per DeepSeek a partire dalla richiesta,
+ * dal profilo dell'intervista e dall'eventuale modello di catalogo.
+ */
+function costruisciPromptUtente(
+  query: string,
+  profilo: Record<string, string> | undefined,
+  catalogo: CatalogoModulo | null,
+): string {
   const dettagli: string[] = [];
-  if (dim.tipo) dettagli.push(`Tipo di documento: ${dim.tipo}`);
-  if (dim.ordine) dettagli.push(`Ordine di scuola: ${dim.ordine}`);
+  if (profilo && Object.keys(profilo).length > 0) {
+    dettagli.push(`Profilo della richiesta (variante esatta): ${descriviProfilo(profilo).join('; ')}.`);
+  } else {
+    const dim = trovaDimensioni(query);
+    if (dim.tipo) dettagli.push(`Tipo di documento: ${dim.tipo}`);
+    if (dim.ordine) dettagli.push(`Ordine di scuola: ${dim.ordine}`);
+  }
   const contesto = catalogo
     ? `\n\nModello di riferimento del catalogo ScuoleRadar da adattare al caso specifico: "${catalogo.nome}" (${catalogo.tipo}) — ${catalogo.descrizione}`
     : '';
-  const dettagliStr = dettagli.length > 0 ? `\nContesto rilevato dalla richiesta: ${dettagli.join('; ')}.` : '';
+  const dettagliStr = dettagli.length > 0 ? `\nContesto rilevato dalla richiesta: ${dettagli.join(' ')}` : '';
   return `Redigi il documento richiesto dall'utente.\n\nRichiesta: ${query}${dettagliStr}${contesto}`;
 }
 
@@ -474,26 +843,28 @@ function titoloDaQuery(query: string): string {
 
 /**
  * Genera (o riusa in cache) il documento per la query.
- * - query_hash SHA-256 → lookup su generated_modules
- * - se presente: restituisce il documento salvato a costo API zero
+ * - l'impronta dell'intervista (profilo canonico SHA-256) è la chiave di cache;
+ *   senza profilo si usa l'hash della query normalizzata (compatibilità legacy)
+ * - se l'impronta è presente: restituisce il documento salvato a costo API zero
  * - altrimenti: chiama DeepSeek e salva il risultato nella cache
  */
 async function azioneGenera(
   supabase: ReturnType<typeof createClient>,
   query: string,
+  profilo: Record<string, string> | undefined,
   catalogoId?: string,
 ) {
   const q = normalizza(query);
   if (q.length < 4) throw new Error('La richiesta è troppo breve per generare un documento.');
 
-  const queryHash = await hashQuery(q);
+  const impronta = await improntaDocumento(q, profilo);
 
   // Cache hit → costo API zero
   try {
     const { data: esistente, error: errCache } = await supabase
       .from('generated_modules')
       .select('*')
-      .eq('query_hash', queryHash)
+      .eq('query_hash', impronta)
       .maybeSingle();
     if (!errCache && esistente) {
       return { esito: 'generato', cache: true, modulo: esistente };
@@ -502,19 +873,20 @@ async function azioneGenera(
     console.warn('genera-modulo — lookup cache:', (err as Error).message);
   }
 
-  const catalogo = CATALOGO.find((c) => c.id === catalogoId) ?? null;
-  const prompt = costruisciPromptUtente(q, catalogo);
+  const catalogo =
+    CATALOGO.find((c) => c.id === catalogoId) ?? catalogoDaProfilo(profilo ?? {}) ?? null;
+  const prompt = costruisciPromptUtente(q, profilo, catalogo);
   const raw = await chiamaDeepSeek(prompt);
   const pulito = pulisciHtml(raw);
   const html = rimuoviPrimoH1(pulito);
   const titolo = estraiTitolo(pulito) ?? titoloDaQuery(q);
 
   const riga = {
-    query_hash: queryHash,
+    query_hash: impronta,
     query: q,
     title: titolo,
     content_html: html,
-    meta: catalogo ? { catalogo_id: catalogo.id } : {},
+    meta: { ...(catalogo ? { catalogo_id: catalogo.id } : {}), ...(profilo ? { profilo } : {}) },
   };
 
   try {
@@ -533,7 +905,7 @@ async function azioneGenera(
       cache: false,
       modulo: {
         id: '',
-        query_hash: queryHash,
+        query_hash: impronta,
         query: q,
         title: titolo,
         content_html: html,
@@ -650,13 +1022,20 @@ serve(async (req: Request) => {
         const esito = await azioneRicerca(supabase, query);
         return risposta({ ok: true, ...esito });
       }
+      case 'intervista': {
+        const query = String(body.query ?? '').trim();
+        const risposte = (body.risposte ?? {}) as Record<string, unknown>;
+        const esito = await azioneIntervista(supabase, query, risposte);
+        return risposta({ ok: true, ...esito });
+      }
       case 'genera': {
         if (!userId) {
           return risposta({ ok: false, errore: 'Autenticazione richiesta per generare documenti.' }, 401);
         }
         const query = String(body.query ?? '').trim();
+        const profilo = (body.profilo ?? {}) as Record<string, string>;
         const catalogoId = body.catalogoId ? String(body.catalogoId) : undefined;
-        const esito = await azioneGenera(supabase, query, catalogoId);
+        const esito = await azioneGenera(supabase, query, profilo, catalogoId);
         return risposta({ ok: true, ...esito });
       }
       case 'salva': {

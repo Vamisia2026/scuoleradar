@@ -118,6 +118,12 @@ export interface UtenteCompatibile {
   classi: string[];
   /** Chat ID Telegram del profilo (FASE 5) — presente se l'utente ha collegato il bot. */
   telegramChatId?: string | null;
+  /** Piano dell'utente ('base' | 'pro'): serve a selezionare il template di notifica. */
+  piano?: string;
+  /** True se il messaggio di blocco notifiche è già stato inviato (una tantum). */
+  notificheBloccoInviato?: boolean;
+  /** True se la email riepilogativa del blocco definitivo è già stata inviata (una tantum). */
+  notificheRecapInviato?: boolean;
 }
 
 /**
@@ -133,7 +139,7 @@ export async function findUtentiCompatibili(
   try {
     const { data, error } = await client
       .from('profiles')
-      .select('id, email, email_notifica, nome, province_interesse, province_attive, classi_concorso, telegram_chat_id');
+      .select('id, email, email_notifica, nome, province_interesse, province_attive, classi_concorso, telegram_chat_id, piano, notifiche_blocco_inviato, notifiche_recap_inviato');
 
     if (error) {
       console.warn('MatchingEngine — lettura profiles (utenti compatibili):', error.message);
@@ -164,6 +170,9 @@ export async function findUtentiCompatibili(
         province: provinceProfilo,
         classi: classiProfilo,
         telegramChatId: chatId || null,
+        piano: riga.piano ? String(riga.piano) : 'base',
+        notificheBloccoInviato: Boolean(riga.notifiche_blocco_inviato),
+        notificheRecapInviato: Boolean(riga.notifiche_recap_inviato),
       });
     }
     return compatibili;

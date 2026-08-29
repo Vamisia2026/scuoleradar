@@ -15,6 +15,7 @@ import {
   inviaNotificaEmail,
   type DettagliNotifica,
   type DestinatarioNotifica,
+  type TipoMessaggio,
 } from './resend.ts';
 import { inviaNotificaTelegram } from './telegram.ts';
 import { findUtentiCompatibili } from './matchingEngine.ts';
@@ -34,6 +35,14 @@ export interface EsitoNotifiche {
 }
 
 type EsitoJob = { ok: boolean };
+
+/**
+ * Dedup in-process dei messaggi post-prova (extra / recap), complementari ai
+ * flag `notifiche_blocco_inviato` e `notifiche_recap_inviato` sul DB: evita
+ * invii multipli nell'arco della stessa esecuzione dello scraper.
+ */
+const notificheBloccoInviate = new Set<string>();
+const notificheRecapInviate = new Set<string>();
 
 /**
  * Invia le notifiche per i nuovi interpelli agli utenti compatibili:
@@ -85,7 +94,12 @@ export async function notificaNuoviInterpelli(
     const risultati = await Promise.all(
       utenti.map(async (utente) => {
         // FASE 6 — guardia server-side: RPC atomica del contatore notifiche.
-        // base → max 3/mese (skip oltre il limite); pro → sempre consentito.
+        // base → max 3 totali (skip oltre il limite); pro → sempre consentito.
+        let tipo: TipoMessaggio = 'notifica_pro';
+        let consentito = true;
+        let skip = false;
+        const chatId = utente.telegramChatId;
+
         if (client) {
           const { data: rpcData, error: rpcError } = await client.rpc('incrementa_notifiche_utente', {
             p_user_id: utente.id,
@@ -94,15 +108,108 @@ export async function notificaNuoviInterpelli(
             console.warn(
               `  ⚠ RPC contatore notifiche fallita per ${utente.id.slice(0, 8)}… (${rpcError.message}) — invio comunque.`,
             );
-          } else if (rpcData?.[0]?.consentito === false) {
-            console.log(
-              `  ℹ Utente ${utente.id.slice(0, 8)}… al limite notifiche (${rpcData[0].notifiche_usate}/3): notifica saltata.`,
-            );
-            return [] as Array<{ tipo: 'email' | 'telegram'; valore: EsitoJob }>;
+          } else if (rpcData?.[0]) {
+            if (rpcData[0].consentito === false) {
+              // Post-prova: prima opportunità oltre il limite → EXTRA (soft);
+              // poi → RECAP (definitivo, una tantum). Se entrambi già inviati, skip.
+              consentito = false;
+              if (utente.notificheBloccoInviato !== true) {
+                tipo = 'extra';
+              } else if (utente.notificheRecapInviato !== true) {
+                tipo = 'recap';
+              } else {
+                skip = true;
+              }
+            } else {
+              // Variante del template in base al contatore (1ª, 2ª, 3ª di prova);
+              // gli utenti PRO ricevono sempre la notifica standard.
+              const usate = Number(rpcData[0].notifiche_usate);
+              tipo =
+                utente.piano === 'pro'
+                  ? 'notifica_pro'
+                  : usate === 1
+                    ? 'prova1'
+                    : usate === 2
+                      ? 'prova2'
+                      : 'prova3';
+            }
           }
         }
 
+        // Entrambi i messaggi post-prova (extra + recap) già inviati in passato.
+        if (skip) return [];
+
         const jobs: Array<{ tipo: 'email' | 'telegram'; promessa: Promise<EsitoJob> }> = [];
+
+        // Post-prova: EXTRA o RECAP, una sola volta in assoluto per ciascuno
+        // (flag sul DB + dedup in-process tra esecuzioni concorrenti).
+        if (!consentito) {
+          const giaInviato =
+            tipo === 'recap'
+              ? notificheRecapInviate.has(utente.id) || utente.notificheRecapInviato === true
+              : notificheBloccoInviate.has(utente.id) || utente.notificheBloccoInviato === true;
+
+          if (!giaInviato) {
+            if (tipo === 'recap') notificheRecapInviate.add(utente.id);
+            else notificheBloccoInviate.add(utente.id);
+            console.log(`  ℹ Utente ${utente.id.slice(0, 8)}… post-prova: invio messaggio ${tipo}.`);
+            if (utente.email && resend) {
+              const destinatario: DestinatarioNotifica = {
+                email: utente.email,
+                nome: utente.nome,
+                province: utente.province,
+                classi: utente.classi,
+              };
+              jobs.push({
+                tipo: 'email',
+                promessa: inviaNotificaEmail(resend, dettagli, destinatario, {
+                  dryRun,
+                  dashboardUrl,
+                  tipo,
+                }).then((e) => ({ ok: e.inviata })),
+              });
+            }
+            if (chatId) {
+              jobs.push({
+                tipo: 'telegram',
+                promessa: (async () => {
+                  if (dryRun) {
+                    console.log(`  ✈ [DRY-RUN] → Telegram ${chatId} (${tipo})`);
+                    return { ok: true };
+                  }
+                  const r = await inviaNotificaTelegram(chatId, dettagli, {
+                    classiUtente: utente.classi,
+                    dashboardUrl,
+                    tipo,
+                  });
+                  if (r.ok) console.log(`  ✓ Telegram (${tipo}) inviato a chat ${chatId}`);
+                  else console.warn(`  ✗ Telegram a ${chatId} fallito: ${r.error ?? 'errore'}`);
+                  return { ok: r.ok };
+                })(),
+              });
+            }
+          }
+          const completati = await Promise.all(
+            jobs.map((j) =>
+              j.promessa
+                .then((valore) => ({ tipo: j.tipo, valore }))
+                .catch(() => ({ tipo: j.tipo, valore: { ok: false } })),
+            ),
+          );
+
+          // Messaggio consegnato su almeno un canale: marcatura una tantum sul DB.
+          if (completati.some((c) => c.valore.ok) && client) {
+            const flag = tipo === 'recap' ? 'notifiche_recap_inviato' : 'notifiche_blocco_inviato';
+            const { error: errFlag } = await client
+              .from('profiles')
+              .update({ [flag]: true })
+              .eq('id', utente.id);
+            if (errFlag) {
+              console.warn(`  ⚠ Flag ${flag} non aggiornato per ${utente.id.slice(0, 8)}… (${errFlag.message})`);
+            }
+          }
+          return completati;
+        }
 
         if (utente.email && resend) {
           const destinatario: DestinatarioNotifica = {
@@ -116,11 +223,11 @@ export async function notificaNuoviInterpelli(
             promessa: inviaNotificaEmail(resend, dettagli, destinatario, {
               dryRun,
               dashboardUrl,
+              tipo,
             }).then((e) => ({ ok: e.inviata })),
           });
         }
 
-        const chatId = utente.telegramChatId;
         if (chatId) {
           jobs.push({
             tipo: 'telegram',
@@ -132,6 +239,7 @@ export async function notificaNuoviInterpelli(
               const r = await inviaNotificaTelegram(chatId, dettagli, {
                 classiUtente: utente.classi,
                 dashboardUrl,
+                tipo,
               });
               if (r.ok) console.log(`  ✓ Telegram inviato a chat ${chatId}`);
               else console.warn(`  ✗ Telegram a ${chatId} fallito: ${r.error ?? 'errore'}`);

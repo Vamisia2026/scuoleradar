@@ -9,6 +9,9 @@ import { classiConcorso, classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import { STORAGE_KEY_INTENDED_PLAN, STORAGE_KEY_INTENDED_PLAN_DATA, type PianoId } from '@/lib/pricing';
 
+/** Limite notifiche di prova per gli utenti BASE: 3 TOTALI, in assoluto (nessun reset mensile). */
+export const LIMITE_NOTIFICHE_PROVA = 3;
+
 export interface User {
   nome: string;
   cognome: string;
@@ -489,7 +492,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!au) return;
         const { data, error } = await supabase
           .from('profiles')
-          .select('province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, abbonamento_scade_il, crediti, notifiche_usate, notifiche_mese, favorite_schools, ignored_schools')
+          .select('province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, abbonamento_scade_il, crediti, notifiche_usate, favorite_schools, ignored_schools')
           .eq('id', au.id)
           .maybeSingle();
         if (!error && data) {

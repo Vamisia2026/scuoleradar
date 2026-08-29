@@ -2,25 +2,25 @@ import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 
 /**
- * ScuoleRadar.it — "Pensieri dell'Archivista Premuroso".
+ * ScuoleRadar.it — "Recupero dell'Archivista Capo".
  *
- * Frasi calde ed empatiche mostrate in sequenza durante ricerca/generazione
- * del documento (rotazione ogni ~3 secondi). Danno l'impressione di un
- * collega che lavora con cura, non di un processo automatico.
+ * Frasi brevi e professionali mostrate in sequenza mentre il documento
+ * viene recuperato/generato (rotazione ogni ~2.5 secondi): danno la
+ * sensazione di un archivista esperto che lavora con precisione.
  */
 const FRASI = [
-  'Stiamo spulciando tra i moduli per trovare quello che si adatta meglio al tuo caso specifico…',
-  'Abbiamo individuato un paio di modelli simili: li stiamo confrontando per darti esattamente quello più preciso…',
-  "Diamo un'ultima controllata al testo per assicurarci che sia formattato alla perfezione e pronto da stampare.",
-  'Stiamo verificando i riferimenti normativi aggiornati, così il documento resti valido e affidabile…',
-  'Quasi fatto: stiamo componendo il documento con cura, come lo faremmo per un collega…',
+  'Sto cercando nel registro: un momento…',
+  'Ho trovato la cartella giusta: verifico la versione più recente…',
+  'Controllo i riferimenti normativi aggiornati per il tuo caso…',
+  'Quasi pronto: sistemo il documento per la stampa…',
+  'Un momento: preparo il foglio giusto per te…',
 ];
 
 export function PensieriArchivista({ etichetta }: { etichetta?: string }) {
   const [indice, setIndice] = useState(0);
 
   useEffect(() => {
-    const timer = setInterval(() => setIndice((i) => (i + 1) % FRASI.length), 3000);
+    const timer = setInterval(() => setIndice((i) => (i + 1) % FRASI.length), 2500);
     return () => clearInterval(timer);
   }, []);
 

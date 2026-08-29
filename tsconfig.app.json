@@ -27,5 +27,12 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
-  "exclude": ["src/scraper", "src/lib/resend.ts", "src/lib/notifier.ts", "src/lib/telegram.ts"]
+  "exclude": [
+    "src/scraper",
+    "src/departments/notizie/services/newsFetcher.ts",
+    "src/departments/notizie/services/ingestNotizie.ts",
+    "src/lib/resend.ts",
+    "src/lib/notifier.ts",
+    "src/lib/telegram.ts"
+  ]
 }

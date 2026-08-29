@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Radar, BellRing, ShieldCheck, Heart, ArrowRight, UserPlus, Send, CreditCard, MapPin, Calendar, Sparkles,
 } from 'lucide-react';
 import { Header } from '@/components/Header';
+import { ContattiModal } from '@/components/ContattiModal';
 import { SimulatorRadar } from '@/components/SimulatorRadar';
 import { useApp } from '@/contexts/AppContext';
 import { servizi } from '@/data/servizi';
@@ -63,7 +65,7 @@ export function LandingPage() {
                 </button>
               </div>
               <p className="mt-4 text-sm text-primary-500">
-                3 notifiche incluse nell&apos;Offerta per provare. Nessuna carta richiesta.
+                3 notifiche di prova in assoluto. Nessuna carta richiesta.
               </p>
             </div>
 
@@ -260,7 +262,7 @@ export function LandingPage() {
             Inizia il tuo Radar
           </h2>
           <p className="mt-4 text-lg text-primary-600">
-            3 notifiche incluse nell&apos;Offerta per provare. Se trovi lavoro grazie a noi, ci raccomandi.
+            3 notifiche di prova in assoluto. Se trovi lavoro grazie a noi, ci raccomandi.
             Altrimenti, se vuoi continuare, 49€ all&apos;anno con PureFocus incluso.
           </p>
           <button
@@ -374,6 +376,8 @@ function Stat({ numero, label }: { numero: string; label: string }) {
 }
 
 export function Footer() {
+  const [contattiOpen, setContattiOpen] = useState(false);
+
   return (
     <footer className="border-t border-primary-100 bg-white">
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
@@ -384,8 +388,9 @@ export function Footer() {
               <span className="font-semibold">ScuoleRadar.it</span>
             </div>
             <p className="mt-3 text-sm leading-relaxed text-primary-500">
-              Monitoriamo interpelli e bandi per docenti e ti avvisiamo solo quando c&apos;è
-              qualcosa di davvero pertinente.
+              Monitoriamo in tempo reale interpelli, supplenze e tutte le opportunità retribuite per
+              la scuola (PNRR, PON, POR e bandi per esperti). Più una suite completa di strumenti per
+              la tua carriera docente.
             </p>
           </div>
           <div>
@@ -421,6 +426,14 @@ export function Footer() {
                   Tutti i servizi
                 </Link>
               </li>
+              <li>
+                <button
+                  onClick={() => setContattiOpen(true)}
+                  className="text-left text-primary-600 transition hover:text-primary-800"
+                >
+                  Contattaci
+                </button>
+              </li>
             </ul>
           </div>
         </div>
@@ -428,6 +441,8 @@ export function Footer() {
           Dati di esempio a scopo dimostrativo. Nessun invio di domande.
         </p>
       </div>
+
+      <ContattiModal open={contattiOpen} onClose={() => setContattiOpen(false)} />
     </footer>
   );
 }

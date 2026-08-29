@@ -16,18 +16,18 @@ export const LOGO_DOCUMENTO = '/ScuoleRadar Logo Transparent Full Final.png';
 const STILI_DOCUMENTO = `
   @page {
     size: A4;
-    margin: 22mm 14mm 20mm 14mm;
+    margin: 20mm;
     @bottom-left {
-      content: "Documento generato tramite ScuoleRadar.it";
+      content: "Documento scaricato gratuitamente da ScuoleRadar.it";
       font-family: Arial, sans-serif;
       font-size: 8pt;
-      color: #94a3b8;
+      color: #64748b;
     }
     @bottom-right {
       content: "Pagina " counter(page) " di " counter(pages);
       font-family: Arial, sans-serif;
       font-size: 8pt;
-      color: #94a3b8;
+      color: #64748b;
     }
   }
   * { box-sizing: border-box; }
@@ -47,7 +47,7 @@ const STILI_DOCUMENTO = `
   }
   .divisore {
     border: none;
-    border-top: 1px solid #e5e7eb;
+    border-top: 1px solid #333;
     margin: 8px 0 20px;
   }
   h1.titolo-documento {
@@ -62,7 +62,7 @@ const STILI_DOCUMENTO = `
     color: #14354e;
     margin: 26px 0 10px;
     padding-bottom: 4px;
-    border-bottom: 1px solid #eef2f7;
+    border-bottom: 1px solid #cbd5e1;
   }
   h3 {
     font-size: 12pt;
@@ -70,25 +70,129 @@ const STILI_DOCUMENTO = `
     color: #1b4768;
     margin: 18px 0 8px;
   }
-  p { margin: 0 0 10px; }
+  p { margin: 0 0 10px; font-size: 12pt; }
   ul, ol { margin: 0 0 12px; padding-left: 22px; }
-  li { margin-bottom: 4px; }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 12px 0 16px;
-  }
+  li { margin-bottom: 4px; font-size: 12pt; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 16px; }
   th, td {
     padding: 8px;
-    border: 1px solid #e2e8f0;
-    font-size: 11pt;
+    border: 1px solid #333;
+    font-size: 12pt;
     text-align: left;
     vertical-align: top;
   }
-  thead th { background: #f1f5f9; font-weight: 700; color: #14354e; }
-  tbody tr:nth-child(even) { background: #f9fafb; }
+  thead th { background: #eef2f7; font-weight: 700; color: #0c2235; }
+
+  /* ------- Anatomia del documento scolastico formale ------- */
+  .intestazione-formale {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 16px;
+    page-break-inside: avoid;
+  }
+  .intestazione-formale td {
+    border: 1px solid #333;
+    padding: 8px 10px;
+    font-size: 12pt;
+    vertical-align: top;
+  }
+  .campo-etichetta {
+    font-weight: 700;
+    color: #111;
+    width: 30%;
+    background: #f4f6f8;
+  }
+  .riferimento-normativo {
+    border: 1px solid #333;
+    background: #f4f6f8;
+    padding: 10px 12px;
+    font-size: 11pt;
+    margin: 0 0 18px;
+    page-break-inside: avoid;
+  }
+  .quadro-anagrafico {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 16px;
+    page-break-inside: avoid;
+  }
+  .quadro-anagrafico td {
+    border: 1px solid #333;
+    padding: 8px 10px;
+    font-size: 12pt;
+    vertical-align: top;
+  }
+  .crocette {
+    border: 1px solid #333;
+    padding: 14px 16px;
+    margin: 0 0 16px;
+    page-break-inside: avoid;
+  }
+  .crocette p { margin: 0 0 6px; font-size: 12pt; }
+  .crocette .voce { display: flex; align-items: baseline; gap: 10px; margin: 0 0 6px; font-size: 12pt; }
+  .casella {
+    display: inline-block;
+    width: 13px;
+    height: 13px;
+    border: 1px solid #333;
+    margin-right: 8px;
+    vertical-align: -2px;
+    flex-shrink: 0;
+  }
+  .guida-compilazione {
+    border: 1px solid #94a3b8;
+    background: #f0f6ff;
+    padding: 10px 12px;
+    margin: 0 0 12px;
+    font-style: italic;
+    font-size: 10.5pt;
+    line-height: 1.45;
+    color: #1e3a5f;
+    page-break-inside: avoid;
+  }
+  .guida-compilazione strong { font-style: normal; color: #14354e; }
+  .scrittura-mano {
+    min-height: 150px;
+    border: 1px solid #333;
+    margin: 0 0 18px;
+    padding: 14px 16px;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 28px,
+      #94a3b8 28px,
+      #94a3b8 30px
+    );
+    page-break-inside: avoid;
+  }
+  .scrittura-mano--alta { min-height: 180px; }
+  .convalida {
+    border: 1px solid #333;
+    padding: 12px 14px;
+    margin-top: 22px;
+    page-break-inside: avoid;
+  }
+  .convalida p { margin: 0 0 6px; font-size: 10.5pt; }
+  .convalida .riga-firma { height: 30px; border-bottom: 1px dotted #333; }
+  .tabella-firme {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 0;
+    page-break-inside: avoid;
+  }
+  .tabella-firme th,
+  .tabella-firme td {
+    border: 1px solid #333;
+    padding: 10px 12px;
+    font-size: 12pt;
+    vertical-align: bottom;
+  }
+  .tabella-firme th { background: #eef2f7; text-align: left; }
+  .riga-firma { height: 40px; border-bottom: 1px dotted #333; }
+  .campo-scrittura { height: 26px; border-bottom: 1px solid #94a3b8; }
+
   .indice {
-    border: 1px solid #e5e7eb;
+    border: 1px solid #cbd5e1;
     border-radius: 8px;
     padding: 14px 18px;
     margin: 0 0 20px;
@@ -98,6 +202,20 @@ const STILI_DOCUMENTO = `
   .indice ol { margin: 0; padding-left: 20px; }
   .indice a { color: #2b6f9e; text-decoration: none; }
   strong, b { font-weight: 700; }
+
+  @media print {
+    .scrittura-mano,
+    .tabella-firme,
+    .intestazione-formale,
+    .quadro-anagrafico,
+    .crocette,
+    .riferimento-normativo,
+    .guida-compilazione,
+    .convalida {
+      page-break-inside: avoid;
+    }
+    h2, h3 { page-break-after: avoid; }
+  }
   @media screen {
     body { padding: 24px; }
   }

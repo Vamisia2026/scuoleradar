@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Clock, MapPin, GraduationCap, ArrowRight, AlertTriangle, BadgeCheck, BellRing, Star } from 'lucide-react';
 import type { Interpello } from '@/data/interpelli';
 import { Modal } from './Modal';
-import { useApp } from '@/contexts/AppContext';
+import { useApp, LIMITE_NOTIFICHE_PROVA } from '@/contexts/AppContext';
 import { classeByCodice } from '@/data/classiConcorso';
 
 function giorniRimanenti(iso: string): number {
@@ -19,6 +19,7 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
   const inScadenza = giorni >= 0 && giorni <= 3;
   const classe = classeByCodice(interpello.classeCodice);
   const giaNotificato = interpelliNotificati.includes(interpello.id);
+  const notificheRimanenti = Math.max(LIMITE_NOTIFICHE_PROVA - notificheUsate, 0);
   const isPreferita = preferenze.favoriteSchools.some((s) =>
     s && `${interpello.istituto} ${interpello.titolo}`.toLowerCase().includes(s.toLowerCase()),
   );
@@ -158,10 +159,25 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
             </div>
           )}
 
-          {!abbonato && notificheUsate >= 3 && !giaNotificato && (
-            <div className="rounded-xl border border-secondary-200 bg-secondary-50 px-4 py-3 text-sm text-secondary-800">
-              Hai esaurito le 3 notifiche incluse nell'Offerta. Per continuare a ricevere nuove notifiche,
-              passa al piano PRO.
+          {!abbonato && !giaNotificato && (
+            <div
+              className={`rounded-xl border px-4 py-3 text-sm ${
+                notificheRimanenti > 0
+                  ? 'border-primary-100 bg-primary-50 text-primary-700'
+                  : 'border-secondary-200 bg-secondary-50 text-secondary-800'
+              }`}
+            >
+              {notificheRimanenti > 0 ? (
+                <>
+                  Ti restano <strong>{notificheRimanenti}</strong> di {LIMITE_NOTIFICHE_PROVA}{' '}
+                  notifiche di prova in assoluto. Passa a PRO per notifiche illimitate.
+                </>
+              ) : (
+                <>
+                  Hai esaurito le tue {LIMITE_NOTIFICHE_PROVA} notifiche di prova in assoluto. Per
+                  continuare a ricevere nuove notifiche, passa al piano PRO.
+                </>
+              )}
             </div>
           )}
         </div>

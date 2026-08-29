@@ -10,7 +10,11 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "scrape": "tsx src/scraper/index.ts",
-    "scrape:check": "tsc --noEmit -p tsconfig.scraper.json"
+    "scrape:check": "tsc --noEmit -p tsconfig.scraper.json",
+    "scrape:notizie": "tsx src/departments/notizie/services/ingestNotizie.ts",
+    "scrape:notizie:check": "tsc --noEmit -p tsconfig.notizie.json",
+    "test:telegram": "tsx scripts/test-telegram.ts",
+    "test:notifiche": "tsx scripts/test-notifiche.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

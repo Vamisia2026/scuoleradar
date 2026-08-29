@@ -487,7 +487,7 @@ export function OnboardingPage() {
             <div className="animate-fade-in">
               <h2 className="text-xl font-bold text-primary-800">Canali di notifica</h2>
               <p className="mt-1 text-sm text-primary-600">
-                Riceverai le tue 3 notifiche incluse nell&apos;Offerta su Telegram, e in copia via email.
+                Riceverai le tue 3 notifiche di prova (in assoluto, una tantum) su Telegram, e in copia via email.
                 Ti avviseremo di interpelli per supplenze, bandi per esperti, CPIA e progetti scolastici.
               </p>
 

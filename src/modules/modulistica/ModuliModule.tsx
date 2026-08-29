@@ -1,26 +1,33 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FolderOpen } from 'lucide-react';
+import { FolderOpen, Loader2, UserPlus, X } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useApp } from '@/contexts/AppContext';
 import { useToast } from '@/components/Toast';
 import {
   conAggiuntaInCima,
+  macroAreaById,
   moduli,
   STORAGE_KEY_MODULI_SCARICATI,
+  type DocumentoModulistica,
   type Modulo,
   type ModuloScaricato,
 } from '@/data/moduli';
 import type { ModuloSalvatoDB, VistaModulistica, VoceModulo } from './types';
 import { ModuliNavigation } from './components/ModuliNavigation';
-import { ModuliCatalog } from './components/ModuliCatalog';
+import { MacroAreaMenu } from './components/MacroAreaMenu';
+import { EsploraArchivio } from './components/EsploraArchivio';
+import { RicercaArchivista } from './components/RicercaArchivista';
+import { VetrinaModulistica } from './components/VetrinaModulistica';
 import { SavedModuli } from './components/SavedModuli';
-import { ModuleCreatorEngine } from './creator/ModuleCreatorEngine';
+import { ArchivistaCapo } from './creator/ArchivistaCapo';
 import { ModuleCreatorErrorBoundary } from './creator/ModuleCreatorErrorBoundary';
 import { ModuloPreview } from './creator/ModuloPreview';
 import {
   caricaDocumentoGenerato,
+  creaDocumentoLocale,
   elencaDownload,
+  generaDocumento,
   registraDownloadCatalogo,
   registraDownloadGenerato,
   rimuoviDownload,
@@ -30,21 +37,29 @@ import {
 /**
  * Modulo Modulistica — contenitore principale isolato.
  *
- * Struttura:
- *  - `components/` → archivio e navigazione (catalogo, lista salvati)
- *  - `creator/`    → creatore dinamico, protetto da un Error Boundary dedicato
- *                    così che un errore interno non faccia crollare la pagina
- *                    né gli altri servizi di ScuoleRadar.
+ * Struttura (interfaccia dell'Archivista Capo):
+ *  - barra di ricerca larga in cima → avvia l'intervista guidata
+ *  - menu delle Macroaree (Sostegno per prima) → archivio a drill-down
+ *  - contenitore rettangolare: griglia 3×3 delle sottocategorie con
+ *    paginazione, doppio click per scendere fino al singolo documento
+ *  - ogni documento è UN SOLO modulo profilato (cache `generated_modules`
+ *    tramite l'impronta dell'intervista) e al download viene salvato
+ *    automaticamente in `user_saved_modules` ("I miei Modelli Scaricati")
  */
 export function ModuliModule() {
-  const { user, openVetrina } = useApp();
+  const { user, openVetrina, openAuthModal } = useApp();
   const { mostraToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [vista, setVista] = useState<VistaModulistica>(() => {
     const tab = searchParams.get('tab');
-    return tab === 'miei' ? 'miei' : tab === 'genera' ? 'genera' : 'catalogo';
+    return tab === 'miei' ? 'miei' : tab === 'intervista' ? 'intervista' : 'archivio';
   });
-  const [scaricato, setScaricato] = useState<string | null>(null);
+  const [macroAreaId, setMacroAreaId] = useState<string | null>(null);
+  const [intervista, setIntervista] = useState<{ testo: string; nonce: number }>({
+    testo: '',
+    nonce: 0,
+  });
+  const [recupero, setRecupero] = useState(false);
   const [moduliScaricati, setModuliScaricati] = useLocalStorage<ModuloScaricato[]>(
     STORAGE_KEY_MODULI_SCARICATI,
     [],
@@ -52,7 +67,18 @@ export function ModuliModule() {
   /** Download registrati su user_saved_modules. */
   const [moduliDB, setModuliDB] = useState<ModuloSalvatoDB[]>([]);
   const [caricamentoMiei, setCaricamentoMiei] = useState(false);
-  const [anteprima, setAnteprima] = useState<DocumentoGenerato | null>(null);
+  const [anteprima, setAnteprima] = useState<{ modulo: DocumentoGenerato; cache: boolean } | null>(
+    null,
+  );
+  /** Avviso di accesso richiesto / sessione scaduta (customer care "Bezos style"). */
+  const [notaAccesso, setNotaAccesso] = useState(false);
+  const richiediAccesso = useCallback(() => setNotaAccesso(true), []);
+  const chiudiNotaAccesso = useCallback(() => setNotaAccesso(false), []);
+
+  const macroArea = useMemo(() => macroAreaById(macroAreaId), [macroAreaId]);
+
+  /** Compatta banner e padding quando l'utente cerca o esplora una macroarea. */
+  const compattato = vista === 'intervista' || macroAreaId !== null;
 
   const caricaMieiDB = useCallback(async () => {
     if (!user) {
@@ -62,9 +88,10 @@ export function ModuliModule() {
     setCaricamentoMiei(true);
     const res = await elencaDownload();
     if (res.ok && res.moduli) setModuliDB(res.moduli);
-    else if (res.errore !== 'NON_AUTENTICATO') console.warn('ModuliModule — elencaDownload:', res.errore);
+    else if (res.errore === 'NON_AUTENTICATO') richiediAccesso();
+    else if (res.errore) console.warn('ModuliModule — elencaDownload:', res.errore);
     setCaricamentoMiei(false);
-  }, [user]);
+  }, [user, richiediAccesso]);
 
   // Ricarica i download registrati quando si apre la tab "I miei".
   useEffect(() => {
@@ -79,7 +106,6 @@ export function ModuliModule() {
         openVetrina('moduli');
         return;
       }
-      setScaricato(m.nome);
       setModuliScaricati(conAggiuntaInCima(moduliScaricati, m));
       void registraDownloadCatalogo(m).then((res) => {
         if (res.ok) mostraToast('successo', 'Modulo salvato nei tuoi "Modelli Scaricati".');
@@ -87,6 +113,82 @@ export function ModuliModule() {
       alert(`Download simulato di "${m.nome}" (${m.tipo}).`);
     },
     [user, openVetrina, moduliScaricati, setModuliScaricati, mostraToast],
+  );
+
+  /** Registra automaticamente il download nei "Modelli Scaricati" (user_saved_modules). */
+  const registraEAvvisa = useCallback(
+    (modulo: DocumentoGenerato) => {
+      if (!modulo.id) return;
+      void registraDownloadGenerato(modulo).then((res) => {
+        if (res.ok) {
+          mostraToast('successo', 'Modulo salvato nei tuoi "Modelli Scaricati".');
+        } else if (res.errore === 'NON_AUTENTICATO') {
+          richiediAccesso();
+        } else if (res.errore) {
+          console.warn('ModuliModule — auto-salvataggio:', res.errore);
+        }
+      });
+    },
+    [mostraToast, richiediAccesso],
+  );
+
+  /** Apre l'anteprima di un documento generato e lo salva subito nel profilo. */
+  const apriAnteprima = useCallback(
+    (modulo: DocumentoGenerato, cache: boolean) => {
+      setAnteprima({ modulo, cache });
+      registraEAvvisa(modulo);
+    },
+    [registraEAvvisa],
+  );
+
+  /** Documento aperto dall'archivio (profilo già completo) → generazione cache-first. */
+  const apriDocumento = useCallback(
+    async (doc: DocumentoModulistica) => {
+      if (!user) {
+        openVetrina('moduli');
+        return;
+      }
+      setRecupero(true);
+      try {
+        const res = await generaDocumento(doc.nome, doc.profilo, doc.catalogoId);
+        if (!res.ok || !res.esito) {
+          if (res.errore === 'NON_AUTENTICATO') richiediAccesso();
+          else mostraToast('errore', 'Ops, non siamo riusciti a preparare il documento. Riprova tra un istante.');
+          // Fallback locale: il pulsante "Apri documento" apre comunque l'anteprima.
+          apriAnteprima(creaDocumentoLocale(doc.nome, doc.profilo, doc.catalogoId), false);
+          return;
+        }
+        apriAnteprima(res.esito.modulo, res.esito.cache);
+      } catch (err) {
+        console.warn('ModuliModule — apriDocumento:', err);
+        mostraToast('errore', 'Ops, non siamo riusciti a preparare il documento. Riprova tra un istante.');
+        // Fallback locale garantito anche in caso di errore imprevisto.
+        apriAnteprima(creaDocumentoLocale(doc.nome, doc.profilo, doc.catalogoId), false);
+      } finally {
+        // L'indicatore deve SEMPRE spegnersi, anche in caso di errore.
+        setRecupero(false);
+      }
+    },
+    [user, openVetrina, mostraToast, apriAnteprima, richiediAccesso],
+  );
+
+  /** Barra di ricerca in alto → intervista guidata dell'Archivista Capo. */
+  const avviaIntervista = useCallback(
+    (query: string) => {
+      if (!user) {
+        openVetrina('moduli');
+        return;
+      }
+      setIntervista({ testo: query, nonce: Date.now() });
+      setVista('intervista');
+    },
+    [user, openVetrina],
+  );
+
+  /** Callback stabile per l'ArchivistaCapo (evita riavvii involontari). */
+  const onDocumentoPronto = useCallback(
+    (modulo: DocumentoGenerato, cache: boolean) => apriAnteprima(modulo, cache),
+    [apriAnteprima],
   );
 
   const rimuoviModulo = useCallback(
@@ -124,15 +226,15 @@ export function ModuliModule() {
     async (key: string) => {
       const id = key.replace(/^gen:/, '');
       const modulo = await caricaDocumentoGenerato(id);
-      if (modulo) setAnteprima(modulo);
+      if (modulo) apriAnteprima(modulo, true);
       else mostraToast('errore', 'Documento non trovato nell\u2019archivio (o servizio non configurato).');
     },
-    [mostraToast],
+    [apriAnteprima, mostraToast],
   );
 
   const apriTab = (v: VistaModulistica) => {
     setVista(v);
-    setSearchParams(v === 'catalogo' ? {} : { tab: v }, { replace: true });
+    setSearchParams(v === 'archivio' ? {} : { tab: v }, { replace: true });
   };
 
   /** Voci combinate: storico locale (catalogo) + DB (catalogo e generati), senza duplicati. */
@@ -162,43 +264,121 @@ export function ModuliModule() {
     return [...locali, ...remoti];
   }, [moduliScaricati, moduliDB]);
 
+  // Vetrina Freemium: gli utenti NON registrati vedono solo la landing
+  // promozionale orientata alla registrazione gratuita.
+  if (!user) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-2">
+          <FolderOpen className="h-5 w-5 text-primary-600" />
+          <h2 className="text-2xl font-bold text-primary-800">
+            Tutti i moduli che ti servono, senza cercarli ogni volta.
+          </h2>
+        </div>
+        <VetrinaModulistica />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <FolderOpen className="h-5 w-5 text-primary-600" />
-        <h2 className="text-2xl font-bold text-primary-800">
+    <div className={compattato ? 'space-y-3' : 'space-y-6'}>
+      <div className={compattato ? 'flex items-center gap-1.5' : 'flex items-center gap-2'}>
+        <FolderOpen
+          className={compattato ? 'h-4 w-4 text-primary-600' : 'h-5 w-5 text-primary-600'}
+        />
+        <h2
+          className={
+            compattato ? 'text-lg font-bold text-primary-800' : 'text-2xl font-bold text-primary-800'
+          }
+        >
           Tutti i moduli che ti servono, senza cercarli ogni volta.
         </h2>
       </div>
 
-      <div className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
-        <p className="text-lg leading-relaxed text-primary-600">
-          Qui trovi la modulistica per il tuo lavoro a scuola. Il servizio è gratis: devi solo
-          registrarti, così teniamo in memoria i moduli che hai già scaricato, e quando ti serviranno
-          di nuovo (o serviranno a un collega) saprai dove trovarli, senza perdere tempo a cercarli da
-          capo.
-        </p>
-        {!user && (
-          <button
-            onClick={() => openVetrina('moduli')}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
-          >
-            Registrati qui
-          </button>
+      {/* Avviso di accesso (customer care "Bezos style"): visibile SOLO se davvero non sei autenticato */}
+      {notaAccesso && !user && (
+        <div className={`flex flex-col gap-3 rounded-2xl border border-secondary-200 bg-secondary-50 shadow-card sm:flex-row sm:items-center sm:justify-between ${compattato ? 'p-3' : 'p-4'}`}>
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary-500 text-white">
+              <UserPlus className="h-4 w-4" />
+            </span>
+            <p className="text-sm leading-relaxed text-primary-800">
+              Per usare questo servizio devi essere registrato. Registrati ora in un attimo. È
+              gratis.
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={() => openAuthModal('registrazione')}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-5 py-2.5 text-sm font-bold text-white shadow-soft transition hover:bg-secondary-600"
+            >
+              Registrati Ora
+            </button>
+            <button
+              onClick={chiudiNotaAccesso}
+              aria-label="Chiudi avviso"
+              className="rounded-lg p-2 text-primary-400 transition hover:bg-white hover:text-primary-700"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Menu Macroaree — subito in alto */}
+      <MacroAreaMenu
+        attiva={macroAreaId}
+        compatto={compattato}
+        onSeleziona={(area) => {
+          setMacroAreaId(area.id);
+          apriTab('archivio');
+        }}
+      />
+
+      {/* Barra di ricerca dell'Archivista Capo — sotto le Macroaree */}
+      <RicercaArchivista onInvia={avviaIntervista} compatto={compattato} />
+
+      {/* Contenitore rettangolare principale */}
+      <div
+        className={`rounded-2xl border border-primary-100 bg-white shadow-card ${
+          compattato ? 'p-3 sm:p-4' : 'p-5'
+        }`}
+      >
+        {/* Indicatore di recupero INLINE (nessun overlay oscurante: l'archivio resta chiaro e interattivo) */}
+        {recupero && (
+          <div className="mb-3 flex items-center gap-2.5 rounded-xl border border-primary-100 bg-primary-50 px-4 py-2.5">
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-secondary-500" />
+            <p className="text-sm font-medium text-primary-700">
+              Recupero del documento in corso: controllo normativa e versioni recenti…
+            </p>
+          </div>
         )}
 
-        {/* Navigazione archivio / creatore / salvati */}
+        {/* Navigazione archivio / salvati (l'intervista parte solo dalla barra di ricerca) */}
         <ModuliNavigation vista={vista} onNaviga={apriTab} />
 
-        {/* Creatore dinamico — isolato dall'Error Boundary dedicato */}
-        {vista === 'genera' && (
-          <ModuleCreatorErrorBoundary>
-            <ModuleCreatorEngine />
-          </ModuleCreatorErrorBoundary>
+        {/* Archivio: drill-down per macroarea (griglia 3×5 con paginazione) */}
+        {vista === 'archivio' && (
+          <EsploraArchivio
+            key={macroAreaId ?? 'nessuna'}
+            macroArea={macroArea}
+            compatto={compattato}
+            onApriDocumento={(doc) => void apriDocumento(doc)}
+          />
         )}
 
-        {/* Archivio: catalogo */}
-        {vista === 'catalogo' && <ModuliCatalog onScarica={handleDownload} scaricato={scaricato} />}
+        {/* Intervista guidata dell'Archivista Capo — isolata dall'Error Boundary */}
+        {vista === 'intervista' && (
+          <ModuleCreatorErrorBoundary>
+            <ArchivistaCapo
+              key={intervista.nonce}
+              queryIniziale={intervista.testo}
+              onDocumentoPronto={onDocumentoPronto}
+              onTornaAllArchivio={() => apriTab('archivio')}
+              onAccessoRichiesto={richiediAccesso}
+            />
+          </ModuleCreatorErrorBoundary>
+        )}
 
         {/* Archivio: modelli salvati */}
         {vista === 'miei' && (
@@ -212,13 +392,13 @@ export function ModuliModule() {
         )}
       </div>
 
-      {/* Anteprima di un documento generato aperto dalla tab "I miei Modelli" */}
+      {/* Anteprima di un documento generato (intervista o archivio) */}
       {anteprima && (
         <ModuloPreview
           open
           onClose={() => setAnteprima(null)}
-          modulo={anteprima}
-          cache
+          modulo={anteprima.modulo}
+          cache={anteprima.cache}
           onSalva={(m) => registraDownloadGenerato(m)}
         />
       )}

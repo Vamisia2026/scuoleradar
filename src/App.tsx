@@ -18,6 +18,7 @@ import { ProfiloPage } from '@/pages/ProfiloPage';
 import { InvitaPage } from '@/pages/InvitaPage';
 import { PrezziPage } from '@/pages/PrezziPage';
 import { NotiziePage } from '@/pages/NotiziePage';
+import { NotizieDettaglioPage } from '@/pages/NotizieDettaglioPage';
 import { ChiSiamoPage } from '@/pages/ChiSiamoPage';
 import { ServiziPage } from '@/pages/ServiziPage';
 import { ServizioPage } from '@/pages/ServizioPage';
@@ -63,6 +64,7 @@ export default function App() {
             <Route path="/servizi" element={<ServiziPage />} />
             <Route path="/servizi/:slug" element={<ServizioPage />} />
             <Route path="/notizie" element={<NotiziePage />} />
+            <Route path="/notizie/:id" element={<NotizieDettaglioPage />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
 
             {/* Area riservata (autenticazione) */}

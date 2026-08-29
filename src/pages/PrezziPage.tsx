@@ -77,8 +77,8 @@ const faq = [
     a: 'Sì. Un click e cancelliamo tutto: nessun rinnovo automatico nascosto, nessun dark pattern. Onestà prima di tutto.',
   },
   {
-    q: "Come funzionano le 3 notifiche incluse nell'Offerta?",
-    a: 'Ricevi fino a 3 avvisi di opportunità davvero pertinenti al tuo profilo, senza carta di credito. Se ti bastano, puoi fermarti lì.',
+    q: 'Come funzionano le 3 notifiche di prova?',
+    a: 'Ricevi una volta sola, in assoluto, fino a 3 avvisi di opportunità davvero pertinenti al tuo profilo, senza carta di credito e senza reset mensile. Se ti bastano, puoi fermarti lì; per continuare c\u2019è PRO.',
   },
   {
     q: 'Le notifiche arrivano davvero solo se c\u2019è qualcosa di rilevante?',
@@ -141,7 +141,7 @@ export function PrezziPage() {
           <div className="text-center">
             <h1 className="text-3xl font-bold text-primary-900 sm:text-4xl">Prezzi onesti, senza sorprese</h1>
             <p className="mx-auto mt-3 max-w-xl text-lg text-primary-600">
-              Tre notifiche incluse nell&apos;Offerta per provare. Poi i piani PRO:
+              Tre notifiche di prova in assoluto, una tantum. Poi i piani PRO:
               49€ all&apos;anno oppure 9€ al mese. Niente rinnovi automatici nascosti.
             </p>
           </div>

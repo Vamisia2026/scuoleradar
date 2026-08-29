@@ -4,6 +4,9 @@
 
 html {
   scroll-behavior: smooth;
+  /* Zoom predefinito al 100%: evita ridimensionamenti/rimpicciolimenti anomali */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {

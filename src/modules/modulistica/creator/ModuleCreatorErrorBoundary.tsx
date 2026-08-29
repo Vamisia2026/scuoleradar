@@ -36,23 +36,22 @@ export class ModuleCreatorErrorBoundary extends Component<
   render() {
     if (this.state.errore) {
       return (
-        <div className="animate-fade-in mt-4 rounded-2xl border border-error-200 bg-error-50/60 p-5">
+        <div className="animate-fade-in mt-4 rounded-2xl border border-warning-500/40 bg-warning-50/70 p-5">
           <div className="flex items-start gap-3">
-            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-error-500 text-white">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning-500 text-white">
               <AlertTriangle className="h-5 w-5" />
             </span>
             <div className="min-w-0">
-              <h4 className="text-sm font-bold text-error-700">
-                Il creatore ha inciampato, ma ScuoleRadar continua a funzionare
+              <h4 className="text-sm font-bold text-warning-700">
+                Il generatore di documenti ha avuto un problema
               </h4>
-              <p className="mt-1 text-sm leading-relaxed text-error-700">
-                Non ti preoccupare: è successo qualcosa di imprevisto solo nel generatore di
-                documenti. Puoi riprovare da capo oppure usare senza problemi il resto della
-                Modulistica e gli altri servizi.
+              <p className="mt-1 text-sm leading-relaxed text-warning-700">
+                Puoi riprovare da capo oppure continuare a usare l&apos;archivio e gli altri
+                servizi di ScuoleRadar.
               </p>
               <button
                 onClick={this.riprova}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-error-600 px-4 py-2 text-sm font-semibold text-white shadow-soft transition hover:bg-error-700"
+                className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-warning-500 px-4 py-2 text-sm font-semibold text-white shadow-soft transition hover:bg-warning-600"
               >
                 <RotateCcw className="h-4 w-4" />
                 Riprova il creatore
