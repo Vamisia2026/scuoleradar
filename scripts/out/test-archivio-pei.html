@@ -198,6 +198,20 @@
     padding-left: 10px;
     background: #f8f9fa;
   }
+  /* Marcatore di layout forzato (classificazione rigida): nessun impatto visivo. */
+  .layout-richiesto { display: none; }
+  /* Chiusura dossier: firme estese + Single Sign Box + nota restano insieme e
+     compatti in fondo all'ultima pagina (elimina la pagina bianca fantasma:
+     niente break-before, margini ridotti e contenuto bilanciato). */
+  .chiusura-dossier {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    margin-top: 0;
+  }
+  .chiusura-dossier .blocco-firme { margin: 0 0 4px; }
+  .chiusura-dossier .blocco-convalida-unico { padding: 5px 8px; }
+  .chiusura-dossier .nota-normativa { margin: 4px 0 0; }
+  .chiusura-dossier .firme-estese { margin: 0 0 8px; }
   /* Due sezioni affiancate (es. Tipologia + Disponibilità) per i moduli a 1 pagina. */
   .griglia-2 {
     display: grid;
@@ -229,6 +243,11 @@
   .tabella-firme th { background: #eef2f7; text-align: left; }
   .riga-firma { height: 20px; border-bottom: 1px dotted #333; }
   .campo-scrittura { height: 16px; }
+  /* Campi a testo libero AMPI: 4-6 righe di scrittura reale. */
+  .campo-scrittura-ampio div {
+    height: 24px;
+    border-bottom: 1px solid #e0e0e0;
+  }
   .nota-normativa {
     font-size: 8pt;
     color: #64748b;
@@ -286,6 +305,19 @@
   body.layout-esteso .scrittura-mano--alta { min-height: 210px; }
   body.layout-esteso .righe-scrittura div { margin-bottom: 14px; }
   body.layout-esteso .crocette { padding: 8px 10px; }
+  body.layout-esteso { line-height: 1.55; }
+  body.layout-esteso h2 { margin: 14px 0 6px; }
+  body.layout-esteso h3 { margin: 10px 0 4px; }
+  body.layout-esteso .intestazione-formale td,
+  body.layout-esteso .quadro-anagrafico td { padding: 8px 10px; }
+  body.layout-esteso .firme-estese {
+    padding: 10px 12px;
+    margin: 0 0 8px;
+  }
+  body.layout-esteso .firme-estese p { margin-bottom: 10px; }
+  body.layout-esteso .firme-estese .riga-firma { height: 24px; }
+  body.layout-esteso .blocco-convalida-unico { padding: 8px 10px; }
+  body.layout-esteso .blocco-convalida-unico .riga-firma { height: 18px; }
 
   .indice {
     border: 1px solid #cbd5e1;
@@ -326,6 +358,7 @@
 <hr class="divisore" />
 <h1 class="titolo-documento">Piano Educativo Individualizzato (PEI) – modulo compilabile</h1>
 <div class="contenuto-documento">
+    <div class="layout-richiesto" data-layout="esteso" data-min-pagine="26"></div>
     <table class="intestazione-formale">
     <tr>
       <td class="campo-etichetta">Istituto Scolastico</td>
@@ -378,17 +411,598 @@
       <td class="campo-etichetta">Referente ASL / Specialista</td>
       <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
     </tr>
+        <tr>
+      <td class="campo-etichetta">Diagnosi funzionale / certificazione (data e riferimento)</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+        <tr>
+      <td class="campo-etichetta">Terapisti / specialisti di riferimento</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
       </table>
-    <h2>Area di intervento</h2><div class="crocette"><p class="voce"><span class="casella"></span>Sostegno alla didattica</p><p class="voce"><span class="casella"></span>Assistenza specialistica</p><p class="voce"><span class="casella"></span>Assistenza all’autonomia e alla comunicazione</p><p class="voce"><span class="casella"></span>Supporto psicologico / educativo</p><p class="voce"><span class="casella"></span>Progettazione e coordinamento (GLO)</p></div>
-<h2>Tipologia di disabilità (L. 104/1992)</h2><div class="crocette"><p class="voce"><span class="casella"></span>Disabilità sensoriale (visiva / uditiva)</p><p class="voce"><span class="casella"></span>Disabilità motoria</p><p class="voce"><span class="casella"></span>Disabilità intellettiva</p><p class="voce"><span class="casella"></span>Disturbo dello spettro autistico</p><p class="voce"><span class="casella"></span>Altro (specificare)</p></div>
-<h2>Strumenti compensativi adottati</h2><div class="crocette"><p class="voce"><span class="casella"></span>Sintesi vocale / testo digitale</p><p class="voce"><span class="casella"></span>Tabelle e formulari</p><p class="voce"><span class="casella"></span>Mappe concettuali</p><p class="voce"><span class="casella"></span>Calcolatrice</p><p class="voce"><span class="casella"></span>Registratore / software di dettatura</p><p class="voce"><span class="casella"></span>Altri strumenti (specificare)</p></div>
-<h2>Misure dispensative adottate</h2><div class="crocette"><p class="voce"><span class="casella"></span>Dispensa dalla lettura ad alta voce</p><p class="voce"><span class="casella"></span>Dispensa dai tempi standard</p><p class="voce"><span class="casella"></span>Riduzione delle prove scritte</p><p class="voce"><span class="casella"></span>Valutazione personalizzata</p><p class="voce"><span class="casella"></span>Altro (specificare)</p></div>
-<h2>Relazione iniziale / osservazioni</h2><div class="scrittura-mano scrittura-mano--alta"></div>
-<h2>Obiettivi disciplinari e di autonomia</h2><div class="scrittura-mano"></div>
-<h2>Modifiche programmatiche</h2><div class="scrittura-mano"></div>
-<h2>Interventi specialistici (ASL / Terapisti)</h2><div class="scrittura-mano"></div>
-    <div class="blocco-firme">
-      <p class="micro-copy">Da sottoscrivere a cura del richiedente / componenti del GLO. Allegare eventuale documentazione integrativa.</p>
+    <h2>Profilo di funzionamento e risorse</h2>
+<h3>Area di intervento</h3><div class="crocette"><p class="voce"><span class="casella"></span>Sostegno alla didattica</p><p class="voce"><span class="casella"></span>Assistenza specialistica</p><p class="voce"><span class="casella"></span>Assistenza all’autonomia e alla comunicazione</p><p class="voce"><span class="casella"></span>Supporto psicologico / educativo</p><p class="voce"><span class="casella"></span>Progettazione e coordinamento (GLO)</p></div>
+<h3>Tipologia di disabilità (L. 104/1992)</h3><div class="crocette"><p class="voce"><span class="casella"></span>Disabilità sensoriale (visiva / uditiva)</p><p class="voce"><span class="casella"></span>Disabilità motoria</p><p class="voce"><span class="casella"></span>Disabilità intellettiva</p><p class="voce"><span class="casella"></span>Disturbo dello spettro autistico</p><p class="voce"><span class="casella"></span>Altro (specificare)</p></div>
+<h3>Quadro delle risorse disponibili</h3>
+      <table class="quadro-anagrafico">
+        <tr>
+      <td class="campo-etichetta">Ore di sostegno assegnate</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+        <tr>
+      <td class="campo-etichetta">Assistente all’autonomia e alla comunicazione</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+        <tr>
+      <td class="campo-etichetta">Terapie e interventi specialistici (ASL)</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+        <tr>
+      <td class="campo-etichetta">Altri interventi / risorse</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+      </table>
+<h3>Quadro sintetico delle abilità e dei punti di forza</h3><div class="scrittura-mano scrittura-mano--alta"></div>
+<h3>Bisogni educativi emergenti</h3><div class="scrittura-mano"></div>
+<h3>Aspettative della famiglia e del contesto</h3><div class="scrittura-mano"></div>
+<h2>Quadro osservativo per dimensione (D.I. 182/2020)</h2>
+<h3>Dimensione Socializzazione / Interazione / Relazione</h3><div class="scrittura-mano scrittura-mano--alta"></div>
+<h3>Dimensione Comunicazione / Linguaggio</h3><div class="scrittura-mano scrittura-mano--alta"></div>
+<h3>Dimensione Autonomia / Orientamento</h3><div class="scrittura-mano scrittura-mano--alta"></div>
+<h3>Dimensione Cognitiva / Neuropsicologica / Apprendimento</h3><div class="scrittura-mano scrittura-mano--alta"></div>
+<h3>Griglia di osservazione per area disciplinare</h3>
+      <table class="quadro-anagrafico">
+        <tr><td class="campo-etichetta">Area disciplinare</td><td class="campo-compilazione">Osservazioni e interventi previsti</td></tr>
+        <tr>
+      <td class="campo-etichetta">Italiano</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+        <tr>
+      <td class="campo-etichetta">Matematica</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+        <tr>
+      <td class="campo-etichetta">Inglese / Lingue straniere</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+        <tr>
+      <td class="campo-etichetta">Storia / Geografia</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+        <tr>
+      <td class="campo-etichetta">Scienze / Tecnologia</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+        <tr>
+      <td class="campo-etichetta">Arte / Musica / Motoria</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+      </table>
+<h2>Progettazione disciplinare – Italiano / Lingua e comunicazione</h2>
+    <h3>Nuclei fondanti e adattamento della programmazione</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Nuclei fondanti della materia</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Adattamento della programmazione</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Obiettivi minimi</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Contenuti essenziali / semplificazione</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Misure dispensative applicate – Italiano / Lingua e comunicazione</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Dispensa dalla lettura ad alta voce</p>
+<p class="voce"><span class="casella"></span>Riduzione quantitativa delle prove</p>
+<p class="voce"><span class="casella"></span>Tempi aggiuntivi (es. +30%)</p>
+<p class="voce"><span class="casella"></span>Altre dispense specifiche</p>
+    </div>
+    <p class="micro-copy">Eventuali note sulle dispense specifiche:</p>
+    <div class="righe-scrittura"><div></div><div></div></div>
+    <h3>Strumenti compensativi autorizzati – Italiano / Lingua e comunicazione</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Mappe concettuali e schemi</p>
+<p class="voce"><span class="casella"></span>Sintesi vocale / testo digitale</p>
+<p class="voce"><span class="casella"></span>Dizionario e grammatiche agevolate</p>
+<p class="voce"><span class="casella"></span>Software di dettatura</p>
+<p class="voce"><span class="casella"></span>Altri strumenti autorizzati</p>
+    </div>
+    <p class="micro-copy">Eventuali note sugli strumenti autorizzati:</p>
+    <div class="righe-scrittura"><div></div><div></div></div>
+    <h3>Modalità e griglie di verifica – Italiano / Lingua e comunicazione</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Prove equipollenti</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Prove non equipollenti / differenziate</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Uso di strumenti in sede di verifica</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Tempi aggiuntivi in sede di verifica</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Criteri di valutazione disciplinare – Italiano / Lingua e comunicazione</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Criteri trasversali</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Criteri disciplinari</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Livelli attesi / esiti</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Attività e osservazioni specifiche – Italiano / Lingua e comunicazione</h3><div class="scrittura-mano scrittura-mano--alta"></div>
+<h2>Progettazione disciplinare – Matematica</h2>
+    <h3>Nuclei fondanti e adattamento della programmazione</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Nuclei fondanti della materia</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Adattamento della programmazione</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Obiettivi minimi</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Contenuti essenziali / semplificazione</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Misure dispensative applicate – Matematica</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Dispensa dal calcolo a mente</p>
+<p class="voce"><span class="casella"></span>Riduzione quantitativa degli esercizi</p>
+<p class="voce"><span class="casella"></span>Tempi aggiuntivi (es. +30%)</p>
+<p class="voce"><span class="casella"></span>Altre dispense specifiche</p>
+    </div>
+    <p class="micro-copy">Eventuali note sulle dispense specifiche:</p>
+    <div class="righe-scrittura"><div></div><div></div></div>
+    <h3>Strumenti compensativi autorizzati – Matematica</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Calcolatrice / tavole</p>
+<p class="voce"><span class="casella"></span>Formulari e mappe</p>
+<p class="voce"><span class="casella"></span>Sintesi vocale / testo digitale</p>
+<p class="voce"><span class="casella"></span>Software di geometria dinamica</p>
+<p class="voce"><span class="casella"></span>Altri strumenti autorizzati</p>
+    </div>
+    <p class="micro-copy">Eventuali note sugli strumenti autorizzati:</p>
+    <div class="righe-scrittura"><div></div><div></div></div>
+    <h3>Modalità e griglie di verifica – Matematica</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Prove equipollenti</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Prove non equipollenti / differenziate</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Uso di strumenti in sede di verifica</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Tempi aggiuntivi in sede di verifica</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Criteri di valutazione disciplinare – Matematica</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Criteri trasversali</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Criteri disciplinari</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Livelli attesi / esiti</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Attività e osservazioni specifiche – Matematica</h3><div class="scrittura-mano scrittura-mano--alta"></div>
+<h2>Progettazione disciplinare – Scienze</h2>
+    <h3>Nuclei fondanti e adattamento della programmazione</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Nuclei fondanti della materia</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Adattamento della programmazione</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Obiettivi minimi</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Contenuti essenziali / semplificazione</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Misure dispensative applicate – Scienze</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Dispensa dalla lettura di testi complessi</p>
+<p class="voce"><span class="casella"></span>Riduzione quantitativa delle verifiche</p>
+<p class="voce"><span class="casella"></span>Tempi aggiuntivi (es. +30%)</p>
+<p class="voce"><span class="casella"></span>Altre dispense specifiche</p>
+    </div>
+    <p class="micro-copy">Eventuali note sulle dispense specifiche:</p>
+    <div class="righe-scrittura"><div></div><div></div></div>
+    <h3>Strumenti compensativi autorizzati – Scienze</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Calcolatrice scientifica</p>
+<p class="voce"><span class="casella"></span>Tavola periodica / formulari</p>
+<p class="voce"><span class="casella"></span>Mappe concettuali</p>
+<p class="voce"><span class="casella"></span>Sintesi vocale / testo digitale</p>
+<p class="voce"><span class="casella"></span>Altri strumenti autorizzati</p>
+    </div>
+    <p class="micro-copy">Eventuali note sugli strumenti autorizzati:</p>
+    <div class="righe-scrittura"><div></div><div></div></div>
+    <h3>Modalità e griglie di verifica – Scienze</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Prove equipollenti</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Prove non equipollenti / differenziate</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Uso di strumenti in sede di verifica</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Tempi aggiuntivi in sede di verifica</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Criteri di valutazione disciplinare – Scienze</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Criteri trasversali</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Criteri disciplinari</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Livelli attesi / esiti</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Attività e osservazioni specifiche – Scienze</h3><div class="scrittura-mano scrittura-mano--alta"></div>
+<h2>Progettazione disciplinare – Lingue straniere (Inglese / II lingua)</h2>
+    <h3>Nuclei fondanti e adattamento della programmazione</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Nuclei fondanti della materia</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Adattamento della programmazione</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Obiettivi minimi</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Contenuti essenziali / semplificazione</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Misure dispensative applicate – Lingue straniere (Inglese / II lingua)</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Dispensa dalla produzione orale estesa</p>
+<p class="voce"><span class="casella"></span>Riduzione della comprensione di testi complessi</p>
+<p class="voce"><span class="casella"></span>Tempi aggiuntivi (es. +30%)</p>
+<p class="voce"><span class="casella"></span>Altre dispense specifiche</p>
+    </div>
+    <p class="micro-copy">Eventuali note sulle dispense specifiche:</p>
+    <div class="righe-scrittura"><div></div><div></div></div>
+    <h3>Strumenti compensativi autorizzati – Lingue straniere (Inglese / II lingua)</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Dizionari bilingue / traduttori offline</p>
+<p class="voce"><span class="casella"></span>Mappe e schemi linguistici</p>
+<p class="voce"><span class="casella"></span>Sintesi vocale / testo digitale</p>
+<p class="voce"><span class="casella"></span>Software di dettatura</p>
+<p class="voce"><span class="casella"></span>Altri strumenti autorizzati</p>
+    </div>
+    <p class="micro-copy">Eventuali note sugli strumenti autorizzati:</p>
+    <div class="righe-scrittura"><div></div><div></div></div>
+    <h3>Modalità e griglie di verifica – Lingue straniere (Inglese / II lingua)</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Prove equipollenti</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Prove non equipollenti / differenziate</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Uso di strumenti in sede di verifica</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Tempi aggiuntivi in sede di verifica</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Criteri di valutazione disciplinare – Lingue straniere (Inglese / II lingua)</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Criteri trasversali</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Criteri disciplinari</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Livelli attesi / esiti</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Attività e osservazioni specifiche – Lingue straniere (Inglese / II lingua)</h3><div class="scrittura-mano scrittura-mano--alta"></div>
+<h2>Progettazione disciplinare – Storia / Geografia / Studio della società</h2>
+    <h3>Nuclei fondanti e adattamento della programmazione</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Nuclei fondanti della materia</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Adattamento della programmazione</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Obiettivi minimi</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Contenuti essenziali / semplificazione</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Misure dispensative applicate – Storia / Geografia / Studio della società</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Dispensa dalla memorizzazione di date e dati</p>
+<p class="voce"><span class="casella"></span>Riduzione quantitativa delle verifiche</p>
+<p class="voce"><span class="casella"></span>Tempi aggiuntivi (es. +30%)</p>
+<p class="voce"><span class="casella"></span>Altre dispense specifiche</p>
+    </div>
+    <p class="micro-copy">Eventuali note sulle dispense specifiche:</p>
+    <div class="righe-scrittura"><div></div><div></div></div>
+    <h3>Strumenti compensativi autorizzati – Storia / Geografia / Studio della società</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Atlanti e cartine</p>
+<p class="voce"><span class="casella"></span>Mappe concettuali e cronologie</p>
+<p class="voce"><span class="casella"></span>Sintesi vocale / testo digitale</p>
+<p class="voce"><span class="casella"></span>Schemi riassuntivi</p>
+<p class="voce"><span class="casella"></span>Altri strumenti autorizzati</p>
+    </div>
+    <p class="micro-copy">Eventuali note sugli strumenti autorizzati:</p>
+    <div class="righe-scrittura"><div></div><div></div></div>
+    <h3>Modalità e griglie di verifica – Storia / Geografia / Studio della società</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Prove equipollenti</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Prove non equipollenti / differenziate</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Uso di strumenti in sede di verifica</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Tempi aggiuntivi in sede di verifica</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Criteri di valutazione disciplinare – Storia / Geografia / Studio della società</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Criteri trasversali</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Criteri disciplinari</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Livelli attesi / esiti</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Attività e osservazioni specifiche – Storia / Geografia / Studio della società</h3><div class="scrittura-mano scrittura-mano--alta"></div>
+<h2>Progettazione disciplinare – Arte / Musica / Scienze Motorie / Tecnologia</h2>
+    <h3>Nuclei fondanti e adattamento della programmazione</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Nuclei fondanti della materia</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Adattamento della programmazione</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Obiettivi minimi</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Contenuti essenziali / semplificazione</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Misure dispensative applicate – Arte / Musica / Scienze Motorie / Tecnologia</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Dispensa da attività pratiche specifiche</p>
+<p class="voce"><span class="casella"></span>Riduzione quantitativa delle consegne</p>
+<p class="voce"><span class="casella"></span>Tempi aggiuntivi (es. +30%)</p>
+<p class="voce"><span class="casella"></span>Altre dispense specifiche</p>
+    </div>
+    <p class="micro-copy">Eventuali note sulle dispense specifiche:</p>
+    <div class="righe-scrittura"><div></div><div></div></div>
+    <h3>Strumenti compensativi autorizzati – Arte / Musica / Scienze Motorie / Tecnologia</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Schemi e modelli visivi</p>
+<p class="voce"><span class="casella"></span>Materiali adattati</p>
+<p class="voce"><span class="casella"></span>Software specifici</p>
+<p class="voce"><span class="casella"></span>Attrezzature adattate</p>
+<p class="voce"><span class="casella"></span>Altri strumenti autorizzati</p>
+    </div>
+    <p class="micro-copy">Eventuali note sugli strumenti autorizzati:</p>
+    <div class="righe-scrittura"><div></div><div></div></div>
+    <h3>Modalità e griglie di verifica – Arte / Musica / Scienze Motorie / Tecnologia</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Prove equipollenti</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Prove non equipollenti / differenziate</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Uso di strumenti in sede di verifica</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Tempi aggiuntivi in sede di verifica</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Criteri di valutazione disciplinare – Arte / Musica / Scienze Motorie / Tecnologia</h3>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">Criteri trasversali</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Criteri disciplinari</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+      <tr>
+      <td class="campo-etichetta">Livelli attesi / esiti</td>
+      <td class="campo-compilazione"><div class="campo-scrittura-ampio"><div></div><div></div><div></div></div></td>
+    </tr>
+    </table>
+    <h3>Attività e osservazioni specifiche – Arte / Musica / Scienze Motorie / Tecnologia</h3><div class="scrittura-mano scrittura-mano--alta"></div>
+<h2>Riferimenti normativi e tutela legale</h2>
+    <table class="quadro-anagrafico">
+      <tr>
+      <td class="campo-etichetta">D.I. 182/2020 (modelli nazionali PEI)</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+<tr>
+      <td class="campo-etichetta">D.Lgs. 66/2017 e L. 104/1992</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+<tr>
+      <td class="campo-etichetta">D.Lgs. 62/2017 (valutazione ed esami di Stato)</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+<tr>
+      <td class="campo-etichetta">D.M. 182/2020 – Quadro Operativo ICF</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+<tr>
+      <td class="campo-etichetta">Art. 10 D.I. 182/2020 (natura della valutazione)</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+    </table>
+    <h3>Natura della valutazione (art. 10 D.I. 182/2020)</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Programmazione per obiettivi minimi (prove equipollenti)</p>
+      <p class="voce"><span class="casella"></span>Programmazione differenziata (prove non equipollenti)</p>
+      <p class="voce"><span class="casella"></span>Misure compensative e dispensative ai sensi della L. 170/2010</p>
+      <p class="voce"><span class="casella"></span>Valutazione in itinere e per rubriche</p>
+    </div>
+    <p class="formula-dichiarazione">La scelta tra prove equipollenti e non equipollenti e tra programmazione per obiettivi minimi o differenziata è documentata nel presente piano e comunicata alla famiglia, ai sensi dell'art. 10 del D.I. 182/2020 e del D.Lgs. 62/2017, al fine di prevenire vizi di forma in sede di contenzioso.</p>
+<h2>Percorsi di autonomia e interventi specialistici</h2>
+<h3>Percorsi di autonomia personale e sociale</h3><div class="scrittura-mano scrittura-mano--alta"></div>
+<h3>Interventi specialistici ASL / Terapisti</h3><div class="scrittura-mano scrittura-mano--alta"></div>
+<h2>Strumenti, misure e criteri di valutazione</h2>
+<h3>Strumenti compensativi adottati</h3><div class="crocette"><p class="voce"><span class="casella"></span>Sintesi vocale / testo digitale</p><p class="voce"><span class="casella"></span>Tabelle e formulari</p><p class="voce"><span class="casella"></span>Mappe concettuali</p><p class="voce"><span class="casella"></span>Calcolatrice</p><p class="voce"><span class="casella"></span>Registratore / software di dettatura</p><p class="voce"><span class="casella"></span>Altri strumenti (specificare)</p></div>
+<h3>Misure dispensative adottate</h3><div class="crocette"><p class="voce"><span class="casella"></span>Dispensa dalla lettura ad alta voce</p><p class="voce"><span class="casella"></span>Dispensa dai tempi standard</p><p class="voce"><span class="casella"></span>Riduzione delle prove scritte</p><p class="voce"><span class="casella"></span>Valutazione personalizzata</p><p class="voce"><span class="casella"></span>Altro (specificare)</p></div>
+<h3>Criteri di valutazione personalizzata ed esami di Stato</h3><div class="crocette"><p class="voce"><span class="casella"></span>Valutazione per obiettivi minimi</p><p class="voce"><span class="casella"></span>Prove equipollenti / differenziate</p><p class="voce"><span class="casella"></span>Riferimento al PEI nella valutazione</p><p class="voce"><span class="casella"></span>Predisposizione prove d’esame personalizzate</p></div>
+<h3>Modalità di verifica</h3><div class="crocette"><p class="voce"><span class="casella"></span>Prove orali</p><p class="voce"><span class="casella"></span>Prove scritte adattate</p><p class="voce"><span class="casella"></span>Valutazione in itinere e per rubriche</p><p class="voce"><span class="casella"></span>Osservazione strutturata</p></div>
+<h2>Griglia di monitoraggio periodico</h2>
+      <table class="quadro-anagrafico">
+        <tr><td class="campo-etichetta">Periodo</td><td class="campo-compilazione">Esiti</td></tr>
+        <tr>
+      <td class="campo-etichetta">I quadrimestre / trimestre</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+        <tr>
+      <td class="campo-etichetta">II quadrimestre / pentamestre</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+        <tr>
+      <td class="campo-etichetta">Verifica finale / esiti</td>
+      <td class="campo-compilazione"><div class="campo-scrittura"></div></td>
+    </tr>
+      </table>
+<h2>Piani di uscita e raccordo con il territorio</h2>
+    <h3>Continuità e orientamento</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Passaggio all'ordine di scuola successivo</p>
+      <p class="voce"><span class="casella"></span>Passaggio al CPIA / educazione degli adulti</p>
+      <p class="voce"><span class="casella"></span>Orientamento al mondo del lavoro / PCTO</p>
+    </div>
+    <div class="righe-scrittura"><div></div><div></div><div></div></div>
+    <h3>Raccordo con enti e servizi locali</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Servizi sociali</p>
+      <p class="voce"><span class="casella"></span>ASL / Neuropsichiatria</p>
+      <p class="voce"><span class="casella"></span>Mediazione culturale</p>
+      <p class="voce"><span class="casella"></span>Associazioni del territorio</p>
+    </div>
+    <div class="righe-scrittura"><div></div><div></div><div></div></div>
+<h3>Modifiche programmatiche</h3><div class="scrittura-mano"></div>
+    <div class="chiusura-dossier">
+      <div class="firme-ruoli firme-estese">
+    <p class="titolo-chiusura">Firme del Consiglio di Classe / GLO</p>
+    <p>Componenti del GLO / Team docenti: <span class="riga-firma"></span></p>
+    <p>Famiglia / esercenti la responsabilità genitoriale: <span class="riga-firma"></span></p>
+    <p>Dirigente Scolastico: <span class="riga-firma"></span></p>
+  </div>
+      <div class="blocco-firme">
+        <p class="micro-copy">Da sottoscrivere a cura del richiedente / componenti del GLO. Allegare eventuale documentazione integrativa.</p>
     <div class="blocco-convalida-unico">
       <div class="chiusura-documento">
         <p class="titolo-chiusura">Luogo e Data</p>
@@ -400,8 +1014,9 @@
         <p>N° Prot. / Data / Timbro: <span class="riga-firma"></span></p>
       </div>
     </div>
+      </div>
+      <p class="nota-normativa">Modello conforme ai modelli nazionali PEI (D.M. 182/2020, D.Lgs. 66/2017, L. 104/1992). Documento scaricato gratuitamente da ScuoleRadar.it.</p>
     </div>
-    <p class="nota-normativa">Modello conforme ai modelli nazionali PEI (D.M. 182/2020, D.Lgs. 66/2017, L. 104/1992). Documento scaricato gratuitamente da ScuoleRadar.it.</p>
   </div>
 </body>
 </html>

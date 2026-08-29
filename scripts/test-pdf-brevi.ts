@@ -484,7 +484,6 @@ const casi = [
   { nome: 'Verbale / Scheda di Valutazione Periodica e Scrutini', corpo: corpoScrutini, file: 'test-scrutini.html' },
   { nome: 'Modulo di Richiesta / Modifica Servizio Ristorazione Scolastica', corpo: corpoMensa, file: 'test-mensa.html' },
   { nome: 'Richiesta di Riconoscimento Crediti Formativi — Scuola Secondaria di II Grado', corpo: corpoCrediti, file: 'test-crediti.html' },
-  { nome: 'Piano Didattico Personalizzato (PDP) / Scheda BES — Secondaria II Grado', corpo: corpoPdp, file: 'test-pdp.html' },
   { nome: 'Modulo di Reclamo / Ricorso Amministrativo', corpo: corpoRicorso, file: 'test-ricorso.html' },
   { nome: 'Delega Ritiro Alunno / Autorizzazione Uscita Autonoma', corpo: corpoDelega, file: 'test-delega.html' },
   { nome: 'Comunicazione di Istruzione Parentale', corpo: corpoIstruzioneParentale, file: 'test-istruzione-parentale.html' },

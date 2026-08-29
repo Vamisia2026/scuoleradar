@@ -82,6 +82,7 @@ export default {
       },
       animation: {
         'fade-in': 'fade-in 0.4s ease-out both',
+        'fade-in-lenta': 'fade-in 0.5s ease-in-out both',
         'pop': 'pop 0.25s ease-out both',
         'pulse-soft': 'pulse-soft 2s ease-in-out infinite',
       },

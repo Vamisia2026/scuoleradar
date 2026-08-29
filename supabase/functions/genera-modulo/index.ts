@@ -176,7 +176,7 @@ const DIMENSIONE_TIPO: Record<string, string[]> = {
   ],
   mad: ['messa a disposizione', 'mad'],
   supplenza: ['supplenza', 'interpello', 'incarico', 'supplente'],
-  pei: ['pei', 'osservazioni', 'inclusione', 'piano educativo individualizzato', 'glho', 'glo'],
+  pei: ['pei', 'osservazioni', 'inclusione', 'piano educativo individualizzato', 'glho', 'glo', 'scheda sintesi pei', 'relazione inclusione'],
   certificazione: ['certificazione', 'l.104', 'legge 104', 'handicap', 'disabilità', 'disabilita'],
   autocertificazione: ['autocertificazione', 'dichiarazione sostitutiva', 'dpr 445', 'titoli di studio'],
   lettera: ['lettera', 'presentazione'],
@@ -218,6 +218,13 @@ const DIMENSIONE_TIPO: Record<string, string[]> = {
   patrocinio_locali: ['patrocinio', 'uso locali scolastici', 'uso palestra', 'concessione locali'],
   convenzione_pcto: ['convenzione pcto', 'convenzione tirocinio', 'alternanza scuola lavoro', 'stage'],
   segnalazione_anomalia: ['segnalazione anomalia', 'segnalazione disservizio', 'segnalazione servizio'],
+  verbale_glo: ['verbale glo', 'verbale glho', 'riunione glo', 'verbale gruppo di lavoro', 'glo'],
+  convocazione_glo: ['convocazione glo', 'convocazione glho', 'convocazione gruppo', 'riunione glo convocazione'],
+  pdp_dsa: ['pdp dsa', 'piano didattico personalizzato dsa', 'pdp disturbi specifici', 'l. 170'],
+  piano_personalizzato_nai: ['piano personalizzato nai', 'alunni stranieri', 'nai', 'piano inclusione stranieri', 'inserimento alunni stranieri'],
+  relazione_finale_inclusione: ['relazione finale inclusione', 'relazione finale pei', 'relazione finale pdp', 'relazione inclusione'],
+  progetto_alfabetizzazione: ['progetto alfabetizzazione', 'italiano l2', 'italiano seconda lingua', 'alfabetizzazione stranieri', 'corso italiano stranieri'],
+  pdp_bes: ['pdp', 'bes', 'adhd', 'dsa', 'piano didattico', 'disturbo specifico', 'piano personalizzato'],
 };
 
 /** Ordini di scuola rilevabili dalla query. */
@@ -413,7 +420,7 @@ interface DomandaChiarimento {
 function domandaTipo(): DomandaChiarimento {
   return {
     id: 'tipo',
-    testo: 'Consigliamo di precisare il tipo di documento che ti serve…',
+    testo: 'Indichi la tipologia di documento di cui necessita.',
     opzioni: [
       'Messa a disposizione (MAD)',
       'Domanda di supplenza (interpello / incarico)',
@@ -430,7 +437,7 @@ function domandaTipo(): DomandaChiarimento {
 function domandaOrdine(): DomandaChiarimento {
   return {
     id: 'ordine',
-    testo: 'Consigliamo di precisare a quale ordine di scuola è destinato il documento…',
+    testo: 'Per quale ordine di scuola?',
     opzioni: [
       "Scuola dell'Infanzia",
       'Scuola Primaria',
@@ -505,7 +512,9 @@ interface PassoIntervista {
   opzioni: string[];
 }
 
-/** Passi dell'intervista chirurgica: una domanda alla volta, solo se serve. */
+/** Passi dell'intervista chirurgica: una domanda alla volta, solo se serve.
+ *  L'ordine precede il tipo: per le richieste generiche la prima domanda
+ *  concreta riguarda l'ordine di scuola (tono dell'Archivista Capo). */
 const PASSI_INTERVISTA: Array<{
   id: string;
   serve: (ctx: Dimensione) => boolean;
@@ -513,9 +522,23 @@ const PASSI_INTERVISTA: Array<{
   opzioni: string[];
 }> = [
   {
+    id: 'ordine',
+    serve: (ctx) => !ctx.ordine,
+    testo:
+      'Per selezionare il modulo corretto, mi indichi l\u2019ordine di scuola: Infanzia, Primaria, Secondaria di primo o di secondo grado, Università o Enti.',
+    opzioni: [
+      "Scuola dell'Infanzia",
+      'Scuola Primaria',
+      'Scuola Secondaria di I Grado',
+      'Scuola Secondaria di II Grado',
+      'Università',
+      'Enti / Istituzioni',
+    ],
+  },
+  {
     id: 'tipo',
     serve: (ctx) => !ctx.tipo,
-    testo: 'Buongiorno, di che modulo hai bisogno?',
+    testo: 'Quale documento le occorre esattamente?',
     opzioni: [
       'Richiesta di sostegno',
       'Messa a disposizione (MAD)',
@@ -530,24 +553,10 @@ const PASSI_INTERVISTA: Array<{
     ],
   },
   {
-    id: 'ordine',
-    serve: (ctx) => !ctx.ordine,
-    testo:
-      'Certo. Per quale ordine di scuola? (Infanzia, Primaria, Secondaria di I Grado, Secondaria di II Grado, Università, Enti)',
-    opzioni: [
-      "Scuola dell'Infanzia",
-      'Scuola Primaria',
-      'Scuola Secondaria di I Grado',
-      'Scuola Secondaria di II Grado',
-      'Università',
-      'Enti / Istituzioni',
-    ],
-  },
-  {
     id: 'scopo_sostegno',
     serve: (ctx) => ctx.tipo === 'sostegno' && !ctx.scopo_sostegno,
     testo:
-      'Capito. Di cosa hai bisogno esattamente: una richiesta di accertamento/assegnazione del sostegno, la disponibilità a un incarico di sostegno o la documentazione PEI?',
+      'La richiesta riguarda l\u2019accertamento e l\u2019assegnazione del sostegno, la disponibilità a un incarico di sostegno o la documentazione PEI?',
     opzioni: [
       'Richiesta di accertamento / assegnazione del sostegno',
       'Disponibilità a incarico di sostegno (ADEE/ADSS)',
@@ -581,6 +590,15 @@ const PASSI_INTERVISTA: Array<{
     opzioni: ['Regione a Statuto Speciale', 'Modello nazionale standard'],
   },
 ];
+
+/** Etichette leggibili per il prompt della prima domanda formulata via LLM. */
+const ETICHETTA_PASSO: Record<string, string> = {
+  ordine: 'ordine di scuola',
+  tipo: 'tipologia di documento',
+  scopo_sostegno: 'scopo della richiesta di sostegno',
+  destinatario: 'destinatario della richiesta',
+  regione: 'modello normativo (Regione a Statuto Speciale o nazionale standard)',
+};
 
 
 /** Etichette leggibili per il prompt DeepSeek a partire dal profilo. */
@@ -641,6 +659,12 @@ const LABEL_PROFILO: Record<string, Record<string, string>> = {
     patrocinio_locali: 'Richiesta Patrocinio / Uso Locali Scolastici',
     convenzione_pcto: 'Convenzione PCTO / Tirocinio',
     segnalazione_anomalia: 'Segnalazione Anomalie del Servizio',
+    verbale_glo: 'Verbale Riunione GLO / GLHO',
+    convocazione_glo: 'Convocazione Riunione GLO / GLHO',
+    pdp_dsa: 'Piano Didattico Personalizzato DSA (L. 170/2010)',
+    piano_personalizzato_nai: 'Piano di Studio Personalizzato per Alunni NAI (Inclusione Stranieri)',
+    relazione_finale_inclusione: 'Relazione Finale Inclusione (PEI / PDP)',
+    progetto_alfabetizzazione: 'Progetto di Alfabetizzazione / Italiano L2 per Alunni NAI',
   },
   ordine: {
     infanzia: "Scuola dell'Infanzia",
@@ -736,6 +760,21 @@ async function azioneIntervista(
   // Contesto iniziale: dimensioni rilevate dal testo della richiesta.
   const ctx: Dimensione = trovaDimensioni(q);
 
+  // Richiesta fuori contesto o goliardica → risposta da custode distaccato e
+  // severo, formulata da DeepSeek (con fallback determinato se il modello è
+  // assente o non configurato).
+  if (eOffTopic(q)) {
+    let testo =
+      'Questo archivio custodisce esclusivamente modulistica scolastica e documentazione ufficiale. Formuli una richiesta pertinente.';
+    try {
+      const risposta = await chiamaDialogo(q, []);
+      if (risposta.length >= 20 && risposta.length <= 400) testo = risposta;
+    } catch {
+      // Fallback: il custode mantiene la misura anche senza modello.
+    }
+    return { esito: 'domanda', passo: { id: 'offtopic', testo, opzioni: [] } };
+  }
+
   // Applica le risposte strutturate (passo → testo della risposta).
   for (const passoId of DIMENSIONI_INTERVISTA) {
     const testoRisposta = risposte[passoId]?.trim();
@@ -752,9 +791,16 @@ async function azioneIntervista(
   }
 
   // Prossimo passo necessario (intervista chirurgica: una domanda alla volta).
+  const nessunaRisposta = Object.keys(risposte).length === 0;
   for (const passo of PASSI_INTERVISTA) {
     if (passo.serve(ctx)) {
-      return { esito: 'domanda', passo: { id: passo.id, testo: passo.testo, opzioni: passo.opzioni } };
+      let testo = passo.testo;
+      // Richiesta generica (nessuna risposta ancora fornita): l'Archivista
+      // formula SUBITO la prima domanda concreta via DeepSeek.
+      if (nessunaRisposta && q.length >= 4) {
+        testo = await primaDomandaLLM(query, passo.id, testo);
+      }
+      return { esito: 'domanda', passo: { id: passo.id, testo, opzioni: passo.opzioni } };
     }
   }
 
@@ -776,13 +822,25 @@ async function azioneIntervista(
       .eq('query_hash', impronta)
       .maybeSingle();
     if (!errCache && esistente) {
-      return { esito: 'pronto', profilo, modulo: esistente, cache: true };
+      return {
+        esito: 'pronto',
+        profilo,
+        messaggio: 'La modulistica richiesta è disponibile nell\u2019archivio.',
+        modulo: esistente,
+        cache: true,
+      };
     }
   } catch (err) {
     console.warn('genera-modulo — lookup cache intervista:', (err as Error).message);
   }
 
-  return { esito: 'pronto', profilo, modulo: null, cache: false };
+  return {
+    esito: 'pronto',
+    profilo,
+    messaggio: 'La modulistica richiesta è disponibile nell\u2019archivio.',
+    modulo: null,
+    cache: false,
+  };
 }
 
 /* ------------------------------ DeepSeek ------------------------------ */
@@ -794,7 +852,7 @@ async function azioneIntervista(
  *  - nota sulle Regioni a Statuto Speciale
  *  - HTML pulito pronto per rendering e conversione in PDF
  */
-const SISTEMA_PROMPT = `Sei l'"Archivista Premuroso" di ScuoleRadar.it, un esperto di modulistica scolastica italiana. Hai il compito di redigere il documento richiesto dall'utente.\n\nREGOLE D'ORO (vincolanti):\n1. DENSITÀ DINAMICA — Conta le sezioni <h2> del documento: se sono MENO di 6, il modulo è compatto e deve stare in UNA SOLA pagina A4 (padding 4-6px, griglie a 2 colonne, righe di scrittura max 3, firme ancorate in calce). Se sono 6 o più (PEI, PDP, ricorsi complessi), il modulo è esteso e deve occupare ESATTAMENTE 2 pagine A4, distribuendo lo spazio in modo omogeneo (mai pagina 2 quasi vuota).\n2. ZERO RIDONDANZA — Nessun dato può comparire due volte: il titolo descrive la tipologia (es. "Domanda di supplenza — Scuola Primaria"), il quadro anagrafico raccoglie i dati del soggetto. MAI campi riepilogativi intermedi come "Contesto della richiesta", "Oggetto generico" o box duplicati.\n3. ESTETICA TIPOGRAFICA — Righe di scrittura a mano con interlinea reale 24px e colore #e0e0e0; tabelle anagrafiche "Clean Institutional": intestazioni #f8f9fa, bordi 1px #d1d5db, font senza grazie (Inter/Roboto/Arial), titoli max 16pt, testi 10pt, note 8pt.\n\nSegui rigorosamente il Design System di ScuoleRadar (docs/PDF_DESIGN_SYSTEM.md).
+const SISTEMA_PROMPT = `Sei l'"Archivista Premuroso" di ScuoleRadar.it, un esperto di modulistica scolastica italiana. Hai il compito di redigere il documento richiesto dall'utente.\n\nREGOLE D'ORO (vincolanti):\n1. DENSITÀ DINAMICA — Classificazione RIGIDA del layout: i MODULI RAPIDI (deleghe, autocertificazioni, permessi orari, uscite didattiche, accesso agli atti, certificati, reclami/ricorsi semplici) DEVONO stare in UNA SOLA pagina A4 (padding 4-6px, griglie a 2 colonne, righe di scrittura max 3, firme ancorate in calce). I DOCUMENTI PEDAGOGICI E INCLUSIVI (PEI D.I. 182/2020, PDP DSA L. 170/2010, PDP BES, verbali GLO, relazioni finali di inclusione, certificazione delle competenze D.M. 742/2017, piani di studio personalizzati) DEVONO usare il layout ESTESO su 2-4 pagine A4: sezioni ampie e complete, griglie di osservazione per area disciplinare (Italiano, Matematica, Inglese, Storia, Scienze...), tabelle dettagliate per misure compensative/dispensative, spazio adeguato per situazione di partenza e verifica finale. MAI comprimere a 1 pagina un documento pedagogico e MAI pagine quasi vuote.\n2. ZERO RIDONDANZA — Nessun dato può comparire due volte: il titolo descrive la tipologia (es. "Domanda di supplenza — Scuola Primaria"), il quadro anagrafico raccoglie i dati del soggetto. MAI campi riepilogativi intermedi come "Contesto della richiesta", "Oggetto generico" o box duplicati.\n3. ESTETICA TIPOGRAFICA — Righe di scrittura a mano con interlinea reale 24px e colore #e0e0e0; tabelle anagrafiche "Clean Institutional": intestazioni #f8f9fa, bordi 1px #d1d5db, font senza grazie (Inter/Roboto/Arial), titoli max 16pt, testi 10pt, note 8pt.\n\nSegui rigorosamente il Design System di ScuoleRadar (docs/PDF_DESIGN_SYSTEM.md).
 
 REGOLE NON NEGOZIABILI:
 1. DATI GENERICI — Non inventare mai dati reali. Nessun testo segnaposto dentro le celle compilabili (VIETATO "[Nome dell'Istituto]", "[Numero di protocollo]", "[Data odierna]", "[Classe e Sezione]", "[Componenti]" e simili): le caselle da compilare restano VUOTE, con solo spazi bianchi o righe guida per la scrittura a mano. Lascia l'etichetta della voce (es. "Cognome e Nome", "Codice Fiscale") e la cella vuota. Non inserire MAI anni scolastici fissi (es. "2025/2026" o "2026/2027"): usa la dicitura compilabile "Anno Scolastico 20____ / 20____".
@@ -814,7 +872,7 @@ REGOLE NON NEGOZIABILI:
    - SEZIONI A CROCETTA: riquadri [   ] da sbarrare a mano per selezioni rapide (area di intervento, tipologia di disabilità, strumenti compensativi, misure dispensative). Nel PEI la sezione si chiama "Tipologia di disabilità (L. 104/1992)" e NON include DSA/BES (riservati ai template PDP). Disponi le voci su 2 colonne affiancate quando sono più di 3, per risparmiare fino al 40% dello spazio verticale. Per le DICHIARAZIONI SOSTITUTIVE (DPR 445/2000): usa la formula giuridica standard "Il/La sottoscritto/a, consapevole delle responsabilità e delle sanzioni penali stabilite dall'art. 76 del D.P.R. 445/2000 per le false attestazioni e le dichiarazioni mendaci, dichiara sotto la propria responsabilità:" seguita da 4 righe di scrittura; NON includere box a crocette "Oggetto della richiesta". Per le ISTANZE di sostegno / L.104: sezione "Oggetto della richiesta" con la formula "Richiesta di attivazione delle misure di sostegno scolastico e inclusione ai sensi della L. 104/1992 e D.Lgs. 66/2017." + riquadro "Documenti allegati" (Verbale di accertamento dell'handicap, Profilo di Funzionamento / Diagnosi Funzionale, Copia del documento di riconoscimento del richiedente). MAI riquadri didattici nelle istanze (strumenti compensativi, misure dispensative, relazioni, obiettivi): appartengono solo al PEI.
    - BOX DI SCRITTURA A MANO: per le sezioni descrittive (relazione iniziale/finale, obiettivi disciplinari, modifiche programmatiche, interventi specialistici) lascia riquadri vuoti alti.
    - NOTE NORMATIVE: NON usare box "Guida alla compilazione" generici né box "Modello conforme alle Linee Guida": le eventuali note normative vanno in una singola riga discreta a piè di pagina (class .nota-normativa, font 8pt, colore grigio).
-   - CHIUSURA STANDARD: il documento NON deve includere MAI blocchi "Luogo e Data", "Firma" o "Convalida/Protocollo": la piattaforma li aggiunge automaticamente in calce (un unico blocco, mai duplicato). NON inserire tabelle firme con ruoli (Consiglio di Classe, Genitori/Tutori, Docenti, ASL, Dirigente) se non richiesti esplicitamente dalla tipologia (es. verbali di GLO o PEI).
+   - CHIUSURA STANDARD: il documento NON deve includere MAI blocchi "Luogo e Data", "Firma" o "Convalida/Protocollo": la piattaforma li aggiunge automaticamente in calce (un unico blocco, mai duplicato). Nei documenti estesi (PEI, PDP, relazioni finali, verbali GLO) la piattaforma aggiunge inoltre il blocco firme del team docenti/GLO e della famiglia in fondo all'ultima pagina con page-break-inside: avoid. NON inserire tabelle firme con ruoli (Consiglio di Classe, Genitori/Tutori, Docenti, ASL, Dirigente) se non richiesti esplicitamente dalla tipologia (es. verbali di GLO o PEI).
    Usa le classi CSS già presenti nello stylesheet della piattaforma quando utile: .intestazione-formale, .quadro-anagrafico, .campo-etichetta, .campo-compilazione, .crocette, .casella, .scrittura-mano, .chiusura-documento, .nota-normativa. NON includere mai <style>.
 6. LINGUAGGIO — Scrivi in italiano corrente, professionale e vicino a chi lo usa; mantieni il rigore formale dei documenti ufficiali senza verbosità ridondante. È TASSATIVAMENTE VIETATO usare le parole "generato", "creato" o "automatico" nel testo del documento: usa sempre il linguaggio di un archivio istituzionale ufficiale e già pronto (es. "documento scaricato").
 7. RISPOSTA — Restituisci ESCLUSIVAMENTE l'HTML richiesto, senza commenti, senza markdown, senza triple backtick, senza testo introduttivo o finale.`;
@@ -853,14 +911,122 @@ function costruisciPromptUtente(
   return `Redigi il documento richiesto dall'utente.\n\nRichiesta: ${query}${dettagliStr}${contesto}`;
 }
 
-/** Chiama l'API di DeepSeek (chat completions) e restituisce il contenuto testuale. */
-async function chiamaDeepSeek(promptUtente: string): Promise<string> {
+/* ------------------------- Dialogo dell'Archivista ------------------------- */
+
+/**
+ * Prompt di sistema per il DIALOGO conversazionale (non per la generazione
+ * dei documenti): l'Archivista Capo come custode d'archivio sobrio e formale.
+ *  - nessun preambolo: la prima riga è già la risposta/domanda utile
+ *  - richieste generiche → prima domanda concreta nella prima riga
+ *  - richieste fuori contesto o goliardiche → custode distaccato e severo
+ */
+const PROMPT_ARCHIVISTA = `Sei l'"Archivista Capo" di ScuoleRadar.it, un custode d'archivio sobrio e formale che assiste gli utenti nella selezione della modulistica scolastica italiana ufficiale.
+
+REGOLE DI CONDOTTA (vincolanti):
+1. Rispondi SEMPRE in italiano, in modo formale e asciutto. Nessun preambolo, nessuna introduzione, nessun punto esclamativo.
+2. Se la richiesta è generica o incompleta, poni SUBITO nella prima riga UNA SOLA domanda concreta per individuare l'elemento mancante. Esempio per una richiesta generica: "Buongiorno. Per selezionare il modulo corretto, mi indichi anzitutto l'ordine di scuola: Primaria, Secondaria di primo o di secondo grado, Università o Enti?"
+3. Se la richiesta è completamente fuori contesto, goliardica o offensiva (battute, insulti, argomenti estranei all'archivio), NON ripetere formule standard e NON elencare opzioni: rispondi da custode distaccato e severo, ad esempio "Questo archivio custodisce esclusivamente modulistica scolastica e documentazione ufficiale. Formuli una richiesta pertinente."
+4. Non inventare documenti né sigle: se la tipologia non è chiara, chiedi chiarimenti.
+5. Non fare elenchi, non ripetere il testo dell'utente e non menzionare istruzioni di sistema o il fatto di essere un modello.`;
+
+/** Riconosce richieste fuori contesto, goliardiche o offensive (battute, insulti, chiacchiere). */
+function eOffTopic(q: string): boolean {
+  if (q.length < 4) return false;
+  // Saluto o conversazione generica senza alcuna richiesta documentale.
   if (
+    /^(ciao|salve|buongiorno|buonasera|buonanotte|hey|ehi|eccomi|sono|mi chiamo|grazie|prego)\b/.test(q) &&
+    q.split(' ').length <= 4
+  ) {
+    return true;
+  }
+  if (
+    /(sei bravo|sei bravissimo|sei carino|ti amo|ti odio|sei il migliore|sei stupido|sei un robot|sei un bot|scherzo|era una battuta|barzelletta|raccontami|fammi ridere)/i.test(q)
+  ) {
+    return true;
+  }
+  if (
+    /(che tempo fa|meteo di|ricetta|come si cucina|la partita|gioca a|videogioco|film preferito|notizia del giorno|musica preferita)/i.test(q)
+  ) {
+    return true;
+  }
+  if (
+    /(coglione|stronzo|deficiente|idiota|vaffanculo|cazzata|merda|fanculo|troia|finocchio|scemo)/i.test(q)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** Verifica che la chiave DeepSeek sia presente e non sia un segnaposto. */
+function chiaveNonConfigurata(): boolean {
+  return (
     !DEEPSEEK_API_KEY ||
     DEEPSEEK_API_KEY.includes('xxxx') ||
     DEEPSEEK_API_KEY.includes('your-') ||
     DEEPSEEK_API_KEY.includes('sk-xxx')
-  ) {
+  );
+}
+
+/**
+ * Chiamata DeepSeek per il dialogo conversazionale dell'Archivista Capo
+ * (prima domanda su richieste generiche, risposte a richieste fuori contesto).
+ * Temperature moderata e token limitati rispetto alla generazione documenti.
+ */
+async function chiamaDialogo(
+  richiesta: string,
+  storico: Array<{ ruolo: 'user' | 'assistant'; contenuto: string }>,
+): Promise<string> {
+  if (chiaveNonConfigurata()) {
+    throw new Error('Generatore non configurato: manca il secret DEEPSEEK_API_KEY.');
+  }
+  const messaggi = [
+    { role: 'system', content: PROMPT_ARCHIVISTA },
+    ...storico.map((m) => ({ role: m.ruolo, content: m.contenuto })),
+    { role: 'user', content: richiesta },
+  ];
+  const res = await fetch(DEEPSEEK_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${DEEPSEEK_API_KEY}` },
+    body: JSON.stringify({
+      model: DEEPSEEK_MODEL,
+      messages: messaggi,
+      temperature: 0.4,
+      max_tokens: 400,
+    }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const msg =
+      (data as { error?: { message?: string } })?.error?.message ?? `DeepSeek HTTP ${res.status}`;
+    throw new Error(`DeepSeek: ${msg}`);
+  }
+  const contenuto = (data as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]
+    ?.message?.content;
+  if (!contenuto || !contenuto.trim()) throw new Error('DeepSeek ha risposto senza contenuto.');
+  return contenuto.trim();
+}
+
+/**
+ * Prima domanda dell'Archivista per richieste generiche: formulata da DeepSeek
+ * a partire dalla richiesta e dall'elemento mancante. Se il modello non
+ * risponde o produce un testo non adatto, resta il testo strutturato.
+ */
+async function primaDomandaLLM(query: string, passoId: string, fallback: string): Promise<string> {
+  try {
+    const testo = await chiamaDialogo(
+      `Richiesta utente: "${query.trim()}".\n\nL'elemento mancante da chiedere per primo è: ${ETICHETTA_PASSO[passoId] ?? passoId}.\nPoni UNA sola domanda concreta nella prima riga, chiedendo esclusivamente questo elemento, in modo formale e senza preamboli né punti esclamativi.`,
+      [],
+    );
+    if (testo.length < 20 || testo.length > 300) return fallback;
+    return testo;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Chiama l'API di DeepSeek (chat completions) e restituisce il contenuto testuale. */
+async function chiamaDeepSeek(promptUtente: string): Promise<string> {
+  if (chiaveNonConfigurata()) {
     throw new Error('Generatore non configurato: manca il secret DEEPSEEK_API_KEY.');
   }
   const res = await fetch(DEEPSEEK_API_URL, {

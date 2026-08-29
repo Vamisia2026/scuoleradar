@@ -1,7 +1,10 @@
 /**
- * TEST COMPLETO ARCHIVIO — verifica che OGNI tipo di modulo presente nel
- * catalogo `moduli.ts` renda su 1 pagina A4 (`.layout-compatto`) con il
- * BLOCCO FIRME UNIFICATO (Single Sign Box).
+ * TEST COMPLETO ARCHIVIO — verifica la CLASSIFICAZIONE RIGIDA dei layout:
+ *  - moduli burocratici/rapidi → 1 pagina A4 (`.layout-compatto`);
+ *  - documenti pedagogici/inclusivi (PEI, PDP, relazioni, certificazione
+ *    delle competenze, piani personalizzati) → 2-4 pagine (`.layout-esteso`).
+ * Ogni documento deve includere il BLOCCO FIRME UNIFICATO (Single Sign Box);
+ * i documenti estesi devono avere anche il blocco firme esteso (GLO/team).
  *
  * Esecuzione:
  *   npm run test:pdf:completo
@@ -33,8 +36,20 @@ for (const m of macroAreeModulistica) for (const s of m.sotto) visita(s as never
 const outDir = fileURLToPath(new URL('./out/', import.meta.url));
 mkdirSync(outDir, { recursive: true });
 
-/** Tipi che per design system sono VOLUTAMENTE a 2 pagine (es. PEI). */
-const INTENZIONALI_2_PAGINE = new Set(['pei']);
+/** Documenti pedagogici/inclusivi: layout esteso con pagine minime garantite
+ * (valori di riferimento; il minimo effettivo è letto dal marcatore data-min-pagine). */
+const MIN_PAGINE: Record<string, number> = {
+  pei: 20,
+  pdp_bes: 18,
+  pdp_dsa: 18,
+  relazione_finale: 12,
+  relazione_finale_inclusione: 12,
+  piano_personalizzato_nai: 18,
+  progetto_alfabetizzazione: 14,
+  verbale_glo: 8,
+  certificazione_competenze: 4,
+  piano_personalizzato: 4,
+};
 
 let ok = 0;
 const daRivedere: string[] = [];
@@ -42,15 +57,23 @@ for (const [tipo, es] of perTipo) {
   const doc = creaDocumentoLocale(es.nome, es.profilo, es.catalogoId);
   const pronto = costruisciDocumento(doc.title, doc.content_html);
   const unico = (pronto.html.match(/class="blocco-convalida-unico"/g) ?? []).length === 1;
-  const unaPagina = pronto.layout === 'compatto' && pronto.pagineStimate === 1;
-  const okTipo = unaPagina && unico;
-  const intenzionale = INTENZIONALI_2_PAGINE.has(tipo);
-  if (okTipo || intenzionale) ok++;
-  else daRivedere.push(`${tipo}: layout=${pronto.layout} pagine=${pronto.pagineStimate} unico=${unico}`);
+  const firmeEstese = pronto.html.includes('firme-estese');
+  const min = Math.max(
+    MIN_PAGINE[tipo] ?? 1,
+    Number(pronto.html.match(/data-min-pagine="(\d+)"/)?.[1] ?? 1),
+  );
+  const estesoAtteso = min > 1;
+  const okTipo =
+    (estesoAtteso
+      ? pronto.layout === 'esteso' && pronto.pagineStimate >= min && firmeEstese
+      : pronto.layout === 'compatto' && pronto.pagineStimate === 1) &&
+    unico;
+  if (okTipo) ok++;
+  else daRivedere.push(`${tipo}: atteso=${estesoAtteso ? `esteso≥${min}` : 'compatto'} layout=${pronto.layout} pagine=${pronto.pagineStimate} unico=${unico} firmeEstese=${firmeEstese}`);
   writeFileSync(`${outDir}test-archivio-${tipo}.html`, pronto.html, 'utf8');
   console.log(
-    `${tipo.padEnd(30)} | ${pronto.layout.padEnd(9)} | pagine: ${pronto.pagineStimate} | ${unico ? 'blocco unico OK' : 'blocco unico NO'}${intenzionale ? '  [2 pagine volute]' : ''}`,
+    `${tipo.padEnd(30)} | ${pronto.layout.padEnd(9)} | pagine: ${pronto.pagineStimate} | ${unico ? 'blocco unico OK' : 'blocco unico NO'} | ${estesoAtteso ? (firmeEstese ? `esteso ≥ ${min} pagine` : 'firme estese NO') : 'compatto 1 pagina'}`,
   );
 }
-console.log(`\nTipi totali: ${perTipo.size} | OK (1 pagina + blocco unico o 2 pagine volute): ${ok}`);
+console.log(`\nTipi totali: ${perTipo.size} | OK: ${ok} (compatto=1pg, esteso dossier ≥${Math.max(...Object.values(MIN_PAGINE))}pg)`);
 if (daRivedere.length) console.log('DA RIVEDERE:\n' + daRivedere.join('\n'));

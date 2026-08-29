@@ -38,7 +38,7 @@ export function RicercaArchivista({ onInvia, busy, compatto = false }: RicercaAr
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buongiorno, di che modulo hai bisogno? Es. Modulo per richiesta sostegno…"
+          placeholder="Buongiorno. Indichi la modulistica che le occorre, ad esempio un modulo per la richiesta di sostegno…"
           className={`w-full rounded-xl border border-primary-200 bg-slate-50 pl-12 pr-4 text-base text-primary-800 outline-none transition placeholder:text-primary-300 focus:border-primary-400 focus:bg-white ${
             compatto ? 'py-2.5' : 'py-3.5'
           }`}

@@ -9,11 +9,11 @@ import { Loader2 } from 'lucide-react';
  * sensazione di un archivista esperto che lavora con precisione.
  */
 const FRASI = [
-  'Sto cercando nel registro: un momento…',
-  'Ho trovato la cartella giusta: verifico la versione più recente…',
-  'Controllo i riferimenti normativi aggiornati per il tuo caso…',
-  'Quasi pronto: sistemo il documento per la stampa…',
-  'Un momento: preparo il foglio giusto per te…',
+  'Consulto il registro d\u2019archivio: un momento\u2026',
+  'Individuata la cartella pertinente: verifico la versione più recente\u2026',
+  'Controllo i riferimenti normativi aggiornati per il caso in esame\u2026',
+  'Quasi pronto: preparo il documento per la stampa\u2026',
+  'Un momento: preparo il foglio richiesto\u2026',
 ];
 
 export function PensieriArchivista({ etichetta }: { etichetta?: string }) {

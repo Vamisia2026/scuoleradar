@@ -22,6 +22,15 @@ body {
   .input {
     @apply w-full rounded-xl border border-primary-200 bg-white px-4 py-2.5 text-sm text-primary-800 transition placeholder:text-primary-300 focus:border-primary-500;
   }
+
+  /* Finestra di conversazione dell'Archivista Capo: transizione scenica
+     (ease-in-out, 400ms) quando la consultazione entra in corso. */
+  .finestra-conversazione {
+    transition:
+      opacity 400ms ease-in-out,
+      transform 400ms ease-in-out;
+    will-change: opacity, transform;
+  }
 }
 
 /* Custom scrollbar (subtle) */

@@ -198,6 +198,20 @@
     padding-left: 10px;
     background: #f8f9fa;
   }
+  /* Marcatore di layout forzato (classificazione rigida): nessun impatto visivo. */
+  .layout-richiesto { display: none; }
+  /* Chiusura dossier: firme estese + Single Sign Box + nota restano insieme e
+     compatti in fondo all'ultima pagina (elimina la pagina bianca fantasma:
+     niente break-before, margini ridotti e contenuto bilanciato). */
+  .chiusura-dossier {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    margin-top: 0;
+  }
+  .chiusura-dossier .blocco-firme { margin: 0 0 4px; }
+  .chiusura-dossier .blocco-convalida-unico { padding: 5px 8px; }
+  .chiusura-dossier .nota-normativa { margin: 4px 0 0; }
+  .chiusura-dossier .firme-estese { margin: 0 0 8px; }
   /* Due sezioni affiancate (es. Tipologia + Disponibilità) per i moduli a 1 pagina. */
   .griglia-2 {
     display: grid;
@@ -229,6 +243,11 @@
   .tabella-firme th { background: #eef2f7; text-align: left; }
   .riga-firma { height: 20px; border-bottom: 1px dotted #333; }
   .campo-scrittura { height: 16px; }
+  /* Campi a testo libero AMPI: 4-6 righe di scrittura reale. */
+  .campo-scrittura-ampio div {
+    height: 24px;
+    border-bottom: 1px solid #e0e0e0;
+  }
   .nota-normativa {
     font-size: 8pt;
     color: #64748b;
@@ -286,6 +305,19 @@
   body.layout-esteso .scrittura-mano--alta { min-height: 210px; }
   body.layout-esteso .righe-scrittura div { margin-bottom: 14px; }
   body.layout-esteso .crocette { padding: 8px 10px; }
+  body.layout-esteso { line-height: 1.55; }
+  body.layout-esteso h2 { margin: 14px 0 6px; }
+  body.layout-esteso h3 { margin: 10px 0 4px; }
+  body.layout-esteso .intestazione-formale td,
+  body.layout-esteso .quadro-anagrafico td { padding: 8px 10px; }
+  body.layout-esteso .firme-estese {
+    padding: 10px 12px;
+    margin: 0 0 8px;
+  }
+  body.layout-esteso .firme-estese p { margin-bottom: 10px; }
+  body.layout-esteso .firme-estese .riga-firma { height: 24px; }
+  body.layout-esteso .blocco-convalida-unico { padding: 8px 10px; }
+  body.layout-esteso .blocco-convalida-unico .riga-firma { height: 18px; }
 
   .indice {
     border: 1px solid #cbd5e1;
@@ -326,6 +358,7 @@
 <hr class="divisore" />
 <h1 class="titolo-documento">Consenso Trattamento Immagini e Riprese Video – Scuola dell&#39;Infanzia</h1>
 <div class="contenuto-documento">
+    
     <table class="intestazione-formale">
     <tr>
       <td class="campo-etichetta">Istituto Scolastico</td>
@@ -373,8 +406,10 @@
         </div>
 <h2>Revoca</h2>
         <p class="formula-dichiarazione">Il consenso può essere revocato in ogni momento con comunicazione scritta alla scuola; i dati saranno trattati ai sensi del Reg. UE 2016/679 (GDPR).</p>
-    <div class="blocco-firme">
-      <p class="micro-copy">Da sottoscrivere a cura del richiedente. Allegare eventuale documentazione integrativa.</p>
+    <div class="chiusura-dossier">
+      
+      <div class="blocco-firme">
+        <p class="micro-copy">Da sottoscrivere a cura del richiedente. Allegare eventuale documentazione integrativa.</p>
     <div class="blocco-convalida-unico">
       <div class="chiusura-documento">
         <p class="titolo-chiusura">Luogo e Data</p>
@@ -386,8 +421,9 @@
         <p>N° Prot. / Data / Timbro: <span class="riga-firma"></span></p>
       </div>
     </div>
+      </div>
+      <p class="nota-normativa">Modello conforme alle Linee Guida del Ministero dell’Istruzione e del Merito. Riferimenti normativi: Reg. UE 2016/679 (GDPR), D.Lgs. 196/2003. Documento scaricato gratuitamente da ScuoleRadar.it.</p>
     </div>
-    <p class="nota-normativa">Modello conforme alle Linee Guida del Ministero dell’Istruzione e del Merito. Riferimenti normativi: Reg. UE 2016/679 (GDPR), D.Lgs. 196/2003. Documento scaricato gratuitamente da ScuoleRadar.it.</p>
   </div>
 </body>
 </html>

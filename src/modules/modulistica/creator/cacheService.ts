@@ -92,6 +92,8 @@ export type EsitoIntervista =
   | {
       esito: 'pronto';
       profilo: ProfiloIntervista;
+      /** Messaggio di consegna formulato dall'archivio (mai replicato lato React). */
+      messaggio?: string;
       modulo?: DocumentoGenerato | null;
       cache?: boolean;
       catalogo?: CatalogoSuggerito | null;
@@ -291,6 +293,12 @@ const NORMATIVA_PER_TIPO: Record<string, string> = {
   patrocinio_locali: 'DPR 275/1999, D.Lgs. 267/2000, regolamento d\u2019Istituto',
   convenzione_pcto: 'D.Lgs. 77/2005, L. 107/2015',
   segnalazione_anomalia: 'L. 241/1990, regolamento d\u2019Istituto',
+  verbale_glo: 'D.I. 182/2020, D.Lgs. 66/2017, L. 104/1992',
+  convocazione_glo: 'D.I. 182/2020, D.Lgs. 66/2017',
+  pdp_dsa: 'L. 170/2010, Linee Guida 12/07/2011, DPR 275/1999',
+  piano_personalizzato_nai: 'D.M. 10/2017 (accoglienza e integrazione alunni stranieri), D.Lgs. 62/2017',
+  relazione_finale_inclusione: 'D.I. 182/2020, L. 170/2010, D.Lgs. 66/2017',
+  progetto_alfabetizzazione: 'D.M. 10/2017, D.Lgs. 165/2001, P.T.O.F.',
 };
 const NORMATIVA_DEFAULT = 'DPR 275/1999, DPR 445/2000, CCNL Scuola';
 
@@ -351,14 +359,21 @@ const TITOLO_PER_TIPO: Record<string, string> = {
   patrocinio_locali: 'Richiesta Patrocinio / Uso Locali Scolastici',
   convenzione_pcto: 'Convenzione PCTO / Tirocinio',
   segnalazione_anomalia: 'Segnalazione Anomalie del Servizio',
+  verbale_glo: 'Verbale Riunione GLO / GLHO',
+  convocazione_glo: 'Convocazione Riunione GLO / GLHO',
+  pdp_dsa: 'Piano Didattico Personalizzato DSA (L. 170/2010)',
+  piano_personalizzato_nai: 'Piano di Studio Personalizzato per Alunni NAI (Inclusione Stranieri)',
+  relazione_finale_inclusione: 'Relazione Finale Inclusione (PEI / PDP)',
+  progetto_alfabetizzazione: 'Progetto di Alfabetizzazione / Italiano L2 per Alunni NAI',
 };
 
 type FamigliaDocumento = 'inclusione' | 'istanza' | 'ambito' | 'reclutamento' | 'generico';
 
 function famigliaDi(profilo?: ProfiloIntervista): FamigliaDocumento {
   const tipo = profilo?.tipo;
-  // PEI completo → 2 pagine; sostegno / certificazione L.104 → istanze snelle da 1 pagina.
-  if (tipo === 'pei') return 'inclusione';
+  // PEI e verbali GLO → documenti inclusivi estesi (5 pagine); sostegno / certificazione
+  // L.104 → istanze snelle da 1 pagina.
+  if (tipo === 'pei' || tipo === 'verbale_glo') return 'inclusione';
   if (tipo === 'sostegno' || tipo === 'certificazione') return 'istanza';
   // Categorie tematiche dedicate (biblioteca, sport/teatro/musica, assistenza Comune,
   // uscite didattiche, scrutini, mensa, crediti formativi).
@@ -406,7 +421,12 @@ function famigliaDi(profilo?: ProfiloIntervista): FamigliaDocumento {
     tipo === 'protocollo_intesa' ||
     tipo === 'patrocinio_locali' ||
     tipo === 'convenzione_pcto' ||
-    tipo === 'segnalazione_anomalia'
+    tipo === 'segnalazione_anomalia' ||
+    tipo === 'convocazione_glo' ||
+    tipo === 'pdp_dsa' ||
+    tipo === 'piano_personalizzato_nai' ||
+    tipo === 'relazione_finale_inclusione' ||
+    tipo === 'progetto_alfabetizzazione'
   ) {
     return 'ambito';
   }
@@ -430,6 +450,12 @@ function campoScrittura(): string {
   return `<div class="campo-scrittura"></div>`;
 }
 
+/** Campo a testo libero AMPIO (4-6 righe di scrittura) per nuclei fondanti,
+ * obiettivi minimi e adattamento della programmazione. */
+function campoScritturaAmpio(righe = 5): string {
+  return `<div class="campo-scrittura-ampio">${Array.from({ length: righe }, () => '<div></div>').join('')}</div>`;
+}
+
 /** Riga "etichetta → campo" (layout a 2 colonne: etichetta stretta, campo ampio con riga sottile). */
 function rigaAnagrafica(etichetta: string, campo: string): string {
   return `<tr>
@@ -447,14 +473,178 @@ function voceCrocetta(testo: string): string {
   return `<p class="voce"><span class="casella"></span>${escapeHtml(testo)}</p>`;
 }
 
-function sezioneCrocette(titolo: string, voci: string[], guida?: string): string {
+function sezioneCrocette(titolo: string, voci: string[], guida?: string, sotto = false): string {
+  const tag = sotto ? 'h3' : 'h2';
   const bloccoGuida = guida ? guidaCompilazione(guida) : '';
-  return `<h2>${escapeHtml(titolo)}</h2>${bloccoGuida}<div class="crocette">${voci.map(voceCrocetta).join('')}</div>`;
+  return `<${tag}>${escapeHtml(titolo)}</${tag}>${bloccoGuida}<div class="crocette">${voci.map(voceCrocetta).join('')}</div>`;
 }
 
-function boxScrittura(titolo: string, guida?: string, alta = false): string {
+function boxScrittura(titolo: string, guida?: string, alta = false, sotto = false): string {
+  const tag = sotto ? 'h3' : 'h2';
   const bloccoGuida = guida ? guidaCompilazione(guida) : '';
-  return `<h2>${escapeHtml(titolo)}</h2>${bloccoGuida}<div class="scrittura-mano${alta ? ' scrittura-mano--alta' : ''}"></div>`;
+  return `<${tag}>${escapeHtml(titolo)}</${tag}>${bloccoGuida}<div class="scrittura-mano${alta ? ' scrittura-mano--alta' : ''}"></div>`;
+}
+
+/**
+ * Progettazione disciplinare per area (documenti inclusivi a 5 pagine):
+ * tabella "Obiettivi minimi / Misure dispensative / Strumenti compensativi /
+ * Valutazione" seguita da un box di approfondimento con gli obiettivi specifici.
+ */
+function sezioneProgettazioneDisciplinare(titolo: string): string {
+  return `<h2>${escapeHtml(titolo)}</h2>
+    <table class="quadro-anagrafico">
+      ${rigaAnagrafica('Obiettivi minimi', campoScrittura())}
+      ${rigaAnagrafica('Misure dispensative', campoScrittura())}
+      ${rigaAnagrafica('Strumenti compensativi', campoScrittura())}
+      ${rigaAnagrafica('Valutazione', campoScrittura())}
+    </table>
+    ${boxScrittura(
+      `Obiettivi specifici e attività – ${titolo}`,
+      `Descrivere gli obiettivi specifici, le attività e le strategie previste per l'area "${titolo}".`,
+    )}`;
+}
+
+/** Strumenti compensativi per disciplina (niente voci fuori contesto). */
+const STRUMENTI_PER_MATERIA: Record<string, string[]> = {
+  'Matematica': ['Calcolatrice / tavole', 'Formulari e mappe', 'Sintesi vocale / testo digitale', 'Software di geometria dinamica', 'Altri strumenti autorizzati'],
+  'Scienze': ['Calcolatrice scientifica', 'Tavola periodica / formulari', 'Mappe concettuali', 'Sintesi vocale / testo digitale', 'Altri strumenti autorizzati'],
+  'Lingue straniere (Inglese / II lingua)': ['Dizionari bilingue / traduttori offline', 'Mappe e schemi linguistici', 'Sintesi vocale / testo digitale', 'Software di dettatura', 'Altri strumenti autorizzati'],
+  'Lingue straniere': ['Dizionari bilingue / traduttori offline', 'Mappe e schemi linguistici', 'Sintesi vocale / testo digitale', 'Software di dettatura', 'Altri strumenti autorizzati'],
+  'Italiano L2 e alfabetizzazione': ['Dizionari bilingue / traduttori offline', 'Schemi e immagini (CAA)', 'Sintesi vocale / testo digitale', 'Materiali semplificati', 'Altri strumenti autorizzati'],
+  'Italiano L2': ['Dizionari bilingue / traduttori offline', 'Schemi e immagini (CAA)', 'Sintesi vocale / testo digitale', 'Materiali semplificati', 'Altri strumenti autorizzati'],
+  'Italiano / Lingua e comunicazione': ['Mappe concettuali e schemi', 'Sintesi vocale / testo digitale', 'Dizionario e grammatiche agevolate', 'Software di dettatura', 'Altri strumenti autorizzati'],
+  'Storia / Geografia': ['Atlanti e cartine', 'Mappe concettuali e cronologie', 'Sintesi vocale / testo digitale', 'Schemi riassuntivi', 'Altri strumenti autorizzati'],
+  'Storia / Geografia / Studio della società': ['Atlanti e cartine', 'Mappe concettuali e cronologie', 'Sintesi vocale / testo digitale', 'Schemi riassuntivi', 'Altri strumenti autorizzati'],
+  'Arte / Musica / Tecnologia': ['Schemi e modelli visivi', 'Materiali adattati', 'Software specifici', 'Attrezzature adattate', 'Altri strumenti autorizzati'],
+  'Arte / Musica / Scienze Motorie / Tecnologia': ['Schemi e modelli visivi', 'Materiali adattati', 'Software specifici', 'Attrezzature adattate', 'Altri strumenti autorizzati'],
+  'Arte / Musica / Tecnologia / Scienze Motorie': ['Schemi e modelli visivi', 'Materiali adattati', 'Software specifici', 'Attrezzature adattate', 'Altri strumenti autorizzati'],
+  'Scienze / Storia / Geografia': ['Atlanti e cartine', 'Tavola periodica / formulari', 'Mappe concettuali', 'Sintesi vocale / testo digitale', 'Altri strumenti autorizzati'],
+};
+const STRUMENTI_DEFAULT = ['Mappe concettuali e formulari', 'Sintesi vocale / testo digitale', 'Software di dettatura', 'Materiali semplificati', 'Altri strumenti autorizzati'];
+
+/** Misure dispensative per disciplina (specifiche, non fuori contesto). */
+const DISPENSE_PER_MATERIA: Record<string, string[]> = {
+  'Matematica': ['Dispensa dal calcolo a mente', 'Riduzione quantitativa degli esercizi', 'Tempi aggiuntivi (es. +30%)', 'Altre dispense specifiche'],
+  'Scienze': ['Dispensa dalla lettura di testi complessi', 'Riduzione quantitativa delle verifiche', 'Tempi aggiuntivi (es. +30%)', 'Altre dispense specifiche'],
+  'Lingue straniere (Inglese / II lingua)': ['Dispensa dalla produzione orale estesa', 'Riduzione della comprensione di testi complessi', 'Tempi aggiuntivi (es. +30%)', 'Altre dispense specifiche'],
+  'Lingue straniere': ['Dispensa dalla produzione orale estesa', 'Riduzione della comprensione di testi complessi', 'Tempi aggiuntivi (es. +30%)', 'Altre dispense specifiche'],
+  'Italiano L2 e alfabetizzazione': ['Dispensa dalla produzione scritta estesa', 'Riduzione della comprensione di testi complessi', 'Tempi aggiuntivi (es. +30%)', 'Altre dispense specifiche'],
+  'Italiano L2': ['Dispensa dalla produzione scritta estesa', 'Riduzione della comprensione di testi complessi', 'Tempi aggiuntivi (es. +30%)', 'Altre dispense specifiche'],
+  'Italiano / Lingua e comunicazione': ['Dispensa dalla lettura ad alta voce', 'Riduzione quantitativa delle prove', 'Tempi aggiuntivi (es. +30%)', 'Altre dispense specifiche'],
+  'Storia / Geografia': ['Dispensa dalla memorizzazione di date e dati', 'Riduzione quantitativa delle verifiche', 'Tempi aggiuntivi (es. +30%)', 'Altre dispense specifiche'],
+  'Storia / Geografia / Studio della società': ['Dispensa dalla memorizzazione di date e dati', 'Riduzione quantitativa delle verifiche', 'Tempi aggiuntivi (es. +30%)', 'Altre dispense specifiche'],
+  'Arte / Musica / Tecnologia': ['Dispensa da attività pratiche specifiche', 'Riduzione quantitativa delle consegne', 'Tempi aggiuntivi (es. +30%)', 'Altre dispense specifiche'],
+  'Arte / Musica / Scienze Motorie / Tecnologia': ['Dispensa da attività pratiche specifiche', 'Riduzione quantitativa delle consegne', 'Tempi aggiuntivi (es. +30%)', 'Altre dispense specifiche'],
+  'Arte / Musica / Tecnologia / Scienze Motorie': ['Dispensa da attività pratiche specifiche', 'Riduzione quantitativa delle consegne', 'Tempi aggiuntivi (es. +30%)', 'Altre dispense specifiche'],
+  'Scienze / Storia / Geografia': ['Dispensa dalla memorizzazione di dati', 'Riduzione quantitativa delle verifiche', 'Tempi aggiuntivi (es. +30%)', 'Altre dispense specifiche'],
+};
+const DISPENSE_DEFAULT = ['Dispensa dalla lettura ad alta voce', 'Riduzione quantitativa delle prove', 'Tempi aggiuntivi (es. +30%)', 'Altre dispense specifiche'];
+
+/**
+ * REGOLA 2 PAGINE PER SEZIONE: blocco disciplinare completo e maestoso per ogni
+ * singola materia — nuclei fondanti e adattamento, misure dispensative nel
+ * dettaglio, strumenti compensativi autorizzati, griglie di verifica (prove
+ * equipollenti/non equipollenti, tempi aggiuntivi, uso calcolatrice/mappe,
+ * riduzione quantitativa) e criteri di valutazione trasversale e disciplinare.
+ */
+function tabellaProgettazioneDisciplina(materia: string): string {
+  const m = escapeHtml(materia);
+  const strumenti = STRUMENTI_PER_MATERIA[materia] ?? STRUMENTI_DEFAULT;
+  const dispense = DISPENSE_PER_MATERIA[materia] ?? DISPENSE_DEFAULT;
+  return `<h2>Progettazione disciplinare – ${m}</h2>
+    <h3>Nuclei fondanti e adattamento della programmazione</h3>
+    <table class="quadro-anagrafico">
+      ${rigaAnagrafica('Nuclei fondanti della materia', campoScritturaAmpio(5))}
+      ${rigaAnagrafica('Adattamento della programmazione', campoScritturaAmpio(5))}
+      ${rigaAnagrafica('Obiettivi minimi', campoScritturaAmpio(5))}
+      ${rigaAnagrafica('Contenuti essenziali / semplificazione', campoScritturaAmpio(5))}
+    </table>
+    <h3>Misure dispensative applicate – ${m}</h3>
+    <div class="crocette">
+      ${dispense.map((d) => voceCrocetta(d)).join('\n')}
+    </div>
+    <p class="micro-copy">Eventuali note sulle dispense specifiche:</p>
+    ${righeScrittura(2)}
+    <h3>Strumenti compensativi autorizzati – ${m}</h3>
+    <div class="crocette">
+      ${strumenti.map((s) => voceCrocetta(s)).join('\n')}
+    </div>
+    <p class="micro-copy">Eventuali note sugli strumenti autorizzati:</p>
+    ${righeScrittura(2)}
+    <h3>Modalità e griglie di verifica – ${m}</h3>
+    <table class="quadro-anagrafico">
+      ${rigaAnagrafica('Prove equipollenti', campoScritturaAmpio(3))}
+      ${rigaAnagrafica('Prove non equipollenti / differenziate', campoScritturaAmpio(3))}
+      ${rigaAnagrafica('Uso di strumenti in sede di verifica', campoScritturaAmpio(3))}
+      ${rigaAnagrafica('Tempi aggiuntivi in sede di verifica', campoScritturaAmpio(3))}
+    </table>
+    <h3>Criteri di valutazione disciplinare – ${m}</h3>
+    <table class="quadro-anagrafico">
+      ${rigaAnagrafica('Criteri trasversali', campoScritturaAmpio(3))}
+      ${rigaAnagrafica('Criteri disciplinari', campoScritturaAmpio(3))}
+      ${rigaAnagrafica('Livelli attesi / esiti', campoScritturaAmpio(3))}
+    </table>
+    ${boxScrittura(
+      `Attività e osservazioni specifiche – ${materia}`,
+      `Descrivere attività, strategie e osservazioni specifiche per la disciplina "${materia}".`,
+      true,
+      true,
+    )}`;
+}
+
+/** Sezione "Piani di uscita e raccordo con il territorio": esplicativa e
+ * pratica, con sottotitoli chiari e checkbox (continuità/orientamento e
+ * raccordo con enti e servizi locali). */
+function sezionePianiUscita(): string {
+  return `<h2>Piani di uscita e raccordo con il territorio</h2>
+    <h3>Continuità e orientamento</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Passaggio all'ordine di scuola successivo</p>
+      <p class="voce"><span class="casella"></span>Passaggio al CPIA / educazione degli adulti</p>
+      <p class="voce"><span class="casella"></span>Orientamento al mondo del lavoro / PCTO</p>
+    </div>
+    ${righeScrittura(3)}
+    <h3>Raccordo con enti e servizi locali</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Servizi sociali</p>
+      <p class="voce"><span class="casella"></span>ASL / Neuropsichiatria</p>
+      <p class="voce"><span class="casella"></span>Mediazione culturale</p>
+      <p class="voce"><span class="casella"></span>Associazioni del territorio</p>
+    </div>
+    ${righeScrittura(3)}`;
+}
+
+/**
+ * BLINDATURA NORMATIVA E TUTELA LEGALE: riferimenti normativi stringenti
+ * (D.I. 182/2020, D.Lgs. 66/2017, L. 170/2010, Direttiva 27/12/2012,
+ * D.M. 10/2017) e natura della valutazione (prove equipollenti vs non
+ * equipollenti, obiettivi minimi vs programmazione differenziata ex art. 10
+ * D.I. 182/2020) per prevenire vizi di forma in sede di contenzioso TAR.
+ */
+function sezioneTutelaLegale(riferimenti: string[]): string {
+  return `<h2>Riferimenti normativi e tutela legale</h2>
+    <table class="quadro-anagrafico">
+      ${riferimenti.map((r) => rigaAnagrafica(r, campoScrittura())).join('\n')}
+    </table>
+    <h3>Natura della valutazione (art. 10 D.I. 182/2020)</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Programmazione per obiettivi minimi (prove equipollenti)</p>
+      <p class="voce"><span class="casella"></span>Programmazione differenziata (prove non equipollenti)</p>
+      <p class="voce"><span class="casella"></span>Misure compensative e dispensative ai sensi della L. 170/2010</p>
+      <p class="voce"><span class="casella"></span>Valutazione in itinere e per rubriche</p>
+    </div>
+    <p class="formula-dichiarazione">La scelta tra prove equipollenti e non equipollenti e tra programmazione per obiettivi minimi o differenziata è documentata nel presente piano e comunicata alla famiglia, ai sensi dell'art. 10 del D.I. 182/2020 e del D.Lgs. 62/2017, al fine di prevenire vizi di forma in sede di contenzioso.</p>`;
+}
+
+/** Blocco firme per l'ultima pagina dei documenti pedagogici/inclusivi: l'intero
+ * team docente / GLO e la famiglia firmano (page-break-inside: avoid). */
+function firmeRuoliEstese(): string {
+  return `<div class="firme-ruoli firme-estese">
+    <p class="titolo-chiusura">Firme del Consiglio di Classe / GLO</p>
+    <p>Componenti del GLO / Team docenti: <span class="riga-firma"></span></p>
+    <p>Famiglia / esercenti la responsabilità genitoriale: <span class="riga-firma"></span></p>
+    <p>Dirigente Scolastico: <span class="riga-firma"></span></p>
+  </div>`;
 }
 
 /**
@@ -626,6 +816,17 @@ function quadroAnagrafico(famiglia: FamigliaDocumento, tipo: string): string {
         ${rigaAnagrafica('Contatto (telefono / email)', campoScrittura())}
       </table>`;
   }
+  if (famiglia === 'ambito' && tipo === 'convocazione_glo') {
+    // Convocazione riunione GLO: dati della riunione (modulo amministrativo).
+    return `<h2>Dati della convocazione</h2>
+      <table class="quadro-anagrafico">
+        ${rigaAnagrafica('Alunno/a', campoScrittura())}
+        ${rigaAnagrafica('Classe / Sezione', campoScrittura())}
+        ${rigaAnagrafica('Riunione (oggetto)', campoScrittura())}
+        ${rigaAnagrafica('Data e ora', campoScrittura())}
+        ${rigaAnagrafica('Luogo / modalità', campoScrittura())}
+      </table>`;
+  }
   if (famiglia === 'reclutamento') {
     return `<h2>Quadro anagrafico del richiedente</h2>
       <table class="quadro-anagrafico">
@@ -637,6 +838,32 @@ function quadroAnagrafico(famiglia: FamigliaDocumento, tipo: string): string {
         ${rigaAnagrafica('Classe di concorso', campoScrittura())}
         ${rigaAnagrafica('Contatto (email / telefono)', campoScrittura())}
         ${rigaAnagrafica('Scuola destinataria', campoScrittura())}
+      </table>`;
+  }
+  if (
+    famiglia === 'ambito' &&
+    (tipo === 'pdp_bes' ||
+      tipo === 'pdp_dsa' ||
+      tipo === 'piano_personalizzato_nai' ||
+      tipo === 'progetto_alfabetizzazione' ||
+      tipo === 'relazione_finale' ||
+      tipo === 'relazione_finale_inclusione')
+  ) {
+    // Dossier inclusione (5 pagine): quadro anagrafico articolato con diagnosi,
+    // GLO/referenti e, per gli alunni NAI, la lingua d'origine.
+    const rigaNai =
+      tipo === 'piano_personalizzato_nai' || tipo === 'progetto_alfabetizzazione'
+        ? rigaAnagrafica('Lingua d\u2019origine / anni di scolarizzazione', campoScrittura())
+        : '';
+    return `<h2>Quadro anagrafico dell\u2019alunno/a</h2>
+      <table class="quadro-anagrafico">
+        ${rigaAnagrafica('Cognome e Nome dell\u2019alunno/a', campoScrittura())}
+        ${rigaAnagrafica('Classe / Sezione', campoScrittura())}
+        ${rigaAnagrafica('Istituto di appartenenza', campoScrittura())}
+        ${rigaAnagrafica('Diagnosi / documentazione (data e riferimento)', campoScrittura())}
+        ${rigaAnagrafica('Consiglio di Classe / GLO', campoScrittura())}
+        ${rigaAnagrafica('Referente ASL / Specialista', campoScrittura())}
+        ${rigaNai}
       </table>`;
   }
   if (famiglia === 'istanza' || famiglia === 'ambito') {
@@ -653,6 +880,18 @@ function quadroAnagrafico(famiglia: FamigliaDocumento, tipo: string): string {
         ${rigaAnagrafica('Genitore / esercente la responsabilità genitoriale', campoScrittura())}
       </table>`;
   }
+  if (famiglia === 'inclusione' && tipo === 'verbale_glo') {
+    // Verbale riunione GLO/GLHO: dati della riunione e componenti.
+    return `<h2>Dati della riunione GLO</h2>
+      <table class="quadro-anagrafico">
+        ${rigaAnagrafica('Alunno/a', campoScrittura())}
+        ${rigaAnagrafica('Classe / Sezione', campoScrittura())}
+        ${rigaAnagrafica('Data e ora della riunione', campoScrittura())}
+        ${rigaAnagrafica('Luogo / modalità', campoScrittura())}
+        ${rigaAnagrafica('Consiglio di Classe / GLO', campoScrittura())}
+        ${rigaAnagrafica('Referente ASL / Specialista', campoScrittura())}
+      </table>`;
+  }
   if (famiglia === 'inclusione') {
     // Inclusione/PEI: GLO e referente ASL sono pertinenti.
     return `<h2>Quadro anagrafico dell\u2019alunno/a</h2>
@@ -665,6 +904,8 @@ function quadroAnagrafico(famiglia: FamigliaDocumento, tipo: string): string {
         ${rigaAnagrafica('Istituto di appartenenza', campoScrittura())}
         ${rigaAnagrafica('Consiglio di Classe / GLO', campoScrittura())}
         ${rigaAnagrafica('Referente ASL / Specialista', campoScrittura())}
+        ${rigaAnagrafica('Diagnosi funzionale / certificazione (data e riferimento)', campoScrittura())}
+        ${rigaAnagrafica('Terapisti / specialisti di riferimento', campoScrittura())}
       </table>`;
   }
   // Generico/MAD: solo i dati essenziali del richiedente (niente GLO/ASL).
@@ -815,22 +1056,132 @@ function costruisciSezioni(famiglia: FamigliaDocumento, tipo: string): string[] 
         </div>`,
       ];
     }
-    if (tipo === 'pdp_bes') {
+    if (tipo === 'pdp_bes' || tipo === 'pdp_dsa') {
       return [
-        `<h2>Tipologia BES / DSA</h2>
+        `<h2>Profilo di funzionamento e risorse</h2>`,
+        boxScrittura(
+          'Situazione di partenza',
+          'Descrivere la situazione di partenza dell\u2019alunno/a: diagnosi o documentazione (L. 170/2010, Direttiva 27/12/2012), bisogni educativi, potenzialità e difficoltà osservate.',
+          true,
+          true,
+        ),
+        sezioneCrocette(
+          'Tipologia BES / DSA',
+          [
+            'DSA (L. 170/2010 con diagnosi)',
+            'BES (svantaggio socio-economico / linguistico / culturale)',
+            'Altro (specificare)',
+          ],
+          'Barrare la tipologia BES/DSA del PDP; indicare il riferimento diagnostico se presente.',
+          true,
+        ),
+        `<h3>Quadro delle risorse disponibili</h3>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Ore di sostegno / potenziamento', campoScrittura())}
+          ${rigaAnagrafica('Tutoraggio / sportello didattico', campoScrittura())}
+          ${rigaAnagrafica('Specialisti / terapisti di riferimento', campoScrittura())}
+        </table>`,
+        boxScrittura(
+          'Quadro sintetico delle abilità e dei punti di forza',
+          'Sintetizzare abilità, competenze e punti di forza dell\u2019alunno/a emersi dall\u2019osservazione.',
+          true,
+          true,
+        ),
+        `<h2>Quadro osservativo per dimensione (D.I. 182/2020)</h2>`,
+        boxScrittura(
+          'Dimensione Socializzazione / Interazione / Relazione',
+          'Osservazioni su interazioni con pari e adulti, partecipazione e gestione delle emozioni.',
+          true,
+          true,
+        ),
+        boxScrittura(
+          'Dimensione Comunicazione / Linguaggio',
+          'Osservazioni su comunicazione, comprensione ed espressione in lingua italiana e straniere.',
+          true,
+          true,
+        ),
+        boxScrittura(
+          'Dimensione Autonomia / Orientamento',
+          'Osservazioni su autonomia personale, metodo di studio e organizzazione.',
+          true,
+          true,
+        ),
+        boxScrittura(
+          'Dimensione Cognitiva / Neuropsicologica / Apprendimento',
+          'Osservazioni su memoria, attenzione, processi di apprendimento e stile cognitivo.',
+          true,
+          true,
+        ),
+        `<h3>Griglia di osservazione per area disciplinare</h3>
+        <table class="quadro-anagrafico">
+          <tr><td class="campo-etichetta">Area disciplinare</td><td class="campo-compilazione">Osservazioni e interventi previsti</td></tr>
+          ${rigaAnagrafica('Italiano', campoScrittura())}
+          ${rigaAnagrafica('Matematica', campoScrittura())}
+          ${rigaAnagrafica('Inglese / Lingue straniere', campoScrittura())}
+          ${rigaAnagrafica('Storia / Geografia', campoScrittura())}
+          ${rigaAnagrafica('Scienze / Tecnologia', campoScrittura())}
+          ${rigaAnagrafica('Arte / Musica / Motoria', campoScrittura())}
+        </table>`,
+        tabellaProgettazioneDisciplina('Italiano / Lingua e comunicazione'),
+        tabellaProgettazioneDisciplina('Matematica'),
+        tabellaProgettazioneDisciplina('Scienze'),
+        tabellaProgettazioneDisciplina('Lingue straniere (Inglese / II lingua)'),
+        tabellaProgettazioneDisciplina('Storia / Geografia'),
+        tabellaProgettazioneDisciplina('Arte / Musica / Tecnologia'),
+        sezioneTutelaLegale([
+          'L. 170/2010 (DSA)',
+          'Direttiva Ministeriale 27/12/2012 (BES)',
+          'Linee Guida 12/07/2011 (DSA)',
+          'D.Lgs. 62/2017 e D.M. 742/2017 (valutazione)',
+          'D.I. 182/2020 (art. 10 – natura della valutazione)',
+        ]),
+        `<h2>Strumenti, misure e criteri di valutazione</h2>`,
+        sezioneCrocette(
+          'Misure compensative',
+          [
+            'Tempi aggiuntivi',
+            'Uso della calcolatrice',
+            'Mappe concettuali e formulari',
+            'Sintesi vocale / testo digitale',
+            'Software di dettatura / registratore',
+            'Valutazione personalizzata',
+          ],
+          'Indicare le misure compensative adottate ai sensi della L. 170/2010.',
+          true,
+        ),
+        sezioneCrocette(
+          'Misure dispensative',
+          [
+            'Dispensa dalla lettura ad alta voce',
+            'Dispensa dai tempi standard',
+            'Riduzione delle prove scritte',
+            'Valutazione personalizzata delle prove',
+            'Altro (specificare)',
+          ],
+          'Indicare le misure dispensative adottate, con modalità e tempi di verifica.',
+          true,
+        ),
+        `<h3>Strumenti e tecnologie</h3>
         <div class="crocette">
-          <p class="voce"><span class="casella"></span>DSA (L. 170/2010 con diagnosi)</p>
-          <p class="voce"><span class="casella"></span>BES (svantaggio socio-economico / linguistico / culturale)</p>
-          <p class="voce"><span class="casella"></span>Altro</p>
+          <p class="voce"><span class="casella"></span>PC / tablet con software specifici</p>
+          <p class="voce"><span class="casella"></span>Audiolibri e testi digitali</p>
+          <p class="voce"><span class="casella"></span>Schemi e mappe forniti dal docente</p>
+          <p class="voce"><span class="casella"></span>Altri strumenti (specificare)</p>
         </div>`,
-        `<h2>Misure Compensative &amp; Dispensative</h2>
-        <div class="crocette">
-          <p class="voce"><span class="casella"></span>Tempi aggiuntivi</p>
-          <p class="voce"><span class="casella"></span>Uso della calcolatrice</p>
-          <p class="voce"><span class="casella"></span>Mappe concettuali</p>
-          <p class="voce"><span class="casella"></span>Dispensa dalla lettura ad alta voce</p>
-          <p class="voce"><span class="casella"></span>Valutazione personalizzata</p>
-        </div>`,
+        `<h2>Verifiche e monitoraggio</h2>`,
+        `<h3>Verifica e valutazione</h3>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Tempi aggiuntivi in itinere (es. +30%)', campoScrittura())}
+          ${rigaAnagrafica('Prove orali / scritte previste', campoScrittura())}
+          ${rigaAnagrafica('Criteri di valutazione personalizzati', campoScrittura())}
+        </table>`,
+        `<h3>Griglia di monitoraggio periodico</h3>
+        <table class="quadro-anagrafico">
+          <tr><td class="campo-etichetta">Periodo</td><td class="campo-compilazione">Esiti e adeguamenti</td></tr>
+          ${rigaAnagrafica('I quadrimestre / trimestre', campoScrittura())}
+          ${rigaAnagrafica('II quadrimestre / pentamestre', campoScrittura())}
+        </table>`,
+        sezionePianiUscita(),
         `<h2>Patto con la Famiglia</h2>
         <div class="firme-ruoli">
           <p>Coordinatore di classe: <span class="riga-firma"></span></p>
@@ -1221,30 +1572,72 @@ function costruisciSezioni(famiglia: FamigliaDocumento, tipo: string): string[] 
           <p class="voce"><span class="casella"></span>Competenza digitale</p>
           <p class="voce"><span class="casella"></span>Imparare a imparare</p>
         </div>`,
-        `<h2>Livelli</h2>
-        <div class="crocette">
-          <p class="voce"><span class="casella"></span>In via di prima acquisizione</p>
-          <p class="voce"><span class="casella"></span>Base</p>
-          <p class="voce"><span class="casella"></span>Intermedio</p>
-          <p class="voce"><span class="casella"></span>Avanzato</p>
-        </div>`,
-        `<h2>Note</h2>
-        ${righeScrittura(2)}`,
+        `<h2>Griglia delle competenze per disciplina</h2>
+        <table class="quadro-anagrafico">
+          <tr><td class="campo-etichetta">Disciplina</td><td class="campo-compilazione">Competenza raggiunta / Livello</td></tr>
+          ${rigaAnagrafica('Italiano', campoScrittura())}
+          ${rigaAnagrafica('Matematica', campoScrittura())}
+          ${rigaAnagrafica('Inglese / Lingue straniere', campoScrittura())}
+          ${rigaAnagrafica('Storia / Geografia', campoScrittura())}
+          ${rigaAnagrafica('Scienze / Tecnologia', campoScrittura())}
+          ${rigaAnagrafica('Arte / Musica / Motoria', campoScrittura())}
+        </table>`,
+        sezioneCrocette(
+          'Livelli di competenza',
+          [
+            'In via di prima acquisizione',
+            'Base',
+            'Intermedio',
+            'Avanzato',
+          ],
+          'Indicare il livello di competenza raggiunto per ciascuna disciplina del modello D.M. 742/2017.',
+        ),
+        boxScrittura(
+          'Descrizione dei livelli raggiunti',
+          'Descrivere sinteticamente il profilo di competenza dell\u2019alunno/a al termine del percorso, con riferimento ai traguardi delle Indicazioni Nazionali.',
+          true,
+        ),
+        `<h2>Note e osservazioni del team docenti</h2>
+        ${righeScrittura(3)}`,
       ];
     }
     if (tipo === 'piano_personalizzato') {
       return [
-        `<h2>Ambito di personalizzazione</h2>
-        <div class="crocette">
-          <p class="voce"><span class="casella"></span>Didattica disciplinare</p>
-          <p class="voce"><span class="casella"></span>Metodo di studio</p>
-          <p class="voce"><span class="casella"></span>Tempi e modalità di verifica</p>
-          <p class="voce"><span class="casella"></span>Strumenti e materiali</p>
-        </div>`,
-        `<h2>Interventi previsti</h2>
+        sezioneCrocette(
+          'Ambito di personalizzazione',
+          [
+            'Didattica disciplinare',
+            'Metodo di studio',
+            'Tempi e modalità di verifica',
+            'Strumenti e materiali',
+            'Organizzazione e relazioni',
+          ],
+          'Indicare gli ambiti oggetto di personalizzazione didattica.',
+        ),
+        boxScrittura(
+          'Situazione di partenza',
+          'Descrivere la situazione di partenza dell\u2019alunno/a e i bisogni che richiedono la personalizzazione.',
+          true,
+        ),
+        `<h2>Obiettivi di apprendimento personalizzati</h2>
         ${righeScrittura(3)}`,
+        sezioneCrocette(
+          'Strategie e strumenti',
+          [
+            'Potenziamento del metodo di studio',
+            'Attività a piccolo gruppo',
+            'Tutoraggio tra pari',
+            'Strumenti digitali',
+            'Prove equipollenti',
+          ],
+          'Indicare le strategie didattiche e gli strumenti previsti.',
+        ),
         `<h2>Verifica e monitoraggio</h2>
-        ${righeScrittura(2)}`,
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Periodi di verifica', campoScrittura())}
+          ${rigaAnagrafica('Strumenti di verifica', campoScrittura())}
+          ${rigaAnagrafica('Criteri di valutazione', campoScrittura())}
+        </table>`,
       ];
     }
     if (tipo === 'progetti_fondi') {
@@ -1389,14 +1782,73 @@ function costruisciSezioni(famiglia: FamigliaDocumento, tipo: string): string[] 
         ${righeScrittura(1)}`,
       ];
     }
-    if (tipo === 'relazione_finale') {
+    if (tipo === 'relazione_finale' || tipo === 'relazione_finale_inclusione') {
       return [
-        `<h2>Esiti del percorso</h2>
-        ${righeScrittura(3)}`,
-        `<h2>Obiettivi raggiunti / da rivedere</h2>
-        ${righeScrittura(2)}`,
-        `<h2>Proposte per il successivo anno</h2>
-        ${righeScrittura(2)}`,
+        `<h2>Dati del percorso</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Alunno/a', campoScrittura())}
+          ${rigaAnagrafica('Classe / Sezione', campoScrittura())}
+          ${rigaAnagrafica('Ordine di scuola', campoScrittura())}
+          ${rigaAnagrafica('Tipo di documento (PEI / PDP)', campoScrittura())}
+        </table>`,
+        boxScrittura(
+          'Situazione di partenza',
+          'Richiamare sinteticamente la situazione di partenza dell\u2019alunno/a e gli obiettivi previsti.',
+          true,
+        ),
+        boxScrittura(
+          'Percorso svolto – Socializzazione / Interazione / Relazione',
+          'Descrivere il percorso realizzato nell\u2019area sociale e relazionale e gli esiti osservati.',
+          true,
+        ),
+        boxScrittura(
+          'Percorso svolto – Comunicazione / Linguaggio',
+          'Descrivere il percorso realizzato nell\u2019area della comunicazione e del linguaggio.',
+          true,
+        ),
+        boxScrittura(
+          'Percorso svolto – Autonomia / Orientamento',
+          'Descrivere il percorso realizzato nell\u2019area dell\u2019autonomia personale e sociale.',
+          true,
+        ),
+        boxScrittura(
+          'Percorso svolto – Apprendimento',
+          'Descrivere il percorso realizzato nell\u2019area degli apprendimenti disciplinari.',
+          true,
+        ),
+        `<h2>Esiti per area disciplinare</h2>
+        <table class="quadro-anagrafico">
+          <tr><td class="campo-etichetta">Area disciplinare</td><td class="campo-compilazione">Esiti e livello raggiunto</td></tr>
+          ${rigaAnagrafica('Italiano', campoScrittura())}
+          ${rigaAnagrafica('Matematica', campoScrittura())}
+          ${rigaAnagrafica('Lingue straniere', campoScrittura())}
+          ${rigaAnagrafica('Storia / Geografia', campoScrittura())}
+          ${rigaAnagrafica('Scienze / Tecnologia', campoScrittura())}
+          ${rigaAnagrafica('Arte / Musica / Motoria', campoScrittura())}
+        </table>`,
+        boxScrittura(
+          'Obiettivi raggiunti',
+          'Indicare gli obiettivi raggiunti rispetto a quanto previsto dal PEI/PDP.',
+        ),
+        boxScrittura(
+          'Criticità e ambiti da potenziare',
+          'Segnalare le criticità residue e gli ambiti su cui concentrare gli interventi.',
+        ),
+        boxScrittura(
+          'Interventi specialistici e collaborazioni',
+          'Sintetizzare gli interventi degli specialisti, dell\u2019assistente e le collaborazioni attivate.',
+        ),
+        boxScrittura(
+          'Proposte per il successivo anno scolastico',
+          'Formulare proposte per la continuità e per il nuovo PEI/PDP.',
+        ),
+        `<h2>Griglia di monitoraggio finale</h2>
+        <table class="quadro-anagrafico">
+          <tr><td class="campo-etichetta">Periodo</td><td class="campo-compilazione">Esiti</td></tr>
+          ${rigaAnagrafica('I quadrimestre / trimestre', campoScrittura())}
+          ${rigaAnagrafica('II quadrimestre / pentamestre', campoScrittura())}
+          ${rigaAnagrafica('Verifica finale', campoScrittura())}
+        </table>`,
       ];
     }
     if (tipo === 'trasporto_protetto') {
@@ -1492,6 +1944,187 @@ function costruisciSezioni(famiglia: FamigliaDocumento, tipo: string): string[] 
         ${righeScrittura(1)}`,
       ];
     }
+    if (tipo === 'piano_personalizzato_nai') {
+      return [
+        `<h2>Profilo e competenze linguistiche d\u2019ingresso</h2>`,
+        `<h3>Quadro delle risorse e dei supporti</h3>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Mediatore linguistico-culturale', campoScrittura())}
+          ${rigaAnagrafica('Corsi di italiano L2 / laboratori', campoScrittura())}
+          ${rigaAnagrafica('Tutor / peer tutoring', campoScrittura())}
+        </table>`,
+        boxScrittura(
+          'Situazione linguistica di ingresso',
+          'Descrivere la situazione linguistica dell\u2019alunno/a al momento dell\u2019ingresso: lingua d\u2019origine, alfabetizzazione, competenze pregresse (D.M. 10/2017).',
+          true,
+          true,
+        ),
+        `<h3>Valutazione delle competenze linguistiche d\u2019ingresso</h3>
+        <table class="quadro-anagrafico">
+          <tr><td class="campo-etichetta">Abilità</td><td class="campo-compilazione">Livello (A1-C2 / osservazione)</td></tr>
+          ${rigaAnagrafica('Ascolto', campoScrittura())}
+          ${rigaAnagrafica('Parlato', campoScrittura())}
+          ${rigaAnagrafica('Lettura', campoScrittura())}
+          ${rigaAnagrafica('Scrittura', campoScrittura())}
+        </table>`,
+        `<h2>Quadro osservativo per dimensione</h2>`,
+        boxScrittura(
+          'Dimensione Socializzazione / Interazione / Relazione',
+          'Osservazioni sull\u2019inserimento nel gruppo classe e sulle relazioni con i pari.',
+          true,
+          true,
+        ),
+        boxScrittura(
+          'Dimensione Comunicazione / Linguaggio',
+          'Osservazioni sulle competenze comunicative in italiano L2 e nella lingua d\u2019origine.',
+          true,
+          true,
+        ),
+        boxScrittura(
+          'Dimensione Autonomia / Orientamento',
+          'Osservazioni su autonomia, organizzazione e orientamento nel nuovo contesto.',
+          true,
+          true,
+        ),
+        boxScrittura(
+          'Dimensione Cognitiva / Neuropsicologica / Apprendimento',
+          'Osservazioni su processi di apprendimento, memoria e stile cognitivo.',
+          true,
+          true,
+        ),
+        tabellaProgettazioneDisciplina('Italiano L2 e alfabetizzazione'),
+        tabellaProgettazioneDisciplina('Matematica'),
+        tabellaProgettazioneDisciplina('Scienze'),
+        tabellaProgettazioneDisciplina('Lingue straniere'),
+        tabellaProgettazioneDisciplina('Storia / Geografia'),
+        tabellaProgettazioneDisciplina('Arte / Musica / Tecnologia / Scienze Motorie'),
+        sezioneTutelaLegale([
+          'D.M. 10/2017 (accoglienza e integrazione alunni stranieri)',
+          'Linee Guida per l\u2019accoglienza e l\u2019integrazione degli alunni stranieri',
+          'D.Lgs. 62/2017 (valutazione e prove equipollenti)',
+          'Quadro Comune Europeo di Riferimento (QCER)',
+        ]),
+        `<h2>Progetti di alfabetizzazione e laboratori</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Laboratorio di italiano L2</p>
+          <p class="voce"><span class="casella"></span>Classe ponte / accoglienza</p>
+          <p class="voce"><span class="casella"></span>Mediazione linguistico-culturale</p>
+          <p class="voce"><span class="casella"></span>Attività interculturali</p>
+        </div>`,
+        sezionePianiUscita(),
+        `<h2>Valutazione e monitoraggio</h2>`,
+        sezioneCrocette(
+          'Criteri di valutazione finale',
+          [
+            'Valutazione per obiettivi personalizzati',
+            'Prove semplificate / equipollenti',
+            'Valutazione della progressione linguistica',
+            'Riferimento al Quadro Comune Europeo (QCER)',
+          ],
+          'Indicare i criteri di valutazione finale per l\u2019alunno NAI.',
+          true,
+        ),
+        `<h3>Griglia di monitoraggio periodico</h3>
+        <table class="quadro-anagrafico">
+          <tr><td class="campo-etichetta">Periodo</td><td class="campo-compilazione">Esiti e adeguamenti</td></tr>
+          ${rigaAnagrafica('I quadrimestre / trimestre', campoScrittura())}
+          ${rigaAnagrafica('II quadrimestre / pentamestre', campoScrittura())}
+        </table>`,
+      ];
+    }
+    if (tipo === 'progetto_alfabetizzazione') {
+      return [
+        `<h2>Dati e obiettivi del progetto</h2>`,
+        `<h3>Dati del progetto</h3>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Titolo del progetto', campoScrittura())}
+          ${rigaAnagrafica('Durata / ore settimanali', campoScrittura())}
+          ${rigaAnagrafica('Ente / associazione partner', campoScrittura())}
+        </table>`,
+        boxScrittura(
+          'Obiettivi del percorso di italiano L2',
+          'Definire gli obiettivi del percorso di alfabetizzazione e di apprendimento dell\u2019italiano L2.',
+          true,
+          true,
+        ),
+        `<h2>Competenze linguistiche e laboratori</h2>`,
+        `<h3>Valutazione delle competenze linguistiche d\u2019ingresso</h3>
+        <table class="quadro-anagrafico">
+          <tr><td class="campo-etichetta">Abilità</td><td class="campo-compilazione">Livello d\u2019ingresso (QCER)</td></tr>
+          ${rigaAnagrafica('Ascolto', campoScrittura())}
+          ${rigaAnagrafica('Parlato', campoScrittura())}
+          ${rigaAnagrafica('Lettura', campoScrittura())}
+          ${rigaAnagrafica('Scrittura', campoScrittura())}
+        </table>`,
+        `<h3>Laboratori e moduli previsti</h3>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Modulo alfabetizzazione di base (A1-A2)</p>
+          <p class="voce"><span class="casella"></span>Modulo linguistico per lo studio (B1-B2)</p>
+          <p class="voce"><span class="casella"></span>Laboratorio di conversazione</p>
+          <p class="voce"><span class="casella"></span>Laboratorio interculturale</p>
+        </div>`,
+        `<h2>Programmazione per competenza</h2>
+        <table class="quadro-anagrafico">
+          <tr><td class="campo-etichetta">Competenza</td><td class="campo-compilazione">Obiettivi e attività</td></tr>
+          ${rigaAnagrafica('Ascolto e comprensione', campoScrittura())}
+          ${rigaAnagrafica('Produzione orale', campoScrittura())}
+          ${rigaAnagrafica('Lettura', campoScrittura())}
+          ${rigaAnagrafica('Scrittura', campoScrittura())}
+        </table>`,
+        tabellaProgettazioneDisciplina('Italiano L2'),
+        tabellaProgettazioneDisciplina('Matematica'),
+        tabellaProgettazioneDisciplina('Scienze / Storia / Geografia'),
+        sezioneTutelaLegale([
+          'D.M. 10/2017 (accoglienza e integrazione alunni stranieri)',
+          'Linee Guida per l\u2019accoglienza e l\u2019integrazione degli alunni stranieri',
+          'D.Lgs. 165/2001 e P.T.O.F.',
+          'Quadro Comune Europeo di Riferimento (QCER)',
+        ]),
+        `<h2>Mediazione, uscita e raccordo con il territorio</h2>`,
+        `<h3>Mediazione e figure di supporto</h3>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Mediatore linguistico-culturale</p>
+          <p class="voce"><span class="casella"></span>Docente facilitatore / di alfabetizzazione</p>
+          <p class="voce"><span class="casella"></span>Peer tutoring</p>
+          <p class="voce"><span class="casella"></span>Associazioni del territorio</p>
+        </div>`,
+        sezionePianiUscita(),
+        `<h2>Verifica e monitoraggio</h2>`,
+        sezioneCrocette(
+          'Verifica e valutazione finale',
+          [
+            'Valutazione della progressione linguistica',
+            'Prove semplificate / equipollenti',
+            'Osservazione strutturata',
+            'Raccordo con i criteri di valutazione della classe',
+          ],
+          'Indicare modalità e criteri di verifica finale del progetto.',
+          true,
+        ),
+        `<h3>Griglia di monitoraggio</h3>
+        <table class="quadro-anagrafico">
+          <tr><td class="campo-etichetta">Periodo</td><td class="campo-compilazione">Esiti</td></tr>
+          ${rigaAnagrafica('I quadrimestre / trimestre', campoScrittura())}
+          ${rigaAnagrafica('II quadrimestre / pentamestre', campoScrittura())}
+        </table>`,
+      ];
+    }
+    if (tipo === 'convocazione_glo') {
+      return [
+        `<h2>Componenti convocati</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Docenti del Consiglio di Classe / team</p>
+          <p class="voce"><span class="casella"></span>Docente di sostegno</p>
+          <p class="voce"><span class="casella"></span>Genitori / esercenti la responsabilità genitoriale</p>
+          <p class="voce"><span class="casella"></span>Specialista ASL / terapisti</p>
+          <p class="voce"><span class="casella"></span>Educatore / assistente all'autonomia</p>
+        </div>`,
+        `<h2>Ordine del giorno</h2>
+        ${righeScrittura(3)}`,
+        `<h2>Note organizzative</h2>
+        ${righeScrittura(2)}`,
+      ];
+    }
     // assistenza_comune: servizi dell'Ente Locale.
     return [
       `<h2>Dettaglio del servizio richiesto</h2>
@@ -1507,18 +2140,75 @@ function costruisciSezioni(famiglia: FamigliaDocumento, tipo: string): string[] 
       </div>`,
     ];
   }
+  if (famiglia === 'inclusione' && tipo === 'verbale_glo') {
+    return [
+      `<h2>Componenti presenti</h2>
+      <table class="quadro-anagrafico">
+        <tr><td class="campo-etichetta">Componente</td><td class="campo-compilazione">Nominativo</td></tr>
+        ${rigaAnagrafica('Dirigente Scolastico / delegato', campoScrittura())}
+        ${rigaAnagrafica('Docenti del Consiglio di Classe', campoScrittura())}
+        ${rigaAnagrafica('Docente di sostegno', campoScrittura())}
+        ${rigaAnagrafica('Educatore / assistente all\u2019autonomia', campoScrittura())}
+        ${rigaAnagrafica('Genitori / esercenti', campoScrittura())}
+        ${rigaAnagrafica('Specialista ASL / terapisti', campoScrittura())}
+      </table>`,
+      `<h2>Ordine del giorno</h2>
+      ${righeScrittura(3)}`,
+      boxScrittura(
+        'Relazioni e discussione',
+        'Sintetizzare le relazioni dei componenti, le osservazioni e il confronto sulla situazione dell\u2019alunno/a.',
+        true,
+      ),
+      boxScrittura(
+        'Dimensione Socializzazione / Interazione / Relazione',
+        'Risultanze dell\u2019osservazione e proposte condivise dal gruppo.',
+        true,
+      ),
+      boxScrittura(
+        'Dimensione Comunicazione / Linguaggio',
+        'Risultanze dell\u2019osservazione e proposte condivise dal gruppo.',
+        true,
+      ),
+      boxScrittura(
+        'Dimensione Autonomia / Orientamento',
+        'Risultanze dell\u2019osservazione e proposte condivise dal gruppo.',
+        true,
+      ),
+      boxScrittura(
+        'Dimensione Cognitiva / Neuropsicologica / Apprendimento',
+        'Risultanze dell\u2019osservazione e proposte condivise dal gruppo.',
+        true,
+      ),
+      `<h2>Decisioni e impegni assunti</h2>
+      ${righeScrittura(4)}`,
+      `<h2>Conferme e richieste di risorse</h2>
+      <table class="quadro-anagrafico">
+        ${rigaAnagrafica('Ore di sostegno (confermate / richieste)', campoScrittura())}
+        ${rigaAnagrafica('Assistenza specialistica / autonomia', campoScrittura())}
+        ${rigaAnagrafica('Interventi ASL / terapie', campoScrittura())}
+        ${rigaAnagrafica('Formazione e supporto al team', campoScrittura())}
+      </table>`,
+      `<h2>Data della successiva riunione</h2>
+      <table class="quadro-anagrafico">
+        ${rigaAnagrafica('Data proposta', campoScrittura())}
+        ${rigaAnagrafica('Ordine del giorno previsto', campoScrittura())}
+      </table>`,
+    ];
+  }
   if (famiglia === 'inclusione') {
     return [
+      `<h2>Profilo di funzionamento e risorse</h2>`,
       sezioneCrocette(
         'Area di intervento',
         [
           'Sostegno alla didattica',
           'Assistenza specialistica',
-          'Assistenza all’autonomia e alla comunicazione',
+          'Assistenza all\u2019autonomia e alla comunicazione',
           'Supporto psicologico / educativo',
           'Progettazione e coordinamento (GLO)',
         ],
         'Barrare le aree di intervento previste nel PEI (Quadro Operativo ICF, D.M. 182/2020): didattica, autonomia, comunicazione, relazioni e supporto specialistico.',
+        true,
       ),
       sezioneCrocette(
         'Tipologia di disabilità (L. 104/1992)',
@@ -1530,7 +2220,95 @@ function costruisciSezioni(famiglia: FamigliaDocumento, tipo: string): string[] 
           'Altro (specificare)',
         ],
         'Barrare la tipologia di disabilità come indicata dalla certificazione e dalla diagnosi funzionale (L. 104/1992).',
+        true,
       ),
+      `<h3>Quadro delle risorse disponibili</h3>
+      <table class="quadro-anagrafico">
+        ${rigaAnagrafica('Ore di sostegno assegnate', campoScrittura())}
+        ${rigaAnagrafica('Assistente all\u2019autonomia e alla comunicazione', campoScrittura())}
+        ${rigaAnagrafica('Terapie e interventi specialistici (ASL)', campoScrittura())}
+        ${rigaAnagrafica('Altri interventi / risorse', campoScrittura())}
+      </table>`,
+      boxScrittura(
+        'Quadro sintetico delle abilità e dei punti di forza',
+        'Sintetizzare le abilità, le competenze e i punti di forza dell\u2019alunno/a osservati nel contesto scolastico e familiare.',
+        true,
+        true,
+      ),
+      boxScrittura(
+        'Bisogni educativi emergenti',
+        'Descrivere i bisogni educativi emersi dall\u2019osservazione e dalla documentazione (D.I. 182/2020).',
+        false,
+        true,
+      ),
+      boxScrittura(
+        'Aspettative della famiglia e del contesto',
+        'Riportare le aspettative della famiglia e degli operatori rispetto al percorso dell\u2019alunno/a.',
+        false,
+        true,
+      ),
+      `<h2>Quadro osservativo per dimensione (D.I. 182/2020)</h2>`,
+      boxScrittura(
+        'Dimensione Socializzazione / Interazione / Relazione',
+        'Osservazioni sulla dimensione sociale e relazionale (D.I. 182/2020): interazioni con pari e adulti, partecipazione, gestione delle emozioni.',
+        true,
+        true,
+      ),
+      boxScrittura(
+        'Dimensione Comunicazione / Linguaggio',
+        'Osservazioni su comunicazione e linguaggio: modalità comunicative, comprensione, espressione, canali alternativi.',
+        true,
+        true,
+      ),
+      boxScrittura(
+        'Dimensione Autonomia / Orientamento',
+        'Osservazioni su autonomia personale, sociale e orientamento nello spazio e nel tempo.',
+        true,
+        true,
+      ),
+      boxScrittura(
+        'Dimensione Cognitiva / Neuropsicologica / Apprendimento',
+        'Osservazioni su funzioni cognitive, memoria, attenzione, processi di apprendimento e stile cognitivo.',
+        true,
+        true,
+      ),
+      `<h3>Griglia di osservazione per area disciplinare</h3>
+      <table class="quadro-anagrafico">
+        <tr><td class="campo-etichetta">Area disciplinare</td><td class="campo-compilazione">Osservazioni e interventi previsti</td></tr>
+        ${rigaAnagrafica('Italiano', campoScrittura())}
+        ${rigaAnagrafica('Matematica', campoScrittura())}
+        ${rigaAnagrafica('Inglese / Lingue straniere', campoScrittura())}
+        ${rigaAnagrafica('Storia / Geografia', campoScrittura())}
+        ${rigaAnagrafica('Scienze / Tecnologia', campoScrittura())}
+        ${rigaAnagrafica('Arte / Musica / Motoria', campoScrittura())}
+      </table>`,
+      tabellaProgettazioneDisciplina('Italiano / Lingua e comunicazione'),
+      tabellaProgettazioneDisciplina('Matematica'),
+      tabellaProgettazioneDisciplina('Scienze'),
+      tabellaProgettazioneDisciplina('Lingue straniere (Inglese / II lingua)'),
+      tabellaProgettazioneDisciplina('Storia / Geografia / Studio della società'),
+      tabellaProgettazioneDisciplina('Arte / Musica / Scienze Motorie / Tecnologia'),
+      sezioneTutelaLegale([
+        'D.I. 182/2020 (modelli nazionali PEI)',
+        'D.Lgs. 66/2017 e L. 104/1992',
+        'D.Lgs. 62/2017 (valutazione ed esami di Stato)',
+        'D.M. 182/2020 – Quadro Operativo ICF',
+        'Art. 10 D.I. 182/2020 (natura della valutazione)',
+      ]),
+      `<h2>Percorsi di autonomia e interventi specialistici</h2>`,
+      boxScrittura(
+        'Percorsi di autonomia personale e sociale',
+        'Descrivere i percorsi finalizzati all\u2019autonomia personale e sociale e al coinvolgimento nelle attività di classe.',
+        true,
+        true,
+      ),
+      boxScrittura(
+        'Interventi specialistici ASL / Terapisti',
+        'Indicare gli interventi dell\u2019assistente specialistico/educatore, le risorse dell\u2019ASL e i rapporti con il referente sanitario.',
+        true,
+        true,
+      ),
+      `<h2>Strumenti, misure e criteri di valutazione</h2>`,
       sezioneCrocette(
         'Strumenti compensativi adottati',
         [
@@ -1541,7 +2319,8 @@ function costruisciSezioni(famiglia: FamigliaDocumento, tipo: string): string[] 
           'Registratore / software di dettatura',
           'Altri strumenti (specificare)',
         ],
-        'Indicare qui le misure compensative adottate ai sensi della L. 170/2010 e del D.Lgs. 66/2017 (sintesi vocale, mappe, formulari, calcolatrice…).',
+        'Indicare le misure compensative adottate ai sensi della L. 170/2010 e del D.Lgs. 66/2017.',
+        true,
       ),
       sezioneCrocette(
         'Misure dispensative adottate',
@@ -1552,24 +2331,44 @@ function costruisciSezioni(famiglia: FamigliaDocumento, tipo: string): string[] 
           'Valutazione personalizzata',
           'Altro (specificare)',
         ],
-        'Indicare qui le misure dispensative adottate ai sensi della L. 170/2010; specificare modalità e tempi di verifica e valutazione.',
-      ),
-      boxScrittura(
-        'Relazione iniziale / osservazioni',
-        'Descrivere la situazione di partenza dell\u2019alunno/a: osservazioni iniziali, certificazioni presentate (L. 104/1992), bisogni educativi emersi e risorse disponibili.',
+        'Indicare le misure dispensative adottate, con modalità e tempi di verifica e valutazione.',
         true,
       ),
-      boxScrittura(
-        'Obiettivi disciplinari e di autonomia',
-        'Indicare gli obiettivi educativi e didattici del PEI (D.M. 182/2020), distinguendo apprendimento, autonomia personale e sociale, comunicazione e relazioni.',
+      sezioneCrocette(
+        'Criteri di valutazione personalizzata ed esami di Stato',
+        [
+          'Valutazione per obiettivi minimi',
+          'Prove equipollenti / differenziate',
+          'Riferimento al PEI nella valutazione',
+          'Predisposizione prove d\u2019esame personalizzate',
+        ],
+        'Indicare i criteri di valutazione personalizzata anche in vista degli esami di Stato (D.Lgs. 62/2017).',
+        true,
       ),
+      sezioneCrocette(
+        'Modalità di verifica',
+        [
+          'Prove orali',
+          'Prove scritte adattate',
+          'Valutazione in itinere e per rubriche',
+          'Osservazione strutturata',
+        ],
+        'Indicare le modalità di verifica e la loro periodicità.',
+        true,
+      ),
+      `<h2>Griglia di monitoraggio periodico</h2>
+      <table class="quadro-anagrafico">
+        <tr><td class="campo-etichetta">Periodo</td><td class="campo-compilazione">Esiti</td></tr>
+        ${rigaAnagrafica('I quadrimestre / trimestre', campoScrittura())}
+        ${rigaAnagrafica('II quadrimestre / pentamestre', campoScrittura())}
+        ${rigaAnagrafica('Verifica finale / esiti', campoScrittura())}
+      </table>`,
+      sezionePianiUscita(),
       boxScrittura(
         'Modifiche programmatiche',
-        'Riportare le modifiche alla programmazione di classe, le strategie di verifica e i criteri di valutazione previsti dal PEI.',
-      ),
-      boxScrittura(
-        'Interventi specialistici (ASL / Terapisti)',
-        'Indicare gli interventi dell\u2019assistente specialistico/educatore, le risorse dell\u2019ASL e i rapporti con il referente sanitario (specialista di riferimento).',
+        'Riportare le modifiche alla programmazione di classe e le strategie di verifica previste dal PEI.',
+        false,
+        true,
       ),
     ];
   }
@@ -1624,6 +2423,39 @@ function costruisciSezioni(famiglia: FamigliaDocumento, tipo: string): string[] 
   ];
 }
 
+/**
+ * Documenti pedagogici / inclusivi / di programmazione che DEVONO usare il
+ * layout ESTESO (mai compressi a 1 pagina). Le pagine minime garantite sono
+ * definite in `MIN_PAGINE_ESTESE` (PEI/PDP/relazioni/verbali GLO → 5 pagine).
+ */
+const TIPI_LAYOUT_ESTESO = new Set([
+  'pei',
+  'pdp_bes',
+  'pdp_dsa',
+  'relazione_finale',
+  'relazione_finale_inclusione',
+  'certificazione_competenze',
+  'piano_personalizzato',
+  'piano_personalizzato_nai',
+  'progetto_alfabetizzazione',
+  'verbale_glo',
+]);
+
+/** Pagine minime garantite per i documenti estesi (dossier maestosi, ~2 pagine
+ * per sezione dell'indice). I valori riflettono il volume reale dei contenuti. */
+const MIN_PAGINE_ESTESE: Record<string, number> = {
+  pei: 20,
+  pdp_bes: 18,
+  pdp_dsa: 18,
+  piano_personalizzato_nai: 18,
+  progetto_alfabetizzazione: 14,
+  relazione_finale: 12,
+  relazione_finale_inclusione: 12,
+  verbale_glo: 8,
+  certificazione_competenze: 4,
+  piano_personalizzato: 4,
+};
+
 function costruisciModuloFormale(
   query: string,
   profilo?: ProfiloIntervista,
@@ -1633,6 +2465,11 @@ function costruisciModuloFormale(
   const normativa = NORMATIVA_PER_TIPO[tipo] ?? NORMATIVA_DEFAULT;
 
   const sezioni: string[] = costruisciSezioni(famiglia, tipo);
+  const esteso = TIPI_LAYOUT_ESTESO.has(tipo);
+
+  // Corpo HTML delle sole sezioni (per contare le macro-sezioni d'indice h2).
+  const htmlSezioni = sezioni.join('\n');
+  const h2Count = (htmlSezioni.match(/<h2[\s>]/g) ?? []).length;
 
   // Micro-copy informativo sopra le firme (umano, senza gergo burocratico).
   const microCopy =
@@ -1648,17 +2485,31 @@ function costruisciModuloFormale(
         ? 'Modello conforme al D.Lgs. 66/2017, D.M. 182/2020 e D.I. 153/2023. Documento scaricato gratuitamente da ScuoleRadar.it.'
         : `Modello conforme alle Linee Guida del Ministero dell\u2019Istruzione e del Merito. Riferimenti normativi: ${normativa}. Documento scaricato gratuitamente da ScuoleRadar.it.`;
 
+  // Classificazione rigida: i documenti pedagogici/inclusivi forzano il layout
+  // esteso tramite un marcatore letto da `calcolaLayout`/`stimaPagine`.
+  // REGOLA 2 PAGINE PER SEZIONE d'indice: minimo = 2 × macro-sezioni h2.
+  const minPagine = esteso
+    ? Math.max(MIN_PAGINE_ESTESE[tipo] ?? 4, Math.ceil(h2Count * 2))
+    : 0;
+  const layoutRichiesto = esteso
+    ? `<div class="layout-richiesto" data-layout="esteso" data-min-pagine="${minPagine}"></div>`
+    : '';
+
   // Il titolo del documento riporta già tipo e ordine di scuola: niente "Oggetto
   // della richiesta" ridondante né blocco "Contesto della richiesta" (metadati AI
   // non esposti nel corpo). Si procede dritti al quadro anagrafico.
   return `
+    ${layoutRichiesto}
     ${intestazioneIstituzionale()}
     ${quadroAnagrafico(famiglia, tipo)}
-    ${sezioni.join('\n')}
-    <div class="blocco-firme">
-      ${bloccoConvalidaUnico(microCopy)}
+    ${htmlSezioni}
+    <div class="chiusura-dossier">
+      ${esteso ? firmeRuoliEstese() : ''}
+      <div class="blocco-firme">
+        ${bloccoConvalidaUnico(microCopy)}
+      </div>
+      <p class="nota-normativa">${escapeHtml(notaNormativa)}</p>
     </div>
-    <p class="nota-normativa">${escapeHtml(notaNormativa)}</p>
   `;
 }
 /**

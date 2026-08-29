@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, FileText, RotateCcw, Send, Sparkles } from 'lucide-react';
+import { ArrowLeft, FileText, Loader2, RotateCcw, Send, Sparkles } from 'lucide-react';
 import {
   creaDocumentoLocale,
   generaDocumento,
@@ -27,7 +27,12 @@ interface ArchivistaCapoProps {
   onAccessoRichiesto: () => void;
 }
 
-type Fase = 'domanda' | 'recupero' | 'pronto' | 'errore';
+type Fase = 'attesa' | 'domanda' | 'recupero' | 'pronto' | 'errore';
+
+/** Pausa d'attesa dignitosa: ritardo intenzionale prima della risposta. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * Bancone dell'Archivista Capo — stile "Indovina Chi?".
@@ -43,7 +48,7 @@ export function ArchivistaCapo({
   onAccessoRichiesto,
 }: ArchivistaCapoProps) {
   const [fase, setFase] = useState<Fase>('domanda');
-  const [messaggio, setMessaggio] = useState('Buongiorno, di che modulo hai bisogno?');
+  const [messaggio, setMessaggio] = useState('Buongiorno. Indichi la modulistica di cui necessita.');
   const [domanda, setDomanda] = useState<DomandaCorrente | null>(null);
   const [rispostaUtente, setRispostaUtente] = useState<string | null>(null);
   const [input, setInput] = useState('');
@@ -53,20 +58,29 @@ export function ArchivistaCapo({
   const queryRef = useRef('');
   const risposteRef = useRef<Record<string, string>>({});
   const attesaPassoRef = useRef<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll: all'apertura la conversazione è sempre al centro dello schermo.
+  useEffect(() => {
+    containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
 
   const gestisciPronto = useCallback(
     async (esito: Exclude<EsitoIntervista, { esito: 'domanda' | 'ripeti' }>) => {
+      // Il messaggio di consegna arriva sempre dall'archivio (mai replica React).
+      const messaggioConsegna =
+        esito.messaggio ?? 'La modulistica richiesta è disponibile nell\u2019archivio.';
       if (esito.modulo) {
         // Cache hit a costo zero: trovato nel registro.
         setPronto({ modulo: esito.modulo, cache: true });
-        setMessaggio('Eccolo: ho esattamente quello che ti serve.');
+        setMessaggio(messaggioConsegna);
         setFase('pronto');
         setBusy(false);
         onDocumentoPronto(esito.modulo, true);
         return;
       }
       // Profilo completo → recupero del documento.
-      setMessaggio('Ho esattamente quello che ti serve. Vado a prenderlo…');
+      setMessaggio('Individuata la modulistica richiesta. Procedo alla preparazione.');
       setFase('recupero');
       const gen = await generaDocumento(queryRef.current, esito.profilo, esito.catalogo?.id);
       setBusy(false);
@@ -79,13 +93,13 @@ export function ArchivistaCapo({
         // Fallback locale: il bancone consegna comunque il documento.
         const locale = creaDocumentoLocale(queryRef.current, esito.profilo, esito.catalogo?.id);
         setPronto({ modulo: locale, cache: false });
-        setMessaggio('Ecco il documento: è esattamente quello che ti serve.');
+        setMessaggio(messaggioConsegna);
         setFase('pronto');
         onDocumentoPronto(locale, false);
         return;
       }
       setPronto({ modulo: gen.esito.modulo, cache: gen.esito.cache });
-      setMessaggio('Ecco il documento: è esattamente quello che ti serve.');
+      setMessaggio(messaggioConsegna);
       setFase('pronto');
       onDocumentoPronto(gen.esito.modulo, gen.esito.cache);
     },
@@ -108,7 +122,7 @@ export function ArchivistaCapo({
         const modulo = creaDocumentoLocale(locale.nome, locale.profilo, locale.catalogoId);
         setPronto({ modulo, cache: false });
         setMessaggio(
-          'Ecco il modulo che cercavi, direttamente dall\u2019archivio (la consultazione remota è momentaneamente non raggiungibile).',
+          'La modulistica richiesta è disponibile nell\u2019archivio (la consultazione remota è momentaneamente non raggiungibile).',
         );
         setFase('pronto');
         setBusy(false);
@@ -117,7 +131,7 @@ export function ArchivistaCapo({
       }
       setFase('errore');
       setMessaggio(
-        'Ops, non sono riuscito a consultare il registro. Riprova tra un istante oppure esplora le macroaree qui sopra.',
+        'Non sono riuscito a individuare la modulistica richiesta. La prego di riprovare tra un istante o di consultare le macroaree dell\u2019archivio.',
       );
       setBusy(false);
       return;
@@ -144,7 +158,12 @@ export function ArchivistaCapo({
       risposteRef.current = {};
       attesaPassoRef.current = null;
       setRispostaUtente(q);
-      setMessaggio('Sto cercando nel registro…');
+      // Pausa d'attesa dignitosa: l'Archivista consulta il registro prima di
+      // rispondere (micro-indicatore sobrio; la risposta arriva SEMPRE
+      // dall'archivio, Edge Function).
+      setFase('attesa');
+      setBusy(true);
+      await sleep(2000);
       await chiediProssimo();
     },
     [chiediProssimo],
@@ -157,26 +176,36 @@ export function ArchivistaCapo({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const rispondi = (testo: string) => {
+  const rispondi = async (testo: string) => {
     const t = testo.trim();
     if (!t || busy) return;
     const passo = attesaPassoRef.current;
-    if (passo) risposteRef.current[passo] = t;
+    if (!passo) return; // nessuna domanda pendente: ignora l'invio
     attesaPassoRef.current = null;
     setRispostaUtente(t);
     setInput('');
-    setMessaggio('Perfetto, ho capito. Un attimo…');
+    // Risposta a una richiesta fuori contesto: la nuova richiesta viene
+    // valutata dall'archivio (mai un loop di formule standard).
+    if (passo === 'offtopic') {
+      void avvia(t);
+      return;
+    }
+    risposteRef.current[passo] = t;
+    // Pausa d'attesa dignitosa prima della risposta dell'archivio.
+    setFase('attesa');
+    setBusy(true);
+    await sleep(2000);
     void chiediProssimo();
   };
 
   const invia = (e: FormEvent) => {
     e.preventDefault();
-    rispondi(input);
+    void rispondi(input);
   };
 
   const ricomincia = () => {
     setFase('domanda');
-    setMessaggio('Buongiorno, di che modulo hai bisogno?');
+    setMessaggio('Buongiorno. Indichi la modulistica di cui necessita.');
     setDomanda(null);
     setRispostaUtente(null);
     setInput('');
@@ -189,7 +218,12 @@ export function ArchivistaCapo({
   };
 
   return (
-    <div className="animate-fade-in mt-4 overflow-hidden rounded-2xl border border-primary-100 bg-white shadow-card">
+    <div
+      ref={containerRef}
+      className={`animate-fade-in finestra-conversazione mt-4 overflow-hidden rounded-2xl border border-primary-100 bg-white shadow-card ${
+        fase === 'attesa' ? '-translate-y-1 opacity-90' : ''
+      }`}
+    >
       {/* Intestazione minima */}
       <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-primary-900 via-primary-800 to-primary-700 px-6 py-4">
         <div className="flex min-w-0 items-center gap-3">
@@ -228,38 +262,32 @@ export function ArchivistaCapo({
             </p>
           )}
 
-          {/* Messaggio dell'Archivista — GRANDE, con fade-in */}
+          {/* Messaggio dell'Archivista — GRANDE, fade-in morbido (500ms) */}
           <p
             key={messaggio}
-            className="animate-fade-in text-2xl font-bold leading-snug text-primary-900 sm:text-4xl"
+            className="animate-fade-in-lenta text-2xl font-bold leading-snug text-primary-900 sm:text-4xl"
           >
             {messaggio}
           </p>
 
-          {/* Opzioni della domanda (come in "Indovina Chi?") */}
-          {fase === 'domanda' && domanda && domanda.opzioni.length > 0 && !busy && (
-            <div className="mt-8 grid gap-2.5 sm:grid-cols-2">
-              {domanda.opzioni.map((op) => (
-                <button
-                  key={op}
-                  type="button"
-                  onClick={() => rispondi(op)}
-                  className="rounded-xl border border-primary-200 bg-white px-5 py-4 text-left text-base font-semibold text-primary-800 shadow-soft transition hover:border-primary-400 hover:bg-primary-50"
-                >
-                  {op}
-                </button>
-              ))}
+          {/* Pausa d'attesa dignitosa: micro-indicatore sobrio mentre
+              l'Archivista consulta il registro (2 secondi simulati). */}
+          {fase === 'attesa' && (
+            <div className="animate-fade-in-lenta mx-auto mt-6 flex items-center justify-center gap-2 text-sm font-medium text-primary-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              L\u2019Archivista Capo consulta il registro\u2026
             </div>
           )}
 
-          {/* Input minimale */}
+          {/* Input libero: SEMPRE attivo durante la conversazione (risposta
+              naturale in testo libero, mai bottoni rigidi). */}
           {fase === 'domanda' && !busy && (
             <form onSubmit={invia} className="mx-auto mt-6 flex max-w-md items-center gap-2">
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Scrivi la risposta…"
+                placeholder="Scrivi qui la tua risposta…"
                 className="input !py-3 text-base"
               />
               <button

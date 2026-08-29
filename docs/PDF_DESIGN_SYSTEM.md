@@ -10,12 +10,20 @@
 
 ## ⭐ Regole d'Oro (algoritmo di generazione)
 
-1. **DENSITÀ DINAMICA (A4 single vs double page)**
-   - Il motore pesa preventivamente il modulo contando le sezioni `<h2>` (`calcolaLayout` in `pdfGenerator.ts`).
-   - **Meno di 6 sezioni** → classe `layout-compatto`: padding 4-6px, griglie a 2 colonne,
-     righe di scrittura **max 3**, firme ancorate in calce → **DEVE stare in 1 pagina A4**.
-   - **6 o più sezioni** (PEI, PDP, Ricorsi complessi) → classe `layout-esteso`:
-     spazio verticale distribuito in modo omogeneo, **esattamente 2 pagine**, mai pagina 2 quasi vuota.
+1. **DENSITÀ DINAMICA — CLASSIFICAZIONE RIGIDA (A4 single vs multi-page)**
+   - Il motore decide il layout con `calcolaLayout` (`pdfGenerator.ts`): conta le sezioni `<h2>`
+     MA rispetta il **marcatore `data-layout`** presente nel corpo (precedenza assoluta).
+   - **LAYOUT COMPATTO (1 pagina A4 strictly enforced)** — moduli burocratici/amministrativi rapidi:
+     deleghe, autocertificazioni, permessi orari, uscite didattiche, accesso agli atti, certificati,
+     reclami/ricorsi semplici. Padding 4-6px, griglie a 2 colonne, righe di scrittura **max 3**,
+     firme ancorate in calce. **DEVE stare in 1 pagina A4.**
+   - **LAYOUT ESTESO (2-4 pagine A4, mai compresse a 1)** — documenti pedagogici, inclusivi e di
+     programmazione: PEI (D.I. 182/2020), PDP DSA (L. 170/2010), PDP BES, verbali GLO, relazioni
+     finali di inclusione, certificazione delle competenze (D.M. 742/2017), piani di studio
+     personalizzati. Sezioni ampie e complete, **griglie di osservazione per area disciplinare**
+     (Italiano, Matematica, Inglese…), tabelle dettagliate per misure compensative/dispensative,
+     spazio adeguato per situazione di partenza e verifica finale. Blocco firme del **team/GLO e
+     famiglia** (`.firme-estese`, `page-break-inside: avoid`) in calce all'ultima pagina.
 
 2. **ZERO RIDONDANZA SUI METADATI**
    - Nessun dato deve mai comparire due volte.

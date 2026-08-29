@@ -405,14 +405,63 @@ const macroAreeRaw: MacroAreaModulistica[] = [
       {
         id: 'gruppi-lavoro',
         nome: 'Gruppi di lavoro (GLI, GLHO, GLO)',
-        descrizione: 'Convocazioni e verbali dei gruppi per l’inclusione.',
-        documenti: [
+        descrizione: 'Convocazioni, verbali e richieste dei gruppi per l\u2019inclusione.',
+        sotto: [
           {
-            id: 'convocazione-gli',
-            nome: 'Convocazione GLI / GLHO / GLO',
-            descrizione: 'Modello di convocazione per le riunioni dei gruppi per l’inclusione.',
-            tipo: 'PDF',
-            profilo: { tipo: 'pei', scopo_sostegno: 'pei' },
+            id: 'convocazioni-glo',
+            nome: 'Convocazioni',
+            descrizione: 'Convocazioni delle riunioni dei gruppi per l\u2019inclusione.',
+            documenti: [
+              {
+                id: 'convocazione-glo',
+                nome: 'Convocazione GLO / GLHO / GLI',
+                descrizione: 'Modello di convocazione per le riunioni dei gruppi per l\u2019inclusione.',
+                tipo: 'PDF',
+                profilo: { tipo: 'convocazione_glo', scopo_sostegno: 'pei' },
+              },
+            ],
+          },
+          {
+            id: 'verbali-glo-gruppi',
+            nome: 'Verbali GLO / GLHO',
+            descrizione: 'Verbali di insediamento, verifica intermedia e finale del GLO.',
+            documenti: [
+              {
+                id: 'verbale-insediamento-glo',
+                nome: 'Verbale insediamento GLO',
+                descrizione: 'Verbale della riunione di insediamento del Gruppo di Lavoro Operativo.',
+                tipo: 'PDF',
+                profilo: { tipo: 'verbale_glo', scopo_sostegno: 'pei' },
+              },
+              {
+                id: 'verbale-verifica-intermedia-glo',
+                nome: 'Verbale verifica intermedia GLO',
+                descrizione: 'Verbale della verifica intermedia del PEI con il GLO.',
+                tipo: 'PDF',
+                profilo: { tipo: 'verbale_glo', scopo_sostegno: 'pei' },
+              },
+              {
+                id: 'verbale-finale-glo',
+                nome: 'Verbale finale GLO',
+                descrizione: 'Verbale della verifica finale e della proposta di continuità.',
+                tipo: 'PDF',
+                profilo: { tipo: 'verbale_glo', scopo_sostegno: 'pei' },
+              },
+            ],
+          },
+          {
+            id: 'ore-sostegno-glo',
+            nome: 'Ore di sostegno',
+            descrizione: 'Richieste di inserimento o variazione delle ore di sostegno.',
+            documenti: [
+              {
+                id: 'richiesta-variazione-ore-sostegno',
+                nome: 'Richiesta inserimento / variazione ore di sostegno',
+                descrizione: 'Istanza di inserimento o variazione delle ore di sostegno assegnate.',
+                tipo: 'PDF',
+                profilo: { tipo: 'sostegno', scopo_sostegno: 'richiesta' },
+              },
+            ],
           },
         ],
       },
@@ -566,7 +615,7 @@ const macroAreeRaw: MacroAreaModulistica[] = [
             nome: 'Verbale riunione GLO',
             descrizione: 'Modello di verbale per le riunioni del Gruppo di Lavoro Operativo.',
             tipo: 'PDF',
-            profilo: { tipo: 'pei', scopo_sostegno: 'pei' },
+            profilo: { tipo: 'verbale_glo', scopo_sostegno: 'pei' },
           },
         ],
       },
@@ -613,7 +662,7 @@ const macroAreeRaw: MacroAreaModulistica[] = [
                 nome: 'Piano Didattico Personalizzato DSA (L. 170/2010)',
                 descrizione: 'Modello di PDP per alunni con DSA certificati.',
                 tipo: 'PDF',
-                profilo: { tipo: 'pdp_bes', scopo_sostegno: 'pdp_dsa' },
+                profilo: { tipo: 'pdp_dsa', scopo_sostegno: 'pdp_dsa' },
               },
             ],
           },
@@ -846,14 +895,91 @@ const macroAreeRaw: MacroAreaModulistica[] = [
       {
         id: 'sostegno-infanzia',
         nome: 'Sostegno e inclusione',
-        descrizione: 'Richieste di sostegno e documentazione inclusiva per l’infanzia.',
-        documenti: [
+        descrizione: 'Documentazione per l\u2019inclusione: PEI, PDP, NAI e relazioni finali.',
+        sotto: [
           {
-            id: 'sostegno-infanzia',
-            nome: 'Richiesta di sostegno – Scuola dell’Infanzia',
-            descrizione: 'Domanda di accertamento e assegnazione delle ore di sostegno per l’infanzia.',
-            tipo: 'PDF',
-            profilo: { tipo: 'sostegno', ordine: 'infanzia', scopo_sostegno: 'richiesta' },
+            id: 'pei-glo-infanzia',
+            nome: 'PEI e Gestione GLO',
+            descrizione: 'Verbali, proposte e gestione del Gruppo di Lavoro Operativo.',
+            documenti: [
+              {
+                id: 'sostegno-infanzia',
+                nome: 'Richiesta di sostegno – Scuola dell\u2019Infanzia',
+                descrizione: 'Domanda di accertamento e assegnazione delle ore di sostegno per l\u2019infanzia.',
+                tipo: 'PDF',
+                profilo: { tipo: 'sostegno', ordine: 'infanzia', scopo_sostegno: 'richiesta' },
+              },
+              {
+                id: 'verbale-glo-infanzia',
+                nome: 'Verbale GLO / GLHO – Infanzia',
+                descrizione: 'Verbale delle riunioni del GLO per la scuola dell\u2019infanzia.',
+                tipo: 'PDF',
+                profilo: { tipo: 'verbale_glo', ordine: 'infanzia', scopo_sostegno: 'pei' },
+              },
+              {
+                id: 'proposta-pei-infanzia',
+                nome: 'Proposta PEI – Infanzia',
+                descrizione: 'Bozza di proposta PEI per la scuola dell\u2019infanzia.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pei', ordine: 'infanzia', scopo_sostegno: 'pei' },
+              },
+            ],
+          },
+          {
+            id: 'pdp-infanzia',
+            nome: 'PDP (DSA e BES)',
+            descrizione: 'Piani Didattici Personalizzati per DSA e BES.',
+            documenti: [
+              {
+                id: 'pdp-dsa-infanzia',
+                nome: 'PDP DSA (L. 170/2010) – Infanzia',
+                descrizione: 'Piano Didattico Personalizzato per alunni con DSA certificati.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pdp_dsa', ordine: 'infanzia', scopo_sostegno: 'pdp_dsa' },
+              },
+              {
+                id: 'pdp-bes-infanzia',
+                nome: 'PDP BES – Infanzia',
+                descrizione: 'Piano Didattico Personalizzato per alunni con BES non certificati.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pdp_bes', ordine: 'infanzia', scopo_sostegno: 'pdp_bes' },
+              },
+            ],
+          },
+          {
+            id: 'nai-infanzia',
+            nome: 'Inclusione NAI e Mediatori',
+            descrizione: 'Piani personalizzati e progetti di alfabetizzazione per alunni stranieri.',
+            documenti: [
+              {
+                id: 'piano-nai-infanzia',
+                nome: 'Piano personalizzato NAI – Infanzia',
+                descrizione: 'Piano di studio personalizzato per alunni stranieri non alfabetizzati.',
+                tipo: 'PDF',
+                profilo: { tipo: 'piano_personalizzato_nai', ordine: 'infanzia' },
+              },
+              {
+                id: 'progetto-alfabetizzazione-infanzia',
+                nome: 'Progetto alfabetizzazione / italiano L2 – Infanzia',
+                descrizione: 'Progetto di alfabetizzazione e mediazione per alunni NAI.',
+                tipo: 'PDF',
+                profilo: { tipo: 'progetto_alfabetizzazione', ordine: 'infanzia' },
+              },
+            ],
+          },
+          {
+            id: 'relazioni-finali-infanzia',
+            nome: 'Relazioni e Monitoraggio Finale',
+            descrizione: 'Relazioni finali di inclusione e monitoraggio del percorso.',
+            documenti: [
+              {
+                id: 'relazione-finale-inclusione-infanzia',
+                nome: 'Relazione finale inclusione – Infanzia',
+                descrizione: 'Relazione finale di verifica del percorso di inclusione.',
+                tipo: 'PDF',
+                profilo: { tipo: 'relazione_finale_inclusione', ordine: 'infanzia' },
+              },
+            ],
           },
         ],
       },
@@ -1224,68 +1350,12 @@ const macroAreeRaw: MacroAreaModulistica[] = [
       {
         id: 'sostegno-primaria',
         nome: 'Sostegno e inclusione',
-        descrizione: 'Richieste di sostegno e documentazione inclusiva per la primaria.',
+        descrizione: 'Documentazione per l\u2019inclusione: PEI, PDP, NAI e relazioni finali.',
         sotto: [
           {
-            id: 'modulistica-pei-primaria',
-            nome: 'Modulistica PEI',
-            descrizione: 'Verbali, osservazioni e richieste per il PEI nella scuola primaria.',
-            sotto: [
-              {
-                id: 'verbali-verifiche-primaria',
-                nome: 'Verbali e verifiche intermedie',
-                descrizione: 'Verbali di accoglienza e verifiche del PEI.',
-                documenti: [
-                  {
-                    id: 'verbale-glo-primaria',
-                    nome: 'Verbale di accoglienza – Primaria',
-                    descrizione: 'Modello di verbale di accoglienza per la scuola primaria.',
-                    tipo: 'PDF',
-                    profilo: { tipo: 'pei', ordine: 'primaria', scopo_sostegno: 'pei' },
-                  },
-                  {
-                    id: 'verifica-intermedia-pei-primaria',
-                    nome: 'Scheda verifica intermedia PEI – Primaria',
-                    descrizione: 'Prospetto per la verifica intermedia del PEI nella scuola primaria.',
-                    tipo: 'PDF',
-                    profilo: { tipo: 'pei', ordine: 'primaria', scopo_sostegno: 'pei' },
-                  },
-                ],
-              },
-              {
-                id: 'osservazioni-pei-primaria',
-                nome: 'Osservazioni e schede',
-                descrizione: 'Schede di osservazione per il PEI nella scuola primaria.',
-                documenti: [
-                  {
-                    id: 'osservazioni-pei-primaria',
-                    nome: 'Scheda osservazioni PEI – Primaria',
-                    descrizione: 'Schema di osservazione per il PEI nella scuola primaria.',
-                    tipo: 'PDF',
-                    profilo: { tipo: 'pei', ordine: 'primaria', scopo_sostegno: 'pei' },
-                  },
-                ],
-              },
-              {
-                id: 'richieste-pei-primaria',
-                nome: 'Richieste PEI',
-                descrizione: 'Istanze di compilazione e aggiornamento del PEI.',
-                documenti: [
-                  {
-                    id: 'pei-primaria',
-                    nome: 'Proposta PEI – Scuola Primaria',
-                    descrizione: 'Bozza di proposta PEI per la scuola primaria.',
-                    tipo: 'PDF',
-                    profilo: { tipo: 'pei', ordine: 'primaria', scopo_sostegno: 'pei' },
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            id: 'richiesta-sostegno-primaria',
-            nome: 'Richiesta di sostegno',
-            descrizione: 'Domanda di accertamento e assegnazione delle ore di sostegno.',
+            id: 'pei-glo-primaria',
+            nome: 'PEI e Gestione GLO',
+            descrizione: 'Verbali, proposte e gestione del Gruppo di Lavoro Operativo.',
             documenti: [
               {
                 id: 'sostegno-primaria',
@@ -1293,6 +1363,90 @@ const macroAreeRaw: MacroAreaModulistica[] = [
                 descrizione: 'Domanda di accertamento e assegnazione delle ore di sostegno per la primaria.',
                 tipo: 'PDF',
                 profilo: { tipo: 'sostegno', ordine: 'primaria', scopo_sostegno: 'richiesta' },
+              },
+              {
+                id: 'verbale-glo-primaria',
+                nome: 'Verbale di accoglienza / GLO – Primaria',
+                descrizione: 'Modello di verbale di accoglienza e di riunione del GLO per la scuola primaria.',
+                tipo: 'PDF',
+                profilo: { tipo: 'verbale_glo', ordine: 'primaria', scopo_sostegno: 'pei' },
+              },
+              {
+                id: 'verifica-intermedia-pei-primaria',
+                nome: 'Scheda verifica intermedia PEI – Primaria',
+                descrizione: 'Prospetto per la verifica intermedia del PEI nella scuola primaria.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pei', ordine: 'primaria', scopo_sostegno: 'pei' },
+              },
+              {
+                id: 'osservazioni-pei-primaria',
+                nome: 'Scheda osservazioni PEI – Primaria',
+                descrizione: 'Schema di osservazione per il PEI nella scuola primaria.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pei', ordine: 'primaria', scopo_sostegno: 'pei' },
+              },
+              {
+                id: 'pei-primaria',
+                nome: 'Proposta PEI – Scuola Primaria',
+                descrizione: 'Bozza di proposta PEI per la scuola primaria.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pei', ordine: 'primaria', scopo_sostegno: 'pei' },
+              },
+            ],
+          },
+          {
+            id: 'pdp-primaria',
+            nome: 'PDP (DSA e BES)',
+            descrizione: 'Piani Didattici Personalizzati per DSA e BES.',
+            documenti: [
+              {
+                id: 'pdp-dsa-primaria',
+                nome: 'PDP DSA (L. 170/2010) – Primaria',
+                descrizione: 'Piano Didattico Personalizzato per alunni con DSA certificati.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pdp_dsa', ordine: 'primaria', scopo_sostegno: 'pdp_dsa' },
+              },
+              {
+                id: 'pdp-bes-primaria',
+                nome: 'PDP BES – Primaria',
+                descrizione: 'Piano Didattico Personalizzato per alunni con BES non certificati.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pdp_bes', ordine: 'primaria', scopo_sostegno: 'pdp_bes' },
+              },
+            ],
+          },
+          {
+            id: 'nai-primaria',
+            nome: 'Inclusione NAI e Mediatori',
+            descrizione: 'Piani personalizzati e progetti di alfabetizzazione per alunni stranieri.',
+            documenti: [
+              {
+                id: 'piano-nai-primaria',
+                nome: 'Piano personalizzato NAI – Primaria',
+                descrizione: 'Piano di studio personalizzato per alunni stranieri non alfabetizzati.',
+                tipo: 'PDF',
+                profilo: { tipo: 'piano_personalizzato_nai', ordine: 'primaria' },
+              },
+              {
+                id: 'progetto-alfabetizzazione-primaria',
+                nome: 'Progetto alfabetizzazione / italiano L2 – Primaria',
+                descrizione: 'Progetto di alfabetizzazione e mediazione per alunni NAI.',
+                tipo: 'PDF',
+                profilo: { tipo: 'progetto_alfabetizzazione', ordine: 'primaria' },
+              },
+            ],
+          },
+          {
+            id: 'relazioni-finali-primaria',
+            nome: 'Relazioni e Monitoraggio Finale',
+            descrizione: 'Relazioni finali di inclusione e monitoraggio del percorso.',
+            documenti: [
+              {
+                id: 'relazione-finale-inclusione-primaria',
+                nome: 'Relazione finale inclusione – Primaria',
+                descrizione: 'Relazione finale di verifica del percorso di inclusione.',
+                tipo: 'PDF',
+                profilo: { tipo: 'relazione_finale_inclusione', ordine: 'primaria' },
               },
             ],
           },
@@ -1758,14 +1912,91 @@ const macroAreeRaw: MacroAreaModulistica[] = [
       {
         id: 'sostegno-medie',
         nome: 'Sostegno e inclusione',
-        descrizione: 'Richieste di sostegno e documentazione inclusiva per la secondaria di I grado.',
-        documenti: [
+        descrizione: 'Documentazione per l\u2019inclusione: PEI, PDP, NAI e relazioni finali.',
+        sotto: [
           {
-            id: 'sostegno-medie',
-            nome: 'Richiesta di sostegno – Secondaria di I grado',
-            descrizione: 'Domanda di accertamento e assegnazione delle ore di sostegno per le medie.',
-            tipo: 'PDF',
-            profilo: { tipo: 'sostegno', ordine: 'secondaria1', scopo_sostegno: 'richiesta' },
+            id: 'pei-glo-secondaria1',
+            nome: 'PEI e Gestione GLO',
+            descrizione: 'Verbali, proposte e gestione del Gruppo di Lavoro Operativo.',
+            documenti: [
+              {
+                id: 'sostegno-medie',
+                nome: 'Richiesta di sostegno – Secondaria di I grado',
+                descrizione: 'Domanda di accertamento e assegnazione delle ore di sostegno per le medie.',
+                tipo: 'PDF',
+                profilo: { tipo: 'sostegno', ordine: 'secondaria1', scopo_sostegno: 'richiesta' },
+              },
+              {
+                id: 'verbale-glo-secondaria1',
+                nome: 'Verbale GLO / GLHO – Secondaria di I grado',
+                descrizione: 'Verbale delle riunioni del GLO per la secondaria di I grado.',
+                tipo: 'PDF',
+                profilo: { tipo: 'verbale_glo', ordine: 'secondaria1', scopo_sostegno: 'pei' },
+              },
+              {
+                id: 'proposta-pei-secondaria1',
+                nome: 'Proposta PEI – Secondaria di I grado',
+                descrizione: 'Bozza di proposta PEI per la secondaria di I grado.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pei', ordine: 'secondaria1', scopo_sostegno: 'pei' },
+              },
+            ],
+          },
+          {
+            id: 'pdp-secondaria1',
+            nome: 'PDP (DSA e BES)',
+            descrizione: 'Piani Didattici Personalizzati per DSA e BES.',
+            documenti: [
+              {
+                id: 'pdp-dsa-secondaria1',
+                nome: 'PDP DSA (L. 170/2010) – Secondaria di I grado',
+                descrizione: 'Piano Didattico Personalizzato per alunni con DSA certificati.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pdp_dsa', ordine: 'secondaria1', scopo_sostegno: 'pdp_dsa' },
+              },
+              {
+                id: 'pdp-bes-secondaria1',
+                nome: 'PDP BES – Secondaria di I grado',
+                descrizione: 'Piano Didattico Personalizzato per alunni con BES non certificati.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pdp_bes', ordine: 'secondaria1', scopo_sostegno: 'pdp_bes' },
+              },
+            ],
+          },
+          {
+            id: 'nai-secondaria1',
+            nome: 'Inclusione NAI e Mediatori',
+            descrizione: 'Piani personalizzati e progetti di alfabetizzazione per alunni stranieri.',
+            documenti: [
+              {
+                id: 'piano-nai-secondaria1',
+                nome: 'Piano personalizzato NAI – Secondaria di I grado',
+                descrizione: 'Piano di studio personalizzato per alunni stranieri non alfabetizzati.',
+                tipo: 'PDF',
+                profilo: { tipo: 'piano_personalizzato_nai', ordine: 'secondaria1' },
+              },
+              {
+                id: 'progetto-alfabetizzazione-secondaria1',
+                nome: 'Progetto alfabetizzazione / italiano L2 – Secondaria di I grado',
+                descrizione: 'Progetto di alfabetizzazione e mediazione per alunni NAI.',
+                tipo: 'PDF',
+                profilo: { tipo: 'progetto_alfabetizzazione', ordine: 'secondaria1' },
+              },
+            ],
+          },
+          {
+            id: 'relazioni-finali-secondaria1',
+            nome: 'Relazioni e Monitoraggio Finale',
+            descrizione: 'Relazioni finali di inclusione e monitoraggio del percorso.',
+            documenti: [
+              {
+                id: 'relazione-finale-inclusione-secondaria1',
+                nome: 'Relazione finale inclusione – Secondaria di I grado',
+                descrizione: 'Relazione finale di verifica del percorso di inclusione.',
+                tipo: 'PDF',
+                profilo: { tipo: 'relazione_finale_inclusione', ordine: 'secondaria1' },
+              },
+            ],
           },
         ],
       },
@@ -2187,14 +2418,91 @@ const macroAreeRaw: MacroAreaModulistica[] = [
       {
         id: 'sostegno-superiori',
         nome: 'Sostegno e inclusione',
-        descrizione: 'Richieste di sostegno e documentazione inclusiva per la secondaria di II grado.',
-        documenti: [
+        descrizione: 'Documentazione per l\u2019inclusione: PEI, PDP, NAI e relazioni finali.',
+        sotto: [
           {
-            id: 'sostegno-superiori',
-            nome: 'Richiesta di sostegno – Secondaria di II grado',
-            descrizione: 'Domanda di accertamento e assegnazione delle ore di sostegno per le superiori.',
-            tipo: 'PDF',
-            profilo: { tipo: 'sostegno', ordine: 'secondaria2', scopo_sostegno: 'richiesta' },
+            id: 'pei-glo-secondaria2',
+            nome: 'PEI e Gestione GLO',
+            descrizione: 'Verbali, proposte e gestione del Gruppo di Lavoro Operativo.',
+            documenti: [
+              {
+                id: 'sostegno-superiori',
+                nome: 'Richiesta di sostegno – Secondaria di II grado',
+                descrizione: 'Domanda di accertamento e assegnazione delle ore di sostegno per le superiori.',
+                tipo: 'PDF',
+                profilo: { tipo: 'sostegno', ordine: 'secondaria2', scopo_sostegno: 'richiesta' },
+              },
+              {
+                id: 'verbale-glo-secondaria2',
+                nome: 'Verbale GLO / GLHO – Secondaria di II grado',
+                descrizione: 'Verbale delle riunioni del GLO per la secondaria di II grado.',
+                tipo: 'PDF',
+                profilo: { tipo: 'verbale_glo', ordine: 'secondaria2', scopo_sostegno: 'pei' },
+              },
+              {
+                id: 'proposta-pei-secondaria2',
+                nome: 'Proposta PEI – Secondaria di II grado',
+                descrizione: 'Bozza di proposta PEI per la secondaria di II grado.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pei', ordine: 'secondaria2', scopo_sostegno: 'pei' },
+              },
+            ],
+          },
+          {
+            id: 'pdp-secondaria2',
+            nome: 'PDP (DSA e BES)',
+            descrizione: 'Piani Didattici Personalizzati per DSA e BES.',
+            documenti: [
+              {
+                id: 'pdp-dsa-secondaria2',
+                nome: 'PDP DSA (L. 170/2010) – Secondaria di II grado',
+                descrizione: 'Piano Didattico Personalizzato per alunni con DSA certificati.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pdp_dsa', ordine: 'secondaria2', scopo_sostegno: 'pdp_dsa' },
+              },
+              {
+                id: 'pdp-bes-secondaria2',
+                nome: 'PDP BES – Secondaria di II grado',
+                descrizione: 'Piano Didattico Personalizzato per alunni con BES non certificati.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pdp_bes', ordine: 'secondaria2', scopo_sostegno: 'pdp_bes' },
+              },
+            ],
+          },
+          {
+            id: 'nai-secondaria2',
+            nome: 'Inclusione NAI e Mediatori',
+            descrizione: 'Piani personalizzati e progetti di alfabetizzazione per alunni stranieri.',
+            documenti: [
+              {
+                id: 'piano-nai-secondaria2',
+                nome: 'Piano personalizzato NAI – Secondaria di II grado',
+                descrizione: 'Piano di studio personalizzato per alunni stranieri non alfabetizzati.',
+                tipo: 'PDF',
+                profilo: { tipo: 'piano_personalizzato_nai', ordine: 'secondaria2' },
+              },
+              {
+                id: 'progetto-alfabetizzazione-secondaria2',
+                nome: 'Progetto alfabetizzazione / italiano L2 – Secondaria di II grado',
+                descrizione: 'Progetto di alfabetizzazione e mediazione per alunni NAI.',
+                tipo: 'PDF',
+                profilo: { tipo: 'progetto_alfabetizzazione', ordine: 'secondaria2' },
+              },
+            ],
+          },
+          {
+            id: 'relazioni-finali-secondaria2',
+            nome: 'Relazioni e Monitoraggio Finale',
+            descrizione: 'Relazioni finali di inclusione e monitoraggio del percorso.',
+            documenti: [
+              {
+                id: 'relazione-finale-inclusione-secondaria2',
+                nome: 'Relazione finale inclusione – Secondaria di II grado',
+                descrizione: 'Relazione finale di verifica del percorso di inclusione.',
+                tipo: 'PDF',
+                profilo: { tipo: 'relazione_finale_inclusione', ordine: 'secondaria2' },
+              },
+            ],
           },
         ],
       },

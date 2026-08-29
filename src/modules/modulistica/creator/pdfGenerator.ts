@@ -209,6 +209,20 @@ const STILI_DOCUMENTO = `
     padding-left: 10px;
     background: #f8f9fa;
   }
+  /* Marcatore di layout forzato (classificazione rigida): nessun impatto visivo. */
+  .layout-richiesto { display: none; }
+  /* Chiusura dossier: firme estese + Single Sign Box + nota restano insieme e
+     compatti in fondo all'ultima pagina (elimina la pagina bianca fantasma:
+     niente break-before, margini ridotti e contenuto bilanciato). */
+  .chiusura-dossier {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    margin-top: 0;
+  }
+  .chiusura-dossier .blocco-firme { margin: 0 0 4px; }
+  .chiusura-dossier .blocco-convalida-unico { padding: 5px 8px; }
+  .chiusura-dossier .nota-normativa { margin: 4px 0 0; }
+  .chiusura-dossier .firme-estese { margin: 0 0 8px; }
   /* Due sezioni affiancate (es. Tipologia + Disponibilità) per i moduli a 1 pagina. */
   .griglia-2 {
     display: grid;
@@ -240,6 +254,11 @@ const STILI_DOCUMENTO = `
   .tabella-firme th { background: #eef2f7; text-align: left; }
   .riga-firma { height: 20px; border-bottom: 1px dotted #333; }
   .campo-scrittura { height: 16px; }
+  /* Campi a testo libero AMPI: 4-6 righe di scrittura reale. */
+  .campo-scrittura-ampio div {
+    height: 24px;
+    border-bottom: 1px solid #e0e0e0;
+  }
   .nota-normativa {
     font-size: 8pt;
     color: #64748b;
@@ -297,6 +316,19 @@ const STILI_DOCUMENTO = `
   body.layout-esteso .scrittura-mano--alta { min-height: 210px; }
   body.layout-esteso .righe-scrittura div { margin-bottom: 14px; }
   body.layout-esteso .crocette { padding: 8px 10px; }
+  body.layout-esteso { line-height: 1.55; }
+  body.layout-esteso h2 { margin: 14px 0 6px; }
+  body.layout-esteso h3 { margin: 10px 0 4px; }
+  body.layout-esteso .intestazione-formale td,
+  body.layout-esteso .quadro-anagrafico td { padding: 8px 10px; }
+  body.layout-esteso .firme-estese {
+    padding: 10px 12px;
+    margin: 0 0 8px;
+  }
+  body.layout-esteso .firme-estese p { margin-bottom: 10px; }
+  body.layout-esteso .firme-estese .riga-firma { height: 24px; }
+  body.layout-esteso .blocco-convalida-unico { padding: 8px 10px; }
+  body.layout-esteso .blocco-convalida-unico .riga-firma { height: 18px; }
 
   .indice {
     border: 1px solid #cbd5e1;
@@ -343,8 +375,14 @@ export interface DocumentoPronto {
  * pesa il modulo contando le sezioni <h2> e decide il layout.
  *  - meno di 6 sezioni → `layout-compatto` (DEVE stare in 1 pagina A4);
  *  - 6 o più sezioni (PEI, PDP, Ricorsi complessi) → `layout-esteso` (2 pagine omogenee).
+ *
+ * Classificazione RIGIDA: se il corpo contiene un marcatore
+ * `data-layout="compatto|esteso"` (documenti pedagogici/inclusivi forzati a
+ * esteso, moduli rapidi forzati a compatto), questo ha precedenza sull'euristica.
  */
 export function calcolaLayout(contenutoHtml: string): 'compatto' | 'esteso' {
+  const richiesto = contenutoHtml.match(/data-layout="(compatto|esteso)"/)?.[1];
+  if (richiesto === 'compatto' || richiesto === 'esteso') return richiesto;
   const sezioni = (contenutoHtml.match(/<h2[\s>]/gi) ?? []).length;
   return sezioni < 6 ? 'compatto' : 'esteso';
 }
@@ -379,21 +417,30 @@ export function stimaPagine(contenutoHtml: string): number {
   const sezioni = (contenutoHtml.match(/<h2[\s>]/gi) ?? []).length;
   const pagineDaSezioni = Math.max(1, Math.ceil(sezioni / 6));
 
-  return Math.max(pagineDaParole, pagineDaSezioni);
+  const stima = Math.max(pagineDaParole, pagineDaSezioni);
+
+  // Classificazione rigida: i documenti estesi (pedagogici/inclusivi, marcati
+  // con data-layout="esteso") non possono essere stimati a meno del minimo
+  // garantito (data-min-pagine, es. PEI/PDP/relazioni/verbali GLO → 5 pagine).
+  const minPagine = Number(contenutoHtml.match(/data-min-pagine="(\d+)"/)?.[1] ?? 0);
+  if (minPagine > 0) return Math.max(stima, minPagine);
+  return stima;
 }
 
-/** Inietta un indice con collegamenti interni (ancore sui titoli h2/h3). */
+/** Inietta un indice con collegamenti interni alle SOLO macro-sezioni h2
+ * (max ~10-15 voci; le sotto-sezioni h3 non compaiono nell'indice). */
 function aggiungiIndice(contenutoHtml: string): string {
+  // In ambienti senza DOM (es. test Node/tsx) l'indice viene saltato.
+  if (typeof DOMParser === 'undefined') return contenutoHtml;
   const doc = new DOMParser().parseFromString(contenutoHtml, 'text/html');
-  const titoli = Array.from(doc.querySelectorAll('h2, h3'));
+  const titoli = Array.from(doc.querySelectorAll('h2'));
   if (titoli.length < 3) return contenutoHtml;
 
   const voci: string[] = [];
   titoli.forEach((h, i) => {
     const testo = (h.textContent ?? '').replace(/\s+/g, ' ').trim() || `Sezione ${i + 1}`;
     h.id = `sezione-${i + 1}`;
-    const rientro = h.tagName.toLowerCase() === 'h3' ? ' style="padding-left:12px"' : '';
-    voci.push(`<li${rientro}><a href="#sezione-${i + 1}">${escapeHtml(testo)}</a></li>`);
+    voci.push(`<li><a href="#sezione-${i + 1}">${escapeHtml(testo)}</a></li>`);
   });
 
   const indice = `<nav class="indice" aria-label="Indice dei contenuti"><h2>Indice dei contenuti</h2><ol>${voci.join('')}</ol></nav>`;
