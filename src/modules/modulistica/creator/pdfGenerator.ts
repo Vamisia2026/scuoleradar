@@ -170,28 +170,44 @@ const STILI_DOCUMENTO = `
   }
   .scrittura-mano--media { min-height: 96px; }
   .scrittura-mano--alta { min-height: 120px; }
-  .convalida {
-    border: 1px solid #333;
-    padding: 8px 10px;
-    margin-top: 10px;
-    page-break-inside: avoid;
-  }
-  .convalida p { margin: 0 0 4px; font-size: 10pt; }
-  .convalida .riga-firma { height: 20px; border-bottom: 1px dotted #333; }
-  .chiusura-documento {
-    border: 1px solid #333;
-    padding: 8px 10px;
-    margin: 0 0 8px;
-    page-break-inside: avoid;
-  }
-  .chiusura-documento p { margin: 0 0 8px; font-size: 10.5pt; }
-  .chiusura-documento .riga-firma { height: 20px; }
-  /* Blocco firme UNICO: firma del richiedente + convalida scolastica mai separate tra pagine. */
+  /* BLOCCO FIRME UNICO (Single Sign Box): un solo contenitore a 2 colonne.
+     Sinistra: Luogo e Data + Firma del richiedente. Destra: spazio riservato
+     alla scuola (solo N° Protocollo / Data / Timbro, nessuna firma funzionario). */
   .blocco-firme {
+    margin: 0 0 8px;
     page-break-inside: avoid;
     break-inside: avoid;
     page-break-before: avoid;
     break-before: avoid;
+  }
+  .blocco-convalida-unico {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 10px;
+    border: 1px solid #cbd5e1;
+    background: #fbfcfe;
+    padding: 6px 8px;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .blocco-convalida-unico p { margin: 0 0 4px; font-size: 10pt; }
+  .blocco-convalida-unico .titolo-chiusura {
+    font-weight: 700;
+    color: #14354e;
+    font-size: 10pt;
+    margin-bottom: 6px;
+  }
+  .blocco-convalida-unico .riga-firma { height: 16px; border-bottom: 1px dotted #333; }
+  .blocco-convalida-unico .chiusura-documento {
+    border: none;
+    background: none;
+    padding: 0;
+    margin: 0;
+  }
+  .blocco-convalida-unico .protocollo-scuola {
+    border-left: 1px solid #e5e7eb;
+    padding-left: 10px;
+    background: #f8f9fa;
   }
   /* Due sezioni affiancate (es. Tipologia + Disponibilità) per i moduli a 1 pagina. */
   .griglia-2 {
@@ -271,6 +287,10 @@ const STILI_DOCUMENTO = `
   body.layout-compatto .convalida .riga-firma,
   body.layout-compatto .firme-ruoli .riga-firma { height: 18px; }
   body.layout-compatto .campo-scrittura { height: 14px; }
+  body.layout-compatto .blocco-convalida-unico { padding: 3px 6px; }
+  body.layout-compatto .blocco-convalida-unico p { margin-bottom: 3px; }
+  body.layout-compatto .blocco-convalida-unico .titolo-chiusura { margin-bottom: 4px; }
+  body.layout-compatto .blocco-convalida-unico .riga-firma { height: 13px; }
   /* Modulo esteso (≥6 sezioni, es. PEI/PDP/Ricorsi): 2 pagine con spazio omogeneo. */
   body.layout-esteso .scrittura-mano { min-height: 110px; }
   body.layout-esteso .scrittura-mano--media { min-height: 170px; }
@@ -298,6 +318,7 @@ const STILI_DOCUMENTO = `
     .riferimento-normativo,
     .guida-compilazione,
     .blocco-firme,
+    .blocco-convalida-unico,
     .chiusura-documento,
     .convalida {
       page-break-inside: avoid;

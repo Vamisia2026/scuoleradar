@@ -21,6 +21,11 @@
 import { supabase } from '@/lib/supabase';
 import { escapeHtml } from './pdfGenerator';
 import type { ModuloSalvatoDB } from '../types';
+import {
+  macroAreeModulistica,
+  type DocumentoModulistica,
+  type SottoCategoriaModulistica,
+} from '@/data/moduli';
 
 export interface CatalogoSuggerito {
   id: string;
@@ -257,6 +262,15 @@ const NORMATIVA_PER_TIPO: Record<string, string> = {
   esonero_motoria: 'D.M. 9/1990, D.Lgs. 62/2017',
   accesso_atti: 'L. 241/1990, D.Lgs. 104/2010',
   consenso_foto: 'Reg. UE 2016/679 (GDPR), D.Lgs. 196/2003',
+  borsa_studio: 'D.Lgs. 63/2017, DPCM 159/2013, bandi regionali EDISU/DSU/ALISEO',
+  ricorso_borsa: 'L. 241/1990, DPCM 159/2013, bando regionale per il diritto allo studio',
+  isee_universita: 'DPR 445/2000, DPCM 159/2013 (ISEE)',
+  riduzione_contributi: 'L. 232/2016, DPCM 159/2013, regolamento tasse dell\u2019Ateneo',
+  contributo_straordinario: 'L. 232/2016, regolamento dell\u2019ente per il diritto allo studio',
+  integrativo_erasmus: 'Reg. UE 1288/2013, programmi Erasmus+ / mobilità internazionale',
+  collaborazioni_studentesche: 'L. 390/1991, DPCM 9/4/2001 (200 ore studentesche)',
+  esenzione_tasse: 'L. 232/2016, DPCM 159/2013, regolamento tasse dell\u2019Ateneo',
+  laurea: 'D.M. 270/2004, regolamento d\u2019Ateneo',
 };
 const NORMATIVA_DEFAULT = 'DPR 275/1999, DPR 445/2000, CCNL Scuola';
 
@@ -288,6 +302,15 @@ const TITOLO_PER_TIPO: Record<string, string> = {
   esonero_motoria: 'Richiesta Esonero Scienze Motorie',
   accesso_atti: 'Richiesta di Accesso agli Atti (L. 241/1990)',
   consenso_foto: 'Consenso Trattamento Immagini e Riprese Video',
+  borsa_studio: 'Domanda di Borsa di Studio (EDISU / ALISEO / DSU)',
+  ricorso_borsa: 'Richiesta Riesame / Ricorso Graduatoria Borse di Studio',
+  isee_universita: 'Dichiarazione ISEE per l\u2019Università',
+  riduzione_contributi: 'Richiesta Ricalcolo / Riduzione Contributo Unico',
+  contributo_straordinario: 'Richiesta Contributo Straordinario per Disagio Economico',
+  integrativo_erasmus: 'Richiesta Borsa Integrativa Erasmus / Mobilità Internazionale',
+  collaborazioni_studentesche: 'Domanda Collaborazioni Studentesche (200 ore / Tutorato)',
+  esenzione_tasse: 'Richiesta Esenzione / Riduzione Tasse Universitarie',
+  laurea: 'Domanda di Laurea / Proclamazione',
 };
 
 type FamigliaDocumento = 'inclusione' | 'istanza' | 'ambito' | 'reclutamento' | 'generico';
@@ -314,7 +337,16 @@ function famigliaDi(profilo?: ProfiloIntervista): FamigliaDocumento {
     tipo === 'permesso_orario' ||
     tipo === 'esonero_motoria' ||
     tipo === 'accesso_atti' ||
-    tipo === 'consenso_foto'
+    tipo === 'consenso_foto' ||
+    tipo === 'borsa_studio' ||
+    tipo === 'ricorso_borsa' ||
+    tipo === 'isee_universita' ||
+    tipo === 'riduzione_contributi' ||
+    tipo === 'contributo_straordinario' ||
+    tipo === 'integrativo_erasmus' ||
+    tipo === 'collaborazioni_studentesche' ||
+    tipo === 'esenzione_tasse' ||
+    tipo === 'laurea'
   ) {
     return 'ambito';
   }
@@ -366,29 +398,26 @@ function boxScrittura(titolo: string, guida?: string, alta = false): string {
 }
 
 /**
- * Sezione di chiusura STANDARD: Luogo e Data + Firma leggibile del richiedente.
- * Le tabelle firme con ruoli multipli (Consiglio di Classe, Genitori/Tutori,
- * Docenti, ASL…) non vanno usate per documenti del richiedente come la MAD.
+ * BLOCCO FIRME UNICO (Single Sign Box):
+ * UN solo contenitore a 2 colonne affiancate — a sinistra la chiusura del
+ * richiedente (Luogo e Data + Firma), a destra lo spazio riservato alla
+ * Scuola (solo N° Protocollo / Data / Timbro, NIENTE seconda firma di un
+ * funzionario). Riduce l'altezza del ~50% rispetto ai vecchi due box.
  */
-function bloccoFirmaRichiedente(nota?: string): string {
+function bloccoConvalidaUnico(nota?: string): string {
   const bloccoNota = nota ? `<p class="micro-copy">${escapeHtml(nota)}</p>` : '';
-  return `<h2>Luogo e Data</h2>${bloccoNota}
-    <div class="chiusura-documento">
-      <p>Luogo e data: <span class="riga-firma"></span></p>
-      <p>Firma del richiedente (leggibile): <span class="riga-firma"></span></p>
+  return `${bloccoNota}
+    <div class="blocco-convalida-unico">
+      <div class="chiusura-documento">
+        <p class="titolo-chiusura">Luogo e Data</p>
+        <p>Luogo e data: <span class="riga-firma"></span></p>
+        <p>Firma del richiedente (leggibile): <span class="riga-firma"></span></p>
+      </div>
+      <div class="protocollo-scuola">
+        <p class="titolo-chiusura">Riservato all'Ufficio di Protocollo</p>
+        <p>N° Prot. / Data / Timbro: <span class="riga-firma"></span></p>
+      </div>
     </div>`;
-}
-
-/** Spazio per il sigillo dell'istituzione e le iniziali di convalida. */
-function bloccoConvalida(): string {
-  return `<div class="convalida">
-    <p><strong>Convalida dell'Istituzione Scolastica</strong> — spazio per il sigillo e le iniziali di convalida.</p>
-    <div class="riga-firma"></div>
-    <p>Luogo e data di protocollo:</p>
-    <div class="riga-firma"></div>
-    <p>Firma del funzionario incaricato:</p>
-    <div class="riga-firma"></div>
-  </div>`;
 }
 
 function intestazioneIstituzionale(): string {
@@ -456,6 +485,33 @@ function quadroAnagrafico(famiglia: FamigliaDocumento, tipo: string): string {
         ${rigaAnagrafica('Nome e Cognome', campoScrittura())}
         ${rigaAnagrafica('Qualifica (Genitore / Studente maggiorenne)', campoScrittura())}
         ${rigaAnagrafica('Contatto (telefono / email)', campoScrittura())}
+      </table>`;
+  }
+  if (
+    famiglia === 'ambito' &&
+    (tipo === 'borsa_studio' ||
+      tipo === 'ricorso_borsa' ||
+      tipo === 'isee_universita' ||
+      tipo === 'riduzione_contributi' ||
+      tipo === 'contributo_straordinario' ||
+      tipo === 'integrativo_erasmus' ||
+      tipo === 'collaborazioni_studentesche' ||
+      tipo === 'esenzione_tasse' ||
+      tipo === 'laurea')
+  ) {
+    // Quadro anagrafico universitario compatto (matricola + corso).
+    const rigaExtra =
+      tipo === 'borsa_studio'
+        ? rigaAnagrafica('ISEE (valore in euro)', campoScrittura())
+        : tipo === 'laurea'
+          ? rigaAnagrafica('Relatore / correlatore', campoScrittura())
+          : '';
+    return `<h2>Quadro anagrafico dello studente</h2>
+      <table class="quadro-anagrafico">
+        ${rigaAnagrafica('Nome e Cognome', campoScrittura())}
+        ${rigaAnagrafica('Matricola', campoScrittura())}
+        ${rigaAnagrafica('Corso di laurea', campoScrittura())}
+        ${rigaExtra}
       </table>`;
   }
   if (famiglia === 'reclutamento') {
@@ -796,6 +852,179 @@ function costruisciSezioni(famiglia: FamigliaDocumento, tipo: string): string[] 
         <p class="formula-dichiarazione">Il consenso può essere revocato in ogni momento con comunicazione scritta alla scuola; i dati saranno trattati ai sensi del Reg. UE 2016/679 (GDPR).</p>`,
       ];
     }
+    if (tipo === 'borsa_studio') {
+      return [
+        `<h2>Bando e Ente erogatore</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>EDISU</p>
+          <p class="voce"><span class="casella"></span>ALISEO</p>
+          <p class="voce"><span class="casella"></span>DSU / altro ente regionale</p>
+        </div>`,
+        `<h2>Requisiti</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Iscritto/a regolarmente al corso</p>
+          <p class="voce"><span class="casella"></span>ISEE entro i limiti del bando</p>
+          <p class="voce"><span class="casella"></span>Requisiti di merito (CFU) maturati</p>
+        </div>`,
+        `<h2>Dichiarazioni</h2>
+        <p class="formula-dichiarazione">Il/La sottoscritto/a, consapevole delle responsabilità e delle sanzioni penali stabilite dall'art. 76 del D.P.R. 445/2000, dichiara sotto la propria responsabilità la veridicità dei dati e dei requisiti dichiarati ai fini del bando.</p>
+        ${righeScrittura(2)}`,
+      ];
+    }
+    if (tipo === 'ricorso_borsa') {
+      return [
+        `<h2>Oggetto del ricorso</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Contestazione graduatoria provvisoria</p>
+          <p class="voce"><span class="casella"></span>Contestazione graduatoria definitiva</p>
+          <p class="voce"><span class="casella"></span>Mancata ammissione alla borsa</p>
+          <p class="voce"><span class="casella"></span>Rideterminazione dell'importo</p>
+        </div>`,
+        `<h2>Motivazioni</h2>
+        ${righeScrittura(4)}`,
+        `<h2>Richiesta</h2>
+        <p class="formula-dichiarazione">Si richiede il riesame in autotutela del provvedimento ai sensi della L. 241/1990 e la nuova valutazione della posizione nella graduatoria.</p>
+        ${righeScrittura(1)}`,
+      ];
+    }
+    if (tipo === 'isee_universita') {
+      return [
+        `<h2>Valore ISEE</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Valore ISEE (in euro)', campoScrittura())}
+          ${rigaAnagrafica('Anno di riferimento', campoScrittura())}
+        </table>`,
+        `<h2>Dichiarazione</h2>
+        <p class="formula-dichiarazione">Il/La sottoscritto/a, consapevole delle responsabilità e delle sanzioni penali stabilite dall'art. 76 del D.P.R. 445/2000, dichiara sotto la propria responsabilità la veridicità del valore ISEE e dei dati dichiarati.</p>
+        ${righeScrittura(2)}`,
+        `<h2>Documenti allegati</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Attestazione ISEE / DSU</p>
+          <p class="voce"><span class="casella"></span>Copia del documento di riconoscimento</p>
+        </div>`,
+      ];
+    }
+    if (tipo === 'riduzione_contributi') {
+      return [
+        `<h2>Motivo della richiesta</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Variazione del valore ISEE</p>
+          <p class="voce"><span class="casella"></span>Errore nel calcolo del contributo</p>
+          <p class="voce"><span class="casella"></span>Sopravvenienza di condizioni economiche</p>
+          <p class="voce"><span class="casella"></span>Altro (specificare)</p>
+        </div>`,
+        `<h2>Riferimenti del versamento</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Contributo unico versato (euro)', campoScrittura())}
+          ${rigaAnagrafica('Data di versamento', campoScrittura())}
+        </table>`,
+        `<h2>Documentazione allegata</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Nuova attestazione ISEE</p>
+          <p class="voce"><span class="casella"></span>Ricevuta di pagamento</p>
+          <p class="voce"><span class="casella"></span>Autocertificazione dei fatti dichiarati</p>
+        </div>`,
+      ];
+    }
+    if (tipo === 'contributo_straordinario') {
+      return [
+        `<h2>Motivo del disagio economico</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Perdita del lavoro / cassa integrazione</p>
+          <p class="voce"><span class="casella"></span>Eventi di salute gravi in famiglia</p>
+          <p class="voce"><span class="casella"></span>Altre situazioni di difficoltà economica</p>
+        </div>`,
+        `<h2>Descrizione della situazione</h2>
+        ${righeScrittura(3)}`,
+        `<h2>Documentazione allegata</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Documentazione comprovante la situazione</p>
+          <p class="voce"><span class="casella"></span>Attestazione ISEE aggiornata</p>
+        </div>`,
+      ];
+    }
+    if (tipo === 'integrativo_erasmus') {
+      return [
+        `<h2>Programma di mobilità</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Erasmus+ Studio</p>
+          <p class="voce"><span class="casella"></span>Erasmus+ Traineeship</p>
+          <p class="voce"><span class="casella"></span>Mobilità extra UE</p>
+        </div>`,
+        `<h2>Destinazione e periodo</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Ateneo di destinazione', campoScrittura())}
+          ${rigaAnagrafica('Paese', campoScrittura())}
+          ${rigaAnagrafica('Periodo (dal / al)', campoScrittura())}
+        </table>`,
+        `<h2>Integrazione richiesta</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Importo borsa base (euro)', campoScrittura())}
+          ${rigaAnagrafica('Importo integrativo richiesto (euro)', campoScrittura())}
+        </table>`,
+      ];
+    }
+    if (tipo === 'collaborazioni_studentesche') {
+      return [
+        `<h2>Tipologia di collaborazione</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Collaborazione 200 ore (part-time studentesco)</p>
+          <p class="voce"><span class="casella"></span>Tutorato retribuito</p>
+          <p class="voce"><span class="casella"></span>Altro (specificare)</p>
+        </div>`,
+        `<h2>Area di interesse</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Biblioteca</p>
+          <p class="voce"><span class="casella"></span>Laboratori informatici / scientifici</p>
+          <p class="voce"><span class="casella"></span>Segreterie e uffici</p>
+          <p class="voce"><span class="casella"></span>Servizi agli studenti</p>
+        </div>`,
+        `<h2>Disponibilità oraria</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Ore settimanali disponibili', campoScrittura())}
+          ${rigaAnagrafica('Fascia oraria preferita', campoScrittura())}
+        </table>`,
+      ];
+    }
+    if (tipo === 'esenzione_tasse') {
+      return [
+        `<h2>Tipologia di agevolazione</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Esenzione totale per fascia ISEE</p>
+          <p class="voce"><span class="casella"></span>Riduzione del contributo per fascia ISEE</p>
+          <p class="voce"><span class="casella"></span>Esonero per merito</p>
+          <p class="voce"><span class="casella"></span>Rateizzazione del contributo</p>
+        </div>`,
+        `<h2>Riferimenti</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Valore ISEE (in euro)', campoScrittura())}
+          ${rigaAnagrafica('Contributo / rata da applicare', campoScrittura())}
+        </table>`,
+        `<h2>Dichiarazioni</h2>
+        <p class="formula-dichiarazione">Il/La sottoscritto/a, consapevole delle responsabilità e delle sanzioni penali stabilite dall'art. 76 del D.P.R. 445/2000, dichiara sotto la propria responsabilità la veridicità dei dati e dei requisiti dichiarati ai fini dell'agevolazione.</p>
+        ${righeScrittura(1)}`,
+      ];
+    }
+    if (tipo === 'laurea') {
+      return [
+        `<h2>Tipo di richiesta</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Ammissione alla seduta di laurea</p>
+          <p class="voce"><span class="casella"></span>Proclamazione</p>
+          <p class="voce"><span class="casella"></span>Deposito tesi</p>
+        </div>`,
+        `<h2>Sessione di laurea</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Sessione di laurea', campoScrittura())}
+          ${rigaAnagrafica('Data seduta (se nota)', campoScrittura())}
+        </table>`,
+        `<h2>Tesi</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Titolo della tesi', campoScrittura())}
+          ${rigaAnagrafica('Relatore / correlatore', campoScrittura())}
+        </table>`,
+      ];
+    }
     // assistenza_comune: servizi dell'Ente Locale.
     return [
       `<h2>Dettaglio del servizio richiesto</h2>
@@ -960,8 +1189,7 @@ function costruisciModuloFormale(
     ${quadroAnagrafico(famiglia, tipo)}
     ${sezioni.join('\n')}
     <div class="blocco-firme">
-      ${bloccoFirmaRichiedente(microCopy)}
-      ${bloccoConvalida()}
+      ${bloccoConvalidaUnico(microCopy)}
     </div>
     <p class="nota-normativa">${escapeHtml(notaNormativa)}</p>
   `;
@@ -996,6 +1224,60 @@ export function creaDocumentoLocale(
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
+}
+
+/**
+ * Ricerca LOCALE nel catalogo `moduli.ts` (fallback offline / edge function
+ * `genera-modulo` non raggiungibile). Ritorna il documento più pertinente
+ * alla query o null se non c'è un match sufficiente.
+ */
+export function trovaModuloLocale(query: string): DocumentoModulistica | null {
+  const q = query
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+  const parole = q.split(/\s+/).filter((w) => w.length >= 3);
+  if (parole.length === 0) return null;
+
+  let best: DocumentoModulistica | null = null;
+  let bestScore = 0;
+
+  const punteggio = (testo: string, nelNome: boolean): number => {
+    const t = testo.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    let score = 0;
+    for (const w of parole) {
+      if (t.includes(w)) score += nelNome ? 3 : 1;
+    }
+    if (nelNome) {
+      // Penalità per parole del NOME estranee alla query: evita che titoli
+      // lunghi e generici ("Domanda di passaggio di corso…") battano quelli
+      // pertinenti a parità di punteggio.
+      for (const w of t.split(/\s+/).filter((x) => x.length >= 3)) {
+        if (!parole.includes(w)) score -= 1;
+      }
+      // Bonus: la query intera compare nel nome → match diretto fortissimo.
+      if (parole.length >= 2 && t.includes(q)) score += 5;
+    }
+    return score;
+  };
+
+  const visita = (nodo: SottoCategoriaModulistica) => {
+    for (const doc of nodo.documenti ?? []) {
+      const score =
+        punteggio(doc.nome, true) + punteggio(`${doc.nome} ${doc.descrizione}`, false);
+      if (score > bestScore) {
+        bestScore = score;
+        best = doc;
+      }
+    }
+    for (const sotto of nodo.sotto ?? []) visita(sotto);
+  };
+
+  for (const area of macroAreeModulistica) {
+    for (const sotto of area.sotto) visita(sotto);
+  }
+  return bestScore >= 1 ? best : null;
 }
 
 /* ------------------- Persistenza (user_saved_modules) ------------------- */

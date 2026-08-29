@@ -47,19 +47,17 @@ const intestazione = `<table class="intestazione-formale">
 </table>`;
 
 const firme = `<div class="blocco-firme">
-  <h2>Luogo e Data</h2>
   <p class="micro-copy">Da sottoscrivere a cura del richiedente. Allegare eventuale documentazione integrativa.</p>
-  <div class="chiusura-documento">
-    <p>Luogo e data: <span class="riga-firma"></span></p>
-    <p>Firma del richiedente (leggibile): <span class="riga-firma"></span></p>
-  </div>
-  <div class="convalida">
-    <p><strong>Convalida dell&apos;Istituzione Scolastica</strong> — spazio per il sigillo e le iniziali di convalida.</p>
-    <div class="riga-firma"></div>
-    <p>Luogo e data di protocollo:</p>
-    <div class="riga-firma"></div>
-    <p>Firma del funzionario incaricato:</p>
-    <div class="riga-firma"></div>
+  <div class="blocco-convalida-unico">
+    <div class="chiusura-documento">
+      <p class="titolo-chiusura">Luogo e Data</p>
+      <p>Luogo e data: <span class="riga-firma"></span></p>
+      <p>Firma del richiedente (leggibile): <span class="riga-firma"></span></p>
+    </div>
+    <div class="protocollo-scuola">
+      <p class="titolo-chiusura">Riservato all&apos;Ufficio di Protocollo</p>
+      <p>N° Prot. / Data / Timbro: <span class="riga-firma"></span></p>
+    </div>
   </div>
 </div>`;
 

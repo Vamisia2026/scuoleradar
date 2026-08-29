@@ -4,6 +4,7 @@ import {
   creaDocumentoLocale,
   generaDocumento,
   inviaIntervista,
+  trovaModuloLocale,
   type DocumentoGenerato,
   type EsitoIntervista,
 } from './cacheService';
@@ -101,8 +102,23 @@ export function ArchivistaCapo({
         setBusy(false);
         return;
       }
+      // Fallback LOCALE: cerchiamo nel catalogo moduli.ts un modulo pertinente.
+      const locale = trovaModuloLocale(queryRef.current);
+      if (locale) {
+        const modulo = creaDocumentoLocale(locale.nome, locale.profilo, locale.catalogoId);
+        setPronto({ modulo, cache: false });
+        setMessaggio(
+          'Ecco il modulo che cercavi, direttamente dall\u2019archivio (la consultazione remota è momentaneamente non raggiungibile).',
+        );
+        setFase('pronto');
+        setBusy(false);
+        onDocumentoPronto(modulo, false);
+        return;
+      }
       setFase('errore');
-      setMessaggio('Ops, non sono riuscito a consultare il registro. Riprova tra un istante.');
+      setMessaggio(
+        'Ops, non sono riuscito a consultare il registro. Riprova tra un istante oppure esplora le macroaree qui sopra.',
+      );
       setBusy(false);
       return;
     }

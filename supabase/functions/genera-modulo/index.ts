@@ -189,6 +189,15 @@ const DIMENSIONE_TIPO: Record<string, string[]> = {
   esonero_motoria: ['esonero scienze motorie', 'esonero educazione fisica', 'esonero attività motorie', 'esonero attività'],
   accesso_atti: ['accesso agli atti', 'accesso atti', 'l.241', 'legge 241', 'accesso documenti', 'istanza accesso'],
   consenso_foto: ['consenso foto', 'foto e video', 'immagini', 'riprese video', 'diritto all.immagine'],
+  borsa_studio: ['borsa di studio', 'borsa studio', 'edisu', 'aliseo', 'dsu', 'diritto allo studio', 'bando borsa'],
+  ricorso_borsa: ['ricorso borsa', 'riesame borsa', 'graduatoria provvisoria', 'graduatoria borse', 'ricorso graduatoria'],
+  isee_universita: ['isee universita', 'dichiarazione isee', 'isee ateneo'],
+  riduzione_contributi: ['riduzione contributo', 'ricalcolo contributo', 'contributo unico', 'riduzione tasse'],
+  contributo_straordinario: ['contributo straordinario', 'disagio economico', 'sussidio straordinario'],
+  integrativo_erasmus: ['integrativo erasmus', 'borsa erasmus', 'mobilita internazionale', 'borsa mobilita'],
+  collaborazioni_studentesche: ['collaborazioni studentesche', '200 ore', 'tutorato', 'part-time studentesco'],
+  esenzione_tasse: ['esenzione tasse', 'esenzione tasse universitarie', 'esonero tasse', 'rateizzazione tasse'],
+  laurea: ['domanda di laurea', 'proclamazione', 'seduta di laurea', 'deposito tesi', 'assegnazione tesi'],
 };
 
 /** Ordini di scuola rilevabili dalla query. */
@@ -583,6 +592,15 @@ const LABEL_PROFILO: Record<string, Record<string, string>> = {
     esonero_motoria: 'Richiesta Esonero Scienze Motorie',
     accesso_atti: 'Richiesta di Accesso agli Atti (L. 241/1990)',
     consenso_foto: 'Consenso Trattamento Immagini e Riprese Video',
+    borsa_studio: 'Domanda di Borsa di Studio (EDISU / ALISEO / DSU)',
+    ricorso_borsa: 'Richiesta Riesame / Ricorso Graduatoria Borse di Studio',
+    isee_universita: 'Dichiarazione ISEE per l\u2019Università',
+    riduzione_contributi: 'Richiesta Ricalcolo / Riduzione Contributo Unico',
+    contributo_straordinario: 'Richiesta Contributo Straordinario per Disagio Economico',
+    integrativo_erasmus: 'Richiesta Borsa Integrativa Erasmus / Mobilità Internazionale',
+    collaborazioni_studentesche: 'Domanda Collaborazioni Studentesche (200 ore / Tutorato)',
+    esenzione_tasse: 'Richiesta Esenzione / Riduzione Tasse Universitarie',
+    laurea: 'Domanda di Laurea / Proclamazione',
   },
   ordine: {
     infanzia: "Scuola dell'Infanzia",

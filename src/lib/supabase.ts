@@ -1,7 +1,10 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+// Difensivo: in ambienti senza Vite (es. test Node/tsx) `import.meta.env`
+// può essere undefined → il client resta null (modalità demo / fallback locale).
+const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
+const url = env.VITE_SUPABASE_URL as string | undefined;
+const anonKey = env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 /**
  * Client Supabase per il frontend (chiave ANON pubblica).

@@ -35,11 +35,13 @@
 - **Massimo 2 pagine A4** per qualsiasi modulo. Mai 3+ pagine.
 - **I moduli brevi devono stare su 1 sola pagina**: se il contenuto è sintetico, l'intero documento
   (firme comprese) DEVE rendere su un'unica A4. Nessuna forzatura artificiale a 2 pagine.
-- **Blocco firme UNICO** (`.blocco-firme` con `page-break-inside: avoid`):
-  firma del richiedente (".chiusura-documento") + convalida scolastica (".convalida")
-  sono SEMPRE contenuti nello stesso contenitore e non possono mai essere separati tra pagine.
-- Il blocco di chiusura (**"Luogo, Data, Firma"** + **"Convalida / Protocollo dell'Istituzione Scolastica"**):
-  - deve risiedere nella **seconda pagina** (o a fondo pagina 1 nei moduli brevi), ancorato in calce al testo;
+- **BLOCCO FIRME UNICO** (`.blocco-firme` + `.blocco-convalida-unico`, `page-break-inside: avoid`):
+  UN solo contenitore a 2 colonne affiancate, mai due box separati:
+  - colonna sinistra (`.chiusura-documento`): **"Luogo e Data"** + **"Firma del richiedente (leggibile)"**;
+  - colonna destra (`.protocollo-scuola`, sfondo neutro `#f8f9fa`): **"Riservato all'Ufficio di Protocollo"** con
+    solo **N° Prot. / Data / Timbro** — NIENTE seconda firma di un funzionario né box "Convalida dell'Istituzione Scolastica";
+  - l'altezza complessiva del blocco è ridotta di ~50% rispetto al vecchio doppio box (padding 3-6px, righe 13-16px);
+  - può risiedere nella **seconda pagina** dei moduli estesi (o a fondo pagina 1 nei moduli brevi), ancorato in calce al testo;
   - **VIETATO** finire con una pagina orfana contenente solo le firme.
 - **Niente `page-break-before: always` / `page-break-after: always`** che forzi pagine aggiuntive.
 - Le sezioni di scrittura non devono superare **3-5 righe** di spazio ciascuna
