@@ -2,13 +2,22 @@
  * ScuoleRadar.it — Ingestione Notizie (entry point CLI / cron).
  *
  * Pipeline:
- *   1. raccoglie le voci reali dalle fonti ufficiali (MIM, Gazzetta Ufficiale);
+ *   1. raccoglie le voci reali dalle fonti ufficiali (MIM, Gazzetta Ufficiale)
+ *      con log HTTP esplicito per ogni fonte (nessun silent-fail);
  *   2. applica il motore di rilevanza (rifiuta contenuti non vincolanti,
  *      accetta solo decreti/note/scadenze per il personale scolastico);
  *   3. estrae la data di scadenza ufficiale e genera l'articolo editoriale
  *      (date esatte, acronimi spiegati, link ai portali ufficiali);
- *   4. scrive il risultato in `src/departments/notizie/data/notizieIngestite.ts`
- *      (file letto dall'app) oppure lo stampa in dry-run.
+ *   4. AGGIUNGE le nuove notizie all'archivio esistente (accumulo con dedupe
+ *      per id: la bacheca non si svuota mai) e scrive il risultato in
+ *      `src/departments/notizie/data/notizieIngestite.ts`.
+ *
+ * Esiti e log:
+ *   - fonti OK, nessuna notizia nuova → "✓ HTTP 200 - 0 new posts criteria matched"
+ *     (esecuzione riuscita, file invariato, nessun commit necessario);
+ *   - fonti OK, N notizie nuove → "✓ HTTP 200 - N new posts criteria matched";
+ *   - tutte le fonti non raggiungibili → "✗ HTTP FAIL" + exit code 1
+ *     (il workflow GitHub lo segnala con un warning, mai un fallimento silenzioso).
  *
  * Uso:
  *   npm run scrape:notizie            # pipeline completa (scrive il file dati)
@@ -19,6 +28,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { raccogliNotizieRaw, type VoceFonte } from './newsFetcher.ts';
+import { notizieIngestite } from '../data/notizieIngestite.ts';
 import {
   valutaRilevanza,
   punteggioRilevanza,
@@ -94,8 +104,18 @@ async function main(): Promise<void> {
   const isDryRun = process.argv.includes('--dry-run');
   console.log('=== Ingestione Notizie ScuoleRadar ===');
 
-  const voci = await raccogliNotizieRaw();
-  console.log(`• Voci raccolte: ${voci.length}`);
+  const { voci, fontiRaggiunte } = await raccogliNotizieRaw();
+  console.log(`• Voci raccolte: ${voci.length} | fonti raggiunte: ${fontiRaggiunte}`);
+
+  // Nessuna fonte ufficiale raggiunta (HTTP 2xx/3xx): niente silent-fail.
+  // Il workflow GitHub trasforma l'exit code in warning visibile nei log.
+  if (fontiRaggiunte === 0) {
+    console.error(
+      '✗ HTTP FAIL - fonti ufficiali non raggiungibili (MIM / Gazzetta Ufficiale). Nessuna ingestione eseguita.',
+    );
+    process.exitCode = 1;
+    return;
+  }
 
   // De-duplica per link.
   const unici = [...new Map(voci.map((v) => [v.link, v])).values()];
@@ -104,13 +124,7 @@ async function main(): Promise<void> {
   const articoli = unici
     .map(costruisciArticolo)
     .filter((a): a is NewsArticle => a !== null);
-  console.log(`• Articoli accettati dal filtro di rilevanza: ${articoli.length}`);
-
-  if (articoli.length === 0) {
-    console.log('Nessuna notizia rilevante da pubblicare.');
-    if (!isDryRun) console.log('Il file dati resta invariato (fallback in uso).');
-    return;
-  }
+  console.log(`• Articoli che soddisfano i criteri editoriali: ${articoli.length}`);
 
   if (isDryRun) {
     console.log('=== DRY-RUN (nessuna scrittura) ===');
@@ -119,25 +133,47 @@ async function main(): Promise<void> {
         `  ✓ [${a.category}] ${a.title.slice(0, 70)} | scad: ${a.deadline_date ?? 'n/d'}`,
       );
     });
+    console.log(`✓ HTTP 200 - ${articoli.length} new posts criteria matched`);
     return;
   }
+
+  // Archiviazione ACCUMULATIVA: le nuove notizie si aggiungono a quelle già
+  // presenti nell'archivio (dedupe per id), così la bacheca non si svuota mai.
+  const esistenti = notizieIngestite;
+  const nuovi = articoli.filter((a) => !esistenti.some((e) => e.id === a.id));
+
+  if (nuovi.length === 0) {
+    console.log('✓ HTTP 200 - 0 new posts criteria matched');
+    if (esistenti.length === 0) {
+      console.log('L\u2019archivio notizie è vuoto: resta attivo il fallback editoriale.');
+    } else {
+      console.log('L\u2019archivio notizie resta invariato (nessun commit necessario).');
+    }
+    return;
+  }
+
+  const combinati = [...esistenti, ...nuovi].sort((a, b) =>
+    (b.published_at || '').localeCompare(a.published_at || ''),
+  );
 
   const contenuto = `/**
  * ScuoleRadar.it — Notizie ingestite (dati reali).
  *
  * File GENERATO automaticamente dal servizio di ingestione:
  *   npm run scrape:notizie
- * Non modificarlo a mano: il contenuto viene sovrascritto ad ogni ingestione.
+ * Non modificarlo a mano: il contenuto viene rigenerato ad ogni ingestione
+ * (accumulo incrementale: le notizie già presenti restano, le nuove si aggiungono).
  */
 import type { NewsArticle } from '../types';
 
 /** Notizie reali ingressate dalle fonti ufficiali (MIM, Gazzetta Ufficiale). */
-export const notizieIngestite: NewsArticle[] = ${JSON.stringify(articoli, null, 2)};
+export const notizieIngestite: NewsArticle[] = ${JSON.stringify(combinati, null, 2)};
 `;
 
   mkdirSync(dirname(FILE_USCITA), { recursive: true });
   writeFileSync(FILE_USCITA, contenuto, 'utf8');
-  console.log(`✓ Scritti ${articoli.length} articoli in ${FILE_USCITA}`);
+  console.log(`✓ HTTP 200 - ${nuovi.length} new posts criteria matched`);
+  console.log(`✓ Scritti ${combinati.length} articoli in ${FILE_USCITA}`);
 }
 
 main().catch((err) => {

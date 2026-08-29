@@ -159,7 +159,7 @@ export function NotizieDettaglio() {
           <button
             type="button"
             onClick={condividiWhatsApp}
-            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#25D366]/40 bg-white px-4 py-2.5 text-sm font-semibold text-[#128C7E] transition hover:border-[#25D366]/70 hover:bg-[#25D366]/10"
+            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-[#25D366] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#20bd5a]"
           >
             <IconaWhatsApp className="h-4 w-4" />
             Condividi su WhatsApp

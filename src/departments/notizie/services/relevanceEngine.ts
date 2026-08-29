@@ -28,14 +28,24 @@ export interface VoceInValutazione {
 
 /** Parole che identificano l'ambito/categoria del personale scolastico. */
 const PAROLE_CATEGORIA: Record<string, string[]> = {
-  'GPS': ['gps', 'graduatoria provinciale', 'graduatorie provinciali', 'supplenze'],
+  'GPS': [
+    'gps', 'graduatoria provinciale', 'graduatorie provinciali', 'supplenze',
+    'nomina', 'nomine', 'algoritmo', 'algoritmi',
+  ],
   'Mobilità': ['mobilità', 'mobilita', 'trasferimento', 'assegnazione provvisoria', 'utilizzazione', 'comma 5'],
   'Concorsi': ['concorso', 'bando di concorso', 'selezione', 'assunzione', 'immissione in ruolo', 'reclutamento'],
   'Pensioni': ['pensione', 'pensioni', 'cessazione dal servizio', 'riscatto', 'buonuscita', 'quota'],
   'Sostegno': ['sostegno', 'pei', 'inclusione', 'disabilità', 'disabilita', 'bes', 'assistente all’autonomia', 'glo'],
   'Graduatorie': ['graduatoria', 'graduatorie', 'gae', 'gps', 'istanze online'],
   'Supplenze': ['supplenza', 'supplenze', 'incarico', 'interpello', 'mad', 'messa a disposizione'],
-  'Scuole': ['organico', 'istituzione scolastica', 'anno scolastico', 'calendario scolastico', 'protocollo d’intesa'],
+  'Scuole': [
+    'organico', 'istituzione scolastica', 'anno scolastico', 'calendario scolastico',
+    'protocollo d’intesa', 'presa di servizio', 'primo settembre',
+  ],
+  'PNRR': [
+    'pnrr', 'piano nazionale di ripresa e resilienza', 'fondi pnrr', 'bandi pnrr',
+    'scuola 4.0', 'nuove competenze',
+  ],
 };
 
 /** Parole che rendono la notizia OPERATIVA (accettabile). */
@@ -47,6 +57,8 @@ const PAROLE_ACCETTA: string[] = [
   'assunzione', 'concorso', 'mobilità', 'mobilita', 'pensioni', 'supplenze', 'sostegno',
   'rettifica', 'integrazione', 'proroga', 'avviso di avvio', 'apertura delle domande',
   'riserva', 'assegnazione', 'conferimento', 'scelta delle sedi',
+  'nomina', 'nomine', 'algoritmo', 'algoritmi', 'presa di servizio', 'primo settembre',
+  '1° settembre', 'pnrr', 'bollettini',
 ];
 
 /** Parole che segnalano contenuti NON vincolanti (da rifiutare). */
@@ -146,7 +158,7 @@ export function promptFiltroLLM(voci: VoceInValutazione[]): string {
   return `Sei il filtro editoriale del servizio Notizie di ScuoleRadar per i docenti italiani.
 Per ciascuna notizia valuta:
 1) RILEVANZA: accetta SOLO decreti, note normative, bandi e scadenze operative per il personale scolastico (GPS, mobilità, concorsi, pensioni, sostegno, supplenze, graduatorie). RIFIUTA comunicati stampa, discorsi, dichiarazioni politiche e annunci generici non vincolanti.
-2) CATEGORIA: una tra GPS, Mobilità, Concorsi, Pensioni, Sostegno, Graduatorie, Supplenze, Scuole.
+2) CATEGORIA: una tra GPS, Mobilità, Concorsi, Pensioni, Sostegno, Graduatorie, Supplenze, Scuole, PNRR.
 3) DEADLINE: la data di scadenza ufficiale in formato ISO (YYYY-MM-DD) se presente, altrimenti null.
 
 Rispondi SOLO in JSON:
@@ -165,6 +177,7 @@ export function punteggioRilevanza(categoria: string | null, hasDeadline: boolea
     Mobilità: 85,
     Pensioni: 82,
     Supplenze: 80,
+    PNRR: 80,
     Graduatorie: 78,
     Scuole: 70,
   };
@@ -324,6 +337,18 @@ const ARTICOLO_ALTRE: Record<string, ArticoloCopy> = {
       'La comunicazione introduce novità o conferme su scadenze e adempimenti dell\u2019anno: i dettagli completi sono riportati nella pagina ufficiale.',
     come:
       'Le informazioni complete sono consultabili sul sito del %LINK%. Se la notizia riguarda la tua scuola, la segreteria provvederà a comunicare le scadenze interne.',
+    linkLabel: 'Ministero',
+    portale: 'la pagina del Ministero',
+  },
+  'PNRR': {
+    fatto:
+      'Il Ministero dell\u2019Istruzione e del Merito (MIM) ha aggiornato le scadenze operative del PNRR (Piano Nazionale di Ripresa e Resilienza) per il settore istruzione, con l\u2019avviso',
+    chi:
+      'scuole, dirigenti scolastici, docenti e personale che partecipa ai bandi e alle iniziative finanziate dal PNRR',
+    pratica:
+      'Le scadenze degli avvisi PNRR determinano l\u2019accesso ai finanziamenti per edilizia, digitalizzazione, nuove competenze e inclusione: un termine mancato può far perdere la quota assegnata.',
+    come:
+      'Le istanze e gli allegati si gestiscono online dalle piattaforme del %LINK% e da quelle dedicate al PNRR Istruzione. Controlla la scadenza del bando e conserva la ricevuta di invio.',
     linkLabel: 'Ministero',
     portale: 'la pagina del Ministero',
   },

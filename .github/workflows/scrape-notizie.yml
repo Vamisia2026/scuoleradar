@@ -4,14 +4,19 @@
 # - Pianificazione: ogni giorno alle 06:00 UTC
 #   (= 07:00 italiane in inverno, 08:00 in estate)
 # - Trigger manuale: workflow_dispatch (GitHub → Actions → Run workflow)
-# - Esegue `npm run scrape:notizie`: raccoglie le notizie reali dal MIM,
-#   applica il motore di rilevanza e redazione (`relevanceEngine.ts`:
-#   filtro anti-fluff, date esatte, acronimi spiegati, link reali via
-#   URL_PORTALI, brand "ScuoleRadar") e riscrive
-#   `src/departments/notizie/data/notizieIngestite.ts`.
+# - Esegue `npm run scrape:notizie`: raccoglie le notizie reali dal MIM e
+#   dalla Gazzetta Ufficiale (log HTTP esplicito per ogni fonte, nessun
+#   silent-fail), applica il motore di rilevanza e redazione
+#   (`relevanceEngine.ts`: filtro anti-fluff, date esatte, acronimi spiegati,
+#   link reali via URL_PORTALI, brand "ScuoleRadar") e AGGIORNA con accumulo
+#   `src/departments/notizie/data/notizieIngestite.ts` (le notizie già
+#   presenti restano, solo le nuove vengono aggiunte, dedupe per id).
+# - Esiti chiari nei log: "✓ HTTP 200 - N new posts criteria matched"
+#   (anche "0 new posts") oppure "✗ HTTP FAIL" (exit code 1 → warning).
 # - Commit automatico dei dati aggiornati: il push usa GITHUB_TOKEN e
 #   non rigenera il workflow (nessun loop); il deploy (Vercel ecc.)
-#   riparte automaticamente dal push sul ramo predefinito.
+#   riparte automaticamente dal push sul ramo predefinito. Se non ci sono
+#   nuove notizie non viene creato alcun commit.
 # ============================================================
 name: Scraper Notizie
 

@@ -66,7 +66,11 @@ export function NotizieGrid({ articoli = newsArticles }: NotizieGridProps) {
   const categorie = useMemo(() => ['Tutte', ...categorieNotizie()], []);
 
   const filtrate = useMemo(() => {
-    const ordinate = [...articoli].sort((a, b) => b.relevance_score - a.relevance_score);
+    const ordinate = [...articoli].sort(
+      (a, b) =>
+        b.relevance_score - a.relevance_score ||
+        (b.published_at || '').localeCompare(a.published_at || ''),
+    );
     return categoria === 'Tutte'
       ? ordinate
       : ordinate.filter((n) => n.category === categoria);

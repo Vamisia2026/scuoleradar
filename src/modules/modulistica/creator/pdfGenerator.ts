@@ -13,7 +13,7 @@
  *  - indice automatico (TOC) solo per documenti stimati > 3 pagine
  */
 
-export const LOGO_DOCUMENTO = '/ScuoleRadar Logo Transparent Full Final.png';
+export const LOGO_DOCUMENTO = '/logo.png';
 
 const STILI_DOCUMENTO = `
   @page {

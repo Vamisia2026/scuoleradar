@@ -9,6 +9,7 @@
  * articolo di fallback realistico (senza date o link inventati).
  */
 import { notizieIngestite } from '../data/notizieIngestite';
+import { notizieSeed } from '../data/notizieSeed';
 import type { NewsArticle } from '../types';
 
 /**
@@ -38,9 +39,15 @@ export const newsFallback: NewsArticle = {
   published_at: '',
 };
 
-/** Notizie pubblicate: dati reali ingestiti; altrimenti il fallback singolo. */
-export const newsArticles: NewsArticle[] =
-  notizieIngestite.length > 0 ? notizieIngestite : [newsFallback];
+/** Notizie pubblicate: seed editoriali + dati reali ingestiti (dedup per id);
+ *  se entrambi vuoti resta il fallback singolo realistico. */
+function unisciNotizie(): NewsArticle[] {
+  const tutte = [...notizieSeed, ...notizieIngestite];
+  const uniche = [...new Map(tutte.map((n) => [n.id, n])).values()];
+  return uniche.length > 0 ? uniche : [newsFallback];
+}
+
+export const newsArticles: NewsArticle[] = unisciNotizie();
 
 /** Elenco delle categorie presenti, ordinate per frequenza. */
 export function categorieNotizie(): string[] {

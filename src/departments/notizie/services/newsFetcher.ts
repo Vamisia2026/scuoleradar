@@ -32,20 +32,35 @@ const HTTP_HEADERS = {
   Accept: 'application/rss+xml, application/xml, text/xml, text/html;q=0.9',
 };
 
-/** Scarica un URL e restituisce il testo; null in caso di errore/timeout. */
-export async function fetchTesto(url: string): Promise<string | null> {
+/**
+ * Scarica un URL restituendo testo e status HTTP, con log esplicito di ogni
+ * richiesta: nessun silent-fail, ogni fonte è tracciata nei log del cron
+ * (es. "✓ HTTP 200 - https://www.mim.gov.it/rss.xml").
+ */
+export async function fetchTestoConStato(
+  url: string,
+): Promise<{ testo: string | null; status: number | null }> {
   try {
-    const { data } = await axios.get<string>(url, {
+    const { data, status } = await axios.get<string>(url, {
       timeout: HTTP_TIMEOUT,
       headers: HTTP_HEADERS,
       responseType: 'text',
       validateStatus: (s) => s >= 200 && s < 400,
     });
-    return typeof data === 'string' ? data : null;
+    console.log(`✓ HTTP ${status} - ${url}`);
+    return { testo: typeof data === 'string' ? data : null, status };
   } catch (err) {
-    console.warn(`⚠ Fetch fallito: ${url} — ${(err as Error).message}`);
-    return null;
+    const status =
+      (err as { response?: { status?: number } })?.response?.status ?? null;
+    console.warn(`✗ HTTP ${status ?? 'ERRORE'} - ${url} (${(err as Error).message})`);
+    return { testo: null, status };
   }
+}
+
+/** Scarica un URL e restituisce il testo; null in caso di errore/timeout. */
+export async function fetchTesto(url: string): Promise<string | null> {
+  const { testo } = await fetchTestoConStato(url);
+  return testo;
 }
 
 /** Normalizza un URL relativo in assoluto rispetto a una base. */
@@ -103,14 +118,16 @@ const FONTI_MIM_RSS = [
 ];
 
 /** Prova i feed RSS del MIM; se nessuno risponde, fa fallback sullo scraping HTML. */
-export async function fetchNotizieMim(): Promise<VoceFonte[]> {
+export async function fetchNotizieMim(): Promise<{ voci: VoceFonte[]; raggiunta: boolean }> {
+  let raggiunta = false;
   for (const url of FONTI_MIM_RSS) {
-    const xml = await fetchTesto(url);
-    if (!xml) continue;
-    const voci = parseRss(xml, 'MIM', BASE_MIM);
+    const { testo, status } = await fetchTestoConStato(url);
+    if (status !== null && status >= 200 && status < 400) raggiunta = true;
+    if (!testo) continue;
+    const voci = parseRss(testo, 'MIM', BASE_MIM);
     if (voci.length > 0) {
       console.log(`• MIM RSS: ${voci.length} voci da ${url}`);
-      return voci;
+      return { voci, raggiunta };
     }
   }
   console.log('• MIM RSS non disponibile: provo lo scraping della pagina notizie.');
@@ -122,10 +139,11 @@ export async function fetchNotizieMim(): Promise<VoceFonte[]> {
  * La pagina è server-rendered: le card degli articoli usano link Liferay
  * `/web/guest/-/<slug>` con la data di pubblicazione in `<span class="date">`.
  */
-export async function scrapeMimNotizie(): Promise<VoceFonte[]> {
-  const html = await fetchTesto(`${BASE_MIM}/web/guest/notizie`);
-  if (!html) return [];
-  const $ = cheerio.load(html);
+export async function scrapeMimNotizie(): Promise<{ voci: VoceFonte[]; raggiunta: boolean }> {
+  const { testo, status } = await fetchTestoConStato(`${BASE_MIM}/web/guest/notizie`);
+  const raggiunta = status !== null && status >= 200 && status < 400;
+  if (!testo) return { voci: [], raggiunta };
+  const $ = cheerio.load(testo);
   const voci: VoceFonte[] = [];
   $('a[href*="/web/guest/-/"]').each((_, el) => {
     const $el = $(el);
@@ -142,7 +160,7 @@ export async function scrapeMimNotizie(): Promise<VoceFonte[]> {
       voci.push({ title, link, pubDate, description: '', fonte: 'MIM' });
     }
   });
-  return voci.slice(0, 40);
+  return { voci: voci.slice(0, 40), raggiunta };
 }
 
 /* ------------------------- Gazzetta Ufficiale ------------------------- */
@@ -155,30 +173,43 @@ const FONTI_GU_RSS = [
 ];
 
 /** Recupera gli aggiornamenti della Gazzetta Ufficiale (sezione istruzione). */
-export async function fetchNotizieGazzetta(): Promise<VoceFonte[]> {
+export async function fetchNotizieGazzetta(): Promise<{ voci: VoceFonte[]; raggiunta: boolean }> {
+  let raggiunta = false;
   for (const url of FONTI_GU_RSS) {
-    const xml = await fetchTesto(url);
-    if (!xml) continue;
-    const voci = parseRss(xml, 'Gazzetta Ufficiale', BASE_GU);
+    const { testo, status } = await fetchTestoConStato(url);
+    if (status !== null && status >= 200 && status < 400) raggiunta = true;
+    if (!testo) continue;
+    const voci = parseRss(testo, 'Gazzetta Ufficiale', BASE_GU);
     if (voci.length > 0) {
       console.log(`• GU RSS: ${voci.length} voci da ${url}`);
-      return voci;
+      return { voci, raggiunta };
     }
   }
-  console.warn('⚠ Gazzetta Ufficiale: nessun feed disponibile.');
-  return [];
+  if (!raggiunta) console.warn('⚠ Gazzetta Ufficiale: nessun feed raggiungibile.');
+  return { voci: [], raggiunta };
 }
 
-/** Aggrega le voci da tutte le fonti ufficiali. */
-export async function raccogliNotizieRaw(): Promise<VoceFonte[]> {
+/** Esito aggregato della raccolta: voci + numero di fonti raggiunte (0-2). */
+export interface EsitoRaccolta {
+  voci: VoceFonte[];
+  fontiRaggiunte: number;
+}
+
+/** Aggrega le voci da tutte le fonti ufficiali, tracciando quali hanno risposto. */
+export async function raccogliNotizieRaw(): Promise<EsitoRaccolta> {
   const [mim, gu] = await Promise.allSettled([
     fetchNotizieMim(),
     fetchNotizieGazzetta(),
   ]);
   const voci: VoceFonte[] = [];
+  let fontiRaggiunte = 0;
   for (const r of [mim, gu]) {
-    if (r.status === 'fulfilled') voci.push(...r.value);
-    else console.warn('⚠ Fonte non disponibile:', (r.reason as Error)?.message);
+    if (r.status === 'fulfilled') {
+      voci.push(...r.value.voci);
+      if (r.value.raggiunta) fontiRaggiunte += 1;
+    } else {
+      console.warn('⚠ Fonte non disponibile:', (r.reason as Error)?.message);
+    }
   }
-  return voci;
+  return { voci, fontiRaggiunte };
 }
