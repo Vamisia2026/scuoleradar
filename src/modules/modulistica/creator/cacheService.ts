@@ -271,6 +271,26 @@ const NORMATIVA_PER_TIPO: Record<string, string> = {
   collaborazioni_studentesche: 'L. 390/1991, DPCM 9/4/2001 (200 ore studentesche)',
   esenzione_tasse: 'L. 232/2016, DPCM 159/2013, regolamento tasse dell\u2019Ateneo',
   laurea: 'D.M. 270/2004, regolamento d\u2019Ateneo',
+  schede_osservazione: 'D.Lgs. 65/2017, Indicazioni Nazionali 2012',
+  progetto_continuita: 'D.Lgs. 65/2017, P.T.O.F.',
+  servizi_prepost: 'D.Lgs. 297/1994, regolamento d\u2019Istituto',
+  rinuncia_iscrizione: 'DPR 275/1999, regolamento d\u2019Istituto',
+  certificazione_competenze: 'D.M. 742/2017, D.Lgs. 62/2017',
+  piano_personalizzato: 'D.Lgs. 62/2017, D.M. 742/2017',
+  progetti_fondi: 'D.M. 170/2022 (PNRR), avvisi PON/POR',
+  liberatoria_sport: 'D.Lgs. 81/2008, DPR 567/1996',
+  cambio_sezione: 'DPR 275/1999, regolamento d\u2019Istituto',
+  assemblea_studenti: 'DPR 567/1996, DPR 249/1998',
+  esonero_tasse: 'L. 107/2015, DPR 567/1996, regolamento contributi d\u2019Istituto',
+  ammissione_esami: 'D.Lgs. 62/2017, O.M. esami di Stato',
+  crediti_scolastici: 'D.P.R. 122/2009, D.Lgs. 62/2017, P.T.O.F.',
+  certificato_diploma: 'DPR 445/2000, D.Lgs. 62/2017',
+  relazione_finale: 'D.I. 182/2020, L. 170/2010',
+  trasporto_protetto: 'L. 104/1992, D.Lgs. 66/2017',
+  protocollo_intesa: 'L. 104/1992, D.Lgs. 66/2017, D.Lgs. 267/2000',
+  patrocinio_locali: 'DPR 275/1999, D.Lgs. 267/2000, regolamento d\u2019Istituto',
+  convenzione_pcto: 'D.Lgs. 77/2005, L. 107/2015',
+  segnalazione_anomalia: 'L. 241/1990, regolamento d\u2019Istituto',
 };
 const NORMATIVA_DEFAULT = 'DPR 275/1999, DPR 445/2000, CCNL Scuola';
 
@@ -311,6 +331,26 @@ const TITOLO_PER_TIPO: Record<string, string> = {
   collaborazioni_studentesche: 'Domanda Collaborazioni Studentesche (200 ore / Tutorato)',
   esenzione_tasse: 'Richiesta Esenzione / Riduzione Tasse Universitarie',
   laurea: 'Domanda di Laurea / Proclamazione',
+  schede_osservazione: 'Scheda di Osservazione delle Competenze — Scuola dell\u2019Infanzia',
+  progetto_continuita: 'Adesione Progetto Continuità Nido-Infanzia',
+  servizi_prepost: 'Richiesta Servizio Pre / Post Scuola',
+  rinuncia_iscrizione: 'Rinuncia / Ritiro Iscrizione',
+  certificazione_competenze: 'Certificazione delle Competenze (D.M. 742/2017)',
+  piano_personalizzato: 'Piano di Studio Personalizzato',
+  progetti_fondi: 'Adesione Progetti PON / POR / PNRR',
+  liberatoria_sport: 'Liberatoria Attività Sportive',
+  cambio_sezione: 'Richiesta Cambio Sezione / Indirizzo',
+  assemblea_studenti: 'Istanza di Assemblea di Classe / Istituto',
+  esonero_tasse: 'Richiesta Esonero Tasse Scolastiche / Contributi',
+  ammissione_esami: 'Domanda di Ammissione agli Esami di Stato',
+  crediti_scolastici: 'Richiesta Riconoscimento Crediti Scolastici / Formativi',
+  certificato_diploma: 'Richiesta Certificato Sostitutivo Diploma',
+  relazione_finale: 'Relazione Finale PEI / PDP',
+  trasporto_protetto: 'Richiesta Trasporto Scolastico Protetto',
+  protocollo_intesa: 'Protocollo di Intesa ASL / Comune',
+  patrocinio_locali: 'Richiesta Patrocinio / Uso Locali Scolastici',
+  convenzione_pcto: 'Convenzione PCTO / Tirocinio',
+  segnalazione_anomalia: 'Segnalazione Anomalie del Servizio',
 };
 
 type FamigliaDocumento = 'inclusione' | 'istanza' | 'ambito' | 'reclutamento' | 'generico';
@@ -346,7 +386,27 @@ function famigliaDi(profilo?: ProfiloIntervista): FamigliaDocumento {
     tipo === 'integrativo_erasmus' ||
     tipo === 'collaborazioni_studentesche' ||
     tipo === 'esenzione_tasse' ||
-    tipo === 'laurea'
+    tipo === 'laurea' ||
+    tipo === 'schede_osservazione' ||
+    tipo === 'progetto_continuita' ||
+    tipo === 'servizi_prepost' ||
+    tipo === 'rinuncia_iscrizione' ||
+    tipo === 'certificazione_competenze' ||
+    tipo === 'piano_personalizzato' ||
+    tipo === 'progetti_fondi' ||
+    tipo === 'liberatoria_sport' ||
+    tipo === 'cambio_sezione' ||
+    tipo === 'assemblea_studenti' ||
+    tipo === 'esonero_tasse' ||
+    tipo === 'ammissione_esami' ||
+    tipo === 'crediti_scolastici' ||
+    tipo === 'certificato_diploma' ||
+    tipo === 'relazione_finale' ||
+    tipo === 'trasporto_protetto' ||
+    tipo === 'protocollo_intesa' ||
+    tipo === 'patrocinio_locali' ||
+    tipo === 'convenzione_pcto' ||
+    tipo === 'segnalazione_anomalia'
   ) {
     return 'ambito';
   }
@@ -512,6 +572,58 @@ function quadroAnagrafico(famiglia: FamigliaDocumento, tipo: string): string {
         ${rigaAnagrafica('Matricola', campoScrittura())}
         ${rigaAnagrafica('Corso di laurea', campoScrittura())}
         ${rigaExtra}
+      </table>`;
+  }
+  if (
+    famiglia === 'ambito' &&
+    (tipo === 'schede_osservazione' ||
+      tipo === 'progetto_continuita' ||
+      tipo === 'servizi_prepost' ||
+      tipo === 'rinuncia_iscrizione' ||
+      tipo === 'certificazione_competenze' ||
+      tipo === 'piano_personalizzato' ||
+      tipo === 'progetti_fondi' ||
+      tipo === 'liberatoria_sport' ||
+      tipo === 'esonero_tasse')
+  ) {
+    // Quadro anagrafico dell'alunno compatto per i moduli scuola/famiglia.
+    return `<h2>Quadro anagrafico dell'alunno/a</h2>
+      <table class="quadro-anagrafico">
+        ${rigaAnagrafica('Nome e Cognome', campoScrittura())}
+        ${rigaAnagrafica('Classe / Sezione', campoScrittura())}
+        ${rigaAnagrafica('Genitore / esercente la responsabilità genitoriale', campoScrittura())}
+      </table>`;
+  }
+  if (
+    famiglia === 'ambito' &&
+    (tipo === 'cambio_sezione' ||
+      tipo === 'assemblea_studenti' ||
+      tipo === 'ammissione_esami' ||
+      tipo === 'crediti_scolastici' ||
+      tipo === 'certificato_diploma' ||
+      tipo === 'trasporto_protetto')
+  ) {
+    // Quadro anagrafico dello studente per carriera ed esami.
+    return `<h2>Quadro anagrafico dello studente</h2>
+      <table class="quadro-anagrafico">
+        ${rigaAnagrafica('Nome e Cognome', campoScrittura())}
+        ${rigaAnagrafica('Classe / Sezione / Indirizzo', campoScrittura())}
+        ${rigaAnagrafica('Contatto (telefono / email)', campoScrittura())}
+      </table>`;
+  }
+  if (
+    famiglia === 'ambito' &&
+    (tipo === 'protocollo_intesa' ||
+      tipo === 'patrocinio_locali' ||
+      tipo === 'convenzione_pcto' ||
+      tipo === 'segnalazione_anomalia')
+  ) {
+    // Quadro anagrafico del richiedente / ente per i moduli "Enti e Territorio".
+    return `<h2>Quadro anagrafico del richiedente / Ente</h2>
+      <table class="quadro-anagrafico">
+        ${rigaAnagrafica('Nome e Cognome / Ragione sociale', campoScrittura())}
+        ${rigaAnagrafica('Qualifica / Referente', campoScrittura())}
+        ${rigaAnagrafica('Contatto (telefono / email)', campoScrittura())}
       </table>`;
   }
   if (famiglia === 'reclutamento') {
@@ -1023,6 +1135,361 @@ function costruisciSezioni(famiglia: FamigliaDocumento, tipo: string): string[] 
           ${rigaAnagrafica('Titolo della tesi', campoScrittura())}
           ${rigaAnagrafica('Relatore / correlatore', campoScrittura())}
         </table>`,
+      ];
+    }
+    if (tipo === 'schede_osservazione') {
+      return [
+        `<h2>Area di competenza osservata</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Autonomia e identità</p>
+          <p class="voce"><span class="casella"></span>Relazione e socialità</p>
+          <p class="voce"><span class="casella"></span>Comunicazione e linguaggio</p>
+          <p class="voce"><span class="casella"></span>Motorio-prassica</p>
+          <p class="voce"><span class="casella"></span>Cognitiva e logico-matematica</p>
+        </div>`,
+        `<h2>Osservazione</h2>
+        ${righeScrittura(3)}`,
+        `<h2>Esiti e orientamenti didattici</h2>
+        ${righeScrittura(2)}`,
+      ];
+    }
+    if (tipo === 'progetto_continuita') {
+      return [
+        `<h2>Attività proposte</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Laboratori condivisi</p>
+          <p class="voce"><span class="casella"></span>Incontri con le famiglie</p>
+          <p class="voce"><span class="casella"></span>Open day / scuola aperta</p>
+        </div>`,
+        `<h2>Consenso alla partecipazione</h2>
+        <p class="formula-dichiarazione">Consenso alla partecipazione del bambino alle attività del progetto continuità nido-infanzia e al trattamento dei dati per le finalità del progetto.</p>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Consenso alla partecipazione</p>
+          <p class="voce"><span class="casella"></span>Consenso a foto / materiali del progetto</p>
+        </div>`,
+        `<h2>Note</h2>
+        ${righeScrittura(2)}`,
+      ];
+    }
+    if (tipo === 'servizi_prepost') {
+      return [
+        `<h2>Servizio richiesto</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Pre-scuola</p>
+          <p class="voce"><span class="casella"></span>Post-scuola</p>
+          <p class="voce"><span class="casella"></span>Pre e post-scuola</p>
+        </div>`,
+        `<h2>Orari</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Ingresso pre-scuola', campoScrittura())}
+          ${rigaAnagrafica('Uscita post-scuola', campoScrittura())}
+          ${rigaAnagrafica('Giorni di frequenza', campoScrittura())}
+        </table>`,
+        `<h2>Note / esigenze particolari</h2>
+        ${righeScrittura(2)}`,
+      ];
+    }
+    if (tipo === 'rinuncia_iscrizione') {
+      return [
+        `<h2>Motivo della rinuncia</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Trasferimento in altra città</p>
+          <p class="voce"><span class="casella"></span>Cambio di istituto</p>
+          <p class="voce"><span class="casella"></span>Scelta di istruzione parentale</p>
+          <p class="voce"><span class="casella"></span>Altro (specificare)</p>
+        </div>`,
+        `<h2>Decorrenza</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Data di decorrenza', campoScrittura())}
+          ${rigaAnagrafica('Data di ultima frequenza', campoScrittura())}
+        </table>`,
+        `<h2>Restituzione documenti</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Pagelle / documenti di valutazione</p>
+          <p class="voce"><span class="casella"></span>Certificati e attestati</p>
+          <p class="voce"><span class="casella"></span>Documenti personali dell'alunno</p>
+        </div>`,
+      ];
+    }
+    if (tipo === 'certificazione_competenze') {
+      return [
+        `<h2>Competenze certificate</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Comunicazione nella madrelingua</p>
+          <p class="voce"><span class="casella"></span>Comunicazione in lingue straniere</p>
+          <p class="voce"><span class="casella"></span>Competenza matematica e scientifica</p>
+          <p class="voce"><span class="casella"></span>Competenza digitale</p>
+          <p class="voce"><span class="casella"></span>Imparare a imparare</p>
+        </div>`,
+        `<h2>Livelli</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>In via di prima acquisizione</p>
+          <p class="voce"><span class="casella"></span>Base</p>
+          <p class="voce"><span class="casella"></span>Intermedio</p>
+          <p class="voce"><span class="casella"></span>Avanzato</p>
+        </div>`,
+        `<h2>Note</h2>
+        ${righeScrittura(2)}`,
+      ];
+    }
+    if (tipo === 'piano_personalizzato') {
+      return [
+        `<h2>Ambito di personalizzazione</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Didattica disciplinare</p>
+          <p class="voce"><span class="casella"></span>Metodo di studio</p>
+          <p class="voce"><span class="casella"></span>Tempi e modalità di verifica</p>
+          <p class="voce"><span class="casella"></span>Strumenti e materiali</p>
+        </div>`,
+        `<h2>Interventi previsti</h2>
+        ${righeScrittura(3)}`,
+        `<h2>Verifica e monitoraggio</h2>
+        ${righeScrittura(2)}`,
+      ];
+    }
+    if (tipo === 'progetti_fondi') {
+      return [
+        `<h2>Progetto di riferimento</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Titolo del progetto', campoScrittura())}
+          ${rigaAnagrafica('Avviso / bando (PON, POR, PNRR)', campoScrittura())}
+        </table>`,
+        `<h2>Consenso alla partecipazione</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Consenso alla frequenza delle attività</p>
+          <p class="voce"><span class="casella"></span>Consenso al trattamento dei dati (GDPR)</p>
+        </div>`,
+        `<h2>Note</h2>
+        ${righeScrittura(2)}`,
+      ];
+    }
+    if (tipo === 'liberatoria_sport') {
+      return [
+        `<h2>Attività sportiva</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Tornei interni</p>
+          <p class="voce"><span class="casella"></span>Campionati studenteschi</p>
+          <p class="voce"><span class="casella"></span>Attività motoria extracurricolare</p>
+        </div>`,
+        `<h2>Consenso e dichiarazioni</h2>
+        <p class="formula-dichiarazione">Consenso alla partecipazione alle attività sportive e dichiarazione di essere a conoscenza dei rischi connessi, con esonero di responsabilità dell'Istituzione per comportamenti non conformi alle indicazioni dei docenti.</p>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Certificato medico non agonistico allegato</p>
+        </div>`,
+        `<h2>Note</h2>
+        ${righeScrittura(2)}`,
+      ];
+    }
+    if (tipo === 'cambio_sezione') {
+      return [
+        `<h2>Tipo di richiesta</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Cambio sezione</p>
+          <p class="voce"><span class="casella"></span>Cambio indirizzo di studio</p>
+          <p class="voce"><span class="casella"></span>Cambio corso</p>
+        </div>`,
+        `<h2>Motivazione</h2>
+        ${righeScrittura(3)}`,
+        `<h2>Disponibilità</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Accettazione degli orari della nuova sezione</p>
+          <p class="voce"><span class="casella"></span>Disponibilità a trasferirsi in altra sede</p>
+        </div>`,
+      ];
+    }
+    if (tipo === 'assemblea_studenti') {
+      return [
+        `<h2>Tipo di assemblea</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Assemblea di classe</p>
+          <p class="voce"><span class="casella"></span>Assemblea d'Istituto</p>
+        </div>`,
+        `<h2>Oggetto e ordine del giorno</h2>
+        ${righeScrittura(3)}`,
+        `<h2>Richiedenti</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Numero di studenti richiedenti', campoScrittura())}
+          ${rigaAnagrafica('Portavoce / referente', campoScrittura())}
+        </table>`,
+      ];
+    }
+    if (tipo === 'esonero_tasse') {
+      return [
+        `<h2>Motivo dell'esonero</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Condizioni economiche (ISEE)</p>
+          <p class="voce"><span class="casella"></span>Esonero per merito</p>
+          <p class="voce"><span class="casella"></span>Esonero per disabilità</p>
+          <p class="voce"><span class="casella"></span>Altro (specificare)</p>
+        </div>`,
+        `<h2>Riferimenti</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Valore ISEE (in euro)', campoScrittura())}
+          ${rigaAnagrafica('Contributi versati / rate', campoScrittura())}
+        </table>`,
+        `<h2>Dichiarazioni</h2>
+        <p class="formula-dichiarazione">Il/La sottoscritto/a, consapevole delle responsabilità e delle sanzioni penali stabilite dall'art. 76 del D.P.R. 445/2000, dichiara sotto la propria responsabilità la veridicità dei dati e dei requisiti dichiarati ai fini dell'esonero.</p>
+        ${righeScrittura(1)}`,
+      ];
+    }
+    if (tipo === 'ammissione_esami') {
+      return [
+        `<h2>Tipo di esame</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Esame di Stato del I ciclo</p>
+          <p class="voce"><span class="casella"></span>Esame di Stato del II ciclo</p>
+          <p class="voce"><span class="casella"></span>Esame di idoneità</p>
+        </div>`,
+        `<h2>Candidato</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica("Candidato interno / esterno", campoScrittura())}
+          ${rigaAnagrafica("Sede d'esame", campoScrittura())}
+        </table>`,
+        `<h2>Requisiti</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Requisiti di frequenza maturati</p>
+          <p class="voce"><span class="casella"></span>Crediti / voti maturati</p>
+          <p class="voce"><span class="casella"></span>Documentazione allegata</p>
+        </div>`,
+      ];
+    }
+    if (tipo === 'crediti_scolastici') {
+      return [
+        `<h2>Tipologia di credito</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Credito scolastico</p>
+          <p class="voce"><span class="casella"></span>Credito formativo (attività esterne)</p>
+          <p class="voce"><span class="casella"></span>Credito per certificazioni</p>
+        </div>`,
+        `<h2>Dettaglio dell'attività</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Ente / istituzione erogatrice', campoScrittura())}
+          ${rigaAnagrafica('Ore / periodi', campoScrittura())}
+          ${rigaAnagrafica('Attestato / documentazione', campoScrittura())}
+        </table>`,
+        `<h2>Richiesta di riconoscimento</h2>
+        ${righeScrittura(2)}`,
+      ];
+    }
+    if (tipo === 'certificato_diploma') {
+      return [
+        `<h2>Documento richiesto</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Certificato di diploma / qualifica</p>
+          <p class="voce"><span class="casella"></span>Certificato sostitutivo</p>
+          <p class="voce"><span class="casella"></span>Copia conforme all'originale</p>
+        </div>`,
+        `<h2>Riferimenti</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Anno di conseguimento', campoScrittura())}
+          ${rigaAnagrafica('Istituzione scolastica', campoScrittura())}
+        </table>`,
+        `<h2>Dichiarazione</h2>
+        <p class="formula-dichiarazione">Il/La sottoscritto/a, consapevole delle responsabilità e delle sanzioni penali stabilite dall'art. 76 del D.P.R. 445/2000, dichiara sotto la propria responsabilità la veridicità dei dati indicati.</p>
+        ${righeScrittura(1)}`,
+      ];
+    }
+    if (tipo === 'relazione_finale') {
+      return [
+        `<h2>Esiti del percorso</h2>
+        ${righeScrittura(3)}`,
+        `<h2>Obiettivi raggiunti / da rivedere</h2>
+        ${righeScrittura(2)}`,
+        `<h2>Proposte per il successivo anno</h2>
+        ${righeScrittura(2)}`,
+      ];
+    }
+    if (tipo === 'trasporto_protetto') {
+      return [
+        `<h2>Tipologia di trasporto</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Scuolabus con assistente dedicato</p>
+          <p class="voce"><span class="casella"></span>Trasporto individuale</p>
+          <p class="voce"><span class="casella"></span>Trasporto accompagnato da personale</p>
+        </div>`,
+        `<h2>Dati del percorso</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Luogo di partenza', campoScrittura())}
+          ${rigaAnagrafica('Orario andata / ritorno', campoScrittura())}
+          ${rigaAnagrafica('Accompagnatore / assistente', campoScrittura())}
+        </table>`,
+        `<h2>Note sanitarie / esigenze</h2>
+        ${righeScrittura(2)}`,
+      ];
+    }
+    if (tipo === 'protocollo_intesa') {
+      return [
+        `<h2>Oggetto del protocollo</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Assistenza specialistica</p>
+          <p class="voce"><span class="casella"></span>Assistenza educativa</p>
+          <p class="voce"><span class="casella"></span>Interventi sanitari / riabilitativi</p>
+        </div>`,
+        `<h2>Parti coinvolte</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica("Ente / Istituzione", campoScrittura())}
+          ${rigaAnagrafica("Referente dell'accordo", campoScrittura())}
+        </table>`,
+        `<h2>Durata e risorse</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica("Durata dell'intesa", campoScrittura())}
+          ${rigaAnagrafica('Risorse previste', campoScrittura())}
+        </table>`,
+      ];
+    }
+    if (tipo === 'patrocinio_locali') {
+      return [
+        `<h2>Tipo di richiesta</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Patrocinio dell'iniziativa</p>
+          <p class="voce"><span class="casella"></span>Uso dei locali scolastici</p>
+          <p class="voce"><span class="casella"></span>Sponsorizzazione</p>
+        </div>`,
+        `<h2>Iniziativa</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica("Titolo dell'iniziativa", campoScrittura())}
+          ${rigaAnagrafica('Data / periodo', campoScrittura())}
+          ${rigaAnagrafica('Luogo', campoScrittura())}
+        </table>`,
+        `<h2>Impegni e responsabilità</h2>
+        ${righeScrittura(2)}`,
+      ];
+    }
+    if (tipo === 'convenzione_pcto') {
+      return [
+        `<h2>Tipo di convenzione</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>PCTO (ex alternanza scuola-lavoro)</p>
+          <p class="voce"><span class="casella"></span>Tirocinio curriculare</p>
+          <p class="voce"><span class="casella"></span>Stage estivo</p>
+        </div>`,
+        `<h2>Dati dell'azienda / ente</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Ragione sociale', campoScrittura())}
+          ${rigaAnagrafica('Sede', campoScrittura())}
+          ${rigaAnagrafica('Tutore aziendale', campoScrittura())}
+        </table>`,
+        `<h2>Periodo e orari</h2>
+        <table class="quadro-anagrafico">
+          ${rigaAnagrafica('Inizio / fine', campoScrittura())}
+          ${rigaAnagrafica('Orario settimanale', campoScrittura())}
+        </table>`,
+      ];
+    }
+    if (tipo === 'segnalazione_anomalia') {
+      return [
+        `<h2>Oggetto della segnalazione</h2>
+        <div class="crocette">
+          <p class="voce"><span class="casella"></span>Servizio mensa</p>
+          <p class="voce"><span class="casella"></span>Trasporto scolastico</p>
+          <p class="voce"><span class="casella"></span>Pulizia e manutenzione</p>
+          <p class="voce"><span class="casella"></span>Organizzazione didattica</p>
+        </div>`,
+        `<h2>Descrizione dell'anomalia</h2>
+        ${righeScrittura(3)}`,
+        `<h2>Richiesta</h2>
+        <p class="formula-dichiarazione">Si richiede l'intervento di verifica e la comunicazione degli esiti ai sensi della L. 241/1990.</p>
+        ${righeScrittura(1)}`,
       ];
     }
     // assistenza_comune: servizi dell'Ente Locale.

@@ -18,7 +18,8 @@
     "test:pdf": "tsx scripts/test-pdf-mad.ts",
     "test:pdf:breve": "tsx scripts/test-pdf-breve.ts",
     "test:pdf:brevi": "tsx scripts/test-pdf-brevi.ts",
-    "test:pdf:universita": "tsx --tsconfig tsconfig.app.json scripts/test-pdf-universita.ts"
+    "test:pdf:universita": "tsx --tsconfig tsconfig.app.json scripts/test-pdf-universita.ts",
+    "test:pdf:completo": "tsx --tsconfig tsconfig.app.json scripts/test-pdf-completo.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

@@ -601,14 +601,147 @@ const macroAreeRaw: MacroAreaModulistica[] = [
       {
         id: 'pdp-bes',
         nome: 'PDP e BES',
-        descrizione: 'Piani Didattici Personalizzati per alunni con BES.',
-        documenti: [
+        descrizione: 'Piani Didattici Personalizzati per DSA e BES.',
+        sotto: [
           {
-            id: 'pdp-bes-modello',
-            nome: 'Modello PDP per BES',
-            descrizione: 'Modello di Piano Didattico Personalizzato per alunni con BES.',
-            tipo: 'PDF',
-            profilo: { tipo: 'pdp_bes' },
+            id: 'pdp-dsa',
+            nome: 'PDP DSA (L. 170/2010)',
+            descrizione: 'Piano Didattico Personalizzato per alunni con DSA certificati.',
+            documenti: [
+              {
+                id: 'pdp-dsa',
+                nome: 'Piano Didattico Personalizzato DSA (L. 170/2010)',
+                descrizione: 'Modello di PDP per alunni con DSA certificati.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pdp_bes', scopo_sostegno: 'pdp_dsa' },
+              },
+            ],
+          },
+          {
+            id: 'pdp-bes-non-certificati',
+            nome: 'PDP BES non certificati',
+            descrizione: 'PDP per alunni con BES non certificati (svantaggio).',
+            documenti: [
+              {
+                id: 'pdp-bes-non-certificati',
+                nome: 'PDP BES non certificati',
+                descrizione: 'Piano Didattico Personalizzato per BES non certificati.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pdp_bes', scopo_sostegno: 'pdp_bes' },
+              },
+            ],
+          },
+          {
+            id: 'misure-compensative',
+            nome: 'Misure compensative / dispensative',
+            descrizione: 'Schede delle misure compensative e dispensative.',
+            documenti: [
+              {
+                id: 'misure-compensative',
+                nome: 'Misure compensative e dispensative',
+                descrizione: 'Scheda delle misure compensative e dispensative adottate.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pdp_bes', scopo_sostegno: 'misure' },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'documenti-pei-glo',
+        nome: 'Documenti PEI e GLO',
+        descrizione: 'Verbali di insediamento del GLO, schede di sintesi PEI e richieste di ore.',
+        sotto: [
+          {
+            id: 'verbale-insediamento-glo',
+            nome: 'Verbale insediamento GLO',
+            descrizione: 'Verbale di insediamento del Gruppo di Lavoro Operativo.',
+            documenti: [
+              {
+                id: 'verbale-insediamento-glo',
+                nome: 'Verbale insediamento GLO',
+                descrizione: 'Modello di verbale per l\u2019insediamento del GLO.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pei', scopo_sostegno: 'pei' },
+              },
+            ],
+          },
+          {
+            id: 'scheda-sintesi-pei',
+            nome: 'Scheda di sintesi PEI (D.I. 182/2020)',
+            descrizione: 'Scheda di sintesi del PEI secondo i modelli nazionali.',
+            documenti: [
+              {
+                id: 'scheda-sintesi-pei',
+                nome: 'Scheda di sintesi PEI (D.I. 182/2020)',
+                descrizione: 'Scheda di sintesi del PEI conforme al D.I. 182/2020.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pei', scopo_sostegno: 'pei' },
+              },
+            ],
+          },
+          {
+            id: 'richiesta-ore-sostegno',
+            nome: 'Richiesta ore di sostegno',
+            descrizione: 'Richieste di ore di sostegno e assistenza specialistica.',
+            documenti: [
+              {
+                id: 'richiesta-ore-sostegno',
+                nome: 'Richiesta ore di sostegno / assistenza specialistica',
+                descrizione: 'Istanza per l\u2019assegnazione di ore di sostegno e assistenza specialistica.',
+                tipo: 'PDF',
+                profilo: { tipo: 'sostegno', scopo_sostegno: 'richiesta' },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'verbali-relazioni',
+        nome: 'Verbali e Relazioni',
+        descrizione: 'Relazioni finali PEI/PDP, verbali di verifica e trasporto protetto.',
+        sotto: [
+          {
+            id: 'relazione-finale-pei-pdp',
+            nome: 'Relazione finale PEI / PDP',
+            descrizione: 'Relazioni finali di verifica dei percorsi di inclusione.',
+            documenti: [
+              {
+                id: 'relazione-finale-pei-pdp',
+                nome: 'Relazione finale PEI / PDP',
+                descrizione: 'Modello di relazione finale di verifica del PEI o del PDP.',
+                tipo: 'PDF',
+                profilo: { tipo: 'relazione_finale', scopo_sostegno: 'pei' },
+              },
+            ],
+          },
+          {
+            id: 'verifica-intermedia-sostegno',
+            nome: 'Verbale di verifica intermedia',
+            descrizione: 'Verbali di verifica intermedia del PEI.',
+            documenti: [
+              {
+                id: 'verifica-intermedia-sostegno',
+                nome: 'Verbale di verifica intermedia PEI',
+                descrizione: 'Modello di verbale per la verifica intermedia del PEI.',
+                tipo: 'PDF',
+                profilo: { tipo: 'pei', scopo_sostegno: 'pei' },
+              },
+            ],
+          },
+          {
+            id: 'trasporto-protetto',
+            nome: 'Trasporto scolastico protetto',
+            descrizione: 'Richieste di trasporto scolastico protetto.',
+            documenti: [
+              {
+                id: 'trasporto-protetto',
+                nome: 'Richiesta trasporto scolastico protetto',
+                descrizione: 'Istanza di trasporto scolastico protetto per alunni con disabilità.',
+                tipo: 'PDF',
+                profilo: { tipo: 'trasporto_protetto', scopo_sostegno: 'richiesta' },
+              },
+            ],
           },
         ],
       },
@@ -824,6 +957,104 @@ const macroAreeRaw: MacroAreaModulistica[] = [
                 descrizione: 'Consenso al trattamento e alla pubblicazione di immagini e riprese video.',
                 tipo: 'PDF',
                 profilo: { tipo: 'consenso_foto', ordine: 'infanzia' },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'didattica-progetti-infanzia',
+        nome: 'Didattica e Progetti',
+        descrizione: 'Schede di osservazione, progetti di continuità e autorizzazioni per uscite e laboratori.',
+        sotto: [
+          {
+            id: 'schede-osservazione-infanzia',
+            nome: 'Schede di osservazione',
+            descrizione: 'Schede di osservazione delle competenze per la scuola dell\u2019infanzia.',
+            documenti: [
+              {
+                id: 'scheda-osservazione-infanzia',
+                nome: 'Scheda osservazione competenze – Infanzia',
+                descrizione: 'Scheda di osservazione delle competenze per la scuola dell\u2019infanzia.',
+                tipo: 'PDF',
+                profilo: { tipo: 'schede_osservazione', ordine: 'infanzia' },
+              },
+            ],
+          },
+          {
+            id: 'continuita-nido-infanzia',
+            nome: 'Progetti continuità nido-infanzia',
+            descrizione: 'Adesione ai progetti di continuità tra nido e scuola dell\u2019infanzia.',
+            documenti: [
+              {
+                id: 'continuita-nido-infanzia',
+                nome: 'Adesione progetto continuità nido-infanzia',
+                descrizione: 'Consenso alla partecipazione al progetto continuità nido-infanzia.',
+                tipo: 'PDF',
+                profilo: { tipo: 'progetto_continuita', ordine: 'infanzia' },
+              },
+            ],
+          },
+          {
+            id: 'uscite-laboratori-infanzia',
+            nome: 'Uscite e laboratori',
+            descrizione: 'Autorizzazioni per uscite didattiche e attività di laboratorio.',
+            documenti: [
+              {
+                id: 'autorizzazione-uscite-laboratori',
+                nome: 'Autorizzazione uscite / laboratori – Infanzia',
+                descrizione: 'Modulo di autorizzazione per uscite didattiche e laboratori.',
+                tipo: 'PDF',
+                profilo: { tipo: 'uscite_didattiche', ordine: 'infanzia' },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'organizzazione-servizi-infanzia',
+        nome: 'Organizzazione e Servizi',
+        descrizione: 'Mensa, diete speciali, pre/post scuola e rinunce.',
+        sotto: [
+          {
+            id: 'mensa-org-infanzia',
+            nome: 'Mensa e diete speciali',
+            descrizione: 'Richieste per il servizio mensa e le diete speciali.',
+            documenti: [
+              {
+                id: 'mensa-diete-organizzazione',
+                nome: 'Modulo mensa / diete speciali',
+                descrizione: 'Richiesta del servizio mensa e della dieta speciale certificata.',
+                tipo: 'PDF',
+                profilo: { tipo: 'mensa', ordine: 'infanzia' },
+              },
+            ],
+          },
+          {
+            id: 'prepost-infanzia',
+            nome: 'Pre / Post scuola',
+            descrizione: 'Richiesta del servizio di pre e post scuola.',
+            documenti: [
+              {
+                id: 'servizio-prepost-infanzia',
+                nome: 'Richiesta servizio pre / post scuola',
+                descrizione: 'Domanda di attivazione del servizio pre / post scuola.',
+                tipo: 'PDF',
+                profilo: { tipo: 'servizi_prepost', ordine: 'infanzia' },
+              },
+            ],
+          },
+          {
+            id: 'rinunce-infanzia',
+            nome: 'Rinunce e ritiri',
+            descrizione: 'Rinuncia o ritiro dell\u2019iscrizione.',
+            documenti: [
+              {
+                id: 'rinuncia-iscrizione-infanzia',
+                nome: 'Rinuncia / ritiro iscrizione – Infanzia',
+                descrizione: 'Modulo di rinuncia o ritiro dell\u2019iscrizione.',
+                tipo: 'PDF',
+                profilo: { tipo: 'rinuncia_iscrizione', ordine: 'infanzia' },
               },
             ],
           },
@@ -1201,6 +1432,104 @@ const macroAreeRaw: MacroAreaModulistica[] = [
         ],
       },
       {
+        id: 'valutazione-didattica-primaria',
+        nome: 'Valutazione e Didattica',
+        descrizione: 'Schede di valutazione, certificazione delle competenze e piani personalizzati.',
+        sotto: [
+          {
+            id: 'schede-valutazione-primaria',
+            nome: 'Schede di valutazione periodica',
+            descrizione: 'Schede di valutazione periodica e finale degli apprendimenti.',
+            documenti: [
+              {
+                id: 'scheda-valutazione-primaria',
+                nome: 'Scheda di valutazione periodica – Primaria',
+                descrizione: 'Scheda di valutazione periodica degli apprendimenti e del comportamento.',
+                tipo: 'PDF',
+                profilo: { tipo: 'scrutini', ordine: 'primaria' },
+              },
+            ],
+          },
+          {
+            id: 'certificazione-competenze-primaria',
+            nome: 'Certificazione delle competenze',
+            descrizione: 'Certificazione delle competenze al termine della scuola primaria (D.M. 742/2017).',
+            documenti: [
+              {
+                id: 'certificazione-competenze-primaria',
+                nome: 'Certificazione delle competenze (D.M. 742/2017)',
+                descrizione: 'Modello di certificazione delle competenze per la scuola primaria.',
+                tipo: 'PDF',
+                profilo: { tipo: 'certificazione_competenze', ordine: 'primaria' },
+              },
+            ],
+          },
+          {
+            id: 'piani-personalizzati-primaria',
+            nome: 'Piani di studio personalizzati',
+            descrizione: 'Piani di studio personalizzati e flessibilità didattica.',
+            documenti: [
+              {
+                id: 'piano-personalizzato-primaria',
+                nome: 'Piano di studio personalizzato – Primaria',
+                descrizione: 'Proposta di piano di studio personalizzato con flessibilità didattica.',
+                tipo: 'PDF',
+                profilo: { tipo: 'piano_personalizzato', ordine: 'primaria' },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'gite-progetti-primaria',
+        nome: 'Gite e Progetti',
+        descrizione: 'Consensi per uscite e viaggi, adesioni a progetti finanziati e liberatorie.',
+        sotto: [
+          {
+            id: 'uscite-gite-primaria',
+            nome: 'Uscite e viaggi di istruzione',
+            descrizione: 'Consensi e autorizzazioni per uscite didattiche e viaggi di istruzione.',
+            documenti: [
+              {
+                id: 'consenso-viaggio-primaria',
+                nome: 'Consenso uscita didattica / viaggio di istruzione – Primaria',
+                descrizione: 'Autorizzazione alla partecipazione a uscite didattiche e viaggi di istruzione.',
+                tipo: 'PDF',
+                profilo: { tipo: 'uscite_didattiche', ordine: 'primaria' },
+              },
+            ],
+          },
+          {
+            id: 'progetti-fondi-primaria',
+            nome: 'Progetti PON / POR / PNRR',
+            descrizione: 'Adesioni ai progetti finanziati con fondi nazionali ed europei.',
+            documenti: [
+              {
+                id: 'adesione-pon-primaria',
+                nome: 'Adesione progetto PON / POR / PNRR',
+                descrizione: 'Consenso alla partecipazione a progetti finanziati con fondi PON/POR/PNRR.',
+                tipo: 'PDF',
+                profilo: { tipo: 'progetti_fondi', ordine: 'primaria' },
+              },
+            ],
+          },
+          {
+            id: 'attivita-sportive-primaria',
+            nome: 'Liberatorie attività sportive',
+            descrizione: 'Liberatorie per la partecipazione ad attività sportive.',
+            documenti: [
+              {
+                id: 'liberatoria-sport-primaria',
+                nome: 'Liberatoria attività sportive – Primaria',
+                descrizione: 'Liberatoria per la partecipazione a tornei e attività motorie.',
+                tipo: 'PDF',
+                profilo: { tipo: 'liberatoria_sport', ordine: 'primaria' },
+              },
+            ],
+          },
+        ],
+      },
+      {
         id: 'esoneri-certificazioni',
         nome: 'Certificazioni ed esoneri',
         descrizione: 'Esoneri dall’educazione fisica e certificazioni sanitarie.',
@@ -1509,6 +1838,104 @@ const macroAreeRaw: MacroAreaModulistica[] = [
             tipo: 'DOCX',
             catalogoId: 'supplenza-breve',
             profilo: { tipo: 'supplenza', ordine: 'secondaria1' },
+          },
+        ],
+      },
+      {
+        id: 'carriera-studenti-medie',
+        nome: 'Gestione Carriera e Modulistica Studenti',
+        descrizione: 'Cambi di sezione e indirizzo, assemblee e agevolazioni economiche.',
+        sotto: [
+          {
+            id: 'cambio-sezione-medie',
+            nome: 'Cambio sezione / indirizzo',
+            descrizione: 'Richieste di cambio di sezione, indirizzo o corso.',
+            documenti: [
+              {
+                id: 'cambio-sezione-medie',
+                nome: 'Richiesta cambio sezione / indirizzo',
+                descrizione: 'Istanza di cambio di sezione, indirizzo o corso di studi.',
+                tipo: 'PDF',
+                profilo: { tipo: 'cambio_sezione', ordine: 'secondaria1' },
+              },
+            ],
+          },
+          {
+            id: 'assemblee-studenti-medie',
+            nome: 'Assemblee di classe / istituto',
+            descrizione: 'Istanza di convocazione di assemblee studentesche.',
+            documenti: [
+              {
+                id: 'istanza-assemblea-medie',
+                nome: 'Istanza assemblea di classe / istituto',
+                descrizione: 'Richiesta di convocazione di un\u2019assemblea di classe o d\u2019Istituto.',
+                tipo: 'PDF',
+                profilo: { tipo: 'assemblea_studenti', ordine: 'secondaria1' },
+              },
+            ],
+          },
+          {
+            id: 'esonero-tasse-medie',
+            nome: 'Esonero tasse e contributi',
+            descrizione: 'Esoneri e riduzioni di tasse scolastiche e contributi.',
+            documenti: [
+              {
+                id: 'esonero-tasse-medie',
+                nome: 'Richiesta esonero tasse scolastiche / contributi',
+                descrizione: 'Istanza di esonero o riduzione delle tasse scolastiche e dei contributi.',
+                tipo: 'PDF',
+                profilo: { tipo: 'esonero_tasse', ordine: 'secondaria1' },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'esami-certificazioni-medie',
+        nome: 'Esami e Certificazioni',
+        descrizione: 'Ammissione agli esami, crediti e certificati sostitutivi.',
+        sotto: [
+          {
+            id: 'ammissione-esami-medie',
+            nome: 'Ammissione agli esami',
+            descrizione: 'Domande di ammissione agli esami di Stato.',
+            documenti: [
+              {
+                id: 'ammissione-esami-medie',
+                nome: 'Domanda ammissione esami di Stato – I ciclo',
+                descrizione: 'Domanda di ammissione all\u2019esame di Stato conclusivo del primo ciclo.',
+                tipo: 'PDF',
+                profilo: { tipo: 'ammissione_esami', ordine: 'secondaria1' },
+              },
+            ],
+          },
+          {
+            id: 'crediti-medie',
+            nome: 'Crediti scolastici / formativi',
+            descrizione: 'Riconoscimento di crediti scolastici e formativi.',
+            documenti: [
+              {
+                id: 'crediti-medie',
+                nome: 'Richiesta riconoscimento crediti scolastici / formativi',
+                descrizione: 'Istanza di riconoscimento di crediti formativi e scolastici.',
+                tipo: 'PDF',
+                profilo: { tipo: 'crediti_scolastici', ordine: 'secondaria1' },
+              },
+            ],
+          },
+          {
+            id: 'certificati-medie',
+            nome: 'Certificati sostitutivi',
+            descrizione: 'Certificati di diploma e copie conformi.',
+            documenti: [
+              {
+                id: 'certificato-diploma-medie',
+                nome: 'Richiesta certificato sostitutivo diploma',
+                descrizione: 'Istanza di rilascio di certificato o copia conforme del diploma.',
+                tipo: 'PDF',
+                profilo: { tipo: 'certificato_diploma', ordine: 'secondaria1' },
+              },
+            ],
           },
         ],
       },
@@ -1855,6 +2282,104 @@ const macroAreeRaw: MacroAreaModulistica[] = [
             descrizione: 'Istanza di riconoscimento dei crediti formativi per le superiori.',
             tipo: 'PDF',
             profilo: { tipo: 'crediti_formativi', ordine: 'secondaria2' },
+          },
+        ],
+      },
+      {
+        id: 'carriera-studenti-superiori',
+        nome: 'Gestione Carriera e Modulistica Studenti',
+        descrizione: 'Cambi di sezione e indirizzo, assemblee e agevolazioni economiche.',
+        sotto: [
+          {
+            id: 'cambio-sezione-superiori',
+            nome: 'Cambio sezione / indirizzo',
+            descrizione: 'Richieste di cambio di sezione, indirizzo o corso.',
+            documenti: [
+              {
+                id: 'cambio-sezione-superiori',
+                nome: 'Richiesta cambio sezione / indirizzo',
+                descrizione: 'Istanza di cambio di sezione, indirizzo o corso di studi.',
+                tipo: 'PDF',
+                profilo: { tipo: 'cambio_sezione', ordine: 'secondaria2' },
+              },
+            ],
+          },
+          {
+            id: 'assemblee-studenti-superiori',
+            nome: 'Assemblee di classe / istituto',
+            descrizione: 'Istanza di convocazione di assemblee studentesche.',
+            documenti: [
+              {
+                id: 'istanza-assemblea-superiori',
+                nome: 'Istanza assemblea di classe / istituto',
+                descrizione: 'Richiesta di convocazione di un\u2019assemblea di classe o d\u2019Istituto.',
+                tipo: 'PDF',
+                profilo: { tipo: 'assemblea_studenti', ordine: 'secondaria2' },
+              },
+            ],
+          },
+          {
+            id: 'esonero-tasse-superiori',
+            nome: 'Esonero tasse e contributi',
+            descrizione: 'Esoneri e riduzioni di tasse scolastiche e contributi.',
+            documenti: [
+              {
+                id: 'esonero-tasse-superiori',
+                nome: 'Richiesta esonero tasse scolastiche / contributi',
+                descrizione: 'Istanza di esonero o riduzione delle tasse scolastiche e dei contributi.',
+                tipo: 'PDF',
+                profilo: { tipo: 'esonero_tasse', ordine: 'secondaria2' },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'esami-certificazioni-superiori',
+        nome: 'Esami e Certificazioni',
+        descrizione: 'Ammissione agli esami, crediti e certificati sostitutivi.',
+        sotto: [
+          {
+            id: 'ammissione-esami-superiori',
+            nome: 'Ammissione agli esami',
+            descrizione: 'Domande di ammissione agli esami di Stato.',
+            documenti: [
+              {
+                id: 'ammissione-esami-superiori',
+                nome: 'Domanda ammissione esami di Stato – II ciclo',
+                descrizione: 'Domanda di ammissione all\u2019esame di Stato conclusivo del secondo ciclo.',
+                tipo: 'PDF',
+                profilo: { tipo: 'ammissione_esami', ordine: 'secondaria2' },
+              },
+            ],
+          },
+          {
+            id: 'crediti-superiori',
+            nome: 'Crediti scolastici / formativi',
+            descrizione: 'Riconoscimento di crediti scolastici e formativi.',
+            documenti: [
+              {
+                id: 'crediti-superiori',
+                nome: 'Richiesta riconoscimento crediti scolastici / formativi',
+                descrizione: 'Istanza di riconoscimento di crediti formativi e scolastici.',
+                tipo: 'PDF',
+                profilo: { tipo: 'crediti_scolastici', ordine: 'secondaria2' },
+              },
+            ],
+          },
+          {
+            id: 'certificati-superiori',
+            nome: 'Certificati sostitutivi',
+            descrizione: 'Certificati di diploma e copie conformi.',
+            documenti: [
+              {
+                id: 'certificato-diploma-superiori',
+                nome: 'Richiesta certificato sostitutivo diploma',
+                descrizione: 'Istanza di rilascio di certificato o copia conforme del diploma.',
+                tipo: 'PDF',
+                profilo: { tipo: 'certificato_diploma', ordine: 'secondaria2' },
+              },
+            ],
           },
         ],
       },
@@ -2599,6 +3124,104 @@ const macroAreeRaw: MacroAreaModulistica[] = [
                 descrizione: 'Modello di rendiconto per progetti finanziati.',
                 tipo: 'PDF',
                 profilo: { tipo: 'autocertificazione', ordine: 'enti' },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'integrazione-territoriale',
+        nome: 'Integrazione Territoriale',
+        descrizione: 'Protocolli di intesa, patrocini, uso locali e convenzioni con il territorio.',
+        sotto: [
+          {
+            id: 'protocolli-intesa',
+            nome: 'Protocolli di intesa ASL / Comune',
+            descrizione: 'Protocolli e accordi con ASL, Comune e servizi territoriali.',
+            documenti: [
+              {
+                id: 'protocollo-intesa',
+                nome: 'Protocollo di intesa ASL / Comune',
+                descrizione: 'Modello di protocollo di intesa tra istituzione scolastica e ASL/Comune.',
+                tipo: 'PDF',
+                profilo: { tipo: 'protocollo_intesa', ordine: 'enti' },
+              },
+            ],
+          },
+          {
+            id: 'patrocinio-locali',
+            nome: 'Patrocinio e uso locali',
+            descrizione: 'Richieste di patrocinio e concessione dei locali scolastici.',
+            documenti: [
+              {
+                id: 'richiesta-patrocinio',
+                nome: 'Richiesta patrocinio / uso locali scolastici',
+                descrizione: 'Istanza di patrocinio o concessione in uso dei locali scolastici.',
+                tipo: 'PDF',
+                profilo: { tipo: 'patrocinio_locali', ordine: 'enti' },
+              },
+            ],
+          },
+          {
+            id: 'convenzioni-pcto-tirocini',
+            nome: 'Convenzioni PCTO / Tirocini',
+            descrizione: 'Convenzioni per PCTO, tirocini e stage con aziende ed enti.',
+            documenti: [
+              {
+                id: 'convenzione-pcto',
+                nome: 'Convenzione PCTO / tirocinio',
+                descrizione: 'Modello di convenzione per PCTO, tirocini curriculari e stage.',
+                tipo: 'PDF',
+                profilo: { tipo: 'convenzione_pcto', ordine: 'enti' },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'ricorsi-tutela',
+        nome: 'Ricorsi e Tutela',
+        descrizione: 'Reclami, ricorsi amministrativi e segnalazioni di anomalie.',
+        sotto: [
+          {
+            id: 'reclami-ricorsi',
+            nome: 'Reclamo e ricorso amministrativo',
+            descrizione: 'Modelli di reclamo e ricorso amministrativo.',
+            documenti: [
+              {
+                id: 'reclamo-ricorso-amministrativo',
+                nome: 'Modulo reclamo / ricorso amministrativo',
+                descrizione: 'Modello di reclamo o ricorso amministrativo.',
+                tipo: 'PDF',
+                profilo: { tipo: 'ricorso_reclamo', ordine: 'enti' },
+              },
+            ],
+          },
+          {
+            id: 'riesame-autotutela',
+            nome: 'Riesame in autotutela',
+            descrizione: 'Istanze di riesame in autotutela di provvedimenti.',
+            documenti: [
+              {
+                id: 'istanza-riesame-autotutela',
+                nome: 'Istanza di riesame in autotutela',
+                descrizione: 'Istanza di riesame di un provvedimento ai sensi della L. 241/1990.',
+                tipo: 'PDF',
+                profilo: { tipo: 'ricorso_reclamo', ordine: 'enti' },
+              },
+            ],
+          },
+          {
+            id: 'segnalazioni-anomalie',
+            nome: 'Segnalazione anomalie servizio',
+            descrizione: 'Segnalazioni di anomalie e disservizi.',
+            documenti: [
+              {
+                id: 'segnalazione-anomalia',
+                nome: 'Segnalazione anomalie del servizio',
+                descrizione: 'Modulo di segnalazione di anomalie o disservizi.',
+                tipo: 'PDF',
+                profilo: { tipo: 'segnalazione_anomalia', ordine: 'enti' },
               },
             ],
           },
