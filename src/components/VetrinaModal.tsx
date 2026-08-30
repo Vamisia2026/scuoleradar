@@ -16,11 +16,11 @@ const dettagli: Record<string, DettaglioVetrina> = {
     icona: <Radar className="h-6 w-6" />,
     titolo: 'Radar Interpelli',
     testo:
-      'Interpelli, supplenze e bandi mappati per te: i primi 3 sono gratuiti. Con un account continui a monitorare le opportunità e attivi le notifiche.',
+      'Interpelli, supplenze e bandi mappati per te: i primi 3 sono gratuiti. Attiva le notifiche e continua a monitorare le opportunità su misura per te.',
   },
   cv: {
     icona: <FileText className="h-6 w-6" />,
-    titolo: 'CV Builder',
+    titolo: 'Crea CV',
     testo:
       'Trasforma il tuo CV in un layout ordinato. Registrandoti gratuitamente scarichi il PDF (con logo), con il PRO senza logo.',
   },
@@ -28,19 +28,19 @@ const dettagli: Record<string, DettaglioVetrina> = {
     icona: <Calculator className="h-6 w-6" />,
     titolo: 'Check CFU',
     testo:
-      'Verifica le classi di concorso accessibili dal tuo percorso di studi: la verifica richiede 1 credito a consumo oppure il piano PRO.',
+      'Verifica le classi di concorso accessibili dal tuo percorso di studi: procedi con 1 credito a consumo oppure con il piano PRO senza limiti.',
   },
   moduli: {
     icona: <FolderOpen className="h-6 w-6" />,
     titolo: 'Modulistica',
     testo:
-      'Modelli e documenti pronti all\u2019uso (domande, autocertificazioni, lettere di presentazione). I download sono riservati agli account registrati.',
+      'Modelli e documenti pronti all\u2019uso (domande, autocertificazioni, lettere di presentazione). I download sono disponibili con un account gratuito.',
   },
   assistente: {
     icona: <Bot className="h-6 w-6" />,
-    titolo: 'Assistente AI',
+    titolo: 'Assistente Sindacalista Virtuale',
     testo:
-      'Risposte su graduatorie, mobilità e supplenze. Il servizio è riservato ai PRO: registrati e richiedi l\u2019accesso in prova.',
+      'Risposte su graduatorie, mobilità e supplenze. Il servizio è incluso per i PRO: registrati e richiedi l\u2019accesso in prova.',
   },
   purefocus: {
     icona: <PenLine className="h-6 w-6" />,
@@ -52,24 +52,37 @@ const dettagli: Record<string, DettaglioVetrina> = {
 
 /** Modal di conversione "Vetrina Freemium": scelta tra Free, PRO Mensile, PRO Annuale. */
 export function VetrinaModal() {
-  const { vetrinaAperta, vetrinaSezione, closeVetrina, openAuthModal } = useApp();
+  const { user, vetrinaAperta, vetrinaSezione, closeVetrina, openAuthModal, avviaCheckout } =
+    useApp();
   const dettaglio = (vetrinaSezione && dettagli[vetrinaSezione]) || null;
 
   const scegliPiano = (piano: 'free' | 'pro_mensile' | 'pro_annuale') => {
-    if (piano !== 'free') {
-      try {
-        // Il checkout del piano scelto ripartirà automaticamente dopo il login.
-        localStorage.setItem(STORAGE_KEY_INTENDED_PLAN, piano);
-      } catch {
-        // localStorage non disponibile
-      }
-    }
     closeVetrina();
-    openAuthModal('registrazione');
+
+    if (piano === 'free') {
+      // Account Base: solo registrazione (mai checkout).
+      if (!user) openAuthModal('registrazione', 'default');
+      return;
+    }
+
+    if (user) {
+      // Già autenticato: checkout Stripe IMMEDIATO per il piano scelto, nessun altro click.
+      void avviaCheckout(piano);
+      return;
+    }
+
+    // Utente anonimo: salva il piano scelto e apri l'Auth modal con header dedicato PRO.
+    // Dopo login/signup (Google o email) il checkout ripartirà automaticamente (AppContext).
+    try {
+      localStorage.setItem(STORAGE_KEY_INTENDED_PLAN, piano);
+    } catch {
+      // localStorage non disponibile
+    }
+    openAuthModal('registrazione', 'pro');
   };
 
   return (
-    <Modal open={vetrinaAperta} onClose={closeVetrina} title="Sblocca ScuoleRadar" size="sm">
+    <Modal open={vetrinaAperta} onClose={closeVetrina} title="Attiva ScuoleRadar" size="sm">
       <div className="space-y-4">
         {dettaglio && (
           <div className="flex items-start gap-3 rounded-xl bg-primary-50 p-4">
@@ -84,7 +97,7 @@ export function VetrinaModal() {
         )}
 
         <p className="text-sm text-primary-600">
-          Crea il tuo account gratuito per iniziare. Scegli il piano che preferisci:
+          Crea il tuo account gratuito e inizia subito. Scegli il piano che preferisci:
         </p>
 
         <div className="space-y-2">
@@ -93,7 +106,7 @@ export function VetrinaModal() {
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-primary-200 px-5 py-3 text-sm font-semibold text-primary-700 transition hover:bg-primary-50"
           >
             <UserPlus className="h-4 w-4" />
-            Registrati gratis (Free)
+            Registrati (Account Base - Gratis)
           </button>
           <button
             onClick={() => scegliPiano('pro_mensile')}
@@ -111,8 +124,8 @@ export function VetrinaModal() {
           </button>
         </div>
 
-        <p className="text-center text-xs text-primary-400">
-          Iscrizione gratuita in 2 minuti. Nessun dark pattern: disdici quando vuoi.
+        <p className="text-center text-sm font-medium text-primary-500">
+          L&apos;unica cosa che ti dispiacerà è non averlo fatto prima.
         </p>
       </div>
     </Modal>

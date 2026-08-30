@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Baby, School, BookOpen, GraduationCap, Search, Check, MapPin, Send, Mail, Radar, ArrowRight, ArrowLeft,
   Plus, Users, Moon, Briefcase, Wrench, AlertCircle,
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
+import { supabase } from '@/lib/supabase';
 import { ordiniScuola, materie, type OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso } from '@/data/classiConcorso';
 import { province } from '@/data/province';
@@ -31,7 +32,7 @@ const ordineIcons: Record<OrdineScuola, React.ReactNode> = {
 
 export function OnboardingPage() {
   const navigate = useNavigate();
-  const { user, completaOnboarding, salvaProfilo } = useApp();
+  const { user, preferenze, completaOnboarding, salvaProfilo } = useApp();
   const [step, setStep] = useState(1);
 
   const [ordini, setOrdini] = useState<OrdineScuola[]>([]);
@@ -41,6 +42,27 @@ export function OnboardingPage() {
   const [provinceCodici, setProvinceCodici] = useState<string[]>([]);
   const [telegramUsername, setTelegramUsername] = useState('');
   const [emailNotifica, setEmailNotifica] = useState(user?.email ?? '');
+
+  // Deeplink Telegram: https://t.me/ScuoleRadar_bot?start=<user_id> — il bot
+  // collega automaticamente il Chat ID dell'utente al suo profilo (webhook /start).
+  const [telegramDeepLink, setTelegramDeepLink] = useState('https://t.me/ScuoleRadar_bot');
+  useEffect(() => {
+    if (!supabase) return;
+    let attivo = true;
+    supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (attivo && data.user) {
+          setTelegramDeepLink(`https://t.me/ScuoleRadar_bot?start=${data.user.id}`);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      attivo = false;
+    };
+  }, []);
+  /** True se il profilo ha già un Chat ID Telegram collegato (via bot o manuale). */
+  const telegramCollegato = Boolean(preferenze.telegramChatId);
 
   // search for classi
   const [queryClasse, setQueryClasse] = useState('');
@@ -135,7 +157,7 @@ export function OnboardingPage() {
     if (step === 1) return ordini.length > 0;
     if (step === 2) return classiCodici.length > 0 || materieId.length > 0 || materieCustom.length > 0;
     if (step === 3) return provinceCodici.length > 0;
-    if (step === 4) return telegramUsername.trim() && emailNotifica.trim();
+    if (step === 4) return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNotifica.trim());
     return false;
   };
 
@@ -147,7 +169,7 @@ export function OnboardingPage() {
       materieCustom,
       provinceCodici,
       telegramUsername: telegramUsername.trim(),
-      telegramChatId: '',
+      telegramChatId: preferenze.telegramChatId || '',
       emailNotifica: emailNotifica.trim(),
       onboarded: true,
       favoriteSchools: [],
@@ -485,17 +507,49 @@ export function OnboardingPage() {
 
           {step === 4 && (
             <div className="animate-fade-in">
-              <h2 className="text-xl font-bold text-primary-800">Canali di notifica</h2>
+              <h2 className="text-xl font-bold text-primary-800">Canali di notifica (Account Base)</h2>
               <p className="mt-1 text-sm text-primary-600">
-                Riceverai le tue 3 notifiche di prova (in assoluto, una tantum) su Telegram, e in copia via email.
-                Ti avviseremo di interpelli per supplenze, bandi per esperti, CPIA e progetti scolastici.
+                Riceverai le tue 3 notifiche gratuite all&apos;anno (si rinnovano a ogni anno
+                solare), su Telegram e in copia via email.
               </p>
 
               <div className="mt-6 space-y-5">
+                {/* Collegamento Telegram via deeplink ?start=<user_id> */}
+                <div className="rounded-xl border border-primary-100 bg-primary-50 p-4">
+                  <p className="text-sm font-semibold text-primary-800">Collega Telegram</p>
+                  <p className="mt-1 text-xs leading-relaxed text-primary-600">
+                    Premi il pulsante qui sotto: si aprirà il bot{' '}
+                    <strong>@ScuoleRadar_bot</strong> con il tuo account già riconosciuto.
+                    Nel bot premi <strong>Start</strong>: il collegamento avviene automaticamente
+                    e riceverai le notifiche in tempo reale.
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <a
+                      href={telegramDeepLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
+                    >
+                      <Send className="h-4 w-4" />
+                      Collega Telegram
+                    </a>
+                    {telegramCollegato && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-3 py-1 text-xs font-semibold text-accent-700">
+                        <Check className="h-3.5 w-3.5" /> Telegram collegato
+                      </span>
+                    )}
+                  </div>
+                  {!telegramCollegato && (
+                    <p className="mt-2 text-xs text-primary-400">
+                      Puoi completare il collegamento anche più tardi dalla pagina Profilo.
+                    </p>
+                  )}
+                </div>
+
                 <label className="block">
                   <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-primary-700">
                     <Send className="h-4 w-4 text-primary-500" />
-                    Username Telegram
+                    Username Telegram (opzionale)
                   </span>
                   <input
                     type="text"
@@ -520,7 +574,8 @@ export function OnboardingPage() {
                 </label>
 
                 <div className="rounded-xl bg-accent-50 px-4 py-3 text-sm text-accent-700">
-                  Niente spam: solo notifiche di opportunità compatibili con il tuo profilo.
+                  Piano Base: 3 notifiche all&apos;anno, si rinnovano automaticamente a ogni anno
+                  solare. Niente spam: solo opportunità compatibili con il tuo profilo.
                 </div>
               </div>
             </div>

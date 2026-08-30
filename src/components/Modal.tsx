@@ -8,9 +8,11 @@ interface ModalProps {
   title?: string;
   children: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  /** Classe z-index del contenitore (default z-50; es. z-[9999] per stare sopra gli overlay di sviluppo). */
+  zClass?: string;
 }
 
-export function Modal({ open, onClose, title, children, size = 'md' }: ModalProps) {
+export function Modal({ open, onClose, title, children, size = 'md', zClass = 'z-50' }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -30,7 +32,7 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className={`fixed inset-0 ${zClass} flex items-center justify-center p-4`}
       role="dialog"
       aria-modal="true"
       aria-label={title}

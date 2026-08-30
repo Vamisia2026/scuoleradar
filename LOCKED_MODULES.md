@@ -45,9 +45,9 @@ Procedi con la creazione del componente DevToolbar.tsx, integralo in App.tsx e a
 
 | # | Modulo | File | Descrizione | Stato |
 |---|--------|------|-------------|-------|
-| 1 | AuthModal | `src/components/AuthModal.tsx` | Gestione Google Login & Email | 🔒 Bloccato |
+| 1 | AuthModal | `src/components/AuthModal.tsx` | Gestione Google Login & Email — ri-bloccato il 2026-08-30 dopo intervento checkout-flow (header "Crea il tuo account per accedere a ScuoleRadar PRO") | 🔒 Bloccato |
 | 2 | Pagina Chi Siamo | `src/pages/ChiSiamoPage.tsx` | Pagina istituzionale / valori | 🔒 Bloccato |
-| 3 | Pagina Prezzi / Offerta | `src/pages/PrezziPage.tsx` | Piano Offerta, VIP e PureFocus | 🔒 Bloccato |
+| 3 | Pagina Prezzi / Offerta | `src/pages/PrezziPage.tsx` | Piano Offerta, VIP e PureFocus — ri-bloccato il 2026-08-30 dopo rename copy "CV Builder"→"Crea CV" | 🔒 Bloccato |
 
 ## Prossimi blocchi (in lavorazione)
 

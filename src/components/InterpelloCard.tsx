@@ -170,12 +170,12 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
               {notificheRimanenti > 0 ? (
                 <>
                   Ti restano <strong>{notificheRimanenti}</strong> di {LIMITE_NOTIFICHE_PROVA}{' '}
-                  notifiche di prova in assoluto. Passa a PRO per notifiche illimitate.
+                  notifiche per quest&apos;anno. Passa a PRO per notifiche illimitate.
                 </>
               ) : (
                 <>
-                  Hai esaurito le tue {LIMITE_NOTIFICHE_PROVA} notifiche di prova in assoluto. Per
-                  continuare a ricevere nuove notifiche, passa al piano PRO.
+                  Hai usato le tue {LIMITE_NOTIFICHE_PROVA} notifiche per quest&apos;anno. Attiva il
+                  piano PRO per continuare a ricevere nuove notifiche senza limiti.
                 </>
               )}
             </div>

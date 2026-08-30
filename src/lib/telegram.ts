@@ -64,7 +64,7 @@ function proUrl(dashboardUrl: string): string {
 /** Restituisce il token del bot o `null` se non configurato (o placeholder). */
 export function getTelegramBotToken(): string | null {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token || token.includes('ExampleToken') || token.includes('xxxx')) {
+  if (!token || token.includes('ExampleToken') || token.includes('xxxx') || token.includes('inserisci')) {
     console.warn('⚠ TELEGRAM_BOT_TOKEN non configurato: notifiche Telegram disattivate.');
     return null;
   }
@@ -84,71 +84,34 @@ interface TestoTelegram {
 
 const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
   welcome: {
-    testa: '👋 Benvenuto in ScuoleRadar!',
+    testa: '👋 Benvenuto in ScuoleRadar',
     paragrafi: [
-      'Abbiamo iniziato a cercare per te le opportunità più interessanti in base al tuo profilo: interpelli, supplenze, incarichi, PNRR, PON, POR e altro ancora.',
-      'Per provare il servizio hai a disposizione 3 segnalazioni ultra personalizzate.',
-      'Noi cerchiamo. Tu decidi quali opportunità cogliere.',
+      'Grazie per esserti iscritto, ora ci pensiamo noi.',
+      'Il tuo profilo è <b>attivo</b>: interpelli, supplenze, PON, PNRR e bandi per esperti ora hanno qualcuno che li monitora per te.',
     ],
-    cta: (linkPro) =>
-      `💰 ScuoleRadar PRO costa 49 € all'anno, con tutti i nostri servizi inclusi.\n👉 <a href="${linkPro}">Attiva PRO</a>`,
+    cta: (dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
   },
   prova1: {
-    testa: '🎯 Abbiamo trovato una nuova opportunità per te!',
-    paragrafi: [
-      'Questa è la <b>prima</b> opportunità che abbiamo trovato per te.',
-      'Te ne restano <b>2</b> per provare il servizio.',
-      'Come vedi, non ti intasiamo di segnalazioni inutili solo per fare volume: cerchiamo proprio quell\'opportunità che può fare la differenza.',
-      'Una buona opportunità può valere mesi, o persino un anno, di lavoro.',
-    ],
-    cta: (linkPro) =>
-      `💰 Se vuoi che continuiamo a cercare per te, ScuoleRadar PRO costa 49 € all'anno.\n👉 <a href="${linkPro}">Continua con PRO</a>`,
+    testa: '🎯 Prima opportunità',
+    paragrafi: ['Questa è la <b>prima opportunità</b> che abbiamo trovato per te. Te ne <b>restano 2</b>.'],
+    cta: (_linkPro, linkOpp) => `👉 <a href="${linkOpp}">Guarda l'opportunità e candidati</a>`,
   },
   prova2: {
-    testa: '🎯 Abbiamo trovato un\'altra opportunità che potrebbe interessarti!',
-    paragrafi: [
-      'Questa è la <b>seconda</b> segnalazione che ti inviamo.',
-      'Te ne resta <b>1</b>.',
-      'Facciamo ogni giorno del nostro meglio per trovare le migliori opportunità per te, in modo che tu non debba sprecare il tuo tempo a farlo.',
-      'Una sola opportunità andata a buon fine può valere migliaia di euro. E se ti sfugge, sono migliaia di euro che perdi, non soltanto un\'email.',
-    ],
-    cta: (linkPro) =>
-      `💰 ScuoleRadar PRO costa 49 € all'anno e comprende tutti i nostri servizi per la scuola.\n👉 <a href="${linkPro}">Continua con PRO</a>`,
-  },
-  prova3: {
-    testa: '🎯 Terza e ultima segnalazione di prova!',
-    paragrafi: [
-      'Se nel frattempo hai trovato quello che cercavi grazie a noi e non vuoi abbonarti, siamo contenti per te.',
-      'Dillo ai tuoi amici e siamo pari.',
-      'Se invece vuoi che continuiamo a cercare opportunità per te, puoi attivare ScuoleRadar PRO a 49 € all\'anno.',
-      'Nel prezzo sono inclusi anche la modulistica, lo strumento per costruire e aggiornare il CV, il calcolatore di CFU e gli altri servizi per chi lavora nella scuola.',
-    ],
-    cta: (linkPro) => `👉 <a href="${linkPro}">Continua con PRO</a>`,
+    testa: '🎯 Seconda opportunità',
+    paragrafi: ['Questa è la <b>seconda opportunità</b> che abbiamo trovato per te. Te ne <b>resta 1</b>.'],
+    cta: (_linkPro, linkOpp) => `👉 <a href="${linkOpp}">Guarda l'opportunità e candidati</a>`,
   },
   extra: {
-    testa: '😊 Questa opportunità non dovevamo mandartela...',
-    paragrafi: [
-      'Il periodo di prova è terminato, ma quando l\'abbiamo vista ci è sembrata davvero adatta al tuo profilo ed era un peccato non fartela vedere.',
-      'Ecco, questa volta te l\'abbiamo offerta noi. 😊',
-      'Se vuoi che continuiamo a cercare opportunità per te, ScuoleRadar PRO costa 49 € all\'anno.',
-      'Hai anche accesso a tutta la modulistica, allo strumento per costruire il CV, al calcolatore di CFU, a Pure Focus e agli altri servizi che stiamo sviluppando.',
-      'Buona giornata, e buona vita!',
-    ],
+    testa: '😮 Questa non dovevamo mandartela...',
+    paragrafi: ['Questa non dovevamo mandartela, ma era troppo bella. <b>Ora il tuo periodo di prova è finito.</b>'],
     cta: (linkPro) => `👉 <a href="${linkPro}">Attiva PRO</a>`,
   },
   recap: {
-    testa: '📋 Il tuo periodo di prova su ScuoleRadar è terminato',
+    testa: '📋 Le tue notifiche di prova sono finite',
     paragrafi: [
-      'Hai ricevuto le 3 segnalazioni gratuite di ScuoleRadar.',
-      'Da questo momento il tuo account passa al piano Free: puoi continuare a usare i servizi disponibili gratuitamente, consultare il blog, scaricare la modulistica e usare gli strumenti che mettiamo a disposizione.',
-      'Quello che cambia è che smettiamo di cercare opportunità personalizzate per te.',
-      'Se vuoi continuare a ricevere interpelli, supplenze, incarichi, PNRR, PON, POR e altre opportunità selezionate in base al tuo profilo, puoi attivare ScuoleRadar PRO a 49 € all\'anno.',
-      'Una sola buona opportunità può valere migliaia di euro.',
-      'E nel frattempo hai tutto il resto: CV, calcolo CFU, Pure Focus, modulistica e gli altri servizi PRO.',
-      'Se invece preferisci restare sul piano Free, nessun problema.',
-      'Buona vita. Se cambi idea, noi siamo qui.',
+      'Le tue notifiche di prova sono finite. <b>Passa al piano PRO</b> per continuare a ricevere notifiche illimitate in tempo reale, oppure resta con l\'Account Base.',
     ],
-    cta: (linkPro) => `👉 <a href="${linkPro}">Attiva PRO</a>`,
+    cta: (linkPro) => `👉 <a href="${linkPro}">Passa a PRO</a>`,
   },
   welcome_pro: {
     testa: '🎉 Benvenuto in ScuoleRadar PRO!',
@@ -165,6 +128,7 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
   notifica_pro: {
     testa: '🎯 Nuova opportunità trovata per te!',
     paragrafi: [
+      'Abbiamo trovato una <b>nuova opportunità</b> per te.',
       'Ci è sembrata interessante per il tuo profilo e abbiamo pensato che valesse la pena fartela vedere.',
       'Continuiamo a cercare per te.',
       'A presto!',
@@ -209,8 +173,8 @@ export function formattaMessaggioTelegram(
   }
 
   const linkRiga =
-    interpello && TIPI_CON_OPPORTUNITA.has(tipo)
-      ? `🔗 <a href="${escapeHtml(linkOpp)}">Vedi l'opportunità e candidati</a>`
+    interpello && interpello.link && TIPI_CON_OPPORTUNITA.has(tipo)
+      ? `🔗 <a href="${escapeHtml(interpello.link)}">Fonte ufficiale verificata (Albo Pretorio) — apri e candidati</a>`
       : '';
 
   const parti: string[] = [copy.testa];
@@ -219,6 +183,7 @@ export function formattaMessaggioTelegram(
   if (linkRiga) parti.push(linkRiga);
   if (copy.paragrafi.length) parti.push(copy.paragrafi.join('\n'));
   if (copy.cta) parti.push(copy.cta(linkPro, linkOpp));
+  parti.push('I tuoi colleghi di <b>Scuole Radar</b>');
 
   return parti.join('\n\n');
 }

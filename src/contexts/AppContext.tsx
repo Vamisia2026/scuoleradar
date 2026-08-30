@@ -9,7 +9,7 @@ import { classiConcorso, classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import { STORAGE_KEY_INTENDED_PLAN, STORAGE_KEY_INTENDED_PLAN_DATA, type PianoId } from '@/lib/pricing';
 
-/** Limite notifiche di prova per gli utenti BASE: 3 TOTALI, in assoluto (nessun reset mensile). */
+/** Limite notifiche per gli utenti BASE: 3 per ANNO solare (reset annuale via RPC incrementa_notifiche_utente). */
 export const LIMITE_NOTIFICHE_PROVA = 3;
 
 export interface User {
@@ -70,9 +70,13 @@ interface AppContextValue extends AppState {
   interpelliFiltrati: Interpello[];
   origineDati: 'mock' | 'supabase';
   loading: boolean;
+  /** id dell'utente Supabase Auth con sessione attiva (null = non autenticato). */
+  supabaseUserId: string | null;
   authModalOpen: boolean;
   authModalMode: 'login' | 'registrazione';
-  openAuthModal: (mode?: 'login' | 'registrazione') => void;
+  /** Contesto della modale Auth: 'pro' = l'utente stava scegliendo un piano a pagamento. */
+  authModalCtx: 'default' | 'pro';
+  openAuthModal: (mode?: 'login' | 'registrazione', ctx?: 'default' | 'pro') => void;
   closeAuthModal: () => void;
   /** Vetrina Freemium: modal di conversione per gli utenti non autenticati. */
   vetrinaAperta: boolean;
@@ -146,13 +150,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'registrazione'>('login');
+  const [authModalCtx, setAuthModalCtx] = useState<'default' | 'pro'>('default');
 
-  const openAuthModal = useCallback((mode: 'login' | 'registrazione' = 'login') => {
-    setAuthModalMode(mode);
-    setAuthModalOpen(true);
+  const openAuthModal = useCallback(
+    (mode: 'login' | 'registrazione' = 'login', ctx: 'default' | 'pro' = 'default') => {
+      setAuthModalMode(mode);
+      setAuthModalCtx(ctx);
+      setAuthModalOpen(true);
+    },
+    [],
+  );
+
+  const closeAuthModal = useCallback(() => {
+    setAuthModalOpen(false);
+    setAuthModalCtx('default');
   }, []);
-
-  const closeAuthModal = useCallback(() => setAuthModalOpen(false), []);
 
   // Vetrina Freemium: modal di conversione per gli utenti non autenticati.
   const [vetrinaAperta, setVetrinaAperta] = useState(false);
@@ -740,8 +752,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     interpelliFiltrati,
     origineDati,
     loading,
+    supabaseUserId,
     authModalOpen,
     authModalMode,
+    authModalCtx,
     openAuthModal,
     closeAuthModal,
     vetrinaAperta,

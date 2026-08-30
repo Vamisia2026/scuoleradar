@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { getNotiziaById, formatDataNotizia } from '../services/newsService';
+import { èLinkPdf } from '../services/relevanceEngine';
+import { SeoMeta } from './SeoMeta';
 
 /** Icona WhatsApp (i brand non sono più inclusi in lucide-react). */
 function IconaWhatsApp({ className = 'h-4 w-4' }: { className?: string }) {
@@ -55,6 +57,15 @@ export function NotizieDettaglio() {
     );
   }
 
+  // Strict URL integrity + PDF handling: se la fonte è un PDF ufficiale il link
+  // primario diventa il bottone "Visualizza PDF Ufficiale" (nuova scheda).
+  const pdfUrl =
+    notizia.official_pdf_url ??
+    (èLinkPdf(notizia.official_source_url) ? notizia.official_source_url : null);
+  const fonteWeb = èLinkPdf(notizia.official_source_url)
+    ? null
+    : notizia.official_source_url;
+
   const condividiWhatsApp = () => {
     const testo = encodeURIComponent(
       `${notizia.title} — ScuoleRadar: ${window.location.href}`,
@@ -75,7 +86,15 @@ export function NotizieDettaglio() {
   };
 
   return (
-    <article className="mx-auto max-w-3xl">
+    <>
+      <SeoMeta
+        tipo="articolo"
+        articolo={notizia}
+        titolo={notizia.title}
+        descrizione={notizia.summary_points[0] ?? ''}
+        urlCanonica={`/notizie/${notizia.id}`}
+      />
+      <article className="mx-auto max-w-3xl">
       {/* Torna alla lista */}
       <Link
         to="/notizie"
@@ -86,21 +105,24 @@ export function NotizieDettaglio() {
       </Link>
 
       {/* Meta articolo */}
-      <div className="mt-5 flex flex-wrap items-center gap-2">
+      <header className="mt-5 flex flex-wrap items-center gap-2">
         <span className="rounded-md bg-primary-100 px-2 py-0.5 text-xs font-bold text-primary-700">
           {notizia.category}
         </span>
-        <span className="inline-flex items-center gap-1 text-xs text-primary-400">
+        <time
+          dateTime={notizia.published_at || undefined}
+          className="inline-flex items-center gap-1 text-xs text-primary-400"
+        >
           <CalendarDays className="h-3.5 w-3.5" />
           Pubblicato il {formatDataNotizia(notizia.published_at)}
-        </span>
+        </time>
         {notizia.deadline_date && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-50 px-3 py-1 text-xs font-semibold text-warning-700 ring-1 ring-warning-500/30">
             <FileText className="h-3.5 w-3.5" />
             Scadenza {formatDataNotizia(notizia.deadline_date)}
           </span>
         )}
-      </div>
+      </header>
 
       <h1 className="mt-3 text-3xl font-extrabold leading-tight text-primary-900 sm:text-4xl">
         {notizia.title}
@@ -135,24 +157,26 @@ export function NotizieDettaglio() {
         </h2>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            <a
-              href={notizia.official_source_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl border border-primary-200 bg-white px-4 py-2.5 text-sm font-semibold text-primary-700 transition hover:bg-primary-50"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Leggi la fonte ufficiale
-            </a>
-            {notizia.official_pdf_url && (
+            {fonteWeb && (
               <a
-                href={notizia.official_pdf_url}
+                href={fonteWeb}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 rounded-xl border border-primary-200 bg-white px-4 py-2.5 text-sm font-semibold text-primary-700 transition hover:bg-primary-50"
               >
+                <ExternalLink className="h-4 w-4" />
+                Leggi la fonte ufficiale
+              </a>
+            )}
+            {pdfUrl && (
+              <a
+                href={pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-600"
+              >
                 <FilePdf className="h-4 w-4" />
-                Scarica il PDF ufficiale
+                Visualizza PDF Ufficiale
               </a>
             )}
           </div>
@@ -188,7 +212,8 @@ export function NotizieDettaglio() {
           Registrati qui
         </button>
       </div>
-    </article>
+      </article>
+    </>
   );
 }
 

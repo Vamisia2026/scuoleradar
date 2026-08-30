@@ -26,9 +26,12 @@ export function VetrinaModulistica() {
       {/* Hero Section pulita */}
       <div className="bg-gradient-to-br from-primary-900 via-primary-800 to-primary-600 px-6 py-10 text-center sm:px-10 sm:py-14">
         <h2 className="mx-auto max-w-3xl text-3xl font-extrabold leading-tight text-white sm:text-4xl">
-          Oltre 1.000 moduli. Quello che cerchi, a pochi secondi da te.
+          Oltre 1.000 moduli per la scuola, pronti all&apos;uso.
         </h2>
-        <p className="mx-auto mt-4 max-w-3xl text-base leading-relaxed text-primary-100 sm:text-lg">
+        <p className="mx-auto mt-4 max-w-3xl text-lg font-semibold text-accent-300">
+          Disponibili gratuitamente per tutti gli utenti registrati, anche con Account Base.
+        </p>
+        <p className="mx-auto mt-2 max-w-3xl text-base leading-relaxed text-primary-100 sm:text-lg">
           Scuole Radar mette a tua disposizione oltre 1.000 moduli per la scuola (insegnanti,
           studenti, famiglie, sostegno, rapporti con ASL e servizi sociali, università e molto
           altro). Ti aiutiamo noi a trovare il documento che ti serve.

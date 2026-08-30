@@ -1,16 +1,28 @@
 /**
- * ScuoleRadar.it — Motore di rilevanza e matching del dipartimento Notizie.
+ * ScuoleRadar.it — Motore di rilevanza e redazione del Dipartimento Notizie.
+ *
+ * Riferimento permanente: docs/BLOG_EDITORIAL_GUIDELINES.md
  *
  * Modulo PURO (nessuna dipendenza dalla rete né da Node): valuta le notizie
- * reali in ingresso e applica le regole editoriali:
- *  - RIFIUTA comunicati stampa, discorsi politici, dichiarazioni non
- *    vincolanti e annunci generici;
- *  - ACCETTA SOLO decreti, note normative, bandi e scadenze operative per il
- *    personale scolastico (GPS, Mobilità, Concorsi, Pensioni, Sostegno, …);
- *  - estrae la data di scadenza ufficiale (`deadline_date`) se dichiarata;
- *  - genera articoli giornalistici con date esatte, acronimi spiegati alla
- *    prima menzione e link contestuali ai portali ufficiali (il blog NON
- *    promuove moduli o template interni).
+ * reali in ingresso e applica le regole editoriali STRETTE:
+ *  - ZERO rumore: RIFIUTA comunicati stampa, discorsi, interviste, campagne e
+ *    qualsiasi annuncio NON vincolante;
+ *  - ACCETTA SOLO provvedimenti vincolanti: decreti, ordinanze ministeriali,
+ *    note, circolari, bandi e scadenze operative per il personale scolastico
+ *    (GPS, Mobilità, Concorsi, Pensioni, Sostegno, …);
+ *  - validità giuridica: la notizia deve riferirsi a un atto ufficiale preciso
+ *    (Ordinanza Ministeriale, Decreto, articolo di legge), mai a generiche
+ *    comunicazioni;
+ *  - tetto settimanale: MASSIMO 3 articoli ad alto valore a settimana
+ *    (`MAX_ARTICOLI_SETTIMANA`); se non ci sono provvedimenti vincolanti si
+ *    pubblicano 0 articoli;
+ *  - integrità degli URL: niente mockup né root-domain generici, solo link di
+ *    approfondimento reali validati HTTP 200;
+ *  - PDF ufficiali: se la fonte è un PDF, il link dedicato deve aprire il PDF
+ *    direttamente (target="_blank");
+ *  - linguaggio chiaro: acronimi spiegati alla prima menzione, burocrazia
+ *    semplificata, zero cliché da chatbot (il blog NON promuove moduli o
+ *    template interni).
  */
 import type { NewsArticle } from '../types';
 
@@ -61,12 +73,16 @@ const PAROLE_ACCETTA: string[] = [
   '1° settembre', 'pnrr', 'bollettini',
 ];
 
-/** Parole che segnalano contenuti NON vincolanti (da rifiutare). */
+/** Parole che segnalano contenuti NON vincolanti (zero rumore: da rifiutare). */
 const PAROLE_RIFIUTA: string[] = [
-  'intervista', 'discorso', 'dichiarazione del ministro', 'saluto', 'auguri', 'cerimonia',
-  'inaugurazione', 'premiazione', 'spettacolo', 'spot', 'campagna di comunicazione',
-  'messaggio del ministro', 'video', 'podcast', 'mostra', 'fiera', 'concorso letterario',
-  'bandiera', 'festa', 'progetto di lettura', 'evento sportivo', 'manifestazione',
+  // Contenuti NON vincolanti: nessun rumore da marketing / press-release.
+  'intervista', 'discorso', 'dichiarazione del ministro', 'messaggio del ministro',
+  'comunicato stampa', 'conferenza stampa', 'saluto', 'auguri', 'cerimonia',
+  'inaugurazione', 'premiazione', 'premio letterario', 'spettacolo', 'esibizione',
+  'spot', 'spot pubblicitario', 'campagna di comunicazione', 'campagna social',
+  'campagna pubblicitaria', 'iniziativa promozionale', 'webinar', 'seminario',
+  'video', 'podcast', 'mostra', 'fiera', 'concorso artistico', 'progetto di lettura',
+  'bandiera', 'festa', 'evento sportivo', 'manifestazione', 'sondaggio',
 ];
 
 const MESI_ITALIANI: Record<string, number> = {
@@ -152,14 +168,17 @@ export function valutaRilevanza(voce: VoceInValutazione): ValutazioneNotizia {
 /**
  * Helper per la valutazione con LLM (filtro editoriale assistito).
  * Produce il prompt da inviare al modello per ottenere una validazione
- * strutturata JSON delle notizie raccolte.
+ * strutturata JSON delle notizie raccolte (vedi docs/BLOG_EDITORIAL_GUIDELINES.md).
  */
 export function promptFiltroLLM(voci: VoceInValutazione[]): string {
   return `Sei il filtro editoriale del servizio Notizie di ScuoleRadar per i docenti italiani.
-Per ciascuna notizia valuta:
-1) RILEVANZA: accetta SOLO decreti, note normative, bandi e scadenze operative per il personale scolastico (GPS, mobilità, concorsi, pensioni, sostegno, supplenze, graduatorie). RIFIUTA comunicati stampa, discorsi, dichiarazioni politiche e annunci generici non vincolanti.
-2) CATEGORIA: una tra GPS, Mobilità, Concorsi, Pensioni, Sostegno, Graduatorie, Supplenze, Scuole, PNRR.
-3) DEADLINE: la data di scadenza ufficiale in formato ISO (YYYY-MM-DD) se presente, altrimenti null.
+
+REGOLE VINCOLANTI (strict editorial guidelines):
+1) ZERO RUMORE: rifiuta discorsi, interviste, dichiarazioni non vincolanti, comunicati stampa, campagne di comunicazione ed eventi promozionali. Accetta SOLO provvedimenti VINCOLANTI per il personale scolastico: decreti, ordinanze ministeriali, note, circolari, bandi, avvisi e scadenze operative (GPS, mobilità, concorsi, pensioni, sostegno, supplenze, graduatorie).
+2) VALIDITÀ GIURIDICA: la notizia DEVE riferirsi a un atto ufficiale preciso (Ordinanza Ministeriale, Decreto, articolo di legge, nota protocollata). Se titolo/descrizione non citano un riferimento ufficiale specifico, rilevanza = false.
+3) CAPACITÀ SETTIMANALE: al massimo 3 articoli ad alto valore per settimana. Se nessun provvedimento è vincolante, la risposta deve avere "items" vuoti (0 articoli pubblicati).
+4) CATEGORIA: una tra GPS, Mobilità, Concorsi, Pensioni, Sostegno, Graduatorie, Supplenze, Scuole, PNRR.
+5) DEADLINE: la data di scadenza ufficiale in formato ISO (YYYY-MM-DD) se presente, altrimenti null.
 
 Rispondi SOLO in JSON:
 {"items":[{"rilevante":bool,"categoria":"...","deadline":"YYYY-MM-DD"|null}]}
@@ -185,14 +204,145 @@ export function punteggioRilevanza(categoria: string | null, hasDeadline: boolea
   return Math.min(100, base + (hasDeadline ? 8 : 0));
 }
 
+/** Tetto settimanale: massimo 3 articoli ad alto valore ogni 7 giorni. */
+export const MAX_ARTICOLI_SETTIMANA = 3;
+
+/**
+ * Portali istituzionali il cui dominio RADICE È la destinazione operativa del
+ * servizio (l'utente accede da lì): esenti dal divieto di "root-domain".
+ * Per TUTTI gli altri domini vale il divieto assoluto di homepage generiche
+ * (vedi docs/BLOG_EDITORIAL_GUIDELINES.md, sez. 5).
+ */
+const PORTALI_SERVIZIO = new Set<string>([
+  'https://www.inpa.gov.it', // Portale del Reclutamento (InPA)
+  'https://www.inps.it', // Portale INPS
+]);
+
+/** Segnali di URL segnaposto/mockup: vietati nei link pubblicati. */
+const SEGNALI_MOCKUP = [
+  'example.com', 'example.org', 'localhost', 'mockup', 'placeholder',
+  'yourdomain', 'lorem-ipsum', '.test', ':3000', ':5173',
+];
+
+/** True se l'URL punta a un file PDF (es. fonte ufficiale in PDF). */
+export function èLinkPdf(url: string): boolean {
+  try {
+    return new URL(url).pathname.toLowerCase().endsWith('.pdf');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Percorsi generici che NON sono un articolo/atto specifico: usati come
+ * radice di fallback (homepage, liste notizie, indici). Vietati come
+ * `official_source_url` ("Leggi la fonte ufficiale" deve puntare all'articolo).
+ */
+const PERCORSI_GENERICI = new Set([
+  '', '/', '/home', '/home.html', '/index', '/index.html',
+  '/notizie', '/news', '/news.html', '/comunicati', '/atti',
+  '/atti-pubblici', '/web/guest', '/web/guest/home', '/web/guest/notizie',
+  '/web/guest/ricerca',
+]);
+
+/**
+ * True se l'URL è una FONTE CANONICA (il singolo articolo/atto) e non una
+ * pagina generica del sito (es. `https://www.mim.gov.it/web/guest/home`).
+ * Per il dominio MIM è richiesto il pattern canonico degli articoli
+ * `/web/guest/-/<slug>`.
+ */
+export function èFonteCanonica(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    let percorso = parsed.pathname.toLowerCase();
+    if (percorso.length > 1 && percorso.endsWith('/')) percorso = percorso.slice(0, -1);
+    if (PERCORSI_GENERICI.has(percorso)) return false;
+    // MIM: gli articoli canonici seguono il pattern /web/guest/-/<slug>.
+    if (parsed.hostname.endsWith('mim.gov.it')) {
+      return /\/web\/guest\/-\//.test(percorso);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Controllo PURO (senza rete) di integrità di un link ufficiale:
+ *  - solo http(s);
+ *  - mai root-domain generici (es. https://www.mim.gov.it/) a meno che il
+ *    dominio non sia un portale di servizio esplicitamente autorizzato;
+ *  - mai segnaposto/mockup.
+ * Ritorna null se valido, altrimenti una stringa col motivo del rifiuto.
+ */
+export function validaUrlDeepLink(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return 'URL non valido';
+  }
+  if (!/^https?:$/.test(parsed.protocol)) return 'Solo URL HTTP(S)';
+  const indizi = `${parsed.hostname}${parsed.pathname}${parsed.search}`.toLowerCase();
+  if (SEGNALI_MOCKUP.some((m) => indizi.includes(m))) {
+    return 'URL segnaposto/mockup non consentito';
+  }
+  const radiceNuda = parsed.pathname === '' || parsed.pathname === '/';
+  if (radiceNuda && !PORTALI_SERVIZIO.has(parsed.origin)) {
+    return `Root-domain generico non consentito (${parsed.origin}/)`;
+  }
+  return null;
+}
+
+/**
+ * Applica il tetto settimanale: al massimo `max` articoli con data di
+ * pubblicazione nella finestra mobile degli ultimi 7 giorni. Gli articoli più
+ * rilevanti (punteggio, poi data) vengono tenuti; gli esuberi sono scartati.
+ * Gli articoli più vecchi della finestra non vengono toccati (accumulo).
+ */
+export function limitaArticoliSettimanali(
+  articoli: NewsArticle[],
+  oggi: Date = new Date(),
+  max: number = MAX_ARTICOLI_SETTIMANA,
+): { mantenuti: NewsArticle[]; rimossi: NewsArticle[] } {
+  const soglia = oggi.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const recenti: NewsArticle[] = [];
+  const storici: NewsArticle[] = [];
+  for (const a of articoli) {
+    const t = a.published_at ? new Date(a.published_at).getTime() : Number.NaN;
+    if (Number.isNaN(t) || t >= soglia) recenti.push(a);
+    else storici.push(a);
+  }
+  recenti.sort(
+    (a, b) =>
+      b.relevance_score - a.relevance_score ||
+      (b.published_at || '').localeCompare(a.published_at || ''),
+  );
+  const tenuti = recenti.slice(0, max);
+  const rimossi = recenti.slice(max);
+  return { mantenuti: [...storici, ...tenuti], rimossi };
+}
+
 /** Valida la coerenza di un articolo costruito prima dell'inserimento. */
 export function articoloValido(a: NewsArticle): boolean {
-  return (
+  const base =
     Boolean(a.id) &&
     Boolean(a.title) &&
     Boolean(a.official_source_url) &&
-    a.official_source_url.startsWith('http')
-  );
+    a.official_source_url.startsWith('http');
+  if (!base) return false;
+  const motivo = validaUrlDeepLink(a.official_source_url);
+  if (motivo) {
+    console.warn(`✗ Articolo scartato (${a.id}): URL fonte non valido — ${motivo}`);
+    return false;
+  }
+  if (!èFonteCanonica(a.official_source_url)) {
+    console.warn(
+      `✗ Articolo scartato (${a.id}): la fonte non è un URL canonico di articolo — ${a.official_source_url}`,
+    );
+    return false;
+  }
+  return true;
 }
 
 
@@ -338,7 +488,7 @@ const ARTICOLO_ALTRE: Record<string, ArticoloCopy> = {
     come:
       'Le informazioni complete sono consultabili sul sito del %LINK%. Se la notizia riguarda la tua scuola, la segreteria provvederà a comunicare le scadenze interne.',
     linkLabel: 'Ministero',
-    portale: 'la pagina del Ministero',
+    portale: 'Notizie del Ministero',
   },
   'PNRR': {
     fatto:
@@ -350,7 +500,7 @@ const ARTICOLO_ALTRE: Record<string, ArticoloCopy> = {
     come:
       'Le istanze e gli allegati si gestiscono online dalle piattaforme del %LINK% e da quelle dedicate al PNRR Istruzione. Controlla la scadenza del bando e conserva la ricevuta di invio.',
     linkLabel: 'Ministero',
-    portale: 'la pagina del Ministero',
+    portale: 'Notizie del Ministero',
   },
 };
 
@@ -366,19 +516,23 @@ const ARTICOLO: Record<string, ArticoloCopy> = {
  * contestuale alla procedura ufficiale.
  */
 /**
- * URL di ingresso REALE degli enti e portali istituzionali citati negli
- * articoli. I link contestuali devono puntare qui (non alla pagina della
- * singola notizia); l'URL della fonte resta il fallback se il portale non è
- * presente in questa mappa.
+ * URL di ingresso REALE e DI APPROFONDIMENTO degli enti e portali
+ * istituzionali citati negli articoli (STRICT URL INTEGRITY):
+ *  - niente mockup, niente homepage di radice generiche (mai www.mim.gov.it/);
+ *  - i link devono essere risorse di profondità, validati HTTP 200;
+ *  - le uniche radici ammesse sono i portali di servizio (Istanze Online/POLIS,
+ *    InPA, INPS) dove la radice È l'accesso operativo.
+ * L'URL della fonte resta il fallback solo se il portale non è in mappa.
  */
 const URL_PORTALI: Record<string, string> = {
-  'Istanze Online': 'https://www.istanze.istruzione.it/',
-  'POLIS': 'https://www.istanze.istruzione.it/',
-  'InPA': 'https://www.inpa.gov.it/',
-  'MIM': 'https://www.mim.gov.it/',
-  'Ministero': 'https://www.mim.gov.it/',
-  'la pagina del Ministero': 'https://www.mim.gov.it/',
-  'INPS': 'https://www.inps.it/',
+  'Istanze Online': 'https://www.istruzione.it/polis/Istanzeonline.htm', // Istanze Online / POLIS (200 ✓)
+  'POLIS': 'https://www.istruzione.it/polis/Istanzeonline.htm',
+  'InPA': 'https://www.inpa.gov.it/', // Portale del Reclutamento (200 ✓)
+  'MIM': 'https://www.mim.gov.it/web/guest/notizie', // deep: pagina Notizie (200 ✓)
+  'Ministero': 'https://www.mim.gov.it/web/guest/notizie',
+  'la pagina del Ministero': 'https://www.mim.gov.it/web/guest/notizie',
+  'Notizie del Ministero': 'https://www.mim.gov.it/web/guest/notizie',
+  'INPS': 'https://www.inps.it/', // Portale INPS (200 ✓)
 };
 
 export function generaArticoloEditoriale(
@@ -420,7 +574,8 @@ export function generaArticoloEditoriale(
 
 /**
  * Prompt per la scrittura dell'articolo con LLM: stesse regole editoriali
- * (3 paragrafi fluidi, tono giornalistico, zero cliché, link contestuale).
+ * STRETTE (3 paragrafi fluidi, validità giuridica, linguaggio chiaro, strict
+ * URL integrity, PDF ufficiali) — vedi docs/BLOG_EDITORIAL_GUIDELINES.md.
  */
 export function promptScritturaArticolo(d: DatiArticoloEditoriale): string {
   return `Sei una giornalista esperta di scuola per ScuoleRadar, il sito per la scuola che fa risparmiare tempo.
@@ -433,13 +588,17 @@ Scrivi un articolo di 3 paragrafi fluidi e naturali, in italiano, basandoti SOLO
 - Descrizione della fonte: ${d.descrizione ?? ''}
 
 Struttura (3 paragrafi, senza titoli di sezione):
-1. Che cosa è successo: il fatto, il decreto o la data, con la scadenza ESATTA (es. "Il termine per presentare la domanda è il 30 settembre 2026"). MAI scrivere "le date saranno confermate" o altri testi vaghi.
-2. Chi è coinvolto e che cosa significa in pratica.
+1. Che cosa è successo: il fatto e il RIFERIMENTO UFFICIALE ESATTO (es. "l'Ordinanza Ministeriale n. X del ...", "il Decreto Ministeriale ...", "la Nota prot. ...", "l'articolo X della legge ...") con la scadenza ESATTA (es. "Il termine per presentare la domanda è il 30 settembre 2026"). MAI scrivere "le date saranno confermate" o altri testi vaghi.
+2. Chi è coinvolto e che cosa significa in pratica, spiegando la burocrazia in LINGUAGGIO SEMPLICE per docenti e personale ATA.
 3. Dove e come agire: portale ufficiale, modalità e link contestuale obbligatorio <a href="${d.official_url ?? ''}" target="_blank" rel="noopener noreferrer">Accedi al portale</a>.
 
-Regole:
+REGOLE VINCOLANTI:
+- VALIDITÀ GIURIDICA: cita SEMPRE il riferimento normativo preciso (Ordinanza Ministeriale, Decreto, Nota prot., articolo di legge) quando la fonte lo contiene; mai riferimenti generici.
+- LINGUAGGIO CHIARO: spiega la procedura come la spiegheresti a un docente o a un ATA, senza tecnicismi inutili, senza fluff e senza cliché da chatbot ("C'è una novità ufficiale", "La fonte ufficiale segnala", "Vale la pena di leggere subito", "non perdere tempo").
+- ZERO RUMORE: nessun contenuto promozionale, nessun riferimento a discorsi, interviste o dichiarazioni non vincolanti.
+- STRICT URL INTEGRITY: ogni link deve puntare a una risorsa REALE di approfondimento, mai a homepage di radice (es. https://www.mim.gov.it/ è VIETATA come destinazione; usa https://www.mim.gov.it/web/guest/notizie). Portali di servizio consentiti SOLO come destinazione operativa: Istanze Online/POLIS → https://www.istruzione.it/polis/Istanzeonline.htm, InPA → https://www.inpa.gov.it/, INPS → https://www.inps.it/. Vietato inventare URL o usare segnaposto.
+- PDF UFFICIALE: se la fonte è un documento PDF ufficiale o ne fornisce uno allegato, nel paragrafo 3 includi un link dedicato che apra il PDF in una nuova scheda (target="_blank" rel="noopener noreferrer").
 - Spiega SEMPRE gli acronimi alla prima menzione (es. "GPS (Graduatorie Provinciali per le Supplenze, le liste per gli incarichi annuali)", "SPID (Sistema Pubblico di Identità Digitale)").
-- Ogni menzione di portali esterni deve essere un link HTML cliccabile (target="_blank" rel="noopener noreferrer") che punta all'URL REALE del portale: Istanze Online/POLIS → https://www.istanze.istruzione.it/, InPA → https://www.inpa.gov.it/, MIM → https://www.mim.gov.it/, INPS → https://www.inps.it/. Usa l'URL della fonte (${d.official_url ?? ''}) SOLO come fallback se il portale menzionato non è tra questi.
-- VIETATO usare cliché da chatbot: "C'è una novità ufficiale", "La fonte ufficiale segnala", "Vale la pena di leggere subito", "non perdere tempo". Niente <h2>, niente riempitivi, niente dati inventati. Restituisci SOLO i 3 paragrafi in HTML.`;
+- Niente <h2>, niente riempitivi, niente dati inventati. Restituisci SOLO i 3 paragrafi in HTML.`;
 }
 

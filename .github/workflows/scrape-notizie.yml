@@ -7,12 +7,17 @@
 # - Esegue `npm run scrape:notizie`: raccoglie le notizie reali dal MIM e
 #   dalla Gazzetta Ufficiale (log HTTP esplicito per ogni fonte, nessun
 #   silent-fail), applica il motore di rilevanza e redazione
-#   (`relevanceEngine.ts`: filtro anti-fluff, date esatte, acronimi spiegati,
-#   link reali via URL_PORTALI, brand "ScuoleRadar") e AGGIORNA con accumulo
-#   `src/departments/notizie/data/notizieIngestite.ts` (le notizie già
-#   presenti restano, solo le nuove vengono aggiunte, dedupe per id).
+#   (`relevanceEngine.ts`: filtro anti-rumore, date esatte, acronimi spiegati,
+#   STRICT URL INTEGRITY con link canonici `/web/guest/-/<slug>` validati
+#   HTTP 200, brand "ScuoleRadar") e applica il TETTO SETTIMANALE
+#   (max 3 articoli ad alto valore per settimana, finestra mobile di 7 giorni:
+#   se non ci sono provvedimenti vincolanti si pubblicano 0 articoli).
+#   Poi AGGIORNA con accumulo `src/departments/notizie/data/notizieIngestite.ts`
+#   (le notizie già presenti restano, solo le nuove vengono aggiunte, dedupe per id).
 # - Esiti chiari nei log: "✓ HTTP 200 - N new posts criteria matched"
 #   (anche "0 new posts") oppure "✗ HTTP FAIL" (exit code 1 → warning).
+# - Se la valutazione editoriale non trova contenuti meritevoli non viene
+#   creato alcun commit: la bacheca resta invariata fino a provvedimenti reali.
 # - Commit automatico dei dati aggiornati: il push usa GITHUB_TOKEN e
 #   non rigenera il workflow (nessun loop); il deploy (Vercel ecc.)
 #   riparte automaticamente dal push sul ramo predefinito. Se non ci sono
@@ -75,3 +80,14 @@ jobs:
             git push
             echo "Dati Notizie aggiornati e committati: il deploy parte automaticamente dal push."
           fi
+
+      - name: Riepilogo esito ingestione (cron giornaliero)
+        if: always()
+        run: |
+          {
+            echo "## 📰 Cron giornaliero Notizie — esito"
+            echo ""
+            echo "- **Frequenza**: ogni giorno alle 06:00 UTC (07:00/08:00 italiane)."
+            echo "- **Valutazione editoriale**: filtro anti-rumore + link canonici validati HTTP 200 + tetto **max 3 articoli a settimana** prima del salvataggio."
+            echo "- **Verifica pubblicazione**: controllare il passo precedente — *nessun commit* significa nessun contenuto meritevole di pubblicazione."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -4,7 +4,9 @@ import { AppProvider, useApp } from '@/contexts/AppContext';
 import { AuthModal } from '@/components/AuthModal';
 import { VetrinaModal } from '@/components/VetrinaModal';
 import { DevToolbar } from '@/components/DevToolbar';
+import { ScrollToTop } from '@/components/ScrollToTop';
 import { ToastProvider } from '@/components/Toast';
+import { GoogleOneTap } from '@/components/GoogleOneTap';
 import { AuthCallback } from '@/pages/AuthCallback';
 import { LandingPage } from '@/pages/LandingPage';
 import { OnboardingPage } from '@/pages/OnboardingPage';
@@ -20,8 +22,11 @@ import { PrezziPage } from '@/pages/PrezziPage';
 import { NotiziePage } from '@/pages/NotiziePage';
 import { NotizieDettaglioPage } from '@/pages/NotizieDettaglioPage';
 import { ChiSiamoPage } from '@/pages/ChiSiamoPage';
+import { FAQPage } from '@/pages/FAQPage';
 import { ServiziPage } from '@/pages/ServiziPage';
 import { ServizioPage } from '@/pages/ServizioPage';
+import { ContattiPage } from '@/pages/ContattiPage';
+import { AdminPage } from '@/pages/AdminPage';
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading, openAuthModal } = useApp();
@@ -56,15 +61,19 @@ export default function App() {
     <AppProvider>
       <ToastProvider>
         <BrowserRouter>
+          {/* Scroll-to-top globale a ogni cambio di rotta (SPA) */}
+          <ScrollToTop />
           <Routes>
             {/* Sito vetrina pubblico */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/prezzi" element={<PrezziPage />} />
             <Route path="/chi-siamo" element={<ChiSiamoPage />} />
+            <Route path="/faq" element={<FAQPage />} />
             <Route path="/servizi" element={<ServiziPage />} />
             <Route path="/servizi/:slug" element={<ServizioPage />} />
             <Route path="/notizie" element={<NotiziePage />} />
             <Route path="/notizie/:id" element={<NotizieDettaglioPage />} />
+            <Route path="/contatti" element={<ContattiPage />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
 
             {/* Area riservata (autenticazione) */}
@@ -105,10 +114,20 @@ export default function App() {
               />
             </Route>
 
+            <Route
+              path="/admin"
+              element={
+                <RequireAuth>
+                  <AdminPage />
+                </RequireAuth>
+              }
+            />
+
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <AuthModal />
           <VetrinaModal />
+          <GoogleOneTap />
           <DevToolbar />
         </BrowserRouter>
       </ToastProvider>

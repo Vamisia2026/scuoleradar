@@ -176,11 +176,25 @@ serve(async (req: Request) => {
       promo?: string;
       quantita?: number;
       origin?: string;
+      ping?: boolean;
     };
     try {
       body = await req.json();
     } catch {
       return risposta({ error: 'Body JSON non valido' }, 400);
+    }
+
+    // Health-check mode (ping): nessuna sessione Stripe creata, solo stato di configurazione.
+    if (body.ping === true) {
+      const priceMancanti = Object.entries(STRIPE_PRICE_IDS)
+        .filter(([, v]) => !v)
+        .map(([k]) => k);
+      return risposta({
+        ok: true,
+        configurato: Boolean(STRIPE_SECRET_KEY) && priceMancanti.length === 0,
+        stripeKey: Boolean(STRIPE_SECRET_KEY),
+        priceMancanti,
+      });
     }
 
     const plan = normalizzaPiano((body.plan ?? '').trim());

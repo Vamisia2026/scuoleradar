@@ -6,7 +6,7 @@
  *
  * Variabili d'ambiente:
  *   RESEND_API_KEY        (obbligatoria) — chiave API Resend
- *   RESEND_FROM_EMAIL     (opzionale)    — mittente (default "ScuoleRadar <onboarding@resend.dev>")
+ *   RESEND_FROM_EMAIL     (opzionale)    — mittente (default "ScuoleRadar (Notifiche Automatiche) <notifiche@scuoleradar.it>")
  *   RESEND_DASHBOARD_URL  (opzionale)    — URL base dell'app per i link CTA
  *
  * NOTA: modulo solo-Node (usato da scraper/notifier), verificato da tsconfig.scraper.json.
@@ -61,7 +61,6 @@ export type TipoMessaggio =
   | 'welcome'
   | 'prova1'
   | 'prova2'
-  | 'prova3'
   | 'extra'
   | 'recap'
   | 'welcome_pro'
@@ -70,7 +69,7 @@ export type TipoMessaggio =
 /* ----------------------------- Configurazione ----------------------------- */
 
 const RESEND_FROM_EMAIL =
-  process.env.RESEND_FROM_EMAIL ?? 'ScuoleRadar <onboarding@resend.dev>';
+  process.env.RESEND_FROM_EMAIL ?? 'ScuoleRadar (Notifiche Automatiche) <notifiche@scuoleradar.it>';
 const DASHBOARD_URL =
   process.env.RESEND_DASHBOARD_URL ?? 'https://scuoleradar.it/dashboard/radar';
 
@@ -80,7 +79,7 @@ const RESEND_TAGS = [{ name: 'project', value: 'scuoleradar' }];
 /** Restituisce il client Resend o `null` se `RESEND_API_KEY` non è configurata. */
 export function getResendClient(): Resend | null {
   const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey || apiKey.includes('xxxx') || apiKey.includes('your-')) {
+  if (!apiKey || apiKey.includes('xxxx') || apiKey.includes('your-') || apiKey.includes('inserisci')) {
     console.warn('⚠ RESEND_API_KEY non configurata: notifiche email disattivate.');
     return null;
   }
@@ -117,10 +116,10 @@ export function classeRilevante(
 /** Rileva la categoria dell'opportunità dal titolo (Interpelli, PNRR, PON, Bandi Esperti). */
 export function categoriaOpportunita(title: string): string {
   const t = title.toLowerCase();
-  if (/\bpnrr\b/.test(t)) return 'PNRR';
-  if (/\bpon\b/.test(t)) return 'PON';
-  if (/\bpor\b/.test(t)) return 'POR';
-  if (/esperto/.test(t)) return 'Bando Esperti';
+  if (/\bpnrr\b|next generation eu/.test(t)) return 'PNRR';
+  if (/\bpon\b|programma operativo nazionale|\bfse\b/.test(t)) return 'PON';
+  if (/\bpor\b|programma operativo regionale|\bfesr\b/.test(t)) return 'POR';
+  if (/espert|reclutamento/.test(t)) return 'Bando Esperti';
   if (/interpello|supplenza/.test(t)) return 'Interpello / Supplenza';
   return 'Opportunità';
 }
@@ -154,12 +153,12 @@ export function linkOpportunita(interpello: DettagliNotifica | null, dashboardUr
 /* --------------------------- Soggetti e copy --------------------------- */
 
 const SUBJECT: Record<TipoMessaggio, string> = {
-  welcome: 'Benvenuto in ScuoleRadar',
-  prova1: 'Abbiamo trovato una nuova opportunità per te!',
-  prova2: 'Abbiamo trovato un\'altra opportunità che potrebbe interessarti',
-  prova3: 'Terza e ultima segnalazione di prova + ScuoleRadar',
-  extra: 'Questa opportunità non dovevamo mandartela...',
-  recap: 'Il tuo periodo di prova su ScuoleRadar è terminato',
+  welcome: 'Grazie per esserti iscritto, ora ci pensiamo noi',
+  prova1: 'Questa è la prima opportunità che abbiamo trovato per te. Te ne restano 2',
+  prova2: 'Questa è la seconda opportunità che abbiamo trovato per te. Te ne resta 1',
+
+  extra: 'Questa non dovevamo mandartela, ma era troppo bella. Ora il tuo periodo di prova è finito',
+  recap: 'Le tue notifiche di prova sono finite',
   welcome_pro: 'Benvenuto in ScuoleRadar PRO!',
   notifica_pro: 'Nuova opportunità trovata per te!',
 };
@@ -183,7 +182,6 @@ interface ContenutoMessaggio {
 export const TIPI_CON_OPPORTUNITA: ReadonlySet<TipoMessaggio> = new Set([
   'prova1',
   'prova2',
-  'prova3',
   'extra',
   'notifica_pro',
 ]);
@@ -195,70 +193,28 @@ export const TIPI_CON_OPPORTUNITA: ReadonlySet<TipoMessaggio> = new Set([
 const CORPO_MESSAGGI: Record<TipoMessaggio, ContenutoMessaggio> = {
   welcome: {
     paragrafi: [
-      'Benvenuto in ScuoleRadar.',
-      'Abbiamo iniziato a cercare per te le opportunità più interessanti in base al tuo profilo: interpelli, supplenze, incarichi, PNRR, PON, POR e altro ancora.',
-      'Per provare il servizio hai a disposizione <strong>3 segnalazioni ultra personalizzate</strong>.',
-      'Noi cerchiamo. Tu decidi quali opportunità cogliere.',
-      'Se vuoi che continuiamo a farlo per te, ScuoleRadar PRO costa <strong>49 € all\'anno</strong>, con tutti i nostri servizi inclusi.',
+      'Grazie per esserti iscritto, ora ci pensiamo noi.',
+      'Il tuo profilo è <strong>attivo</strong>: interpelli, supplenze, PON, PNRR e bandi per esperti ora hanno qualcuno che li monitora per te.',
     ],
-    cta: { label: 'Attiva PRO →', destinazione: 'prezzi' },
+    cta: { label: 'Vai a ScuoleRadar →', destinazione: 'dashboard' },
   },
   prova1: {
-    paragrafi: [
-      'Abbiamo trovato una nuova opportunità per te.',
-      'Questa è la <strong>prima</strong> opportunità che abbiamo trovato per te.',
-      'Te ne restano <strong>2</strong> per provare il servizio.',
-      'Come vedi, non ti intasiamo l\'email di segnalazioni inutili solo per fare volume: cerchiamo proprio quell\'opportunità che può fare la differenza.',
-      'Una buona opportunità può valere mesi, o persino un anno, di lavoro. Per questo facciamo molta attenzione a ciò che ti segnaliamo.',
-      'Se vuoi che continuiamo a cercare per te, ScuoleRadar PRO costa <strong>49 € all\'anno</strong>.',
-    ],
-    cta: { label: 'Continua con PRO →', destinazione: 'prezzi' },
+    paragrafi: ['Questa è la <strong>prima opportunità</strong> che abbiamo trovato per te. Te ne <strong>restano 2</strong>.'],
+    cta: { label: 'Guarda l\'opportunità e candidati →', destinazione: 'opportunita' },
   },
   prova2: {
-    paragrafi: [
-      'Abbiamo trovato un\'altra opportunità che potrebbe interessarti.',
-      'Questa è la <strong>seconda</strong> segnalazione che ti inviamo.',
-      'Te ne resta <strong>1</strong>.',
-      'Facciamo ogni giorno del nostro meglio per trovare le migliori opportunità per te, in modo che tu non debba sprecare il tuo tempo a farlo.',
-      'Una sola opportunità andata a buon fine può valere migliaia di euro. E se ti sfugge, sono migliaia di euro che perdi, non soltanto un\'email.',
-      'ScuoleRadar PRO costa <strong>49 € all\'anno</strong> e comprende tutti i nostri servizi per la scuola.',
-    ],
-    cta: { label: 'Continua con PRO →', destinazione: 'prezzi' },
-  },
-  prova3: {
-    paragrafi: [
-      'Abbiamo trovato un\'altra opportunità per te.',
-      'Questa è la <strong>terza e ultima</strong> segnalazione del tuo periodo di prova.',
-      'Se nel frattempo hai trovato quello che cercavi grazie a noi e non vuoi abbonarti, siamo contenti per te.',
-      'Dillo ai tuoi amici e siamo pari.',
-      'Se invece vuoi che continuiamo a cercare opportunità per te, puoi attivare ScuoleRadar PRO a <strong>49 € all\'anno</strong>.',
-      'Nel prezzo sono inclusi anche la modulistica, il nostro strumento per costruire e aggiornare il CV, il calcolatore di CFU e gli altri servizi per chi lavora nella scuola.',
-    ],
-    cta: { label: 'Continua con PRO →', destinazione: 'prezzi' },
+    paragrafi: ['Questa è la <strong>seconda opportunità</strong> che abbiamo trovato per te. Te ne <strong>resta 1</strong>.'],
+    cta: { label: 'Guarda l\'opportunità e candidati →', destinazione: 'opportunita' },
   },
   extra: {
-    paragrafi: [
-      'Questa opportunità non dovevamo mandartela.',
-      'Il periodo di prova è terminato, ma quando l\'abbiamo vista ci è sembrata davvero adatta al tuo profilo ed era un peccato non fartela vedere.',
-      'Ecco, questa volta te l\'abbiamo offerta noi. 😊',
-      'Se vuoi che continuiamo a cercare opportunità per te, ScuoleRadar PRO costa <strong>49 € all\'anno</strong>.',
-      'Hai anche accesso a tutta la modulistica, al nostro strumento per costruire il CV, al calcolatore di CFU, a Pure Focus e agli altri servizi che stiamo sviluppando per chi lavora nella scuola.',
-      'Buona giornata, e buona vita!',
-    ],
+    paragrafi: ['Questa non dovevamo mandartela, ma era troppo bella. <strong>Ora il tuo periodo di prova è finito.</strong>'],
     cta: { label: 'Attiva PRO →', destinazione: 'prezzi' },
   },
   recap: {
     paragrafi: [
-      'Hai ricevuto le <strong>3 segnalazioni gratuite</strong> di ScuoleRadar.',
-      'Da questo momento il tuo account passa al piano <strong>Free</strong>: puoi continuare a usare i servizi disponibili gratuitamente, consultare il blog, scaricare la modulistica e usare gli strumenti che mettiamo a disposizione.',
-      'Quello che cambia è che smettiamo di cercare opportunità personalizzate per te.',
-      'Se vuoi continuare a ricevere interpelli, supplenze, incarichi, PNRR, PON, POR e altre opportunità selezionate in base al tuo profilo, puoi attivare ScuoleRadar PRO a <strong>49 € all\'anno</strong>.',
-      'Una sola buona opportunità può valere migliaia di euro.',
-      'E nel frattempo hai tutto il resto: CV, calcolo CFU, Pure Focus, modulistica e gli altri servizi PRO.',
-      'Se invece preferisci restare sul piano Free, nessun problema.',
-      'Buona vita. Se cambi idea, noi siamo qui.',
+      'Le tue notifiche di prova sono finite. <strong>Passa al piano PRO</strong> per continuare a ricevere notifiche illimitate in tempo reale, oppure resta con l\'Account Base.',
     ],
-    cta: { label: 'Attiva PRO →', destinazione: 'prezzi' },
+    cta: { label: 'Passa a PRO →', destinazione: 'prezzi' },
   },
   welcome_pro: {
     paragrafi: [
@@ -274,7 +230,7 @@ const CORPO_MESSAGGI: Record<TipoMessaggio, ContenutoMessaggio> = {
   },
   notifica_pro: {
     paragrafi: [
-      'Abbiamo trovato una nuova opportunità per te.',
+      'Abbiamo trovato una <strong>nuova opportunità</strong> per te.',
       'Ci è sembrata interessante per il tuo profilo e abbiamo pensato che valesse la pena fartela vedere.',
       'Continuiamo a cercare per te.',
       'A presto!',
@@ -312,18 +268,19 @@ export function renderEmailHtml(
     interpello && TIPI_CON_OPPORTUNITA.has(tipo)
       ? (() => {
           const classe = classeRilevante(interpello, destinatario);
-          const dettagli: string[] = [categoriaOpportunita(interpello.title)];
-          if (interpello.schoolName) dettagli.push(interpello.schoolName);
-          dettagli.push(interpello.province);
-          if (classe) dettagli.push(classe);
+          const dettagli: string[] = [];
+          if (interpello.schoolName) dettagli.push(`🏫 ${escapeHtml(interpello.schoolName)}`);
+          if (classe) dettagli.push(`📚 ${escapeHtml(classe)}`);
+          dettagli.push(`📍 ${escapeHtml(interpello.province)}`);
+          dettagli.push(`🏷️ ${escapeHtml(categoriaOpportunita(interpello.title))}`);
           return `
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px; border:1px solid #e2e8f0; border-radius:12px; background:#f8fafc;">
                   <tr>
                     <td style="padding:16px 20px;">
-                      <h2 style="margin:0 0 8px; font-size:18px; font-weight:800; line-height:1.35; color:#14354e;">${escapeHtml(interpello.title)}</h2>
+                      <h2 style="margin:0 0 8px; font-size:18px; font-weight:800; line-height:1.35; color:#14354e;"><b>${escapeHtml(interpello.title)}</b></h2>
                       <p style="margin:0; font-size:14px; line-height:1.6; color:#475569;">${dettagli.join(' · ')}</p>
-                      <p style="margin:8px 0 0; font-size:13px; color:#64748b;">Scadenza: ${formatDataScadenza(interpello.scadenza)}</p>
-                      <p style="margin:12px 0 0;"><a href="${escapeHtml(urlOpportunita)}" target="_blank" rel="noopener" style="font-size:14px; font-weight:700; color:#2B6F9E; text-decoration:underline;">Apri l'avviso e candidati →</a></p>
+                      <p style="margin:8px 0 0; font-size:13px; color:#64748b;">⏳ Scadenza: ${formatDataScadenza(interpello.scadenza)}</p>
+                      <p style="margin:12px 0 0;">${interpello.link ? `<a href="${escapeHtml(interpello.link)}" target="_blank" rel="noopener" style="font-size:14px; font-weight:700; color:#2B6F9E; text-decoration:underline;">🔗 Fonte ufficiale verificata (Albo Pretorio) — apri e candidati →</a>` : ''}</p>
                     </td>
                   </tr>
                 </table>`;
@@ -384,6 +341,15 @@ export function renderEmailHtml(
 
                 ${ctaHtml}
 
+                <p style="margin:20px 0 0; font-size:15px; line-height:1.6; color:#14354e;"><b>I tuoi colleghi di Scuole Radar</b></p>
+                <p style="margin:10px 0 0; font-size:13px; line-height:1.5; color:#64748b;">P.S. Approfondimenti e novità sul blog: <a href="https://scuoleradar.it/notizie" style="color:#2B6F9E;">scuoleradar.it/notizie</a></p>
+
+                <p style="margin:14px 0 0; font-size:12px; line-height:1.5; color:#94a3b8;">
+                  ⚠️ Questa è un'email automatica generata dal sistema. Ti preghiamo di non rispondere a questo
+                  messaggio perché la casella non viene letta. Se hai bisogno di aiuto o vuoi segnalarci qualcosa,
+                  usa il nostro Form di Contatto (<a href="https://scuoleradar.it/contatti" style="color:#94a3b8;">scuoleradar.it/contatti</a>).
+                </p>
+
                 <p style="margin:20px 0 0; font-size:12px; line-height:1.5; color:#94a3b8;">
                   ScuoleRadar.it — Interpelli, supplenze, incarichi, PNRR, PON, POR e opportunità per i docenti<br />
                   Se non desideri ricevere queste email, modifica le preferenze nel tuo profilo.
@@ -422,20 +388,28 @@ export async function inviaNotificaEmail(
     return { inviata: true };
   }
 
-  const { error } = await client.emails.send({
-    from: RESEND_FROM_EMAIL,
-    to: [destinatario.email],
-    subject,
-    html,
-    tags: RESEND_TAGS,
-  });
+  try {
+    const { error } = await client.emails.send({
+      from: RESEND_FROM_EMAIL,
+      to: [destinatario.email],
+      subject,
+      html,
+      tags: RESEND_TAGS,
+    });
 
-  if (error) {
-    console.warn(`  ✗ Invio email a ${destinatario.email} fallito: ${error.message}`);
-    return { inviata: false, error: error.message };
+    if (error) {
+      console.warn(`  ✗ Invio email a ${destinatario.email} fallito: ${error.message}`);
+      return { inviata: false, error: error.message };
+    }
+    console.log(`  ✓ Email inviata a ${destinatario.email}`);
+    return { inviata: true };
+  } catch (err) {
+    // Un'eccezione (rete, timeout, rate-limit) NON deve silenziosamente
+    // perdere l'email: viene loggata e riportata al notifier per il conteggio.
+    const messaggio = (err as Error).message ?? 'Errore sconosciuto';
+    console.warn(`  ✗ Invio email a ${destinatario.email} fallito (eccezione): ${messaggio}`);
+    return { inviata: false, error: messaggio };
   }
-  console.log(`  ✓ Email inviata a ${destinatario.email}`);
-  return { inviata: true };
 }
 
 /** Invia la notifica a una lista di destinatari (utile per lanci multi-utente). */

@@ -61,6 +61,43 @@ export function rilevaClassi(testo: string): string[] {
   return [...new Set(trovate.map((c) => c.toUpperCase()))];
 }
 
+/**
+ * Categoria dell'opportunità rilevata dal testo (copre tutte le tipologie
+ * gestite dallo scraper): Interpelli/Supplenze, PON, POR, PNRR e bandi per
+ * esperti (ricerca esperti / selezione esperti).
+ */
+export function rilevaCategoriaAvviso(testo: string): string {
+  const t = testo.toLowerCase();
+  // Priorità per specificità: PNRR > PON > POR > Esperti > Interpelli > Bandi.
+  // Copre sia gli acronimi (PNRR / PON / POR) sia le denominazioni complete
+  // (Next Generation EU, Programma Operativo Nazionale/Regionale, FSE, FESR).
+  if (/\bpnrr\b|next generation eu|missione 4/.test(t)) return 'PNRR';
+  if (/\bpon\b|programma operativo nazionale|\bfse\b/.test(t)) return 'PON';
+  if (/\bpor\b|programma operativo regionale|\bfesr\b/.test(t)) return 'POR';
+  if (/espert|reclutamento/.test(t)) return 'Bando Esperti';
+  if (/interpell|supplenz/.test(t)) return 'Interpello / Supplenza';
+  if (/bando|avviso|pubblicazione|selezione|incarico|procedura|manifestazione di interesse/.test(t)) {
+    return 'Bando / Avviso';
+  }
+  return 'Altro';
+}
+
+/**
+ * True se il contesto di un link/avviso sembra un'opportunità da intercettare.
+ * Copre TUTTE le tipologie gestite dallo scraper: interpelli/supplenze, bandi,
+ * avvisi, pubblicazioni, selezioni di esperti (ricerca esperti / selezione
+ * esperti) e i fondi PON / POR / PNRR (es. "Bando per esperto esterno PNRR").
+ */
+export function sembraOpportunita(contesto: string): boolean {
+  // Copre TUTTE le tipologie gestite: interpelli/supplenze, bandi/avvisi,
+  // selezioni di esperti (ricerca esperti / reclutamento esperti) e i fondi
+  // PON / POR / PNRR, anche con le denominazioni estese (FSE, FESR,
+  // Programma Operativo, Next Generation EU).
+  return /interpell|supplenz|avviso|bando|pubblicazione|selezione|espert|pnrr|next generation eu|pon\b|por\b|fse\b|fesr\b|programma operativo|fondi strutturali|incarico|procedura|manifestazione di interesse|finanziamento/i.test(
+    contesto,
+  );
+}
+
 /* ------------------------------- Date ------------------------------- */
 
 const MESI_IT: Record<string, string> = {

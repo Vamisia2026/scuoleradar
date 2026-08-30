@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Zap, X, User as UserIcon, Crown, UserX, RotateCcw, Monitor } from 'lucide-react';
+import { Zap, X, User as UserIcon, Crown, UserX, RotateCcw, Monitor, Activity } from 'lucide-react';
 import { useApp, type RuoloSimulato } from '@/contexts/AppContext';
+import { HealthCheckModal } from '@/components/HealthCheckModal';
 
 const ruoli: { id: RuoloSimulato; label: string; desc: string; icon: React.ReactNode }[] = [
   {
@@ -26,6 +27,7 @@ const ruoli: { id: RuoloSimulato; label: string; desc: string; icon: React.React
 export function DevToolbar() {
   const { user, abbonato, simulaStato, resettaTutto } = useApp();
   const [open, setOpen] = useState(false);
+  const [checkupOpen, setCheckupOpen] = useState(false);
 
   // Visibile SOLO in ambiente di sviluppo
   if (!import.meta.env.DEV) return null;
@@ -157,10 +159,35 @@ export function DevToolbar() {
                   Ripristina preferenze e onboarding con 1 click.
                 </p>
               </section>
+
+              {/* System Health Check */}
+              <section>
+                <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary-400">
+                  <Activity className="h-4 w-4" />
+                  System Health Check
+                </h3>
+                <button
+                  onClick={() => {
+                    // Chiude il pannello DEV e apre il checkup in cima a tutto
+                    // (z-[9999]): la modal resta sopra la toolbar e il backdrop.
+                    setOpen(false);
+                    setCheckupOpen(true);
+                  }}
+                  className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-4 py-2.5 text-sm font-semibold text-primary-700 transition hover:bg-primary-100"
+                >
+                  <Activity className="h-4 w-4" />
+                  Esegui Checkup Sito
+                </button>
+                <p className="mt-2 text-xs text-primary-400">
+                  Verifica database, Edge Functions, rotte e servizi esterni in tempo reale.
+                </p>
+              </section>
             </div>
           </aside>
         </div>
       )}
+
+      <HealthCheckModal open={checkupOpen} onClose={() => setCheckupOpen(false)} />
     </>
   );
 }

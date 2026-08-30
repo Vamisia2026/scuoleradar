@@ -4,7 +4,6 @@ import {
   Radar, BellRing, ShieldCheck, Heart, ArrowRight, UserPlus, Send, CreditCard, MapPin, Calendar, Sparkles,
 } from 'lucide-react';
 import { Header } from '@/components/Header';
-import { ContattiModal } from '@/components/ContattiModal';
 import { SimulatorRadar } from '@/components/SimulatorRadar';
 import { useApp } from '@/contexts/AppContext';
 import { servizi } from '@/data/servizi';
@@ -34,10 +33,6 @@ export function LandingPage() {
         <div className="relative mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
           <div className="grid items-center gap-10 lg:grid-cols-2">
             <div className="animate-fade-in">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-50 px-3 py-1 text-sm font-medium text-accent-700">
-                <ShieldCheck className="h-4 w-4" />
-                Trasparente. Niente dark pattern.
-              </span>
               <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight text-primary-900 sm:text-5xl">
                 Ogni giorno centinaia di interpelli e bandi.
                 <br />
@@ -65,7 +60,7 @@ export function LandingPage() {
                 </button>
               </div>
               <p className="mt-4 text-sm text-primary-500">
-                3 notifiche di prova in assoluto. Nessuna carta richiesta.
+                3 notifiche gratuite all'anno. Nessuna carta richiesta.
               </p>
             </div>
 
@@ -262,7 +257,7 @@ export function LandingPage() {
             Inizia il tuo Radar
           </h2>
           <p className="mt-4 text-lg text-primary-600">
-            3 notifiche di prova in assoluto. Se trovi lavoro grazie a noi, ci raccomandi.
+            3 notifiche gratuite all'anno. Se trovi lavoro grazie a noi, ci raccomandi.
             Altrimenti, se vuoi continuare, 49€ all&apos;anno con PureFocus incluso.
           </p>
           <button
@@ -376,7 +371,9 @@ function Stat({ numero, label }: { numero: string; label: string }) {
 }
 
 export function Footer() {
-  const [contattiOpen, setContattiOpen] = useState(false);
+  const navigate = useNavigate();
+  // Trigger segreto Admin: 3 click sul copyright → /admin
+  const [clicksCop, setClicksCop] = useState(0);
 
   return (
     <footer className="border-t border-primary-100 bg-white">
@@ -427,22 +424,42 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <button
-                  onClick={() => setContattiOpen(true)}
-                  className="text-left text-primary-600 transition hover:text-primary-800"
-                >
+                <Link to="/contatti" className="text-primary-600 transition hover:text-primary-800">
                   Contattaci
-                </button>
+                </Link>
               </li>
             </ul>
           </div>
         </div>
         <p className="mt-8 border-t border-primary-100 pt-6 text-center text-sm text-primary-400">
-          Dati di esempio a scopo dimostrativo. Nessun invio di domande.
+          Crafted with purpose by{' '}
+          <a
+            href="https://vamisia.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-primary-600 transition hover:text-primary-800"
+          >
+            Vamisia
+          </a>{' '}
+          ·{' '}
+          <button
+            type="button"
+            onClick={() => {
+              const nuovo = clicksCop + 1;
+              setClicksCop(nuovo);
+              if (nuovo >= 3) {
+                setClicksCop(0);
+                navigate('/admin');
+              }
+            }}
+            className="transition hover:text-primary-600"
+            title=""
+          >
+            © 2026 ScuoleRadar
+          </button>{' '}
+          · All rights reserved.
         </p>
       </div>
-
-      <ContattiModal open={contattiOpen} onClose={() => setContattiOpen(false)} />
     </footer>
   );
 }

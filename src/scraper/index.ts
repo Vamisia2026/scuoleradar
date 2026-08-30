@@ -25,7 +25,13 @@ import process from 'node:process';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { parseInterpello, estraiDataScadenza, type InterpelloParsato } from './parser.ts';
+import {
+  parseInterpello,
+  estraiDataScadenza,
+  rilevaCategoriaAvviso,
+  sembraOpportunita,
+  type InterpelloParsato,
+} from './parser.ts';
 import { notificaNuoviInterpelli } from '../lib/notifier.ts';
 
 /* ------------------------------- Tipi ------------------------------- */
@@ -110,8 +116,9 @@ export function parseAvvisi(html: string, provincia: string, source: string): Av
     const testo = $el.text().replace(/\s+/g, ' ').trim();
 
     const contesto = `${href} ${testo}`;
-    const sembraAvviso = /interpell|avviso|supplenz|bando|pubblicazione/i.test(contesto);
-    if (!sembraAvviso) return;
+    // Filtro di rilevanza: vedi `sembraOpportunita` in parser.ts (copre
+    // interpelli/supplenze, bandi, avvisi, selezioni di esperti, PON/POR/PNRR).
+    if (!sembraOpportunita(contesto)) return;
     if (testo.length < 10) return;
 
     // Data di scadenza: cerca nel link e nel contenitore (li / article / entry)
@@ -424,7 +431,9 @@ async function main() {
 
   unici.forEach((n) => {
     console.log(
-      `  [${n.province}] ${n.title.slice(0, 70)} | scad: ${n.expirationDate ?? 'n/d'} | classi: ${
+      `  [${n.province}] ${n.title.slice(0, 70)} | tipo: ${rilevaCategoriaAvviso(n.title)} | scad: ${
+        n.expirationDate ?? 'n/d'
+      } | classi: ${
         n.classCodes.length ? n.classCodes.join(', ') : 'n/d'
       } | hash: ${n.hashId.slice(0, 12)}…`,
     );

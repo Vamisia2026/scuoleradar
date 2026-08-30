@@ -21,7 +21,7 @@ export const servizi: Servizio[] = [
     caratteristiche: [
       'Filtri per ordine di scuola, classe di concorso, materia e provincia',
       'Notifiche Telegram + email quando esce qualcosa di pertinente',
-      '3 notifiche di prova in assoluto (una tantum), poi PRO 49€/anno',
+      '3 notifiche gratuite all\'anno (si rinnovano a ogni anno solare), poi PRO 49€/anno',
       "Niente risultati sfocati: se non c'è nulla, te lo diciamo.",
     ],
     destinatari: 'Docenti di ogni ordine e grado, supplenti, aspiranti docenti e personale ATA.',
@@ -31,7 +31,7 @@ export const servizi: Servizio[] = [
   {
     slug: 'il-mio-cv',
     emoji: '📄',
-    titolo: 'Il mio CV',
+    titolo: 'Crea CV',
     sottotitolo: 'Trasforma il tuo vecchio CV in un layout moderno',
     descrizione:
       'Incolla il testo del tuo CV e lo ristrutturiamo in un layout ordinato e professionale, pronto da scaricare in PDF. Niente più formattazioni perse o sezioni confuse.',
@@ -63,10 +63,10 @@ export const servizi: Servizio[] = [
   {
     slug: 'assistente-ai',
     emoji: '🤖',
-    titolo: 'Assistente AI',
+    titolo: 'Assistente Sindacalista Virtuale',
     sottotitolo: 'Risposte immediate su mobilità, supplenze e carriera',
     descrizione:
-      'Un assistente intelligente che risponde alle tue domande su graduatorie, mobilità, supplenze e requisiti, usando informazioni aggiornate e un linguaggio semplice.',
+      'L\'Assistente Sindacalista Virtuale risponde alle tue domande su graduatorie, mobilità, supplenze e requisiti, usando informazioni aggiornate e un linguaggio semplice.',
     caratteristiche: [
       'Risposte su misura per il tuo profilo',
       'Normativa aggiornata e fonti citate',
@@ -82,7 +82,7 @@ export const servizi: Servizio[] = [
     titolo: 'Moduli',
     sottotitolo: "Documenti e modulistica pronti all'uso",
     descrizione:
-      'Una raccolta di modelli e documenti utili per la vita professionale del docente: domande, autocertificazioni, lettere di presentazione e checklist.',
+      'Oltre 1.000 moduli per la scuola, pronti all\'uso. Disponibili gratuitamente per tutti gli utenti registrati, anche con Account Base.',
     caratteristiche: [
       'Modelli compilabili e scaricabili',
       'Autocertificazioni e dichiarazioni pronte',

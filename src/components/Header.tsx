@@ -8,16 +8,17 @@ import { CreditiModal } from '@/components/CreditiModal';
 const navLinks = [
   { to: '/notizie', label: 'Notizie' },
   { to: '/prezzi', label: 'Prezzi' },
+  { to: '/faq', label: 'FAQ' },
   { to: '/chi-siamo', label: 'Chi siamo' },
 ];
 
 /** Strumenti principali: barra a pillole uniforme anche da utente non loggato. */
 const strumentiLinks = [
   { to: '/dashboard/radar', label: '📡 Radar Interpelli' },
-  { to: '/dashboard/cv', label: '📄 Crea il tuo CV' },
+  { to: '/dashboard/cv', label: '📄 Crea CV' },
   { to: '/dashboard/cfu', label: '🎓 Calcolatore CFU' },
   { to: '/dashboard/moduli', label: '📁 Modulistica' },
-  { to: '/dashboard/assistente-ai', label: '🤖 Sindacalista Virtuale' },
+  { to: '/dashboard/assistente-ai', label: '🤖 Assistente Sindacalista Virtuale' },
   { to: '/dashboard/purefocus', label: '🧘 PureFocus' },
 ];
 
@@ -40,7 +41,10 @@ export function Header() {
         <a href="/" className="justify-self-start focus:outline-none">
           <img
             src="/logo.png"
-            alt="ScuoleRadar.it"
+            alt="ScuoleRadar.it — logo"
+            width={160}
+            height={48}
+            loading="eager"
             className="h-10 w-auto object-contain md:h-12"
           />
         </a>

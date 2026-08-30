@@ -63,6 +63,50 @@ export async function fetchTesto(url: string): Promise<string | null> {
   return testo;
 }
 
+/**
+ * Verifica che un link ufficiale risponda HTTP 200/3xx (STRICT URL INTEGRITY).
+ * Prova prima HEAD; se il server lo nega (403/405), ripiega su GET. Usato in
+ * fase di ingestione prima della pubblicazione: nessun link rotto in bacheca.
+ */
+export async function verificaUrlUfficiale(
+  url: string,
+): Promise<{ ok: boolean; status: number | null }> {
+  const tentativo = async (metodo: 'head' | 'get') => {
+    try {
+      const config = {
+        timeout: 12000,
+        headers: HTTP_HEADERS,
+        validateStatus: (s: number) => s >= 200 && s < 400,
+        ...(metodo === 'get'
+          ? { responseType: 'arraybuffer' as const, maxContentLength: 5 * 1024 * 1024 }
+          : {}),
+      };
+      const r =
+        metodo === 'head'
+          ? await axios.head(url, config)
+          : await axios.get(url, config);
+      return { ok: true, status: r.status };
+    } catch (err) {
+      const status =
+        (err as { response?: { status?: number } })?.response?.status ?? null;
+      return { ok: false, status };
+    }
+  };
+
+  const head = await tentativo('head');
+  if (head.ok) {
+    console.log(`✓ LINK OK ${head.status} - ${url}`);
+    return head;
+  }
+  const get = await tentativo('get');
+  if (get.ok) {
+    console.log(`✓ LINK OK ${get.status} (GET) - ${url}`);
+  } else {
+    console.warn(`✗ LINK ${get.status ?? 'ERRORE'} - ${url}`);
+  }
+  return get;
+}
+
 /** Normalizza un URL relativo in assoluto rispetto a una base. */
 function urlAssoluto(href: string, base: string): string {
   try {
@@ -93,9 +137,17 @@ export function parseRss(xml: string, fonte: string, baseUrl: string): VoceFonte
         $el.find('encoded').first().text().trim() ||
         $el.find('summary').first().text().trim();
       if (title && link) {
+        const url = urlAssoluto(link, baseUrl);
+        // STRICT URL INTEGRITY: per il MIM si accettano SOLO gli articoli
+        // canonici /web/guest/-/<slug> — mai homepage o liste generiche
+        // (es. https://www.mim.gov.it/web/guest/home). Se il feed non li
+        // fornisce, il fallback di scraping recupera i link corretti.
+        if (fonte === 'MIM' && !url.includes('/web/guest/-/')) {
+          continue;
+        }
         voci.push({
           title,
-          link: urlAssoluto(link, baseUrl),
+          link: url,
           pubDate: pubDate || null,
           description,
           fonte,

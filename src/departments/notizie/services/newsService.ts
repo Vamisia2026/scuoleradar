@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ScuoleRadar.it — Servizio Notizie.
  *
  * Livello dati del dipartimento Notizie: legge le notizie REALI già
@@ -33,7 +33,7 @@ export const newsFallback: NewsArticle = {
     <p>Quando il servizio di ingestione sarà attivo, qui compariranno automaticamente decreti,
     note e scadenze operative per GPS, mobilità, concorsi, pensioni e sostegno.</p>
   `,
-  official_source_url: 'https://www.mim.gov.it/notizie',
+  official_source_url: 'https://www.mim.gov.it/web/guest/notizie',
   official_pdf_url: null,
   relevance_score: 0,
   published_at: '',

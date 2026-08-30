@@ -41,6 +41,7 @@ export function AuthModal() {
   const {
     authModalOpen,
     authModalMode,
+    authModalCtx,
     closeAuthModal,
     openAuthModal,
     register,
@@ -126,7 +127,13 @@ export function AuthModal() {
     <Modal
       open={authModalOpen}
       onClose={closeAuthModal}
-      title={isRegister ? 'Crea il tuo account' : 'Accedi al tuo Radar'}
+      title={
+        authModalCtx === 'pro'
+          ? 'Crea il tuo account per accedere a ScuoleRadar PRO'
+          : isRegister
+            ? 'Crea il tuo account'
+            : 'Accedi al tuo Radar'
+      }
       size="sm"
     >
       <div className="space-y-5">

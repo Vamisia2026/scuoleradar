@@ -743,6 +743,10 @@ export function ProfiloPage() {
         <p className="text-sm text-primary-500">
           Configura i canali su cui ricevere gli avvisi dei nuovi interpelli in tempo reale.
         </p>
+        <p className="mt-2 rounded-xl bg-primary-50 px-3 py-2 text-xs text-primary-600">
+          Piano Base: 3 notifiche all&apos;anno (si rinnovano a ogni anno solare); con il PRO
+          notifiche illimitate.
+        </p>
         <div className="mt-4 space-y-4">
           <label className="block">
             <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-primary-700">
@@ -774,6 +778,11 @@ export function ProfiloPage() {
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary-500">
             Collega Telegram
           </p>
+          {preferenze.telegramChatId ? (
+            <p className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-accent-50 px-3 py-1 text-xs font-semibold text-accent-700">
+              <Check className="h-3.5 w-3.5" /> Telegram collegato
+            </p>
+          ) : null}
           <ol className="list-decimal space-y-1 pl-4">
             <li>
               Premi <strong>Collega Telegram</strong>: si aprirà il bot{' '}

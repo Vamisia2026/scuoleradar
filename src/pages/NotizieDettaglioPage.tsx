@@ -11,11 +11,16 @@ export function NotizieDettaglioPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <Header />
-      <section className="bg-gradient-to-b from-primary-50 to-white">
-        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
-          <NotizieDettaglio />
-        </div>
-      </section>
+      <main>
+        <section
+          aria-label="Dettaglio notizia"
+          className="bg-gradient-to-b from-primary-50 to-white"
+        >
+          <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
+            <NotizieDettaglio />
+          </div>
+        </section>
+      </main>
       <Footer />
     </div>
   );

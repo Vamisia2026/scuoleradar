@@ -4,7 +4,7 @@ import { useApp } from '@/contexts/AppContext';
 import { AbbonamentoModal } from '@/components/AbbonamentoModal';
 import { CreditiModal } from '@/components/CreditiModal';
 
-/** Paywall riusabile per gli strumenti riservati (CFU, Assistente AI): PRO o 1 credito. */
+/** Paywall riusabile per gli strumenti riservati (CFU, Assistente Sindacalista Virtuale): PRO o 1 credito. */
 export function ServiziPaywall({
   titolo = 'Contenuto riservato',
   messaggio = 'Questo strumento richiede il piano PRO oppure 1 credito a consumo.',

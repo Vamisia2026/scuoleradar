@@ -6,7 +6,19 @@ import { useReferral } from '@/hooks/useReferral';
 
 const BASE_URL = 'https://scuoleradar.it';
 
-/** "Programma 'Invita un Collega' & Affiliazione" — sezione isolata del profilo. */
+/**
+ * MODULO MARKETING — Programma "Invita un Collega" & Affiliazione.
+ *
+ * Contratto del modulo (sezione ISOLATA del profilo / tab dedicata):
+ *  - Componente UI  : `ReferralSection` — nessun accoppiamento con gli altri
+ *                     dipartimenti (Blog, Modulistica, Radar…).
+ *  - Stato / logica : hook `useReferral` (`src/hooks/useReferral.ts`).
+ *  - Dati           : tabella `referrals` + RPC `applica_promo`
+ *                     (migration `20260822100000_add_referrals.sql`).
+ *  - Ingressi       : tab "Invita un Collega" (`InvitaPage`) e Profilo utente.
+ * Qualsiasi modifica va mantenuta dentro questi confini: nessun altro modulo
+ * deve importare `ReferralSection` o `useReferral`.
+ */
 export function ReferralSection() {
   const { codice, stats, storico, caricamento, validaDisponibilita, salvaCodice } = useReferral();
   const [editMode, setEditMode] = useState(false);

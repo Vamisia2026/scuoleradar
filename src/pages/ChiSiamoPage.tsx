@@ -1,10 +1,10 @@
 import { Radar } from 'lucide-react';
-import { useApp } from '@/contexts/AppContext';
+import { useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Footer } from './LandingPage';
 
 export function ChiSiamoPage() {
-  const { openAuthModal } = useApp();
+  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen">
@@ -52,7 +52,7 @@ export function ChiSiamoPage() {
 
           <div className="mt-12 text-center">
             <button
-              onClick={() => openAuthModal('registrazione')}
+              onClick={() => navigate('/prezzi')}
               className="inline-flex items-center gap-2 rounded-xl bg-primary-500 px-8 py-4 text-base font-semibold text-white shadow-soft transition hover:bg-primary-600"
             >
               <Radar className="h-5 w-5" />

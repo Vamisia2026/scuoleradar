@@ -348,7 +348,7 @@ export function CfuTool() {
           </h3>
           {!abbonato ? (
             <span className="rounded-full bg-secondary-50 px-3 py-1 text-xs font-semibold text-secondary-700">
-              Bloccata · usa 1 credito
+              Attiva la verifica · 1 credito
             </span>
           ) : (
             <span className="rounded-full bg-accent-50 px-3 py-1 text-sm font-semibold text-accent-700">
@@ -436,7 +436,7 @@ export function CfuTool() {
             </h4>
             <p className="mt-1 text-xs text-warning-700">
               Per accedere alle classi evidenziate come non ammissibili ti mancano i seguenti ambiti
-              (settori SSD): integrandoli potresti sbloccare nuove classi di concorso.
+              (settori SSD): integrandoli potresti accedere a nuove classi di concorso.
             </p>
             <ul className="mt-3 space-y-2">
               {cfuMancanti.map((m) => (

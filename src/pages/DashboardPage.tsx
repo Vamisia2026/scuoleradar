@@ -19,9 +19,9 @@ interface TabNav {
 export function DashboardLayout() {
   const tabs: TabNav[] = [
     { to: '/dashboard/radar', label: '📡 Radar Interpelli', end: true },
-    { to: '/dashboard/cv', label: '📄 Il mio CV' },
+    { to: '/dashboard/cv', label: '📄 Crea CV' },
     { to: '/dashboard/cfu', label: '🎓 Check CFU' },
-    { to: '/dashboard/assistente-ai', label: '🤖 Assistente AI' },
+    { to: '/dashboard/assistente-ai', label: '🤖 Assistente Sindacalista Virtuale' },
     { to: '/dashboard/moduli', label: '📁 Moduli' },
     { to: '/dashboard/purefocus', label: '🧘 Pure Focus' },
     { to: '/dashboard/profilo', label: '⚙️ Profilo' },
@@ -96,19 +96,19 @@ export function DashboardPage() {
       {!user ? (
         <div className="rounded-2xl border border-secondary-200 bg-secondary-50 p-6 shadow-card">
           <h3 className="text-2xl font-bold text-primary-900">
-            Smetti di cercare. Cerchiamo noi per te.
+            Smetti di perdere tempo. Cerchiamo noi per te.
           </h3>
           <p className="mt-2 text-lg leading-relaxed text-primary-700">
-            Imposta qui le tue ricerche e Scuole Radar ti avviserà appena troviamo un interpello
-            interessante per te, via email e Telegram. Se non ricevi nulla, è perché non c&apos;è
-            nulla di interessante.
+            Imposta qui i tuoi radar. Ti avvisiamo appena troviamo un&apos;opportunità per te, via
+            email e Telegram. Se non ricevi nulla, è perché non c&apos;è nulla di interessante. Non
+            ti preoccupare, fai altro.
           </p>
           <p className="mt-3 text-base leading-relaxed text-primary-700">
-            Puoi provare il servizio gratis: ti mandiamo 3 interpelli selezionati apposta per te. Se
-            trovi lavoro grazie a noi e non vuoi pagare, va bene così. Dillo ai tuoi amici e siamo
-            pari. Se vuoi continuare con noi, l&apos;abbonamento annuale da €49 è la scelta più
-            conveniente, ti costa meno di due ore di lavoro all&apos;anno e include tutti i nostri
-            servizi per insegnanti, senza limiti.
+            Ti facciamo provare il servizio con 3 segnalazioni su misura per te. Se trovi lavoro
+            grazie a noi e non vuoi pagare, siamo contenti per te. Dillo ai tuoi amici e siamo pari.
+            Se vuoi che continuiamo a monitorare le opportunità per te, la scelta più conveniente è
+            l&apos;abbonamento annuale da €49, che ti dà accesso a tutti i nostri servizi illimitati.
+            Te lo ripaghi con meno di due ore di lavoro all&apos;anno.
           </p>
           <button
             onClick={() => openVetrina('radar')}
@@ -143,13 +143,13 @@ export function DashboardPage() {
                   ? 'Sei abbonato: notifiche illimitate.'
                   : notificheRimanenti > 0
                     ? `Ti restano ${notificheRimanenti} di ${LIMITE_NOTIFICHE_PROVA} notifiche di prova`
-                    : 'Hai esaurito le tue notifiche di prova'}
+                    : 'Notifiche di prova completate'}
               </p>
               <p className="text-xs text-primary-500">
                 {abbonato
                   ? 'Riceverai tutte le notifiche pertinenti, senza limiti.'
                   : notificheRimanenti > 0
-                    ? 'Notifiche di prova totali: le usi una volta sola, in assoluto.'
+                    ? 'Le notifiche dell\'anno: 3 gratuite, si rinnovano a ogni anno solare.'
                     : 'Passa a PRO per continuare a ricevere notifiche.'}
               </p>
               {crediti > 0 && (
@@ -183,8 +183,9 @@ export function DashboardPage() {
         </div>
         {(limiteRaggiunto || limiteFeedRaggiunto) && (
           <p className="mt-3 text-sm text-secondary-800">
-            Hai usato le tue {LIMITE_NOTIFICHE_PROVA} notifiche di prova in assoluto. I contenuti
-            restano accessibili, ma per ricevere nuove notifiche ti serve l&apos;abbonamento.
+            Hai usato le tue {LIMITE_NOTIFICHE_PROVA} notifiche per quest&apos;anno: i contenuti
+            restano accessibili. Con il PRO ricevi notifiche illimitate, oppure riparti da 3 il
+            prossimo anno.
           </p>
         )}
         </div>

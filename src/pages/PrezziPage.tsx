@@ -32,7 +32,7 @@ const piani: Piano[] = [
     risparmio: 'Solo ~4€/mese — Risparmi il 55%',
     caratteristiche: [
       'Segnalazioni e notifiche illimitate',
-      'Tutti i tool completi: CV Builder, Check CFU, Assistente AI',
+      'Tutti i tool completi: Crea CV, Check CFU, Assistente AI',
       'PDF ufficiali senza watermark',
       'Accesso completo a PureFocus incluso',
     ],
@@ -47,7 +47,7 @@ const piani: Piano[] = [
     evidenziato: false,
     caratteristiche: [
       'Segnalazioni e notifiche illimitate',
-      'Tutti i tool completi: CV Builder, Check CFU, Assistente AI',
+      'Tutti i tool completi: Crea CV, Check CFU, Assistente AI',
       'PDF ufficiali senza watermark',
       'Accesso completo a PureFocus incluso',
     ],

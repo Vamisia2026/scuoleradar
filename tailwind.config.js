@@ -61,6 +61,7 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+        display: ['"Source Serif 4"', 'Georgia', 'Cambria', 'Times New Roman', 'serif'],
       },
       boxShadow: {
         card: '0 1px 3px rgba(20,53,78,0.06), 0 8px 24px rgba(20,53,78,0.06)',
