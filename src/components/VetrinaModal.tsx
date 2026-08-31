@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Bot, Calculator, FileText, FolderOpen, PenLine, Radar, Sparkles, UserPlus } from 'lucide-react';
+import { Bot, Calculator, FileText, FolderOpen, PenLine, Radar, ShieldCheck, Sparkles, UserPlus } from 'lucide-react';
 import { Modal } from '@/components/Modal';
 import { useApp } from '@/contexts/AppContext';
 import { STORAGE_KEY_INTENDED_PLAN } from '@/lib/pricing';
@@ -14,7 +14,7 @@ interface DettaglioVetrina {
 const dettagli: Record<string, DettaglioVetrina> = {
   radar: {
     icona: <Radar className="h-6 w-6" />,
-    titolo: 'Radar Interpelli',
+    titolo: 'Radar Opportunità',
     testo:
       'Interpelli, supplenze e bandi mappati per te: i primi 3 sono gratuiti. Attiva le notifiche e continua a monitorare le opportunità su misura per te.',
   },
@@ -97,17 +97,29 @@ export function VetrinaModal() {
         )}
 
         <p className="text-sm text-primary-600">
-          Crea il tuo account gratuito e inizia subito. Scegli il piano che preferisci:
+          {user
+            ? 'Sei già nel tuo account Base: continua gratis oppure passa al PRO per notifiche illimitate.'
+            : 'Crea il tuo account gratuito e inizia subito. Scegli il piano che preferisci:'}
         </p>
 
         <div className="space-y-2">
-          <button
-            onClick={() => scegliPiano('free')}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-primary-200 px-5 py-3 text-sm font-semibold text-primary-700 transition hover:bg-primary-50"
-          >
-            <UserPlus className="h-4 w-4" />
-            Registrati (Account Base - Gratis)
-          </button>
+          {user ? (
+            <button
+              onClick={() => scegliPiano('free')}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-primary-200 px-5 py-3 text-sm font-semibold text-primary-700 transition hover:bg-primary-50"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Continua con Account Base
+            </button>
+          ) : (
+            <button
+              onClick={() => scegliPiano('free')}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-primary-200 px-5 py-3 text-sm font-semibold text-primary-700 transition hover:bg-primary-50"
+            >
+              <UserPlus className="h-4 w-4" />
+              Registrati (Account Base - Gratis)
+            </button>
+          )}
           <button
             onClick={() => scegliPiano('pro_mensile')}
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-secondary-200 px-5 py-3 text-sm font-semibold text-secondary-700 transition hover:bg-secondary-50"

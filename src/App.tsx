@@ -7,6 +7,7 @@ import { DevToolbar } from '@/components/DevToolbar';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { ToastProvider } from '@/components/Toast';
 import { GoogleOneTap } from '@/components/GoogleOneTap';
+import { RadarWizardModal } from '@/components/RadarWizardModal';
 import { AuthCallback } from '@/pages/AuthCallback';
 import { LandingPage } from '@/pages/LandingPage';
 import { OnboardingPage } from '@/pages/OnboardingPage';
@@ -128,6 +129,7 @@ export default function App() {
           <AuthModal />
           <VetrinaModal />
           <GoogleOneTap />
+          <RadarWizardModal />
           <DevToolbar />
         </BrowserRouter>
       </ToastProvider>

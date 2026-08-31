@@ -1,8 +1,8 @@
 import { useMemo, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Check, MapPin, Send, Mail, Search, GraduationCap, School, BookOpen, Baby, Users, Moon, Briefcase, Wrench, Plus,
-  Star, Ban, Download, Trash2, Sparkles, ChevronDown, AlertTriangle, Loader2, ShieldCheck, FolderOpen,
+  Star, Ban, Download, Trash2, Sparkles, ChevronDown, AlertTriangle, Loader2, FolderOpen,
 } from 'lucide-react';
 import { useApp, type Preferenze } from '@/contexts/AppContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -72,6 +72,10 @@ function Accordion({
 
 export function ProfiloPage() {
   const { preferenze, setPreferenze, salvaProfilo, crediti } = useApp();
+  // Da "Completa il profilo" (Radar) si arriva con ?configura=1: apriamo le sezioni
+  // principali così l'utente vede subito i campi da compilare.
+  const [searchParams] = useSearchParams();
+  const configuraDaCompletaProfilo = searchParams.get('configura') === '1';
 
   const [ordini, setOrdini] = useState<OrdineScuola[]>(preferenze.ordini);
   const [classiCodici, setClassiCodici] = useState<string[]>(preferenze.classiCodici);
@@ -112,11 +116,33 @@ export function ProfiloPage() {
   // Evita un salvataggio al primo mount (i valori iniziali vengono solo letti).
   const primaEsecuzione = useRef(true);
 
-  // Sezioni collassabili del Profilo (accordion) per eliminare lo scroll infinito
+  // Sezioni collassabili del Profilo (accordion) per eliminare lo scroll infinito.
   // Il drop-down "Modelli Scaricati di Recente" parte APERTO per mostrare subito l'elenco.
-  const [accordionAperti, setAccordionAperti] = useState<Record<string, boolean>>({ modelli: true });
+  // Con ?configura=1 (redirect da "Completa il profilo") partono aperte anche le sezioni
+  // principali: Ordini, Classi, Materie, Province e Filtri Avanzati.
+  const [accordionAperti, setAccordionAperti] = useState<Record<string, boolean>>({
+    modelli: true,
+    ordini: configuraDaCompletaProfilo,
+    classi: configuraDaCompletaProfilo,
+    materie: configuraDaCompletaProfilo,
+    province: configuraDaCompletaProfilo,
+    filtri: configuraDaCompletaProfilo,
+  });
   const toggleAccordion = (chiave: string) =>
     setAccordionAperti((prev) => ({ ...prev, [chiave]: !prev[chiave] }));
+  // Copre anche la navigazione SPA (es. passare da /dashboard/profilo a ?configura=1).
+  useEffect(() => {
+    if (configuraDaCompletaProfilo) {
+      setAccordionAperti((prev) => ({
+        ...prev,
+        ordini: true,
+        classi: true,
+        materie: true,
+        province: true,
+        filtri: true,
+      }));
+    }
+  }, [configuraDaCompletaProfilo]);
 
   // Disdetta / cancellazione account
   const [mostraModaleElimina, setMostraModaleElimina] = useState(false);
@@ -830,38 +856,37 @@ export function ProfiloPage() {
         </p>
       </Accordion>
 
-      {/* Note legali e gestione dati */}
-      <section className="rounded-2xl border border-primary-100 bg-primary-50/50 p-5">
-        <h3 className="flex items-center gap-1.5 text-sm font-bold text-primary-800">
-          <ShieldCheck className="h-4 w-4 text-primary-500" />
-          Note legali e gestione dati
-        </h3>
-        <p className="mt-1 text-xs leading-relaxed text-primary-600">
+      {/* Sicurezza e Account — sezione collassata in fondo alla pagina */}
+      <Accordion
+        icona="🛡️"
+        titolo="Sicurezza e Account"
+        aperto={!!accordionAperti.sicurezza}
+        onToggle={() => toggleAccordion('sicurezza')}
+      >
+        <p className="text-xs leading-relaxed text-primary-600">
           I tuoi dati personali sono trattati in conformità con il GDPR. Puoi esportare o cancellare
           i tuoi dati in qualsiasi momento. La disdetta dell&apos;abbonamento è disponibile qui sotto;
           la cancellazione dell&apos;account è irreversibile e comporta la perdita di profilo,
           preferenze, moduli scaricati e accesso a PureFocus.
         </p>
-      </section>
-
-      {/* Disdetta / cancellazione account */}
-      <section className="rounded-2xl border border-error-200 bg-error-50/40 p-5">
-        <h3 className="flex items-center gap-1.5 text-sm font-bold text-error-700">
-          <AlertTriangle className="h-4 w-4" />
-          Disdetta e cancellazione account
-        </h3>
-        <p className="mt-1 text-sm text-primary-600">
-          La disdetta elimina definitivamente profilo, preferenze, moduli scaricati e accesso a
-          PureFocus. L&apos;operazione è irreversibile.
-        </p>
-        <button
-          onClick={() => setMostraModaleElimina(true)}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-error-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-error-600"
-        >
-          <Trash2 className="h-4 w-4" />
-          Cancella il mio account
-        </button>
-      </section>
+        <div className="mt-4 rounded-xl border border-error-200 bg-error-50/40 p-5">
+          <h4 className="flex items-center gap-1.5 text-sm font-bold text-error-700">
+            <AlertTriangle className="h-4 w-4" />
+            Disdetta e cancellazione account
+          </h4>
+          <p className="mt-1 text-sm text-primary-600">
+            La disdetta elimina definitivamente profilo, preferenze, moduli scaricati e accesso a
+            PureFocus. L&apos;operazione è irreversibile.
+          </p>
+          <button
+            onClick={() => setMostraModaleElimina(true)}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-error-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-error-600"
+          >
+            <Trash2 className="h-4 w-4" />
+            Cancella il mio account
+          </button>
+        </div>
+      </Accordion>
 
       <Modal
         open={mostraModaleElimina}

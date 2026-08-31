@@ -7,6 +7,8 @@ import { useApp, LIMITE_NOTIFICHE_PROVA } from '@/contexts/AppContext';
 import { AbbonamentoModal } from '@/components/AbbonamentoModal';
 import { CreditiModal } from '@/components/CreditiModal';
 import { interpelli } from '@/data/interpelli';
+import { classeByCodice } from '@/data/classiConcorso';
+import { province } from '@/data/province';
 import { Footer } from './LandingPage';
 
 interface TabNav {
@@ -18,7 +20,7 @@ interface TabNav {
 
 export function DashboardLayout() {
   const tabs: TabNav[] = [
-    { to: '/dashboard/radar', label: '📡 Radar Interpelli', end: true },
+    { to: '/dashboard/radar', label: '📡 Radar Opportunità', end: true },
     { to: '/dashboard/cv', label: '📄 Crea CV' },
     { to: '/dashboard/cfu', label: '🎓 Check CFU' },
     { to: '/dashboard/assistente-ai', label: '🤖 Assistente Sindacalista Virtuale' },
@@ -77,6 +79,7 @@ export function DashboardPage() {
     avviaCheckout,
     origineDati,
     openVetrina,
+    openRadarWizard,
   } = useApp();
   const [showAbbonamento, setShowAbbonamento] = useState(false);
   const [showCrediti, setShowCrediti] = useState(false);
@@ -89,6 +92,16 @@ export function DashboardPage() {
   const feedVetrina = !user && interpelliFiltrati.length === 0 ? interpelli : interpelliFiltrati;
   const interpelliVisibili = abbonato ? feedVetrina : feedVetrina.slice(0, 3);
   const limiteFeedRaggiunto = !abbonato && feedVetrina.length > 3;
+
+  // Etichette per lo stato vuoto del Radar (dalle preferenze dell'utente).
+  const classeEtichetta = preferenze.classiCodici
+    .map((c) => classeByCodice(c)?.denominazione ?? c)
+    .filter(Boolean)
+    .join(', ');
+  const provinciaEtichetta = preferenze.provinceCodici
+    .map((c) => province.find((p) => p.codice === c)?.nome ?? c)
+    .filter(Boolean)
+    .join(', ');
 
   return (
     <div className="space-y-6">
@@ -223,30 +236,34 @@ export function DashboardPage() {
                   Scegli province, classi di concorso e materie per vedere solo le opportunità che ti
                   riguardano davvero.
                 </p>
-                <Link
-                  to="/dashboard/profilo"
+                <button
+                  type="button"
+                  onClick={openRadarWizard}
                   className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
                 >
                   <SlidersHorizontal className="h-4 w-4" />
                   Completa il profilo
-                </Link>
+                </button>
               </>
             ) : (
               <>
                 <h3 className="mt-4 text-lg font-bold text-primary-800">
-                  Se oggi non arriva niente, non c&apos;è nulla di rilevante.
+                  Nessuna nuova opportunità oggi
+                  {classeEtichetta ? ` per la classe ${classeEtichetta}` : ''}
+                  {provinciaEtichetta ? ` in provincia di ${provinciaEtichetta}` : ''}.
                 </h3>
                 <p className="mx-auto mt-1 max-w-md text-sm text-primary-500">
-                  I nostri radar controllano continuamente albi e interpelli per te. Torna domani,
-                  oppure amplia le tue preferenze per ricevere più segnalazioni.
+                  Imposta il tuo Radar e rilassati: ti avvisiamo noi appena esce qualcosa di
+                  interessante per te!
                 </p>
-                <Link
-                  to="/dashboard/profilo"
-                  className="mt-5 inline-flex items-center gap-2 rounded-xl border border-primary-200 px-5 py-2.5 text-sm font-semibold text-primary-700 transition hover:bg-primary-50"
+                <button
+                  type="button"
+                  onClick={openRadarWizard}
+                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
                 >
                   <SlidersHorizontal className="h-4 w-4" />
-                  Rivedi le preferenze
-                </Link>
+                  Imposta il tuo Radar
+                </button>
               </>
             )}
           </div>

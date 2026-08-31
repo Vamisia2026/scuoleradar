@@ -12,6 +12,9 @@ import { STORAGE_KEY_INTENDED_PLAN, STORAGE_KEY_INTENDED_PLAN_DATA, type PianoId
 /** Limite notifiche per gli utenti BASE: 3 per ANNO solare (reset annuale via RPC incrementa_notifiche_utente). */
 export const LIMITE_NOTIFICHE_PROVA = 3;
 
+/** Chiave localStorage: "radar wizard in attesa" — un anonimo ha cliccato ATTIVA IL TUO RADAR. */
+export const STORAGE_KEY_RADAR_WIZARD_PENDING = 'sr_wizard_pending';
+
 export interface User {
   nome: string;
   cognome: string;
@@ -72,12 +75,18 @@ interface AppContextValue extends AppState {
   loading: boolean;
   /** id dell'utente Supabase Auth con sessione attiva (null = non autenticato). */
   supabaseUserId: string | null;
+  /** Avatar (URL) dell'utente autenticato da user_metadata (es. Google OAuth). */
+  avatarUrl: string | null;
   authModalOpen: boolean;
   authModalMode: 'login' | 'registrazione';
   /** Contesto della modale Auth: 'pro' = l'utente stava scegliendo un piano a pagamento. */
   authModalCtx: 'default' | 'pro';
   openAuthModal: (mode?: 'login' | 'registrazione', ctx?: 'default' | 'pro') => void;
   closeAuthModal: () => void;
+  /** Wizard Radar (onboarding a 4 passi): stato + apertura/chiusura. */
+  radarWizardOpen: boolean;
+  openRadarWizard: () => void;
+  closeRadarWizard: () => void;
   /** Vetrina Freemium: modal di conversione per gli utenti non autenticati. */
   vetrinaAperta: boolean;
   vetrinaSezione: string | null;
@@ -147,10 +156,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [notificheUsate, setNotificheUsate] = useState(0);
   const [crediti, setCrediti] = useState(0);
   const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
+  /** Avatar dell'utente (user_metadata.avatar_url / picture, es. login Google). */
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'registrazione'>('login');
   const [authModalCtx, setAuthModalCtx] = useState<'default' | 'pro'>('default');
+
+  // Wizard Radar (onboarding a 4 passi) — aperto da "ATTIVA IL TUO RADAR".
+  const [radarWizardOpen, setRadarWizardOpen] = useState(false);
+  const openRadarWizard = useCallback(() => setRadarWizardOpen(true), []);
+  const closeRadarWizard = useCallback(() => setRadarWizardOpen(false), []);
 
   const openAuthModal = useCallback(
     (mode: 'login' | 'registrazione' = 'login', ctx: 'default' | 'pro' = 'default') => {
@@ -502,6 +518,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!attivo) return;
         setLoading(false);
         if (!au) return;
+        const metaAu = (au.user_metadata ?? {}) as Record<string, unknown>;
+        setAvatarUrl(String(metaAu.avatar_url ?? metaAu.picture ?? '').trim() || null);
         const { data, error } = await supabase
           .from('profiles')
           .select('province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, abbonamento_scade_il, crediti, notifiche_usate, favorite_schools, ignored_schools')
@@ -565,6 +583,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
         setSupabaseUserId(session.user.id);
         const meta = (session.user.user_metadata ?? {}) as Record<string, unknown>;
+        // Avatar Google OAuth: avatar_url (o picture come fallback) in user_metadata.
+        setAvatarUrl(String(meta.avatar_url ?? meta.picture ?? '').trim() || null);
         const fullName = String(meta.full_name ?? meta.name ?? '').trim();
         if (fullName) {
           const [nome, ...resto] = fullName.split(' ');
@@ -588,10 +608,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (event === 'SIGNED_OUT') {
         setUser(null);
         setSupabaseUserId(null);
+        setAvatarUrl(null);
       }
     });
     return () => subscription.subscription.unsubscribe();
   }, [setUser, setSupabaseUserId]);
+
+  // Wizard Radar in attesa: se un utente NON autenticato ha cliccato "ATTIVA IL TUO RADAR",
+  // al termine di login/registrazione si apre automaticamente il wizard di onboarding.
+  useEffect(() => {
+    const pending = localStorage.getItem(STORAGE_KEY_RADAR_WIZARD_PENDING);
+    if (pending !== '1') return;
+    if (!user && !supabaseUserId) return;
+    try {
+      localStorage.removeItem(STORAGE_KEY_RADAR_WIZARD_PENDING);
+    } catch {
+      // localStorage non disponibile
+    }
+    openRadarWizard();
+  }, [user, supabaseUserId, openRadarWizard]);
 
   // FASE 7 — Ripresa automatica del checkout ("intended plan").
   // Se un utente anonimo aveva scelto un piano prima del login, appena la sessione
@@ -753,11 +788,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     origineDati,
     loading,
     supabaseUserId,
+    avatarUrl,
     authModalOpen,
     authModalMode,
     authModalCtx,
     openAuthModal,
     closeAuthModal,
+    radarWizardOpen,
+    openRadarWizard,
+    closeRadarWizard,
     vetrinaAperta,
     vetrinaSezione,
     openVetrina,

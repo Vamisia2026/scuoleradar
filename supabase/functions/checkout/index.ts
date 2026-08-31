@@ -12,7 +12,7 @@
 //   MAI fidarsi di priceId inviati dal client.
 //   "promo" (opzionale): codice referral → validato via RPC valida_codice_promo;
 //   se valido applica il coupon -10€ (PRO annuale e crediti a consumo) e traccia il referrer.
-//   "quantita" (opzionale, default 1): numero di crediti a consumo (5€/cad).
+//   "quantita" (opzionale, default 1): numero di crediti a consumo (1€/cad).
 //
 // Secrets richiesti:
 //   STRIPE_SECRET_KEY              (obbligatoria)
@@ -248,6 +248,14 @@ serve(async (req: Request) => {
           campi['discounts[0][coupon]'] = COUPON_REFERRAL;
         }
       }
+    }
+
+    // Promo codes Stripe nel checkout hosted (es. BARTOLOANSALDI): consentono all'utente
+    // di inserire un codice sconto direttamente nella pagina di pagamento.
+    // NB: `allow_promotion_codes` è mutuamente esclusivo con `discounts` (coupon referral),
+    // quindi lo abilitiamo SOLO quando non è già stato applicato un coupon automatico.
+    if (!campi['discounts[0][coupon]']) {
+      campi['allow_promotion_codes'] = 'true';
     }
 
     const esito = await postStripe<{ url?: string }>('/checkout/sessions', campi);

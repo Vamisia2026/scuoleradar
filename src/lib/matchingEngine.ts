@@ -96,7 +96,7 @@ export async function searchInterpelli(
   return (data ?? []) as InterpelloDB[];
 }
 
-/** Feed già mappato nel tipo `Interpello` per la Dashboard / Radar Interpelli. */
+/** Feed già mappato nel tipo `Interpello` per la Dashboard / Radar Opportunità. */
 export async function getFeedInterpelli(
   client: SupabaseClient | null,
   criteri: MatchingCriteri,

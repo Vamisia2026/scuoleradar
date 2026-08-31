@@ -14,7 +14,7 @@ const navLinks = [
 
 /** Strumenti principali: barra a pillole uniforme anche da utente non loggato. */
 const strumentiLinks = [
-  { to: '/dashboard/radar', label: '📡 Radar Interpelli' },
+  { to: '/dashboard/radar', label: '📡 Radar Opportunità' },
   { to: '/dashboard/cv', label: '📄 Crea CV' },
   { to: '/dashboard/cfu', label: '🎓 Calcolatore CFU' },
   { to: '/dashboard/moduli', label: '📁 Modulistica' },
@@ -23,7 +23,7 @@ const strumentiLinks = [
 ];
 
 export function Header() {
-  const { user, abbonato, crediti, logout, openAuthModal } = useApp();
+  const { user, abbonato, crediti, logout, openAuthModal, avatarUrl } = useApp();
   const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuUtenteOpen, setMenuUtenteOpen] = useState(false);
@@ -73,12 +73,21 @@ export function Header() {
               <div className="flex items-center gap-0.5 rounded-full border border-primary-200 bg-white py-1 pl-1 pr-1 shadow-soft">
                 <Link
                   to="/dashboard/radar"
-                  aria-label="Torna al Radar interpelli"
+                  aria-label="Torna al Radar opportunità"
                   className="flex items-center gap-2 rounded-full pr-2 transition hover:opacity-90"
                 >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-500 text-white">
-                    <UserIcon className="h-4 w-4" />
-                  </span>
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt={user.nome}
+                      referrerPolicy="no-referrer"
+                      className="h-8 w-8 shrink-0 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-500 text-white">
+                      <UserIcon className="h-4 w-4" />
+                    </span>
+                  )}
                   <span className="max-w-[110px] truncate text-sm font-semibold text-primary-800">
                     {user.nome}
                   </span>
@@ -119,24 +128,38 @@ export function Header() {
                     role="menu"
                     className="absolute right-0 z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-primary-100 bg-white shadow-card"
                   >
-                    <div className="border-b border-primary-100 bg-primary-50/60 px-4 py-3">
-                      <p className="truncate text-sm font-bold text-primary-800">
-                        {user.nome} {user.cognome}
-                      </p>
-                      <p className="truncate text-xs text-primary-500">{user.email}</p>
-                      <span
-                        className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                          abbonato ? 'bg-accent-500 text-white' : 'bg-primary-50 text-primary-600'
-                        }`}
-                      >
-                        {abbonato ? (
-                          <>
-                            <Sparkles className="h-3 w-3" /> Piano PRO
-                          </>
-                        ) : (
-                          'Piano Base'
-                        )}
-                      </span>
+                    <div className="flex items-center gap-3 border-b border-primary-100 bg-primary-50/60 px-4 py-3">
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt={user.nome}
+                          referrerPolicy="no-referrer"
+                          className="h-10 w-10 shrink-0 rounded-full object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-500 text-white">
+                          <UserIcon className="h-5 w-5" />
+                        </span>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold text-primary-800">
+                          {user.nome} {user.cognome}
+                        </p>
+                        <p className="truncate text-xs text-primary-500">{user.email}</p>
+                        <span
+                          className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                            abbonato ? 'bg-accent-500 text-white' : 'bg-primary-50 text-primary-600'
+                          }`}
+                        >
+                          {abbonato ? (
+                            <>
+                              <Sparkles className="h-3 w-3" /> Piano PRO
+                            </>
+                          ) : (
+                            'Piano Base'
+                          )}
+                        </span>
+                      </div>
                     </div>
                     <nav className="p-1.5">
                       <Link
@@ -247,9 +270,22 @@ export function Header() {
             {user ? (
               <>
                 <div className="flex items-center justify-between px-3">
-                  <span className="truncate text-sm font-medium text-primary-700">
-                    <UserIcon className="mr-1.5 inline h-4 w-4" />
-                    {user.nome} {user.cognome}
+                  <span className="flex min-w-0 items-center gap-2">
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt={user.nome}
+                        referrerPolicy="no-referrer"
+                        className="h-7 w-7 shrink-0 rounded-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-500 text-white">
+                        <UserIcon className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                    <span className="truncate text-sm font-medium text-primary-700">
+                      {user.nome} {user.cognome}
+                    </span>
                   </span>
                   <span
                     className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${

@@ -8,10 +8,10 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
 import { validaPromo, SCONTO_PROMO_EUR } from '@/lib/promo';
 
-const PREZZO_CREDITO = 5;
+const PREZZO_CREDITO = 1;
 const MAX_CREDITI = 10;
 
-/** Modal di checkout per i "Crediti a consumo" (5€/credito, quantità 1–10). */
+/** Modal di checkout per i "Crediti a consumo" (1€/credito, quantità 1–10). */
 export function CreditiModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { avviaCheckout } = useApp();
   const { mostraToast } = useToast();
@@ -212,7 +212,7 @@ export function CreditiModal({ open, onClose }: { open: boolean; onClose: () => 
             La scelta è tua!
           </p>
           <p className="mt-1 text-xs leading-relaxed">
-            Con 10 crediti spendi 50€ ed è a servizio. Il piano PRO costa 49€/anno e include tutto
+            Con 10 crediti spendi 10€ ed è a servizio. Il piano PRO costa 49€/anno e include tutto
             illimitato + PureFocus (valore 29$). Sei libero di procedere, ma non conviene e non è
             rimborsabile.
           </p>

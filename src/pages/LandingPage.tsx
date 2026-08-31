@@ -5,16 +5,26 @@ import {
 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { SimulatorRadar } from '@/components/SimulatorRadar';
-import { useApp } from '@/contexts/AppContext';
+import { useApp, STORAGE_KEY_RADAR_WIZARD_PENDING } from '@/contexts/AppContext';
 import { servizi } from '@/data/servizi';
 
 export function LandingPage() {
-  const { user, openAuthModal, openVetrina } = useApp();
+  const { user, openAuthModal, openVetrina, openRadarWizard } = useApp();
   const navigate = useNavigate();
 
   const handleInizia = () => {
-    if (user) navigate('/dashboard/radar');
-    else openAuthModal('registrazione');
+    if (user) {
+      // Utente loggato: apre direttamente il wizard Radar (mai la pagina Profilo grezza).
+      openRadarWizard();
+    } else {
+      // Utente anonimo: segna il wizard come "in attesa" e chiedi prima login/registrazione.
+      try {
+        localStorage.setItem(STORAGE_KEY_RADAR_WIZARD_PENDING, '1');
+      } catch {
+        // localStorage non disponibile
+      }
+      openAuthModal('registrazione');
+    }
   };
 
   const handleAccedi = () => {
@@ -34,14 +44,15 @@ export function LandingPage() {
           <div className="grid items-center gap-10 lg:grid-cols-2">
             <div className="animate-fade-in">
               <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight text-primary-900 sm:text-5xl">
-                Ogni giorno centinaia di interpelli e bandi.
+                Ogni giorno decine di opportunità scolastiche scappano via.
                 <br />
-                <span className="text-secondary-500">Noi ti mandiamo solo quello giusto per te.</span>
+                <span className="text-secondary-500">Noi intercettiamo solo quelle perfette per te.</span>
               </h1>
               <p className="mt-5 max-w-xl text-lg leading-relaxed text-primary-700">
-                Non perdere tempo a spulciare annunci inutili. Dedica le tue energie a chi insegni,
-                non alla ricerca. ScuoleRadar filtra interpelli per supplenze, bandi per esperti, CPIA e progetti scolastici,
-                e ti avvisa solo quando c'è qualcosa che ti riguarda davvero.
+                Anche se hai già una cattedra o un incarico, quante occasioni ti perdi nella scuola
+                accanto? ScuoleRadar monitora in tempo reale progetti retribuiti, selezioni per esperti,
+                PON/PNRR, corsi CPIA e supplenze. Ti avvisiamo solo quando esce un'opportunità reale
+                nella tua provincia.
               </p>
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <button
@@ -49,7 +60,7 @@ export function LandingPage() {
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-500 px-6 py-3 text-base font-semibold text-white shadow-soft transition hover:bg-primary-600"
                 >
                   <Radar className="h-5 w-5" />
-                  Inizia il tuo Radar
+                  ATTIVA IL TUO RADAR
                   <ArrowRight className="h-4 w-4" />
                 </button>
                 <button
@@ -60,7 +71,7 @@ export function LandingPage() {
                 </button>
               </div>
               <p className="mt-4 text-sm text-primary-500">
-                3 notifiche gratuite all'anno. Nessuna carta richiesta.
+                3 notifiche d'avviso incluse gratis nel tuo account Base. Nessuna carta richiesta.
               </p>
             </div>
 
@@ -254,18 +265,18 @@ export function LandingPage() {
       <section className="bg-white py-10 sm:py-14">
         <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
           <h2 className="text-3xl font-bold text-primary-900 sm:text-4xl">
-            Inizia il tuo Radar
+            ATTIVA IL TUO RADAR
           </h2>
           <p className="mt-4 text-lg text-primary-600">
             3 notifiche gratuite all'anno. Se trovi lavoro grazie a noi, ci raccomandi.
-            Altrimenti, se vuoi continuare, 49€ all&apos;anno con PureFocus incluso.
+            Altrimenti, se vuoi continuare, 49€ all'anno con PureFocus incluso.
           </p>
           <button
             onClick={handleInizia}
             className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl bg-primary-500 px-8 py-4 text-base font-semibold text-white shadow-soft transition hover:bg-primary-600"
           >
             <Radar className="h-5 w-5" />
-            Crea il mio profilo
+            ATTIVA IL TUO RADAR
           </button>
         </div>
       </section>
@@ -386,8 +397,8 @@ export function Footer() {
             </div>
             <p className="mt-3 text-sm leading-relaxed text-primary-500">
               Monitoriamo in tempo reale interpelli, supplenze e tutte le opportunità retribuite per
-              la scuola (PNRR, PON, POR e bandi per esperti). Più una suite completa di strumenti per
-              la tua carriera docente.
+              la scuola: bandi PNRR, PON, CPIA, ore eccedenti e sezioni di esperti. Più una suite
+              completa di strumenti per la tua carriera docente.
             </p>
           </div>
           <div>

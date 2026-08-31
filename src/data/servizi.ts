@@ -14,7 +14,7 @@ export const servizi: Servizio[] = [
   {
     slug: 'radar-interpelli',
     emoji: '📡',
-    titolo: 'Radar Interpelli',
+    titolo: 'Radar Opportunità',
     sottotitolo: 'Solo le opportunità che ti riguardano davvero',
     descrizione:
       "Il Radar monitora ogni giorno interpelli per supplenze, bandi per esperti, CPIA e progetti scolastici, filtrandoli in base a ordine di scuola, classi di concorso, materie e province. Ricevi solo le notifiche pertinenti, su Telegram e via email.",
