@@ -47,20 +47,21 @@ export interface EsitoInvio {
 }
 
 /**
- * Le 8 tipologie di messaggio del sistema (sequenza copywriting di Bartolo):
- *  1. welcome      — registrazione account Base
- *  2. prova1       — prima opportunità di prova
- *  3. prova2       — seconda opportunità di prova
- *  4. prova3       — terza e ultima opportunità di prova
- *  5. extra        — quarta opportunità rilevata post-prova (blocco soft)
- *  6. recap        — riepilogo blocco definitivo
- *  7. welcome_pro  — conferma attivazione abbonamento PRO
- *  8. notifica_pro — notifica standard per abbonati PRO
+ * Le 8 tipologie di messaggio del sistema (sequenza BASE + PRO):
+ *  Email 1. welcome      — intake / conferma iscrizione account Base
+ *  Email 2. prova1       — prima opportunità di prova
+ *  Email 3. prova2       — seconda opportunità di prova
+ *  Email 4. prova3       — terza e ultima opportunità di prova
+ *  Email 5. extra        — avviso: periodo di prova terminato (upgrade PRO)
+ *  Email 6. recap        — avviso finale (servizio di notifica sospeso)
+ *  PRO     welcome_pro   — conferma attivazione abbonamento PRO
+ *  PRO     notifica_pro  — notifica standard per abbonati PRO
  */
 export type TipoMessaggio =
   | 'welcome'
   | 'prova1'
   | 'prova2'
+  | 'prova3'
   | 'extra'
   | 'recap'
   | 'welcome_pro'
@@ -156,9 +157,10 @@ const SUBJECT: Record<TipoMessaggio, string> = {
   welcome: 'Grazie per esserti iscritto, ora ci pensiamo noi',
   prova1: 'Questa è la prima opportunità che abbiamo trovato per te. Te ne restano 2',
   prova2: 'Questa è la seconda opportunità che abbiamo trovato per te. Te ne resta 1',
+  prova3: 'Questa è la terza e ultima opportunità di prova che abbiamo trovato per te',
 
-  extra: 'Questa non dovevamo mandartela, ma era troppo bella. Ora il tuo periodo di prova è finito',
-  recap: 'Le tue notifiche di prova sono finite',
+  extra: 'Il tuo periodo di prova è terminato: passa a PRO per continuare a ricevere le opportunità',
+  recap: 'Avviso finale: le notifiche di prova sono terminate',
   welcome_pro: 'Benvenuto in ScuoleRadar PRO!',
   notifica_pro: 'Nuova opportunità trovata per te!',
 };
@@ -182,7 +184,7 @@ interface ContenutoMessaggio {
 export const TIPI_CON_OPPORTUNITA: ReadonlySet<TipoMessaggio> = new Set([
   'prova1',
   'prova2',
-  'extra',
+  'prova3',
   'notifica_pro',
 ]);
 
@@ -206,13 +208,22 @@ const CORPO_MESSAGGI: Record<TipoMessaggio, ContenutoMessaggio> = {
     paragrafi: ['Questa è la <strong>seconda opportunità</strong> che abbiamo trovato per te. Te ne <strong>resta 1</strong>.'],
     cta: { label: 'Guarda l\'opportunità e candidati →', destinazione: 'opportunita' },
   },
+  prova3: {
+    paragrafi: ['Questa è la <strong>terza e ultima opportunità</strong> di prova che abbiamo trovato per te.'],
+    cta: { label: 'Guarda l\'opportunità e candidati →', destinazione: 'opportunita' },
+  },
   extra: {
-    paragrafi: ['Questa non dovevamo mandartela, ma era troppo bella. <strong>Ora il tuo periodo di prova è finito.</strong>'],
+    paragrafi: [
+      'Le tue <strong>3 notifiche di prova sono terminate</strong>.',
+      'Per continuare a ricevere le opportunità su misura per te in tempo reale, passa al piano PRO.',
+    ],
     cta: { label: 'Attiva PRO →', destinazione: 'prezzi' },
   },
   recap: {
     paragrafi: [
-      'Le tue notifiche di prova sono finite. <strong>Passa al piano PRO</strong> per continuare a ricevere notifiche illimitate in tempo reale, oppure resta con l\'Account Base.',
+      'Questo è l\'ultimo avviso del periodo di prova.',
+      'Il servizio di notifiche automatiche dell\'Account Base è terminato: non riceverai più nuove segnalazioni.',
+      'Se vuoi riattivarlo, passa al piano PRO: notifiche illimitate e tutti gli strumenti ScuoleRadar.',
     ],
     cta: { label: 'Passa a PRO →', destinazione: 'prezzi' },
   },

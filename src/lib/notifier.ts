@@ -75,10 +75,12 @@ export async function notificaNuoviInterpelli(
     const risultati = await Promise.all(
       utenti.map(async (utente) => {
         // FASE 6 — guardia server-side: RPC atomica del contatore notifiche.
-        // base → max 3 per ANNO (reset automatico al cambio di anno solare);
+        // base → max 3 per ANNO SCOLASTICO (reset automatico a settembre);
         // pro → sempre consentito.
-        // Ciclo 5 step: 1ª → prova1, 2ª → prova2, 3ª → extra (hook); il passo
-        // 5 (conversione) è schedulato dal cron `step5-notifiche` 2 ore dopo.
+        // Sequenza BASE: Email 1 (welcome) dal trigger su auth.users;
+        // Email 2-4 (prova1/prova2/prova3) ed Email 5 (extra = avviso) da qui;
+        // Email 6 (recap = avviso finale) dal cron `step5-notifiche` 2 ore
+        // dopo la consegna dell'avviso (extra).
         let tipo: TipoMessaggio = 'notifica_pro';
         let skip = false;
         const chatId = utente.telegramChatId;
@@ -94,10 +96,17 @@ export async function notificaNuoviInterpelli(
             if (utente.piano !== 'pro') tipo = 'prova1';
           } else if (rpcData?.[0]) {
             if (rpcData[0].consentito === false) {
-              // Ciclo completato (3 notifiche/anno già inviate): niente altro
-              // da inviare qui. Il passo 5 è schedulato dal cron `step5-notifiche`
-              // 2 ore dopo la consegna del passo 4 (extra).
-              skip = true;
+              // Ciclo BASE completato (3 notifiche/anno scolastico inviate):
+              // Email 5 (extra = avviso) una sola volta, poi si salta.
+              // Email 6 (recap = avviso finale) è schedulata dal cron
+              // `step5-notifiche` (Edge Function, 2 ore dopo l'avviso).
+              if (utente.piano === 'pro') {
+                tipo = 'notifica_pro';
+              } else if (!utente.notificheBloccoInviato) {
+                tipo = 'extra'; // Email 5 — warning: periodo di prova terminato
+              } else {
+                skip = true;
+              }
             } else {
               const usate = Number(rpcData[0].notifiche_usate);
               tipo =
@@ -107,7 +116,7 @@ export async function notificaNuoviInterpelli(
                     ? 'prova1'
                     : usate === 2
                       ? 'prova2'
-                      : 'extra';
+                      : 'prova3';
             }
           }
         }
@@ -169,15 +178,16 @@ export async function notificaNuoviInterpelli(
           ),
         );
 
-        // Passo 4 (extra) consegnato su almeno un canale: segna l'istante di invio;
-        // il cron `step5-notifiche` invierà il passo 5 (conversione PRO) dopo 2 ore.
-        if (tipo === 'extra' && completati.some((c) => c.valore.ok) && client) {
-          const { error: errStep } = await client
+        // Email 5 (extra) consegnata su almeno un canale: segna l'istante di
+        // invio e il flag una tantum. Il cron `step5-notifiche` invierà poi
+        // Email 6 (recap = avviso finale) 2 ore dopo via Edge Function.
+        if (client && tipo === 'extra' && completati.some((c) => c.valore.ok)) {
+          const { error: errFlag } = await client
             .from('profiles')
-            .update({ step4_inviata_at: new Date().toISOString() })
+            .update({ notifiche_blocco_inviato: true, step4_inviata_at: new Date().toISOString() })
             .eq('id', utente.id);
-          if (errStep) {
-            console.warn(`  ⚠ step4_inviata_at non aggiornato per ${utente.id.slice(0, 8)}… (${errStep.message})`);
+          if (errFlag) {
+            console.warn(`  ⚠ flag sequenza post-prova non aggiornato per ${utente.id.slice(0, 8)}… (${errFlag.message})`);
           }
         }
         return completati;

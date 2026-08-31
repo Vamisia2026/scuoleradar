@@ -56,8 +56,23 @@ function conOpportunitaTg(o: Opportunita, testo: string): string {
   return t;
 }
 
-/** Testi esatti del ciclo a 5 step (Step 1-5) + notifica PRO. */
-const TESTI: Record<string, { soggetto: string; email: (o: Opportunita) => string; telegram: (o: Opportunita) => string }> = {
+/**
+ * Termini declinati per genere (colonna profiles.genere):
+ *   {{Caro_a}}  → 'Cara' se 'F', altrimenti 'Caro'
+ *   {{stato_a}} → 'stata' se 'F', altrimenti 'stato'
+ */
+function caro(genere?: string): string {
+  return genere === 'F' ? 'Cara' : 'Caro';
+}
+function stato(genere?: string): string {
+  return genere === 'F' ? 'stata' : 'stato';
+}
+
+/** Testi esatti del ciclo a 5 step (Step 1-5) + notifica PRO + attivazione/rinnovo PRO (declinati per genere). */
+const TESTI: Record<
+  string,
+  { soggetto: string; email: (o: Opportunita, genere?: string) => string; telegram: (o: Opportunita, genere?: string) => string }
+> = {
   step1: {
     soggetto: 'Grazie per esserti iscritto, ora ci pensiamo noi',
     email: () =>
@@ -80,11 +95,11 @@ const TESTI: Record<string, { soggetto: string; email: (o: Opportunita) => strin
       conOpportunitaTg(o, 'Questa è la <b>seconda opportunità</b> che abbiamo trovato per te. Te ne <b>resta 1</b>.'),
   },
   step4: {
-    soggetto: 'Questa non dovevamo mandartela, ma era troppo bella. Ora il tuo periodo di prova è finito',
+    soggetto: 'Il tuo periodo di prova è terminato: passa a PRO per continuare a ricevere le opportunità',
     email: (o) =>
-      conOpportunita(o, 'Questa non dovevamo mandartela, ma era troppo bella. <b>Ora il tuo periodo di prova è finito.</b>'),
+      conOpportunita(o, 'Le tue <b>3 notifiche di prova sono terminate</b>.<br/>Per continuare a ricevere le opportunità su misura per te in tempo reale, passa al piano PRO.'),
     telegram: (o) =>
-      conOpportunitaTg(o, 'Questa non dovevamo mandartela, ma era troppo bella. <b>Ora il tuo periodo di prova è finito.</b>'),
+      conOpportunitaTg(o, 'Le tue <b>3 notifiche di prova sono terminate</b>.\nPer continuare a ricevere le opportunità su misura per te, passa al piano PRO.'),
   },
   step5: {
     soggetto: 'Le tue notifiche di prova sono finite',
@@ -100,6 +115,27 @@ const TESTI: Record<string, { soggetto: string; email: (o: Opportunita) => strin
     soggetto: 'Nuova opportunità trovata per te!',
     email: (o) => conOpportunita(o, 'Abbiamo trovato una <b>nuova opportunità</b> per te.'),
     telegram: (o) => conOpportunitaTg(o, 'Abbiamo trovato una <b>nuova opportunità</b> per te.'),
+  },
+  welcome_pro: {
+    soggetto: 'Benvenuto nel piano PRO di ScuoleRadar',
+    email: (o, genere) =>
+      `${caro(genere)}, benvenuto ${stato(genere)} nel piano <b>PRO</b> di ScuoleRadar!<br/>Da ora hai notifiche illimitate, strumenti docenti completi e moduli sempre aggiornati a norma di legge.<br/><br/>Inizia subito su <a href="https://www.scuoleradar.it/">www.scuoleradar.it</a> e resta aggiornato con <a href="https://www.scuoleradar.it/notizie">www.scuoleradar.it/notizie</a>.`,
+    telegram: (o, genere) =>
+      `${caro(genere)}, benvenuto ${stato(genere)} nel piano PRO di ScuoleRadar! 👑\nhttps://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
+  },
+  beta_rinnovo_preavviso: {
+    soggetto: 'Sei tra i primi a sostenerci: il tuo account PRO verrà rinnovato GRATIS A VITA 🎁',
+    email: (o, genere) =>
+      `${caro(genere)}, sei tra i primi a sostenerci, e per noi questo conta molto.<br/>Come ringraziamento, il tuo account <b>PRO</b> verrà rinnovato <b>GRATIS A VITA</b>.<br/><br/>Alla scadenza il rinnovo avverrà automaticamente: non dovrai fare nulla. Ti aspettiamo su <a href="https://www.scuoleradar.it/">www.scuoleradar.it</a> e sulle novità del nostro <a href="https://www.scuoleradar.it/notizie">notiziario</a>.`,
+    telegram: (o, genere) =>
+      `${caro(genere)}, sei tra i primi a sostenerci: il tuo account PRO verrà rinnovato GRATIS A VITA. 🎁\nhttps://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
+  },
+  beta_rinnovo_conferma: {
+    soggetto: 'Congratulazioni, il tuo account PRO è stato rinnovato con successo! 🎉',
+    email: (o, genere) =>
+      `Congratulazioni! 🎉<br/>${caro(genere)}, il tuo account <b>PRO</b> è ${stato(genere)} rinnovato con successo: da oggi non ha più una data di scadenza — accesso <b>PRO a vita</b>, in omaggio.<br/><br/>Continua a usare ScuoleRadar su <a href="https://www.scuoleradar.it/">www.scuoleradar.it</a> e resta aggiornato con <a href="https://www.scuoleradar.it/notizie">www.scuoleradar.it/notizie</a>.`,
+    telegram: (o, genere) =>
+      `Congratulazioni! 🎉 ${caro(genere)}, il tuo account PRO è ${stato(genere)} rinnovato con successo: ora sei PRO per sempre, senza scadenza.\nhttps://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
   },
 };
 
@@ -144,7 +180,7 @@ async function inviaEmail(email: string, soggetto: string, html: string): Promis
 async function caricaProfilo(userId: string) {
   if (!SUPABASE_URL || !SERVICE_ROLE) return null;
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/profiles?select=email,email_notifica,telegram_chat_id,nome&id=eq.${encodeURIComponent(userId)}`,
+    `${SUPABASE_URL}/rest/v1/profiles?select=email,email_notifica,telegram_chat_id,nome,genere&id=eq.${encodeURIComponent(userId)}`,
     { headers: { apikey: SERVICE_ROLE, Authorization: `Bearer ${SERVICE_ROLE}` } },
   ).catch(() => null);
   if (!res || !res.ok) return null;
@@ -153,6 +189,7 @@ async function caricaProfilo(userId: string) {
     email_notifica?: string;
     telegram_chat_id?: string;
     nome?: string;
+    genere?: string;
   }>;
   return rows[0] ?? null;
 }
@@ -187,12 +224,14 @@ serve(async (req: Request) => {
   let email = String(body.email ?? '').trim();
   let chatId = String(body.chatId ?? '').trim();
   const nome = String(body.nome ?? '').trim();
+  let genere = String(body.genere ?? '').trim();
 
   if (userId) {
     const profilo = await caricaProfilo(userId);
     if (profilo) {
       if (!email) email = (profilo.email_notifica || profilo.email || '').trim();
       if (!chatId) chatId = (profilo.telegram_chat_id ?? '').trim();
+      if (!genere) genere = (profilo.genere ?? '').trim();
     }
   }
 
@@ -211,8 +250,8 @@ serve(async (req: Request) => {
   };
 
   const saluto = nome ? `Ciao ${escapeHtml(nome)},<br/>` : '';
-  const corpoEmail = saluto + testo.email(opp) + '<br/><br/>' + FIRMA + '<br/>P.S. Approfondimenti e novità sul blog: <a href="' + BLOG_URL + '">scuoleradar.it/notizie</a>' + DISCLAIMER_EMAIL;
-  const corpoTelegram = testo.telegram(opp) + '\n\n' + FIRMA;
+  const corpoEmail = saluto + testo.email(opp, genere) + '<br/><br/>' + FIRMA + '<br/>P.S. Approfondimenti e novità sul blog: <a href="' + BLOG_URL + '">scuoleradar.it/notizie</a>' + DISCLAIMER_EMAIL;
+  const corpoTelegram = testo.telegram(opp, genere) + '\n\n' + FIRMA;
   const errEmail = email ? await inviaEmail(email, testo.soggetto, corpoEmail) : 'nessun indirizzo email';
   const errTelegram = chatId ? await inviaTelegram(chatId, corpoTelegram) : null;
 

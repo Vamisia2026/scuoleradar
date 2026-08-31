@@ -101,15 +101,25 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
     paragrafi: ['Questa è la <b>seconda opportunità</b> che abbiamo trovato per te. Te ne <b>resta 1</b>.'],
     cta: (_linkPro, linkOpp) => `👉 <a href="${linkOpp}">Guarda l'opportunità e candidati</a>`,
   },
+  prova3: {
+    testa: '🎯 Terza e ultima opportunità',
+    paragrafi: ['Questa è la <b>terza e ultima opportunità</b> di prova che abbiamo trovato per te.'],
+    cta: (_linkPro, linkOpp) => `👉 <a href="${linkOpp}">Guarda l'opportunità e candidati</a>`,
+  },
   extra: {
-    testa: '😮 Questa non dovevamo mandartela...',
-    paragrafi: ['Questa non dovevamo mandartela, ma era troppo bella. <b>Ora il tuo periodo di prova è finito.</b>'],
+    testa: '😮 Il tuo periodo di prova è terminato',
+    paragrafi: [
+      'Le tue <b>3 notifiche di prova sono terminate</b>.',
+      'Per continuare a ricevere le opportunità su misura per te, passa al piano PRO.',
+    ],
     cta: (linkPro) => `👉 <a href="${linkPro}">Attiva PRO</a>`,
   },
   recap: {
-    testa: '📋 Le tue notifiche di prova sono finite',
+    testa: '📋 Avviso finale: servizio di notifica sospeso',
     paragrafi: [
-      'Le tue notifiche di prova sono finite. <b>Passa al piano PRO</b> per continuare a ricevere notifiche illimitate in tempo reale, oppure resta con l\'Account Base.',
+      'Questo è l\'ultimo avviso del periodo di prova.',
+      'Il servizio di notifiche automatiche dell\'Account Base è terminato: non riceverai più nuove segnalazioni.',
+      'Passa a PRO per riattivarlo.',
     ],
     cta: (linkPro) => `👉 <a href="${linkPro}">Passa a PRO</a>`,
   },
