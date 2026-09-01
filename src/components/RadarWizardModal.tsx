@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { Modal } from '@/components/Modal';
 import { Pill } from '@/components/Pill';
-import { useApp } from '@/contexts/AppContext';
+import { useApp, STORAGE_KEY_RADAR_WIZARD_PENDING } from '@/contexts/AppContext';
 import { supabase } from '@/lib/supabase';
 import { ordiniScuola, materie, type OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso } from '@/data/classiConcorso';
@@ -52,6 +52,7 @@ export function RadarWizardModal() {
   const navigate = useNavigate();
   const {
     user, preferenze, radarWizardOpen, closeRadarWizard, completaOnboarding, salvaProfilo,
+    openAuthModal,
   } = useApp();
 
   const [fase, setFase] = useState<'wizard' | 'done'>('wizard');
@@ -211,10 +212,28 @@ export function RadarWizardModal() {
       favoriteSchools: preferenze.favoriteSchools ?? [],
       ignoredSchools: preferenze.ignoredSchools ?? [],
     };
+    // Salva le preferenze (localStorage) anche per gli anonimi: la configurazione
+    // non va mai persa.
     completaOnboarding(preferenzeFinali);
-    // Persiste su Supabase (tabella profiles): province, classi, ordini, canali notifica.
-    void salvaProfilo(preferenzeFinali);
-    setFase('done');
+
+    if (user) {
+      // Utente autenticato: persiste su Supabase e mostra il completamento.
+      // Persiste su Supabase (tabella profiles): province, classi, ordini, canali notifica.
+      void salvaProfilo(preferenzeFinali);
+      setFase('done');
+      return;
+    }
+
+    // Nessun paywall: alla fine della configurazione si mostra SOLO il form di
+    // registrazione account gratuito per salvare le preferenze e attivare i 3
+    // avvisi inclusi. Dopo il login il wizard riapre già configurato (AppContext).
+    try {
+      localStorage.setItem(STORAGE_KEY_RADAR_WIZARD_PENDING, '1');
+    } catch {
+      // localStorage non disponibile
+    }
+    closeRadarWizard();
+    openAuthModal('registrazione');
   };
 
   const chiudi = () => closeRadarWizard();
@@ -239,11 +258,9 @@ export function RadarWizardModal() {
           </span>
           <h3 className="mt-4 text-xl font-bold text-primary-800">Il tuo Radar è attivo!</h3>
           <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-primary-600">
-            Preferenze salvate: {ordini.length} {ordini.length === 1 ? 'tipologia' : 'tipologie'},{' '}
-            {provinceCodici.length} {provinceCodici.length === 1 ? 'provincia' : 'province'} e{' '}
-            {classiCodici.length + materieId.length} tra classi e materie. Ti avviseremo su{' '}
-            <strong>Telegram</strong> e via <strong>email</strong> appena esce un'opportunità
-            reale per te.
+            Preferenze salvate: {provinceCodici.length} {provinceCodici.length === 1 ? 'provincia' : 'province'},{' '}
+            {classiCodici.length + materieId.length} tra classi e materie. Ti avviseremo appena
+            esce un'opportunità per te.
           </p>
           <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
             <button
@@ -285,10 +302,6 @@ export function RadarWizardModal() {
               <h2 className="text-lg font-bold text-primary-800">
                 In quale ordine vuoi insegnare o lavorare?
               </h2>
-              <p className="mt-1 text-sm text-primary-600">
-                Puoi selezionare più opzioni. Il Radar cercherà opportunità per tutte le tipologie
-                scelte.
-              </p>
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 {ordiniScuola.map((o) => {
                   const selected = ordini.includes(o.id);
@@ -319,18 +332,6 @@ export function RadarWizardModal() {
                   );
                 })}
               </div>
-              <div className="mt-4 rounded-xl border border-secondary-200 bg-secondary-50 px-4 py-3 text-sm text-secondary-800">
-                <AlertCircle className="mr-1.5 inline h-4 w-4" />
-                I <strong>bandi PNRR/PON per esperti</strong>, i <strong>progetti CPIA</strong> e
-                le <strong>ore eccedenti</strong> non dipendono dall'ordine di scuola: li
-                includiamo comunque nel tuo Radar.
-              </div>
-              {ordini.length > 0 && (
-                <p className="mt-3 text-sm font-medium text-primary-600">
-                  Hai selezionato {ordini.length}{' '}
-                  {ordini.length === 1 ? 'tipologia' : 'tipologie'}.
-                </p>
-              )}
             </div>
           )}
 
@@ -338,10 +339,6 @@ export function RadarWizardModal() {
           {step === 2 && (
             <div className="animate-fade-in">
               <h2 className="text-lg font-bold text-primary-800">Province di interesse</h2>
-              <p className="mt-1 text-sm text-primary-600">
-                Seleziona le province in cui vuoi ricevere opportunità (interpelli, bandi,
-                progetti).
-              </p>
 
               {provinceCodici.length > 0 && (
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -421,11 +418,6 @@ export function RadarWizardModal() {
           {step === 3 && (
             <div className="animate-fade-in">
               <h2 className="text-lg font-bold text-primary-800">Classi di concorso e materie</h2>
-              <p className="mt-1 text-sm text-primary-600">
-                Seleziona le classi per cui sei abilitato e le materie in cui sei competente.
-                Puoi anche aggiungerne di personalizzate, anche non collegate a una classe
-                specifica.
-              </p>
 
               <div className="mt-5 space-y-5">
                 <div>
@@ -600,20 +592,17 @@ export function RadarWizardModal() {
           {/* Passo 4: Canali di Notifica */}
           {step === 4 && (
             <div className="animate-fade-in">
-              <h2 className="text-lg font-bold text-primary-800">Canali di notifica (Account Base)</h2>
+              <h2 className="text-lg font-bold text-primary-800">Canali di notifica</h2>
               <p className="mt-1 text-sm text-primary-600">
-                Riceverai le tue 3 notifiche gratuite all'anno (si rinnovano a ogni anno solare),
-                su Telegram e in copia via email.
+                3 notifiche incluse gratis all'anno, su Telegram ed email.
               </p>
 
               <div className="mt-5 space-y-5">
                 {/* Collegamento Telegram via deeplink ?start=<user_id> */}
                 <div className="rounded-xl border border-primary-100 bg-primary-50 p-4">
                   <p className="text-sm font-semibold text-primary-800">Collega Telegram</p>
-                  <p className="mt-1 text-xs leading-relaxed text-primary-600">
-                    Premi il pulsante qui sotto: si aprirà il bot <strong>@ScuoleRadar_bot</strong>{' '}
-                    con il tuo account già riconosciuto. Nel bot premi <strong>Start</strong>: il
-                    collegamento avviene automaticamente e riceverai le notifiche in tempo reale.
+                  <p className="mt-1 text-xs text-primary-600">
+                    Premi <strong>Start</strong> nel bot per collegarti.
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <a
@@ -631,11 +620,6 @@ export function RadarWizardModal() {
                       </span>
                     )}
                   </div>
-                  {!telegramCollegato && (
-                    <p className="mt-2 text-xs text-primary-400">
-                      Puoi completare il collegamento anche più tardi dalla pagina Profilo.
-                    </p>
-                  )}
                 </div>
 
                 <label className="block">
@@ -666,8 +650,7 @@ export function RadarWizardModal() {
                 </label>
 
                 <div className="rounded-xl bg-accent-50 px-4 py-3 text-sm text-accent-700">
-                  Piano Base: 3 notifiche all'anno, si rinnovano automaticamente a ogni anno
-                  solare. Niente spam: solo opportunità compatibili con il tuo profilo.
+                  Account Base: 3 notifiche incluse all'anno, nessun costo.
                 </div>
               </div>
             </div>

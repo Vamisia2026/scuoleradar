@@ -15,16 +15,21 @@
 //   "quantita" (opzionale, default 1): numero di crediti a consumo (1€/cad).
 //
 // Secrets richiesti:
-//   STRIPE_SECRET_KEY              (obbligatoria)
-//   STRIPE_PRICE_PRO_ANNUALE       (id price PRO annuale)
-//   STRIPE_PRICE_PRO_MENSILE       (id price PRO mensile)
-//   STRIPE_PRICE_A_CONSUMO         (id price A la Carte / a consumo; fallback: STRIPE_PRICE_CONSUMO, STRIPE_PRICE_ALACARTE)
-//   STRIPE_COUPON_REFERRAL_10      (opzionale — coupon amount_off 10€ per i referral)
+//   STRIPE_SECRET_KEY              (obbligatoria — sk_test_… / sk_live_…)
+//   STRIPE_PRICE_ID_ANNUAL         (Price ID PRO annuale — 49€, es. price_1U8GvSKHxfBbZQd8tFCGKT6k)
+//   STRIPE_PRICE_ID_MONTHLY        (Price ID PRO mensile — 9€, es. price_1U8GwMKHxfBbZQd8bHFbT0Zq)
+//   STRIPE_PRICE_ID_CONSUMO        (Price ID a consumo — 5€, es. price_1U8H14KHxfBbZQd834eSWOuE)
+//   REFERRAL_COUPON_ID             (Coupon referral -10€ sul PRO annuale, es. TOQf7ze2)
 //   STRIPE_MODE                    (opzionale — 'test' | 'live'; default: auto-rilevata dalla chiave sk_live_*)
+//   WEBHOOK_ENDPOINT               (URL dell'endpoint webhook configurato nel dashboard Stripe,
+//                                    es. https://gwdmsgsshvdnfrplbjiv.supabase.co/functions/v1/webhook)
+//
+// Retrocompatibilità: in lettura vengono accettati anche i vecchi nomi
+// STRIPE_PRICE_PRO_ANNUALE / STRIPE_PRICE_PRO_MENSILE / STRIPE_PRICE_A_CONSUMO
+// (con fallback _CONSUMO / _ALACARTE) e STRIPE_COUPON_REFERRAL_10 (fallback del coupon).
 //
 // Passaggio TEST → LIVE: aggiorna SOLO i secrets — STRIPE_SECRET_KEY=sk_live_…,
-// STRIPE_PRICE_* con i Price ID di produzione e il webhook secret live.
-// Nessuna modifica al codice è necessaria.
+// i Price ID e il coupon di produzione (nessuna modifica al codice necessaria).
 //
 // Deploy:
 //   supabase functions deploy checkout --project-ref <ref>   (JWT verificato di default)
@@ -42,8 +47,10 @@ console.log(
 const STRIPE_API = 'https://api.stripe.com/v1';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-/** Coupon Stripe (amount_off 10€, una tantum) per il programma referral. */
-const COUPON_REFERRAL = Deno.env.get('STRIPE_COUPON_REFERRAL_10') ?? '';
+/** Coupon referral Stripe (-10€ sul PRO annuale): REFERRAL_COUPON_ID (fallback STRIPE_COUPON_REFERRAL_10). */
+const COUPON_REFERRAL = Deno.env.get('REFERRAL_COUPON_ID') ?? Deno.env.get('STRIPE_COUPON_REFERRAL_10') ?? '';
+/** Endpoint webhook Stripe (configurato nel dashboard Stripe) — esposto nel health-check e nei log. */
+const WEBHOOK_ENDPOINT = Deno.env.get('WEBHOOK_ENDPOINT') ?? '';
 
 /**
  * Normalizza un piano ricevuto nel body (anche le varianti inglesi) al nome canonico italiano.
@@ -63,9 +70,16 @@ function normalizzaPiano(plan: string): string {
 }
 
 const STRIPE_PRICE_IDS: Record<string, string> = {
-  pro_annuale: Deno.env.get('STRIPE_PRICE_PRO_ANNUALE') ?? '',
-  pro_mensile: Deno.env.get('STRIPE_PRICE_PRO_MENSILE') ?? '',
+  pro_annuale:
+    Deno.env.get('STRIPE_PRICE_ID_ANNUAL') ??
+    Deno.env.get('STRIPE_PRICE_PRO_ANNUALE') ??
+    '',
+  pro_mensile:
+    Deno.env.get('STRIPE_PRICE_ID_MONTHLY') ??
+    Deno.env.get('STRIPE_PRICE_PRO_MENSILE') ??
+    '',
   a_consumo:
+    Deno.env.get('STRIPE_PRICE_ID_CONSUMO') ??
     Deno.env.get('STRIPE_PRICE_A_CONSUMO') ??
     Deno.env.get('STRIPE_PRICE_CONSUMO') ??
     Deno.env.get('STRIPE_PRICE_ALACARTE') ??
@@ -206,6 +220,8 @@ serve(async (req: Request) => {
         stripeKey: Boolean(STRIPE_SECRET_KEY),
         priceMancanti,
         mode: STRIPE_MODE,
+        webhookEndpoint: WEBHOOK_ENDPOINT,
+        couponReferral: Boolean(COUPON_REFERRAL),
       });
     }
 

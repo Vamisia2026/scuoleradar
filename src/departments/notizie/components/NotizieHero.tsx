@@ -360,18 +360,25 @@ export function NotizieHero() {
                   </p>
                 </div>
 
-                {/* Scuola iniziata: divisore orizzontale + conteggio vacanze */}
+                {/* Scuola iniziata: divisorio orizzontale netto + conteggio vacanze con la
+                    stessa gerarchia visiva del blocco superiore (Numero grande + Titolo). */}
                 {!contoVacanze.estate && (
                   <>
-                    <div className="mx-auto w-2/3 border-t border-dashed border-primary-100" />
-                    <div className="flex flex-1 flex-col items-center justify-center gap-1 px-5 py-4 text-center">
-                      <p className="font-display text-3xl font-black leading-none tracking-tight text-primary-900 sm:text-4xl">
+                    <div className="border-b border-gray-200" />
+                    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-5 py-5 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <CalendarClock className="h-4 w-4 shrink-0 text-secondary-500" />
+                        <span className="font-bold uppercase tracking-[0.22em] text-primary-500 text-xs">
+                          Conto alla rovescia
+                        </span>
+                      </div>
+                      <p className="mt-1 font-display text-4xl font-black leading-none tracking-tight text-primary-900 sm:text-5xl">
                         {contoVacanze.giorni}
-                        <span className="ml-2 align-baseline text-base font-bold uppercase tracking-[0.18em] text-primary-500">
+                        <span className="ml-2 align-baseline text-lg font-bold uppercase tracking-[0.18em] text-primary-500">
                           {contoVacanze.giorni === 1 ? 'giorno' : 'giorni'}
                         </span>
                       </p>
-                      <p className="text-sm font-semibold text-primary-700">
+                      <p className="mx-auto max-w-[17rem] text-lg font-bold uppercase leading-snug tracking-[0.16em] text-secondary-600 sm:text-xl">
                         Alle {contoVacanze.nome}.
                       </p>
                     </div>

@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { trackPageview } from '@/lib/analytics';
 import { AppProvider, useApp } from '@/contexts/AppContext';
 import { AuthModal } from '@/components/AuthModal';
 import { VetrinaModal } from '@/components/VetrinaModal';
@@ -57,6 +58,15 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/** Traccia la pagina vista a ogni cambio di rotta (SPA) — analytics non bloccante. */
+function RouteTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    trackPageview();
+  }, [location.pathname, location.search]);
+  return null;
+}
+
 export default function App() {
   return (
     <AppProvider>
@@ -64,6 +74,8 @@ export default function App() {
         <BrowserRouter>
           {/* Scroll-to-top globale a ogni cambio di rotta (SPA) */}
           <ScrollToTop />
+          {/* Pageview + referrer/source visitatore a ogni cambio rotta */}
+          <RouteTracker />
           <Routes>
             {/* Sito vetrina pubblico */}
             <Route path="/" element={<LandingPage />} />

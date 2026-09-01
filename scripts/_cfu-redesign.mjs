@@ -1,4 +1,15 @@
-import { AlertTriangle, CheckCircle2, GraduationCap, Sparkles } from 'lucide-react';
+/* Refactor UI/UX — CfuTool: terminologia "Calcolatore CFU", banner appetitoso,
+   mockup moderno. Uso: node scripts/_cfu-redesign.mjs */
+import fs from 'node:fs';
+import path from 'node:path';
+const root = process.cwd();
+const scrivi = (f, txt) => {
+  fs.writeFileSync(path.join(root, f), txt.split('\n').join('\r\n'), 'utf8');
+};
+
+scrivi(
+  'src/components/CfuTool.tsx',
+  `import { AlertTriangle, CheckCircle2, GraduationCap, Sparkles } from 'lucide-react';
 
 /** Righe dell'analisi CFU mostrate nel mockup. */
 const analisi = [
@@ -62,9 +73,9 @@ export function CfuTool() {
             {analisi.map((r) => (
               <div
                 key={r.codice}
-                className={`rounded-xl border p-4 ${
+                className={\`rounded-xl border p-4 \${
                   r.ammissibile ? 'border-accent-200 bg-accent-50/60' : 'border-primary-100 bg-white'
-                }`}
+                }\`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="flex items-center gap-2 text-sm font-bold text-primary-800">
@@ -94,15 +105,15 @@ export function CfuTool() {
                       <div key={q.ambito}>
                         <div className="flex items-center justify-between gap-2 text-[11px] text-primary-600">
                           <span className="font-semibold">{q.ambito}</span>
-                          <span className={`font-bold ${ok ? 'text-accent-700' : 'text-secondary-700'}`}>
+                          <span className={\`font-bold \${ok ? 'text-accent-700' : 'text-secondary-700'}\`}>
                             {q.presenti}/{q.richiesti} CFU
-                            {ok ? ' ✓' : ` (mancano ${q.richiesti - q.presenti})`}
+                            {ok ? ' ✓' : \` (mancano \${q.richiesti - q.presenti})\`}
                           </span>
                         </div>
                         <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
                           <div
-                            className={`h-full rounded-full ${ok ? 'bg-accent-500' : 'bg-secondary-400'}`}
-                            style={{ width: `${Math.min(100, pct)}%` }}
+                            className={\`h-full rounded-full \${ok ? 'bg-accent-500' : 'bg-secondary-400'}\`}
+                            style={{ width: \`\${Math.min(100, pct)}%\` }}
                           />
                         </div>
                       </div>
@@ -122,3 +133,6 @@ export function CfuTool() {
     </div>
   );
 }
+`,
+);
+console.log('  ✓ CfuTool: "Calcolatore CFU", banner appetitoso, mockup moderno');

@@ -8,6 +8,7 @@ import type { OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso, classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import { STORAGE_KEY_INTENDED_PLAN, STORAGE_KEY_INTENDED_PLAN_DATA, type PianoId } from '@/lib/pricing';
+import { identify, track } from '@/lib/analytics';
 
 /** Limite notifiche per gli utenti BASE: 3 per ANNO solare (reset annuale via RPC incrementa_notifiche_utente). */
 export const LIMITE_NOTIFICHE_PROVA = 3;
@@ -195,6 +196,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const register = useCallback(
     (u: User) => {
+      // Analytics: tentativo di registrazione email.
+      track('signup_attempted', { method: 'email' });
       setUser(u);
       // PASSO 3: crea anche l'utente reale su Supabase Auth (non bloccante per la demo).
       if (supabase) {
@@ -203,8 +206,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         void supabase.auth.signUp({ email: u.email, password }).then(({ error }) => {
           if (error && !/already registered/i.test(error.message)) {
             console.warn('Supabase signUp:', error.message);
+          } else {
+            // Account creato (o già registrato, in tal caso si riallaccia alla sessione).
+            track('signup_success', { method: 'email' });
           }
         });
+      } else {
+        // Modalità demo (Supabase non configurato): la registrazione è locale e immediata.
+        track('signup_success', { method: 'email', demo: true });
       }
     },
     [setUser],
@@ -288,6 +297,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** FASE 6 — avvia il checkout Stripe per il piano richiesto e redirige l'utente. */
   const avviaCheckout = useCallback(
     async (plan: PianoId, promo?: string, quantita?: number): Promise<{ ok: boolean; errore?: string }> => {
+      // Analytics: inizializzazione checkout (click "Diventa PRO" / ripresa piano).
+      track('checkout_started', { plan, promo: promo || '', quantita: quantita ?? 1 });
       if (!supabase) {
         return {
           ok: false,
@@ -470,6 +481,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loginConGoogle = useCallback(async () => {
     if (!supabase) return;
 
+    // Analytics: avvio del flusso Google OAuth (login o registrazione).
+    track('signin_google_started');
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -525,7 +539,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAvatarUrl(String(metaAu.avatar_url ?? metaAu.picture ?? '').trim() || null);
         const { data, error } = await supabase
           .from('profiles')
-          .select('province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, abbonamento_scade_il, crediti, notifiche_usate, favorite_schools, ignored_schools')
+          .select('province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, subscription_status, abbonamento_scade_il, current_period_end, crediti, notifiche_usate, favorite_schools, ignored_schools')
           .eq('id', au.id)
           .maybeSingle();
         if (!error && data) {
@@ -553,11 +567,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 ? data.ignored_schools
                 : prev.ignoredSchools,
           }));
-          // FASE 6 — piano e contatori dal profilo (server-side)
-          setAbbonato(
-            data.piano === 'pro' &&
-              (!data.abbonamento_scade_il || new Date(data.abbonamento_scade_il) > new Date()),
-          );
+          // FASE 6 + Account Bridge — piano, stato abbonamento e scadenza (server-side).
+          // Lo stato esplicito (subscription_status) e la scadenza (current_period_end,
+          // sincronizzata dal webhook) cascano automaticamente su abbonato=false.
+          const periodoOk =
+            !data.abbonamento_scade_il || new Date(data.abbonamento_scade_il) > new Date();
+          const statoOk =
+            !data.subscription_status ||
+            data.subscription_status === 'active' ||
+            data.subscription_status === 'trialing';
+          setAbbonato(data.piano === 'pro' && statoOk && periodoOk);
           setCrediti(Number(data.crediti ?? 0));
           setNotificheUsate(Number(data.notifiche_usate ?? 0));
         }
@@ -585,6 +604,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
         setSupabaseUserId(session.user.id);
+        // Analytics: collega l'ID anonimo all'ID utente (nessun dato personale inviato).
+        identify(session.user.id);
         const meta = (session.user.user_metadata ?? {}) as Record<string, unknown>;
         // Avatar Google OAuth: avatar_url (o picture come fallback) in user_metadata.
         setAvatarUrl(String(meta.avatar_url ?? meta.picture ?? '').trim() || null);

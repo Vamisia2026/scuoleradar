@@ -21,7 +21,7 @@
 5. Radar Scuole / Interpelli (deep)
 6. Notifiche & Drip Freemium (deep)
 7. Modulistica & Archivista Capo (deep)
-8. Check CFU & CV Builder
+8. Calcolatore CFU & CV Builder
 9. Blog Notizie (cron + editorial gate)
 10. PureFocus, Assistente AI & pagine vetrina
 11. Programma Referral & Codici Promo
@@ -644,7 +644,7 @@ Client tipizzato dell'Edge `genera-modulo` + motore locale cache-first:
 
 ---
 
-## 8. Check CFU & CV Builder
+## 8. Calcolatore CFU & CV Builder
 
 ### 8.1 Calcolatore CFU (`CfuTool.tsx`, 500 righe)
 - Preset `TITOLI_STUDIO` (L-19, LM-85, LM-14, …) con `esamiTipici`
@@ -760,9 +760,11 @@ Niente menzioni a ricompense o account PRO gratuiti. Nel header/dashboard compar
 ### 12.1 Edge `checkout` (JWT)
 - Body `{ plan: 'pro_annuale'|'pro_mensile'|'a_consumo', promo?, quantita?, origin? }`
   (accetta varianti inglesi `pro_annual/pro_monthly/alacarte`).
-- Price ID **solo da secrets** (`STRIPE_PRICE_PRO_ANNUALE`, `_MENSILE`, `_A_CONSUMO`);
+- Price ID **solo da secrets** (`STRIPE_PRICE_ID_ANNUAL`, `STRIPE_PRICE_ID_MONTHLY`,
+  `STRIPE_PRICE_ID_CONSUMO`; retrocompatibili: `STRIPE_PRICE_PRO_ANNUALE`/`_MENSILE`/`_A_CONSUMO`);
   mai fidarsi di priceId client.
-- Referral: `validaPromo` → coupon `STRIPE_COUPON_REFERRAL_10` su PRO annuale e crediti;
+- Referral: `validaPromo` → coupon `REFERRAL_COUPON_ID` (fallback `STRIPE_COUPON_REFERRAL_10`)
+  su PRO annuale e crediti;
   `metadata[promo]`/`metadata[promo_referrer]` per il webhook.
 - `allow_promotion_codes` abilitato SOLO se non c'è coupon automatico (mutualmente esclusivi).
 - URL success/cancel dinamici: `origin + /dashboard/radar?esito=successo|annullato`.
@@ -783,14 +785,31 @@ Niente menzioni a ricompense o account PRO gratuiti. Nel header/dashboard compar
 Tutto è già pronto: il codice legge **solo da secrets** e non cambia tra modalità.
 Per passare in produzione basta aggiornare i secrets Supabase (nessun redeploy del codice):
 1. `STRIPE_SECRET_KEY` → `sk_live_…` (la modalità viene auto-rilevata dal prefisso `sk_live_`).
-2. `STRIPE_PRICE_PRO_ANNUALE`, `STRIPE_PRICE_PRO_MENSILE`, `STRIPE_PRICE_A_CONSUMO` → i Price ID
+2. `STRIPE_PRICE_ID_ANNUAL`, `STRIPE_PRICE_ID_MONTHLY`, `STRIPE_PRICE_ID_CONSUMO` → i Price ID
    dello **Stripe Live** (attenzione: gli ID test e live sono diversi anche per lo stesso prezzo).
-3. `STRIPE_WEBHOOK_SECRET` → signing secret dell'endpoint **Live** (endpoint webhook separato).
-4. `STRIPE_COUPON_REFERRAL_10` → ID del coupon Live (se si vuole mantenere lo sconto referral -10€).
+3. `STRIPE_WEBHOOK_SECRET` → signing secret (`whsec_…`) dell'endpoint **Live** (endpoint webhook separato).
+4. `REFERRAL_COUPON_ID` → ID del coupon Live (se si vuole mantenere lo sconto referral -10€).
 5. `STRIPE_MODE=live` (facoltativo, esplicito) — il log di avvio di `checkout`/`webhook` riporta la
-   modalità; il `ping` di `checkout` restituisce `{ mode, configurato, priceMancanti }` per il check.
+   modalità; il `ping` di `checkout` restituisce
+   `{ mode, configurato, priceMancanti, webhookEndpoint, couponReferral }`.
 6. Verifica con un pagamento reale di prova (es. piano mensile) e controlla i log della Edge Function
    `webhook` (piano=`pro`, scadenza=`current_period_end`).
+
+**Valori di produzione attuali (Stripe):**
+| Secret | Valore |
+|---|---|
+| `STRIPE_PRICE_ID_ANNUAL` | `price_1U8GvSKHxfBbZQd8tFCGKT6k` — PRO annuale 49€ |
+| `STRIPE_PRICE_ID_MONTHLY` | `price_1U8GwMKHxfBbZQd8bHFbT0Zq` — PRO mensile 9€ |
+| `STRIPE_PRICE_ID_CONSUMO` | `price_1U8H14KHxfBbZQd834eSWOuE` — a consumo 5€ |
+| `REFERRAL_COUPON_ID` | `TOQf7ze2` — coupon -10€ sul PRO annuale |
+| `WEBHOOK_ENDPOINT` | `https://gwdmsgsshvdnfrplbjiv.supabase.co/functions/v1/webhook` |
+| `STRIPE_WEBHOOK_SECRET` | `whsec_…` — signing secret dell'endpoint (test o live) |
+
+**Payout / accrediti bancari (Wise):**
+- **Beneficiary**: Bartolo Ansaldi
+- **IBAN**: BE07 9058 5022 0666
+- **SWIFT/BIC**: TRWIBEB1XXX
+- **Bank Address**: Wise, Rue du Trône 100, 3rd floor, Brussels, 1050, Belgium
 
 ---
 
@@ -964,9 +983,10 @@ UNIQUE `(user_id, module_key)`. Indice `(user_id, created_at desc)`.
 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `TELEGRAM_BOT_TOKEN`.
 
 ### 17.3 Secrets Supabase Edge (via `supabase secrets set`)
-`STRIPE_SECRET_KEY`, `STRIPE_PRICE_PRO_ANNUALE`, `STRIPE_PRICE_PRO_MENSILE`,
-`STRIPE_PRICE_A_CONSUMO` (fallback `_CONSUMO`, `_ALACARTE`), `STRIPE_COUPON_REFERRAL_10`,
-`STRIPE_WEBHOOK_SECRET`, `STRIPE_MODE` (test | live, vedi §12.3), `SEND_NOTIFICATION_SECRET`,
+`STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID_ANNUAL`, `STRIPE_PRICE_ID_MONTHLY`, `STRIPE_PRICE_ID_CONSUMO`,
+`REFERRAL_COUPON_ID`, `WEBHOOK_ENDPOINT`, `STRIPE_WEBHOOK_SECRET` (`whsec_…`), `STRIPE_MODE`
+(test | live, vedi §12.3) — retrocompatibili: `STRIPE_PRICE_PRO_ANNUALE`/`_MENSILE`/`_A_CONSUMO`
+(e `_CONSUMO`/`_ALACARTE`), `STRIPE_COUPON_REFERRAL_10` —, `SEND_NOTIFICATION_SECRET`,
 `RESEND_API_KEY`, `RESEND_FROM_EMAIL`,
 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`,
 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_EMAILS`, `CONTACT_SUPPORT_EMAIL`, `APP_URL`.

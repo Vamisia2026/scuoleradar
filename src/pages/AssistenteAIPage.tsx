@@ -63,8 +63,8 @@ export function AssistenteAIPage() {
           domanda e ricevi una risposta chiara, con i riferimenti giusti e i moduli che ti servono.
         </p>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-primary-500">
-          Stiamo selezionando i primi docenti che vogliono provarlo in anteprima. Lascia i tuoi dati
-          qui sotto: ti contatteremo appena l&apos;accesso sarà disponibile.
+          Stiamo cercando scuolatori che vogliono provare il servizio in anteprima. Lascia i tuoi dati
+          qui: ti contatteremo appena apriremo l'accesso.
         </p>
       </div>
 
@@ -80,7 +80,6 @@ export function AssistenteAIPage() {
               required
               value={nomeCognome}
               onChange={(e) => setNomeCognome(e.target.value)}
-              placeholder="Mario Rossi"
               className="input"
             />
           </label>
@@ -91,7 +90,6 @@ export function AssistenteAIPage() {
               required
               value={emailAccesso}
               onChange={(e) => setEmailAccesso(e.target.value)}
-              placeholder="mario@esempio.it"
               className="input"
             />
           </label>
@@ -121,20 +119,23 @@ export function AssistenteAIPage() {
             </span>
             <select required value={ruolo} onChange={(e) => setRuolo(e.target.value)} className="input">
               <option value="">Seleziona…</option>
-              <option value="ruolo">Insegnante di ruolo</option>
-              <option value="gps">Inserito in GPS</option>
-              <option value="interpelli">Cerco interpelli e supplenze</option>
+              <option value="docente">Docente</option>
+              <option value="ata_segreteria">ATA (Segreteria)</option>
+              <option value="ata_tecnico">ATA (Tecnico)</option>
+              <option value="ata_collaboratore">ATA (Collaboratore scolastico / Bidello)</option>
+              <option value="educatore">Educatore</option>
+              <option value="dirigente">Dirigente</option>
+              <option value="altro">Altro</option>
             </select>
           </label>
           <label className="block sm:col-span-2">
-            <span className="mb-1 block text-xs font-semibold text-primary-700">Età (anni)</span>
+            <span className="mb-1 block text-xs font-semibold text-primary-700">Età</span>
             <input
               type="number"
               min={18}
               max={99}
               value={eta}
               onChange={(e) => setEta(e.target.value)}
-              placeholder="Es. 34"
               className="input"
             />
           </label>

@@ -34,7 +34,7 @@ export function ChiSiamoPage() {
             Per questo motivo stiamo costruendo{' '}
             <strong>sistemi che facciano ordine nella confusione</strong>. Potremmo tenerli per noi e
             avere un vantaggio personale, ma vogliamo metterli a disposizione di tutti,{' '}
-            <strong>a un prezzo onesto</strong>, affinché le persone smettano di sacrificare la propria
+            <strong>a un prezzo accessibile</strong>, affinché le persone smettano di sacrificare la propria
             vita.
           </p>
 

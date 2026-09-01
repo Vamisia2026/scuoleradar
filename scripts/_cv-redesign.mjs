@@ -1,4 +1,13 @@
-import { Award, Briefcase, GraduationCap, Mail, MapPin, Phone, Sparkles } from 'lucide-react';
+/* Refactor UI/UX — CvTool: nomi realistici, pitch ad alta conversione,
+   mockup moderno. Uso: node scripts/_cv-redesign.mjs */
+import fs from 'node:fs';
+import path from 'node:path';
+const root = process.cwd();
+const scrivi = (f, txt) => {
+  fs.writeFileSync(path.join(root, f), txt.split('\n').join('\r\n'), 'utf8');
+};
+
+const parte1 = `import { Award, Briefcase, GraduationCap, Mail, MapPin, Phone, Sparkles } from 'lucide-react';
 
 /** Sezioni del CV mostrate nel mockup. */
 const sezioni = [
@@ -67,7 +76,8 @@ export function CvTool() {
               </span>
             </div>
           </div>
-          {/* Corpo: sezioni con evidenziazioni */}
+`;
+const parte2 = `          {/* Corpo: sezioni con evidenziazioni */}
           <div className="space-y-5 p-5">
             {sezioni.map((s) => (
               <div key={s.titolo}>
@@ -115,3 +125,7 @@ export function CvTool() {
     </div>
   );
 }
+`;
+scrivi('src/components/CvTool.tsx', parte1 + parte2);
+console.log('  ✓ CvTool: Elena Bianchi, pitch ad alta conversione, mockup moderno');
+

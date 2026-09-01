@@ -3,6 +3,7 @@ import { MessageSquare, Calculator, FileText, FolderOpen, PenLine, Radar, Shield
 import { Modal } from '@/components/Modal';
 import { useApp } from '@/contexts/AppContext';
 import { STORAGE_KEY_INTENDED_PLAN } from '@/lib/pricing';
+import { track } from '@/lib/analytics';
 
 interface DettaglioVetrina {
   icona: ReactNode;
@@ -26,7 +27,7 @@ const dettagli: Record<string, DettaglioVetrina> = {
   },
   cfu: {
     icona: <Calculator className="h-6 w-6" />,
-    titolo: 'Check CFU',
+    titolo: 'Calcolatore CFU',
     testo:
             'Verifica le classi di concorso accessibili dal tuo percorso di studi: in arrivo a Ottobre, riservato ai membri PRO.',
   },
@@ -46,7 +47,7 @@ const dettagli: Record<string, DettaglioVetrina> = {
     icona: <PenLine className="h-6 w-6" />,
     titolo: 'PureFocus',
     testo:
-      'PureFocus è una piattaforma straordinaria che trasforma YouTube in un ambiente di studio e lavoro: elimina distrazioni, suggerimenti e contenuti irrilevanti, lasciandoti solo ciò che ti serve per ottimizzare il tuo tempo. PureFocus costa 29$ all\u2019anno ed è incluso nel tuo abbonamento a Scuole Radar.',
+      'La piattaforma che trasforma YouTube in un ambiente di studio e lavoro: elimina distrazioni, suggerimenti e contenuti irrilevanti, lasciandoti solo ciò che ti serve per ottimizzare il tuo tempo.',
   },
 };
 
@@ -64,6 +65,9 @@ export function VetrinaModal() {
       if (!user) openAuthModal('registrazione', 'default');
       return;
     }
+
+    // Analytics: click sulla CTA di upgrade a un piano PRO (funnel checkout).
+    track('cta_pro_click', { piano });
 
     if (user) {
       // Già autenticato: checkout Stripe IMMEDIATO per il piano scelto, nessun altro click.

@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { BellRing, CheckCircle2, Radar, Database, SlidersHorizontal } from 'lucide-react';
+import { BellRing, CheckCircle2, Radar, Database, SlidersHorizontal, UserPlus } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { InterpelloCard } from '@/components/InterpelloCard';
+import { PureFocusBridgeCta } from '@/components/PureFocusBridgeCta';
 import { useApp, LIMITE_NOTIFICHE_PROVA } from '@/contexts/AppContext';
 import { interpelli } from '@/data/interpelli';
 import { classeByCodice } from '@/data/classiConcorso';
@@ -20,7 +21,7 @@ export function DashboardLayout() {
   const tabs: TabNav[] = [
     { to: '/dashboard/radar', label: '📡 Radar Scuole', end: true },
     { to: '/dashboard/cv', label: '📄 Crea CV' },
-    { to: '/dashboard/cfu', label: '🎓 Check CFU' },
+    { to: '/dashboard/cfu', label: '🎓 Calcolatore CFU' },
     { to: '/dashboard/assistente-ai', label: '💬 Assistente Sindacalista Virtuale' },
     { to: '/dashboard/moduli', label: '📁 Moduli' },
     { to: '/dashboard/purefocus', label: '🧘 Pure Focus' },
@@ -73,7 +74,7 @@ export function DashboardPage() {
     notificheUsate,
     abbonato,
     origineDati,
-    openVetrina,
+    openAuthModal,
     openRadarWizard,
   } = useApp();
 
@@ -133,13 +134,21 @@ export function DashboardPage() {
             l&apos;abbonamento annuale da €49, che ti dà accesso a tutti i nostri servizi illimitati.
             Te lo ripaghi con meno di due ore di lavoro all&apos;anno.
           </p>
-          <button
-            onClick={() => openVetrina('radar')}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            Imposta le tue ricerche
-          </button>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => openAuthModal('registrazione')}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
+            >
+              <UserPlus className="h-4 w-4" />
+              Iscriviti Gratis (Account Base)
+            </button>
+            <Link
+              to="/prezzi"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
+            >
+              Passa a PRO
+            </Link>
+          </div>
         </div>
       ) : (
         <div
@@ -185,6 +194,8 @@ export function DashboardPage() {
             prossimo anno.
           </p>
         )}
+        {/* Account Bridge: launch link cross-app per PureFocus PRO */}
+        <PureFocusBridgeCta />
         </div>
       )}
 

@@ -8,13 +8,18 @@
 // `stripe-signature` (HMAC-SHA256) con STRIPE_WEBHOOK_SECRET.
 //
 // Eventi gestiti:
-//   checkout.session.completed   → subscription: piano=pro | payment: +crediti
-//   customer.subscription.created/updated → piano=pro, scadenza=current_period_end
-//   customer.subscription.deleted → piano=base
+//   checkout.session.completed   → subscription: piano=pro + subscription_tier | payment: +crediti
+//   customer.subscription.created/updated → piano, subscription_status, current_period_end
+//   customer.subscription.deleted → piano=base, subscription_status=canceled
+// Nota: l'Account Bridge (get_user_pro_status) deriva is_pro da
+// subscription_status + current_period_end → la scadenza casca automaticamente.
 //
 // Secrets richiesti:
-//   STRIPE_WEBHOOK_SECRET  (dal pannello Stripe → Webhooks → signing secret)
+//   STRIPE_WEBHOOK_SECRET  (signing secret dal pannello Stripe → Webhooks, formato whsec_…;
+//                           in LIVE va usato il signing secret dell'endpoint Live)
 //   STRIPE_MODE            (opzionale — 'test' | 'live': modalità dichiarata, solo per i log)
+//   WEBHOOK_ENDPOINT       (URL pubblico di questo endpoint —
+//                           es. https://gwdmsgsshvdnfrplbjiv.supabase.co/functions/v1/webhook)
 //
 // Passaggio TEST → LIVE: basta usare il signing secret LIVE in STRIPE_WEBHOOK_SECRET.
 //
@@ -27,9 +32,19 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 const STRIPE_WEBHOOK_SECRET = Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? '';
 /** Modalità Stripe dichiarata (test | live): la firma usa il webhook secret corrispondente. */
 const STRIPE_MODE = Deno.env.get('STRIPE_MODE') ?? 'test';
-console.log(`[stripe-webhook] modalità Stripe: ${STRIPE_MODE}`);
+console.log(
+  `[stripe-webhook] modalità Stripe: ${STRIPE_MODE} — webhook secret: ${STRIPE_WEBHOOK_SECRET
+    ? STRIPE_WEBHOOK_SECRET.startsWith('whsec_')
+      ? STRIPE_WEBHOOK_SECRET.slice(0, 10) + '…'
+      : 'formato non whsec_ (da verificare)'
+    : 'mancante'}`,
+);
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+/** Price ID LIVE (secrets): mapping prezzo → tier per subscription_tier (Account Bridge). */
+const STRIPE_PRICE_ID_ANNUAL = Deno.env.get('STRIPE_PRICE_ID_ANNUAL') ?? '';
+const STRIPE_PRICE_ID_MONTHLY = Deno.env.get('STRIPE_PRICE_ID_MONTHLY') ?? '';
+const STRIPE_PRICE_ID_CONSUMO = Deno.env.get('STRIPE_PRICE_ID_CONSUMO') ?? '';
 
 /** Verifica l'header `stripe-signature` (t=<timestamp>,v1=<hmac hex>). */
 async function verificaFirma(body: string, signatureHeader: string): Promise<boolean> {
@@ -128,6 +143,15 @@ function epochToIso(epoch: number | null | undefined): string | null {
   return new Date(epoch * 1000).toISOString();
 }
 
+/** Mappa un Price ID Stripe al tier canonico (per subscription_tier, Account Bridge). */
+function tierDaPriceId(priceId?: string | null): string {
+  if (!priceId) return 'pro_annuale';
+  if (STRIPE_PRICE_ID_ANNUAL && priceId === STRIPE_PRICE_ID_ANNUAL) return 'pro_annuale';
+  if (STRIPE_PRICE_ID_MONTHLY && priceId === STRIPE_PRICE_ID_MONTHLY) return 'pro_mensile';
+  if (STRIPE_PRICE_ID_CONSUMO && priceId === STRIPE_PRICE_ID_CONSUMO) return 'a_consumo';
+  return 'pro_annuale';
+}
+
 serve(async (req: Request) => {
   // 1. Verifica della firma Stripe sul body grezzo
   const raw = await req.text();
@@ -148,6 +172,8 @@ serve(async (req: Request) => {
         status?: string;
         current_period_end?: number | null;
         customer?: string;
+        /** Line items della sessione/abbonamento: usati per derivare il tier dal Price ID. */
+        items?: { data?: { price?: { id?: string } }[] };
       };
     };
   };
@@ -171,12 +197,16 @@ serve(async (req: Request) => {
         const ok = await incrementaCrediti(userId, 1);
         console.log(`  → crediti +1: ${ok}`);
       } else if (obj.mode === 'subscription') {
-        // PRO → piano attivo (scadenza gestita da subscription.*)
+        // PRO → piano attivo (scadenza gestita da subscription.*).
+        // Account Bridge: imposta anche subscription_tier/status espliciti.
+        const tier = tierDaPriceId(obj.items?.data?.[0]?.price?.id);
         const ok = await aggiornaProfilo(userId, {
           piano: 'pro',
           stripe_subscription_id: obj.id ?? null,
+          subscription_tier: tier,
+          subscription_status: 'active',
         });
-        console.log(`  → piano pro (subscription ${obj.id ?? '?'}): ${ok}`);
+        console.log(`  → piano pro (subscription ${obj.id ?? '?'}, tier ${tier}): ${ok}`);
       }
 
       // Referral: se il checkout usava un codice promo, registra la ricompensa del referrer
@@ -191,12 +221,19 @@ serve(async (req: Request) => {
     case 'customer.subscription.updated': {
       if (!userId) break;
       const attivo = obj.status === 'active' || obj.status === 'trialing';
+      const tier = tierDaPriceId(obj.items?.data?.[0]?.price?.id);
+      const scadenza = attivo ? epochToIso(obj.current_period_end) : null;
       const ok = await aggiornaProfilo(userId, {
         piano: attivo ? 'pro' : 'base',
         stripe_subscription_id: obj.id ?? null,
-        abbonamento_scade_il: attivo ? epochToIso(obj.current_period_end) : null,
+        subscription_tier: attivo ? tier : 'base',
+        subscription_status: obj.status ?? (attivo ? 'active' : 'inactive'),
+        abbonamento_scade_il: scadenza,
+        current_period_end: scadenza,
       });
-      console.log(`  → piano=${attivo ? 'pro' : 'base'} scade=${epochToIso(obj.current_period_end)}: ${ok}`);
+      console.log(
+        `  → piano=${attivo ? 'pro' : 'base'} tier=${tier} status=${obj.status ?? '?'} scade=${scadenza}: ${ok}`,
+      );
       break;
     }
 
@@ -205,9 +242,12 @@ serve(async (req: Request) => {
       const ok = await aggiornaProfilo(userId, {
         piano: 'base',
         stripe_subscription_id: null,
+        subscription_tier: 'base',
+        subscription_status: 'canceled',
         abbonamento_scade_il: null,
+        current_period_end: null,
       });
-      console.log(`  → piano base: ${ok}`);
+      console.log(`  → piano base (status=canceled): ${ok}`);
       break;
     }
 

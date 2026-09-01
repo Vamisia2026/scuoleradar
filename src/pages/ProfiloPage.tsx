@@ -2,7 +2,7 @@ import { useMemo, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   Check, MapPin, Send, Mail, Search, GraduationCap, School, BookOpen, Baby, Users, Moon, Briefcase, Wrench, Plus,
-  Star, Ban, Download, Trash2, Sparkles, ChevronDown, AlertTriangle, Loader2, FolderOpen,
+  Star, Ban, Download, Trash2, Sparkles, ChevronDown, AlertTriangle, Loader2, FolderOpen, Lock,
 } from 'lucide-react';
 import { useApp, type Preferenze } from '@/contexts/AppContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -70,7 +70,7 @@ function Accordion({
 }
 
 export function ProfiloPage() {
-  const { preferenze, setPreferenze, salvaProfilo } = useApp();
+  const { preferenze, setPreferenze, salvaProfilo, abbonato } = useApp();
   // Da "Completa il profilo" (Radar) si arriva con ?configura=1: apriamo le sezioni
   // principali così l'utente vede subito i campi da compilare.
   const [searchParams] = useSearchParams();
@@ -344,11 +344,12 @@ export function ProfiloPage() {
       <Accordion
         icona="📁"
         titolo="Modelli Scaricati di Recente"
-        badge={moduliScaricati.length ? `${moduliScaricati.length} scaricati` : undefined}
+        badge={abbonato ? (moduliScaricati.length ? `${moduliScaricati.length} scaricati` : undefined) : 'PRO'}
         aperto={!!accordionAperti.modelli}
         onToggle={() => toggleAccordion('modelli')}
       >
-        {moduliScaricati.length === 0 ? (
+        {abbonato ? (
+          moduliScaricati.length === 0 ? (
           <p className="text-sm text-primary-400">
             Non hai ancora scaricato modelli. Visita la pagina Moduli per trovare documenti e
             template pronti all&apos;uso.
@@ -386,6 +387,23 @@ export function ProfiloPage() {
               </li>
             ))}
           </ul>
+          )
+        ) : (
+          <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-primary-200 bg-primary-50/50 p-5">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1 text-[11px] font-bold text-primary-600 ring-1 ring-primary-200">
+              <Lock className="h-3.5 w-3.5" />
+              Feature PRO
+            </span>
+            <p className="text-sm font-semibold leading-relaxed text-primary-800">
+              I tuoi modelli scaricati sono salvati nel tuo archivio personale (Feature PRO)
+            </p>
+            <Link
+              to="/prezzi"
+              className="mt-1 inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
+            >
+              Passa a PRO per salvare i tuoi documenti
+            </Link>
+          </div>
         )}
         <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-primary-100 pt-3">
           <Link
@@ -395,7 +413,7 @@ export function ProfiloPage() {
             <FolderOpen className="h-3.5 w-3.5" />
             Vai alla pagina Moduli
           </Link>
-          {moduliScaricati.length > 0 && (
+          {abbonato && moduliScaricati.length > 0 && (
             <button
               onClick={svuotaStorico}
               className="text-xs font-medium text-primary-400 transition hover:text-error-600"

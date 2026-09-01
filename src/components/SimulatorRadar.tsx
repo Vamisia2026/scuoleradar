@@ -16,7 +16,7 @@ interface OpportunitaReale {
 }
 
 export function SimulatorRadar() {
-  const { openVetrina } = useApp();
+  const { openRadarWizard } = useApp();
   const [provCodice, setProvCodice] = useState('');
   const [classeCodice, setClasseCodice] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -194,7 +194,7 @@ export function SimulatorRadar() {
                     Dati reali, aggiornati in tempo reale dal database ScuoleRadar.
                   </p>
                   <button
-                    onClick={() => openVetrina('radar')}
+                    onClick={() => openRadarWizard()}
                     className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-accent-600"
                   >
                     <BellRing className="h-4 w-4" />
@@ -217,7 +217,7 @@ export function SimulatorRadar() {
                     troviamo qualcosa di interessante per te.
                   </p>
                   <button
-                    onClick={() => openVetrina('radar')}
+                    onClick={() => openRadarWizard()}
                     className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
                   >
                     <BellRing className="h-4 w-4" />

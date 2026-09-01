@@ -47,7 +47,7 @@ export const servizi: Servizio[] = [
   {
     slug: 'calcolo-cfu',
     emoji: '🎓',
-    titolo: 'Check CFU',
+    titolo: 'Calcolatore CFU',
     sottotitolo: 'Scopri quali classi di concorso puoi ottenere',
     descrizione:
       'Inserisci i tuoi esami universitari (materia, CFU e settore scientifico-disciplinare) e verifica in modo indicativo le classi di concorso a cui risulti ammissibile, con il dettaglio dei CFU mancanti.',

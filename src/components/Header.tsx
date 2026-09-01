@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { LogOut, User as UserIcon, Menu, X, Sparkles, ChevronDown, CreditCard, FileText } from 'lucide-react';
+import { LogOut, User as UserIcon, Menu, X, Sparkles, ChevronDown, CreditCard, FileText, Lock } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 
 /** Link istituzionali / di supporto (barra superiore). */
@@ -23,7 +23,7 @@ interface LinkStrumento {
 const strumentiLinks: LinkStrumento[] = [
   { to: '/dashboard/radar', label: '📡 Radar Scuole' },
   { to: '/dashboard/cv', label: '📄 Crea CV' },
-  { to: '/dashboard/cfu', label: '🎓 Check CFU' },
+  { to: '/dashboard/cfu', label: '🎓 Calcolatore CFU' },
   { to: '/dashboard/assistente-ai', label: '💬 Assistente Sindacalista Virtuale' },
   { to: '/dashboard/moduli', label: '📁 Moduli' },
   { to: '/dashboard/purefocus', label: '🧘 Pure Focus' },
@@ -182,15 +182,26 @@ export function Header() {
                         Il mio profilo
                       </Link>
                       <Link
-                        to="/dashboard/moduli"
+                        to={abbonato ? '/dashboard/moduli' : '/prezzi'}
                         onClick={chiudiMenuUtente}
                         className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
                       >
-                        <FileText className="h-4 w-4 text-primary-400" />
+                        {abbonato ? (
+                          <FileText className="h-4 w-4 text-primary-400" />
+                        ) : (
+                          <Lock className="h-4 w-4 text-secondary-500" />
+                        )}
                         Documenti scaricati
-                        <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-50 px-1.5 text-[11px] font-bold text-primary-600">
-                          {moduliScaricati}
-                        </span>
+                        {abbonato ? (
+                          <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-50 px-1.5 text-[11px] font-bold text-primary-600">
+                            {moduliScaricati}
+                          </span>
+                        ) : (
+                          <span className="ml-auto inline-flex items-center gap-0.5 rounded-full bg-secondary-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-secondary-700 ring-1 ring-secondary-200">
+                            <Lock className="h-3 w-3" />
+                            PRO
+                          </span>
+                        )}
                       </Link>
                       {!abbonato && (
                         <Link

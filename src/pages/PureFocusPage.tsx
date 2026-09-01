@@ -35,10 +35,9 @@ export function PureFocusPage() {
         </div>
 
         <p className="mt-5 max-w-2xl text-base leading-relaxed text-primary-100">
-          PureFocus trasforma YouTube in un ambiente di studio e lavoro: elimina distrazioni,
-          suggerimenti e contenuti irrilevanti, lasciandoti solo ciò che ti serve per ottimizzare il
-          tuo tempo. Uno strumento essenziale per studiare, ripassare e preparare le tue lezioni
-          senza perdere la concentrazione.
+              La piattaforma che trasforma YouTube in un ambiente di studio e lavoro: elimina
+              distrazioni, suggerimenti e contenuti irrilevanti, lasciandoti solo ciò che ti serve
+              per ottimizzare il tuo tempo.
         </p>
 
         {abbonato ? (

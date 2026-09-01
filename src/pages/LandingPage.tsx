@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { SimulatorRadar } from '@/components/SimulatorRadar';
-import { useApp, STORAGE_KEY_RADAR_WIZARD_PENDING } from '@/contexts/AppContext';
+import { useApp } from '@/contexts/AppContext';
 import { servizi } from '@/data/servizi';
 
 export function LandingPage() {
@@ -13,18 +13,10 @@ export function LandingPage() {
   const navigate = useNavigate();
 
   const handleInizia = () => {
-    if (user) {
-      // Utente loggato: apre direttamente il wizard Radar (mai la pagina Profilo grezza).
-      openRadarWizard();
-    } else {
-      // Utente anonimo: segna il wizard come "in attesa" e chiedi prima login/registrazione.
-      try {
-        localStorage.setItem(STORAGE_KEY_RADAR_WIZARD_PENDING, '1');
-      } catch {
-        // localStorage non disponibile
-      }
-      openAuthModal('registrazione');
-    }
+    // Nessun paywall e nessun login anticipato: si configura subito il Radar.
+    // La registrazione gratuita (per salvare le preferenze e attivare i 3 avvisi
+    // inclusi) arriva SOLO alla fine del percorso di configurazione.
+    openRadarWizard();
   };
 
   const handleAccedi = () => {
@@ -90,14 +82,14 @@ export function LandingPage() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="mb-6 text-center">
             <h2 className="text-3xl font-bold text-primary-900">Come funziona</h2>
-            <p className="mt-3 text-primary-600">Tre passi. Semplice e onesto.</p>
+            <p className="mt-3 text-primary-600">Tre passaggi per non perdere più una sola opportunità.</p>
           </div>
           <div className="animate-fade-in grid gap-6 md:grid-cols-3">
             <StepCard
               icon={<UserPlus className="h-6 w-6" />}
               step="1"
               title="Registrati e imposta il tuo profilo"
-              text="Dicci ordine di scuola, materie, classi di concorso e province che ti interessano. Bastano due minuti."
+              text="Dicci ordine di scuola, materie, classi di concorso e province che ti interessano. Bastano pochi secondi."
             />
             <StepCard
               icon={<Send className="h-6 w-6" />}
@@ -224,10 +216,9 @@ export function LandingPage() {
               </div>
             </div>
             <p className="mt-4 leading-relaxed text-primary-100">
-              PureFocus è una piattaforma straordinaria che trasforma YouTube in un ambiente di studio
-              e lavoro: elimina distrazioni, suggerimenti e contenuti irrilevanti, lasciandoti solo ciò
-              che ti serve per ottimizzare il tuo tempo. PureFocus costa 29$ all&apos;anno ed è incluso nel
-              tuo abbonamento a Scuole Radar.
+              La piattaforma che trasforma YouTube in un ambiente di studio e lavoro: elimina
+              distrazioni, suggerimenti e contenuti irrilevanti, lasciandoti solo ciò che ti serve
+              per ottimizzare il tuo tempo.
             </p>
             <div className="mt-6">
               {user ? (
@@ -256,10 +247,10 @@ export function LandingPage() {
       <section className="bg-primary-900 py-10">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="grid gap-6 text-center md:grid-cols-4">
-            <Stat numero="100+" label="Interpelli e bandi mappati ogni mese" />
-            <Stat numero="3" label="Notifiche incluse per provare gratis" />
-            <Stat numero="49€" label="All'anno per il piano PRO, PureFocus incluso" />
-            <Stat numero="0" label="Dark pattern: onestà prima di tutto" />
+            <Stat numero="1.000+" label="Interpelli e bandi pubblicati ogni giorno in Italia" />
+            <Stat numero="12.000+" label="Supplenze e incarichi da conferire ogni mese" />
+            <Stat numero="4.000+" label="Richieste mensili per Personale ATA e Collaboratori" />
+            <Stat numero="120" label="Bandi al mese ritirati per mancanza di candidati" />
           </div>
         </div>
       </section>
@@ -270,10 +261,6 @@ export function LandingPage() {
           <h2 className="text-3xl font-bold text-primary-900 sm:text-4xl">
             ATTIVA IL TUO RADAR
           </h2>
-          <p className="mt-4 text-lg text-primary-600">
-            3 notifiche gratuite all'anno. Se trovi lavoro grazie a noi, ci raccomandi.
-            Altrimenti, se vuoi continuare, 49€ all'anno con PureFocus incluso.
-          </p>
           <button
             onClick={handleInizia}
             className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl bg-primary-500 px-8 py-4 text-base font-semibold text-white shadow-soft transition hover:bg-primary-600"
