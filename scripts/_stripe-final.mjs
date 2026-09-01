@@ -40,9 +40,9 @@ function applicaOp(f, ops) {
   const f = 'supabase/functions/checkout/index.ts';
   const headerNuovo = `// Secrets richiesti:
 //   STRIPE_SECRET_KEY              (obbligatoria — sk_test_… / sk_live_…)
-//   STRIPE_PRICE_ID_ANNUAL         (Price ID PRO annuale — 49€, es. price_1U8GvSKHxfBbZQd8tFCGKT6k)
-//   STRIPE_PRICE_ID_MONTHLY        (Price ID PRO mensile — 9€, es. price_1U8GwMKHxfBbZQd8bHFbT0Zq)
-//   STRIPE_PRICE_ID_CONSUMO        (Price ID a consumo — 5€, es. price_1U8H14KHxfBbZQd834eSWOuE)
+//   STRIPE_PRICE_ID_ANNUAL         (Price ID PRO annuale — 49€, es. price_1UAnSqKHxfBbZQd8xtvuLMVK)
+//   STRIPE_PRICE_ID_MONTHLY        (Price ID PRO mensile — 9€, es. price_1UAnTeKHxfBbZQd8iqjzlvn0)
+//   STRIPE_PRICE_ID_CONSUMO        (Price ID a consumo — 5€, es. price_1UAnUXKHxfBbZQd8n1UfrIkI)
 //   REFERRAL_COUPON_ID             (Coupon referral -10€ sul PRO annuale, es. TOQf7ze2)
 //   STRIPE_MODE                    (opzionale — 'test' | 'live'; default: auto-rilevata dalla chiave sk_live_*)
 //   WEBHOOK_ENDPOINT               (URL dell'endpoint webhook configurato nel dashboard Stripe,

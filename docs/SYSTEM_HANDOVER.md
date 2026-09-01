@@ -798,9 +798,9 @@ Per passare in produzione basta aggiornare i secrets Supabase (nessun redeploy d
 **Valori di produzione attuali (Stripe):**
 | Secret | Valore |
 |---|---|
-| `STRIPE_PRICE_ID_ANNUAL` | `price_1U8GvSKHxfBbZQd8tFCGKT6k` — PRO annuale 49€ |
-| `STRIPE_PRICE_ID_MONTHLY` | `price_1U8GwMKHxfBbZQd8bHFbT0Zq` — PRO mensile 9€ |
-| `STRIPE_PRICE_ID_CONSUMO` | `price_1U8H14KHxfBbZQd834eSWOuE` — a consumo 5€ |
+| `STRIPE_PRICE_ID_ANNUAL` | `price_1UAnSqKHxfBbZQd8xtvuLMVK` — PRO annuale 49€ |
+| `STRIPE_PRICE_ID_MONTHLY` | `price_1UAnTeKHxfBbZQd8iqjzlvn0` — PRO mensile 9€ |
+| `STRIPE_PRICE_ID_CONSUMO` | `price_1UAnUXKHxfBbZQd8n1UfrIkI` — a consumo 5€ |
 | `REFERRAL_COUPON_ID` | `TOQf7ze2` — coupon -10€ sul PRO annuale |
 | `WEBHOOK_ENDPOINT` | `https://gwdmsgsshvdnfrplbjiv.supabase.co/functions/v1/webhook` |
 | `STRIPE_WEBHOOK_SECRET` | `whsec_…` — signing secret dell'endpoint (test o live) |
