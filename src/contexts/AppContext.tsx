@@ -311,6 +311,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** FASE 6 — avvia il checkout Stripe per il piano richiesto e redirige l'utente. */
   const avviaCheckout = useCallback(
     async (plan: PianoId, promo?: string, quantita?: number): Promise<{ ok: boolean; errore?: string }> => {
+      try {
       // Analytics: inizializzazione checkout (click "Diventa PRO" / ripresa piano).
       track('checkout_started', { plan, promo: promo || '', quantita: quantita ?? 1 });
       if (!supabase) {
@@ -391,6 +392,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         window.location.href = payload.url;
       }
       return { ok: true };
+      } catch (err) {
+        // Mai lasciare una Promise rifiutata: errori di rete/CORS/SDK vengono gestiti e
+        // mostrati al chiamante (toast in PrezziPage) invece di restare silenziosi.
+        console.error('avviaCheckout — errore non gestito:', err);
+        return {
+          ok: false,
+          errore: (err as Error)?.message ?? 'Errore imprevisto durante il checkout. Riprova.',
+        };
+      }
     },
     [openAuthModal, salvaIntendedPlan],
   );

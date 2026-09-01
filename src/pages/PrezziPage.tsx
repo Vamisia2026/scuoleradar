@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, X, Sparkles, Send, ShieldCheck, Gift } from 'lucide-react';
+import { Check, X, Sparkles, Send, ShieldCheck, Gift, Loader2 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
+import { useToast } from '@/components/Toast';
 import { STORAGE_KEY_INTENDED_PLAN, STORAGE_KEY_INTENDED_PLAN_DATA, type PianoId } from '@/lib/pricing';
 import { track } from '@/lib/analytics';
 import { Header } from '@/components/Header';
@@ -113,8 +114,11 @@ const faq = [
 export function PrezziPage() {
   const navigate = useNavigate();
   const { user, openAuthModal, avviaCheckout } = useApp();
+  const { mostraToast } = useToast();
   const [promoUrl, setPromoUrl] = useState<string | null>(null);
   const [crediti, setCrediti] = useState<number>(5);
+  /** Piano con checkout in corso (per disabilitare la CTA e mostrare il caricamento). */
+  const [checkoutInCorso, setCheckoutInCorso] = useState<PianoId | null>(null);
 
   // Se arrivi da un link referral (?promo=CODE), salva il codice per il checkout
   useEffect(() => {
@@ -130,12 +134,30 @@ export function PrezziPage() {
     }
   }, []);
 
-  const handleCta = (piano: PianoId, quantita?: number) => {
+  const handleCta = async (piano: PianoId, quantita?: number) => {
     // Analytics: click sulla CTA del piano (funnel verso il checkout).
     track('cta_pro_click', { piano, ...(quantita !== undefined ? { quantita } : {}) });
     if (user) {
       // Già autenticato: avvia subito il checkout, MAI il modal di login/registrazione.
-      void avviaCheckout(piano, undefined, quantita);
+      setCheckoutInCorso(piano);
+      try {
+        const esito = await avviaCheckout(piano, undefined, quantita);
+        if (!esito.ok) {
+          // Errore esplicito (Edge Function non-2xx, secret mancante, rete, CORS…):
+          // log + toast, mai un fallimento silenzioso.
+          console.error('Checkout fallito:', esito.errore);
+          mostraToast('errore', esito.errore ?? 'Impossibile avviare il pagamento. Riprova.');
+        }
+      } catch (err) {
+        // Unhandled rejection / errore imprevisto: mai silenzioso.
+        console.error('Checkout — errore non gestito:', err);
+        mostraToast(
+          'errore',
+          'Impossibile avviare il pagamento. Controlla la connessione e riprova.',
+        );
+      } finally {
+        setCheckoutInCorso(null);
+      }
       return;
     }
     // Utente anonimo: salva il piano desiderato (e la quantità crediti per A Consumo) così
@@ -255,14 +277,19 @@ export function PrezziPage() {
                 </ul>
 
                 <button
-                  onClick={() => handleCta(p.plan, p.plan === 'a_consumo' ? crediti : undefined)}
-                  className={`mt-7 inline-flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-soft transition ${
+                  type="button"
+                  onClick={() => void handleCta(p.plan, p.plan === 'a_consumo' ? crediti : undefined)}
+                  disabled={checkoutInCorso === p.plan}
+                  className={`mt-7 inline-flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-soft transition disabled:cursor-wait disabled:opacity-70 ${
                     p.evidenziato
                       ? 'bg-secondary-500 hover:bg-secondary-600'
                       : 'bg-primary-500 hover:bg-primary-600'
                   }`}
                 >
-                  {p.cta}
+                  {checkoutInCorso === p.plan ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : null}
+                  {checkoutInCorso === p.plan ? 'Apertura…' : p.cta}
                 </button>
               </div>
             ))}
