@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { LogOut, User as UserIcon, Menu, X, Sparkles, ChevronDown, CreditCard } from 'lucide-react';
+import { LogOut, User as UserIcon, Menu, X, Sparkles, ChevronDown, CreditCard, FileText } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
-import { CreditiModal } from '@/components/CreditiModal';
 
 /** Link istituzionali / di supporto (barra superiore). */
 const navLinks = [
@@ -13,24 +12,44 @@ const navLinks = [
 ];
 
 /** Strumenti principali: barra a pillole uniforme anche da utente non loggato. */
-const strumentiLinks = [
-  { to: '/dashboard/radar', label: '📡 Radar Opportunità' },
+interface LinkStrumento {
+  to: string;
+  label: string;
+  /** Accento visivo per i servizi speciali (es. Invita un Collega). */
+  accent?: boolean;
+}
+
+/** Ordine ufficiale della barra servizi (Guest, Base, PRO): Radar Scuole → ... */
+const strumentiLinks: LinkStrumento[] = [
+  { to: '/dashboard/radar', label: '📡 Radar Scuole' },
   { to: '/dashboard/cv', label: '📄 Crea CV' },
-  { to: '/dashboard/cfu', label: '🎓 Calcolatore CFU' },
-  { to: '/dashboard/moduli', label: '📁 Modulistica' },
-  { to: '/dashboard/assistente-ai', label: '🤖 Assistente Sindacalista Virtuale' },
-  { to: '/dashboard/purefocus', label: '🧘 PureFocus' },
+  { to: '/dashboard/cfu', label: '🎓 Check CFU' },
+  { to: '/dashboard/assistente-ai', label: '💬 Assistente Sindacalista Virtuale' },
+  { to: '/dashboard/moduli', label: '📁 Moduli' },
+  { to: '/dashboard/purefocus', label: '🧘 Pure Focus' },
+  { to: '/dashboard/invita', label: '🎁 Invita un Collega', accent: true },
 ];
 
 export function Header() {
-  const { user, abbonato, crediti, logout, openAuthModal, avatarUrl } = useApp();
+  const { user, abbonato, logout, openAuthModal, avatarUrl } = useApp();
   const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuUtenteOpen, setMenuUtenteOpen] = useState(false);
-  const [apriCrediti, setApriCrediti] = useState(false);
 
   const chiudiMenu = () => setMenuOpen(false);
   const chiudiMenuUtente = () => setMenuUtenteOpen(false);
+
+  // Documenti scaricati dall’utente (conteggio condiviso con la pagina Moduli).
+  const moduliScaricati = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('scuoleradar:moduli_scaricati');
+      if (!raw) return 0;
+      const arr = JSON.parse(raw) as unknown[];
+      return Array.isArray(arr) ? arr.length : 0;
+    } catch {
+      return 0;
+    }
+  }, []);
   // Su /dashboard la navigazione a pillole è già fornita dalla barra del DashboardLayout.
   const isDashboard = pathname.startsWith('/dashboard');
 
@@ -73,7 +92,7 @@ export function Header() {
               <div className="flex items-center gap-0.5 rounded-full border border-primary-200 bg-white py-1 pl-1 pr-1 shadow-soft">
                 <Link
                   to="/dashboard/radar"
-                  aria-label="Torna al Radar opportunità"
+                  aria-label="Torna al Radar Scuole"
                   className="flex items-center gap-2 rounded-full pr-2 transition hover:opacity-90"
                 >
                   {avatarUrl ? (
@@ -101,14 +120,6 @@ export function Header() {
                     </span>
                   )}
                 </Link>
-                <button
-                  onClick={() => setApriCrediti(true)}
-                  aria-label="Acquista crediti a consumo"
-                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary-50 px-2 py-0.5 text-[11px] font-semibold text-secondary-700 transition hover:bg-secondary-100"
-                >
-                  <Sparkles className="h-3 w-3" />
-                  Crediti: {crediti}
-                </button>
                 <button
                   onClick={() => setMenuUtenteOpen((o) => !o)}
                   aria-expanded={menuUtenteOpen}
@@ -171,6 +182,27 @@ export function Header() {
                         Il mio profilo
                       </Link>
                       <Link
+                        to="/dashboard/moduli"
+                        onClick={chiudiMenuUtente}
+                        className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
+                      >
+                        <FileText className="h-4 w-4 text-primary-400" />
+                        Documenti scaricati
+                        <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-50 px-1.5 text-[11px] font-bold text-primary-600">
+                          {moduliScaricati}
+                        </span>
+                      </Link>
+                      {!abbonato && (
+                        <Link
+                          to="/prezzi"
+                          onClick={chiudiMenuUtente}
+                          className="mt-1 flex items-center justify-center gap-1.5 rounded-xl bg-secondary-500 px-3 py-2.5 text-sm font-bold text-white shadow-soft transition hover:bg-secondary-600"
+                        >
+                          <Sparkles className="h-4 w-4" />
+                          PASSA A PRO
+                        </Link>
+                      )}
+                      <Link
                         to="/prezzi"
                         onClick={chiudiMenuUtente}
                         className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
@@ -222,11 +254,18 @@ export function Header() {
                   `inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-sm font-semibold transition ${
                     isActive
                       ? 'bg-primary-500 text-white shadow-soft'
-                      : 'text-primary-700 hover:bg-primary-50'
+                      : l.accent
+                        ? 'bg-accent-50 text-accent-700 ring-1 ring-accent-200 hover:bg-accent-100'
+                        : 'text-primary-700 hover:bg-primary-50'
                   }`
                 }
               >
                 {l.label}
+                {l.accent && (
+                  <span className="rounded-full bg-accent-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    Novembre
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>
@@ -245,9 +284,18 @@ export function Header() {
                 key={l.to}
                 to={l.to}
                 onClick={chiudiMenu}
-                className="rounded-lg px-3 py-2.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
+                className={`rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                  l.accent
+                    ? 'bg-accent-50 font-semibold text-accent-700 ring-1 ring-accent-200'
+                    : 'text-primary-700 hover:bg-primary-50'
+                }`}
               >
                 {l.label}
+                {l.accent && (
+                  <span className="ml-1 rounded-full bg-accent-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    Novembre
+                  </span>
+                )}
               </Link>
             ))}
             <p className="px-3 pt-2 text-xs font-bold uppercase tracking-wide text-primary-400">Info</p>
@@ -353,7 +401,6 @@ export function Header() {
         </div>
       )}
 
-      <CreditiModal open={apriCrediti} onClose={() => setApriCrediti(false)} />
     </header>
   );
 }

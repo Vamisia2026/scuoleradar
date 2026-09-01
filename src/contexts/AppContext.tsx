@@ -18,6 +18,8 @@ export const STORAGE_KEY_RADAR_WIZARD_PENDING = 'sr_wizard_pending';
 export interface User {
   nome: string;
   cognome: string;
+  /** Genere dichiarato ('M' | 'F'), opzionale: declina le email automatiche (Cara/Caro, stata/stato). */
+  genere?: 'M' | 'F' | null;
   email: string;
   // password stored only for demo; never do this in production
   password: string;
@@ -438,6 +440,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           {
             id: authUser.id,
             email: authUser.email ?? dati.emailNotifica,
+            genere: user?.genere ?? null,
             province_attive: dati.provinceCodici,
             province_interesse: dati.provinceCodici,
             classi_concorso: dati.classiCodici,
@@ -455,7 +458,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.log('✓ Profilo salvato su Supabase (tabella profiles).');
       }
     },
-    [preferenze],
+    [preferenze, user],
   );
 
   /**

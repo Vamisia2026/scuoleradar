@@ -1,59 +1,95 @@
-import { useState, type FormEvent } from 'react';
-import { Search } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { FolderSearch, Search } from 'lucide-react';
 
 interface RicercaArchivistaProps {
-  onInvia: (query: string) => void;
-  /** Disabilita l'invio (es. mentre il documento è in recupero). */
-  busy?: boolean;
-  /** Modalità compatta: riduce altezza e padding (ricerca in corso). */
+  /** Query COMMESSA della ricerca (si aggiorna SOLO all'invio). */
+  filtro: string;
+  /** Avvia la ricerca (Enter o click su lente/Cerca). */
+  onCerca: (q: string) => void;
+  /** Apre la modale teaser dell'Archivista Capo (In arrivo a Ottobre per i PRO). */
+  onTeaserArchivista: () => void;
+  /** Modalità compatta: riduce altezza e padding. */
   compatto?: boolean;
 }
 
 /**
- * Barra di ricerca dell'Archivista Capo, ben visibile e larga, in cima alla
- * Modulistica. La richiesta NON genera subito il documento: avvia l'intervista
- * guidata, una domanda chirurgica alla volta.
+ * Barra di ricerca MODULI (disponibile a tutti gli utenti): NIENTE filtro live.
+ * La ricerca parte SOLO alla pressione di Enter o al click sulla lente/pulsante
+ * "Cerca"; il parent gestisce lo stato di caricamento ("Labor Illusion") e la
+ * griglia dei risultati compare poi ad onda.
+ *
+ * Il pulsante "Chiedi all'Archivista Capo" apre SOLO la modale teaser:
+ * la chat guidata dell'Archivista arriverà a Ottobre per gli utenti PRO.
  */
-export function RicercaArchivista({ onInvia, busy, compatto = false }: RicercaArchivistaProps) {
-  const [query, setQuery] = useState('');
+export function RicercaArchivista({
+  filtro,
+  onCerca,
+  onTeaserArchivista,
+  compatto = false,
+}: RicercaArchivistaProps) {
+  /** Testo scritto dall'utente (stato locale semplice: nessun filtraggio live). */
+  const [queryInput, setQueryInput] = useState(filtro);
+
+  // Sincronizza il campo se la query cambia dall'esterno (es. reset del parent).
+  useEffect(() => setQueryInput(filtro), [filtro]);
 
   const invia = (e: FormEvent) => {
     e.preventDefault();
-    const q = query.trim();
-    if (!q || busy) return;
-    setQuery('');
-    onInvia(q);
+    onCerca(queryInput.trim());
   };
 
   return (
-    <form
-      onSubmit={invia}
+    <div
       className={`flex flex-col gap-2 rounded-2xl border border-primary-100 bg-white shadow-card sm:flex-row sm:items-center ${
         compatto ? 'p-2.5' : 'p-5'
       }`}
     >
-      <div className="relative flex-1">
-        <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-primary-400" />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buongiorno. Indichi la modulistica che le occorre, ad esempio un modulo per la richiesta di sostegno…"
-          className={`w-full rounded-xl border border-primary-200 bg-slate-50 pl-12 pr-4 text-base text-primary-800 outline-none transition placeholder:text-primary-300 focus:border-primary-400 focus:bg-white ${
+      {/* Ricerca su invio: Enter o click su lente/Cerca attivano la consultazione */}
+      <form onSubmit={invia} role="search" className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="relative flex-1">
+          <button
+            type="submit"
+            aria-label="Cerca nell'archivio"
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-primary-400 transition hover:text-primary-600"
+          >
+            <Search className="h-5 w-5" />
+          </button>
+          <input
+            type="text"
+            value={queryInput}
+            onChange={(e) => setQueryInput(e.target.value)}
+            placeholder="Cerca un modulo nell'archivio: ad esempio «sostegno», «PEI», «delega ritiro»…"
+            className={`w-full rounded-xl border border-primary-200 bg-slate-50 pl-12 pr-4 text-base text-primary-800 outline-none transition placeholder:text-primary-300 focus:border-primary-400 focus:bg-white ${
+              compatto ? 'py-2.5' : 'py-3.5'
+            }`}
+          />
+        </div>
+        <button
+          type="submit"
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary-500 px-4 text-sm font-bold text-white shadow-soft transition hover:bg-primary-600 ${
             compatto ? 'py-2.5' : 'py-3.5'
           }`}
-        />
-      </div>
+        >
+          <Search className="h-4 w-4" />
+          Cerca
+        </button>
+      </form>
+
+      {/* Pulsante teaser Archivista Capo — blu risaltato, esclusivo PRO */}
       <button
-        type="submit"
-        disabled={busy || !query.trim()}
-        className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary-500 px-6 text-sm font-bold uppercase tracking-wide text-white shadow-soft transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50 ${
+        type="button"
+        onClick={onTeaserArchivista}
+        className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-sky-700 px-5 text-sm font-bold text-white shadow-soft transition hover:bg-sky-800 ${
           compatto ? 'py-2.5' : 'py-3.5'
         }`}
       >
-        <Search className="h-4 w-4" />
+        <FolderSearch className="h-4 w-4" />
         Chiedi all&apos;Archivista Capo
+        <span className="rounded-md bg-[#E67E22] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+          Esclusivo PRO
+        </span>
       </button>
-    </form>
+    </div>
   );
 }
+

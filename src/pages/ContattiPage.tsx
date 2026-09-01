@@ -47,7 +47,7 @@ export function ContattiPage() {
           </div>
         </div>
 
-        <p className="mt-6 text-center text-xs text-primary-400">
+        <p className="mt-6 text-left text-xs text-primary-400">
           Oppure torna alla{' '}
           <Link to="/" className="text-primary-600 underline hover:text-primary-800">
             home

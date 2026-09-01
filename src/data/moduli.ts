@@ -954,7 +954,7 @@ const macroAreeRaw: MacroAreaModulistica[] = [
               {
                 id: 'piano-nai-infanzia',
                 nome: 'Piano personalizzato NAI – Infanzia',
-                descrizione: 'Piano di studio personalizzato per alunni stranieri non alfabetizzati.',
+                descrizione: 'Piano di Studio Personalizzato per alunni NAI non alfabetizzati: scheda di ingresso QCER (A0-B1), laboratorio italiano L2 e progettazione per Assi/Macro-Aree.',
                 tipo: 'PDF',
                 profilo: { tipo: 'piano_personalizzato_nai', ordine: 'infanzia' },
               },
@@ -975,7 +975,7 @@ const macroAreeRaw: MacroAreaModulistica[] = [
               {
                 id: 'relazione-finale-inclusione-infanzia',
                 nome: 'Relazione finale inclusione – Infanzia',
-                descrizione: 'Relazione finale di verifica del percorso di inclusione.',
+                descrizione: 'Relazione finale di verifica del percorso di inclusione (PEI/PDP): 4 Dimensioni ICF strutturate (D.I. 182/2020), esiti e proposte di transizione (art. 10 D.Lgs. 66/2017).',
                 tipo: 'PDF',
                 profilo: { tipo: 'relazione_finale_inclusione', ordine: 'infanzia' },
               },
@@ -1062,6 +1062,13 @@ const macroAreeRaw: MacroAreaModulistica[] = [
                 descrizione: 'Modulo per entrata posticipata, uscita anticipata o assenza breve.',
                 tipo: 'PDF',
                 profilo: { tipo: 'permesso_orario', ordine: 'infanzia' },
+              },
+              {
+                id: 'congedo-maternita-infanzia',
+                nome: 'Congedo di maternità / paternità',
+                descrizione: 'Richiesta di congedo obbligatorio di maternità o paternità (D.Lgs. 151/2001).',
+                tipo: 'PDF',
+                profilo: { tipo: 'congedo_maternita', ordine: 'infanzia' },
               },
             ],
           },
@@ -1423,7 +1430,7 @@ const macroAreeRaw: MacroAreaModulistica[] = [
               {
                 id: 'piano-nai-primaria',
                 nome: 'Piano personalizzato NAI – Primaria',
-                descrizione: 'Piano di studio personalizzato per alunni stranieri non alfabetizzati.',
+                descrizione: 'Piano di Studio Personalizzato per alunni NAI non alfabetizzati: scheda di ingresso QCER (A0-B1), laboratorio italiano L2 e progettazione per Assi/Macro-Aree.',
                 tipo: 'PDF',
                 profilo: { tipo: 'piano_personalizzato_nai', ordine: 'primaria' },
               },
@@ -1444,7 +1451,7 @@ const macroAreeRaw: MacroAreaModulistica[] = [
               {
                 id: 'relazione-finale-inclusione-primaria',
                 nome: 'Relazione finale inclusione – Primaria',
-                descrizione: 'Relazione finale di verifica del percorso di inclusione.',
+                descrizione: 'Relazione finale di verifica del percorso di inclusione (PEI/PDP): 4 Dimensioni ICF strutturate (D.I. 182/2020), esiti e proposte di transizione (art. 10 D.Lgs. 66/2017).',
                 tipo: 'PDF',
                 profilo: { tipo: 'relazione_finale_inclusione', ordine: 'primaria' },
               },
@@ -1552,6 +1559,13 @@ const macroAreeRaw: MacroAreaModulistica[] = [
                 descrizione: 'Modulo per entrata posticipata, uscita anticipata o assenza breve.',
                 tipo: 'PDF',
                 profilo: { tipo: 'permesso_orario', ordine: 'primaria' },
+              },
+              {
+                id: 'congedo-maternita-primaria',
+                nome: 'Congedo di maternità / paternità',
+                descrizione: 'Richiesta di congedo obbligatorio di maternità o paternità (D.Lgs. 151/2001).',
+                tipo: 'PDF',
+                profilo: { tipo: 'congedo_maternita', ordine: 'primaria' },
               },
               {
                 id: 'istruzione-parentale-primaria',
@@ -1971,7 +1985,7 @@ const macroAreeRaw: MacroAreaModulistica[] = [
               {
                 id: 'piano-nai-secondaria1',
                 nome: 'Piano personalizzato NAI – Secondaria di I grado',
-                descrizione: 'Piano di studio personalizzato per alunni stranieri non alfabetizzati.',
+                descrizione: 'Piano di Studio Personalizzato per alunni NAI non alfabetizzati: scheda di ingresso QCER (A0-B1), laboratorio italiano L2 e progettazione per Assi/Macro-Aree.',
                 tipo: 'PDF',
                 profilo: { tipo: 'piano_personalizzato_nai', ordine: 'secondaria1' },
               },
@@ -1992,7 +2006,7 @@ const macroAreeRaw: MacroAreaModulistica[] = [
               {
                 id: 'relazione-finale-inclusione-secondaria1',
                 nome: 'Relazione finale inclusione – Secondaria di I grado',
-                descrizione: 'Relazione finale di verifica del percorso di inclusione.',
+                descrizione: 'Relazione finale di verifica del percorso di inclusione (PEI/PDP): 4 Dimensioni ICF strutturate (D.I. 182/2020), esiti e proposte di transizione (art. 10 D.Lgs. 66/2017).',
                 tipo: 'PDF',
                 profilo: { tipo: 'relazione_finale_inclusione', ordine: 'secondaria1' },
               },
@@ -2221,6 +2235,13 @@ const macroAreeRaw: MacroAreaModulistica[] = [
                 descrizione: 'Modulo per entrata posticipata, uscita anticipata o assenza breve.',
                 tipo: 'PDF',
                 profilo: { tipo: 'permesso_orario', ordine: 'secondaria1' },
+              },
+              {
+                id: 'congedo-maternita-medie',
+                nome: 'Congedo di maternità / paternità',
+                descrizione: 'Richiesta di congedo obbligatorio di maternità o paternità (D.Lgs. 151/2001).',
+                tipo: 'PDF',
+                profilo: { tipo: 'congedo_maternita', ordine: 'secondaria1' },
               },
               {
                 id: 'esonero-scienze-motorie-medie',
@@ -2477,7 +2498,7 @@ const macroAreeRaw: MacroAreaModulistica[] = [
               {
                 id: 'piano-nai-secondaria2',
                 nome: 'Piano personalizzato NAI – Secondaria di II grado',
-                descrizione: 'Piano di studio personalizzato per alunni stranieri non alfabetizzati.',
+                descrizione: 'Piano di Studio Personalizzato per alunni NAI non alfabetizzati: scheda di ingresso QCER (A0-B1), laboratorio italiano L2 e progettazione per Assi/Macro-Aree.',
                 tipo: 'PDF',
                 profilo: { tipo: 'piano_personalizzato_nai', ordine: 'secondaria2' },
               },
@@ -2498,7 +2519,7 @@ const macroAreeRaw: MacroAreaModulistica[] = [
               {
                 id: 'relazione-finale-inclusione-secondaria2',
                 nome: 'Relazione finale inclusione – Secondaria di II grado',
-                descrizione: 'Relazione finale di verifica del percorso di inclusione.',
+                descrizione: 'Relazione finale di verifica del percorso di inclusione (PEI/PDP): 4 Dimensioni ICF strutturate (D.I. 182/2020), esiti e proposte di transizione (art. 10 D.Lgs. 66/2017).',
                 tipo: 'PDF',
                 profilo: { tipo: 'relazione_finale_inclusione', ordine: 'secondaria2' },
               },
@@ -2742,6 +2763,13 @@ const macroAreeRaw: MacroAreaModulistica[] = [
                 descrizione: 'Modulo per entrata posticipata, uscita anticipata o assenza breve.',
                 tipo: 'PDF',
                 profilo: { tipo: 'permesso_orario', ordine: 'secondaria2' },
+              },
+              {
+                id: 'congedo-maternita-superiori',
+                nome: 'Congedo di maternità / paternità',
+                descrizione: 'Richiesta di congedo obbligatorio di maternità o paternità (D.Lgs. 151/2001).',
+                tipo: 'PDF',
+                profilo: { tipo: 'congedo_maternita', ordine: 'secondaria2' },
               },
               {
                 id: 'esonero-scienze-motorie-superiori',

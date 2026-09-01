@@ -199,7 +199,7 @@ export function AbbonamentoModal({ open, onClose, onConfirm }: AbbonamentoModalP
           {invio ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
           {invio ? 'Creazione sessione di pagamento…' : 'Procedi al pagamento (Stripe)'}
         </button>
-        <p className="text-center text-xs text-primary-400">
+        <p className="text-left text-xs text-primary-400">
           Pagamento sicuro gestito da Stripe: i tuoi dati non transitano mai da ScuoleRadar.
           Nessun addebito automatico nascosto.
         </p>

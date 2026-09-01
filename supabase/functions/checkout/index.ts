@@ -20,6 +20,11 @@
 //   STRIPE_PRICE_PRO_MENSILE       (id price PRO mensile)
 //   STRIPE_PRICE_A_CONSUMO         (id price A la Carte / a consumo; fallback: STRIPE_PRICE_CONSUMO, STRIPE_PRICE_ALACARTE)
 //   STRIPE_COUPON_REFERRAL_10      (opzionale — coupon amount_off 10€ per i referral)
+//   STRIPE_MODE                    (opzionale — 'test' | 'live'; default: auto-rilevata dalla chiave sk_live_*)
+//
+// Passaggio TEST → LIVE: aggiorna SOLO i secrets — STRIPE_SECRET_KEY=sk_live_…,
+// STRIPE_PRICE_* con i Price ID di produzione e il webhook secret live.
+// Nessuna modifica al codice è necessaria.
 //
 // Deploy:
 //   supabase functions deploy checkout --project-ref <ref>   (JWT verificato di default)
@@ -28,6 +33,12 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
+/** Modalità Stripe: 'live' se la chiave è sk_live_*, 'test' altrimenti (sovrascrivibile via STRIPE_MODE). */
+const STRIPE_MODE =
+  Deno.env.get('STRIPE_MODE') ?? (STRIPE_SECRET_KEY.startsWith('sk_live_') ? 'live' : 'test');
+console.log(
+  `[checkout] modalità Stripe: ${STRIPE_MODE} — chiave: ${STRIPE_SECRET_KEY ? STRIPE_SECRET_KEY.slice(0, 7) + '…' : 'mancante'}`,
+);
 const STRIPE_API = 'https://api.stripe.com/v1';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -194,6 +205,7 @@ serve(async (req: Request) => {
         configurato: Boolean(STRIPE_SECRET_KEY) && priceMancanti.length === 0,
         stripeKey: Boolean(STRIPE_SECRET_KEY),
         priceMancanti,
+        mode: STRIPE_MODE,
       });
     }
 

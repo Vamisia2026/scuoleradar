@@ -44,7 +44,7 @@ export function SavedModuli({ caricamento, voci, onApriGenerato, onScarica, onRi
   return (
     <div className="mt-4">
       {voci.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-primary-100 p-8 text-center text-sm text-primary-400">
+        <p className="rounded-xl border border-dashed border-primary-100 p-8 text-left text-sm text-primary-400">
           Non hai ancora scaricato modelli. Torna al catalogo e scarica il primo documento, oppure
           genera un documento su misura nella tab &quot;Genera un Documento&quot;.
         </p>

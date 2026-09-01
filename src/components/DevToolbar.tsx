@@ -49,9 +49,10 @@ export function DevToolbar() {
 
       {open && (
         <div className="fixed inset-0 z-[70]">
-          {/* Overlay */}
+          {/* Overlay INVISIBILE: chiude al click fuori dal pannello ma NON oscura né
+              offusca la pagina (nessun backdrop scuro/bloccante durante lo sviluppo). */}
           <div
-            className="absolute inset-0 bg-primary-900/30 backdrop-blur-sm animate-fade-in"
+            className="absolute inset-0 bg-transparent"
             onClick={() => setOpen(false)}
           />
 

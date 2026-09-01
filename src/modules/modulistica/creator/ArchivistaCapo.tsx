@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, FileText, Loader2, RotateCcw, Send, Sparkles } from 'lucide-react';
+import { ArrowLeft, FileText, Loader2, RotateCcw, Send } from 'lucide-react';
 import {
   creaDocumentoLocale,
   generaDocumento,
@@ -9,6 +9,7 @@ import {
   type EsitoIntervista,
 } from './cacheService';
 import { PensieriArchivista } from './PensieriArchivista';
+import { useApp } from '@/contexts/AppContext';
 
 interface DomandaCorrente {
   testo: string;
@@ -55,6 +56,10 @@ export function ArchivistaCapo({
   const [busy, setBusy] = useState(false);
   const [pronto, setPronto] = useState<{ modulo: DocumentoGenerato; cache: boolean } | null>(null);
 
+  const { user } = useApp();
+  /** Bancone consultabile da PRO (illimitato) o da chi ha almeno un credito a consumo. */
+  const accessoConsentito = Boolean(user);
+
   const queryRef = useRef('');
   const risposteRef = useRef<Record<string, string>>({});
   const attesaPassoRef = useRef<string | null>(null);
@@ -82,7 +87,14 @@ export function ArchivistaCapo({
       // Profilo completo → recupero del documento.
       setMessaggio('Individuata la modulistica richiesta. Procedo alla preparazione.');
       setFase('recupero');
-      const gen = await generaDocumento(queryRef.current, esito.profilo, esito.catalogo?.id);
+      // Intercettazione errori: mai lasciare la chat bloccata su `busy`.
+      let gen: Awaited<ReturnType<typeof generaDocumento>>;
+      try {
+        gen = await generaDocumento(queryRef.current, esito.profilo, esito.catalogo?.id);
+      } catch (err) {
+        console.warn('ArchivistaCapo — generaDocumento:', err);
+        gen = { ok: false, errore: 'ERRORE_RETE' };
+      }
       setBusy(false);
       if (!gen.ok || !gen.esito) {
         if (gen.errore === 'NON_AUTENTICATO') {
@@ -107,8 +119,22 @@ export function ArchivistaCapo({
   );
 
   const chiediProssimo = useCallback(async () => {
+    // Sessione assente: il parent gestisce l'avviso di accesso.
+    if (!accessoConsentito) {
+      setBusy(false);
+      onAccessoRichiesto();
+      return;
+    }
     setBusy(true);
-    const res = await inviaIntervista(queryRef.current, risposteRef.current);
+    // Intercettazione errori: una chiamata fallita (rete, timeout, risposta
+    // inattesa) NON deve MAI lasciare la chat bloccata nello stato `busy`.
+    let res: Awaited<ReturnType<typeof inviaIntervista>>;
+    try {
+      res = await inviaIntervista(queryRef.current, risposteRef.current);
+    } catch (err) {
+      console.warn('ArchivistaCapo — inviaIntervista:', err);
+      res = { ok: false, errore: 'ERRORE_RETE' };
+    }
     if (!res.ok || !res.esito) {
       if (res.errore === 'NON_AUTENTICATO') {
         onAccessoRichiesto();
@@ -131,7 +157,7 @@ export function ArchivistaCapo({
       }
       setFase('errore');
       setMessaggio(
-        'Non sono riuscito a individuare la modulistica richiesta. La prego di riprovare tra un istante o di consultare le macroaree dell\u2019archivio.',
+        'Non sono riuscito a individuare la modulistica richiesta. Riprova tra un istante oppure consulta le macroaree dell\u2019archivio.',
       );
       setBusy(false);
       return;
@@ -148,10 +174,15 @@ export function ArchivistaCapo({
     }
     const prontoEsito = esito as Extract<EsitoIntervista, { esito: 'pronto' }>;
     await gestisciPronto(prontoEsito);
-  }, [gestisciPronto, onAccessoRichiesto]);
+  }, [gestisciPronto, onAccessoRichiesto, accessoConsentito]);
 
   const avvia = useCallback(
     async (query: string) => {
+      if (!accessoConsentito) {
+        setBusy(false);
+        onAccessoRichiesto();
+        return;
+      }
       const q = query.trim();
       if (!q) return;
       queryRef.current = q;
@@ -166,7 +197,7 @@ export function ArchivistaCapo({
       await sleep(2000);
       await chiediProssimo();
     },
-    [chiediProssimo],
+    [chiediProssimo, accessoConsentito],
   );
 
   // Avvio della consultazione al mount (il parent rimonta il componente per ogni nuova query).
@@ -177,10 +208,23 @@ export function ArchivistaCapo({
   }, []);
 
   const rispondi = async (testo: string) => {
+    if (!accessoConsentito) {
+      setBusy(false);
+      onAccessoRichiesto();
+      return;
+    }
     const t = testo.trim();
     if (!t || busy) return;
     const passo = attesaPassoRef.current;
-    if (!passo) return; // nessuna domanda pendente: ignora l'invio
+    if (!passo) {
+      // Nessuna domanda pendente: reazione chiara, mai un invio ignorato in silenzio.
+      setFase('errore');
+      setMessaggio(
+        'Non risulta una domanda in corso. Scrivi una nuova richiesta nella barra di ricerca oppure premi "Ricomincia".',
+      );
+      setBusy(false);
+      return;
+    }
     attesaPassoRef.current = null;
     setRispostaUtente(t);
     setInput('');
@@ -200,6 +244,9 @@ export function ArchivistaCapo({
 
   const invia = (e: FormEvent) => {
     e.preventDefault();
+    // Submit robusto: sia il click su "Invia" sia il tasto Enter passano da qui;
+    // la guardia `busy` evita doppi invii consecutivi.
+    if (busy) return;
     void rispondi(input);
   };
 
@@ -228,7 +275,7 @@ export function ArchivistaCapo({
       <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-primary-900 via-primary-800 to-primary-700 px-6 py-4">
         <div className="flex min-w-0 items-center gap-3">
           <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-white">
-            <Sparkles className="h-5 w-5" />
+            <FileText className="h-5 w-5" />
           </span>
           <p className="truncate text-base font-bold text-white">Archivista Capo</p>
         </div>
@@ -278,6 +325,7 @@ export function ArchivistaCapo({
               L\u2019Archivista Capo consulta il registro\u2026
             </div>
           )}
+
 
           {/* Input libero: SEMPRE attivo durante la conversazione (risposta
               naturale in testo libero, mai bottoni rigidi). */}

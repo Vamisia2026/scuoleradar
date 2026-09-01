@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FolderOpen, Loader2, UserPlus, X } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -20,8 +20,7 @@ import { EsploraArchivio } from './components/EsploraArchivio';
 import { RicercaArchivista } from './components/RicercaArchivista';
 import { VetrinaModulistica } from './components/VetrinaModulistica';
 import { SavedModuli } from './components/SavedModuli';
-import { ArchivistaCapo } from './creator/ArchivistaCapo';
-import { ModuleCreatorErrorBoundary } from './creator/ModuleCreatorErrorBoundary';
+import { TeaserArchivistaModal } from './components/TeaserArchivistaModal';
 import { ModuloPreview } from './creator/ModuloPreview';
 import {
   caricaDocumentoGenerato,
@@ -38,7 +37,7 @@ import {
  * Modulo Modulistica — contenitore principale isolato.
  *
  * Struttura (interfaccia dell'Archivista Capo):
- *  - barra di ricerca larga in cima → avvia l'intervista guidata
+ *  - barra di ricerca larga in cima → filtro LIVE sul catalogo dei moduli
  *  - menu delle Macroaree (Sostegno per prima) → archivio a drill-down
  *  - contenitore rettangolare: griglia 3×3 delle sottocategorie con
  *    paginazione, doppio click per scendere fino al singolo documento
@@ -52,13 +51,35 @@ export function ModuliModule() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [vista, setVista] = useState<VistaModulistica>(() => {
     const tab = searchParams.get('tab');
-    return tab === 'miei' ? 'miei' : tab === 'intervista' ? 'intervista' : 'archivio';
+    return tab === 'miei' ? 'miei' : 'archivio';
   });
   const [macroAreaId, setMacroAreaId] = useState<string | null>(null);
-  const [intervista, setIntervista] = useState<{ testo: string; nonce: number }>({
-    testo: '',
-    nonce: 0,
-  });
+  /** Filtro live della ricerca standard sui moduli. */
+  const [filtro, setFiltro] = useState('');
+  /** "Labor Illusion": true durante la consultazione (~2s) dopo l'invio della ricerca. */
+  const [isSearching, setIsSearching] = useState(false);
+  const timerCercaRef = useRef<number | null>(null);
+
+  /** Avvia la ricerca SOLO su invio (Enter/click Cerca): committa la query e mostra il caricamento. */
+  const eseguiRicerca = useCallback((q: string) => {
+    setFiltro(q);
+    if (q.trim().length < 2) {
+      setIsSearching(false);
+      return;
+    }
+    setIsSearching(true);
+    if (timerCercaRef.current) window.clearTimeout(timerCercaRef.current);
+    timerCercaRef.current = window.setTimeout(() => setIsSearching(false), 2000);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (timerCercaRef.current) window.clearTimeout(timerCercaRef.current);
+    },
+    [],
+  );
+  /** Modale teaser "Archivista Capo — In arrivo a Ottobre per utenti PRO!". */
+  const [teaserAperto, setTeaserAperto] = useState(false);
   const [recupero, setRecupero] = useState(false);
   const [moduliScaricati, setModuliScaricati] = useLocalStorage<ModuloScaricato[]>(
     STORAGE_KEY_MODULI_SCARICATI,
@@ -78,7 +99,7 @@ export function ModuliModule() {
   const macroArea = useMemo(() => macroAreaById(macroAreaId), [macroAreaId]);
 
   /** Compatta banner e padding quando l'utente cerca o esplora una macroarea. */
-  const compattato = vista === 'intervista' || macroAreaId !== null;
+  const compattato = macroAreaId !== null || filtro.trim() !== '';
 
   const caricaMieiDB = useCallback(async () => {
     if (!user) {
@@ -172,24 +193,7 @@ export function ModuliModule() {
     [user, openVetrina, mostraToast, apriAnteprima, richiediAccesso],
   );
 
-  /** Barra di ricerca in alto → intervista guidata dell'Archivista Capo. */
-  const avviaIntervista = useCallback(
-    (query: string) => {
-      if (!user) {
-        openVetrina('moduli');
-        return;
-      }
-      setIntervista({ testo: query, nonce: Date.now() });
-      setVista('intervista');
-    },
-    [user, openVetrina],
-  );
-
-  /** Callback stabile per l'ArchivistaCapo (evita riavvii involontari). */
-  const onDocumentoPronto = useCallback(
-    (modulo: DocumentoGenerato, cache: boolean) => apriAnteprima(modulo, cache),
-    [apriAnteprima],
-  );
+  /** Flusso chat dell'Archivista Capo: momentaneamente disattivato (teaser a Ottobre). */
 
   const rimuoviModulo = useCallback(
     (id: string) => setModuliScaricati(moduliScaricati.filter((x) => x.id !== id)),
@@ -336,7 +340,12 @@ export function ModuliModule() {
       />
 
       {/* Barra di ricerca dell'Archivista Capo — sotto le Macroaree */}
-      <RicercaArchivista onInvia={avviaIntervista} compatto={compattato} />
+      <RicercaArchivista
+        filtro={filtro}
+        onCerca={eseguiRicerca}
+        onTeaserArchivista={() => setTeaserAperto(true)}
+        compatto={compattato}
+      />
 
       {/* Contenitore rettangolare principale */}
       <div
@@ -354,7 +363,7 @@ export function ModuliModule() {
           </div>
         )}
 
-        {/* Navigazione archivio / salvati (l'intervista parte solo dalla barra di ricerca) */}
+        {/* Navigazione archivio / salvati (la ricerca filtra il catalogo) */}
         <ModuliNavigation vista={vista} onNaviga={apriTab} />
 
         {/* Archivio: drill-down per macroarea (griglia 3×5 con paginazione) */}
@@ -362,23 +371,14 @@ export function ModuliModule() {
           <EsploraArchivio
             key={macroAreaId ?? 'nessuna'}
             macroArea={macroArea}
+            filtro={filtro}
+            consultando={isSearching}
             compatto={compattato}
             onApriDocumento={(doc) => void apriDocumento(doc)}
           />
         )}
 
-        {/* Intervista guidata dell'Archivista Capo — isolata dall'Error Boundary */}
-        {vista === 'intervista' && (
-          <ModuleCreatorErrorBoundary>
-            <ArchivistaCapo
-              key={intervista.nonce}
-              queryIniziale={intervista.testo}
-              onDocumentoPronto={onDocumentoPronto}
-              onTornaAllArchivio={() => apriTab('archivio')}
-              onAccessoRichiesto={richiediAccesso}
-            />
-          </ModuleCreatorErrorBoundary>
-        )}
+        {/* Intervista guidata dell'Archivista Capo: disattivata (arriva a Ottobre per i PRO). */}
 
         {/* Archivio: modelli salvati */}
         {vista === 'miei' && (
@@ -391,6 +391,9 @@ export function ModuliModule() {
           />
         )}
       </div>
+
+      {/* Modale teaser Archivista Capo (In arrivo a Ottobre per i PRO) */}
+      <TeaserArchivistaModal open={teaserAperto} onClose={() => setTeaserAperto(false)} />
 
       {/* Anteprima di un documento generato (intervista o archivio) */}
       {anteprima && (

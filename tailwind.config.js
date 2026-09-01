@@ -58,6 +58,16 @@ export default {
           600: '#b9403c',
           700: '#93332f',
         },
+        // Token allineati alla palette ufficiale ScuolaRadar:
+        //  · sky.700  = Primary Blu Radar #2B6F9E (hover sky.800 = #1E5276)
+        //  · slate.50 = sfondo Modal/Card #F4F7F9
+        sky: {
+          700: '#2B6F9E',
+          800: '#1E5276',
+        },
+        slate: {
+          50: '#F4F7F9',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],

@@ -148,7 +148,7 @@ Supabase DB (pg_cron + trigger):
 
 | File | Righe | Responsabilità |
 |---|---|---|
-| `index.html` | 20 | Entry SPA; title/meta "Solo le opportunità giuste per te" (terminologia Radar Opportunità); favicon; font Google |
+| `index.html` | 20 | Entry SPA; title/meta "La piattaforma per gli Scuolatori" (terminologia Radar Scuole); favicon; font Google |
 | `package.json` | 52 | Script + dipendenze (§18) |
 | `vite.config.ts` | 22 | Porta 5174 strictPort; alias `@`; exclude lucide |
 | `tailwind.config.js` | 93+ | Token palette, font, shadow, animazioni (§1.4) |
@@ -298,7 +298,7 @@ Supabase DB (pg_cron + trigger):
 | `NotizieDettaglioPage.tsx` | Wrapper `NotizieDettaglio` |
 | `AuthCallback.tsx` | Rotta ritorno Google OAuth (scambia code → sessione) |
 | `OnboardingPage.tsx` | Wizard onboarding preferenze + collegamento Telegram |
-| `DashboardPage.tsx` | `DashboardLayout` (tab + `Outlet`) + `DashboardPage` (Radar Opportunità: notifiche restanti, abbonamento, crediti, feed, blacklist) |
+| `DashboardPage.tsx` | `DashboardLayout` (tab + `Outlet`) + `DashboardPage` (Radar Scuole: notifiche restanti, abbonamento, crediti, feed, blacklist) |
 | `CvPage.tsx` / `CfuPage.tsx` | Wrapper `CvTool` / `CfuTool` |
 | `AssistenteAIPage.tsx` | Chat Assistente Sindacalista (demo simulata, paywall) |
 | `ModuliPage.tsx` | Wrapper `ModuliModule` |
@@ -717,9 +717,12 @@ Ambiente di lavoro distrazione-free (focus timer), incluso nell'offerta PRO.
 Pagine Prezzi/ChiSiamo 🔒 bloccate.
 
 ### 10.2 Assistente Sindacalista AI (`AssistenteAIPage.tsx`)
-Chat simulata (messaggi `bot`/`utente` in stato locale) con `ExperimentalBanner`;
-funzionalità completa dietro paywall. Nel header/dashboard compare come tab pulito
+Pagina di **Accesso in Anteprima** (early-access): nessuna chat, nessun robot, nessun disclaimer.
+Solo il modulo di interesse — Nome e Cognome, Email, Provincia, Ruolo, Età — con CTA
+"Richiedi accesso in anteprima". La richiesta finisce in `localStorage` (`scuoleradar:richiesta_assistente`).
+Niente menzioni a ricompense o account PRO gratuiti. Nel header/dashboard compare come tab pulito
 "Assistente Sindacalista Virtuale" (niente emoji robot).
+
 
 ### 10.3 Pagine vetrina & servizi
 - `servizi.ts` → `Servizio[]` per `ServiziPage`/`ServizioPage` (radar, cv, cfu, assistente, moduli).
@@ -776,6 +779,18 @@ funzionalità completa dietro paywall. Nel header/dashboard compare come tab pul
   - `customer.subscription.deleted`: `piano='base'`, reset id/scadenza.
 - Sempre `ack` 200 (mai far ritentare Stripe).
 
+### 12.3 Passaggio TEST → LIVE
+Tutto è già pronto: il codice legge **solo da secrets** e non cambia tra modalità.
+Per passare in produzione basta aggiornare i secrets Supabase (nessun redeploy del codice):
+1. `STRIPE_SECRET_KEY` → `sk_live_…` (la modalità viene auto-rilevata dal prefisso `sk_live_`).
+2. `STRIPE_PRICE_PRO_ANNUALE`, `STRIPE_PRICE_PRO_MENSILE`, `STRIPE_PRICE_A_CONSUMO` → i Price ID
+   dello **Stripe Live** (attenzione: gli ID test e live sono diversi anche per lo stesso prezzo).
+3. `STRIPE_WEBHOOK_SECRET` → signing secret dell'endpoint **Live** (endpoint webhook separato).
+4. `STRIPE_COUPON_REFERRAL_10` → ID del coupon Live (se si vuole mantenere lo sconto referral -10€).
+5. `STRIPE_MODE=live` (facoltativo, esplicito) — il log di avvio di `checkout`/`webhook` riporta la
+   modalità; il `ping` di `checkout` restituisce `{ mode, configurato, priceMancanti }` per il check.
+6. Verifica con un pagamento reale di prova (es. piano mensile) e controlla i log della Edge Function
+   `webhook` (piano=`pro`, scadenza=`current_period_end`).
 
 ---
 
@@ -951,7 +966,8 @@ UNIQUE `(user_id, module_key)`. Indice `(user_id, created_at desc)`.
 ### 17.3 Secrets Supabase Edge (via `supabase secrets set`)
 `STRIPE_SECRET_KEY`, `STRIPE_PRICE_PRO_ANNUALE`, `STRIPE_PRICE_PRO_MENSILE`,
 `STRIPE_PRICE_A_CONSUMO` (fallback `_CONSUMO`, `_ALACARTE`), `STRIPE_COUPON_REFERRAL_10`,
-`STRIPE_WEBHOOK_SECRET`, `SEND_NOTIFICATION_SECRET`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`,
+`STRIPE_WEBHOOK_SECRET`, `STRIPE_MODE` (test | live, vedi §12.3), `SEND_NOTIFICATION_SECRET`,
+`RESEND_API_KEY`, `RESEND_FROM_EMAIL`,
 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`,
 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_EMAILS`, `CONTACT_SUPPORT_EMAIL`, `APP_URL`.
 

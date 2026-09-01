@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Bot, Calculator, FileText, FolderOpen, PenLine, Radar, ShieldCheck, Sparkles, UserPlus } from 'lucide-react';
+import { MessageSquare, Calculator, FileText, FolderOpen, PenLine, Radar, ShieldCheck, Sparkles, UserPlus } from 'lucide-react';
 import { Modal } from '@/components/Modal';
 import { useApp } from '@/contexts/AppContext';
 import { STORAGE_KEY_INTENDED_PLAN } from '@/lib/pricing';
@@ -14,7 +14,7 @@ interface DettaglioVetrina {
 const dettagli: Record<string, DettaglioVetrina> = {
   radar: {
     icona: <Radar className="h-6 w-6" />,
-    titolo: 'Radar Opportunità',
+    titolo: 'Radar Scuole',
     testo:
       'Interpelli, supplenze e bandi mappati per te: i primi 3 sono gratuiti. Attiva le notifiche e continua a monitorare le opportunità su misura per te.',
   },
@@ -28,7 +28,7 @@ const dettagli: Record<string, DettaglioVetrina> = {
     icona: <Calculator className="h-6 w-6" />,
     titolo: 'Check CFU',
     testo:
-      'Verifica le classi di concorso accessibili dal tuo percorso di studi: procedi con 1 credito a consumo oppure con il piano PRO senza limiti.',
+            'Verifica le classi di concorso accessibili dal tuo percorso di studi: in arrivo a Ottobre, riservato ai membri PRO.',
   },
   moduli: {
     icona: <FolderOpen className="h-6 w-6" />,
@@ -37,10 +37,10 @@ const dettagli: Record<string, DettaglioVetrina> = {
       'Modelli e documenti pronti all\u2019uso (domande, autocertificazioni, lettere di presentazione). I download sono disponibili con un account gratuito.',
   },
   assistente: {
-    icona: <Bot className="h-6 w-6" />,
+    icona: <MessageSquare className="h-6 w-6" />,
     titolo: 'Assistente Sindacalista Virtuale',
     testo:
-      'Risposte su graduatorie, mobilità e supplenze. Il servizio è incluso per i PRO: registrati e richiedi l\u2019accesso in prova.',
+      'Risposte su graduatorie, mobilità e supplenze. Il servizio è incluso per i PRO: registrati e richiedi l\u2019accesso in anteprima.',
   },
   purefocus: {
     icona: <PenLine className="h-6 w-6" />,
@@ -136,7 +136,7 @@ export function VetrinaModal() {
           </button>
         </div>
 
-        <p className="text-center text-sm font-medium text-primary-500">
+        <p className="text-left text-sm font-medium text-primary-500">
           L&apos;unica cosa che ti dispiacerà è non averlo fatto prima.
         </p>
       </div>

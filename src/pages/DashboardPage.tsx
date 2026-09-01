@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { BellRing, Sparkles, CheckCircle2, CreditCard, Radar, Database, SlidersHorizontal } from 'lucide-react';
+import { BellRing, CheckCircle2, Radar, Database, SlidersHorizontal } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { InterpelloCard } from '@/components/InterpelloCard';
 import { useApp, LIMITE_NOTIFICHE_PROVA } from '@/contexts/AppContext';
-import { AbbonamentoModal } from '@/components/AbbonamentoModal';
-import { CreditiModal } from '@/components/CreditiModal';
 import { interpelli } from '@/data/interpelli';
 import { classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
@@ -20,13 +18,12 @@ interface TabNav {
 
 export function DashboardLayout() {
   const tabs: TabNav[] = [
-    { to: '/dashboard/radar', label: '📡 Radar Opportunità', end: true },
+    { to: '/dashboard/radar', label: '📡 Radar Scuole', end: true },
     { to: '/dashboard/cv', label: '📄 Crea CV' },
     { to: '/dashboard/cfu', label: '🎓 Check CFU' },
-    { to: '/dashboard/assistente-ai', label: '🤖 Assistente Sindacalista Virtuale' },
+    { to: '/dashboard/assistente-ai', label: '💬 Assistente Sindacalista Virtuale' },
     { to: '/dashboard/moduli', label: '📁 Moduli' },
     { to: '/dashboard/purefocus', label: '🧘 Pure Focus' },
-    { to: '/dashboard/profilo', label: '⚙️ Profilo' },
     { to: '/dashboard/invita', label: '🎁 Invita un Collega', accent: true },
   ];
 
@@ -53,7 +50,7 @@ export function DashboardLayout() {
               {t.label}
               {t.accent && (
                 <span className="rounded-full bg-accent-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                  10€
+                  Novembre
                 </span>
               )}
             </NavLink>
@@ -75,14 +72,10 @@ export function DashboardPage() {
     preferenze,
     notificheUsate,
     abbonato,
-    crediti,
-    avviaCheckout,
     origineDati,
     openVetrina,
     openRadarWizard,
   } = useApp();
-  const [showAbbonamento, setShowAbbonamento] = useState(false);
-  const [showCrediti, setShowCrediti] = useState(false);
 
   const limiteRaggiunto = !abbonato && notificheUsate >= LIMITE_NOTIFICHE_PROVA;
   const notificheRimanenti = Math.max(LIMITE_NOTIFICHE_PROVA - notificheUsate, 0);
@@ -105,6 +98,23 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Radar Scuole — header bold del servizio attivo (massima chiarezza) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary-100 bg-white p-5 shadow-card">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-primary-900">
+            <Radar className="h-6 w-6 text-primary-500" />
+            Radar Scuole
+          </h1>
+          <p className="mt-0.5 max-w-2xl text-sm font-medium text-primary-500">
+            Interpelli, supplenze, PNRR e bandi: solo le opportunità che ti riguardano, in tempo reale.
+          </p>
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-50 px-3 py-1 text-xs font-bold text-accent-700 ring-1 ring-accent-200">
+          <Database className="h-3.5 w-3.5" />
+          Servizio attivo
+        </span>
+      </div>
+
       {/* Vetrina Freemium: copy di conversione per gli utenti non loggati */}
       {!user ? (
         <div className="rounded-2xl border border-secondary-200 bg-secondary-50 p-6 shadow-card">
@@ -165,33 +175,7 @@ export function DashboardPage() {
                     ? 'Le notifiche dell\'anno: 3 gratuite, si rinnovano a ogni anno solare.'
                     : 'Passa a PRO per continuare a ricevere notifiche.'}
               </p>
-              {crediti > 0 && (
-                <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-secondary-50 px-2 py-0.5 text-xs font-semibold text-secondary-700">
-                  <Sparkles className="h-3 w-3" />
-                  {crediti} credito{crediti > 1 ? 'i' : ''} a consumo
-                </span>
-              )}
             </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {!abbonato && (
-              <button
-                onClick={() => setShowAbbonamento(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-4 py-2 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
-              >
-                <CreditCard className="h-4 w-4" />
-                Abbonati 49€/anno
-              </button>
-            )}
-            {user && (
-              <button
-                onClick={() => setShowCrediti(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-secondary-300 px-4 py-2 text-sm font-semibold text-secondary-700 transition hover:bg-secondary-50"
-              >
-                <Sparkles className="h-4 w-4" />
-                Acquista crediti
-              </button>
-            )}
           </div>
         </div>
         {(limiteRaggiunto || limiteFeedRaggiunto) && (
@@ -225,7 +209,7 @@ export function DashboardPage() {
         </div>
 
         {interpelliFiltrati.length === 0 ? (
-          <div className="animate-fade-in rounded-2xl border border-primary-100 bg-white p-10 text-center shadow-card">
+          <div className="animate-fade-in rounded-2xl border border-primary-100 bg-white p-10 text-left shadow-card">
             <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary-50">
               <Radar className="h-7 w-7 text-primary-400" />
             </span>
@@ -275,17 +259,11 @@ export function DashboardPage() {
           </div>
         )}
 
-        <p className="mt-6 text-center text-sm text-primary-500">
+        <p className="mt-6 max-w-2xl text-left text-sm text-primary-500">
           Interpelli, bandi per esperti, CPIA e progetti scolastici: mostriamo solo ciò che ti riguarda davvero.
         </p>
       </div>
 
-      <AbbonamentoModal
-        open={showAbbonamento}
-        onClose={() => setShowAbbonamento(false)}
-        onConfirm={(promo) => avviaCheckout('pro_annuale', promo)}
-      />
-      <CreditiModal open={showCrediti} onClose={() => setShowCrediti(false)} />
     </div>
   );
 }

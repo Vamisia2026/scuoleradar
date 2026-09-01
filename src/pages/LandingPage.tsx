@@ -43,16 +43,19 @@ export function LandingPage() {
         <div className="relative mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
           <div className="grid items-center gap-10 lg:grid-cols-2">
             <div className="animate-fade-in">
+              <span className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-white px-3 py-1 text-xs font-bold text-primary-600 shadow-soft">
+                <Radar className="h-3.5 w-3.5 text-secondary-500" />
+                La piattaforma per gli Scuolatori: chi vive la scuola ogni giorno
+              </span>
               <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight text-primary-900 sm:text-5xl">
                 Ogni giorno decine di opportunità scolastiche scappano via.
                 <br />
                 <span className="text-secondary-500">Noi intercettiamo solo quelle perfette per te.</span>
               </h1>
               <p className="mt-5 max-w-xl text-lg leading-relaxed text-primary-700">
-                Anche se hai già una cattedra o un incarico, quante occasioni ti perdi nella scuola
-                accanto? ScuoleRadar monitora in tempo reale progetti retribuiti, selezioni per esperti,
-                PON/PNRR, corsi CPIA e supplenze. Ti avvisiamo solo quando esce un'opportunità reale
-                nella tua provincia.
+                Scansioniamo h24 interpelli e bandi per TUTTI i lavoratori della scuola: docenti,
+                supplenti, personale ATA ed esperti esterni. Progetti retribuiti, PON/PNRR, CPIA e
+                supplenze: ti avvisiamo solo quando esce un&apos;opportunità reale nella tua provincia.
               </p>
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <button
@@ -198,7 +201,7 @@ export function LandingPage() {
               scadenza="05/10/2026"
             />
           </div>
-          <p className="mt-6 text-center text-sm text-primary-500">
+          <p className="mx-auto mt-6 max-w-2xl text-left text-sm text-primary-500">
             Inserisci il tuo profilo e vedrai solo le opportunità davvero pertinenti per te.
           </p>
         </div>
@@ -396,9 +399,8 @@ export function Footer() {
               <span className="font-semibold">ScuoleRadar.it</span>
             </div>
             <p className="mt-3 text-sm leading-relaxed text-primary-500">
-              Monitoriamo in tempo reale interpelli, supplenze e tutte le opportunità retribuite per
-              la scuola: bandi PNRR, PON, CPIA, ore eccedenti e sezioni di esperti. Più una suite
-              completa di strumenti per la tua carriera docente.
+              Scansioniamo h24 opportunità per TUTTI i lavoratori della scuola. La piattaforma per chi
+              vive la scuola ogni giorno.
             </p>
           </div>
           <div>
@@ -442,8 +444,8 @@ export function Footer() {
             </ul>
           </div>
         </div>
-        <p className="mt-8 border-t border-primary-100 pt-6 text-center text-sm text-primary-400">
-          Crafted with purpose by{' '}
+        <p className="mt-8 flex w-full flex-wrap items-center justify-center gap-x-1.5 border-t border-primary-100 pt-6 text-center text-sm text-primary-400">
+          Realizzato con passione da
           <a
             href="https://vamisia.com"
             target="_blank"
@@ -451,8 +453,8 @@ export function Footer() {
             className="font-semibold text-primary-600 transition hover:text-primary-800"
           >
             Vamisia
-          </a>{' '}
-          ·{' '}
+          </a>
+          <span aria-hidden="true">·</span>
           <button
             type="button"
             onClick={() => {
@@ -467,8 +469,9 @@ export function Footer() {
             title=""
           >
             © 2026 ScuoleRadar
-          </button>{' '}
-          · All rights reserved.
+          </button>
+          <span aria-hidden="true">·</span>
+          Tutti i diritti riservati.
         </p>
       </div>
     </footer>

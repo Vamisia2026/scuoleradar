@@ -10,9 +10,11 @@ interface ModalProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   /** Classe z-index del contenitore (default z-50; es. z-[9999] per stare sopra gli overlay di sviluppo). */
   zClass?: string;
+  /** Classi extra della card (es. sfondo allineato alla palette: `bg-slate-50`). Sostituisce il default `bg-white`. */
+  cardClassName?: string;
 }
 
-export function Modal({ open, onClose, title, children, size = 'md', zClass = 'z-50' }: ModalProps) {
+export function Modal({ open, onClose, title, children, size = 'md', zClass = 'z-50', cardClassName = 'bg-white' }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -42,7 +44,7 @@ export function Modal({ open, onClose, title, children, size = 'md', zClass = 'z
         onClick={onClose}
       />
       <div
-        className={`relative w-full ${maxW} max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-card animate-pop`}
+        className={`relative w-full ${maxW} max-h-[90vh] overflow-y-auto rounded-2xl ${cardClassName} shadow-card animate-pop`}
       >
         <div className="flex items-center justify-between border-b border-primary-100 px-5 py-4">
           <h3 className="text-lg font-bold text-primary-800">{title}</h3>

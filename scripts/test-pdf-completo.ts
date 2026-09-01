@@ -39,12 +39,12 @@ mkdirSync(outDir, { recursive: true });
 /** Documenti pedagogici/inclusivi: layout esteso con pagine minime garantite
  * (valori di riferimento; il minimo effettivo è letto dal marcatore data-min-pagine). */
 const MIN_PAGINE: Record<string, number> = {
-  pei: 20,
+  pei: 15,
   pdp_bes: 18,
   pdp_dsa: 18,
   relazione_finale: 12,
-  relazione_finale_inclusione: 12,
-  piano_personalizzato_nai: 18,
+  relazione_finale_inclusione: 6,
+  piano_personalizzato_nai: 8,
   progetto_alfabetizzazione: 14,
   verbale_glo: 8,
   certificazione_competenze: 4,

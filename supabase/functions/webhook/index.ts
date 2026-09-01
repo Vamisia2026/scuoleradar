@@ -14,6 +14,9 @@
 //
 // Secrets richiesti:
 //   STRIPE_WEBHOOK_SECRET  (dal pannello Stripe → Webhooks → signing secret)
+//   STRIPE_MODE            (opzionale — 'test' | 'live': modalità dichiarata, solo per i log)
+//
+// Passaggio TEST → LIVE: basta usare il signing secret LIVE in STRIPE_WEBHOOK_SECRET.
 //
 // Deploy:
 //   supabase functions deploy webhook --project-ref <ref> --no-verify-jwt
@@ -22,6 +25,9 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 
 const STRIPE_WEBHOOK_SECRET = Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? '';
+/** Modalità Stripe dichiarata (test | live): la firma usa il webhook secret corrispondente. */
+const STRIPE_MODE = Deno.env.get('STRIPE_MODE') ?? 'test';
+console.log(`[stripe-webhook] modalità Stripe: ${STRIPE_MODE}`);
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 

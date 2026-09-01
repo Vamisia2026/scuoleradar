@@ -219,7 +219,7 @@ export function NotizieGrid({ articoli = newsArticles }: NotizieGridProps) {
 
       {/* Griglia delle notizie */}
       {filtrate.length === 0 ? (
-        <p className="mt-8 rounded-2xl border border-dashed border-primary-100 p-10 text-center text-sm text-primary-400">
+        <p className="mt-8 rounded-2xl border border-dashed border-primary-100 p-10 text-left text-sm text-primary-400">
           Nessuna notizia in questa categoria per il momento.
         </p>
       ) : (

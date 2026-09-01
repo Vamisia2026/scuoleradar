@@ -8,8 +8,8 @@ interface ModuliNavigationProps {
 
 /**
  * Barra di navigazione della sezione Modulistica: archivio (macroaree) e
- * modelli salvati. L'intervista con l'Archivista Capo si avvia ESCLUSIVAMENTE
- * dalla barra di ricerca, quindi qui non c'è un tab dedicato.
+ * modelli salvati. La ricerca filtra il catalogo; l'Archivista Capo (in
+ * arrivo a Ottobre per i PRO) si apre dalla modale teaser, non da un tab.
  */
 export function ModuliNavigation({ vista, onNaviga }: ModuliNavigationProps) {
   return (

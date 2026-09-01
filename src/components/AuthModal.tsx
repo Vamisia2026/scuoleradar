@@ -54,6 +54,7 @@ export function AuthModal() {
 
   const [nome, setNome] = useState('');
   const [cognome, setCognome] = useState('');
+  const [genere, setGenere] = useState<'M' | 'F' | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -65,6 +66,7 @@ export function AuthModal() {
     if (!authModalOpen) {
       setNome('');
       setCognome('');
+      setGenere(null);
       setEmail('');
       setPassword('');
       setShowPassword(false);
@@ -97,7 +99,7 @@ export function AuthModal() {
         setErrore('La password deve avere almeno 6 caratteri.');
         return;
       }
-      register({ nome: nome.trim(), cognome: cognome.trim(), email: email.trim(), password });
+      register({ nome: nome.trim(), cognome: cognome.trim(), email: email.trim(), password, genere });
       closeAuthModal();
       navigate('/onboarding');
     } else {
@@ -194,6 +196,39 @@ export function AuthModal() {
                 />
               </Field>
             </div>
+          )}
+          {isRegister && (
+            <Field label="Genere (per le email automatiche)">
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setGenere('F')}
+                  aria-pressed={genere === 'F'}
+                  className={`rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
+                    genere === 'F'
+                      ? 'border-accent-400 bg-accent-50 text-accent-700'
+                      : 'border-primary-200 bg-white text-primary-600 hover:bg-primary-50'
+                  }`}
+                >
+                  Donna
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGenere('M')}
+                  aria-pressed={genere === 'M'}
+                  className={`rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
+                    genere === 'M'
+                      ? 'border-accent-400 bg-accent-50 text-accent-700'
+                      : 'border-primary-200 bg-white text-primary-600 hover:bg-primary-50'
+                  }`}
+                >
+                  Uomo
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-primary-400">
+                Facoltativo: usiamo questa informazione solo per rivolgerti le email ("Cara" / "Caro").
+              </p>
+            </Field>
           )}
           <Field label="Email">
             <input

@@ -69,7 +69,7 @@ export function ReferralSection() {
   };
 
   const testoCondivisione = encodeURIComponent(
-    `Invita un collega a ScuoleRadar 🎯 — -10€ sul piano PRO con il tuo codice ${codice}. ${linkReferral}`,
+    `Usa il codice promo ${codice} su scuoleradar.it 🎯 — -10€ sul piano PRO. ${linkReferral}`,
   );
 
   const formatData = (iso: string) =>
@@ -96,84 +96,79 @@ export function ReferralSection() {
         confermato.
       </p>
 
-      {/* Codice promo */}
+      {/* Codice promo — stile Satispay */}
       <div className="mt-4 rounded-xl border border-primary-100 bg-primary-50 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-primary-500">Il tuo codice promo</p>
-            {editMode ? (
-              <div className="mt-1.5 flex items-center gap-2">
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => void handleInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && void handleSalva()}
-                  placeholder="IL TUO CODICE"
-                  className="input w-48 font-mono text-sm"
-                  autoFocus
-                />
-                <button
-                  onClick={() => void handleSalva()}
-                  disabled={salvataggio || !input || disponibile === false}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-600 disabled:opacity-50"
-                >
-                  {salvataggio ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                  Salva
-                </button>
-                <button
-                  onClick={() => {
-                    setEditMode(false);
-                    setInput('');
-                    setErrore('');
-                    setDisponibile(null);
-                  }}
-                  className="rounded-lg px-2 py-2 text-xs font-medium text-primary-500 transition hover:text-primary-700"
-                >
-                  Annulla
-                </button>
-              </div>
-            ) : (
-              <p className="mt-1 font-mono text-xl font-bold tracking-wider text-primary-800">
-                {codice || '—'}
-              </p>
-            )}
-          </div>
-          {!editMode && (
+        <p className="text-xs uppercase tracking-wide text-primary-500">Il tuo codice promo personale</p>
+        <div className="mt-2.5 rounded-xl border-2 border-dashed border-secondary-300 bg-white px-4 py-3.5">
+          <p className="font-mono text-2xl font-extrabold uppercase tracking-[0.15em] text-primary-900 sm:text-3xl">
+            {codice || 'NOMECOGNOME'}
+          </p>
+          <p className="mt-1.5 text-sm leading-relaxed text-primary-600">
+            Usa il codice promo: <strong className="font-mono uppercase">{codice || 'NOMECOGNOME'}</strong> su{' '}
+            <strong>scuoleradar.it</strong>
+          </p>
+        </div>
+
+        {editMode ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => void handleInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && void handleSalva()}
+              placeholder="IL TUO CODICE"
+              className="input w-52 font-mono text-sm"
+              autoFocus
+            />
+            <button
+              onClick={() => void handleSalva()}
+              disabled={salvataggio || !input || disponibile === false}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-600 disabled:opacity-50"
+            >
+              {salvataggio ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+              Salva
+            </button>
             <button
               onClick={() => {
-                setEditMode(true);
-                setInput(codice);
+                setEditMode(false);
+                setInput('');
+                setErrore('');
                 setDisponibile(null);
               }}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-white px-3 py-2 text-xs font-semibold text-primary-700 transition hover:bg-primary-50"
+              className="rounded-lg px-2 py-2 text-xs font-medium text-primary-500 transition hover:text-primary-700"
             >
-              <Pencil className="h-3.5 w-3.5" />
-              Modifica codice
+              Annulla
             </button>
-          )}
-        </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => {
+              setEditMode(true);
+              setInput(codice);
+              setDisponibile(null);
+            }}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-white px-3 py-2 text-xs font-semibold text-primary-700 transition hover:bg-primary-50"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Personalizza il codice
+          </button>
+        )}
 
         {editMode && (
           <p className="mt-2 text-xs">
             {disponibile === true && <span className="text-accent-600">✓ Codice disponibile</span>}
-            {disponibile === false && (
-              <span className="text-error-600">✗ Codice già in uso da un altro utente</span>
-            )}
+            {disponibile === false && <span className="text-error-600">✗ Codice già in uso</span>}
           </p>
         )}
         {errore && <p className="mt-2 text-xs text-error-600">{errore}</p>}
 
-        {/* Link di condivisione */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <code className="rounded-lg bg-white px-3 py-2 text-xs text-primary-700">
-            {linkReferral}
-          </code>
           <button
             onClick={() => void handleCopia()}
             className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-white px-3 py-2 text-xs font-semibold text-primary-700 transition hover:bg-primary-50"
           >
             {copiato ? <Check className="h-3.5 w-3.5 text-accent-500" /> : <Copy className="h-3.5 w-3.5" />}
-            {copiato ? 'Copiato!' : 'Copia link'}
+            {copiato ? 'Codice copiato!' : 'Copia codice'}
           </button>
           <a
             href={`https://wa.me/?text=${testoCondivisione}`}
@@ -195,7 +190,6 @@ export function ReferralSection() {
           </a>
         </div>
       </div>
-
       {/* KPI */}
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <Kpi icon={<Users className="h-4 w-4" />} value={String(stats.totaleUsi)} label="Utilizzi Totali" />
