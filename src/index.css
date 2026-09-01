@@ -52,6 +52,35 @@ body {
   .card-onda {
     animation: onda-salita 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
+
+  /* Glint periodico sul CTA "ATTIVA IL TUO RADAR": un riflesso di luce
+     sottile e brevissimo (~0,5 s) che attraversa il pulsante una volta
+     ogni 12 s. Volutamente quasi impercettibile: l'utente deve chiedersi
+     se l'ha visto davvero, e guardare di nuovo. */
+  .btn-glint {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-glint::after {
+    content: '';
+    position: absolute;
+    top: -40%;
+    bottom: -40%;
+    left: -130%;
+    width: 42%;
+    background: linear-gradient(
+      100deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.12) 38%,
+      rgba(255, 255, 255, 0.28) 50%,
+      rgba(255, 255, 255, 0.12) 62%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    transform: skewX(-18deg);
+    pointer-events: none;
+    animation: glint-ciclo 12s ease-in-out infinite;
+  }
 }
 
 @keyframes onda-salita {
@@ -62,6 +91,37 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* Ciclo del glint: il riflesso attraversa il pulsante nei primi ~4% del
+   ciclo (≈0,5 s su 12 s) e resta nascosto per tutto il resto del giro. */
+@keyframes glint-ciclo {
+  0% {
+    left: -130%;
+    opacity: 0;
+  }
+  2% {
+    opacity: 0.2;
+  }
+  4% {
+    left: 170%;
+    opacity: 1;
+  }
+  5.5% {
+    left: 170%;
+    opacity: 0;
+  }
+  100% {
+    left: 170%;
+    opacity: 0;
+  }
+}
+
+/* Niente glint se l'utente ha disattivato le animazioni nel sistema. */
+@media (prefers-reduced-motion: reduce) {
+  .btn-glint::after {
+    animation: none;
   }
 }
 

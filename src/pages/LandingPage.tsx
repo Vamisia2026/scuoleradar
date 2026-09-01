@@ -52,7 +52,7 @@ export function LandingPage() {
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <button
                   onClick={handleInizia}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-500 px-6 py-3 text-base font-semibold text-white shadow-soft transition hover:bg-primary-600"
+                  className="btn-glint inline-flex items-center justify-center gap-2 rounded-xl bg-primary-500 px-6 py-3 text-base font-semibold text-white shadow-soft transition hover:bg-primary-600"
                 >
                   <Radar className="h-5 w-5" />
                   ATTIVA IL TUO RADAR
