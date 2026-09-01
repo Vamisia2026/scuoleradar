@@ -138,7 +138,7 @@ export function SimulatorRadar() {
       <button
         onClick={handleSimula}
         disabled={!provCodice || !classeCodice}
-        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
         <Search className="h-4 w-4" />
         Cerca ora

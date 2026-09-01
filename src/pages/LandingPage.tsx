@@ -32,7 +32,7 @@ export function LandingPage() {
       <section className="relative overflow-hidden bg-gradient-to-b from-primary-50 via-white to-white">
         <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-secondary-100/60 blur-3xl" />
         <div className="pointer-events-none absolute top-40 -left-24 h-72 w-72 rounded-full bg-primary-100/60 blur-3xl" />
-        <div className="relative mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
+        <div className="relative mx-auto max-w-6xl px-4 pt-8 pb-16 sm:px-6 sm:pt-10 sm:pb-20">
           <div className="grid items-center gap-10 lg:grid-cols-2">
             <div className="animate-fade-in">
               <span className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-white px-3 py-1 text-xs font-bold text-primary-600 shadow-soft">
@@ -66,7 +66,7 @@ export function LandingPage() {
                 </button>
               </div>
               <p className="mt-4 text-sm text-primary-500">
-                3 segnalazioni incluse gratis nel tuo account Base. Nessuna carta richiesta.
+                3 segnalazioni incluse nel tuo account Base. Nessuna carta richiesta.
               </p>
             </div>
 
