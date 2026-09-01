@@ -109,6 +109,7 @@ export function VetrinaModal() {
         <div className="space-y-2">
           {user ? (
             <button
+              type="button"
               onClick={() => scegliPiano('free')}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-primary-200 px-5 py-3 text-sm font-semibold text-primary-700 transition hover:bg-primary-50"
             >
@@ -117,6 +118,7 @@ export function VetrinaModal() {
             </button>
           ) : (
             <button
+              type="button"
               onClick={() => scegliPiano('free')}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-primary-200 px-5 py-3 text-sm font-semibold text-primary-700 transition hover:bg-primary-50"
             >
@@ -125,6 +127,7 @@ export function VetrinaModal() {
             </button>
           )}
           <button
+            type="button"
             onClick={() => scegliPiano('pro_mensile')}
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-secondary-200 px-5 py-3 text-sm font-semibold text-secondary-700 transition hover:bg-secondary-50"
           >
@@ -132,6 +135,7 @@ export function VetrinaModal() {
             PRO Mensile · 9€/mese
           </button>
           <button
+            type="button"
             onClick={() => scegliPiano('pro_annuale')}
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-secondary-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
           >

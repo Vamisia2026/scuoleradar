@@ -2,13 +2,28 @@ import { supabase } from '@/lib/supabase';
 
 export interface PromoValido {
   valido: boolean;
+  gratuito?: boolean;
   referrer_id?: string;
   codice?: string;
+  piano?: string;
+  durata?: string;
 }
 
 /**
- * Valida un codice promo/referral contro profiles.referral_code (RPC valida_codice_promo).
- * Un codice è applicabile solo se appartiene a un ALTRO utente (niente auto-promo).
+ * Coupon attivo (Stripe): codice utente applicabile al checkout.
+ * "BETA1ANNO" → Coupon ID XRxitsVf (sconto 100% sul PRO annuale)
+ * (la mappatura è server-side nella Edge Function `checkout`).
+ */
+export const PROMO_CODE_BETA1ANNO = 'BETA1ANNO';
+
+/** Codici promo attivi accettati in pre-fill (mappati server-side sul coupon Stripe). */
+export const PROMO_CODES_ATTIVI = [PROMO_CODE_BETA1ANNO];
+
+/**
+ * Valida un codice promo/referral contro promo_codes / profiles.referral_code
+ * (RPC valida_codice_promo). Un codice referral è applicabile solo se appartiene
+ * a un ALTRO utente (niente auto-promo); i codici beta/gratuiti (es. BETA1ANNO)
+ * sono validi anche senza referrer.
  */
 export async function validaPromo(codice: string, userId?: string | null): Promise<PromoValido> {
   if (!supabase) return { valido: false };
@@ -17,15 +32,28 @@ export async function validaPromo(codice: string, userId?: string | null): Promi
   const { data } = await supabase.rpc('valida_codice_promo', { p_codice: upp });
   const riga =
     Array.isArray(data) && data.length > 0
-      ? (data[0] as { valido?: boolean; referrer_id?: string; codice?: string })
+      ? (data[0] as {
+          valido?: boolean;
+          gratuito?: boolean;
+          referrer_id?: string;
+          codice?: string;
+          piano?: string;
+          durata?: string;
+        })
       : null;
-  const valido = Boolean(riga?.valido && riga.referrer_id && riga.referrer_id !== userId);
+  const valido = Boolean(
+    riga?.valido &&
+      (riga.gratuito === true || (Boolean(riga.referrer_id) && riga.referrer_id !== userId)),
+  );
   return {
     valido,
+    gratuito: riga?.gratuito,
     referrer_id: riga?.referrer_id,
     codice: riga?.codice,
+    piano: riga?.piano,
+    durata: riga?.durata,
   };
 }
 
-/** Importo dello sconto promo applicato (coincide con il coupon Stripe amount_off). */
+/** Importo dello sconto promo referral applicato (coincide con il coupon Stripe amount_off). */
 export const SCONTO_PROMO_EUR = 10;

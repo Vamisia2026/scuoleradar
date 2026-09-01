@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { supabase } from '@/lib/supabase';
 import { interpelli, type Interpello } from '@/data/interpelli';
@@ -308,9 +308,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /** Lock anti-concorrenza per avviaCheckout: evita doppie sessioni / doppie schede Stripe. */
+  const checkoutInCorsoRef = useRef(false);
+
   /** FASE 6 — avvia il checkout Stripe per il piano richiesto e redirige l'utente. */
   const avviaCheckout = useCallback(
     async (plan: PianoId, promo?: string, quantita?: number): Promise<{ ok: boolean; errore?: string }> => {
+      // Guardia ANTI-DOPPIO-OPEN: se un checkout è già in volo (doppio click rapido,
+      // doppio trigger, oppure ripresa post-login sovrapposta a un click manuale),
+      // ignora la seconda chiamata → UNA sola scheda Stripe per azione utente.
+      if (checkoutInCorsoRef.current) {
+        console.warn('avviaCheckout — chiamata ignorata: checkout già in corso.');
+        return { ok: false, errore: 'Un pagamento è già in corso. Controlla le schede aperte.' };
+      }
+      checkoutInCorsoRef.current = true;
       try {
       // Analytics: inizializzazione checkout (click "Diventa PRO" / ripresa piano).
       track('checkout_started', { plan, promo: promo || '', quantita: quantita ?? 1 });
@@ -330,10 +341,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         openAuthModal('login');
         return { ok: false, errore: 'Accedi al tuo account per procedere al pagamento.' };
       }
+      // Normalizza il codice promo (es. BETA1ANNO) prima di inviarlo alla Edge Function:
+      // la mappatura al Coupon ID è server-side (STRIPE_COUPON_BETA1ANNO).
+      const promoNorm = promo ? promo.toUpperCase().replace(/[^A-Z0-9]/g, '') : undefined;
       const { data, error } = await supabase.functions.invoke('checkout', {
         body: {
           plan,
-          promo: promo || undefined,
+          promo: promoNorm,
           quantita,
           // URL di ritorno dinamici: la Edge Function usa questa origin
           // (mai un fallback rigido su localhost).
@@ -385,10 +399,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
           errore: payload?.error ?? 'La sessione di pagamento non è stata creata. Riprova.',
         };
       }
-      // Apre il checkout Stripe in una NUOVA scheda, mantenendo l'app ScuoleRadar aperta
-      // e attiva nel tab principale. Se il popup viene bloccato, fallback sul tab corrente.
-      const nuovaScheda = window.open(payload.url, '_blank', 'noopener,noreferrer');
-      if (!nuovaScheda) {
+      // STRICT redirect: il checkout Stripe si apre SEMPRE in una NUOVA scheda (_blank),
+      // mantenendo l'app ScuoleRadar aperta e attiva nel tab principale.
+      // `window.location.href` NON è mai un fallback "diretto": scatta solo nel caso
+      // specifico di popup bloccato dal browser (window.open → null) oppure dentro un
+      // vero catch block (ambienti restrittivi che lanciano un'eccezione su window.open).
+      // NB: NON passare 'noopener,noreferrer' come features string: il token `noopener`
+      // fa restituire null a window.open ANCHE a scheda aperta correttamente (il fallback
+      // scatterebbe sempre). Apriamo senza features e azzeriamo opener a mano.
+      // Questo blocco è il funnel UNICO di tutti i trigger checkout: "Passa a PRO Annuale"
+      // (PrezziPage), VetrinaModal, ServiziPaywall/AbbonamentoModal e ripresa post-login.
+      try {
+        const stripeTab = window.open(payload.url, '_blank');
+        if (stripeTab) {
+          // Security best practice: la nuova scheda non ha handle sulla finestra chiamante.
+          stripeTab.opener = null;
+        } else {
+          // Popup bloccato dal browser: SOLO in questo caso specifico naviga il tab corrente.
+          window.location.href = payload.url;
+        }
+      } catch {
+        // Vero catch block: mai lasciare l'utente a metà, apriamo nel tab corrente.
         window.location.href = payload.url;
       }
       return { ok: true };
@@ -400,6 +431,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ok: false,
           errore: (err as Error)?.message ?? 'Errore imprevisto durante il checkout. Riprova.',
         };
+      } finally {
+        // Rilascia il lock: la scheda Stripe è già stata aperta (window.open è sincrono)
+        // oppure l'operazione è terminata — un nuovo click può ripartire in modo pulito.
+        checkoutInCorsoRef.current = false;
       }
     },
     [openAuthModal, salvaIntendedPlan],

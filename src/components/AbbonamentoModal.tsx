@@ -5,6 +5,7 @@ import {
 import { Modal } from '@/components/Modal';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
+import { PROMO_CODES_ATTIVI } from '@/lib/promo';
 
 interface AbbonamentoModalProps {
   open: boolean;
@@ -56,16 +57,25 @@ export function AbbonamentoModal({ open, onClose, onConfirm }: AbbonamentoModalP
       return;
     }
     setPromoStato('verifica');
+    // Coupon attivo (es. BETA1ANNO): applicato direttamente al checkout Stripe
+    // (la Edge Function `checkout` lo mappa sul Coupon ID XRxitsVf, sconto 100%).
+    if (PROMO_CODES_ATTIVI.includes(upp)) {
+      setPromo(upp);
+      setPromoStato('applicato');
+      setPromoMsg('Codice promo applicato al checkout');
+      return;
+    }
     const { data } = await supabase.rpc('valida_codice_promo', { p_codice: upp });
     const riga =
       Array.isArray(data) && data.length > 0
-        ? (data[0] as { valido?: boolean; referrer_id?: string })
+        ? (data[0] as { valido?: boolean; gratuito?: boolean; referrer_id?: string })
         : null;
-    // Valido SOLO se appartiene a un altro utente (niente auto-promo)
-    if (riga?.valido && riga.referrer_id && riga.referrer_id !== userId) {
+    // Codice beta/gratuito: valido anche senza referrer.
+    // Codice referral: valido SOLO se appartiene a un altro utente (niente auto-promo).
+    if (riga?.valido && (riga.gratuito === true || (riga.referrer_id && riga.referrer_id !== userId))) {
       setPromo(upp);
       setPromoStato('applicato');
-      setPromoMsg('Codice sconto applicato (-10€)');
+      setPromoMsg(riga.gratuito === true ? 'Codice promo applicato' : 'Codice sconto applicato (-10€)');
     } else {
       setPromoStato('errore');
       setPromoMsg('Codice promo non valido o non applicabile');
@@ -133,12 +143,13 @@ export function AbbonamentoModal({ open, onClose, onConfirm }: AbbonamentoModalP
                 setPromoStato('idle');
                 setPromoMsg('');
               }}
-              placeholder="ES. BARTOLOANSALDI"
+              placeholder="ES. BETA1ANNO"
               className="input font-mono text-sm"
               disabled={promoStato === 'applicato'}
             />
             {promoStato === 'applicato' ? (
               <button
+                type="button"
                 onClick={() => {
                   setPromo('');
                   setPromoStato('idle');
@@ -151,6 +162,7 @@ export function AbbonamentoModal({ open, onClose, onConfirm }: AbbonamentoModalP
               </button>
             ) : (
               <button
+                type="button"
                 onClick={() => void applicaPromo(promo)}
                 disabled={promoStato === 'verifica' || !promo}
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-600 disabled:opacity-50"
@@ -192,6 +204,7 @@ export function AbbonamentoModal({ open, onClose, onConfirm }: AbbonamentoModalP
         </ul>
 
         <button
+          type="button"
           onClick={() => void handleProcedi()}
           disabled={invio}
           className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-secondary-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600 disabled:cursor-not-allowed disabled:opacity-60"

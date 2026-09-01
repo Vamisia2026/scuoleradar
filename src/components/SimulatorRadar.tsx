@@ -135,10 +135,13 @@ export function SimulatorRadar() {
         </label>
       </div>
 
+      {/* CTA "Cerca ora": sfondo #2B6F9E SEMPRE a piena opacità — anche da disabilitata
+          NESSUN modificatore `disabled:opacity-*`: il colore resta identico all'hero
+          "ATTIVA IL TUO RADAR" (unico segnale di stato: il cursore not-allowed). */}
       <button
         onClick={handleSimula}
         disabled={!provCodice || !classeCodice}
-        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#2B6F9E] px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-[#225a82] disabled:cursor-not-allowed sm:w-auto"
       >
         <Search className="h-4 w-4" />
         Cerca ora

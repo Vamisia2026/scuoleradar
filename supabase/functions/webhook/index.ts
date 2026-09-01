@@ -41,10 +41,24 @@ console.log(
 );
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-/** Price ID LIVE (secrets): mapping prezzo → tier per subscription_tier (Account Bridge). */
-const STRIPE_PRICE_ID_ANNUAL = Deno.env.get('STRIPE_PRICE_ID_ANNUAL') ?? '';
-const STRIPE_PRICE_ID_MONTHLY = Deno.env.get('STRIPE_PRICE_ID_MONTHLY') ?? '';
-const STRIPE_PRICE_ID_CONSUMO = Deno.env.get('STRIPE_PRICE_ID_CONSUMO') ?? '';
+/**
+ * Price ID LIVE (secrets): mapping prezzo → tier per subscription_tier (Account Bridge).
+ * Fallback sui Price ID LIVE attivi: NON modificare, sono i prezzi di produzione.
+ */
+const STRIPE_PRICE_ID_ANNUAL =
+  Deno.env.get('STRIPE_PRICE_ID_ANNUAL') ??
+  Deno.env.get('STRIPE_PRICE_PRO_ANNUALE') ??
+  'price_1UAnSqKHxfBbZQd8xtvuLMVK'; // LIVE — PRO annuale 49€ (prod_VB9makC3Y0XBKH)
+const STRIPE_PRICE_ID_MONTHLY =
+  Deno.env.get('STRIPE_PRICE_ID_MONTHLY') ??
+  Deno.env.get('STRIPE_PRICE_PRO_MENSILE') ??
+  'price_1UAnTeKHxfBbZQd8iqjzlvn0'; // LIVE — PRO mensile 9€ (prod_VB9nHSVaw9Tlhi)
+const STRIPE_PRICE_ID_CONSUMO =
+  Deno.env.get('STRIPE_PRICE_ID_CONSUMO') ??
+  Deno.env.get('STRIPE_PRICE_A_CONSUMO') ??
+  Deno.env.get('STRIPE_PRICE_CONSUMO') ??
+  Deno.env.get('STRIPE_PRICE_ALACARTE') ??
+  'price_1UAnUXKHxfBbZQd8n1UfrIkI'; // LIVE — a consumo 5€ (prod_VB9oCAZRUAgjEp)
 
 /** Verifica l'header `stripe-signature` (t=<timestamp>,v1=<hmac hex>). */
 async function verificaFirma(body: string, signatureHeader: string): Promise<boolean> {

@@ -53,33 +53,42 @@ body {
     animation: onda-salita 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
-  /* Glint periodico sul CTA "ATTIVA IL TUO RADAR": un riflesso di luce
-     sottile e brevissimo (~0,5 s) che attraversa il pulsante una volta
-     ogni 12 s. Volutamente quasi impercettibile: l'utente deve chiedersi
-     se l'ha visto davvero, e guardare di nuovo. */
+  /* Glint sul CTA "ATTIVA IL TUO RADAR": riflesso di luce diagonale, sottile e
+     brevissimo (~0,7 s) che attraversa il pulsante da un angolo all'opposto.
+     Il timing è PSEUDO-CASUALE: LandingPage aggiunge la classe `.btn-glint-on`
+     a intervalli random di 10–15 s e la rimuove a fine corsa. Volutamente quasi
+     impercettibile: l'utente deve chiedersi se l'ha visto davvero, e guardare
+     di nuovo. */
   .btn-glint {
+    /* Stacking context locale: il beam (z-index: 10) resta SOPRA il contenuto
+       del pulsante ma è ritagliato dal `overflow: hidden` del bottone stesso. */
     position: relative;
     overflow: hidden;
+    isolation: isolate;
   }
 
   .btn-glint::after {
     content: '';
     position: absolute;
-    top: -40%;
-    bottom: -40%;
-    left: -130%;
-    width: 42%;
+    top: -50%;
+    left: -150%;
+    width: 100%;
+    height: 200%;
     background: linear-gradient(
-      100deg,
-      rgba(255, 255, 255, 0) 0%,
-      rgba(255, 255, 255, 0.12) 38%,
-      rgba(255, 255, 255, 0.28) 50%,
-      rgba(255, 255, 255, 0.12) 62%,
-      rgba(255, 255, 255, 0) 100%
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.8),
+      transparent
     );
-    transform: skewX(-18deg);
+    transform: rotate(25deg);
     pointer-events: none;
-    animation: glint-ciclo 12s ease-in-out infinite;
+    z-index: 10;
+    opacity: 0;
+  }
+
+  /* Beam one-shot: attraversa il pulsante (~0,7 s) e resta spento. */
+  .btn-glint.btn-glint-on::after {
+    animation: glint-scatto 0.7s ease-out forwards;
   }
 }
 
@@ -94,33 +103,30 @@ body {
   }
 }
 
-/* Ciclo del glint: il riflesso attraversa il pulsante nei primi ~4% del
-   ciclo (≈0,5 s su 12 s) e resta nascosto per tutto il resto del giro. */
-@keyframes glint-ciclo {
+/* Passaggio del glint: traversata diagonale breve (≈0,7 s), poi si spegne.
+   La classe `.btn-glint-on` viene aggiunta/rimossa da LandingPage con timing
+   random di 10–15 s (mai un loop fisso). */
+@keyframes glint-scatto {
   0% {
-    left: -130%;
+    left: -120%;
     opacity: 0;
   }
-  2% {
-    opacity: 0.2;
-  }
-  4% {
-    left: 170%;
+  15% {
     opacity: 1;
   }
-  5.5% {
-    left: 170%;
-    opacity: 0;
+  75% {
+    left: 120%;
+    opacity: 1;
   }
   100% {
-    left: 170%;
+    left: 120%;
     opacity: 0;
   }
 }
 
 /* Niente glint se l'utente ha disattivato le animazioni nel sistema. */
 @media (prefers-reduced-motion: reduce) {
-  .btn-glint::after {
+  .btn-glint.btn-glint-on::after {
     animation: none;
   }
 }

@@ -135,13 +135,16 @@ export function PrezziPage() {
   }, []);
 
   const handleCta = async (piano: PianoId, quantita?: number) => {
+    // Guardia anti doppio click: se un checkout è già in corso per QUESTO piano, ignora
+    // il click (il lock anti-concorrenza in avviaCheckout copre anche gli altri piani).
+    if (checkoutInCorso) return;
     // Analytics: click sulla CTA del piano (funnel verso il checkout).
     track('cta_pro_click', { piano, ...(quantita !== undefined ? { quantita } : {}) });
     if (user) {
       // Già autenticato: avvia subito il checkout, MAI il modal di login/registrazione.
       setCheckoutInCorso(piano);
       try {
-        const esito = await avviaCheckout(piano, undefined, quantita);
+        const esito = await avviaCheckout(piano, promoUrl ?? undefined, quantita);
         if (!esito.ok) {
           // Errore esplicito (Edge Function non-2xx, secret mancante, rete, CORS…):
           // log + toast, mai un fallimento silenzioso.
@@ -164,11 +167,11 @@ export function PrezziPage() {
     // dopo login/registrazione il checkout riparte automaticamente (AppContext).
     try {
       localStorage.setItem(STORAGE_KEY_INTENDED_PLAN, piano);
-      if (quantita !== undefined) {
-        localStorage.setItem(STORAGE_KEY_INTENDED_PLAN_DATA, JSON.stringify({ promo: '', quantita }));
-      } else {
-        localStorage.removeItem(STORAGE_KEY_INTENDED_PLAN_DATA);
-      }
+      // Conserva anche il codice promo pre-fillato (?promo=…) per la ripresa del checkout.
+      localStorage.setItem(
+        STORAGE_KEY_INTENDED_PLAN_DATA,
+        JSON.stringify({ promo: promoUrl ?? '', quantita: quantita ?? 1 }),
+      );
     } catch {
       // localStorage non disponibile
     }
@@ -182,8 +185,8 @@ export function PrezziPage() {
       {promoUrl && (
         <div className="border-b border-accent-200 bg-accent-500/10 px-4 py-2.5 text-center text-sm text-accent-800">
           <Gift className="mr-1.5 inline h-4 w-4" />
-          Hai un invito! Il codice <strong>{promoUrl}</strong> verrà applicato automaticamente al
-          checkout (-10€ sul piano PRO annuale).
+          Hai un codice promozionale! Il codice <strong>{promoUrl}</strong> verrà applicato
+          automaticamente al checkout.
         </div>
       )}
 

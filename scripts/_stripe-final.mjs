@@ -44,13 +44,20 @@ function applicaOp(f, ops) {
 //   STRIPE_PRICE_ID_MONTHLY        (Price ID PRO mensile — 9€, es. price_1UAnTeKHxfBbZQd8iqjzlvn0)
 //   STRIPE_PRICE_ID_CONSUMO        (Price ID a consumo — 5€, es. price_1UAnUXKHxfBbZQd8n1UfrIkI)
 //   REFERRAL_COUPON_ID             (Coupon referral -10€ sul PRO annuale, es. TOQf7ze2)
+//   STRIPE_COUPON_BETA1ANNO        (Coupon ID di "BETA1ANNO" — sconto 100% sul PRO annuale,
+//                                    es. XRxitsVf)
 //   STRIPE_MODE                    (opzionale — 'test' | 'live'; default: auto-rilevata dalla chiave sk_live_*)
 //   WEBHOOK_ENDPOINT               (URL dell'endpoint webhook configurato nel dashboard Stripe,
 //                                    es. https://gwdmsgsshvdnfrplbjiv.supabase.co/functions/v1/webhook)
 //
+// Stripe LIVE — Product ID di riferimento (le sessioni usano SOLO i Price ID sopra):
+//   PRO annuale 49€ → prod_VB9makC3Y0XBKH · PRO mensile 9€ → prod_VB9nHSVaw9Tlhi
+//   A consumo 5€    → prod_VB9oCAZRUAgjEp
+//
 // Retrocompatibilità: in lettura vengono accettati anche i vecchi nomi
 // STRIPE_PRICE_PRO_ANNUALE / STRIPE_PRICE_PRO_MENSILE / STRIPE_PRICE_A_CONSUMO
 // (con fallback _CONSUMO / _ALACARTE) e STRIPE_COUPON_REFERRAL_10 (fallback del coupon).
+// Se i secrets STRIPE_PRICE_ID_* mancano, il codice usa i Price ID LIVE come fallback.
 //
 // Passaggio TEST → LIVE: aggiorna SOLO i secrets — STRIPE_SECRET_KEY=sk_live_…,
 // i Price ID e il coupon di produzione (nessuna modifica al codice necessaria).`;

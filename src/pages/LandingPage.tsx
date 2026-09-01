@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Radar, BellRing, ShieldCheck, Heart, ArrowRight, UserPlus, Send, CreditCard, MapPin, Calendar, Sparkles,
@@ -11,6 +11,36 @@ import { servizi } from '@/data/servizi';
 export function LandingPage() {
   const { user, openAuthModal, openVetrina, openRadarWizard } = useApp();
   const navigate = useNavigate();
+
+  // Shimmer pseudo-casuale sul CTA "ATTIVA IL TUO RADAR": ogni 10–15 s (intervallo
+  // random) il beam attraversa il pulsante (~0,7 s) e poi si rischedula. Discreto,
+  // quasi impercettibile: attira l'occhio senza distrarre.
+  const [glintOn, setGlintOn] = useState(false);
+  /** Timer del glint in un ref: non viene MAI invalidato dai re-render del componente. */
+  const glintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let attivo = true;
+
+    const accendiGlint = () => {
+      if (!attivo) return;
+      setGlintOn(true);
+      // Durata della traversata del beam (~0,7 s), poi si spegne e si rischedula.
+      glintTimerRef.current = setTimeout(() => {
+        if (!attivo) return;
+        setGlintOn(false);
+        glintTimerRef.current = setTimeout(accendiGlint, 10000 + Math.random() * 5000);
+      }, 700);
+    };
+
+    // Primo passaggio dopo 10–15 s (mai subito: il sito resta pulito).
+    glintTimerRef.current = setTimeout(accendiGlint, 10000 + Math.random() * 5000);
+
+    return () => {
+      attivo = false;
+      if (glintTimerRef.current) clearTimeout(glintTimerRef.current);
+    };
+  }, []);
 
   const handleInizia = () => {
     // Nessun paywall e nessun login anticipato: si configura subito il Radar.
@@ -52,7 +82,9 @@ export function LandingPage() {
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <button
                   onClick={handleInizia}
-                  className="btn-glint inline-flex items-center justify-center gap-2 rounded-xl bg-primary-500 px-6 py-3 text-base font-semibold text-white shadow-soft transition hover:bg-primary-600"
+                  className={`btn-glint inline-flex items-center justify-center gap-2 rounded-xl bg-[#2B6F9E] px-6 py-3 text-base font-semibold text-white shadow-soft transition hover:bg-[#225a82]${
+                    glintOn ? ' btn-glint-on' : ''
+                  }`}
                 >
                   <Radar className="h-5 w-5" />
                   ATTIVA IL TUO RADAR

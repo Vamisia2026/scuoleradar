@@ -20,13 +20,21 @@
 //   STRIPE_PRICE_ID_MONTHLY        (Price ID PRO mensile — 9€, es. price_1UAnTeKHxfBbZQd8iqjzlvn0)
 //   STRIPE_PRICE_ID_CONSUMO        (Price ID a consumo — 5€, es. price_1UAnUXKHxfBbZQd8n1UfrIkI)
 //   REFERRAL_COUPON_ID             (Coupon referral -10€ sul PRO annuale, es. TOQf7ze2)
+//   STRIPE_COUPON_BETA1ANNO        (Coupon ID di "BETA1ANNO" — sconto 100% sul PRO annuale —
+//                                    LIVE: XRxitsVf)
 //   STRIPE_MODE                    (opzionale — 'test' | 'live'; default: auto-rilevata dalla chiave sk_live_*)
 //   WEBHOOK_ENDPOINT               (URL dell'endpoint webhook configurato nel dashboard Stripe,
 //                                    es. https://gwdmsgsshvdnfrplbjiv.supabase.co/functions/v1/webhook)
 //
+// Stripe LIVE — Product ID di riferimento (le sessioni usano SOLO i Price ID sopra):
+//   PRO annuale 49€ → prod_VB9makC3Y0XBKH · PRO mensile 9€ → prod_VB9nHSVaw9Tlhi
+//   A consumo 5€    → prod_VB9oCAZRUAgjEp
+//
 // Retrocompatibilità: in lettura vengono accettati anche i vecchi nomi
 // STRIPE_PRICE_PRO_ANNUALE / STRIPE_PRICE_PRO_MENSILE / STRIPE_PRICE_A_CONSUMO
 // (con fallback _CONSUMO / _ALACARTE) e STRIPE_COUPON_REFERRAL_10 (fallback del coupon).
+// Se i secrets STRIPE_PRICE_ID_* mancano, il codice usa i Price ID LIVE qui sotto come fallback:
+// NON modificare mai questi ID: sono i prezzi attivi di produzione.
 //
 // Passaggio TEST → LIVE: aggiorna SOLO i secrets — STRIPE_SECRET_KEY=sk_live_…,
 // i Price ID e il coupon di produzione (nessuna modifica al codice necessaria).
@@ -73,18 +81,33 @@ const STRIPE_PRICE_IDS: Record<string, string> = {
   pro_annuale:
     Deno.env.get('STRIPE_PRICE_ID_ANNUAL') ??
     Deno.env.get('STRIPE_PRICE_PRO_ANNUALE') ??
-    '',
+    'price_1UAnSqKHxfBbZQd8xtvuLMVK', // LIVE — PRO annuale 49€ (prod_VB9makC3Y0XBKH)
   pro_mensile:
     Deno.env.get('STRIPE_PRICE_ID_MONTHLY') ??
     Deno.env.get('STRIPE_PRICE_PRO_MENSILE') ??
-    '',
+    'price_1UAnTeKHxfBbZQd8iqjzlvn0', // LIVE — PRO mensile 9€ (prod_VB9nHSVaw9Tlhi)
   a_consumo:
     Deno.env.get('STRIPE_PRICE_ID_CONSUMO') ??
     Deno.env.get('STRIPE_PRICE_A_CONSUMO') ??
     Deno.env.get('STRIPE_PRICE_CONSUMO') ??
     Deno.env.get('STRIPE_PRICE_ALACARTE') ??
-    '',
+    'price_1UAnUXKHxfBbZQd8n1UfrIkI', // LIVE — a consumo 5€ (prod_VB9oCAZRUAgjEp)
 };
+
+/** Stripe LIVE — Product ID di riferimento (verifica/diagnostica; le sessioni usano i Price ID). */
+const STRIPE_PRODUCT_IDS: Record<string, string> = {
+  pro_annuale: 'prod_VB9makC3Y0XBKH', // PRO annuale 49€
+  pro_mensile: 'prod_VB9nHSVaw9Tlhi', // PRO mensile 9€
+  a_consumo: 'prod_VB9oCAZRUAgjEp', // a consumo 5€
+};
+
+/**
+ * Coupon Stripe LIVE applicato DIRETTAMENTE alla sessione per il codice "BETA1ANNO"
+ * (sconto 100%: totale 0,00 € mostrato subito nel checkout hosted).
+ * Bypassa la validazione dei promo code usando il Coupon ID via `discounts[0][coupon]`.
+ * Override via secret STRIPE_COUPON_BETA1ANNO.
+ */
+const STRIPE_COUPON_BETA1ANNO = Deno.env.get('STRIPE_COUPON_BETA1ANNO') ?? 'XRxitsVf';
 
 /** Decodifica il payload (base64url) di un JWT senza verificarne la firma (il runtime la verifica con --verify-jwt). */
 function decodeJwt(token: string): { sub?: string; email?: string } | null {
@@ -219,6 +242,8 @@ serve(async (req: Request) => {
         configurato: Boolean(STRIPE_SECRET_KEY) && priceMancanti.length === 0,
         stripeKey: Boolean(STRIPE_SECRET_KEY),
         priceMancanti,
+        productIds: STRIPE_PRODUCT_IDS,
+        couponBeta1Anno: STRIPE_COUPON_BETA1ANNO,
         mode: STRIPE_MODE,
         webhookEndpoint: WEBHOOK_ENDPOINT,
         couponReferral: Boolean(COUPON_REFERRAL),
@@ -266,23 +291,38 @@ serve(async (req: Request) => {
     };
     if (jwt?.email) campi.customer_email = jwt.email;
 
-    // Codice promo / referral: valida e applica il coupon (-10€ su PRO annuale e crediti a consumo)
+    // Codice promo / referral:
+    // 1) "BETA1ANNO": coupon Stripe applicato DIRETTAMENTE alla sessione via
+    //    `discounts[0][coupon]` (MAI `discounts[0][promotion_code]`). Il coupon
+    //    (XRxitsVf, sconto 100%) è già applicato in fase di creazione sessione, quindi
+    //    il checkout hosted mostra subito il totale a 0,00 € senza validazione promo.
+    // 2) Codice referral (-10€): valida via RPC e applica il coupon automatico.
     if (body.promo) {
-      const promo = await validaPromo(body.promo);
-      if (promo?.valido && promo.referrer_id) {
-        campi['metadata[promo]'] = promo.codice ?? body.promo;
-        campi['metadata[promo_referrer]'] = promo.referrer_id;
-        if (COUPON_REFERRAL && (plan === 'pro_annuale' || plan === 'a_consumo')) {
-          campi['discounts[0][coupon]'] = COUPON_REFERRAL;
+      const codiceUpp = body.promo.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (codiceUpp === 'BETA1ANNO') {
+        campi['discounts[0][coupon]'] = STRIPE_COUPON_BETA1ANNO;
+        campi['metadata[promo]'] = codiceUpp;
+        console.log(`  → coupon Stripe applicato: ${codiceUpp} (${STRIPE_COUPON_BETA1ANNO})`);
+      } else {
+        const promo = await validaPromo(body.promo);
+        if (promo?.valido && promo.referrer_id) {
+          campi['metadata[promo]'] = promo.codice ?? body.promo;
+          campi['metadata[promo_referrer]'] = promo.referrer_id;
+          if (COUPON_REFERRAL && (plan === 'pro_annuale' || plan === 'a_consumo')) {
+            campi['discounts[0][coupon]'] = COUPON_REFERRAL;
+          }
         }
       }
     }
 
-    // Promo codes Stripe nel checkout hosted (es. BARTOLOANSALDI): consentono all'utente
+    // Promo codes Stripe nel checkout hosted (es. BETA1ANNO): consentono all'utente
     // di inserire un codice sconto direttamente nella pagina di pagamento.
-    // NB: `allow_promotion_codes` è mutuamente esclusivo con `discounts` (coupon referral),
-    // quindi lo abilitiamo SOLO quando non è già stato applicato un coupon automatico.
-    if (!campi['discounts[0][coupon]']) {
+    // NB: `allow_promotion_codes` è mutuamente esclusivo con `discounts` (coupon referral
+    // o promotion code pre-fillato): se è già stato applicato uno sconto automatico,
+    // MAI inviare allow_promotion_codes=true (Stripe rifiuterebbe la richiesta).
+    if (campi['discounts[0][coupon]'] || campi['discounts[0][promotion_code]']) {
+      delete campi['allow_promotion_codes'];
+    } else {
       campi['allow_promotion_codes'] = 'true';
     }
 

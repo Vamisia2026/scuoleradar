@@ -761,12 +761,18 @@ Niente menzioni a ricompense o account PRO gratuiti. Nel header/dashboard compar
 - Body `{ plan: 'pro_annuale'|'pro_mensile'|'a_consumo', promo?, quantita?, origin? }`
   (accetta varianti inglesi `pro_annual/pro_monthly/alacarte`).
 - Price ID **solo da secrets** (`STRIPE_PRICE_ID_ANNUAL`, `STRIPE_PRICE_ID_MONTHLY`,
-  `STRIPE_PRICE_ID_CONSUMO`; retrocompatibili: `STRIPE_PRICE_PRO_ANNUALE`/`_MENSILE`/`_A_CONSUMO`);
-  mai fidarsi di priceId client.
+  `STRIPE_PRICE_ID_CONSUMO`; retrocompatibili: `STRIPE_PRICE_PRO_ANNUALE`/`_MENSILE`/`_A_CONSUMO`)
+  con **fallback sui Price ID LIVE attivi** (tabella §12.3) — mai fidarsi di priceId client.
+  Product ID LIVE di riferimento: `prod_VB9makC3Y0XBKH` (annuale 49€), `prod_VB9nHSVaw9Tlhi`
+  (mensile 9€), `prod_VB9oCAZRUAgjEp` (a consumo 5€).
+- Promo pre-fillato (es. `BETA1ANNO`): mappato server-side sul **Coupon ID** `XRxitsVf`
+  (sconto 100% sul PRO annuale → totale 0,00 € subito nel checkout hosted) e applicato alla
+  sessione via `discounts[0][coupon]` + `metadata[promo]` (mai `discounts[0][promotion_code]`).
 - Referral: `validaPromo` → coupon `REFERRAL_COUPON_ID` (fallback `STRIPE_COUPON_REFERRAL_10`)
   su PRO annuale e crediti;
   `metadata[promo]`/`metadata[promo_referrer]` per il webhook.
-- `allow_promotion_codes` abilitato SOLO se non c'è coupon automatico (mutualmente esclusivi).
+- `allow_promotion_codes: true` abilitato SEMPRE, tranne quando è già stato applicato uno sconto
+  automatico (coupon referral o coupon `BETA1ANNO` pre-fillato): i due parametri sono mutuamente esclusivi.
 - URL success/cancel dinamici: `origin + /dashboard/radar?esito=successo|annullato`.
 - `client_reference_id` e `metadata[user_id]` = userId; `customer_email` se nel JWT.
 
@@ -782,25 +788,32 @@ Niente menzioni a ricompense o account PRO gratuiti. Nel header/dashboard compar
 - Sempre `ack` 200 (mai far ritentare Stripe).
 
 ### 12.3 Passaggio TEST → LIVE
-Tutto è già pronto: il codice legge **solo da secrets** e non cambia tra modalità.
-Per passare in produzione basta aggiornare i secrets Supabase (nessun redeploy del codice):
+Tutto è già pronto: il codice legge **solo da secrets** e non cambia tra modalità. In più, se un
+secret `STRIPE_PRICE_ID_*` manca, il codice usa il **Price ID LIVE attivo** come fallback (mai un
+test ID). Per passare in produzione basta aggiornare i secrets Supabase (nessun redeploy del codice):
 1. `STRIPE_SECRET_KEY` → `sk_live_…` (la modalità viene auto-rilevata dal prefisso `sk_live_`).
 2. `STRIPE_PRICE_ID_ANNUAL`, `STRIPE_PRICE_ID_MONTHLY`, `STRIPE_PRICE_ID_CONSUMO` → i Price ID
    dello **Stripe Live** (attenzione: gli ID test e live sono diversi anche per lo stesso prezzo).
 3. `STRIPE_WEBHOOK_SECRET` → signing secret (`whsec_…`) dell'endpoint **Live** (endpoint webhook separato).
 4. `REFERRAL_COUPON_ID` → ID del coupon Live (se si vuole mantenere lo sconto referral -10€).
-5. `STRIPE_MODE=live` (facoltativo, esplicito) — il log di avvio di `checkout`/`webhook` riporta la
+5. `STRIPE_COUPON_BETA1ANNO` → Coupon ID del codice attivo `BETA1ANNO`
+   (default `XRxitsVf`, sconto 100% sul PRO annuale).
+6. `STRIPE_MODE=live` (facoltativo, esplicito) — il log di avvio di `checkout`/`webhook` riporta la
    modalità; il `ping` di `checkout` restituisce
-   `{ mode, configurato, priceMancanti, webhookEndpoint, couponReferral }`.
-6. Verifica con un pagamento reale di prova (es. piano mensile) e controlla i log della Edge Function
+   `{ mode, configurato, priceMancanti, productIds, couponBeta1Anno, webhookEndpoint, couponReferral }`.
+7. Verifica con un pagamento reale di prova (es. piano mensile) e controlla i log della Edge Function
    `webhook` (piano=`pro`, scadenza=`current_period_end`).
 
 **Valori di produzione attuali (Stripe):**
 | Secret | Valore |
 |---|---|
+| `STRIPE_PRODUCT_ID_ANNUAL` | `prod_VB9makC3Y0XBKH` — PRO annuale 49€ |
+| `STRIPE_PRODUCT_ID_MONTHLY` | `prod_VB9nHSVaw9Tlhi` — PRO mensile 9€ |
+| `STRIPE_PRODUCT_ID_CONSUMO` | `prod_VB9oCAZRUAgjEp` — a consumo 5€ |
 | `STRIPE_PRICE_ID_ANNUAL` | `price_1UAnSqKHxfBbZQd8xtvuLMVK` — PRO annuale 49€ |
 | `STRIPE_PRICE_ID_MONTHLY` | `price_1UAnTeKHxfBbZQd8iqjzlvn0` — PRO mensile 9€ |
 | `STRIPE_PRICE_ID_CONSUMO` | `price_1UAnUXKHxfBbZQd8n1UfrIkI` — a consumo 5€ |
+| `STRIPE_COUPON_BETA1ANNO` | `XRxitsVf` — codice `BETA1ANNO`, sconto 100% sul PRO annuale |
 | `REFERRAL_COUPON_ID` | `TOQf7ze2` — coupon -10€ sul PRO annuale |
 | `WEBHOOK_ENDPOINT` | `https://gwdmsgsshvdnfrplbjiv.supabase.co/functions/v1/webhook` |
 | `STRIPE_WEBHOOK_SECRET` | `whsec_…` — signing secret dell'endpoint (test o live) |
