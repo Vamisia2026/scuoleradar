@@ -66,7 +66,7 @@ export function LandingPage() {
                 </button>
               </div>
               <p className="mt-4 text-sm text-primary-500">
-                3 notifiche d'avviso incluse gratis nel tuo account Base. Nessuna carta richiesta.
+                3 segnalazioni incluse gratis nel tuo account Base. Nessuna carta richiesta.
               </p>
             </div>
 
@@ -94,7 +94,7 @@ export function LandingPage() {
             <StepCard
               icon={<Send className="h-6 w-6" />}
               step="2"
-              title="Ricevi 3 notifiche incluse"
+              title="Ricevi 3 segnalazioni incluse"
               text="Ti avvisiamo su Telegram e via email solo quando c'è un interpello, un bando o un progetto in linea con te."
             />
             <StepCard

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, UserPlus, AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { LogIn, UserPlus, AlertCircle, Eye, EyeOff, Loader2, Sparkles } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { Modal } from '@/components/Modal';
 
@@ -60,6 +60,8 @@ export function AuthModal() {
   const [showPassword, setShowPassword] = useState(false);
   const [errore, setErrore] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
+  /** Soft sell registrazione: tipo account scelto (Base di default; PRO → /prezzi). */
+  const [tipoAccount, setTipoAccount] = useState<'base' | 'pro'>('base');
 
   // Ripulisce il form quando la modale si chiude
   useEffect(() => {
@@ -72,6 +74,7 @@ export function AuthModal() {
       setShowPassword(false);
       setErrore('');
       setGoogleLoading(false);
+      setTipoAccount('base');
     }
   }, [authModalOpen]);
 
@@ -91,7 +94,7 @@ export function AuthModal() {
     setErrore('');
 
     if (isRegister) {
-      if (!nome.trim() || !cognome.trim() || !email.trim() || !password) {
+      if (!nome.trim() || !cognome.trim() || !genere || !email.trim() || !password) {
         setErrore('Compila tutti i campi.');
         return;
       }
@@ -125,6 +128,12 @@ export function AuthModal() {
     }
   };
 
+  /** Soft sell: la card PRO reindirizza alla pagina Prezzi. */
+  const scegliPro = () => {
+    closeAuthModal();
+    navigate('/prezzi');
+  };
+
   return (
     <Modal
       open={authModalOpen}
@@ -136,9 +145,43 @@ export function AuthModal() {
             ? 'Crea il tuo account'
             : 'Accedi al tuo Radar'
       }
-      size="sm"
+      size="lg"
     >
       <div className="space-y-5">
+        {/* Soft sell registrazione: scelta account Base (registrazione gratuita) o PRO (/prezzi) */}
+        {isRegister && (
+          <div className="rounded-2xl border border-primary-100 bg-slate-50 p-4">
+            <p className="mb-3 text-center text-sm font-bold text-primary-800">
+              Scegli il tuo account:
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setTipoAccount('base')}
+                aria-pressed={tipoAccount === 'base'}
+                className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 px-3 py-4 text-sm font-bold transition ${
+                  tipoAccount === 'base'
+                    ? 'border-secondary-500 bg-white text-secondary-700'
+                    : 'border-primary-200 bg-white text-primary-600 hover:bg-primary-50'
+                }`}
+              >
+                <UserPlus className="h-5 w-5" />
+                Account Base
+                <span className="text-xs font-medium">3 segnalazioni incluse</span>
+              </button>
+              <button
+                type="button"
+                onClick={scegliPro}
+                className="flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-secondary-500 bg-secondary-500 px-3 py-4 text-sm font-bold text-white shadow-soft transition hover:bg-secondary-600"
+              >
+                <Sparkles className="h-5 w-5" />
+                Account PRO
+                <span className="text-xs font-medium">Notifiche illimitate</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Google OAuth reale: il redirect avviene via URL diretto, nessun preventDefault */}
         <button
           type="button"
@@ -198,7 +241,7 @@ export function AuthModal() {
             </div>
           )}
           {isRegister && (
-            <Field label="Genere (per le email automatiche)">
+            <Field label="Genere">
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
@@ -225,9 +268,6 @@ export function AuthModal() {
                   Uomo
                 </button>
               </div>
-              <p className="mt-1 text-xs text-primary-400">
-                Facoltativo: usiamo questa informazione solo per rivolgerti le email ("Cara" / "Caro").
-              </p>
             </Field>
           )}
           <Field label="Email">

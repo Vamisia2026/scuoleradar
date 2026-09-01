@@ -360,25 +360,19 @@ export function NotizieHero() {
                   </p>
                 </div>
 
-                {/* Scuola iniziata: divisorio orizzontale netto + conteggio vacanze con la
+                {/* Scuola iniziata: divisorio netto marcato + conteggio vacanze con la
                     stessa gerarchia visiva del blocco superiore (Numero grande + Titolo). */}
                 {!contoVacanze.estate && (
                   <>
-                    <div className="border-b border-gray-200" />
-                    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-5 py-5 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <CalendarClock className="h-4 w-4 shrink-0 text-secondary-500" />
-                        <span className="font-bold uppercase tracking-[0.22em] text-primary-500 text-xs">
-                          Conto alla rovescia
-                        </span>
-                      </div>
-                      <p className="mt-1 font-display text-4xl font-black leading-none tracking-tight text-primary-900 sm:text-5xl">
+                    <div className="my-4 border-b-2 border-gray-300" />
+                    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-5 py-4 text-center">
+                      <p className="font-display text-4xl font-black leading-none tracking-tight text-primary-900 sm:text-5xl">
                         {contoVacanze.giorni}
                         <span className="ml-2 align-baseline text-lg font-bold uppercase tracking-[0.18em] text-primary-500">
                           {contoVacanze.giorni === 1 ? 'giorno' : 'giorni'}
                         </span>
                       </p>
-                      <p className="mx-auto max-w-[17rem] text-lg font-bold uppercase leading-snug tracking-[0.16em] text-secondary-600 sm:text-xl">
+                      <p className="whitespace-nowrap text-base font-bold uppercase leading-snug tracking-[0.16em] text-secondary-600 sm:text-lg">
                         Alle {contoVacanze.nome}.
                       </p>
                     </div>

@@ -1,154 +1,19 @@
-import { useMemo, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import {
-  Check, MapPin, Send, Mail, Search, GraduationCap, School, BookOpen, Baby, Users, Moon, Briefcase, Wrench, Plus,
-  Star, Ban, Download, Trash2, Sparkles, ChevronDown, AlertTriangle, Loader2, FolderOpen, Lock,
-} from 'lucide-react';
-import { useApp, type Preferenze } from '@/contexts/AppContext';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, Download, FolderOpen, Loader2, Lock, Trash2 } from 'lucide-react';
+import { useApp } from '@/contexts/AppContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { supabase } from '@/lib/supabase';
-import { interpelli } from '@/data/interpelli';
 import {
   conAggiuntaInCima,
   STORAGE_KEY_MODULI_SCARICATI,
   type ModuloScaricato,
 } from '@/data/moduli';
-import { ordiniScuola, materie, type OrdineScuola } from '@/data/ordiniMaterie';
-import { classiConcorso } from '@/data/classiConcorso';
-import { province } from '@/data/province';
-import { Pill } from '@/components/Pill';
 import { Modal } from '@/components/Modal';
-
-const ordineIcons: Record<OrdineScuola, React.ReactNode> = {
-  infanzia: <Baby className="h-5 w-5" />,
-  primaria: <School className="h-5 w-5" />,
-  secondaria1: <BookOpen className="h-5 w-5" />,
-  secondaria2: <GraduationCap className="h-5 w-5" />,
-  cpia: <Users className="h-5 w-5" />,
-  serali: <Moon className="h-5 w-5" />,
-  pon: <Briefcase className="h-5 w-5" />,
-  ata: <Wrench className="h-5 w-5" />,
-};
-
-/** Card collassabile del Profilo: riduce lo scroll raggruppando le impostazioni. */
-function Accordion({
-  icona,
-  titolo,
-  badge,
-  aperto,
-  onToggle,
-  children,
-}: {
-  icona: ReactNode;
-  titolo: string;
-  badge?: string;
-  aperto: boolean;
-  onToggle: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <section className="overflow-hidden rounded-2xl border border-primary-100 bg-white shadow-card">
-      <button
-        onClick={onToggle}
-        aria-expanded={aperto}
-        className="flex w-full items-center gap-2.5 px-5 py-4 text-left transition hover:bg-primary-50/50"
-      >
-        <span className="text-lg leading-none">{icona}</span>
-        <h3 className="flex-1 text-sm font-bold text-primary-800">{titolo}</h3>
-        {badge ? (
-          <span className="rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-semibold text-primary-600">
-            {badge}
-          </span>
-        ) : null}
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 text-primary-400 transition-transform ${aperto ? 'rotate-180' : ''}`}
-        />
-      </button>
-      {aperto && <div className="border-t border-primary-100 px-5 py-4">{children}</div>}
-    </section>
-  );
-}
+import { Accordion } from '@/components/Accordion';
 
 export function ProfiloPage() {
-  const { preferenze, setPreferenze, salvaProfilo, abbonato } = useApp();
-  // Da "Completa il profilo" (Radar) si arriva con ?configura=1: apriamo le sezioni
-  // principali così l'utente vede subito i campi da compilare.
-  const [searchParams] = useSearchParams();
-  const configuraDaCompletaProfilo = searchParams.get('configura') === '1';
-
-  const [ordini, setOrdini] = useState<OrdineScuola[]>(preferenze.ordini);
-  const [classiCodici, setClassiCodici] = useState<string[]>(preferenze.classiCodici);
-  const [materieId, setMaterieId] = useState<string[]>(preferenze.materieId);
-  const [materieCustom, setMaterieCustom] = useState<string[]>(preferenze.materieCustom);
-  const [provinceCodici, setProvinceCodici] = useState<string[]>(preferenze.provinceCodici);
-  const [telegramUsername, setTelegramUsername] = useState(preferenze.telegramUsername);
-  const [telegramChatIdInput, setTelegramChatIdInput] = useState(preferenze.telegramChatId ?? '');
-
-  // Deeplink Telegram: https://t.me/ScuoleRadar_bot?start=<user_id> (collega automaticamente l'account)
-  const [telegramDeepLink, setTelegramDeepLink] = useState('https://t.me/ScuoleRadar_bot');
-  useEffect(() => {
-    if (!supabase) return;
-    let attivo = true;
-    supabase.auth
-      .getUser()
-      .then(({ data }) => {
-        if (attivo && data.user) {
-          setTelegramDeepLink(`https://t.me/ScuoleRadar_bot?start=${data.user.id}`);
-        }
-      })
-      .catch(() => undefined);
-    return () => {
-      attivo = false;
-    };
-  }, []);
-  const [emailNotifica, setEmailNotifica] = useState(preferenze.emailNotifica);
-  const [favoriteSchools, setFavoriteSchools] = useState<string[]>(preferenze.favoriteSchools);
-  const [ignoredSchools, setIgnoredSchools] = useState<string[]>(preferenze.ignoredSchools);
-  const [favoriteScuolaInput, setFavoriteScuolaInput] = useState('');
-  const [ignoredScuolaInput, setIgnoredScuolaInput] = useState('');
-
-  const [queryClasse, setQueryClasse] = useState('');
-  const [materiaFilter, setMateriaFilter] = useState('');
-  const [customMateriaInput, setCustomMateriaInput] = useState('');
-  // Stato dell'autosave: 'idle' → 'salvataggio' (debounce/upsert in corso) → 'salvato'.
-  const [statoSalvataggio, setStatoSalvataggio] = useState<'idle' | 'salvataggio' | 'salvato'>('idle');
-  // Evita un salvataggio al primo mount (i valori iniziali vengono solo letti).
-  const primaEsecuzione = useRef(true);
-
-  // Sezioni collassabili del Profilo (accordion) per eliminare lo scroll infinito.
-  // Il drop-down "Modelli Scaricati di Recente" parte APERTO per mostrare subito l'elenco.
-  // Con ?configura=1 (redirect da "Completa il profilo") partono aperte anche le sezioni
-  // principali: Ordini, Classi, Materie, Province e Filtri Avanzati.
-  const [accordionAperti, setAccordionAperti] = useState<Record<string, boolean>>({
-    modelli: true,
-    ordini: configuraDaCompletaProfilo,
-    classi: configuraDaCompletaProfilo,
-    materie: configuraDaCompletaProfilo,
-    province: configuraDaCompletaProfilo,
-    filtri: configuraDaCompletaProfilo,
-  });
-  const toggleAccordion = (chiave: string) =>
-    setAccordionAperti((prev) => ({ ...prev, [chiave]: !prev[chiave] }));
-  // Copre anche la navigazione SPA (es. passare da /dashboard/profilo a ?configura=1).
-  useEffect(() => {
-    if (configuraDaCompletaProfilo) {
-      setAccordionAperti((prev) => ({
-        ...prev,
-        ordini: true,
-        classi: true,
-        materie: true,
-        province: true,
-        filtri: true,
-      }));
-    }
-  }, [configuraDaCompletaProfilo]);
-
-  // Disdetta / cancellazione account
-  const [mostraModaleElimina, setMostraModaleElimina] = useState(false);
-  const [testoConferma, setTestoConferma] = useState('');
-  const [cancellando, setCancellando] = useState(false);
-  const [erroreElimina, setErroreElimina] = useState('');
-
+  const { abbonato } = useApp();
 
   // Storico dei modelli scaricati (condiviso con la pagina Moduli via localStorage)
   const [moduliScaricati, setModuliScaricati] = useLocalStorage<ModuloScaricato[]>(
@@ -156,121 +21,15 @@ export function ProfiloPage() {
     [],
   );
 
-  const provinceSorted = useMemo(() => [...province].sort((a, b) => a.nome.localeCompare(b.nome)), []);
+  // Tendina "Modelli Scaricati" (solo PRO) e sezione Sicurezza
+  const [moduliAperti, setModuliAperti] = useState(true);
+  const [sicurezzaAperti, setSicurezzaAperti] = useState(false);
 
-  // Scuole note dai dati disponibili: suggerimenti per i Filtri Avanzati Scuole.
-  const scuoleConosciute = useMemo(
-    () => [...new Set(interpelli.map((i) => i.istituto).filter(Boolean))],
-    [],
-  );
-
-  const classiFiltrate = useMemo(() => {
-    let list = classiConcorso;
-    if (materiaFilter) list = list.filter((c) => c.materie.includes(materiaFilter));
-    if (queryClasse.trim()) {
-      const q = queryClasse.toLowerCase();
-      list = list.filter(
-        (c) => c.codice.toLowerCase().includes(q) || c.denominazione.toLowerCase().includes(q),
-      );
-    }
-    return list;
-  }, [queryClasse, materiaFilter]);
-
-  const toggleOrdine = (id: OrdineScuola) =>
-    setOrdini((prev) => (prev.includes(id) ? prev.filter((o) => o !== id) : [...prev, id]));
-
-  const toggleClasse = (codice: string) =>
-    setClassiCodici((prev) => (prev.includes(codice) ? prev.filter((c) => c !== codice) : [...prev, codice]));
-
-  const toggleMateria = (id: string) =>
-    setMaterieId((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
-
-  const addCustomMateria = () => {
-    const val = customMateriaInput.trim();
-    if (!val) return;
-    if (!materieCustom.some((m) => m.toLowerCase() === val.toLowerCase())) {
-      setMaterieCustom((prev) => [...prev, val]);
-    }
-    setCustomMateriaInput('');
-  };
-
-  const removeCustomMateria = (m: string) =>
-    setMaterieCustom((prev) => prev.filter((x) => x !== m));
-
-  const toggleProvincia = (codice: string) =>
-    setProvinceCodici((prev) => (prev.includes(codice) ? prev.filter((c) => c !== codice) : [...prev, codice]));
-
-  const addFavoriteScuola = () => {
-    const val = favoriteScuolaInput.trim();
-    if (!val) return;
-    if (!favoriteSchools.some((s) => s.toLowerCase() === val.toLowerCase())) {
-      setFavoriteSchools((prev) => [...prev, val]);
-    }
-    setFavoriteScuolaInput('');
-  };
-
-  const removeFavoriteScuola = (s: string) =>
-    setFavoriteSchools((prev) => prev.filter((x) => x !== s));
-
-  const addIgnoredScuola = () => {
-    const val = ignoredScuolaInput.trim();
-    if (!val) return;
-    if (!ignoredSchools.some((s) => s.toLowerCase() === val.toLowerCase())) {
-      setIgnoredSchools((prev) => [...prev, val]);
-    }
-    setIgnoredScuolaInput('');
-  };
-
-  const removeIgnoredScuola = (s: string) =>
-    setIgnoredSchools((prev) => prev.filter((x) => x !== s));
-
-  /**
-   * AUTOSAVE con debounce (500ms): ad ogni modifica di campi, checkbox e sezioni
-   * compone le preferenze aggiornate, sincronizza il context e le persiste su Supabase.
-   * `salvaProfilo` riceve sempre dati espliciti, quindi viene escluso dai deps
-   * per evitare un loop di salvataggio quando il context preferenze si aggiorna.
-   */
-  useEffect(() => {
-    if (primaEsecuzione.current) {
-      primaEsecuzione.current = false;
-      return;
-    }
-    const modifiche: Preferenze = {
-      ordini,
-      classiCodici,
-      materieId,
-      materieCustom,
-      provinceCodici,
-      telegramUsername: telegramUsername.trim(),
-      telegramChatId: telegramChatIdInput.trim(),
-      emailNotifica: emailNotifica.trim(),
-      onboarded: preferenze.onboarded,
-      favoriteSchools,
-      ignoredSchools,
-    };
-    setStatoSalvataggio('salvataggio');
-    const timeout = setTimeout(() => {
-      setPreferenze(modifiche);
-      void salvaProfilo(modifiche).then(() => {
-        setStatoSalvataggio('salvato');
-        setTimeout(() => setStatoSalvataggio('idle'), 2500);
-      });
-    }, 500);
-    return () => clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- autosave intenzionale: salvaProfilo/setPreferenze esclusi di proposito
-  }, [
-    ordini,
-    classiCodici,
-    materieId,
-    materieCustom,
-    provinceCodici,
-    telegramUsername,
-    telegramChatIdInput,
-    emailNotifica,
-    favoriteSchools,
-    ignoredSchools,
-    moduliScaricati,
-  ]);
+  // Disdetta / cancellazione account
+  const [mostraModaleElimina, setMostraModaleElimina] = useState(false);
+  const [testoConferma, setTestoConferma] = useState('');
+  const [cancellando, setCancellando] = useState(false);
+  const [erroreElimina, setErroreElimina] = useState('');
 
   const formatDataScaricato = (iso: string) => {
     try {
@@ -325,534 +84,96 @@ export function ProfiloPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-primary-800">Il mio profilo</h2>
-        {statoSalvataggio === 'salvataggio' ? (
-          <span className="inline-flex items-center gap-1.5 text-sm text-primary-400">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Salvataggio in corso...
-          </span>
-        ) : statoSalvataggio === 'salvato' ? (
-          <span className="inline-flex items-center gap-1.5 text-sm font-medium text-accent-600">
-            <Check className="h-4 w-4 text-accent-500" />
-            Salvato ✓
-          </span>
-        ) : null}
       </div>
 
-
-
-      {/* Modelli Scaricati di Recente — drop-down */}
-      <Accordion
-        icona="📁"
-        titolo="Modelli Scaricati di Recente"
-        badge={abbonato ? (moduliScaricati.length ? `${moduliScaricati.length} scaricati` : undefined) : 'PRO'}
-        aperto={!!accordionAperti.modelli}
-        onToggle={() => toggleAccordion('modelli')}
-      >
-        {abbonato ? (
-          moduliScaricati.length === 0 ? (
-          <p className="text-sm text-primary-400">
-            Non hai ancora scaricato modelli. Visita la pagina Moduli per trovare documenti e
-            template pronti all&apos;uso.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {moduliScaricati.map((m) => (
-              <li
-                key={m.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-primary-100 bg-slate-50 px-4 py-3"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-primary-800">{m.nome}</p>
-                  <p className="text-xs text-primary-400">
-                    {m.tipo} · scaricato il {formatDataScaricato(m.scaricatoIl)}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    onClick={() => riscaricaModulo(m)}
-                    aria-label={`Scarica di nuovo ${m.nome}`}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-white px-3 py-2 text-xs font-semibold text-primary-700 transition hover:bg-primary-50"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    Scarica
-                  </button>
-                  <button
-                    onClick={() => rimuoviModulo(m.id)}
-                    aria-label={`Rimuovi ${m.nome} dallo storico`}
-                    className="rounded-lg p-2 text-primary-400 transition hover:bg-error-50 hover:text-error-600"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-          )
-        ) : (
-          <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-primary-200 bg-primary-50/50 p-5">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1 text-[11px] font-bold text-primary-600 ring-1 ring-primary-200">
-              <Lock className="h-3.5 w-3.5" />
-              Feature PRO
-            </span>
-            <p className="text-sm font-semibold leading-relaxed text-primary-800">
-              I tuoi modelli scaricati sono salvati nel tuo archivio personale (Feature PRO)
+      {/* Gestione Moduli — tendina apribile/comprimibile (solo PRO);
+          per gli utenti Base una barra grigia compatta di upsell */}
+      {abbonato ? (
+        <Accordion
+          icona="📁"
+          titolo="Modelli Scaricati di Recente"
+          badge={moduliScaricati.length ? `${moduliScaricati.length} scaricati` : undefined}
+          aperto={moduliAperti}
+          onToggle={() => setModuliAperti((v) => !v)}
+        >
+          {moduliScaricati.length === 0 ? (
+            <p className="text-sm text-primary-400">
+              Non hai ancora scaricato modelli. Visita la pagina Moduli per trovare documenti e
+              template pronti all&apos;uso.
             </p>
-            <Link
-              to="/prezzi"
-              className="mt-1 inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
-            >
-              Passa a PRO per salvare i tuoi documenti
-            </Link>
-          </div>
-        )}
-        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-primary-100 pt-3">
-          <Link
-            to="/dashboard/moduli?tab=miei"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-600"
-          >
-            <FolderOpen className="h-3.5 w-3.5" />
-            Vai alla pagina Moduli
-          </Link>
-          {abbonato && moduliScaricati.length > 0 && (
-            <button
-              onClick={svuotaStorico}
-              className="text-xs font-medium text-primary-400 transition hover:text-error-600"
-            >
-              Svuota storico
-            </button>
+          ) : (
+            <ul className="space-y-2">
+              {moduliScaricati.map((m) => (
+                <li
+                  key={m.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-primary-100 bg-slate-50 px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-primary-800">{m.nome}</p>
+                    <p className="text-xs text-primary-400">
+                      {m.tipo} · scaricato il {formatDataScaricato(m.scaricatoIl)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      onClick={() => riscaricaModulo(m)}
+                      aria-label={`Scarica di nuovo ${m.nome}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-white px-3 py-2 text-xs font-semibold text-primary-700 transition hover:bg-primary-50"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Scarica
+                    </button>
+                    <button
+                      onClick={() => rimuoviModulo(m.id)}
+                      aria-label={`Rimuovi ${m.nome} dallo storico`}
+                      className="rounded-lg p-2 text-primary-400 transition hover:bg-error-50 hover:text-error-600"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
-        </div>
-      </Accordion>
-
-      {/* Ordini e Tipologie di Scuola — accordion */}
-      <Accordion
-        icona="📂"
-        titolo="Ordini e Tipologie di Scuola"
-        badge={ordini.length ? `${ordini.length} selezionati` : undefined}
-        aperto={!!accordionAperti.ordini}
-        onToggle={() => toggleAccordion('ordini')}
-      >
-        <p className="text-xs text-primary-500">Puoi selezionare più opzioni.</p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {ordiniScuola.map((o) => {
-            const selected = ordini.includes(o.id);
-            return (
-              <button
-                key={o.id}
-                onClick={() => toggleOrdine(o.id)}
-                className={`flex items-center gap-2 rounded-xl border p-3 text-left text-sm transition ${
-                  selected
-                    ? 'border-primary-500 bg-primary-50'
-                    : 'border-primary-200 hover:border-primary-300'
-                }`}
-              >
-                <span className="text-primary-600">{ordineIcons[o.id]}</span>
-                <span className="flex-1 font-medium text-primary-800">{o.nome}</span>
-                {selected && <Check className="h-4 w-4 text-primary-600" />}
-              </button>
-            );
-          })}
-        </div>
-      </Accordion>
-
-      {/* Classi di Concorso — accordion */}
-      <Accordion
-        icona="🎓"
-        titolo="Classi di Concorso"
-        badge={classiCodici.length ? `${classiCodici.length} selezionate` : undefined}
-        aperto={!!accordionAperti.classi}
-        onToggle={() => toggleAccordion('classi')}
-      >
-
-        {classiCodici.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {classiCodici.map((c) => (
-              <Pill key={c} label={c} onRemove={() => toggleClasse(c)} color="accent" />
-            ))}
-          </div>
-        )}
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <select
-            value={materiaFilter}
-            onChange={(e) => setMateriaFilter(e.target.value)}
-            className="input"
-          >
-            <option value="">Filtra per materia</option>
-            {materie.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.nome}
-              </option>
-            ))}
-          </select>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary-400" />
-            <input
-              type="text"
-              value={queryClasse}
-              onChange={(e) => setQueryClasse(e.target.value)}
-              placeholder="Cerca classe (es. A-12)"
-              className="input pl-10"
-            />
-          </div>
-        </div>
-
-        <div className="mt-3 max-h-56 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-2">
-          {classiFiltrate.map((c) => {
-            const selected = classiCodici.includes(c.codice);
-            return (
-              <button
-                key={c.codice}
-                onClick={() => toggleClasse(c.codice)}
-                className={`flex w-full items-center justify-between gap-2 rounded-lg p-2.5 text-left text-sm transition ${
-                  selected ? 'bg-accent-50 text-accent-800' : 'hover:bg-primary-50 text-primary-700'
-                }`}
-              >
-                <span>
-                  <strong>{c.codice}</strong> – {c.denominazione}
-                </span>
-                {selected && <Check className="h-4 w-4 text-accent-600" />}
-              </button>
-            );
-          })}
-        </div>
-      </Accordion>
-
-      {/* Materie e Competenze — accordion */}
-      <Accordion
-        icona="📚"
-        titolo="Materie e Competenze"
-        badge={
-          materieId.length + materieCustom.length
-            ? `${materieId.length + materieCustom.length} selezionate`
-            : undefined
-        }
-        aperto={!!accordionAperti.materie}
-        onToggle={() => toggleAccordion('materie')}
-      >
-        <p className="mt-1 text-xs text-primary-500">
-          Seleziona le materie in cui sei competente, anche non collegate a una classe specifica.
-        </p>
-
-        {materieId.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {materieId.map((id) => (
-              <Pill
-                key={id}
-                label={materie.find((m) => m.id === id)?.nome ?? id}
-                onRemove={() => toggleMateria(id)}
-                color="primary"
-              />
-            ))}
-          </div>
-        )}
-
-        <div className="mt-3 max-h-44 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-2">
-          {materie.map((m) => {
-            const selected = materieId.includes(m.id);
-            return (
-              <button
-                key={m.id}
-                onClick={() => toggleMateria(m.id)}
-                className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
-                  selected ? 'bg-primary-50 text-primary-800' : 'text-primary-700 hover:bg-primary-50'
-                }`}
-              >
-                <span>{m.nome}</span>
-                {selected && <Check className="h-4 w-4 text-primary-600" />}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Custom materie */}
-        <h4 className="mt-5 text-sm font-bold text-primary-700">Materie personalizzate</h4>
-        {materieCustom.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {materieCustom.map((m) => (
-              <Pill key={m} label={m} onRemove={() => removeCustomMateria(m)} color="secondary" />
-            ))}
-          </div>
-        )}
-        <div className="mt-3 flex gap-2">
-          <input
-            type="text"
-            value={customMateriaInput}
-            onChange={(e) => setCustomMateriaInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                addCustomMateria();
-              }
-            }}
-            placeholder="Es. Robotica educativa, Dizione…"
-            className="input"
-          />
-          <button
-            onClick={addCustomMateria}
-            disabled={!customMateriaInput.trim()}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600 disabled:opacity-50"
-          >
-            <Plus className="h-4 w-4" />
-            Aggiungi
-          </button>
-        </div>
-      </Accordion>
-
-      {/* Province di Interesse — accordion */}
-      <Accordion
-        icona="📍"
-        titolo="Province di Interesse"
-        badge={provinceCodici.length ? `${provinceCodici.length} selezionate` : undefined}
-        aperto={!!accordionAperti.province}
-        onToggle={() => toggleAccordion('province')}
-      >
-
-        {provinceCodici.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {provinceCodici.map((c) => (
-              <Pill
-                key={c}
-                label={province.find((p) => p.codice === c)?.nome ?? c}
-                onRemove={() => toggleProvincia(c)}
-                color="primary"
-              />
-            ))}
-          </div>
-        )}
-
-        <div className="mt-4 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-2">
-          {provinceSorted.map((p) => {
-            const selected = provinceCodici.includes(p.codice);
-            return (
-              <label
-                key={p.codice}
-                className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition hover:bg-primary-50 ${
-                  selected ? 'bg-primary-50' : ''
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={selected}
-                  onChange={() => toggleProvincia(p.codice)}
-                  className="h-4 w-4 rounded border-primary-300 text-primary-500"
-                />
-                <MapPin className="h-4 w-4 text-primary-400" />
-                <span className="text-sm text-primary-800">{p.nome}</span>
-                <span className="ml-auto text-xs text-primary-400">{p.codice}</span>
-              </label>
-            );
-          })}
-        </div>
-      </Accordion>
-
-      {/* Filtri Avanzati Scuole — accordion */}
-      <Accordion
-        icona="🏫"
-        titolo="Filtri Avanzati Scuole"
-        badge={
-          favoriteSchools.length + ignoredSchools.length
-            ? `${favoriteSchools.length + ignoredSchools.length} scuole`
-            : undefined
-        }
-        aperto={!!accordionAperti.filtri}
-        onToggle={() => toggleAccordion('filtri')}
-      >
-        <p className="text-sm text-primary-500">
-          Le scuole preferite ricevono notifiche prioritarie e un badge dedicato; quelle escluse
-          vengono nascoste dalla dashboard.
-        </p>
-
-        {/* Suggerimenti per la ricerca di Istituti (struttura pronta per il catalogo scuole) */}
-        <datalist id="scuole-conosciute">
-          {scuoleConosciute.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
-
-        <div className="mt-4 space-y-4">
-          {/* Preferite (whitelist) */}
-          <div className="rounded-xl border border-accent-200 bg-accent-50/50 p-4">
-            <h4 className="flex items-center gap-1.5 text-sm font-semibold text-accent-800">
-              <Star className="h-4 w-4 text-accent-500" />
-              Scuole preferite (Notifiche Prioritarie)
-            </h4>
-            <div className="mt-3 flex gap-2">
-              <input
-                type="text"
-                value={favoriteScuolaInput}
-                onChange={(e) => setFavoriteScuolaInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addFavoriteScuola()}
-                placeholder="Es. Media Jona Asti, ITIS Artom Asti"
-                list="scuole-conosciute"
-                className="input"
-              />
-              <button
-                onClick={addFavoriteScuola}
-                disabled={!favoriteScuolaInput.trim()}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-accent-600 disabled:opacity-50"
-              >
-                <Plus className="h-4 w-4" />
-                Aggiungi
-              </button>
-            </div>
-            {favoriteSchools.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {favoriteSchools.map((s) => (
-                  <Pill key={s} label={s} onRemove={() => removeFavoriteScuola(s)} color="accent" />
-                ))}
-              </div>
-            ) : (
-              <p className="mt-3 text-xs text-primary-400">Nessuna scuola preferita.</p>
-            )}
-          </div>
-
-          {/* Escluse (blacklist) */}
-          <div className="rounded-xl border border-secondary-200 bg-secondary-50/50 p-4">
-            <h4 className="flex items-center gap-1.5 text-sm font-semibold text-secondary-800">
-              <Ban className="h-4 w-4 text-secondary-500" />
-              Scuole escluse (Nascondi Avvisi)
-            </h4>
-            <div className="mt-3 flex gap-2">
-              <input
-                type="text"
-                value={ignoredScuolaInput}
-                onChange={(e) => setIgnoredScuolaInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addIgnoredScuola()}
-                placeholder="Es. IC Castell'Alfero, IC Incisa Scapaccino"
-                list="scuole-conosciute"
-                className="input"
-              />
-              <button
-                onClick={addIgnoredScuola}
-                disabled={!ignoredScuolaInput.trim()}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-secondary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600 disabled:opacity-50"
-              >
-                <Plus className="h-4 w-4" />
-                Aggiungi
-              </button>
-            </div>
-            {ignoredSchools.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {ignoredSchools.map((s) => (
-                  <Pill key={s} label={s} onRemove={() => removeIgnoredScuola(s)} color="secondary" />
-                ))}
-              </div>
-            ) : (
-              <p className="mt-3 text-xs text-primary-400">Nessuna scuola esclusa.</p>
-            )}
-          </div>
-        </div>
-      </Accordion>
-
-      {/* Canali di Notifica e Telegram — accordion */}
-      <Accordion
-        icona="🔔"
-        titolo="Canali di Notifica e Telegram"
-        badge={
-          [telegramUsername, telegramChatIdInput, emailNotifica].some(Boolean)
-            ? 'configurati'
-            : undefined
-        }
-        aperto={!!accordionAperti.canali}
-        onToggle={() => toggleAccordion('canali')}
-      >
-        <p className="text-sm text-primary-500">
-          Configura i canali su cui ricevere gli avvisi dei nuovi interpelli in tempo reale.
-        </p>
-        <p className="mt-2 rounded-xl bg-primary-50 px-3 py-2 text-xs text-primary-600">
-          Piano Base: 3 notifiche all&apos;anno (si rinnovano a ogni anno solare); con il PRO
-          notifiche illimitate.
-        </p>
-        <div className="mt-4 space-y-4">
-          <label className="block">
-            <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-primary-700">
-              <Send className="h-4 w-4 text-primary-500" />
-              Username Telegram
-            </span>
-            <input
-              type="text"
-              value={telegramUsername}
-              onChange={(e) => setTelegramUsername(e.target.value)}
-              className="input"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-primary-700">
-              <Mail className="h-4 w-4 text-primary-500" />
-              Email (backup)
-            </span>
-            <input
-              type="email"
-              value={emailNotifica}
-              onChange={(e) => setEmailNotifica(e.target.value)}
-              className="input"
-            />
-          </label>
-        </div>
-
-        <div className="mt-5 rounded-xl border border-primary-100 bg-primary-50 p-4 text-sm text-primary-700">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary-500">
-            Collega Telegram
-          </p>
-          {preferenze.telegramChatId ? (
-            <p className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-accent-50 px-3 py-1 text-xs font-semibold text-accent-700">
-              <Check className="h-3.5 w-3.5" /> Telegram collegato
-            </p>
-          ) : null}
-          <ol className="list-decimal space-y-1 pl-4">
-            <li>
-              Premi <strong>Collega Telegram</strong>: si aprirà il bot{' '}
-              <a
-                href="https://t.me/ScuoleRadar_bot"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-semibold text-primary-700 underline"
-              >
-                @ScuoleRadar_bot
-              </a>{' '}
-              con il tuo account già riconosciuto.
-            </li>
-            <li>
-              Nel bot premi <strong>Start</strong> (o invia il comando <code>/start</code>): il
-              collegamento avviene automaticamente.
-            </li>
-            <li>
-              Riceverai il messaggio di conferma e, da quel momento, le notifiche dei nuovi
-              interpelli.
-            </li>
-          </ol>
-          <div className="mt-3 flex gap-2">
-            <input
-              type="text"
-              value={telegramChatIdInput}
-              onChange={(e) => setTelegramChatIdInput(e.target.value)}
-              placeholder="Chat ID (solo se preferisci il collegamento manuale)"
-              className="input"
-            />
-            <a
-              href={telegramDeepLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
+          <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-primary-100 pt-3">
+            <Link
+              to="/dashboard/moduli?tab=miei"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-600"
             >
-              <Send className="h-4 w-4" />
-              Collega Telegram
-            </a>
+              <FolderOpen className="h-3.5 w-3.5" />
+              Vai alla pagina Moduli
+            </Link>
+            {moduliScaricati.length > 0 && (
+              <button
+                onClick={svuotaStorico}
+                className="text-xs font-medium text-primary-400 transition hover:text-error-600"
+              >
+                Svuota storico
+              </button>
+            )}
           </div>
+        </Accordion>
+      ) : (
+        <div className="flex flex-col items-start justify-between gap-3 rounded-2xl bg-slate-100 px-5 py-4 sm:flex-row sm:items-center">
+          <p className="flex items-center gap-2 text-sm font-semibold text-primary-600">
+            <Lock className="h-4 w-4 text-primary-400" />
+            Modelli Scaricati — Funzionalità PRO
+          </p>
+          <Link
+            to="/prezzi"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-secondary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
+          >
+            Strumento disponibile per gli utenti PRO
+          </Link>
         </div>
-        <p className="mt-3 text-xs text-primary-400">
-          Con il pulsante "Collega Telegram" il tuo Chat ID viene salvato automaticamente nel profilo
-          e usato per inviarti le notifiche Telegram.
-        </p>
-      </Accordion>
+      )}
 
-      {/* Sicurezza e Account — sezione collassata in fondo alla pagina */}
+      {/* Sicurezza e Account */}
       <Accordion
         icona="🛡️"
         titolo="Sicurezza e Account"
-        aperto={!!accordionAperti.sicurezza}
-        onToggle={() => toggleAccordion('sicurezza')}
+        aperto={sicurezzaAperti}
+        onToggle={() => setSicurezzaAperti((v) => !v)}
       >
         <p className="text-xs leading-relaxed text-primary-600">
           I tuoi dati personali sono trattati in conformità con il GDPR. Puoi esportare o cancellare

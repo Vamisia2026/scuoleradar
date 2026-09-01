@@ -67,18 +67,41 @@ function caro(genere?: string): string {
 function stato(genere?: string): string {
   return genere === 'F' ? 'stata' : 'stato';
 }
+/** Concordanza di genere della email di benvenuto (Benvenuto/Benvenuta). */
+function benvenuto(genere?: string): string {
+  return genere === 'F' ? 'Benvenuta' : 'Benvenuto';
+}
 
 /** Testi esatti del ciclo a 5 step (Step 1-5) + notifica PRO + attivazione/rinnovo PRO (declinati per genere). */
 const TESTI: Record<
   string,
-  { soggetto: string; email: (o: Opportunita, genere?: string) => string; telegram: (o: Opportunita, genere?: string) => string }
+  {
+    soggetto: string | ((genere?: string) => string);
+    email: (o: Opportunita, genere?: string) => string;
+    telegram: (o: Opportunita, genere?: string) => string;
+  }
 > = {
   step1: {
-    soggetto: 'Grazie per esserti iscritto, ora ci pensiamo noi',
-    email: () =>
-      'Grazie per esserti iscritto, ora ci pensiamo noi.<br/>Il tuo profilo è <b>attivo</b>: interpelli, supplenze, PON, PNRR e bandi per esperti ora hanno qualcuno che li monitora per te.',
-    telegram: () =>
-      'Grazie per esserti iscritto, ora ci pensiamo noi.\nIl tuo profilo è <b>attivo</b>: interpelli, supplenze, PON, PNRR e bandi per esperti ora hanno qualcuno che li monitora per te.',
+    soggetto: (genere) => `${benvenuto(genere)} in Scuole Radar`,
+    email: (_o, genere) =>
+      `${benvenuto(genere)} in Scuole Radar.<br/><br/>
+Questo è un sito per chi lavora o cerca lavoro nella scuola. Ti aiutiamo a trovare informazioni e opportunità, senza perdere tempo.<br/><br/>
+Con il tuo account <b>Base</b> hai accesso gratuito a:<br/>
+• Modulistica scolastica<br/>
+• Crea CV<br/>
+• Calcolatore CFU<br/>
+• Radar Scuole, con <b>3 segnalazioni</b> di opportunità di lavoro<br/><br/>
+Radar Scuole è il servizio di cui siamo più orgogliosi.<br/>
+Cerchiamo per te opportunità di lavoro nelle scuole, che spesso sono difficili da trovare, perché nascoste nei siti istituzionali. Quando ce n'è una, il tempo è fondamentale.<br/><br/>
+Per sfruttare Radar Scuole al meglio, scarica Telegram e attiva le notifiche: è lì che ti arriveranno le nostre segnalazioni.<br/><br/>
+Hai <b>3 segnalazioni gratuite</b>. Dopo potrai decidere se passare a PRO e lasciarci continuare la ricerca per te, oppure usare solo l'account Base.<br/><br/>
+Non ti mandiamo comunicazioni inutili. Se ti scriviamo, apri il messaggio.<br/><br/>
+Hai appena cominciato a conoscere Scuole Radar. Gli strumenti PRO sono molti di più, ma lasciamo che sia tu a scoprirli, un po' alla volta.<br/><br/>
+E niente newsletter quotidiane.<br/><br/>
+Quando vuoi sapere cosa succede di importante nella scuola, vai su <a href="${BLOG_URL}">ScuoleRadar.it → Notizie</a>.<br/><br/>
+${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua vita professionale, facendoti risparmiare tempo.`,
+    telegram: (_o, genere) =>
+      `${benvenuto(genere)} in Scuole Radar! 🎉\nCerchiamo per te opportunità di lavoro nelle scuole, spesso nascoste nei siti istituzionali. Hai 3 segnalazioni gratuite: attiva le notifiche su Telegram. Quando vuoi, tutto su https://www.scuoleradar.it/notizie`,
   },
   step2: {
     soggetto: 'Questa è la prima opportunità che abbiamo trovato per te. Te ne restano 2',
@@ -249,10 +272,11 @@ serve(async (req: Request) => {
     link: body.link ? String(body.link) : undefined,
   };
 
-  const saluto = nome ? `Ciao ${escapeHtml(nome)},<br/>` : '';
+  const saluto = nome ? `${caro(genere)} ${escapeHtml(nome)},<br/>` : '';
   const corpoEmail = saluto + testo.email(opp, genere) + '<br/><br/>' + FIRMA + '<br/>P.S. Approfondimenti e novità sul blog: <a href="' + BLOG_URL + '">scuoleradar.it/notizie</a>' + DISCLAIMER_EMAIL;
   const corpoTelegram = testo.telegram(opp, genere) + '\n\n' + FIRMA;
-  const errEmail = email ? await inviaEmail(email, testo.soggetto, corpoEmail) : 'nessun indirizzo email';
+  const soggetto = typeof testo.soggetto === 'function' ? testo.soggetto(genere) : testo.soggetto;
+  const errEmail = email ? await inviaEmail(email, soggetto, corpoEmail) : 'nessun indirizzo email';
   const errTelegram = chatId ? await inviaTelegram(chatId, corpoTelegram) : null;
 
   if (errEmail) console.error(`[send-notification] ${tipo} → email ${email}: ${errEmail}`);

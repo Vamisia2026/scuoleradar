@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom';
 import { BellRing, CheckCircle2, Radar, Database, SlidersHorizontal, UserPlus } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { InterpelloCard } from '@/components/InterpelloCard';
-import { PureFocusBridgeCta } from '@/components/PureFocusBridgeCta';
+import { PreferenzeRadar } from '@/components/PreferenzeRadar';
 import { useApp, LIMITE_NOTIFICHE_PROVA } from '@/contexts/AppContext';
 import { interpelli } from '@/data/interpelli';
 import { classeByCodice } from '@/data/classiConcorso';
@@ -73,7 +73,6 @@ export function DashboardPage() {
     preferenze,
     notificheUsate,
     abbonato,
-    origineDati,
     openAuthModal,
     openRadarWizard,
   } = useApp();
@@ -194,10 +193,11 @@ export function DashboardPage() {
             prossimo anno.
           </p>
         )}
-        {/* Account Bridge: launch link cross-app per PureFocus PRO */}
-        <PureFocusBridgeCta />
         </div>
       )}
+
+      {/* Preferenze Radar — impostazioni e filtri del profilo (bacheca unificata) */}
+      {user && <PreferenzeRadar />}
 
       {/* Feed */}
       <div>
@@ -207,16 +207,6 @@ export function DashboardPage() {
           <span className="rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-medium text-primary-600">
             {interpelliFiltrati.length}
           </span>
-          {origineDati === 'supabase' ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-2.5 py-0.5 text-xs font-semibold text-accent-700">
-              <Database className="h-3 w-3" />
-              Dati reali da Supabase
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-medium text-primary-500">
-              Dati di esempio (fallback)
-            </span>
-          )}
         </div>
 
         {interpelliFiltrati.length === 0 ? (

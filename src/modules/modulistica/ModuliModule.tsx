@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FolderOpen, Loader2, UserPlus, X } from 'lucide-react';
+import { FolderOpen, Loader2, Lock, UserPlus, X } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useApp } from '@/contexts/AppContext';
 import { useToast } from '@/components/Toast';
@@ -19,6 +19,7 @@ import { MacroAreaMenu } from './components/MacroAreaMenu';
 import { EsploraArchivio } from './components/EsploraArchivio';
 import { RicercaArchivista } from './components/RicercaArchivista';
 import { VetrinaModulistica } from './components/VetrinaModulistica';
+import { ModuliProLockModal } from './components/ModuliProLockModal';
 import { SavedModuli } from './components/SavedModuli';
 import { TeaserArchivistaModal } from './components/TeaserArchivistaModal';
 import { ModuloPreview } from './creator/ModuloPreview';
@@ -46,7 +47,7 @@ import {
  *    automaticamente in `user_saved_modules` ("I miei Modelli Scaricati")
  */
 export function ModuliModule() {
-  const { user, openVetrina, openAuthModal } = useApp();
+  const { user, abbonato, openVetrina, openAuthModal } = useApp();
   const { mostraToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [vista, setVista] = useState<VistaModulistica>(() => {
@@ -80,6 +81,8 @@ export function ModuliModule() {
   );
   /** Modale teaser "Archivista Capo — In arrivo a Ottobre per utenti PRO!". */
   const [teaserAperto, setTeaserAperto] = useState(false);
+  /** Modale "Moduli scaricati — Funzionalità PRO" per gli utenti Base. */
+  const [proLockAperto, setProLockAperto] = useState(false);
   const [recupero, setRecupero] = useState(false);
   const [moduliScaricati, setModuliScaricati] = useLocalStorage<ModuloScaricato[]>(
     STORAGE_KEY_MODULI_SCARICATI,
@@ -286,7 +289,7 @@ export function ModuliModule() {
 
   return (
     <div className={compattato ? 'space-y-3' : 'space-y-6'}>
-      <div className={compattato ? 'flex items-center gap-1.5' : 'flex items-center gap-2'}>
+      <div className={compattato ? 'flex flex-wrap items-center gap-1.5' : 'flex flex-wrap items-center gap-2'}>
         <FolderOpen
           className={compattato ? 'h-4 w-4 text-primary-600' : 'h-5 w-5 text-primary-600'}
         />
@@ -297,6 +300,59 @@ export function ModuliModule() {
         >
           Tutti i moduli che ti servono, senza cercarli ogni volta.
         </h2>
+      </div>
+
+      {/* MODULI SCARICATI — cartella in alto: per i PRO mostra i download recenti;
+          per gli utenti Base apre il modale Funzionalità PRO */}
+      <div className="rounded-2xl border border-primary-100 bg-white p-4 shadow-card">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-primary-800">
+            <FolderOpen className="h-5 w-5 text-primary-500" />
+            Moduli scaricati
+          </h3>
+          {abbonato ? (
+            <button
+              type="button"
+              onClick={() => apriTab('miei')}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-white px-3 py-1.5 text-xs font-semibold text-primary-700 transition hover:bg-primary-50"
+            >
+              Vedi tutti
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setProLockAperto(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-secondary-500 px-3 py-1.5 text-xs font-semibold text-white shadow-soft transition hover:bg-secondary-600"
+            >
+              <Lock className="h-3.5 w-3.5" />
+              Scopri il PRO
+            </button>
+          )}
+        </div>
+        {abbonato ? (
+          vociMiei.length === 0 ? (
+            <p className="mt-3 text-sm text-primary-400">
+              Nessun modulo scaricato di recente: i tuoi modelli salvati compariranno qui.
+            </p>
+          ) : (
+            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+              {vociMiei.slice(0, 6).map((v) => (
+                <li
+                  key={v.key}
+                  className="flex items-center gap-2 rounded-xl border border-primary-100 bg-slate-50 px-3 py-2"
+                >
+                  <FolderOpen className="h-4 w-4 shrink-0 text-primary-400" />
+                  <span className="truncate text-sm font-medium text-primary-800">{v.title}</span>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : (
+          <p className="mt-3 text-sm text-primary-500">
+            L&apos;archiviazione dei moduli scaricati è una Funzionalità PRO: conserva i tuoi
+            documenti sempre a portata di mano.
+          </p>
+        )}
       </div>
 
       {/* Avviso di accesso (customer care "Bezos style"): visibile SOLO se davvero non sei autenticato */}
@@ -394,6 +450,9 @@ export function ModuliModule() {
 
       {/* Modale teaser Archivista Capo (In arrivo a Ottobre per i PRO) */}
       <TeaserArchivistaModal open={teaserAperto} onClose={() => setTeaserAperto(false)} />
+
+      {/* Modale "Moduli scaricati — Funzionalità PRO" (utenti Base) */}
+      <ModuliProLockModal open={proLockAperto} onClose={() => setProLockAperto(false)} />
 
       {/* Anteprima di un documento generato (intervista o archivio) */}
       {anteprima && (

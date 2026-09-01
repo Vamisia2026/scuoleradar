@@ -203,7 +203,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (supabase) {
         // Password demo generata se assente (es. login Google simulato).
         const password = u.password || `Demo!${crypto.randomUUID()}`;
-        void supabase.auth.signUp({ email: u.email, password }).then(({ error }) => {
+        // Il genere viaggia in user_metadata per la concordanza della email di
+        // benvenuto (Benvenuto/Benvenuta) gestita dal trigger auth.users → send-notification.
+        void supabase.auth
+          .signUp({
+            email: u.email,
+            password,
+            options: {
+              data: {
+                genere: u.genere ?? '',
+                nome: u.nome.trim(),
+                cognome: u.cognome.trim(),
+              },
+            },
+          })
+          .then(({ error }) => {
           if (error && !/already registered/i.test(error.message)) {
             console.warn('Supabase signUp:', error.message);
           } else {

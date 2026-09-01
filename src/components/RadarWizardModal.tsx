@@ -135,12 +135,14 @@ export function RadarWizardModal() {
     let list = classiConcorso;
     if (materiaFilter) list = list.filter((c) => c.materie.includes(materiaFilter));
     if (queryClasse.trim()) {
+      // Tolleranza di ricerca: spazi e trattini vengono ignorati nel match
+      // (es. "a-18", "a 18" e "a18" restituiscono tutte la classe A-18).
       const q = queryClasse.toLowerCase();
-      const qAlias = q.replace(/[\s-]/g, '');
-      const classiDaAlias = ALIAS_LAUREA_CLASSI[qAlias] ?? [];
+      const qNorm = q.replace(/[\s-]/g, '');
+      const classiDaAlias = ALIAS_LAUREA_CLASSI[qNorm] ?? [];
       list = list.filter(
         (c) =>
-          c.codice.toLowerCase().includes(q) ||
+          c.codice.toLowerCase().replace(/[\s-]/g, '').includes(qNorm) ||
           c.denominazione.toLowerCase().includes(q) ||
           classiDaAlias.includes(c.codice),
       );
@@ -281,7 +283,7 @@ export function RadarWizardModal() {
       ) : (
         <>
           {/* Progress */}
-          <div className="mb-5">
+          <div className="mb-4">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-sm font-medium text-primary-600">
                 Passo {step} di {totalSteps}
@@ -457,7 +459,7 @@ export function RadarWizardModal() {
                     </div>
                   )}
 
-                  <div className="mt-3 max-h-52 space-y-2 overflow-y-auto rounded-xl border border-primary-100 p-2">
+                  <div className="mt-3 max-h-40 space-y-1.5 overflow-y-auto rounded-xl border border-primary-100 p-1.5">
                     {classiFiltrate.length === 0 ? (
                       <p className="p-4 text-center text-sm text-primary-400">Nessuna classe trovata.</p>
                     ) : (
@@ -519,7 +521,7 @@ export function RadarWizardModal() {
                       className="w-full rounded-xl border border-primary-200 bg-white py-2.5 pl-10 pr-4 text-sm text-primary-800"
                     />
                   </div>
-                  <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-2">
+                  <div className="max-h-36 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-1.5">
                     {materieFiltrate.length === 0 ? (
                       <p className="p-4 text-center text-sm text-primary-400">Nessuna materia trovata.</p>
                     ) : (
@@ -594,7 +596,7 @@ export function RadarWizardModal() {
             <div className="animate-fade-in">
               <h2 className="text-lg font-bold text-primary-800">Canali di notifica</h2>
               <p className="mt-1 text-sm text-primary-600">
-                3 notifiche incluse gratis all'anno, su Telegram ed email.
+                3 segnalazioni incluse gratis, su Telegram ed email.
               </p>
 
               <div className="mt-5 space-y-5">
@@ -650,14 +652,14 @@ export function RadarWizardModal() {
                 </label>
 
                 <div className="rounded-xl bg-accent-50 px-4 py-3 text-sm text-accent-700">
-                  Account Base: 3 notifiche incluse all'anno, nessun costo.
+                  Account Base: 3 segnalazioni incluse, nessun costo.
                 </div>
               </div>
             </div>
           )}
 
           {/* Navigation */}
-          <div className="mt-7 flex items-center justify-between">
+          <div className="mt-5 flex items-center justify-between">
             {step > 1 ? (
               <button
                 type="button"

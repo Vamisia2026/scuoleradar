@@ -1,4 +1,4 @@
-/* Feature Lock "Documenti Scaricati" per utenti Base (ProfiloPage + dropdown Header).
+/* Blocco "Modelli Scaricati" per utenti Base (ProfiloPage + menu Header).
    Uso: node scripts/_modelli-pro-lock.mjs */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -37,10 +37,10 @@ function applicaOp(f, ops) {
           <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-primary-200 bg-primary-50/50 p-5">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1 text-[11px] font-bold text-primary-600 ring-1 ring-primary-200">
               <Lock className="h-3.5 w-3.5" />
-              Feature PRO
+              Funzionalità PRO
             </span>
             <p className="text-sm font-semibold leading-relaxed text-primary-800">
-              I tuoi modelli scaricati sono salvati nel tuo archivio personale (Feature PRO)
+              I tuoi modelli scaricati sono salvati nel tuo archivio personale (Funzionalità PRO)
             </p>
             <Link
               to="/prezzi"
@@ -75,10 +75,10 @@ function applicaOp(f, ops) {
     { type: 'replaceLine', line: 389, new: bloccoLock },
     { type: 'replaceLine', line: 398, new: '          {abbonato && moduliScaricati.length > 0 && (' },
   ]);
-  console.log('  ✓ ProfiloPage: blocco bloccato Feature PRO per Base, lista reale per PRO');
+  console.log('  ✓ ProfiloPage: blocco bloccato Funzionalità PRO per Base, lista reale per PRO');
 }
 
-/* ============ HEADER (dropdown) ============ */
+/* ============ HEADER (menu utente) ============ */
 {
   const f = 'src/components/Header.tsx';
   const blocco = `                      <Link

@@ -509,8 +509,7 @@ export function OnboardingPage() {
             <div className="animate-fade-in">
               <h2 className="text-xl font-bold text-primary-800">Canali di notifica (Account Base)</h2>
               <p className="mt-1 text-sm text-primary-600">
-                Riceverai le tue 3 notifiche gratuite all&apos;anno (si rinnovano a ogni anno
-                solare), su Telegram e in copia via email.
+                Riceverai le tue 3 segnalazioni gratuite, su Telegram e in copia via email.
               </p>
 
               <div className="mt-6 space-y-5">
@@ -574,8 +573,7 @@ export function OnboardingPage() {
                 </label>
 
                 <div className="rounded-xl bg-accent-50 px-4 py-3 text-sm text-accent-700">
-                  Piano Base: 3 notifiche all&apos;anno, si rinnovano automaticamente a ogni anno
-                  solare. Niente spam: solo opportunità compatibili con il tuo profilo.
+                  Account Base: 3 segnalazioni incluse, nessun costo.
                 </div>
               </div>
             </div>

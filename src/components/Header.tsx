@@ -90,10 +90,13 @@ export function Header() {
           {user ? (
             <div className="relative hidden md:block">
               <div className="flex items-center gap-0.5 rounded-full border border-primary-200 bg-white py-1 pl-1 pr-1 shadow-soft">
-                <Link
-                  to="/dashboard/radar"
-                  aria-label="Torna al Radar Scuole"
-                  className="flex items-center gap-2 rounded-full pr-2 transition hover:opacity-90"
+                {/* Foto profilo cliccabile → apre/chiude il menu utente (come la freccia) */}
+                <button
+                  type="button"
+                  onClick={() => setMenuUtenteOpen((o) => !o)}
+                  aria-expanded={menuUtenteOpen}
+                  aria-label="Apri il menu del profilo"
+                  className="shrink-0 rounded-full transition hover:opacity-90"
                 >
                   {avatarUrl ? (
                     <img
@@ -107,6 +110,12 @@ export function Header() {
                       <UserIcon className="h-4 w-4" />
                     </span>
                   )}
+                </button>
+                <Link
+                  to="/dashboard/radar"
+                  aria-label="Torna al Radar Scuole"
+                  className="flex items-center gap-2 rounded-full pr-2 transition hover:opacity-90"
+                >
                   <span className="max-w-[110px] truncate text-sm font-semibold text-primary-800">
                     {user.nome}
                   </span>

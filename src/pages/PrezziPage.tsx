@@ -74,7 +74,7 @@ const piani: Piano[] = [
     descrizione: 'Il massimo dell\u2019offerta, al prezzo migliore.',
     evidenziato: true,
     badge: '🏆 IL PIÙ SCELTO (Risparmi il 55%)',
-    notaPrezzo: 'equivalente a circa 4€/mese',
+    notaPrezzo: 'Equivalente a circa 4€/mese',
     vantaggi: VANTAGGI_PRO,
     cta: 'Passa a PRO Annuale',
   },
@@ -169,7 +169,7 @@ export function PrezziPage() {
         <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
           <div className="text-center">
             <h1 className="mb-8 text-3xl font-bold text-primary-900 sm:text-4xl">
-              Smetti di perdere tempo. D&apos;ora in poi ci pensiamo noi.
+              Smetti di perdere tempo. Cerchiamo noi per te.
             </h1>
           </div>
 
@@ -179,7 +179,7 @@ export function PrezziPage() {
                 key={p.nome}
                 className={`relative flex flex-col rounded-3xl border p-6 shadow-card transition ${
                   p.evidenziato
-                    ? 'border-secondary-500 bg-gradient-to-b from-secondary-50 to-white shadow-soft ring-1 ring-secondary-500/25 md:z-10 md:scale-105'
+                    ? 'border-secondary-500 bg-gradient-to-b from-secondary-50 to-white shadow-soft ring-1 ring-secondary-500/25 md:z-10 md:mt-6 md:scale-105'
                     : 'border-primary-100 bg-white'
                 }`}
               >
