@@ -247,10 +247,10 @@ export function LandingPage() {
       <section className="bg-primary-900 py-10">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="grid gap-6 text-center md:grid-cols-4">
-            <Stat numero="1.000+" label="Interpelli e bandi pubblicati ogni giorno in Italia" />
-            <Stat numero="12.000+" label="Supplenze e incarichi da conferire ogni mese" />
-            <Stat numero="4.000+" label="Richieste mensili per Personale ATA e Collaboratori" />
-            <Stat numero="120" label="Bandi al mese ritirati per mancanza di candidati" />
+            <Stat numero="8.000+" label="Scuole e istituti monitorati ogni giorno" />
+            <Stat numero="500+" label="Nuove opportunità settimanali tra Docenti e ATA" />
+            <Stat numero="24/7" label="Notifiche automatiche sugli interpelli della tua provincia" />
+            <Stat numero={'< 48 ore'} label="Tempo medio di scadenza degli avvisi di supplenza" />
           </div>
         </div>
       </section>
