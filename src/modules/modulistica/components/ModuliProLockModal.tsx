@@ -1,30 +1,23 @@
 import { useNavigate } from 'react-router-dom';
-import { FolderOpen, Lock, Sparkles } from 'lucide-react';
+import { FolderOpen, Sparkles } from 'lucide-react';
 import { Modal } from '@/components/Modal';
 
 /**
- * Modale dedicato per gli utenti Base che cliccano la cartella "Moduli scaricati":
- * spiega che l'archiviazione è una Funzionalità PRO e invita all'aggiornamento.
+ * Paywall soft-sell per gli utenti Base che cliccano "I Miei Moduli Scaricati":
+ * spiega il valore dell'archivio personale e invita a passare a PRO.
  */
 export function ModuliProLockModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
   return (
-    <Modal open={open} onClose={onClose} title="Moduli scaricati — Funzionalità PRO" size="sm">
+    <Modal open={open} onClose={onClose} title="Archivio Personale Moduli" size="sm">
       <div className="flex flex-col items-center gap-4 text-center">
         <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary-50 text-secondary-500">
           <FolderOpen className="h-7 w-7" />
         </span>
-        <div>
-          <p className="flex items-center justify-center gap-1.5 text-sm font-bold text-primary-800">
-            <Lock className="h-4 w-4 text-secondary-500" />
-            Archiviazione riservata agli account PRO
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-primary-600">
-            La funzionalità di archiviazione dei moduli scaricati è riservata agli account PRO.
-            Con il PRO conservi tutti i tuoi documenti e modelli nel tuo archivio personale, sempre
-            a portata di mano.
-          </p>
-        </div>
+        <p className="text-sm leading-relaxed text-primary-600">
+          Salva, organizza e ritrova i tuoi moduli scaricati da qualsiasi dispositivo senza doverli
+          cercare ogni volta. Questa funzione è riservata agli utenti PRO.
+        </p>
         <button
           type="button"
           onClick={() => {
@@ -41,7 +34,7 @@ export function ModuliProLockModal({ open, onClose }: { open: boolean; onClose: 
           onClick={onClose}
           className="text-sm font-medium text-primary-500 transition hover:text-primary-700"
         >
-          Non ora
+          Chiudi
         </button>
       </div>
     </Modal>

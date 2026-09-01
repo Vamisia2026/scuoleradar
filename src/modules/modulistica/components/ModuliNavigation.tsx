@@ -32,7 +32,7 @@ export function ModuliNavigation({ vista, onNaviga }: ModuliNavigationProps) {
         }`}
       >
         <Download className="h-4 w-4" />
-        I miei Modelli Scaricati
+        I Miei Moduli Scaricati
       </button>
     </div>
   );
