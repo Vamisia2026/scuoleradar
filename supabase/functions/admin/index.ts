@@ -81,9 +81,24 @@ serve(async (req: Request) => {
       const id = String(payload.id ?? '');
       const updates = (payload.updates ?? {}) as Record<string, unknown>;
       if (!id || Object.keys(updates).length === 0) return risposta({ error: 'id/updates mancanti' }, 400);
+
+      // Normalizzazione/arricchimento Free Forever: 'ffe'/'free forever' convergono su
+      // 'free_forever'; scadenza ancorata a 1 anno se assente; stato subscription 'active'.
+      const updatesNormalizzati: Record<string, unknown> = { ...updates };
+      const rawPiano = String(updates.piano ?? '').trim().toLowerCase();
+      if (rawPiano === 'free_forever' || rawPiano === 'ffe' || rawPiano === 'free forever') {
+        updatesNormalizzati.piano = 'free_forever';
+        if (!updatesNormalizzati.abbonamento_scade_il) {
+          updatesNormalizzati.abbonamento_scade_il = new Date(Date.now() + 365 * 86_400_000).toISOString();
+        }
+        // Colonne Account Bridge (feature-detect: rigaProfiles le scarta se assenti in DB).
+        updatesNormalizzati.subscription_tier = 'free_forever';
+        updatesNormalizzati.subscription_status = 'active';
+      }
+
       const { error } = await sb
         .from('profiles')
-        .update(await rigaProfiles(sb, updates))
+        .update(await rigaProfiles(sb, updatesNormalizzati))
         .eq('id', id);
       if (error) return risposta({ error: error.message }, 500);
       return risposta({ ok: true });

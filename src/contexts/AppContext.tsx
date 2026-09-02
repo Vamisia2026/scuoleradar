@@ -173,6 +173,15 @@ function mapNoticiaToInterpello(r: {
   };
 }
 
+/** Normalizza il valore del piano letto dal DB: eventuali alias di Free Forever
+ *  ('ffe', 'free forever') convergono sul valore canonico 'free_forever'. */
+function normalizzaPiano(raw: unknown): 'base' | 'pro' | 'free_forever' {
+  const p = String(raw ?? '').trim().toLowerCase();
+  if (p === 'pro') return 'pro';
+  if (p === 'free_forever' || p === 'ffe' || p === 'free forever') return 'free_forever';
+  return 'base';
+}
+
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -707,14 +716,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Diagnostica: mostra la riga grezza restituita dal DB.
     console.log('[refreshProfilo] riga profiles (per id) →', data);
     const periodoOk = !data.abbonamento_scade_il || new Date(data.abbonamento_scade_il) > new Date();
-    const pianoGratuitoVita = data.piano === 'free_forever';
-    // Normalizzazione: qualsiasi valore non riconosciuto cade su 'base'.
-    const pianoCorrente: 'base' | 'pro' | 'free_forever' =
-      data.piano === 'pro' || data.piano === 'free_forever' ? data.piano : 'base';
+    const pianoCorrente = normalizzaPiano(data.piano);
+    const pianoGratuitoVita = pianoCorrente === 'free_forever';
+    const hasAccessoPro = pianoCorrente !== 'base';
     setPiano(pianoCorrente);
-    setAbbonato(pianoCorrente !== 'base' && (pianoGratuitoVita || periodoOk));
+    setAbbonato(hasAccessoPro && (pianoGratuitoVita || periodoOk));
     setCrediti(Number(data.crediti ?? 0));
     setNotificheUsate(Number(data.notifiche_usate ?? 0));
+    console.log('Logged user piano:', pianoCorrente, 'hasProAccess:', hasAccessoPro);
   }, [setAbbonato, setCrediti, setNotificheUsate, setPiano]);
 
   // All'avvio, se esiste una sessione Supabase, carica le preferenze salvate nel DB.
@@ -772,17 +781,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // NB: NON si selezionano più subscription_status / current_period_end
           // (assenti nello schema): prima quell'errore invalidava l'intero
           // caricamento del profilo e il piano restava su 'base'.
-          const pianoCorrente: 'base' | 'pro' | 'free_forever' =
-            data.piano === 'pro' || data.piano === 'free_forever' ? data.piano : 'base';
+          const pianoCorrente = normalizzaPiano(data.piano);
           const periodoOk =
             !data.abbonamento_scade_il || new Date(data.abbonamento_scade_il) > new Date();
           // Piano Free Forever: accesso PRO permanente — mai soggetto a scadenza
           // di pagamento; per gli altri piani casca automaticamente su base.
-          const pianoGratuitoVita = data.piano === 'free_forever';
+          const pianoGratuitoVita = pianoCorrente === 'free_forever';
+          const hasAccessoPro = pianoCorrente !== 'base';
           setPiano(pianoCorrente);
-          setAbbonato(pianoCorrente !== 'base' && (pianoGratuitoVita || periodoOk));
+          setAbbonato(hasAccessoPro && (pianoGratuitoVita || periodoOk));
           setCrediti(Number(data.crediti ?? 0));
           setNotificheUsate(Number(data.notifiche_usate ?? 0));
+          console.log('Logged user piano:', pianoCorrente, 'hasProAccess:', hasAccessoPro);
         }
         // Mini-onboarding anagrafico: profilo senza nome/cognome?
         void valutaProfiloIncompleto(au.id);

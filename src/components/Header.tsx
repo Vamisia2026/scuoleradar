@@ -121,7 +121,7 @@ export function Header() {
                       title="Free Forever — accesso PRO a vita, incluso"
                       className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary-500 px-2 py-0.5 text-[10px] font-bold text-white"
                     >
-                      <Sparkles className="h-3 w-3" /> Free Forever
+                      ✦ Free Forever
                     </span>
                   ) : abbonato ? (
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-500 px-2 py-0.5 text-[11px] font-bold text-white">
