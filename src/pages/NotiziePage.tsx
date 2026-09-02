@@ -26,9 +26,9 @@ export function NotiziePage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-50">
       <Header />
-      <main>
+      <main className="w-full max-w-full overflow-x-hidden">
         <NotizieHero
           categorie={categorie}
           conteggi={conteggi}
@@ -37,7 +37,7 @@ export function NotiziePage() {
         />
         <section
           aria-label="Articoli pubblicati"
-          className="mx-auto max-w-7xl px-4 pb-16 sm:px-6"
+          className="mx-auto w-full max-w-7xl overflow-x-hidden px-4 pb-16 sm:px-6"
         >
           <NotizieGrid articoli={newsArticles} categoria={categoria} />
         </section>

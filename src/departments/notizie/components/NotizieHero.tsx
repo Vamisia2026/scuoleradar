@@ -170,9 +170,9 @@ export function NotizieHero({
         className="bg-gradient-to-b from-primary-50 to-white"
       >
         <div className="mx-auto max-w-7xl px-4 pb-6 pt-3 sm:px-6 sm:pb-8 sm:pt-4">
-          <div className="grid gap-x-8 gap-y-6 md:grid-cols-12">
+          <div className="grid w-full max-w-full grid-cols-1 gap-x-8 gap-y-6 overflow-x-hidden lg:grid-cols-12">
             {/* Colonna sinistra — masthead editoriale */}
-            <div className="flex flex-col md:col-span-7">
+            <div className="flex min-w-0 flex-col lg:col-span-7">
               <div className="border-b-4 border-double border-primary-900/80 py-3 sm:py-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-primary-500">
                   <span className="inline-flex items-center gap-1.5">
@@ -255,10 +255,10 @@ export function NotizieHero({
             </div>
 
             {/* Colonna destra — widget Scadenze: revolver (2/3) + countdown (1/3) */}
-            <div className="md:col-span-5">
+            <div className="w-full min-w-0 max-w-full lg:col-span-5">
               <aside
                 aria-label="Prossime scadenze operative e conto alla rovescia per le vacanze"
-                className="flex h-full flex-col overflow-hidden rounded-xl border border-primary-100 bg-white shadow-card"
+                className="flex h-full w-full min-w-0 max-w-full flex-col overflow-hidden rounded-xl border border-primary-100 bg-white shadow-card"
               >
                 {/* Revolver Scadenze — 2/3 dell'altezza (in estate occupa tutto il box). */}
                 <RevolverScadenze
@@ -270,14 +270,14 @@ export function NotizieHero({
                 {!contoVacanze.estate && (
                   <>
                     <div className="mx-5 shrink-0 border-b-2 border-gray-300" />
-                    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 px-5 pb-3 pt-1.5 text-center">
-                      <p className="font-display text-3xl font-black leading-none tracking-tight text-primary-900 sm:text-4xl">
+                    <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-3 pb-3 pt-1.5 text-center sm:px-5">
+                      <p className="font-display text-2xl font-black leading-none tracking-tight text-primary-900 sm:text-3xl">
                         {contoVacanze.giorni}
-                        <span className="ml-2 align-baseline text-base font-bold uppercase tracking-[0.16em] text-primary-500">
+                        <span className="ml-2 align-baseline text-sm font-bold uppercase tracking-[0.16em] text-primary-500 sm:text-base">
                           {contoVacanze.giorni === 1 ? 'giorno' : 'giorni'}
                         </span>
                       </p>
-                      <p className="whitespace-nowrap text-sm font-bold uppercase leading-snug tracking-[0.14em] text-secondary-600 sm:text-base">
+                      <p className="w-full min-w-0 text-xs font-bold uppercase leading-snug tracking-[0.14em] text-secondary-600 sm:text-sm">
                         Alle {contoVacanze.nome}.
                       </p>
                     </div>

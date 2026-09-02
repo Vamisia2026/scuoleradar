@@ -33,7 +33,7 @@ function NotizieCard({ articolo }: { articolo: NewsArticle }) {
     (èLinkPdf(articolo.official_source_url) ? articolo.official_source_url : null);
 
   return (
-    <article className="flex flex-col rounded-2xl border border-primary-100 bg-white p-5 shadow-card transition hover:border-primary-300 hover:shadow-soft">
+    <article className="flex min-w-0 flex-col rounded-2xl border border-primary-100 bg-white p-4 shadow-card transition hover:border-primary-300 hover:shadow-soft sm:p-5">
       <div className="flex items-center gap-2">
         <span className="rounded-md bg-primary-100 px-2 py-0.5 text-xs font-bold text-primary-700">
           {articolo.category}
@@ -47,12 +47,12 @@ function NotizieCard({ articolo }: { articolo: NewsArticle }) {
         </time>
       </div>
 
-      <h3 className="mt-3 text-base font-bold leading-snug text-primary-900">
+      <h3 className="mt-3 min-w-0 text-base font-bold leading-snug text-primary-900">
         <Link
           to={`/notizie/${articolo.id}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="transition hover:text-primary-600"
+          className="break-words transition hover:text-primary-600"
         >
           {articolo.title}
         </Link>
@@ -60,7 +60,7 @@ function NotizieCard({ articolo }: { articolo: NewsArticle }) {
 
       <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-primary-600">{riepilogo}</p>
 
-      <div className="mt-auto flex items-center justify-between gap-2 pt-4">
+      <div className="mt-auto flex w-full min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-2 pt-4">
         {articolo.deadline_date ? (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-50 px-3 py-1 text-xs font-semibold text-warning-700 ring-1 ring-warning-500/30">
             <FileText className="h-3.5 w-3.5" />
@@ -69,7 +69,7 @@ function NotizieCard({ articolo }: { articolo: NewsArticle }) {
         ) : (
           <span className="text-xs text-primary-300">Fonte ufficiale MIM / G.U.</span>
         )}
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {pdfUrl && (
             <a
               href={pdfUrl}

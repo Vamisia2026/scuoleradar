@@ -231,10 +231,10 @@ export function RevolverScadenze({
       onMouseLeave={() => setInPausa(false)}
       onFocus={() => setInPausa(true)}
       onBlur={() => setInPausa(false)}
-      className={`flex h-full min-h-0 w-full flex-col overflow-hidden bg-white ${className}`}
+      className={`flex h-full min-h-0 w-full max-w-full flex-col overflow-hidden bg-white ${className}`}
     >
-      <header className="px-4 pb-0.5 pt-2.5 text-center sm:pb-1 sm:pt-3">
-        <p className="text-base font-black uppercase leading-none tracking-[0.16em] text-secondary-500 sm:text-lg">
+      <header className="w-full min-w-0 px-4 pb-0.5 pt-2.5 text-center sm:pb-1 sm:pt-3">
+        <p className="text-sm font-black uppercase leading-none tracking-[0.16em] text-secondary-500 sm:text-base">
           {titolo}
         </p>
       </header>
@@ -266,9 +266,9 @@ export function RevolverScadenze({
                 <div
                   key={`${occ.record.id}-${i}`}
                   aria-hidden={i !== pos}
-                  className="flex h-full w-full shrink-0 flex-col items-center justify-center gap-2 px-5 text-center sm:gap-2.5 sm:px-8"
+                  className="flex h-full w-full shrink-0 flex-col items-center justify-center gap-2 px-4 text-center sm:gap-2.5 sm:px-8"
                 >
-                  <p className="font-display text-lg font-black uppercase leading-none tracking-tight text-primary-900 sm:text-2xl">
+                  <p className="font-display text-base font-black uppercase leading-none tracking-tight text-primary-900 sm:text-2xl">
                     {formattaPeriodo(occ)}
                   </p>
                   <p
