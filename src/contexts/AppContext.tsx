@@ -101,6 +101,10 @@ interface AppContextValue extends AppState {
   authModalCtx: 'default' | 'pro';
   openAuthModal: (mode?: 'login' | 'registrazione', ctx?: 'default' | 'pro') => void;
   closeAuthModal: () => void;
+  /** Modal di recupero mostrato dopo un bounce OAuth Google (es. dominio .edu.it bloccato). */
+  oauthBounceOpen: boolean;
+  openOAuthBounce: () => void;
+  closeOAuthBounce: () => void;
   /** Wizard Radar (onboarding a 4 passi): stato + apertura/chiusura. */
   radarWizardOpen: boolean;
   openRadarWizard: () => void;
@@ -203,6 +207,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAuthModalOpen(false);
     setAuthModalCtx('default');
   }, []);
+
+  // Bounce OAuth (dominio scolastico / Google bloccato): modal di recupero.
+  const [oauthBounceOpen, setOauthBounceOpen] = useState(false);
+  const openOAuthBounce = useCallback(() => setOauthBounceOpen(true), []);
+  const closeOAuthBounce = useCallback(() => setOauthBounceOpen(false), []);
 
   // Vetrina Freemium: modal di conversione per gli utenti non autenticati.
   const [vetrinaAperta, setVetrinaAperta] = useState(false);
@@ -967,6 +976,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     authModalCtx,
     openAuthModal,
     closeAuthModal,
+    oauthBounceOpen,
+    openOAuthBounce,
+    closeOAuthBounce,
     radarWizardOpen,
     openRadarWizard,
     closeRadarWizard,

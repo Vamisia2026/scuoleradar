@@ -11,6 +11,7 @@ import { GoogleOneTap } from '@/components/GoogleOneTap';
 import { RadarWizardModal } from '@/components/RadarWizardModal';
 import { ForcePasswordModal } from '@/components/ForcePasswordModal';
 import { DatiProfiloModal } from '@/components/DatiProfiloModal';
+import { OAuthBounceModal } from '@/components/OAuthBounceModal';
 import { AuthCallback } from '@/pages/AuthCallback';
 import { LandingPage } from '@/pages/LandingPage';
 import { OnboardingPage } from '@/pages/OnboardingPage';
@@ -146,6 +147,7 @@ export default function App() {
           <RadarWizardModal />
           <ForcePasswordModal />
           <DatiProfiloModal />
+          <OAuthBounceModal />
           <DevToolbar />
         </BrowserRouter>
       </ToastProvider>

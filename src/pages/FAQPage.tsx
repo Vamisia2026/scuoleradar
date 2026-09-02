@@ -4,14 +4,21 @@ import { Header } from '@/components/Header';
 import { Footer } from './LandingPage';
 
 /** Domande frequenti del servizio (pagina pubblica /faq) — copy sales-oriented. */
-const FAQ_ITEMS = [
+const FAQ_ITEMS: Array<{ id?: string; q: string; a: string }> = [
   {
+    id: 'radar-personalizzati',
     q: 'Come funzionano i radar personalizzati su di me?',
     a: 'Imposti i parametri come la provincia, la materia e l’ordine di scuola a cui sei interessato e ogni giorno facciamo tre ricerche al giorno per trovare se c’è qualcosa che ci sembra adatto a te. Se lo troviamo te lo mandiamo subito via Telegram e email (per questo raccomandiamo di attivare Telegram). Spesso queste opportunità hanno scadenze temporali molto brevi, quindi trovarle in tempo è importantissimo e l’alternativa è passare la vita a cercarle.',
   },
   {
-    q: 'Perché non ricevo le vostre notifiche tutti i giorni?',
-    a: 'Per scelta personale e professionale, abbiamo deciso di non mettere angoscia alle persone intasando la casella di notifiche inutili. Quando ricevete un messaggio da Scuole Radar è perché dovete aprirlo. Se non ricevete niente è perché non c’è niente di adatto: state tranquilli e dedicatevi ad altro.',
+    id: 'accesso-google-edu',
+    q: 'Perché non riesco ad accedere con l\'email Google della mia scuola (.edu.it)?',
+    a: 'Molti Istituti Scolastici bloccano l\'accesso Google OAuth verso app terze non espressamente autorizzate nella console dell\'amministratore. Per accedere subito puoi utilizzare la registrazione standard con Email e Password oppure accedere con il tuo account Google personale.',
+  },
+  {
+    id: 'animatore-digitale',
+    q: 'Sono un Animatore Digitale o Referente Google: come autorizzo ScuoleRadar per la mia scuola?',
+    a: 'È semplicissimo e richiede meno di 2 minuti: entra nella Google Admin Console del tuo Istituto, vai su Sicurezza > Controllo dell\'accesso e dei dati > Controlli API e App terze, seleziona "Aggiungi app" tramite l\'ID/Client ID di ScuoleRadar o cercandola come App Web, e contrassegnala come "Attendibile" (Trusted). In questo modo tutti i docenti del tuo Istituto potranno accedere con 1 click.',
   },
   {
     q: 'Non ho un curriculum pronto o aggiornato, come faccio?',
@@ -20,6 +27,10 @@ const FAQ_ITEMS = [
   {
     q: 'Non so a quali classi di concorso posso accedere col mio titolo.',
     a: 'Abbiamo messo a disposizione il nostro Calcolatore CFU: basta inserire i tuoi titoli di studio e gli esami sostenuti per avere una stima delle classi di concorso a cui puoi accedere o di quali crediti devi integrare.',
+  },
+  {
+    q: 'Perché non ricevo le vostre notifiche tutti i giorni?',
+    a: 'Per scelta personale e professionale, abbiamo deciso di non mettere angoscia alle persone intasando la casella di notifiche inutili. Quando ricevete un messaggio da Scuole Radar è perché dovete aprirlo. Se non ricevete niente è perché non c’è niente di adatto: state tranquilli e dedicatevi ad altro.',
   },
   {
     q: 'Ho un dubbio o un problema sul lavoro a scuola, posso parlarne con qualcuno?',
@@ -59,8 +70,9 @@ export function FAQPage() {
             <div className="mt-8 space-y-3">
               {FAQ_ITEMS.map((f) => (
                 <details
+                  id={f.id}
                   key={f.q}
-                  className="group rounded-2xl border border-primary-100 bg-white p-5 shadow-card"
+                  className="group scroll-mt-24 rounded-2xl border border-primary-100 bg-white p-5 shadow-card"
                 >
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-base font-semibold text-primary-800">
                     {f.q}
