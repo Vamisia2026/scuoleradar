@@ -123,8 +123,9 @@ export function TabUtenti() {
       setUtenti(await caricaUtenti());
     } catch (err) {
       const messaggio = err instanceof AdminApiError ? err.message : (err as Error).message;
-      setErrore(`Errore admin — ${messaggio}`);
-      mostraToast('errore', `Errore admin — ${messaggio}`);
+      console.error('[admin] caricamento utenti fallito', err);
+      setErrore(messaggio);
+      mostraToast('errore', messaggio);
     } finally {
       setCaricamento(false);
     }

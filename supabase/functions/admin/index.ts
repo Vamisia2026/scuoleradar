@@ -15,7 +15,10 @@ const CORS = {
 };
 
 function risposta(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), { status, headers: CORS });
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...CORS, 'Content-Type': 'application/json; charset=utf-8' },
+  });
 }
 
 /** Colonne effettive presenti su profiles (feature-detect senza migrazioni). */
@@ -164,8 +167,40 @@ serve(async (req: Request) => {
     }
 
     if (action === 'list_users_full') {
-      const { data: utenti, error } = await sb.from('profiles').select('*').order('created_at', { ascending: false });
+      const { data: profili, error } = await sb.from('profiles').select('*').order('created_at', { ascending: false });
       if (error) return risposta({ error: error.message }, 500);
+
+      // JOIN logico con auth.users: i profili restano la fonte autorevole dei dettagli,
+      // ma vengono aggiunti gli utenti auth senza riga profiles (es. mai on-boardizzati).
+      const elenco: Array<Record<string, unknown>> = [...(profili ?? [])];
+      const visti = new Set(elenco.map((u) => String(u.id)));
+      try {
+        let pagina = 1;
+        while (pagina <= 20) {
+          const { data: authPage } = await sb.auth.admin.listUsers({ page: pagina, perPage: 200 });
+          const lista = authPage?.users ?? [];
+          if (lista.length === 0) break;
+          for (const au of lista) {
+            const id = String(au.id);
+            if (visti.has(id)) continue;
+            visti.add(id);
+            const meta = (au.user_metadata ?? {}) as Record<string, unknown>;
+            elenco.push({
+              id,
+              email: String(au.email ?? ''),
+              nome: typeof meta.nome === 'string' ? meta.nome : (typeof meta.full_name === 'string' ? String(meta.full_name).split(' ')[0] : null),
+              cognome: typeof meta.cognome === 'string' ? meta.cognome : null,
+              created_at: au.created_at ?? null,
+              onboarded: false,
+              auth_senza_profilo: true,
+            });
+          }
+          if (lista.length < 200) break;
+          pagina++;
+        }
+      } catch {
+        // listUsers non disponibile: si procede con i soli profili.
+      }
 
       const { data: codici, error: errCodici } = await sb.from('promo_codes').select('codice,tipo,usato_da,usato_il');
       const { data: refs, error: errRefs } = await sb
@@ -183,7 +218,7 @@ serve(async (req: Request) => {
         }
       }
       const emailById = new Map<string, string>();
-      for (const u of utenti ?? []) emailById.set(String(u.id), String(u.email ?? ''));
+      for (const u of elenco) emailById.set(String(u.id), String(u.email ?? ''));
       const referrerByUser = new Map<string, { referrer_id: string; referrer_email: string; referral_status: string }>();
       for (const r of refs ?? []) {
         if (r.referred_user_id) {
@@ -196,7 +231,7 @@ serve(async (req: Request) => {
         }
       }
 
-      const lista = (utenti ?? []).map((u) => ({
+      const lista = (elenco ?? []).map((u) => ({
         ...u,
         ...(couponById.get(String(u.id)) ?? {}),
         ...(referrerByUser.get(String(u.id)) ?? {}),

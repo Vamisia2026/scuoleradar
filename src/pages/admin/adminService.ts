@@ -24,13 +24,21 @@ async function chiamaAdmin<T>(action: string, payload?: Record<string, unknown>)
     body: { action, payload: payload ?? {} },
   });
   if (error) {
-    const messaggio =
+    const ctx = (error as { context?: { error?: string; message?: string } }).context;
+    const dettaglio =
+      ctx?.error ??
+      ctx?.message ??
       (error as { message?: string }).message ??
       "Errore admin — verifica che la edge function 'admin' sia deployata.";
-    throw new AdminApiError(messaggio);
+    console.error('[admin] chiamata fallita', { action, payload, error, data });
+    throw new AdminApiError(dettaglio);
   }
   const res = data as { ok?: boolean; error?: string } | null;
-  if (!res?.ok) throw new AdminApiError(res?.error ?? 'Errore admin.');
+  if (!res || typeof res !== 'object' || res.ok !== true) {
+    const motivo = res && typeof res === 'object' && 'error' in res ? String(res.error) : '';
+    console.error('[admin] risposta senza ok', { action, data, raw: typeof data });
+    throw new AdminApiError(motivo || `Azione "${action}" non riuscita: risposta inattesa dalla edge function.`);
+  }
   return data as T;
 }
 
