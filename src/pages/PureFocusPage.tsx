@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ExternalLink, PenLine, Sparkles } from 'lucide-react';
+import { PenLine, Sparkles } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 
 /**
@@ -28,9 +28,17 @@ export function PureFocusPage() {
           <div className="min-w-0">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-primary-100">
               <Sparkles className="h-3.5 w-3.5" />
-              Incluso nel piano PRO
+              {hasProAccess ? 'Incluso nel tuo piano' : 'Sponsor Ufficiale'}
             </span>
             <h3 className="mt-2 text-2xl font-bold sm:text-3xl">PureFocus · purefocus.one</h3>
+            <a
+              href="https://purefocus.one"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-primary-200 underline-offset-4 transition hover:text-white hover:underline"
+            >
+              Visita purefocus.one ↗
+            </a>
           </div>
         </div>
 
@@ -43,8 +51,8 @@ export function PureFocusPage() {
         {hasProAccess ? (
           <div className="mt-6 rounded-2xl bg-white/10 p-5 ring-1 ring-white/20">
             <p className="max-w-2xl text-sm leading-relaxed text-primary-100">
-              🎉 Grazie al tuo account PRO a ScuoleRadar, hai sbloccato l&apos;accesso PRO a PureFocus
-              (valore 29$/anno)! Usalo subito per studiare e lavorare su YouTube senza distrazioni.
+              🎉 PureFocus è già incluso nel tuo piano PRO (mensile, annuale o Free Forever): nessun
+              costo aggiuntivo. Entra e inizia subito a studiare e lavorare su YouTube senza distrazioni.
             </p>
             <a
               href="https://purefocus.one"
@@ -52,22 +60,31 @@ export function PureFocusPage() {
               rel="noopener noreferrer"
               className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-bold text-primary-800 shadow-soft transition hover:bg-primary-50"
             >
-              VAI SU PUREFOCUS.ONE
-              <ExternalLink className="h-4 w-4" />
+              ACCEDI A PUREFOCUS ↗
             </a>
           </div>
         ) : (
           <div className="mt-6 rounded-2xl bg-white/10 p-5 ring-1 ring-white/20">
             <p className="max-w-2xl text-sm leading-relaxed text-primary-100">
-              PureFocus costa 29$/anno ed è <strong>INCLUSO GRATUITAMENTE</strong> nel tuo
-              abbonamento PRO a ScuoleRadar.
+              PureFocus costa 29$/anno ed è <strong className="text-white">INCLUSO GRATUITAMENTE</strong>{' '}
+              per tutti gli utenti PRO di ScuoleRadar.
             </p>
-            <Link
-              to="/prezzi"
-              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-secondary-500 px-6 py-3 text-sm font-bold text-white shadow-soft transition hover:bg-secondary-600"
-            >
-              PASSA A PRO
-            </Link>
+            <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:items-center">
+              <Link
+                to="/prezzi"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-secondary-500 px-6 py-3 text-sm font-bold text-white shadow-soft transition hover:bg-secondary-600"
+              >
+                PASSA A PRO
+              </Link>
+              <a
+                href="https://purefocus.one"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-white/15 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/25"
+              >
+                Visita purefocus.one ↗
+              </a>
+            </div>
           </div>
         )}
       </div>
