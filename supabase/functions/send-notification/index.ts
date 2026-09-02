@@ -183,6 +183,15 @@ Speriamo che Scuole Radar contribuisca a migliorare la tua vita professionale, f
     telegram: (o, genere) =>
       `${caro(genere)}, il tuo piano PRO Free Forever scade il ${o.scadenza ?? 'prossimo rinnovo annuale'}. 🎁 Rinnovo automatico a 0€, per sempre: nessun pagamento, nessuna azione. https://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
   },
+  free_forever_scadenza: {
+    soggetto: 'Scadenza abbonamento Scuole Radar',
+    // NB: il saluto "Caro/Cara {{nome}}" viene PREPOSTO dal corpo email della
+    // pipeline: qui NON si ripete il saluto (evita duplicati).
+    email: () =>
+      `Il tuo abbonamento annuale a Scuole Radar sta per scadere.<br/><br/>Ma tu sei stato tra i primi a darci fiducia.<br/>Per questo, tu <b>non pagherai mai</b>.<br/>Il tuo abbonamento sarà rinnovato automaticamente e resterà <b>PRO per sempre</b>, gratis.<br/><br/>Speriamo che Scuole Radar stia contribuendo a cambiarti la vita in meglio.`,
+    telegram: (o, genere) =>
+      `${caro(genere)}, il tuo abbonamento annuale sta per scadere, ma tu non pagherai mai: verrà rinnovato automaticamente e resterai PRO per sempre, gratis! 🎁\nhttps://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
+  },
   beta_rinnovo_preavviso: {
     soggetto: 'Sei tra i primi a sostenerci: il tuo account PRO verrà rinnovato GRATIS A VITA 🎁',
     email: (o, genere) =>
