@@ -941,12 +941,29 @@ export function TabAccount() {
     });
   };
 
-  const upgradePro = (u: AdminUtente): void =>
-    azione(u, 'Upgrade a PRO', { piano: 'pro', abbonamento_scade_il: piuAnni(u.abbonamento_scade_il ? new Date(u.abbonamento_scade_il) : null, 365).toISOString() }, 'Attiva il piano PRO annuale');
+  const upgradeProAnnuale = (u: AdminUtente): void =>
+    azione(
+      u,
+      'Attiva PRO Annuale',
+      { piano: 'pro', pro_tipo: 'annuale', abbonamento_scade_il: piuAnni(u.abbonamento_scade_il ? new Date(u.abbonamento_scade_il) : null, 365).toISOString() },
+      'Assegna il piano PRO annuale',
+    );
+  const upgradeProMensile = (u: AdminUtente): void =>
+    azione(
+      u,
+      'Attiva PRO Mensile',
+      { piano: 'pro', pro_tipo: 'mensile', abbonamento_scade_il: piuAnni(u.abbonamento_scade_il ? new Date(u.abbonamento_scade_il) : null, 30).toISOString() },
+      'Assegna il piano PRO mensile',
+    );
   const downgradeBase = (u: AdminUtente): void =>
-    azione(u, 'Downgrade a Base', { piano: 'base', abbonamento_scade_il: null }, "Riporta l'account al piano Base");
+    azione(u, 'Downgrade a Base', { piano: 'base', pro_tipo: null, abbonamento_scade_il: null }, "Riporta l'account al piano Base");
   const freeForever = (u: AdminUtente): void =>
-    azione(u, 'Imposta Free Forever', { piano: 'free_forever', abbonamento_scade_il: piuAnni(u.abbonamento_scade_il ? new Date(u.abbonamento_scade_il) : null, 365).toISOString() }, 'Assegna il piano PRO gratuito a vita');
+    azione(
+      u,
+      'Imposta Free Forever',
+      { piano: 'free_forever', pro_tipo: null, abbonamento_scade_il: piuAnni(u.abbonamento_scade_il ? new Date(u.abbonamento_scade_il) : null, 365).toISOString() },
+      'Assegna il piano PRO gratuito a vita',
+    );
   const regalaMese = (u: AdminUtente): void =>
     azione(u, 'Regala 1 mese gratuito', { abbonamento_scade_il: piuAnni(u.abbonamento_scade_il ? new Date(u.abbonamento_scade_il) : null, 30).toISOString() }, 'Estende la scadenza di 30 giorni');
 
@@ -1005,7 +1022,14 @@ export function TabAccount() {
               </tr>
             </thead>
             <tbody className="divide-y divide-primary-100">
-              {utenti.map((u) => (
+              {utenti.map((u) => {
+                const piano = u.piano ?? 'base';
+                const proTipo = String(u.pro_tipo ?? '').toLowerCase();
+                const attivaAnnuale = piano === 'pro' && (!proTipo || proTipo.includes('annuale'));
+                const attivaMensile = piano === 'pro' && proTipo.includes('mensile');
+                const attivaBase = piano === 'base';
+                const attivaFree = piano === 'free_forever';
+                return (
                 <tr key={u.id} className="align-top transition hover:bg-primary-50/40">
                   <td className="px-3 py-3">
                     <div className="font-bold text-primary-800">{nomeCognome(u)}</div>
@@ -1057,13 +1081,40 @@ export function TabAccount() {
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex flex-wrap items-center justify-end gap-1">
-                      <button type="button" onClick={() => upgradePro(u)} className={`${btnAdmin} ${btnPrim}`}>
-                        Upgrade PRO
+                      <button
+                        type="button"
+                        disabled={attivaAnnuale}
+                        title={attivaAnnuale ? 'Piano attuale: PRO Annuale' : 'Assegna il piano PRO annuale'}
+                        onClick={() => upgradeProAnnuale(u)}
+                        className={`${btnAdmin} ${attivaAnnuale ? 'cursor-default bg-violet-600 text-white' : `${btnPrim}`}`}
+                      >
+                        PRO Ann.
                       </button>
-                      <button type="button" onClick={() => downgradeBase(u)} className={`${btnAdmin} ${btnGhost}`}>
+                      <button
+                        type="button"
+                        disabled={attivaMensile}
+                        title={attivaMensile ? 'Piano attuale: PRO Mensile' : 'Assegna il piano PRO mensile'}
+                        onClick={() => upgradeProMensile(u)}
+                        className={`${btnAdmin} ${attivaMensile ? 'cursor-default bg-violet-600 text-white' : `${btnGhost} bg-sky-50`}`}
+                      >
+                        PRO Mes.
+                      </button>
+                      <button
+                        type="button"
+                        disabled={attivaBase}
+                        title={attivaBase ? 'Piano attuale: Base' : 'Porta al piano Base'}
+                        onClick={() => downgradeBase(u)}
+                        className={`${btnAdmin} ${attivaBase ? 'cursor-default bg-sky-600 text-white' : `${btnGhost}`}`}
+                      >
                         Base
                       </button>
-                      <button type="button" onClick={() => freeForever(u)} className={`${btnAdmin} bg-secondary-500 text-white hover:bg-secondary-600`}>
+                      <button
+                        type="button"
+                        disabled={attivaFree}
+                        title={attivaFree ? 'Piano attuale: PRO Free Forever' : 'Assegna il piano PRO gratuito a vita'}
+                        onClick={() => freeForever(u)}
+                        className={`${btnAdmin} ${attivaFree ? 'cursor-default bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
+                      >
                         Free Forever
                       </button>
                       <button type="button" onClick={() => regalaMese(u)} className={`${btnAdmin} ${btnGhost}`}>
@@ -1081,7 +1132,8 @@ export function TabAccount() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1101,7 +1153,11 @@ export function TabAccount() {
         </div>
       </section>
 
-      <ConfermaDialog stato={conferma} onChiudi={() => setConferma(null)} />
+      <ConfermaDialog
+        stato={conferma}
+        onChiudi={() => setConferma(null)}
+        onErrore={(msg) => mostraToast('errore', msg)}
+      />
     </div>
   );
 }

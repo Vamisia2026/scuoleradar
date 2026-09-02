@@ -1,6 +1,7 @@
 /* Piccoli atomi UI condivisi del Pannello Admin. */
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Check, Loader2, ShieldAlert, X } from 'lucide-react';
+import { AlertCircle, Check, Loader2, ShieldAlert, X } from 'lucide-react';
 import { classePiano, etichettaPiano, type AdminUtente } from './types';
 
 export const inputAdmin =
@@ -31,25 +32,35 @@ export function BadgePianoCompatto({ utente }: { utente: AdminUtente }) {
   ).toLowerCase();
 
   let label = 'B';
-  let classe = 'bg-slate-200 text-slate-600';
+  let classe = 'bg-sky-100 text-sky-700 ring-1 ring-inset ring-sky-200';
   if (piano === 'free_forever') {
     label = 'FFE';
-    classe = 'bg-amber-100 text-amber-700 ring-1 ring-inset ring-amber-300';
+    classe = 'bg-emerald-100 text-emerald-700 ring-1 ring-inset ring-emerald-300';
   } else if (piano === 'pro') {
     if (tipo.includes('mensile')) {
       label = 'PRO1M';
-      classe = 'bg-sky-100 text-sky-700 ring-1 ring-inset ring-sky-200';
+      classe = 'bg-violet-100 text-violet-700 ring-1 ring-inset ring-violet-200';
     } else if (tipo.includes('annuale')) {
       label = 'PRO1A';
-      classe = 'bg-sky-700 text-white';
+      classe = 'bg-violet-600 text-white';
     } else {
       label = 'PRO';
-      classe = 'bg-sky-700 text-white';
+      classe = 'bg-violet-600 text-white';
     }
   }
+  const titolo =
+    piano === 'pro'
+      ? tipo.includes('mensile')
+        ? 'PRO Mensile'
+        : tipo.includes('annuale')
+          ? 'PRO Annuale'
+          : 'PRO'
+      : piano === 'free_forever'
+        ? 'PRO Free Forever'
+        : 'Base';
   return (
     <span
-      title={piano === 'pro' ? 'PRO' : etichettaPiano(piano)}
+      title={titolo}
       className={`inline-block whitespace-nowrap rounded-md px-1.5 py-0.5 text-[10px] font-black tracking-wide ${classe}`}
     >
       {label}
@@ -109,12 +120,43 @@ export function ConfermaDialog({
   stato,
   onChiudi,
   inCorso = false,
+  onErrore,
 }: {
   stato: ConfermaStato | null;
   onChiudi: () => void;
   inCorso?: boolean;
+  onErrore?: (messaggio: string) => void;
 }) {
+  const [localeInCorso, setLocaleInCorso] = useState(false);
+  const [errore, setErrore] = useState<string | null>(null);
+
+  // Ogni nuovo stato di conferma riparte pulito (niente residui tra aperture).
+  useEffect(() => {
+    setLocaleInCorso(false);
+    setErrore(null);
+  }, [stato]);
+
   if (!stato) return null;
+  const busy = inCorso || localeInCorso;
+
+  const esegui = (): void => {
+    if (busy) return;
+    setLocaleInCorso(true);
+    setErrore(null);
+    void (async () => {
+      try {
+        await stato.onConferma();
+        onChiudi();
+      } catch (err) {
+        const messaggio = err instanceof Error ? err.message : String(err);
+        console.error('[admin] operazione non riuscita:', err);
+        setErrore(messaggio);
+        onErrore?.(messaggio);
+        setLocaleInCorso(false);
+      }
+    })();
+  };
+
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-primary-900/40 backdrop-blur-sm" onClick={onChiudi} />
@@ -126,25 +168,26 @@ export function ConfermaDialog({
           <div className="min-w-0">
             <h3 className="text-sm font-bold text-primary-800">{stato.titolo}</h3>
             <p className="mt-1 text-xs leading-relaxed text-primary-500">{stato.messaggio}</p>
+            {errore && (
+              <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-red-50 px-2.5 py-2 text-xs font-medium text-red-700">
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {errore}
+              </p>
+            )}
           </div>
         </div>
         <div className="mt-4 flex items-center justify-end gap-2">
-          <button type="button" onClick={onChiudi} className={`${btnAdmin} ${btnGhost}`}>
+          <button type="button" onClick={onChiudi} disabled={busy} className={`${btnAdmin} ${btnGhost}`}>
             <X className="h-3.5 w-3.5" /> Annulla
           </button>
           <button
             type="button"
-            disabled={inCorso}
-            onClick={() => {
-              void (async () => {
-                await stato.onConferma();
-                onChiudi();
-              })();
-            }}
-            className={`${btnAdmin} ${btnPrim}`}
+            disabled={busy}
+            onClick={esegui}
+            className={`${btnAdmin} ${btnPrim} min-w-[150px] justify-center`}
           >
-            {inCorso ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-            Conferma e salva
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+            {busy ? 'Salvataggio…' : 'Conferma e salva'}
           </button>
         </div>
       </div>
