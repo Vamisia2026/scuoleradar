@@ -14,7 +14,7 @@ scrivi(
 /** Righe dell'analisi CFU mostrate nel mockup. */
 const analisi = [
   {
-    codice: 'A-28',
+    codice: 'A-27',
     nome: 'Matematica e Fisica',
     ammissibile: true,
     requisiti: [

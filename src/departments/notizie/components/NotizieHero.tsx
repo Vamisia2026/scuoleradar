@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   BadgeCheck,
-  CalendarClock,
   FileCheck2,
   Newspaper,
 } from 'lucide-react';
-import { newsArticles } from '../services/newsService';
 import { SeoMeta } from './SeoMeta';
+import { RevolverScadenze } from '@/departments/scadenze';
 
 /**
  * Copy editoriale ufficiale della pagina Notizie (nuova edizione).
@@ -114,125 +113,29 @@ export function prossimeVacanze(oggi: Date): {
   return { estate: false, giorni, nome };
 }
 
-/** Data locale a mezzanotte da una stringa ISO "YYYY-MM-DD" (senza shift di fuso). */
-function dataLocaleDaIso(iso: string): Date {
-  const [anno, mese, giorno] = iso.split('-').map(Number);
-  return new Date(anno, mese - 1, giorno);
-}
-
-/** Formatta una data locale come "1 settembre" (prima lettera maiuscola). */
-function etichettaItaliana(data: Date): string {
-  const testo = data.toLocaleDateString('it-IT', {
-    day: 'numeric',
-    month: 'long',
-  });
-  return testo.charAt(0).toUpperCase() + testo.slice(1);
-}
-
-/** Parole da rimuovere in coda alla sintesi dell'evento (articoli/preposizioni). */
-const STOPWORDS = new Set([
-  'e', 'ed', 'o', 'di', 'del', 'della', 'dei', 'delle', 'il', 'la', 'le', 'gli',
-  'lo', 'per', 'con', 'al', 'alla', 'ai', 'alle', 'dal', 'dalla', 'dai', 'dalle',
-  'nel', 'nella', 'nei', 'nelle', 'sul', 'sulla', 'sui', 'sulle', 'in', 'a', 'da',
-  'un', 'una', 'che', 'su',
-]);
-
-/**
- * Sintetizza il nome dell'evento a partire da un titolo di notizia:
- *  - prende il topic PRIMA dei ":" (e prima della prima virgola);
- *  - rimuove date e anni ripetuti (es. "1° settembre", "1°luglio", "2026", "2026/27");
- *  - conserva al massimo 3 parole significative (senza articoli in coda);
- *  - restituisce il testo in MAIUSCOLO (es. "PRESA DI SERVIZIO", "BOLLETTINI GPS").
- */
-export function sintetizzaEvento(titolo: string): string {
-  const topic = (titolo.split(':')[0] ?? '').split(',')[0] ?? '';
-  const pulito = topic
-    .replace(
-      /\d{1,2}°?\s*(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)/gi,
-      ' ',
-    )
-    .replace(/\b20\d{2}(?:\/\d{2,4})?\b/g, ' ')
-    .replace(/\b\d{2}\/\d{2}\b/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  const parole = pulito.split(' ').filter(Boolean).slice(0, 3);
-  while (
-    parole.length > 0 &&
-    STOPWORDS.has(parole[parole.length - 1].toLowerCase())
-  ) {
-    parole.pop();
-  }
-
-  if (parole.length === 0) {
-    return topic.split(' ').filter(Boolean).slice(0, 3).join(' ').toUpperCase();
-  }
-  return parole.join(' ').toUpperCase();
-}
-
-/**
- * Prossimo evento UFFICIALE del calendario scolastico (fallback dinamico
- * quando nessuna scadenza delle notizie è attiva): presa di servizio,
- * vacanze di Natale, Pasqua, fine delle lezioni — il primo con data >= oggi.
- * Gli eventi sono calcolati per la stagione scolastica corrente (settembre →
- * agosto) e cambiano automaticamente con la data odierna.
- */
-export function prossimoEventoAccademico(oggi: Date): { etichetta: string; evento: string } {
-  const anno = oggi.getFullYear();
-  const mese = oggi.getMonth();
-  // Autunno di riferimento della stagione scolastica corrente:
-  // se oggi è da settembre in poi, l'anno scolastico è quello corrente,
-  // altrimenti quello iniziato l'anno solare precedente.
-  const autunno = mese >= 8 ? anno : anno - 1;
-
-  const eventi = [
-    { data: new Date(autunno, 8, 1), nome: 'Presa di servizio' },
-    { data: new Date(autunno, 11, 23), nome: 'Vacanze di Natale' },
-    { data: dataPasqua(autunno + 1), nome: 'Vacanze di Pasqua' },
-    { data: new Date(autunno + 1, 5, 8), nome: 'Fine delle lezioni' },
-    { data: new Date(autunno + 1, 8, 1), nome: 'Presa di servizio' },
-  ];
-
-  const prossimo = eventi
-    .filter((e) => e.data.getTime() >= oggi.getTime())
-    .sort((a, b) => a.data.getTime() - b.data.getTime())[0];
-
-  const evento = prossimo ?? eventi[0];
-  return {
-    etichetta: etichettaItaliana(evento.data),
-    evento: sintetizzaEvento(evento.nome),
-  };
-}
-
-/**
- * Prima scadenza ATTIVA dal servizio notizie (data di scadenza >= oggi,
- * la più vicina), oppure fallback al prossimo evento del calendario
- * scolastico ufficiale quando non ci sono scadenze specifiche.
- */
-export function trovaProssimaScadenza(oggi: Date): { etichetta: string; evento: string } {
-  const prossima = newsArticles
-    .filter((a) => a.deadline_date)
-    .map((a) => ({ articolo: a, data: dataLocaleDaIso(a.deadline_date as string) }))
-    .filter(
-      (x) => !Number.isNaN(x.data.getTime()) && x.data.getTime() >= oggi.getTime(),
-    )
-    .sort((a, b) => a.data.getTime() - b.data.getTime())[0];
-
-  if (prossima) {
-    return {
-      etichetta: etichettaItaliana(prossima.data),
-      evento: sintetizzaEvento(prossima.articolo.title),
-    };
-  }
-  return prossimoEventoAccademico(oggi);
-}
-
 /**
  * Hero editoriale del Dipartimento Notizie (stile "Daily Planet"):
- * masthead serif con righe doppie, sottotitolo + slogan, widget
- * "PROSSIMA SCADENZA IMPORTANTE" a destra e CTA di registrazione in basso.
+ * masthead serif con righe doppie, sottotitolo + slogan, e a destra il
+ * widget Scadenze con il revolver orizzontale delle 10 prossime scadenze
+ * operative e il conto alla rovescia per le vacanze in basso.
  */
-export function NotizieHero() {
+export interface NotizieHeroProps {
+  /** Voci del menu categorie (es. 'Tutte', 'GPS', 'Mobilità'…). */
+  categorie?: string[];
+  /** Conteggio articoli per categoria (chiavi = nomi categoria). */
+  conteggi?: Record<string, number>;
+  /** Categoria attiva (default 'Tutte'). */
+  categoria?: string;
+  /** Callback quando l'admin/cliente cambia categoria. */
+  onCategoriaChange?: (categoria: string) => void;
+}
+
+export function NotizieHero({
+  categorie = [],
+  conteggi = {},
+  categoria = 'Tutte',
+  onCategoriaChange,
+}: NotizieHeroProps = {}) {
   const [oggi, setOggi] = useState<Date>(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -252,10 +155,6 @@ export function NotizieHero() {
     return () => clearInterval(timer);
   }, []);
 
-  // Prima scadenza attiva (data >= oggi) dalle notizie, oppure fallback al
-  // prossimo evento ufficiale del calendario scolastico.
-  const prossimaScadenza = useMemo(() => trovaProssimaScadenza(oggi), [oggi]);
-
   // Conto alla rovescia per le vacanze (in estate il box mostra solo la scadenza).
   const contoVacanze = useMemo(() => prossimeVacanze(oggi), [oggi]);
 
@@ -270,11 +169,11 @@ export function NotizieHero() {
         aria-label="Rassegna stampa di notizie e scadenze per la scuola"
         className="bg-gradient-to-b from-primary-50 to-white"
       >
-        <div className="mx-auto max-w-7xl px-4 pb-2 pt-6 sm:px-6 sm:pt-10">
-          <div className="grid gap-8 md:grid-cols-12">
+        <div className="mx-auto max-w-7xl px-4 pb-6 pt-3 sm:px-6 sm:pb-8 sm:pt-4">
+          <div className="grid gap-x-8 gap-y-6 md:grid-cols-12">
             {/* Colonna sinistra — masthead editoriale */}
-            <div className="md:col-span-7">
-              <div className="border-y-4 border-double border-primary-900/80 py-4">
+            <div className="flex flex-col md:col-span-7">
+              <div className="border-b-4 border-double border-primary-900/80 py-3 sm:py-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-primary-500">
                   <span className="inline-flex items-center gap-1.5">
                     <Newspaper className="h-3.5 w-3.5" />
@@ -287,16 +186,16 @@ export function NotizieHero() {
                 </h1>
               </div>
 
-              <p className="mt-4 max-w-xl text-base leading-relaxed text-primary-700 sm:text-lg">
+              <p className="mt-3 max-w-xl text-base leading-relaxed text-primary-700 sm:text-lg">
                 {SOTTOTITOLO_NOTIZIE}
               </p>
 
               {/* Slogan: sotto il sottotitolo, sopra i badge di fiducia */}
-              <p className="mt-3 font-display text-xl font-semibold leading-snug text-primary-900 sm:text-2xl">
+              <p className="mt-2 font-display text-xl font-semibold leading-snug text-primary-900 sm:text-2xl">
                 «{SLOGAN_NOTIZIE}»
               </p>
 
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-white px-3 py-1 text-xs font-semibold text-primary-700">
                   <BadgeCheck className="h-3.5 w-3.5 text-accent-500" />
                   Solo fonti ufficiali verificate
@@ -310,69 +209,75 @@ export function NotizieHero() {
                   Aggiornato ogni giorno
                 </span>
               </div>
+
+              {/* Menu Categorie: subito sotto i badge di verifica, occupa lo spazio
+                  residuo della colonna e chiude il suo bordo inferiore in linea con
+                  il fondo del box "PROSSIME SCADENZE" a destra. */}
+              {onCategoriaChange && categorie.length > 0 && (
+                <div
+                  role="toolbar"
+                  aria-label="Filtra le notizie per categoria"
+                  className="mt-4 flex flex-wrap items-center gap-1.5"
+                >
+                  <span className="mr-1 text-[11px] font-black uppercase tracking-[0.16em] text-secondary-600">
+                    Categorie
+                  </span>
+                  {categorie.map((c) => {
+                    const attiva = categoria === c;
+                    const conteggio = conteggi[c] ?? 0;
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => onCategoriaChange(c)}
+                        aria-pressed={attiva}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition ${
+                          attiva
+                            ? 'bg-primary-700 text-white shadow-soft'
+                            : 'bg-white text-primary-600 ring-1 ring-inset ring-primary-200 hover:bg-primary-50'
+                        }`}
+                      >
+                        {c}
+                        {c !== 'Tutte' && conteggio > 0 && (
+                          <span
+                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+                              attiva ? 'bg-white/20 text-white' : 'bg-primary-100 text-primary-500'
+                            }`}
+                          >
+                            {conteggio}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            {/* Colonna destra — prossima scadenza importante */}
+            {/* Colonna destra — widget Scadenze: revolver (2/3) + countdown (1/3) */}
             <div className="md:col-span-5">
               <aside
-                aria-label="Prossima scadenza importante e conto alla rovescia per le vacanze"
+                aria-label="Prossime scadenze operative e conto alla rovescia per le vacanze"
                 className="flex h-full flex-col overflow-hidden rounded-xl border border-primary-100 bg-white shadow-card"
               >
-                {/* Sezione principale — in estate (scuola non ancora iniziata)
-                    riempie tutta l'altezza con elementi ingranditi; a scuola
-                    iniziata si scala leggermente per lasciare spazio al conteggio. */}
-                <div
-                  className={`flex flex-1 flex-col items-center justify-center gap-2 px-5 text-center ${
-                    contoVacanze.estate ? 'py-8' : 'py-5'
-                  }`}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <CalendarClock
-                      className={`shrink-0 text-secondary-500 ${
-                        contoVacanze.estate ? 'h-5 w-5' : 'h-4 w-4'
-                      }`}
-                    />
-                    <span
-                      className={`font-bold uppercase tracking-[0.22em] text-primary-500 ${
-                        contoVacanze.estate ? 'text-sm' : 'text-xs'
-                      }`}
-                    >
-                      Prossima scadenza importante
-                    </span>
-                  </div>
-                  <p
-                    className={`font-display font-black leading-none tracking-tight text-primary-900 ${
-                      contoVacanze.estate
-                        ? 'mt-2 text-5xl sm:text-6xl'
-                        : 'mt-1 text-4xl sm:text-5xl'
-                    }`}
-                  >
-                    {prossimaScadenza.etichetta}
-                  </p>
-                  <p
-                    className={`mx-auto max-w-[17rem] font-bold uppercase leading-snug tracking-[0.16em] text-secondary-600 ${
-                      contoVacanze.estate
-                        ? 'mt-2 text-2xl'
-                        : 'mt-1 text-lg sm:text-xl'
-                    }`}
-                  >
-                    {prossimaScadenza.evento}
-                  </p>
-                </div>
+                {/* Revolver Scadenze — 2/3 dell'altezza (in estate occupa tutto il box). */}
+                <RevolverScadenze
+                  className={contoVacanze.estate ? 'min-h-0 flex-1' : 'min-h-0 flex-[2]'}
+                />
 
-                {/* Scuola iniziata: divisorio netto marcato + conteggio vacanze con la
-                    stessa gerarchia visiva del blocco superiore (Numero grande + Titolo). */}
+                {/* Scuola iniziata: divisorio netto + conteggio vacanze (1/3 del box),
+                    compatto per stare nella fascia inferiore senza tagli. */}
                 {!contoVacanze.estate && (
                   <>
-                    <div className="my-4 border-b-2 border-gray-300" />
-                    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-5 py-4 text-center">
-                      <p className="font-display text-4xl font-black leading-none tracking-tight text-primary-900 sm:text-5xl">
+                    <div className="mx-5 shrink-0 border-b-2 border-gray-300" />
+                    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 px-5 pb-3 pt-1.5 text-center">
+                      <p className="font-display text-3xl font-black leading-none tracking-tight text-primary-900 sm:text-4xl">
                         {contoVacanze.giorni}
-                        <span className="ml-2 align-baseline text-lg font-bold uppercase tracking-[0.18em] text-primary-500">
+                        <span className="ml-2 align-baseline text-base font-bold uppercase tracking-[0.16em] text-primary-500">
                           {contoVacanze.giorni === 1 ? 'giorno' : 'giorni'}
                         </span>
                       </p>
-                      <p className="whitespace-nowrap text-base font-bold uppercase leading-snug tracking-[0.16em] text-secondary-600 sm:text-lg">
+                      <p className="whitespace-nowrap text-sm font-bold uppercase leading-snug tracking-[0.14em] text-secondary-600 sm:text-base">
                         Alle {contoVacanze.nome}.
                       </p>
                     </div>

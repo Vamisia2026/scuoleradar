@@ -1,0 +1,454 @@
+[
+  {
+    "id": "lav-01",
+    "category": "Lavoretti",
+    "title": "Lavoretto - Festa dei Nonni",
+    "type": "exact",
+    "date": "10-02",
+    "phase": "Ultimo giorno utile per il lavoretto in classe",
+    "target": "Infanzia/Primaria"
+  },
+  {
+    "id": "lav-02",
+    "category": "Lavoretti",
+    "title": "Lavoretto - Halloween",
+    "type": "exact",
+    "date": "10-30",
+    "phase": "Ultimo giorno utile per il lavoretto in classe",
+    "target": "Infanzia/Primaria"
+  },
+  {
+    "id": "lav-03",
+    "category": "Lavoretti",
+    "title": "Lavoretto - Giornata dei Calzini Spaiati",
+    "type": "exact",
+    "date": "02-05",
+    "phase": "Ultimo giorno utile per il lavoretto in classe",
+    "target": "Infanzia/Primaria"
+  },
+  {
+    "id": "lav-04",
+    "category": "Lavoretti",
+    "title": "Lavoretto - San Valentino / Amicizia",
+    "type": "exact",
+    "date": "02-12",
+    "phase": "Ultimo giorno utile per il lavoretto in classe",
+    "target": "Infanzia/Primaria"
+  },
+  {
+    "id": "lav-05",
+    "category": "Lavoretti",
+    "title": "Lavoretto - Carnevale",
+    "type": "exact",
+    "date": "02-09",
+    "phase": "Ultimo giorno utile per il lavoretto in classe",
+    "target": "Infanzia/Primaria"
+  },
+  {
+    "id": "lav-06",
+    "category": "Lavoretti",
+    "title": "Lavoretto - Festa del Papà",
+    "type": "exact",
+    "date": "03-19",
+    "phase": "Ultimo giorno utile per il lavoretto in classe",
+    "target": "Infanzia/Primaria"
+  },
+  {
+    "id": "lav-07",
+    "category": "Lavoretti",
+    "title": "Lavoretto - Benvenuta Primavera",
+    "type": "exact",
+    "date": "03-19",
+    "phase": "Ultimo giorno utile per il lavoretto in classe",
+    "target": "Infanzia/Primaria"
+  },
+  {
+    "id": "lav-08",
+    "category": "Lavoretti",
+    "title": "Lavoretto - Pasqua",
+    "type": "exact",
+    "date": "03-26",
+    "phase": "Ultimo giorno utile per il lavoretto in classe",
+    "target": "Infanzia/Primaria"
+  },
+  {
+    "id": "lav-09",
+    "category": "Lavoretti",
+    "title": "Lavoretto - Giornata della Terra",
+    "type": "exact",
+    "date": "04-22",
+    "phase": "Ultimo giorno utile per il lavoretto in classe",
+    "target": "Infanzia/Primaria"
+  },
+  {
+    "id": "lav-10",
+    "category": "Lavoretti",
+    "title": "Lavoretto - Festa della Mamma",
+    "type": "exact",
+    "date": "05-07",
+    "phase": "Ultimo giorno utile per il lavoretto in classe",
+    "target": "Infanzia/Primaria"
+  },
+  {
+    "id": "lav-11",
+    "category": "Lavoretti",
+    "title": "Lavoretto - Ricordo di Fine Anno",
+    "type": "exact",
+    "date": "06-08",
+    "phase": "Ultimo giorno utile per il lavoretto in classe",
+    "target": "Infanzia/Primaria"
+  },
+  {
+    "id": "lav-12",
+    "category": "Lavoretti",
+    "title": "Lavoretto - Natale",
+    "type": "exact",
+    "date": "12-25",
+    "phase": "Ultimo giorno utile per il lavoretto in classe",
+    "target": "Infanzia/Primaria"
+  },
+  {
+    "id": "did-01",
+    "category": "Didattica",
+    "title": "Presa di Servizio e Primo Collegio Docenti",
+    "type": "exact",
+    "date": "09-01",
+    "phase": "Presa di servizio e primo collegio",
+    "target": "Tutti i Gradi"
+  },
+  {
+    "id": "did-02",
+    "category": "Didattica",
+    "title": "Verifica Documentazione Vaccinale",
+    "type": "exact",
+    "date": "09-30",
+    "phase": "Verifica documentazione vaccinale",
+    "target": "Infanzia"
+  },
+  {
+    "id": "did-03",
+    "category": "Didattica",
+    "title": "Somministrazione Prove d'Ingresso",
+    "type": "window",
+    "startDate": "09-15",
+    "endDate": "09-30",
+    "phase": "Somministrazione prove d'ingresso",
+    "target": "Primaria e Secondaria"
+  },
+  {
+    "id": "did-04",
+    "category": "Didattica",
+    "title": "Elezioni Rappresentanti nei Consigli di Classe/Sezione",
+    "type": "window",
+    "startDate": "10-15",
+    "endDate": "10-31",
+    "phase": "Elezioni rappresentanti di classe",
+    "target": "Tutti i Gradi"
+  },
+  {
+    "id": "did-05",
+    "category": "Didattica",
+    "title": "Stesura e Approvazione PEI / PDP",
+    "type": "window",
+    "startDate": "11-01",
+    "endDate": "11-30",
+    "phase": "Stesura e approvazione PEI/PDP",
+    "target": "Tutti i Gradi"
+  },
+  {
+    "id": "did-06",
+    "category": "Didattica",
+    "title": "Consiglio Orientativo Terze Classi",
+    "type": "window",
+    "startDate": "12-01",
+    "endDate": "12-15",
+    "phase": "Consiglio orientativo classi terze",
+    "target": "Sec I Grado"
+  },
+  {
+    "id": "did-07",
+    "category": "Didattica",
+    "title": "Iscrizioni Online Anno Scolastico Successivo",
+    "type": "window",
+    "startDate": "01-10",
+    "endDate": "01-31",
+    "phase": "Iscrizioni online anno successivo",
+    "target": "Tutti i Gradi"
+  },
+  {
+    "id": "did-08",
+    "category": "Didattica",
+    "title": "Scrutini Primo Quadrimestre & Pagelle",
+    "type": "window",
+    "startDate": "01-25",
+    "endDate": "02-15",
+    "phase": "Scrutini e pubblicazione pagelle",
+    "target": "Tutti i Gradi"
+  },
+  {
+    "id": "inv-01",
+    "category": "INVALSI",
+    "title": "INVALSI Sec II Grado (Classi V) - Finestra Iscrizione & Testing",
+    "type": "window",
+    "startDate": "03-01",
+    "endDate": "03-31",
+    "phase": "Iscrizione piattaforma e testing",
+    "target": "Sec II Grado"
+  },
+  {
+    "id": "inv-02",
+    "category": "INVALSI",
+    "title": "INVALSI Sec I Grado (Classi III) - Somministrazione CBT",
+    "type": "window",
+    "startDate": "04-01",
+    "endDate": "04-30",
+    "phase": "Somministrazione prove CBT",
+    "target": "Sec I Grado"
+  },
+  {
+    "id": "inv-03",
+    "category": "INVALSI",
+    "title": "INVALSI Primaria (Classi II e V) - Somministrazione Cartacea",
+    "type": "window",
+    "startDate": "05-03",
+    "endDate": "05-15",
+    "phase": "Somministrazione prove cartacee",
+    "target": "Primaria"
+  },
+  {
+    "id": "inv-04",
+    "category": "INVALSI",
+    "title": "INVALSI - Finestra Correzione e Caricamento Dati",
+    "type": "window",
+    "startDate": "05-16",
+    "endDate": "05-31",
+    "phase": "Correzione e inserimento dati",
+    "target": "Tutti i Gradi"
+  },
+  {
+    "id": "did-09",
+    "category": "Didattica",
+    "title": "Pubblicazione Documento del 15 Maggio",
+    "type": "exact",
+    "date": "05-15",
+    "phase": "Pubblicazione del 15 maggio",
+    "target": "Sec II Grado"
+  },
+  {
+    "id": "did-10",
+    "category": "Didattica",
+    "title": "Delibera Adozione Libri di Testo",
+    "type": "window",
+    "startDate": "05-10",
+    "endDate": "05-20",
+    "phase": "Delibera adozione libri di testo",
+    "target": "Primaria e Secondaria"
+  },
+  {
+    "id": "did-11",
+    "category": "Didattica",
+    "title": "Scrutini Finali e Ammissione Esami",
+    "type": "window",
+    "startDate": "06-08",
+    "endDate": "06-14",
+    "phase": "Scrutini finali e ammissione",
+    "target": "Primaria e Secondaria"
+  },
+  {
+    "id": "did-12",
+    "category": "Didattica",
+    "title": "Esame di Stato Primo Ciclo (Terza Media)",
+    "type": "window",
+    "startDate": "06-15",
+    "endDate": "06-30",
+    "phase": "Esame di Stato primo ciclo",
+    "target": "Sec I Grado"
+  },
+  {
+    "id": "did-13",
+    "category": "Didattica",
+    "title": "Maturità - Prima e Seconda Prova Scritta",
+    "type": "window",
+    "startDate": "06-17",
+    "endDate": "06-20",
+    "phase": "Maturità: prove scritte",
+    "target": "Sec II Grado"
+  },
+  {
+    "id": "did-14",
+    "category": "Didattica",
+    "title": "Sospensione Giudizio / Saldo Debiti Formativi Estivi",
+    "type": "window",
+    "startDate": "08-20",
+    "endDate": "08-31",
+    "phase": "Sospensione giudizio e saldo debiti",
+    "target": "Sec II Grado"
+  },
+  {
+    "id": "fis-01",
+    "category": "Fisco & Inps",
+    "title": "Rinnovo Polizza Assicurativa Integrativa RC/Infortuni",
+    "type": "exact",
+    "date": "10-31",
+    "phase": "Rinnovo polizza RC/Infortuni",
+    "target": "Docenti e ATA"
+  },
+  {
+    "id": "fis-02",
+    "category": "Fisco & Inps",
+    "title": "Rendicontazione Progetti PCTO Triennio",
+    "type": "exact",
+    "date": "12-31",
+    "phase": "Rendicontazione progetti PCTO",
+    "target": "Sec II Grado"
+  },
+  {
+    "id": "fis-03",
+    "category": "Fisco & Inps",
+    "title": "Rinnovo ISEE per Assegno Unico e Prestazioni INPS",
+    "type": "exact",
+    "date": "02-28",
+    "phase": "Rinnovo ISEE e prestazioni INPS",
+    "target": "Tutti"
+  },
+  {
+    "id": "fis-04",
+    "category": "Fisco & Inps",
+    "title": "Domanda Pensionamento (Quota 103 / Opzione Donna)",
+    "type": "exact",
+    "date": "02-28",
+    "phase": "Domanda di pensionamento",
+    "target": "Docenti e ATA"
+  },
+  {
+    "id": "fis-05",
+    "category": "Fisco & Inps",
+    "title": "Finestra Domande Trasferimento e Mobilità",
+    "type": "window",
+    "startDate": "03-15",
+    "endDate": "04-15",
+    "phase": "Domande di mobilità e trasferimento",
+    "target": "Docenti e ATA"
+  },
+  {
+    "id": "fis-06",
+    "category": "Fisco & Inps",
+    "title": "Inserimento/Aggiornamento Graduatorie GPS/GI",
+    "type": "window",
+    "startDate": "05-10",
+    "endDate": "06-10",
+    "phase": "Inserimento/aggiornamento GPS/GI",
+    "target": "Docenti"
+  },
+  {
+    "id": "fis-07",
+    "category": "Fisco & Inps",
+    "title": "Presentazione Domanda NASpI (Termine Contratti 30 Giugno)",
+    "type": "window",
+    "startDate": "07-01",
+    "endDate": "07-15",
+    "phase": "Domanda NASpI - precari",
+    "target": "Precari Scuola"
+  },
+  {
+    "id": "fis-08",
+    "category": "Fisco & Inps",
+    "title": "Scioglimento Riserva e Inserimento Titoli Specializzazione GPS",
+    "type": "window",
+    "startDate": "07-01",
+    "endDate": "07-20",
+    "phase": "Scioglimento riserva e titoli GPS",
+    "target": "Docenti"
+  },
+  {
+    "id": "fis-09",
+    "category": "Fisco & Inps",
+    "title": "Scelta Sedi 150 Preferenze Supplenze GPS",
+    "type": "window",
+    "startDate": "07-25",
+    "endDate": "08-15",
+    "phase": "Scelta sedi 150 preferenze",
+    "target": "Docenti Precari"
+  },
+  {
+    "id": "fis-10",
+    "category": "Fisco & Inps",
+    "title": "Scadenza Spesa / Rendicontazione Carta del Docente",
+    "type": "exact",
+    "date": "08-31",
+    "phase": "Rendicontazione Carta del Docente",
+    "target": "Docenti di Ruolo"
+  },
+  {
+    "id": "fis-11",
+    "category": "Fisco & Inps",
+    "title": "Presentazione 730 / Modello Redditi",
+    "type": "exact",
+    "date": "09-30",
+    "phase": "Presentazione 730 / Modello Redditi",
+    "target": "Tutti"
+  },
+  {
+    "id": "uni-01",
+    "category": "Università",
+    "title": "Immatricolazioni universitarie - Anno Accademico Successivo",
+    "type": "window",
+    "startDate": "07-01",
+    "endDate": "09-30",
+    "phase": "Immatricolazione e scadenze tasse",
+    "target": "Università"
+  },
+  {
+    "id": "uni-02",
+    "category": "Università",
+    "title": "Tasse universitarie e contribuzione - Rate ed esoneri",
+    "type": "window",
+    "startDate": "10-01",
+    "endDate": "12-15",
+    "phase": "Pagamento tasse, rateizzazioni ed esoneri ISEE",
+    "target": "Università"
+  },
+  {
+    "id": "uni-03",
+    "category": "Università",
+    "title": "TFA Sostegno - Bando, domanda e preselezione",
+    "type": "window",
+    "startDate": "04-15",
+    "endDate": "06-15",
+    "phase": "Bando, domanda e prove TFA Sostegno",
+    "target": "Università"
+  },
+  {
+    "id": "uni-04",
+    "category": "Università",
+    "title": "Master e corsi di perfezionamento per docenti - Iscrizioni",
+    "type": "window",
+    "startDate": "09-01",
+    "endDate": "10-31",
+    "phase": "Iscrizione master e corsi di perfezionamento",
+    "target": "Università"
+  },
+  {
+    "id": "uni-05",
+    "category": "Università",
+    "title": "Iscrizioni esami e appelli di profitto - Sessione estiva",
+    "type": "window",
+    "startDate": "05-15",
+    "endDate": "06-30",
+    "phase": "Iscrizione appelli esami di profitto",
+    "target": "Università"
+  },
+  {
+    "id": "uni-06",
+    "category": "Università",
+    "title": "Corsi 60 CFU - Percorsi formativi per l'insegnamento",
+    "type": "window",
+    "startDate": "03-01",
+    "endDate": "06-30",
+    "phase": "Iscrizione percorsi 60 CFU",
+    "target": "Università"
+  }
+]
+
+
+

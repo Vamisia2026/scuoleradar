@@ -14,4 +14,5 @@
 export { NotizieHero } from './components/NotizieHero';
 export { NotizieGrid } from './components/NotizieGrid';
 export { NotizieDettaglio } from './components/NotizieDettaglio';
+export { newsArticles, categorieNotizie } from './services/newsService';
 export type { NewsArticle } from './types';

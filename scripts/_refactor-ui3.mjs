@@ -44,7 +44,7 @@ export function CvTool() {
             <div>
               <p className="text-xl font-extrabold text-primary-900">Mario Rossi</p>
               <p className="text-xs font-semibold text-primary-500">
-                Docente di Matematica e Fisica · A-28
+                Docente di Matematica e Fisica · A-27
               </p>
             </div>
             <span className="rounded-full bg-accent-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-accent-700 ring-1 ring-accent-200">

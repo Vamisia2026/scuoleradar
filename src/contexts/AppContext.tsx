@@ -635,7 +635,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
             !data.subscription_status ||
             data.subscription_status === 'active' ||
             data.subscription_status === 'trialing';
-          setAbbonato(data.piano === 'pro' && statoOk && periodoOk);
+          // Piano Free Forever: accesso PRO permanente — mai soggetto a scadenza
+          // di pagamento; per gli altri piani casca automaticamente su base.
+          const pianoGratuitoVita = data.piano === 'free_forever';
+          setAbbonato(
+            (data.piano === 'pro' || pianoGratuitoVita) &&
+              (pianoGratuitoVita || (statoOk && periodoOk)),
+          );
           setCrediti(Number(data.crediti ?? 0));
           setNotificheUsate(Number(data.notifiche_usate ?? 0));
         }

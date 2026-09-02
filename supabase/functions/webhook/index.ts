@@ -41,6 +41,7 @@ console.log(
 );
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const SEND_SECRET = Deno.env.get('SEND_NOTIFICATION_SECRET') ?? '';
 /**
  * Price ID LIVE (secrets): mapping prezzo → tier per subscription_tier (Account Bridge).
  * Fallback sui Price ID LIVE attivi: NON modificare, sono i prezzi di produzione.
@@ -151,6 +152,16 @@ async function registraReferral(
   return res.ok;
 }
 
+/** Invia EMAIL 2 (conferma attivazione/rinnovo) via Edge send-notification. */
+async function notificaAttivazione(userId: string, piano: string): Promise<void> {
+  if (!SUPABASE_URL || !SEND_SECRET) return;
+  await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-send-secret': SEND_SECRET },
+    body: JSON.stringify({ tipo: 'conferma_attivazione', userId, piano }),
+  }).catch(() => null);
+}
+
 /** Converte un timestamp epoch (secondi) in data ISO, o null. */
 function epochToIso(epoch: number | null | undefined): string | null {
   if (!epoch) return null;
@@ -221,6 +232,7 @@ serve(async (req: Request) => {
           subscription_status: 'active',
         });
         console.log(`  → piano pro (subscription ${obj.id ?? '?'}, tier ${tier}): ${ok}`);
+        await notificaAttivazione(userId, 'pro');
       }
 
       // Referral: se il checkout usava un codice promo, registra la ricompensa del referrer
@@ -262,6 +274,16 @@ serve(async (req: Request) => {
         current_period_end: null,
       });
       console.log(`  → piano base (status=canceled): ${ok}`);
+      break;
+    }
+
+    case 'invoice.paid': {
+      if (!userId) break;
+      // Rinnovo o creazione di un abbonamento PRO pagato → EMAIL 2 di conferma.
+      if (obj.billing_reason === 'subscription_create' || obj.billing_reason === 'subscription_cycle') {
+        await notificaAttivazione(userId, 'pro');
+        console.log('  → EMAIL 2 conferma attivazione/rinnovo PRO inviata');
+      }
       break;
     }
 

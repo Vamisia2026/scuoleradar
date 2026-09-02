@@ -33,6 +33,11 @@ export interface EsitoNotifiche {
 
 type EsitoJob = { ok: boolean };
 
+/** Piani con notifiche illimitate (PRO a pagamento + PRO Free Forever). */
+function pianoIllimitato(piano?: string): boolean {
+  return piano === 'pro' || piano === 'free_forever';
+}
+
 export async function notificaNuoviInterpelli(
   client: SupabaseClient | null,
   nuovi: InterpelloParsato[],
@@ -93,14 +98,14 @@ export async function notificaNuoviInterpelli(
             console.warn(
               `  ⚠ RPC contatore notifiche fallita per ${utente.id.slice(0, 8)}… (${rpcError.message}) — invio comunque.`,
             );
-            if (utente.piano !== 'pro') tipo = 'prova1';
+            if (!pianoIllimitato(utente.piano)) tipo = 'prova1';
           } else if (rpcData?.[0]) {
             if (rpcData[0].consentito === false) {
               // Ciclo BASE completato (3 notifiche/anno scolastico inviate):
               // Email 5 (extra = avviso) una sola volta, poi si salta.
               // Email 6 (recap = avviso finale) è schedulata dal cron
               // `step5-notifiche` (Edge Function, 2 ore dopo l'avviso).
-              if (utente.piano === 'pro') {
+              if (pianoIllimitato(utente.piano)) {
                 tipo = 'notifica_pro';
               } else if (!utente.notificheBloccoInviato) {
                 tipo = 'extra'; // Email 5 — warning: periodo di prova terminato
@@ -110,7 +115,7 @@ export async function notificaNuoviInterpelli(
             } else {
               const usate = Number(rpcData[0].notifiche_usate);
               tipo =
-                utente.piano === 'pro'
+                pianoIllimitato(utente.piano)
                   ? 'notifica_pro'
                   : usate === 1
                     ? 'prova1'

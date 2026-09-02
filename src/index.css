@@ -142,3 +142,45 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-primary-300;
 }
+
+/* ============================================================
+   Revolver Scadenze — animazioni del widget carosello
+   Il track scorre orizzontalmente (SINISTRA → DESTRA) con una
+   transizione CSS fluida; la barra di avanzamento della slide
+   si consuma linearmente durante l'intervallo di autoplay.
+   ============================================================ */
+.revolver-track {
+  transition: transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.revolver-track.revolver-no-anim {
+  transition: none;
+}
+
+@keyframes revolver-progress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.revolver-progress {
+  transform-origin: left center;
+  animation-name: revolver-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+/* Niente animazioni se l'utente le ha disattivate nel sistema. */
+@media (prefers-reduced-motion: reduce) {
+  .revolver-track {
+    transition: none;
+  }
+  .revolver-progress {
+    animation: none;
+  }
+}
+

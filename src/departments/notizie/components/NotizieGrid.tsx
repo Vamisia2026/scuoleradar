@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   CalendarDays,
@@ -10,13 +10,15 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
-import { newsArticles, categorieNotizie, formatDataNotizia } from '../services/newsService';
+import { newsArticles, formatDataNotizia } from '../services/newsService';
 import { èLinkPdf } from '../services/relevanceEngine';
 import type { NewsArticle } from '../types';
 
 interface NotizieGridProps {
   /** Articoli da mostrare (di default tutti quelli del servizio). */
   articoli?: NewsArticle[];
+  /** Categoria selezionata nel menu Categorie dell'Hero (default 'Tutte'). */
+  categoria?: string;
 }
 
 /** Card singola della griglia: niente immagini, solo contenuto essenziale. */
@@ -158,15 +160,7 @@ function NotizieCtaChiusura() {
  * Layout pulito a schede (senza immagini), filtro per categoria e
  * badge di scadenza quando presente. Accessibile pubblicamente, senza login.
  */
-export function NotizieGrid({ articoli = newsArticles }: NotizieGridProps) {
-  const [categoria, setCategoria] = useState('Tutte');
-  const categorie = useMemo(() => ['Tutte', ...categorieNotizie()], []);
-  const conteggi = useMemo(() => {
-    const mappa = new Map<string, number>();
-    for (const a of articoli) mappa.set(a.category, (mappa.get(a.category) ?? 0) + 1);
-    return mappa;
-  }, [articoli]);
-
+export function NotizieGrid({ articoli = newsArticles, categoria = 'Tutte' }: NotizieGridProps) {
   const filtrate = useMemo(() => {
     const ordinate = [...articoli].sort(
       (a, b) =>
@@ -180,50 +174,14 @@ export function NotizieGrid({ articoli = newsArticles }: NotizieGridProps) {
 
   return (
     <div>
-      {/* Toolbar editoriale per categoria ("Sezioni") */}
-      <div
-        role="toolbar"
-        aria-label="Filtra le notizie per sezione"
-        className="mt-5 flex flex-wrap items-center gap-1 overflow-x-auto rounded-xl border border-primary-100 bg-white px-2 py-2 shadow-card"
-      >
-        <span className="mr-1 px-2 text-[11px] font-bold uppercase tracking-[0.18em] text-primary-400">
-          Sezioni
-        </span>
-        {categorie.map((c) => {
-          const attiva = categoria === c;
-          const conteggio = c === 'Tutte' ? articoli.length : (conteggi.get(c) ?? 0);
-          return (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setCategoria(c)}
-              aria-pressed={attiva}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition ${
-                attiva
-                  ? 'bg-primary-800 text-white shadow-soft'
-                  : 'text-primary-600 hover:bg-primary-50'
-              }`}
-            >
-              {c}
-              <span
-                className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
-                  attiva ? 'bg-white/20 text-white' : 'bg-primary-50 text-primary-500'
-                }`}
-              >
-                {conteggio}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Griglia delle notizie */}
+      {/* Griglia delle notizie: parte subito sotto la linea di allineamento
+          creata dal menu Categorie (Hero) e dal fondo del box Scadenze. */}
       {filtrate.length === 0 ? (
-        <p className="mt-8 rounded-2xl border border-dashed border-primary-100 p-10 text-left text-sm text-primary-400">
+        <p className="rounded-2xl border border-dashed border-primary-100 p-10 text-left text-sm text-primary-400">
           Nessuna notizia in questa categoria per il momento.
         </p>
       ) : (
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtrate.map((n) => (
             <NotizieCard key={n.id} articolo={n} />
           ))}

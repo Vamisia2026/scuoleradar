@@ -6,6 +6,8 @@ import {
 import { Header } from '@/components/Header';
 import { SimulatorRadar } from '@/components/SimulatorRadar';
 import { useApp } from '@/contexts/AppContext';
+import { AdminAccessModal } from '@/pages/admin/AdminAccessModal';
+import { ADMIN_EMAILS } from '@/pages/admin/types';
 import { servizi } from '@/data/servizi';
 
 export function LandingPage() {
@@ -405,8 +407,10 @@ function Stat({ numero, label }: { numero: string; label: string }) {
 
 export function Footer() {
   const navigate = useNavigate();
-  // Trigger segreto Admin: 3 click sul copyright → /admin
-  const [clicksCop, setClicksCop] = useState(0);
+  const { user } = useApp();
+  // Trigger segreto Admin nascosto nella parola "riservati" (3 click).
+  const [clicksSegreti, setClicksSegreti] = useState(0);
+  const [adminModalAperto, setAdminModalAperto] = useState(false);
 
   return (
     <footer className="border-t border-primary-100 bg-white">
@@ -474,25 +478,36 @@ export function Footer() {
             Vamisia
           </a>
           <span aria-hidden="true">·</span>
+          <span>© 2026 ScuoleRadar</span>
+          <span aria-hidden="true">·</span>
+          Tutti i diritti{' '}
           <button
             type="button"
             onClick={() => {
-              const nuovo = clicksCop + 1;
-              setClicksCop(nuovo);
+              const nuovo = clicksSegreti + 1;
+              setClicksSegreti(nuovo);
               if (nuovo >= 3) {
-                setClicksCop(0);
-                navigate('/admin');
+                setClicksSegreti(0);
+                const autorizzato = user?.email
+                  ? ADMIN_EMAILS.includes(user.email.toLowerCase())
+                  : false;
+                if (autorizzato) {
+                  navigate('/admin');
+                } else {
+                  setAdminModalAperto(true);
+                }
               }
             }}
-            className="transition hover:text-primary-600"
-            title=""
+            className="inline cursor-default bg-transparent p-0 align-baseline text-primary-400 hover:text-primary-400"
           >
-            © 2026 ScuoleRadar
+            riservati
           </button>
-          <span aria-hidden="true">·</span>
-          Tutti i diritti riservati.
+          .
         </p>
       </div>
+      {adminModalAperto && (
+        <AdminAccessModal aperto onChiudi={() => setAdminModalAperto(false)} />
+      )}
     </footer>
   );
 }

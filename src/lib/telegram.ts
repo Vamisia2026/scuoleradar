@@ -55,7 +55,7 @@ function baseUrl(dashboardUrl: string): string {
 /** URL assoluto della pagina prezzi per la CTA PRO. */
 function proUrl(dashboardUrl: string): string {
   try {
-    return new URL('/prezzi', dashboardUrl).toString();
+    return new URL('prezzi', baseUrl(dashboardUrl)).toString();
   } catch {
     return 'https://scuoleradar.it/prezzi';
   }
@@ -84,10 +84,11 @@ interface TestoTelegram {
 
 const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
   welcome: {
-    testa: '👋 Benvenuto in ScuoleRadar',
+    testa: '🎉 Account Base attivo — benvenuto in ScuoleRadar!',
     paragrafi: [
-      'Grazie per esserti iscritto, ora ci pensiamo noi.',
-      'Il tuo profilo è <b>attivo</b>: interpelli, supplenze, PON, PNRR e bandi per esperti ora hanno qualcuno che li monitora per te.',
+      'Il tuo account Base è attivo.',
+      'Hai già accesso gratuito a Modulistica, Crea CV, Calcolatore CFU e Radar Scuole con 3 segnalazioni di opportunità.',
+      'Quando vuoi sapere cosa succede di importante nella scuola, passa dal nostro Notiziario.',
     ],
     cta: (dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
   },
@@ -132,6 +133,24 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
       'Hai fatto un buon investimento.',
       'Noi continuiamo a cercare per te!',
       'A presto!',
+    ],
+    cta: (dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
+  },
+  conferma_attivazione: {
+    testa: '🎉 Conferma attivazione: il tuo piano PRO è attivo!',
+    paragrafi: [
+      'La tua attivazione è confermata: il piano PRO di ScuoleRadar è attivo.',
+      'Notifiche illimitate, strumenti docenti completi, modulistica sempre aggiornata e Pure Focus.',
+      'Nessun altro passaggio: noi continuiamo a cercare per te.',
+    ],
+    cta: (dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
+  },
+  free_forever_preavviso: {
+    testa: '🎁 PRO Free Forever: il rinnovo gratuito è automatico',
+    paragrafi: [
+      'Il tuo piano PRO Free Forever si sta avvicinando alla scadenza annuale.',
+      'Nessun pagamento e nessuna azione richiesta: alla scadenza il rinnovo parte automaticamente a 0€, per sempre.',
+      'Non riceverai mai solleciti di pagamento né avvisi di mancato rinnovo.',
     ],
     cta: (dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
   },

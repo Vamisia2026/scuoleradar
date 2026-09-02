@@ -44,7 +44,7 @@ export function CvTool() {
               <div>
                 <p className="text-2xl font-extrabold tracking-tight">Elena Bianchi</p>
                 <p className="mt-0.5 text-xs font-semibold text-primary-200">
-                  Docente di Matematica e Fisica · A-28
+                  Docente di Matematica e Fisica · A-27
                 </p>
               </div>
               <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-accent-200 ring-1 ring-white/20">

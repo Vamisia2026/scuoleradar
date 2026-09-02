@@ -26,6 +26,7 @@ interface Opportunita {
   classe?: string;
   scadenza?: string;
   link?: string;
+  piano?: string;
 }
 
 function escapeHtml(v: string): string {
@@ -146,6 +147,27 @@ ${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua
     telegram: (o, genere) =>
       `${caro(genere)}, benvenuto ${stato(genere)} nel piano PRO di ScuoleRadar! 👑\nhttps://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
   },
+  conferma_base: {
+    soggetto: 'Conferma attivazione: il tuo account Base è attivo',
+    email: (_o, genere) =>
+      `${benvenuto(genere)} in ScuoleRadar!<br/><br/>Il tuo account <b>Base</b> è attivo e puoi iniziare subito.<br/>Hai già accesso gratuito a Modulistica scolastica, Crea CV, Calcolatore CFU e Radar Scuole con <b>3 segnalazioni</b> di opportunità.<br/><br/>Quando vuoi sapere cosa succede di importante nella scuola, vai su <a href="${BLOG_URL}">ScuoleRadar.it → Notizie</a>.<br/><br/>Non ti mandiamo comunicazioni inutili: quando ti scriviamo, apri il messaggio.`,
+    telegram: (_o, genere) =>
+      `${benvenuto(genere)} in ScuoleRadar! 🎉 Il tuo account Base è attivo: hai accesso gratuito a Modulistica, Crea CV, Calcolatore CFU e Radar con 3 segnalazioni. Novità su https://www.scuoleradar.it/notizie`,
+  },
+  conferma_attivazione: {
+    soggetto: 'Conferma attivazione: il tuo piano PRO è attivo',
+    email: (o, genere) =>
+      `${caro(genere)}, la tua attivazione è confermata: il piano <b>PRO</b> di ScuoleRadar è attivo.${o.piano === 'free_forever' ? ' Sei nel piano <b>Free Forever</b>: il rinnovo annuale avviene automaticamente a <b>0€</b> per sempre — non riceverai mai solleciti di pagamento.' : ' Da ora hai notifiche illimitate, strumenti docenti completi e moduli sempre aggiornati a norma di legge.'}<br/><br/>Inizia subito su <a href="https://www.scuoleradar.it/">www.scuoleradar.it</a> e resta aggiornato con <a href="${BLOG_URL}">www.scuoleradar.it/notizie</a>.`,
+    telegram: (o, genere) =>
+      `${caro(genere)}, la tua attivazione è confermata: il piano PRO di ScuoleRadar è attivo!${o.piano === 'free_forever' ? ' Free Forever: rinnovo annuale automatico a 0€, per sempre.' : ' Notifiche illimitate e strumenti docenti completi.'}\nhttps://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
+  },
+  free_forever_preavviso: {
+    soggetto: 'Piano PRO Free Forever: il rinnovo gratuito è automatico',
+    email: (o, genere) =>
+      `${caro(genere)}, il tuo piano <b>PRO Free Forever</b> scade il <b>${o.scadenza ?? 'prossimo rinnovo annuale'}</b>.<br/><br/>Tranquillo: nessun pagamento e nessuna azione richiesta. Alla scadenza il rinnovo parte automaticamente a <b>0€</b>, per sempre.<br/>Non riceverai mai solleciti di pagamento né avvisi di mancato rinnovo.<br/><br/>Ti aspettiamo su <a href="https://www.scuoleradar.it/">www.scuoleradar.it</a> e sulle novità del nostro <a href="${BLOG_URL}">notiziario</a>.`,
+    telegram: (o, genere) =>
+      `${caro(genere)}, il tuo piano PRO Free Forever scade il ${o.scadenza ?? 'prossimo rinnovo annuale'}. 🎁 Rinnovo automatico a 0€, per sempre: nessun pagamento, nessuna azione. https://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
+  },
   beta_rinnovo_preavviso: {
     soggetto: 'Sei tra i primi a sostenerci: il tuo account PRO verrà rinnovato GRATIS A VITA 🎁',
     email: (o, genere) =>
@@ -161,6 +183,12 @@ ${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua
       `Congratulazioni! 🎉 ${caro(genere)}, il tuo account PRO è ${stato(genere)} rinnovato con successo: ora sei PRO per sempre, senza scadenza.\nhttps://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
   },
 };
+
+// EMAIL 3 — "Conferma attivazione Base" per i nuovi account Base (inclusi
+// Google One Tap): il trigger DB legacy `trg_auth_users_step1_welcome` invia
+// ancora tipo 'step1' → consegniamo il testo di conferma aggiornato anche su
+// quel tipo, finché il trigger non viene migrato a 'conferma_base'.
+TESTI.step1 = { ...TESTI.conferma_base };
 
 async function inviaTelegram(chatId: string, testo: string): Promise<string | null> {
   if (!TELEGRAM_TOKEN) return 'TELEGRAM_BOT_TOKEN non configurato';
@@ -270,6 +298,7 @@ serve(async (req: Request) => {
     classe: body.classe ? String(body.classe) : undefined,
     scadenza: body.scadenza ? String(body.scadenza) : undefined,
     link: body.link ? String(body.link) : undefined,
+    piano: body.piano ? String(body.piano) : undefined,
   };
 
   const saluto = nome ? `${caro(genere)} ${escapeHtml(nome)},<br/>` : '';

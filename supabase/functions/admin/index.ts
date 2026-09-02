@@ -11,11 +11,31 @@ const ADMIN_EMAILS = (Deno.env.get('ADMIN_EMAILS') ?? 'bartoloansaldi@gmail.com,
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 function risposta(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: CORS });
+}
+
+/** Colonne effettive presenti su profiles (feature-detect senza migrazioni). */
+async function colonneProfiles(sb: ReturnType<typeof createClient>) {
+  const { data } = await sb.from('profiles').select('*').limit(1);
+  if (!data || data.length === 0) return null;
+  return Object.keys(data[0]);
+}
+
+/** Conserva solo i campi la cui colonna esiste davvero nel database. */
+function soloColonneEsistenti(payload: Record<string, unknown>, chiavi: string[] | null): Record<string, unknown> {
+  if (!chiavi) return payload;
+  const filtrato: Record<string, unknown> = {};
+  for (const k of Object.keys(payload)) if (chiavi.includes(k)) filtrato[k] = payload[k];
+  return filtrato;
+}
+
+/** Riga profilo "sicura": filtra i campi opzionali rispetto allo schema reale. */
+async function rigaProfiles(sb: ReturnType<typeof createClient>, payload: Record<string, unknown>) {
+  return soloColonneEsistenti(payload, await colonneProfiles(sb));
 }
 
 async function verificaAdmin(req: Request) {
@@ -58,7 +78,10 @@ serve(async (req: Request) => {
       const id = String(payload.id ?? '');
       const updates = (payload.updates ?? {}) as Record<string, unknown>;
       if (!id || Object.keys(updates).length === 0) return risposta({ error: 'id/updates mancanti' }, 400);
-      const { error } = await sb.from('profiles').update(updates).eq('id', id);
+      const { error } = await sb
+        .from('profiles')
+        .update(await rigaProfiles(sb, updates))
+        .eq('id', id);
       if (error) return risposta({ error: error.message }, 500);
       return risposta({ ok: true });
     }
@@ -138,6 +161,112 @@ serve(async (req: Request) => {
         ...(perReferrer.get(String(p.id)) ?? { inviti: 0, completati: 0, premio: 0 }),
       }));
       return risposta({ ok: true, referrals: lista });
+    }
+
+    if (action === 'list_users_full') {
+      const { data: utenti, error } = await sb.from('profiles').select('*').order('created_at', { ascending: false });
+      if (error) return risposta({ error: error.message }, 500);
+
+      const { data: codici } = await sb.from('promo_codes').select('codice,tipo,usato_da,usato_il').catch(() => ({ data: null }));
+      const { data: refs } = await sb
+        .from('referrals')
+        .select('referrer_id,referred_user_id,reward_amount,status,created_at')
+        .catch(() => ({ data: null }));
+
+      const couponById = new Map<string, { coupon_codice: string; coupon_tipo: string; coupon_usato_il: string | null }>();
+      for (const c of codici ?? []) {
+        if (c.usato_da) {
+          couponById.set(String(c.usato_da), {
+            coupon_codice: String(c.codice ?? ''),
+            coupon_tipo: String(c.tipo ?? ''),
+            coupon_usato_il: c.usato_il ?? null,
+          });
+        }
+      }
+      const emailById = new Map<string, string>();
+      for (const u of utenti ?? []) emailById.set(String(u.id), String(u.email ?? ''));
+      const referrerByUser = new Map<string, { referrer_id: string; referrer_email: string; referral_status: string }>();
+      for (const r of refs ?? []) {
+        if (r.referred_user_id) {
+          const referrerId = String(r.referrer_id ?? '');
+          referrerByUser.set(String(r.referred_user_id), {
+            referrer_id: referrerId,
+            referrer_email: emailById.get(referrerId) ?? '',
+            referral_status: String(r.status ?? ''),
+          });
+        }
+      }
+
+      const lista = (utenti ?? []).map((u) => ({
+        ...u,
+        ...(couponById.get(String(u.id)) ?? {}),
+        ...(referrerByUser.get(String(u.id)) ?? {}),
+      }));
+      return risposta({ ok: true, utenti: lista });
+    }
+
+    if (action === 'create_user') {
+      const email = String(payload.email ?? '').trim().toLowerCase();
+      const password = String(payload.password ?? '');
+      if (!email || password.length < 6) {
+        return risposta({ error: 'email valida e password (min 6 caratteri) richieste' }, 400);
+      }
+      const nome = String(payload.nome ?? '').trim();
+      const cognome = String(payload.cognome ?? '').trim();
+      const telefono = String(payload.telefono ?? '').trim();
+      const isBeta = payload.isBetaTester === true;
+      const proTipo =
+        pianoScelto === 'pro_mensile' ? 'mensile' : pianoScelto === 'pro_annuale' ? 'annuale' : null;
+      const pianoScelto = String(payload.piano ?? '').trim();
+      const piano = ['pro_mensile', 'pro_annuale', 'pro', 'free_forever'].includes(pianoScelto)
+        ? (pianoScelto === 'pro_mensile' || pianoScelto === 'pro_annuale' ? 'pro' : String(payload.piano))
+        : 'base';
+
+      const { data: creato, error } = await sb.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { nome, cognome, force_password_change: true },
+      });
+      if (error) return risposta({ error: error.message }, 500);
+
+      if (creato?.user) {
+        await sb.from('profiles').upsert(
+          (
+            await rigaProfiles(sb, {
+              id: creato.user.id,
+              email,
+              nome,
+              cognome,
+              telefono,
+              piano,
+              pro_tipo: proTipo,
+              is_beta_tester: isBeta,
+              onboarded: false,
+            })
+          ),
+          { onConflict: 'id' },
+        );
+      }
+      return risposta({ ok: true, id: creato?.user?.id ?? null });
+    }
+
+    if (action === 'delete_user') {
+      const id = String(payload.id ?? '');
+      if (!id) return risposta({ error: 'id mancante' }, 400);
+      const { error } = await sb.auth.admin.deleteUser(id);
+      if (error) return risposta({ error: error.message }, 500);
+      return risposta({ ok: true });
+    }
+
+    if (action === 'reset_password') {
+      const email = String(payload.email ?? '').trim();
+      if (!email) return risposta({ error: 'email mancante' }, 400);
+      const { error } = await sb.auth.resetPasswordForEmail(email, {
+        redirectTo: 'https://scuoleradar.it/auth/callback',
+      });
+      if (error) return risposta({ error: error.message }, 500);
+      return risposta({ ok: true });
     }
 
     return risposta({ error: `azione sconosciuta: ${action}` }, 400);

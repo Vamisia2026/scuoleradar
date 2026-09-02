@@ -15,7 +15,7 @@ import { Pill } from '@/components/Pill';
 const ALIAS_LAUREA_CLASSI: Record<string, string[]> = {
   lm85: ['A-18'], // Scienze pedagogiche → Filosofia e scienze umane
   lm14: ['A-12'], // Filologia moderna → Discipline letterarie
-  lm40: ['A-28'], // Matematica → Matematica e fisica
+  lm40: ['A-27'], // Matematica → Matematica e Fisica
   lm37: ['A-22'], // Lingue e letterature moderne → Inglese
 };
 

@@ -15,7 +15,7 @@ scrivi(
 /** Righe della Matrice CFU mostrata nel mockup (anteprima illustrativa). */
 const matrice = [
   {
-    codice: 'A-28',
+    codice: 'A-27',
     nome: 'Matematica e Fisica',
     ammissibile: true,
     requisiti: [

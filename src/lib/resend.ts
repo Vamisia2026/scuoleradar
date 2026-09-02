@@ -65,7 +65,9 @@ export type TipoMessaggio =
   | 'extra'
   | 'recap'
   | 'welcome_pro'
-  | 'notifica_pro';
+  | 'notifica_pro'
+  | 'conferma_attivazione'
+  | 'free_forever_preavviso';
 
 /* ----------------------------- Configurazione ----------------------------- */
 
@@ -154,7 +156,7 @@ export function linkOpportunita(interpello: DettagliNotifica | null, dashboardUr
 /* --------------------------- Soggetti e copy --------------------------- */
 
 const SUBJECT: Record<TipoMessaggio, string> = {
-  welcome: 'Grazie per esserti iscritto, ora ci pensiamo noi',
+  welcome: 'Conferma attivazione: il tuo account Base è attivo',
   prova1: 'Questa è la prima opportunità che abbiamo trovato per te. Te ne restano 2',
   prova2: 'Questa è la seconda opportunità che abbiamo trovato per te. Te ne resta 1',
   prova3: 'Questa è la terza e ultima opportunità di prova che abbiamo trovato per te',
@@ -163,6 +165,8 @@ const SUBJECT: Record<TipoMessaggio, string> = {
   recap: 'Avviso finale: le notifiche di prova sono terminate',
   welcome_pro: 'Benvenuto in ScuoleRadar PRO!',
   notifica_pro: 'Nuova opportunità trovata per te!',
+  conferma_attivazione: 'Conferma attivazione: il tuo piano PRO è attivo',
+  free_forever_preavviso: 'Piano PRO Free Forever: il rinnovo gratuito è automatico',
 };
 
 export function subjectNotifica(tipo: TipoMessaggio): string {
@@ -195,8 +199,9 @@ export const TIPI_CON_OPPORTUNITA: ReadonlySet<TipoMessaggio> = new Set([
 const CORPO_MESSAGGI: Record<TipoMessaggio, ContenutoMessaggio> = {
   welcome: {
     paragrafi: [
-      'Grazie per esserti iscritto, ora ci pensiamo noi.',
-      'Il tuo profilo è <strong>attivo</strong>: interpelli, supplenze, PON, PNRR e bandi per esperti ora hanno qualcuno che li monitora per te.',
+      'Il tuo account <strong>Base</strong> è attivo: benvenuto in ScuoleRadar!',
+      'Hai già accesso gratuito a Modulistica, Crea CV, Calcolatore CFU e Radar Scuole con <strong>3 segnalazioni</strong> di opportunità.',
+      'Quando vuoi sapere cosa succede di importante nella scuola, passa dal nostro Notiziario: controlliamo noi le fonti ufficiali per te.',
     ],
     cta: { label: 'Vai a ScuoleRadar →', destinazione: 'dashboard' },
   },
@@ -236,6 +241,22 @@ const CORPO_MESSAGGI: Record<TipoMessaggio, ContenutoMessaggio> = {
       'Hai fatto un buon investimento.',
       'Noi continuiamo a cercare per te!',
       'A presto!',
+    ],
+    cta: { label: 'Vai a ScuoleRadar →', destinazione: 'dashboard' },
+  },
+  conferma_attivazione: {
+    paragrafi: [
+      'La tua attivazione è confermata: il piano <strong>PRO</strong> di ScuoleRadar è attivo.',
+      'Hai accesso a notifiche illimitate, strumenti docenti completi, modulistica sempre aggiornata e Pure Focus.',
+      'Nessun altro passaggio: noi continuiamo a cercare per te.',
+    ],
+    cta: { label: 'Vai a ScuoleRadar →', destinazione: 'dashboard' },
+  },
+  free_forever_preavviso: {
+    paragrafi: [
+      'Il tuo piano <strong>PRO Free Forever</strong> si sta avvicinando alla scadenza annuale.',
+      'Tranquillo: nessun pagamento, nessuna azione richiesta. Alla scadenza il rinnovo parte automaticamente a <strong>0€</strong>, per sempre.',
+      'Non riceverai mai solleciti di pagamento né avvisi di mancato rinnovo: la tua gratuità è garantita.',
     ],
     cta: { label: 'Vai a ScuoleRadar →', destinazione: 'dashboard' },
   },

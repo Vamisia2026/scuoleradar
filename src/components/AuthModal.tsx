@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { LogIn, UserPlus, AlertCircle, Eye, EyeOff, Loader2, Sparkles } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { Modal } from '@/components/Modal';
+import { TelegramLoginButton } from '@/components/TelegramLoginButton';
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -201,6 +202,8 @@ export function AuthModal() {
             </>
           )}
         </button>
+
+        <TelegramLoginButton onSuccess={dopoLogin} onError={(msg) => setErrore(msg)} />
 
         <div className="flex items-center gap-3">
           <span className="h-px flex-1 bg-primary-100" />
