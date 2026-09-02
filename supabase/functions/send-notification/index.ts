@@ -77,7 +77,7 @@ function benvenuto(genere?: string): string {
 const TESTI: Record<
   string,
   {
-    soggetto: string | ((genere?: string) => string);
+    soggetto: string | ((genere?: string, opp?: Opportunita) => string);
     email: (o: Opportunita, genere?: string) => string;
     telegram: (o: Opportunita, genere?: string) => string;
   }
@@ -155,11 +155,26 @@ ${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua
       `${benvenuto(genere)} in ScuoleRadar! 🎉 Il tuo account Base è attivo: hai accesso gratuito a Modulistica, Crea CV, Calcolatore CFU e Radar con 3 segnalazioni. Novità su https://www.scuoleradar.it/notizie`,
   },
   conferma_attivazione: {
-    soggetto: 'Conferma attivazione: il tuo piano PRO è attivo',
-    email: (o, genere) =>
-      `${caro(genere)}, la tua attivazione è confermata: il piano <b>PRO</b> di ScuoleRadar è attivo.${o.piano === 'free_forever' ? ' Sei nel piano <b>Free Forever</b>: il rinnovo annuale avviene automaticamente a <b>0€</b> per sempre — non riceverai mai solleciti di pagamento.' : ' Da ora hai notifiche illimitate, strumenti docenti completi e moduli sempre aggiornati a norma di legge.'}<br/><br/>Inizia subito su <a href="https://www.scuoleradar.it/">www.scuoleradar.it</a> e resta aggiornato con <a href="${BLOG_URL}">www.scuoleradar.it/notizie</a>.`,
+    soggetto: (_genere, o) =>
+      o?.piano === 'free_forever'
+        ? 'Conferma attivazione piano Free Forever su Scuole Radar!'
+        : 'Conferma attivazione: il tuo piano PRO è attivo',
+    // NB: il saluto "Caro/Cara {{nome}}" viene PREPOSTO dal corpo email
+    // (riga `corpoEmail = saluto + testo.email`): qui NON va ripetuto un
+    // secondo "Ciao/Caro", altrimenti si crea un saluto duplicato.
+    email: (o) =>
+      o.piano === 'free_forever'
+        ? `Grazie per credere in <b>Scuole Radar</b>.<br/><br/>
+Per dimostrarti la nostra riconoscenza, il tuo account <b>PRO</b> sarà <b>gratis per sempre</b>.<br/><br/>
+Avrai accesso <b>illimitato</b> a tutti i nostri servizi: Radar Scuole, Modulistica, Crea CV, Calcolatore CFU, PureFocus, Assistente Sindacalista Virtuale e tutti gli altri strumenti PRO.<br/><br/>
+Continueremo a cercare per te le opportunità più interessanti nella scuola e, quando ne troveremo una adatta al tuo profilo, te la segnaleremo. Non devi fare nulla.<br/><br/>
+Non ti intaseremo l'email di comunicazioni inutili. Quando vuoi sapere cosa succede di importante nella Scuola, guarda la sezione Notizie del nostro sito: <a href="https://www.scuoleradar.it/notizie">https://www.scuoleradar.it/notizie</a><br/><br/>
+Speriamo che Scuole Radar contribuisca a migliorare la tua vita professionale, facendoti trovare opportunità e risparmiare tempo.`
+        : `La tua attivazione è confermata: il piano <b>PRO</b> di ScuoleRadar è attivo. Da ora hai notifiche illimitate, strumenti docenti completi e moduli sempre aggiornati a norma di legge.<br/><br/>Inizia subito su <a href="https://www.scuoleradar.it/">www.scuoleradar.it</a> e resta aggiornato con <a href="${BLOG_URL}">www.scuoleradar.it/notizie</a>.`,
     telegram: (o, genere) =>
-      `${caro(genere)}, la tua attivazione è confermata: il piano PRO di ScuoleRadar è attivo!${o.piano === 'free_forever' ? ' Free Forever: rinnovo annuale automatico a 0€, per sempre.' : ' Notifiche illimitate e strumenti docenti completi.'}\nhttps://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
+      o.piano === 'free_forever'
+        ? `${caro(genere)}, il tuo account PRO sarà gratis per sempre! 🎁 Accesso illimitato a Radar Scuole, Modulistica, Crea CV, Calcolatore CFU, PureFocus e tutti gli strumenti PRO. Novità su https://www.scuoleradar.it/notizie`
+        : `${caro(genere)}, la tua attivazione è confermata: il piano PRO di ScuoleRadar è attivo! Notifiche illimitate e strumenti docenti completi.\nhttps://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
   },
   free_forever_preavviso: {
     soggetto: 'Piano PRO Free Forever: il rinnovo gratuito è automatico',
@@ -304,7 +319,7 @@ serve(async (req: Request) => {
   const saluto = nome ? `${caro(genere)} ${escapeHtml(nome)},<br/>` : '';
   const corpoEmail = saluto + testo.email(opp, genere) + '<br/><br/>' + FIRMA + '<br/>P.S. Approfondimenti e novità sul blog: <a href="' + BLOG_URL + '">scuoleradar.it/notizie</a>' + DISCLAIMER_EMAIL;
   const corpoTelegram = testo.telegram(opp, genere) + '\n\n' + FIRMA;
-  const soggetto = typeof testo.soggetto === 'function' ? testo.soggetto(genere) : testo.soggetto;
+  const soggetto = typeof testo.soggetto === 'function' ? testo.soggetto(genere, opp) : testo.soggetto;
   const errEmail = email ? await inviaEmail(email, soggetto, corpoEmail) : 'nessun indirizzo email';
   const errTelegram = chatId ? await inviaTelegram(chatId, corpoTelegram) : null;
 
