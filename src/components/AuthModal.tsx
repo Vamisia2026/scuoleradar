@@ -56,6 +56,7 @@ export function AuthModal() {
   const [nome, setNome] = useState('');
   const [cognome, setCognome] = useState('');
   const [genere, setGenere] = useState<'M' | 'F' | null>(null);
+  const [etaInput, setEtaInput] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -70,6 +71,7 @@ export function AuthModal() {
       setNome('');
       setCognome('');
       setGenere(null);
+      setEtaInput('');
       setEmail('');
       setPassword('');
       setShowPassword(false);
@@ -103,7 +105,23 @@ export function AuthModal() {
         setErrore('La password deve avere almeno 6 caratteri.');
         return;
       }
-      register({ nome: nome.trim(), cognome: cognome.trim(), email: email.trim(), password, genere });
+      let eta: number | null = null;
+      if (etaInput.trim()) {
+        const n = Number.parseInt(etaInput, 10);
+        if (!Number.isFinite(n) || n < 14 || n > 100) {
+          setErrore("L'età deve essere un numero tra 14 e 100 anni.");
+          return;
+        }
+        eta = n;
+      }
+      register({
+        nome: nome.trim(),
+        cognome: cognome.trim(),
+        email: email.trim(),
+        password,
+        genere,
+        eta,
+      });
       closeAuthModal();
       navigate('/onboarding');
     } else {
@@ -244,6 +262,7 @@ export function AuthModal() {
             </div>
           )}
           {isRegister && (
+            <>
             <Field label="Genere">
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -272,6 +291,19 @@ export function AuthModal() {
                 </button>
               </div>
             </Field>
+            <Field label="Età (anni, facoltativa)">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={14}
+                max={100}
+                value={etaInput}
+                onChange={(e) => setEtaInput(e.target.value)}
+                className="input"
+                placeholder="Es. 34"
+              />
+            </Field>
+            </>
           )}
           <Field label="Email">
             <input

@@ -21,12 +21,18 @@ export interface User {
   cognome: string;
   /** Genere dichiarato ('M' | 'F'), opzionale: declina le email automatiche (Cara/Caro, stata/stato). */
   genere?: 'M' | 'F' | null;
+  /** Età in anni (opzionale): dato anagrafico mostrato nel pannello admin. */
+  eta?: number | null;
   email: string;
   // password stored only for demo; never do this in production
   password: string;
 }
 
 export interface Preferenze {
+  /** Genere dichiarato (Uomo/Donna → M/F): persiste su profiles.genere. */
+  genere?: 'M' | 'F' | null;
+  /** Età in anni (opzionale): persiste su profiles.eta. */
+  eta?: number | null;
   ordini: OrdineScuola[];
   classiCodici: string[];
   materieId: string[];
@@ -104,6 +110,8 @@ interface AppContextValue extends AppState {
 }
 
 const defaultPreferenze: Preferenze = {
+  genere: null,
+  eta: null,
   ordini: [],
   classiCodici: [],
   materieId: [],
@@ -212,6 +220,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             options: {
               data: {
                 genere: u.genere ?? '',
+                eta: u.eta ?? null,
                 nome: u.nome.trim(),
                 cognome: u.cognome.trim(),
               },
@@ -504,13 +513,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       }
       const dati = p ?? preferenze;
+      const genereFinale = (p?.genere ?? preferenze.genere ?? user?.genere) ?? null;
+      const etaFinale = (p?.eta ?? preferenze.eta ?? user?.eta) ?? null;
       const { error } = await supabase
         .from('profiles')
         .upsert(
           {
             id: authUser.id,
             email: authUser.email ?? dati.emailNotifica,
-            genere: user?.genere ?? null,
+            genere: genereFinale,
+            eta: etaFinale,
             province_attive: dati.provinceCodici,
             province_interesse: dati.provinceCodici,
             classi_concorso: dati.classiCodici,

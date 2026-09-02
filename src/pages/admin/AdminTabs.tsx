@@ -45,11 +45,13 @@ import {
 } from './adminUi';
 import { dataItaliana, type AdminUtente } from './types';
 
-type IdColonna = 'id' | 'nome' | 'email' | 'telegram' | 'telefono' | 'province' | 'piano' | 'login' | 'azioni';
+type IdColonna = 'id' | 'nome' | 'genere' | 'eta' | 'email' | 'telegram' | 'telefono' | 'province' | 'piano' | 'login' | 'azioni';
 
 const COLONNE: { id: IdColonna; label: string; def: boolean }[] = [
   { id: 'id', label: 'User ID', def: true },
   { id: 'nome', label: 'Nome & Cognome', def: true },
+  { id: 'genere', label: 'Genere', def: true },
+  { id: 'eta', label: 'Età', def: true },
   { id: 'email', label: 'Email', def: true },
   { id: 'telegram', label: 'Telegram', def: true },
   { id: 'telefono', label: 'Phone', def: true },
@@ -60,11 +62,13 @@ const COLONNE: { id: IdColonna; label: string; def: boolean }[] = [
 ];
 
 function scaricaCsv(righe: AdminUtente[], nomeFile = 'utenti_admin.csv'): void {
-  const headers = ['id', 'nome', 'cognome', 'email', 'piano', 'province', 'telegram', 'registrato_il'];
+  const headers = ['id', 'nome', 'cognome', 'genere', 'eta', 'email', 'piano', 'province', 'telegram', 'registrato_il'];
   const campi = (u: AdminUtente) => [
     u.id,
     u.nome ?? '',
     u.cognome ?? '',
+    u.genere === 'M' ? 'Uomo' : u.genere === 'F' ? 'Donna' : '',
+    u.eta ?? '',
     u.email,
     u.piano ?? 'base',
     (u.province_interesse ?? u.province_attive ?? []).join('|'),
@@ -91,6 +95,13 @@ function loginType(u: AdminUtente): string {
 function telefono(u: AdminUtente): string {
   const tel = u.telefono?.trim();
   return tel || '—';
+}
+
+/** Badge Genere: M → Uomo, F → Donna, altrimenti —. */
+function badgeGenere(u: AdminUtente): string {
+  if (u.genere === 'M') return 'Uomo';
+  if (u.genere === 'F') return 'Donna';
+  return '—';
 }
 
 /** Handle/ID Telegram: preferisce l'username (@…), poi chat ID, poi eventuale colonna legacy `telegram`. */
@@ -421,6 +432,8 @@ export function TabUtenti() {
               <tr>
                 {visibile('id') && <th className="px-3 py-2.5">User ID</th>}
                 {visibile('nome') && <th className="px-3 py-2.5">Nome &amp; Cognome</th>}
+                {visibile('genere') && <th className="px-3 py-2.5">Genere</th>}
+                {visibile('eta') && <th className="px-3 py-2.5">Età</th>}
                 {visibile('email') && <th className="px-3 py-2.5">Email</th>}
                 {visibile('telegram') && <th className="px-3 py-2.5">Telegram</th>}
                 {visibile('telefono') && <th className="px-3 py-2.5">Phone</th>}
@@ -475,6 +488,32 @@ export function TabUtenti() {
                         {cellaTesto('cognome')}
                       </td>
                     )}
+                    {visibile('genere') && (
+                      <td className="px-3 py-2.5">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                            u.genere === 'F'
+                              ? 'bg-pink-100 text-pink-700'
+                              : u.genere === 'M'
+                                ? 'bg-sky-100 text-sky-700'
+                                : 'bg-primary-50 text-primary-400'
+                          }`}
+                        >
+                          {badgeGenere(u)}
+                        </span>
+                      </td>
+                    )}
+                    {visibile('eta') && (
+                      <td className="px-3 py-2.5">
+                        {typeof u.eta === 'number' ? (
+                          <span className="inline-flex items-center rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-semibold text-primary-600">
+                            {u.eta} anni
+                          </span>
+                        ) : (
+                          <span className="text-primary-300">—</span>
+                        )}
+                      </td>
+                    )}
                     {visibile('email') && <td className="px-3 py-2.5 text-primary-600">{u.email}</td>}
                     {visibile('telegram') && <td className="px-3 py-2.5">{cellaTesto('telegram')}</td>}
                     {visibile('telefono') && <td className="px-3 py-2.5">{cellaTesto('telefono')}</td>}
@@ -505,7 +544,7 @@ export function TabUtenti() {
               })}
               {filtrati.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="p-10 text-center text-primary-400">
+                  <td colSpan={11} className="p-10 text-center text-primary-400">
                     Nessun utente trovato con i filtri correnti.
                   </td>
                 </tr>

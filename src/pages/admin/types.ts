@@ -6,6 +6,8 @@ export interface AdminUtente {
   nome: string | null;
   cognome: string | null;
   genere?: string | null;
+  /** Età in anni (colonna opzionale profiles.eta). */
+  eta?: number | null;
   piano?: string | null;
   /** Dettaglio piano PRO: 'mensile' | 'annuale' (colonna opzionale pro_tipo). */
   pro_tipo?: string | null;
