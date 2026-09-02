@@ -88,6 +88,12 @@ interface AppContextValue extends AppState {
   avatarUrl: string | null;
   /** true se il profilo (tabella profiles) manca di nome o cognome: i dati anagrafici vanno completati. */
   profiloIncompleto: boolean;
+  /** Piano utente corrente letto da `profiles.piano`: 'base' | 'pro' | 'free_forever'. */
+  piano: 'base' | 'pro' | 'free_forever';
+  /** true = accesso completo PRO: piano 'pro' oppure 'free_forever' (accesso a vita). */
+  hasProAccess: boolean;
+  /** Ricarica piano/abbonamento dal DB (modifiche admin senza logout; su focus/timer). */
+  refreshProfilo: () => Promise<void>;
   /** Salva/aggiorna i dati anagrafici mancanti (nome/cognome/genere/età) su profiles e nello stato. */
   aggiornaAnagrafica: (d: {
     nome: string;
@@ -177,6 +183,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // FASE 6 — piano e contatori letti da Supabase (non più localStorage)
   const [abbonato, setAbbonato] = useState(false);
+  /** Piano letto da profiles.piano: 'base' | 'pro' | 'free_forever'. */
+  const [piano, setPiano] = useState<'base' | 'pro' | 'free_forever'>('base');
   const [notificheUsate, setNotificheUsate] = useState(0);
   const [crediti, setCrediti] = useState(0);
   const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
@@ -284,11 +292,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPref(defaultPreferenze);
     setNotificheUsate(0);
     setAbbonato(false);
+    setPiano('base');
     setCrediti(0);
     setSupabaseUserId(null);
     setEsamiState([]);
     setNotificati([]);
-  }, [setUser, setPref, setNotificheUsate, setAbbonato, setCrediti, setSupabaseUserId, setEsamiState, setNotificati]);
+  }, [setUser, setPref, setNotificheUsate, setAbbonato, setPiano, setCrediti, setSupabaseUserId, setEsamiState, setNotificati]);
 
   const setPreferenze = useCallback(
     (p: Partial<Preferenze>) => setPref((prev) => ({ ...prev, ...p })),
@@ -477,6 +486,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setPref(defaultPreferenze);
         setNotificheUsate(0);
         setAbbonato(false);
+        setPiano('base');
         return;
       }
       const utenteDemo: User = {
@@ -487,6 +497,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
       setUser(utenteDemo);
       setAbbonato(ruolo === 'pro');
+      setPiano(ruolo === 'pro' ? 'pro' : 'base');
       setNotificheUsate(0);
       setPref((prev) => ({
         ...prev,
@@ -496,7 +507,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         onboarded: true,
       }));
     },
-    [setUser, setPref, setNotificheUsate, setAbbonato],
+    [setUser, setPref, setNotificheUsate, setAbbonato, setPiano],
   );
 
   const resettaTutto = useCallback(() => {
@@ -507,11 +518,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPref(defaultPreferenze);
     setNotificheUsate(0);
     setAbbonato(false);
+    setPiano('base');
     setCrediti(0);
     setSupabaseUserId(null);
     setEsamiState([]);
     setNotificati([]);
-  }, [setUser, setPref, setNotificheUsate, setAbbonato, setCrediti, setSupabaseUserId, setEsamiState, setNotificati]);
+  }, [setUser, setPref, setNotificheUsate, setAbbonato, setPiano, setCrediti, setSupabaseUserId, setEsamiState, setNotificati]);
 
   /**
    * PASSO 3 — Persiste le preferenze utente (province di interesse e classi di concorso)
@@ -666,6 +678,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [setUser, setPref],
   );
 
+  /**
+   * Ricarica piano/abbonamento e contatori direttamente da `profiles`.
+   * Usata per riflettere subito le modifiche fatte dal Pannello Admin sul piano
+   * (es. passaggio a 'free_forever') senza richiedere logout/login.
+   */
+  const refreshProfilo = useCallback(async (): Promise<void> => {
+    if (!supabase) return;
+    const { data: sess } = await supabase.auth.getUser();
+    if (!sess.user) return;
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('piano, subscription_status, abbonamento_scade_il, current_period_end, crediti, notifiche_usate')
+      .eq('id', sess.user.id)
+      .maybeSingle();
+    if (error || !data) {
+      if (error) console.warn('Refresh profilo (piano/abbonamento) non riuscito:', error.message);
+      return;
+    }
+    const periodoOk = !data.abbonamento_scade_il || new Date(data.abbonamento_scade_il) > new Date();
+    const statoOk =
+      !data.subscription_status ||
+      data.subscription_status === 'active' ||
+      data.subscription_status === 'trialing';
+    const pianoGratuitoVita = data.piano === 'free_forever';
+    // Normalizzazione: qualsiasi valore non riconosciuto cade su 'base'.
+    const pianoCorrente: 'base' | 'pro' | 'free_forever' =
+      data.piano === 'pro' || data.piano === 'free_forever' ? data.piano : 'base';
+    setPiano(pianoCorrente);
+    setAbbonato(pianoCorrente !== 'base' && (pianoGratuitoVita || (statoOk && periodoOk)));
+    setCrediti(Number(data.crediti ?? 0));
+    setNotificheUsate(Number(data.notifiche_usate ?? 0));
+  }, [setAbbonato, setCrediti, setNotificheUsate, setPiano]);
+
   // All'avvio, se esiste una sessione Supabase, carica le preferenze salvate nel DB.
   useEffect(() => {
     if (!supabase) {
@@ -731,6 +776,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           );
           setCrediti(Number(data.crediti ?? 0));
           setNotificheUsate(Number(data.notifiche_usate ?? 0));
+          // Piano corrente per badge utente ed entitlement: pro e free_forever → accesso completo.
+          setPiano(
+            data.piano === 'pro' || data.piano === 'free_forever' ? data.piano : 'base',
+          );
         }
         // Mini-onboarding anagrafico: profilo senza nome/cognome?
         void valutaProfiloIncompleto(au.id);
@@ -778,7 +827,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           void client
             .from('profiles')
             .upsert({ id: session.user.id, email: session.user.email ?? '' }, { onConflict: 'id' })
-            .then(() => void valutaProfiloIncompleto(session.user.id));
+            .then(() => {
+              void valutaProfiloIncompleto(session.user.id);
+              void refreshProfilo();
+            });
         } else {
           // INITIAL_SESSION: la riga profilo esiste già (trigger auth.users) → verifica anagrafica.
           void valutaProfiloIncompleto(session.user.id);
@@ -792,7 +844,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     });
     return () => subscription.subscription.unsubscribe();
-  }, [setUser, setSupabaseUserId, valutaProfiloIncompleto]);
+  }, [setUser, setSupabaseUserId, valutaProfiloIncompleto, refreshProfilo]);
+
+  // Sincronizzazione attiva del piano/abbonamento (senza logout/login):
+  // un cambio piano fatto dal Pannello Admin viene rilevato tornando sulla
+  // scheda del browser (focus) oppure al massimo entro ~60 secondi.
+  useEffect(() => {
+    if (!supabase) return;
+    const refresh = (): void => void refreshProfilo();
+    const id = window.setInterval(refresh, 60_000);
+    const suVisibilita = (): void => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', suVisibilita);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', suVisibilita);
+    };
+  }, [refreshProfilo]);
 
   // Wizard Radar in attesa: se un utente NON autenticato ha cliccato "ATTIVA IL TUO RADAR",
   // al termine di login/registrazione si apre automaticamente il wizard di onboarding.
@@ -948,11 +1019,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, [preferenze, fontiInterpelli]);
 
+  /** Entitlement globale: accesso PRO completo con piano 'pro' oppure 'free_forever'. */
+  const hasProAccess = piano === 'pro' || piano === 'free_forever';
+
   const value: AppContextValue = {
     user,
     preferenze,
     notificheUsate,
     abbonato,
+    piano,
+    hasProAccess,
     crediti,
     esami,
     interpelliNotificati,
@@ -971,6 +1047,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     avatarUrl,
     profiloIncompleto,
     aggiornaAnagrafica,
+    refreshProfilo,
     authModalOpen,
     authModalMode,
     authModalCtx,

@@ -10,7 +10,7 @@ import { useApp } from '@/contexts/AppContext';
  *  - PRO: "VAI SU PUREFOCUS.ONE" con messaggio di stato personalizzato.
  */
 export function PureFocusPage() {
-  const { abbonato } = useApp();
+  const { hasProAccess } = useApp();
 
   return (
     <div className="space-y-6">
@@ -40,7 +40,7 @@ export function PureFocusPage() {
               per ottimizzare il tuo tempo.
         </p>
 
-        {abbonato ? (
+        {hasProAccess ? (
           <div className="mt-6 rounded-2xl bg-white/10 p-5 ring-1 ring-white/20">
             <p className="max-w-2xl text-sm leading-relaxed text-primary-100">
               🎉 Grazie al tuo account PRO a ScuoleRadar, hai sbloccato l&apos;accesso PRO a PureFocus

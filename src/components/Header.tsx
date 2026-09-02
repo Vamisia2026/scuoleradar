@@ -28,7 +28,7 @@ const strumentiLinks: LinkStrumento[] = [
 ];
 
 export function Header() {
-  const { user, abbonato, logout, openAuthModal, avatarUrl } = useApp();
+  const { user, abbonato, piano, logout, openAuthModal, avatarUrl } = useApp();
   const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuUtenteOpen, setMenuUtenteOpen] = useState(false);
@@ -113,10 +113,17 @@ export function Header() {
                   aria-label="Torna al Radar Scuole"
                   className="flex items-center gap-2 rounded-full pr-2 transition hover:opacity-90"
                 >
-                  <span className="max-w-[110px] truncate text-sm font-semibold text-primary-800">
+                  <span className="max-w-[60px] truncate text-sm font-semibold text-primary-800 lg:max-w-[110px]">
                     {user.nome}
                   </span>
-                  {abbonato ? (
+                  {piano === 'free_forever' ? (
+                    <span
+                      title="Free Forever — accesso PRO a vita, incluso"
+                      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary-500 px-2 py-0.5 text-[10px] font-bold text-white"
+                    >
+                      <Sparkles className="h-3 w-3" /> Free Forever
+                    </span>
+                  ) : abbonato ? (
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-500 px-2 py-0.5 text-[11px] font-bold text-white">
                       <Sparkles className="h-3 w-3" /> PRO
                     </span>
