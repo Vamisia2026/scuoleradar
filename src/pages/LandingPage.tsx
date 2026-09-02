@@ -100,7 +100,7 @@ export function LandingPage() {
                 </button>
               </div>
               <p className="mt-4 text-sm text-primary-500">
-                3 segnalazioni incluse nel tuo account Base. Nessuna carta richiesta.
+                3 segnalazioni gratuite incluse. Nessuna carta richiesta.
               </p>
             </div>
 
@@ -108,6 +108,50 @@ export function LandingPage() {
               <SimulatorRadar />
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Ecco cosa riceverai — subito sotto l'hero, prima di "Come funziona". */}
+      <section className="bg-primary-50 py-10">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="mb-6 text-center">
+            <h2 className="text-3xl font-bold text-primary-900">Ecco cosa riceverai</h2>
+            <p className="mt-3 text-primary-600">
+              Un assaggio degli avvisi che il radar ti segnala, filtrati per il tuo profilo.
+            </p>
+          </div>
+          <div className="animate-fade-in grid gap-5 md:grid-cols-3">
+            <VetrinaCard
+              tipo="Supplenza"
+              tipoClasse="bg-primary-50 text-primary-600"
+              classe="A-18"
+              titolo="Interpello supplenza Filosofia e Scienze Umane"
+              scuola="Liceo Classico A. Manzoni"
+              provincia="AT"
+              scadenza="30/09/2026"
+            />
+            <VetrinaCard
+              tipo="Bando PNRR"
+              tipoClasse="bg-secondary-50 text-secondary-700"
+              classe="A-050"
+              titolo="Esperto esterno Biologia e Chimica"
+              scuola="IIS G. Carducci"
+              provincia="RM"
+              scadenza="12/09/2026"
+            />
+            <VetrinaCard
+              tipo="Sostegno"
+              tipoClasse="bg-accent-50 text-accent-700"
+              classe="ADEE"
+              titolo="Supplenza sostegno scuola primaria"
+              scuola="IC Incisa Scapaccino"
+              provincia="AL"
+              scadenza="05/10/2026"
+            />
+          </div>
+          <p className="mx-auto mt-6 max-w-2xl text-left text-sm text-primary-500">
+            Inserisci il tuo profilo e vedrai solo le opportunità davvero pertinenti per te.
+          </p>
         </div>
       </section>
 
@@ -171,65 +215,32 @@ export function LandingPage() {
             <h2 className="text-3xl font-bold text-primary-900">I nostri strumenti</h2>
             <p className="mt-3 text-primary-600">Tutto in un&apos;unica dashboard, per non perdere tempo.</p>
           </div>
-          <div className="grid gap-5 md:grid-cols-3">
-            {servizi.map((s) => (
-              <Link
-                key={s.slug}
-                to={`/servizi/${s.slug}`}
-                className="group rounded-2xl border border-primary-100 bg-white p-6 shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
-              >
-                <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-2xl">
-                  {s.emoji}
-                </span>
-                <h3 className="mt-4 text-lg font-bold text-primary-800">{s.titolo}</h3>
-                <p className="mt-1 text-sm text-primary-500">{s.sottotitolo}</p>
-              </Link>
-            ))}
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <Link
+              to="/servizi/radar-interpelli"
+              className="group rounded-2xl border border-primary-100 bg-white p-6 shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
+            >
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-2xl">📡</span>
+              <h3 className="mt-4 text-lg font-bold text-primary-800">Radar Scuole</h3>
+              <p className="mt-1 text-sm text-primary-500">Solo le opportunità che ti riguardano davvero</p>
+            </Link>
+            <Link
+              to="/servizi/moduli"
+              className="group rounded-2xl border border-primary-100 bg-white p-6 shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
+            >
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-2xl">📁</span>
+              <h3 className="mt-4 text-lg font-bold text-primary-800">Moduli</h3>
+              <p className="mt-1 text-sm text-primary-500">Documenti e modulistica pronti all&apos;uso</p>
+            </Link>
+            <Link
+              to="/dashboard/purefocus"
+              className="group rounded-2xl border border-primary-100 bg-white p-6 shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
+            >
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-2xl">🧘</span>
+              <h3 className="mt-4 text-lg font-bold text-primary-800">Pure Focus</h3>
+              <p className="mt-1 text-sm text-primary-500">Studia e lavora su YouTube senza distrazioni</p>
+            </Link>
           </div>
-        </div>
-      </section>
-
-      {/* Vetrina dimostrativa */}
-      <section className="bg-primary-50 py-10">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="mb-6 text-center">
-            <h2 className="text-3xl font-bold text-primary-900">Ecco cosa riceverai</h2>
-            <p className="mt-3 text-primary-600">
-              Un assaggio degli avvisi che il radar ti segnala, filtrati per il tuo profilo.
-            </p>
-          </div>
-          <div className="animate-fade-in grid gap-5 md:grid-cols-3">
-            <VetrinaCard
-              tipo="Supplenza"
-              tipoClasse="bg-primary-50 text-primary-600"
-              classe="A-18"
-              titolo="Interpello supplenza Filosofia e Scienze Umane"
-              scuola="Liceo Classico A. Manzoni"
-              provincia="AT"
-              scadenza="30/09/2026"
-            />
-            <VetrinaCard
-              tipo="Bando PNRR"
-              tipoClasse="bg-secondary-50 text-secondary-700"
-              classe="A-050"
-              titolo="Esperto esterno Biologia e Chimica"
-              scuola="IIS G. Carducci"
-              provincia="RM"
-              scadenza="12/09/2026"
-            />
-            <VetrinaCard
-              tipo="Sostegno"
-              tipoClasse="bg-accent-50 text-accent-700"
-              classe="ADEE"
-              titolo="Supplenza sostegno scuola primaria"
-              scuola="IC Incisa Scapaccino"
-              provincia="AL"
-              scadenza="05/10/2026"
-            />
-          </div>
-          <p className="mx-auto mt-6 max-w-2xl text-left text-sm text-primary-500">
-            Inserisci il tuo profilo e vedrai solo le opportunità davvero pertinenti per te.
-          </p>
         </div>
       </section>
 

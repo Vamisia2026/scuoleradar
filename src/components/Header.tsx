@@ -22,9 +22,6 @@ interface LinkStrumento {
 /** Ordine ufficiale della barra servizi (Guest, Base, PRO): Radar Scuole → ... */
 const strumentiLinks: LinkStrumento[] = [
   { to: '/dashboard/radar', label: '📡 Radar Scuole' },
-  { to: '/dashboard/cv', label: '📄 Crea CV' },
-  { to: '/dashboard/cfu', label: '🎓 Calcolatore CFU' },
-  { to: '/dashboard/assistente-ai', label: '💬 Assistente Sindacalista Virtuale' },
   { to: '/dashboard/moduli', label: '📁 Moduli' },
   { to: '/dashboard/purefocus', label: '🧘 Pure Focus' },
   { to: '/dashboard/invita', label: '🎁 Invita un Collega', accent: true },
