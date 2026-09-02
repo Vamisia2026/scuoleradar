@@ -167,11 +167,10 @@ serve(async (req: Request) => {
       const { data: utenti, error } = await sb.from('profiles').select('*').order('created_at', { ascending: false });
       if (error) return risposta({ error: error.message }, 500);
 
-      const { data: codici } = await sb.from('promo_codes').select('codice,tipo,usato_da,usato_il').catch(() => ({ data: null }));
-      const { data: refs } = await sb
+      const { data: codici, error: errCodici } = await sb.from('promo_codes').select('codice,tipo,usato_da,usato_il');
+      const { data: refs, error: errRefs } = await sb
         .from('referrals')
-        .select('referrer_id,referred_user_id,reward_amount,status,created_at')
-        .catch(() => ({ data: null }));
+        .select('referrer_id,referred_user_id,reward_amount,status,created_at');
 
       const couponById = new Map<string, { coupon_codice: string; coupon_tipo: string; coupon_usato_il: string | null }>();
       for (const c of codici ?? []) {
