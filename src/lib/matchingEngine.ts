@@ -139,7 +139,7 @@ export async function findUtentiCompatibili(
   try {
     const { data, error } = await client
       .from('profiles')
-      .select('id, email, email_notifica, nome, province_interesse, province_attive, classi_concorso, telegram_chat_id, piano, notifiche_blocco_inviato, notifiche_recap_inviato');
+      .select('id, email, email_notifica, nome, province_interesse, province_attive, classi_concorso, telegram_chat_id, piano, radar_attivo, notifiche_blocco_inviato, notifiche_recap_inviato');
 
     if (error) {
       console.warn('MatchingEngine — lettura profiles (utenti compatibili):', error.message);
@@ -153,6 +153,10 @@ export async function findUtentiCompatibili(
       const chatId = riga.telegram_chat_id ? String(riga.telegram_chat_id).trim() : '';
       // Ammesso se ha almeno un canale di notifica (email valida o Telegram collegato)
       if (!emailValida && !chatId) continue;
+
+      // Radar "In pausa" (radar_attivo=false): le preferenze restano salvate ma le
+      // notifiche vengono sospese finché l'utente non riattiva il Radar.
+      if (riga.radar_attivo === false) continue;
 
       const provinceProfilo: string[] = riga.province_interesse ?? riga.province_attive ?? [];
       const classiProfilo: string[] = riga.classi_concorso ?? [];

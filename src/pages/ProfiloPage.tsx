@@ -11,6 +11,7 @@ import {
 } from '@/data/moduli';
 import { Modal } from '@/components/Modal';
 import { Accordion } from '@/components/Accordion';
+import { RadarStatusToggle } from '@/components/RadarStatusToggle';
 
 export function ProfiloPage() {
   const { abbonato } = useApp();
@@ -85,6 +86,9 @@ export function ProfiloPage() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-primary-800">Il mio profilo</h2>
       </div>
+
+      {/* Stato Radar: Attivo / In Pausa (preferenze conservate quando in pausa) */}
+      <RadarStatusToggle />
 
       {/* Gestione Moduli — tendina apribile/comprimibile (solo PRO);
           per gli utenti Base una barra grigia compatta di upsell */}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Baby, School, BookOpen, GraduationCap, Search, Check, MapPin, Send, Mail, Radar, ArrowRight, ArrowLeft,
-  Plus, Users, Moon, Briefcase, Wrench, AlertCircle, PartyPopper,
+  Plus, Users, Moon, Briefcase, Wrench, AlertCircle, PartyPopper, Loader2,
 } from 'lucide-react';
 import { Modal } from '@/components/Modal';
 import { Pill } from '@/components/Pill';
@@ -52,11 +52,12 @@ export function RadarWizardModal() {
   const navigate = useNavigate();
   const {
     user, preferenze, radarWizardOpen, closeRadarWizard, completaOnboarding, salvaProfilo,
-    openAuthModal,
+    aggiornaRadarAttivo, openAuthModal,
   } = useApp();
 
   const [fase, setFase] = useState<'wizard' | 'done'>('wizard');
   const [step, setStep] = useState(1);
+  const [salvando, setSalvando] = useState(false);
 
   const [ordini, setOrdini] = useState<OrdineScuola[]>([]);
   const [classiCodici, setClassiCodici] = useState<string[]>([]);
@@ -199,8 +200,8 @@ export function RadarWizardModal() {
     return false;
   };
 
-  /** Salva le preferenze, attiva i canali di notifica e mostra il modal di completamento. */
-  const handleFinish = () => {
+  /** Salva preferenze + canali notifica, attiva radar_attivo=true e mostra il completamento. */
+  const handleFinish = async (): Promise<void> => {
     const preferenzeFinali = {
       ordini,
       classiCodici,
@@ -219,10 +220,16 @@ export function RadarWizardModal() {
     completaOnboarding(preferenzeFinali);
 
     if (user) {
-      // Utente autenticato: persiste su Supabase e mostra il completamento.
-      // Persiste su Supabase (tabella profiles): province, classi, ordini, canali notifica.
-      void salvaProfilo(preferenzeFinali);
-      setFase('done');
+      // Utente autenticato: persiste su Supabase, attiva il Radar e mostra il completamento.
+      // Lo step NON viene resettato finché la modal resta attiva.
+      setSalvando(true);
+      try {
+        await aggiornaRadarAttivo(true);
+        await salvaProfilo(preferenzeFinali);
+        setFase('done');
+      } finally {
+        setSalvando(false);
+      }
       return;
     }
 
@@ -686,12 +693,12 @@ export function RadarWizardModal() {
             ) : (
               <button
                 type="button"
-                onClick={handleFinish}
-                disabled={!canNext()}
+                onClick={() => void handleFinish()}
+                disabled={!canNext() || salvando}
                 className="inline-flex items-center gap-2 rounded-xl bg-accent-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Radar className="h-4 w-4" />
-                Attiva il Radar
+                {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radar className="h-4 w-4" />}
+                {salvando ? 'Attivazione…' : 'Attiva il Radar'}
               </button>
             )}
           </div>

@@ -94,6 +94,10 @@ interface AppContextValue extends AppState {
   hasProAccess: boolean;
   /** Ricarica piano/abbonamento dal DB (modifiche admin senza logout; su focus/timer). */
   refreshProfilo: () => Promise<void>;
+  /** Radar attivo: true = invia notifiche; false = "in pausa" (preferenze conservate). */
+  radarAttivo: boolean;
+  /** Imposta radar_attivo su profiles (senza perdere province/classi/preferenze). */
+  aggiornaRadarAttivo: (attivo: boolean) => Promise<void>;
   /** Salva/aggiorna i dati anagrafici mancanti (nome/cognome/genere/età) su profiles e nello stato. */
   aggiornaAnagrafica: (d: {
     nome: string;
@@ -194,6 +198,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [abbonato, setAbbonato] = useState(false);
   /** Piano letto da profiles.piano: 'base' | 'pro' | 'free_forever'. */
   const [piano, setPiano] = useState<'base' | 'pro' | 'free_forever'>('base');
+  /** Stato Radar Scuole letto da profiles.radar_attivo (default false). */
+  const [radarAttivo, setRadarAttivo] = useState(false);
   const [notificheUsate, setNotificheUsate] = useState(0);
   const [crediti, setCrediti] = useState(0);
   const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
@@ -302,11 +308,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotificheUsate(0);
     setAbbonato(false);
     setPiano('base');
+    setRadarAttivo(false);
     setCrediti(0);
     setSupabaseUserId(null);
     setEsamiState([]);
     setNotificati([]);
-  }, [setUser, setPref, setNotificheUsate, setAbbonato, setPiano, setCrediti, setSupabaseUserId, setEsamiState, setNotificati]);
+  }, [setUser, setPref, setNotificheUsate, setAbbonato, setPiano, setRadarAttivo, setCrediti, setSupabaseUserId, setEsamiState, setNotificati]);
 
   const setPreferenze = useCallback(
     (p: Partial<Preferenze>) => setPref((prev) => ({ ...prev, ...p })),
@@ -496,6 +503,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setNotificheUsate(0);
         setAbbonato(false);
         setPiano('base');
+        setRadarAttivo(false);
         return;
       }
       const utenteDemo: User = {
@@ -516,7 +524,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         onboarded: true,
       }));
     },
-    [setUser, setPref, setNotificheUsate, setAbbonato, setPiano],
+    [setUser, setPref, setNotificheUsate, setAbbonato, setPiano, setRadarAttivo],
   );
 
   const resettaTutto = useCallback(() => {
@@ -528,11 +536,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotificheUsate(0);
     setAbbonato(false);
     setPiano('base');
+    setRadarAttivo(false);
     setCrediti(0);
     setSupabaseUserId(null);
     setEsamiState([]);
     setNotificati([]);
-  }, [setUser, setPref, setNotificheUsate, setAbbonato, setPiano, setCrediti, setSupabaseUserId, setEsamiState, setNotificati]);
+  }, [setUser, setPref, setNotificheUsate, setAbbonato, setPiano, setRadarAttivo, setCrediti, setSupabaseUserId, setEsamiState, setNotificati]);
 
   /**
    * PASSO 3 — Persiste le preferenze utente (province di interesse e classi di concorso)
@@ -702,7 +711,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     console.log('[refreshProfilo] utente attivo →', { id: sess.user.id, email: sess.user.email ?? '' });
     const { data, error } = await supabase
       .from('profiles')
-      .select('piano, abbonamento_scade_il, crediti, notifiche_usate')
+      .select('piano, abbonamento_scade_il, crediti, notifiche_usate, radar_attivo')
       .eq('id', sess.user.id)
       .maybeSingle();
     if (error || !data) {
@@ -723,8 +732,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAbbonato(hasAccessoPro && (pianoGratuitoVita || periodoOk));
     setCrediti(Number(data.crediti ?? 0));
     setNotificheUsate(Number(data.notifiche_usate ?? 0));
+    setRadarAttivo(data.radar_attivo === true);
     console.log('Logged user piano:', pianoCorrente, 'hasProAccess:', hasAccessoPro);
-  }, [setAbbonato, setCrediti, setNotificheUsate, setPiano]);
+  }, [setAbbonato, setCrediti, setNotificheUsate, setPiano, setRadarAttivo]);
+
+  /**
+   * Attiva/mette in pausa il Radar per l'utente autenticato (profiles.radar_attivo).
+   * In pausa non si inviano notifiche ma province/classi/preferenze restano salvate.
+   */
+  const aggiornaRadarAttivo = useCallback(
+    async (attivo: boolean): Promise<void> => {
+      // Ottimistico: aggiorna subito la UI, poi persiste su Supabase.
+      setRadarAttivo(attivo);
+      if (!supabase) return;
+      const { data: sess } = await supabase.auth.getUser();
+      if (!sess.user) return;
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({ id: sess.user.id, radar_attivo: attivo }, { onConflict: 'id' });
+      if (error) {
+        console.warn('[radar] aggiornamento radar_attivo fallito:', error.message);
+        setRadarAttivo(!attivo);
+      }
+    },
+    [setRadarAttivo],
+  );
 
   // All'avvio, se esiste una sessione Supabase, carica le preferenze salvate nel DB.
   useEffect(() => {
@@ -745,7 +777,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAvatarUrl(String(metaAu.avatar_url ?? metaAu.picture ?? '').trim() || null);
         const { data, error } = await supabase
           .from('profiles')
-          .select('province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, abbonamento_scade_il, crediti, notifiche_usate, favorite_schools, ignored_schools')
+          .select('province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, abbonamento_scade_il, crediti, notifiche_usate, radar_attivo, favorite_schools, ignored_schools')
           .eq('id', au.id)
           .maybeSingle();
         // Diagnostica caricamento profilo: id/email sessione + riga grezza restituita dal DB.
@@ -792,6 +824,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setAbbonato(hasAccessoPro && (pianoGratuitoVita || periodoOk));
           setCrediti(Number(data.crediti ?? 0));
           setNotificheUsate(Number(data.notifiche_usate ?? 0));
+          setRadarAttivo(data.radar_attivo === true);
           console.log('Logged user piano:', pianoCorrente, 'hasProAccess:', hasAccessoPro);
         }
         // Mini-onboarding anagrafico: profilo senza nome/cognome?
@@ -1061,6 +1094,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     profiloIncompleto,
     aggiornaAnagrafica,
     refreshProfilo,
+    radarAttivo,
+    aggiornaRadarAttivo,
     authModalOpen,
     authModalMode,
     authModalCtx,

@@ -11,7 +11,7 @@ import { ADMIN_EMAILS } from '@/pages/admin/types';
 import { servizi } from '@/data/servizi';
 
 export function LandingPage() {
-  const { user, openAuthModal, hasProAccess, openRadarWizard } = useApp();
+  const { user, openAuthModal, hasProAccess, radarAttivo, openRadarWizard } = useApp();
   const navigate = useNavigate();
 
   // Shimmer pseudo-casuale sul CTA "ATTIVA IL TUO RADAR": ogni 10–15 s (intervallo
@@ -44,10 +44,17 @@ export function LandingPage() {
     };
   }, []);
 
+  /** True se l'utente ha già configurato il Radar (preferenze + radar_attivo=true). */
+  const radarPronto = Boolean(user && radarAttivo);
+
   const handleInizia = () => {
+    // Radar già attivo → gestione direttamente nella dashboard (preferenze precompilate).
+    if (radarPronto) {
+      navigate('/dashboard/radar');
+      return;
+    }
     // Nessun paywall e nessun login anticipato: si configura subito il Radar.
-    // La registrazione gratuita (per salvare le preferenze e attivare i 3 avvisi
-    // inclusi) arriva SOLO alla fine del percorso di configurazione.
+    // La registrazione gratuita arriva SOLO alla fine del percorso di configurazione.
     openRadarWizard();
   };
 
@@ -84,13 +91,25 @@ export function LandingPage() {
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <button
                   onClick={handleInizia}
-                  className={`btn-glint inline-flex items-center justify-center gap-2 rounded-xl bg-[#2B6F9E] px-6 py-3 text-base font-semibold text-white shadow-soft transition hover:bg-[#225a82]${
-                    glintOn ? ' btn-glint-on' : ''
-                  }`}
+                  className={`btn-glint inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-base font-semibold text-white shadow-soft transition ${
+                    radarPronto ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-[#2B6F9E] hover:bg-[#225a82]'
+                  }${glintOn && !radarPronto ? ' btn-glint-on' : ''}`}
                 >
-                  <Radar className="h-5 w-5" />
-                  ATTIVA IL TUO RADAR
-                  <ArrowRight className="h-4 w-4" />
+                  {radarPronto ? (
+                    <>
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white/60 opacity-75" />
+                        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-white" />
+                      </span>
+                      RADAR ATTIVO 🟢
+                    </>
+                  ) : (
+                    <>
+                      <Radar className="h-5 w-5" />
+                      ATTIVA IL TUO RADAR
+                    </>
+                  )}
+                  {!radarPronto && <ArrowRight className="h-4 w-4" />}
                 </button>
                 <button
                   onClick={handleAccedi}
@@ -350,14 +369,22 @@ export function LandingPage() {
       <section className="bg-white py-10 sm:py-12">
         <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
           <h2 className="text-3xl font-bold text-primary-900 sm:text-4xl">
-            ATTIVA IL TUO RADAR
+            {radarPronto ? 'Il tuo Radar è attivo' : 'ATTIVA IL TUO RADAR'}
           </h2>
           <button
             onClick={handleInizia}
-            className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl bg-primary-500 px-8 py-4 text-base font-semibold text-white shadow-soft transition hover:bg-primary-600"
+            className={`mt-8 inline-flex items-center justify-center gap-2 rounded-xl px-8 py-4 text-base font-semibold text-white shadow-soft transition ${
+              radarPronto
+                ? 'bg-emerald-600 hover:bg-emerald-700'
+                : 'bg-primary-500 hover:bg-primary-600'
+            }`}
           >
-            <Radar className="h-5 w-5" />
-            ATTIVA IL TUO RADAR
+            {radarPronto ? 'GESTRISCI RADAR 🟢' : (
+              <>
+                <Radar className="h-5 w-5" />
+                ATTIVA IL TUO RADAR
+              </>
+            )}
           </button>
         </div>
       </section>
