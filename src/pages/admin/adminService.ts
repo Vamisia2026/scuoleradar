@@ -1,5 +1,6 @@
 /** Livello dati del Pannello Admin: chiamate all'Edge `admin` + fallback demo locale. */
 import { supabase } from '@/lib/supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AdminOpportunita, AdminUtente } from './types';
 
 export const DEV = import.meta.env.DEV === true;
@@ -20,28 +21,49 @@ export async function tokenAdmin(): Promise<string | null> {
 
 async function chiamaAdmin<T>(action: string, payload?: Record<string, unknown>): Promise<T> {
   if (!supabase) throw new AdminApiError('Supabase non configurato (modalità demo).');
-  const { data, error } = await supabase.functions.invoke('admin', {
-    body: { action, payload: payload ?? {} },
-  });
-  if (error) {
-    const ctx = (error as { context?: { error?: string; message?: string } }).context;
-    const dettaglio =
-      ctx?.error ??
-      ctx?.message ??
-      (error as { message?: string }).message ??
-      "Errore admin — verifica che la edge function 'admin' sia deployata.";
-    console.error('[admin] chiamata fallita', { action, payload, error, data });
-    throw new AdminApiError(dettaglio);
+  const token = await tokenAdmin();
+  if (!token) throw new AdminApiError('Sessione Supabase non attiva: esegui il login come admin prima di continuare.');
+
+  const client = supabase as SupabaseClient & { supabaseUrl: string; supabaseKey: string };
+  let res: Response;
+  try {
+    res = await fetch(`${client.supabaseUrl}/functions/v1/admin`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: client.supabaseKey,
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ action, payload: payload ?? {} }),
+    });
+  } catch (err) {
+    console.error('[admin] errore di rete verso la edge function', err);
+    throw new AdminApiError("Errore di rete: impossibile raggiungere la edge function 'admin'.");
   }
-  const res = data as { ok?: boolean; error?: string } | null;
-  if (!res || typeof res !== 'object' || res.ok !== true) {
-    const motivo = res && typeof res === 'object' && 'error' in res ? String(res.error) : '';
-    console.error('[admin] risposta senza ok', { action, data, raw: typeof data });
-    throw new AdminApiError(motivo || `Azione "${action}" non riuscita: risposta inattesa dalla edge function.`);
+
+  const testo = await res.text().catch(() => '');
+  let data: unknown = null;
+  try {
+    data = testo ? JSON.parse(testo) : null;
+  } catch {
+    data = testo || null;
+  }
+
+  const obj = data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
+  const ok = obj !== null && obj.ok === true;
+  if (!res.ok || !ok) {
+    const motivo =
+      typeof obj?.error === 'string'
+        ? obj.error
+        : typeof obj?.message === 'string'
+          ? obj.message
+          : '';
+    const prefix = res.ok ? 'Risposta inattesa' : `HTTP ${res.status}`;
+    console.error('[admin] chiamata fallita', { action, payload, prefix, data: testo });
+    throw new AdminApiError(motivo || `${prefix}: la edge function 'admin' non ha completato l'azione "${action}".`);
   }
   return data as T;
 }
-
 export async function caricaUtenti(): Promise<AdminUtente[]> {
   const token = await tokenAdmin();
   if (!token) return caricaDemo();

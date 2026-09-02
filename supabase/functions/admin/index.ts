@@ -242,19 +242,29 @@ serve(async (req: Request) => {
     if (action === 'create_user') {
       const email = String(payload.email ?? '').trim().toLowerCase();
       const password = String(payload.password ?? '');
-      if (!email || password.length < 6) {
-        return risposta({ error: 'email valida e password (min 6 caratteri) richieste' }, 400);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return risposta({ error: 'Indirizzo email non valido' }, 400);
+      }
+      if (password.length < 6) {
+        return risposta({ error: 'Password troppo corta: servono almeno 6 caratteri' }, 400);
       }
       const nome = String(payload.nome ?? '').trim();
       const cognome = String(payload.cognome ?? '').trim();
       const telefono = String(payload.telefono ?? '').trim();
       const isBeta = payload.isBetaTester === true;
+      const pianoScelto = String(payload.piano ?? '').trim().toLowerCase();
       const proTipo =
-        pianoScelto === 'pro_mensile' ? 'mensile' : pianoScelto === 'pro_annuale' ? 'annuale' : null;
-      const pianoScelto = String(payload.piano ?? '').trim();
-      const piano = ['pro_mensile', 'pro_annuale', 'pro', 'free_forever'].includes(pianoScelto)
-        ? (pianoScelto === 'pro_mensile' || pianoScelto === 'pro_annuale' ? 'pro' : String(payload.piano))
-        : 'base';
+        pianoScelto === 'pro_mensile' || pianoScelto === 'pro_mese'
+          ? 'mensile'
+          : pianoScelto === 'pro_annuale' || pianoScelto === 'pro_anno'
+            ? 'annuale'
+            : null;
+      const piano =
+        pianoScelto === 'pro' || proTipo !== null
+          ? 'pro'
+          : pianoScelto === 'free_forever' || pianoScelto === 'free forever' || pianoScelto === 'ffe'
+            ? 'free_forever'
+            : 'base';
 
       const { data: creato, error } = await sb.auth.admin.createUser({
         email,
@@ -262,27 +272,34 @@ serve(async (req: Request) => {
         email_confirm: true,
         user_metadata: { nome, cognome, force_password_change: true },
       });
-      if (error) return risposta({ error: error.message }, 500);
+      if (error) {
+        return risposta({ error: `Creazione account non riuscita: ${error.message}` }, 500);
+      }
+      if (!creato?.user) {
+        return risposta({ error: 'Creazione account non riuscita: nessun utente restituito dall\'API Auth' }, 500);
+      }
 
-      if (creato?.user) {
-        await sb.from('profiles').upsert(
-          (
-            await rigaProfiles(sb, {
-              id: creato.user.id,
-              email,
-              nome,
-              cognome,
-              telefono,
-              piano,
-              pro_tipo: proTipo,
-              is_beta_tester: isBeta,
-              onboarded: false,
-            })
-          ),
-          { onConflict: 'id' },
+      const { error: errProfilo } = await sb.from('profiles').upsert(
+        await rigaProfiles(sb, {
+          id: creato.user.id,
+          email,
+          nome,
+          cognome,
+          telefono,
+          piano,
+          pro_tipo: proTipo,
+          is_beta_tester: isBeta,
+          onboarded: false,
+        }),
+        { onConflict: 'id' },
+      );
+      if (errProfilo) {
+        return risposta(
+          { error: `Account creato ma profilo non salvato: ${errProfilo.message}`, id: creato.user.id },
+          500,
         );
       }
-      return risposta({ ok: true, id: creato?.user?.id ?? null });
+      return risposta({ ok: true, id: creato.user.id, piano, pro_tipo: proTipo });
     }
 
     if (action === 'delete_user') {
