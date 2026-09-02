@@ -32,20 +32,20 @@ export function BadgePianoCompatto({ utente }: { utente: AdminUtente }) {
   ).toLowerCase();
 
   let label = 'B';
-  let classe = 'bg-sky-100 text-sky-700 ring-1 ring-inset ring-sky-200';
+  let classe = 'bg-cyan-100 text-cyan-700 ring-1 ring-inset ring-cyan-200';
   if (piano === 'free_forever') {
     label = 'FFE';
-    classe = 'bg-emerald-100 text-emerald-700 ring-1 ring-inset ring-emerald-300';
+    classe = 'bg-red-100 text-red-700 ring-1 ring-inset ring-red-300';
   } else if (piano === 'pro') {
     if (tipo.includes('mensile')) {
       label = 'PRO1M';
-      classe = 'bg-violet-100 text-violet-700 ring-1 ring-inset ring-violet-200';
+      classe = 'bg-yellow-100 text-yellow-800 ring-1 ring-inset ring-yellow-300';
     } else if (tipo.includes('annuale')) {
       label = 'PRO1A';
-      classe = 'bg-violet-600 text-white';
+      classe = 'bg-orange-500 text-white';
     } else {
       label = 'PRO';
-      classe = 'bg-violet-600 text-white';
+      classe = 'bg-orange-500 text-white';
     }
   }
   const titolo =

@@ -1083,37 +1083,53 @@ export function TabAccount() {
                     <div className="flex flex-wrap items-center justify-end gap-1">
                       <button
                         type="button"
-                        disabled={attivaAnnuale}
+                        aria-pressed={attivaAnnuale}
+                        onClick={attivaAnnuale ? undefined : () => upgradeProAnnuale(u)}
                         title={attivaAnnuale ? 'Piano attuale: PRO Annuale' : 'Assegna il piano PRO annuale'}
-                        onClick={() => upgradeProAnnuale(u)}
-                        className={`${btnAdmin} ${attivaAnnuale ? 'cursor-default bg-violet-600 text-white' : `${btnPrim}`}`}
+                        className={`${btnAdmin} ${
+                          attivaAnnuale
+                            ? 'cursor-default bg-orange-500 text-white shadow-soft'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
                       >
-                        PRO Ann.
+                        PRO Anno
                       </button>
                       <button
                         type="button"
-                        disabled={attivaMensile}
+                        aria-pressed={attivaMensile}
+                        onClick={attivaMensile ? undefined : () => upgradeProMensile(u)}
                         title={attivaMensile ? 'Piano attuale: PRO Mensile' : 'Assegna il piano PRO mensile'}
-                        onClick={() => upgradeProMensile(u)}
-                        className={`${btnAdmin} ${attivaMensile ? 'cursor-default bg-violet-600 text-white' : `${btnGhost} bg-sky-50`}`}
+                        className={`${btnAdmin} ${
+                          attivaMensile
+                            ? 'cursor-default bg-yellow-400 text-slate-900 shadow-soft'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
                       >
-                        PRO Mes.
+                        PRO Mese
                       </button>
                       <button
                         type="button"
-                        disabled={attivaBase}
+                        aria-pressed={attivaBase}
+                        onClick={attivaBase ? undefined : () => downgradeBase(u)}
                         title={attivaBase ? 'Piano attuale: Base' : 'Porta al piano Base'}
-                        onClick={() => downgradeBase(u)}
-                        className={`${btnAdmin} ${attivaBase ? 'cursor-default bg-sky-600 text-white' : `${btnGhost}`}`}
+                        className={`${btnAdmin} ${
+                          attivaBase
+                            ? 'cursor-default bg-cyan-500 text-white shadow-soft'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
                       >
                         Base
                       </button>
                       <button
                         type="button"
-                        disabled={attivaFree}
+                        aria-pressed={attivaFree}
+                        onClick={attivaFree ? undefined : () => freeForever(u)}
                         title={attivaFree ? 'Piano attuale: PRO Free Forever' : 'Assegna il piano PRO gratuito a vita'}
-                        onClick={() => freeForever(u)}
-                        className={`${btnAdmin} ${attivaFree ? 'cursor-default bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
+                        className={`${btnAdmin} ${
+                          attivaFree
+                            ? 'cursor-default bg-red-500 text-white shadow-soft'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
                       >
                         Free Forever
                       </button>
