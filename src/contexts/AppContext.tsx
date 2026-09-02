@@ -686,27 +686,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refreshProfilo = useCallback(async (): Promise<void> => {
     if (!supabase) return;
     const { data: sess } = await supabase.auth.getUser();
-    if (!sess.user) return;
+    if (!sess.user) {
+      console.warn('[refreshProfilo] nessun utente autenticato nella sessione attiva.');
+      return;
+    }
+    console.log('[refreshProfilo] utente attivo →', { id: sess.user.id, email: sess.user.email ?? '' });
     const { data, error } = await supabase
       .from('profiles')
-      .select('piano, subscription_status, abbonamento_scade_il, current_period_end, crediti, notifiche_usate')
+      .select('piano, abbonamento_scade_il, crediti, notifiche_usate')
       .eq('id', sess.user.id)
       .maybeSingle();
     if (error || !data) {
-      if (error) console.warn('Refresh profilo (piano/abbonamento) non riuscito:', error.message);
+      console.warn('[refreshProfilo] query profiles (per id) fallita:', {
+        userId: sess.user.id,
+        email: sess.user.email ?? '',
+        error: error?.message ?? 'nessuna riga profilo trovata',
+      });
       return;
     }
+    // Diagnostica: mostra la riga grezza restituita dal DB.
+    console.log('[refreshProfilo] riga profiles (per id) →', data);
     const periodoOk = !data.abbonamento_scade_il || new Date(data.abbonamento_scade_il) > new Date();
-    const statoOk =
-      !data.subscription_status ||
-      data.subscription_status === 'active' ||
-      data.subscription_status === 'trialing';
     const pianoGratuitoVita = data.piano === 'free_forever';
     // Normalizzazione: qualsiasi valore non riconosciuto cade su 'base'.
     const pianoCorrente: 'base' | 'pro' | 'free_forever' =
       data.piano === 'pro' || data.piano === 'free_forever' ? data.piano : 'base';
     setPiano(pianoCorrente);
-    setAbbonato(pianoCorrente !== 'base' && (pianoGratuitoVita || (statoOk && periodoOk)));
+    setAbbonato(pianoCorrente !== 'base' && (pianoGratuitoVita || periodoOk));
     setCrediti(Number(data.crediti ?? 0));
     setNotificheUsate(Number(data.notifiche_usate ?? 0));
   }, [setAbbonato, setCrediti, setNotificheUsate, setPiano]);
@@ -730,9 +736,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAvatarUrl(String(metaAu.avatar_url ?? metaAu.picture ?? '').trim() || null);
         const { data, error } = await supabase
           .from('profiles')
-          .select('province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, subscription_status, abbonamento_scade_il, current_period_end, crediti, notifiche_usate, favorite_schools, ignored_schools')
+          .select('province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, abbonamento_scade_il, crediti, notifiche_usate, favorite_schools, ignored_schools')
           .eq('id', au.id)
           .maybeSingle();
+        // Diagnostica caricamento profilo: id/email sessione + riga grezza restituita dal DB.
+        console.log('[profilo] auth →', { id: au.id, email: au.email ?? '' });
+        if (error) console.warn('[profilo] query profiles (per id) fallita:', error.message);
+        if (data) console.log('[profilo] riga profiles →', data);
         if (!error && data) {
           setPref((prev) => ({
             ...prev,
@@ -758,28 +768,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 ? data.ignored_schools
                 : prev.ignoredSchools,
           }));
-          // FASE 6 + Account Bridge — piano, stato abbonamento e scadenza (server-side).
-          // Lo stato esplicito (subscription_status) e la scadenza (current_period_end,
-          // sincronizzata dal webhook) cascano automaticamente su abbonato=false.
+          // FASE 6 — piano e scadenza letti dalle colonne REALI di profiles.
+          // NB: NON si selezionano più subscription_status / current_period_end
+          // (assenti nello schema): prima quell'errore invalidava l'intero
+          // caricamento del profilo e il piano restava su 'base'.
+          const pianoCorrente: 'base' | 'pro' | 'free_forever' =
+            data.piano === 'pro' || data.piano === 'free_forever' ? data.piano : 'base';
           const periodoOk =
             !data.abbonamento_scade_il || new Date(data.abbonamento_scade_il) > new Date();
-          const statoOk =
-            !data.subscription_status ||
-            data.subscription_status === 'active' ||
-            data.subscription_status === 'trialing';
           // Piano Free Forever: accesso PRO permanente — mai soggetto a scadenza
           // di pagamento; per gli altri piani casca automaticamente su base.
           const pianoGratuitoVita = data.piano === 'free_forever';
-          setAbbonato(
-            (data.piano === 'pro' || pianoGratuitoVita) &&
-              (pianoGratuitoVita || (statoOk && periodoOk)),
-          );
+          setPiano(pianoCorrente);
+          setAbbonato(pianoCorrente !== 'base' && (pianoGratuitoVita || periodoOk));
           setCrediti(Number(data.crediti ?? 0));
           setNotificheUsate(Number(data.notifiche_usate ?? 0));
-          // Piano corrente per badge utente ed entitlement: pro e free_forever → accesso completo.
-          setPiano(
-            data.piano === 'pro' || data.piano === 'free_forever' ? data.piano : 'base',
-          );
         }
         // Mini-onboarding anagrafico: profilo senza nome/cognome?
         void valutaProfiloIncompleto(au.id);
