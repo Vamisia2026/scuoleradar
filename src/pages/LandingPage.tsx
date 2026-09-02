@@ -64,17 +64,17 @@ export function LandingPage() {
       <section className="relative overflow-hidden bg-gradient-to-b from-primary-50 via-white to-white">
         <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-secondary-100/60 blur-3xl" />
         <div className="pointer-events-none absolute top-40 -left-24 h-72 w-72 rounded-full bg-primary-100/60 blur-3xl" />
-        <div className="relative mx-auto max-w-6xl px-4 pt-8 pb-16 sm:px-6 sm:pt-10 sm:pb-20">
+        <div className="relative mx-auto max-w-6xl px-4 pt-6 pb-10 sm:px-6 sm:pt-8 sm:pb-14">
           <div className="grid items-center gap-10 lg:grid-cols-2">
             <div className="animate-fade-in">
               <span className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-white px-3 py-1 text-xs font-bold text-primary-600 shadow-soft">
                 <Radar className="h-3.5 w-3.5 text-secondary-500" />
-                La piattaforma per gli Scuolatori: chi vive la scuola ogni giorno
+                La piattaforma per chi vive la scuola ogni giorno
               </span>
               <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight text-primary-900 sm:text-5xl">
-                Ogni giorno decine di opportunità scolastiche scappano via.
+                Ogni giorno decine di opportunità.
                 <br />
-                <span className="text-secondary-500">Noi intercettiamo solo quelle perfette per te.</span>
+                <span className="text-secondary-500">Noi intercettiamo solo quelle per te.</span>
               </h1>
               <p className="mt-5 max-w-xl text-lg leading-relaxed text-primary-700">
                 Scansioniamo h24 interpelli e bandi per TUTTI i lavoratori della scuola: docenti,
@@ -99,9 +99,6 @@ export function LandingPage() {
                   Accedi
                 </button>
               </div>
-              <p className="mt-4 text-sm text-primary-500">
-                3 segnalazioni gratuite incluse. Nessuna carta richiesta.
-              </p>
             </div>
 
             <div className="animate-fade-in">
@@ -117,7 +114,7 @@ export function LandingPage() {
           <div className="mb-6 text-center">
             <h2 className="text-3xl font-bold text-primary-900">Ecco cosa riceverai</h2>
             <p className="mt-3 text-primary-600">
-              Un assaggio degli avvisi che il radar ti segnala, filtrati per il tuo profilo.
+              Esempi degli avvisi che il radar ti segnala, filtrati per il tuo profilo.
             </p>
           </div>
           <div className="animate-fade-in grid gap-5 md:grid-cols-3">
@@ -144,7 +141,7 @@ export function LandingPage() {
               tipoClasse="bg-accent-50 text-accent-700"
               classe="ADEE"
               titolo="Supplenza sostegno scuola primaria"
-              scuola="IC Incisa Scapaccino"
+              scuola="IC Dante Alighieri"
               provincia="AL"
               scadenza="05/10/2026"
             />
@@ -156,7 +153,7 @@ export function LandingPage() {
       </section>
 
       {/* Plan explanation */}
-      <section className="bg-white py-10">
+      <section className="bg-white py-8">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="mb-6 text-center">
             <h2 className="text-3xl font-bold text-primary-900">Come funziona</h2>
@@ -166,27 +163,27 @@ export function LandingPage() {
             <StepCard
               icon={<UserPlus className="h-6 w-6" />}
               step="1"
-              title="Registrati e imposta il tuo profilo"
-              text="Dicci ordine di scuola, materie, classi di concorso e province che ti interessano. Bastano pochi secondi."
+              title="Imposta il tuo profilo"
+              text="Seleziona ordine di scuola, classi di concorso e province di tuo interesse in pochi secondi."
             />
             <StepCard
               icon={<Send className="h-6 w-6" />}
               step="2"
-              title="Ricevi 3 segnalazioni incluse"
-              text="Ti avvisiamo su Telegram e via email solo quando c'è un interpello, un bando o un progetto in linea con te."
+              title="Ricevi le notifiche"
+              text="Ti avvisiamo tempestivamente su Telegram ed email appena esce un bando o interpello pertinente."
             />
             <StepCard
               icon={<CreditCard className="h-6 w-6" />}
               step="3"
-              title="Se vuoi continuare, 49€ all'anno"
-              text="Si ripaga con un'ora di lavoro. Se trovi posto grazie a noi, ci raccomandi. Tutto qui."
+              title="Candidati subito"
+              text="Accedi ai link ufficiali con un click e invia la tua candidatura prima degli altri."
             />
           </div>
         </div>
       </section>
 
       {/* Values */}
-      <section className="bg-primary-50 py-10">
+      <section className="bg-primary-50 py-8">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="grid gap-8 md:grid-cols-3">
             <ValueCard
@@ -196,8 +193,8 @@ export function LandingPage() {
             />
             <ValueCard
               icon={<ShieldCheck className="h-6 w-6" />}
-              title="Trasparenza prima di tutto"
-              text="Niente sorprese in fattura, niente rinnovi automatici nascosti. Il piano è chiaro."
+              title="Niente rumore, solo pertinenza"
+              text="Inviamo notifiche solo ed esclusivamente quando c'è un'opportunità reale in linea con il tuo profilo."
             />
             <ValueCard
               icon={<Heart className="h-6 w-6" />}
@@ -209,7 +206,7 @@ export function LandingPage() {
       </section>
 
       {/* Servizi */}
-      <section className="bg-white py-10">
+      <section className="bg-white py-8">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="mb-6 text-center">
             <h2 className="text-3xl font-bold text-primary-900">I nostri strumenti</h2>
@@ -245,7 +242,7 @@ export function LandingPage() {
       </section>
 
       {/* PureFocus */}
-      <section className="bg-white py-10">
+      <section className="bg-white py-8">
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
           <div className="rounded-2xl bg-gradient-to-br from-primary-700 to-primary-900 p-8 text-white shadow-card sm:p-10">
             <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
@@ -301,7 +298,7 @@ export function LandingPage() {
       </section>
 
       {/* CTA */}
-      <section className="bg-white py-10 sm:py-14">
+      <section className="bg-white py-10 sm:py-12">
         <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
           <h2 className="text-3xl font-bold text-primary-900 sm:text-4xl">
             ATTIVA IL TUO RADAR

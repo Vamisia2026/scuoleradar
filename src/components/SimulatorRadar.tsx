@@ -85,7 +85,7 @@ export function SimulatorRadar() {
         <h3 className="text-lg font-bold">Prova il Radar</h3>
       </div>
       <p className="mb-5 text-sm text-primary-600">
-        Scegli una provincia e una classe di concorso: cerchiamo subito nel nostro database reale
+        Scegli una provincia e una classe di concorso. Noi cerchiamo subito in tutta Italia
         (interpelli, PON, PNRR e selezioni di esperti) le opportunità che ti riguardano.
       </p>
 
