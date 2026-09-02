@@ -86,6 +86,15 @@ interface AppContextValue extends AppState {
   supabaseUserId: string | null;
   /** Avatar (URL) dell'utente autenticato da user_metadata (es. Google OAuth). */
   avatarUrl: string | null;
+  /** true se il profilo (tabella profiles) manca di nome o cognome: i dati anagrafici vanno completati. */
+  profiloIncompleto: boolean;
+  /** Salva/aggiorna i dati anagrafici mancanti (nome/cognome/genere/età) su profiles e nello stato. */
+  aggiornaAnagrafica: (d: {
+    nome: string;
+    cognome: string;
+    genere?: 'M' | 'F' | null;
+    eta?: number | null;
+  }) => Promise<void>;
   authModalOpen: boolean;
   authModalMode: 'login' | 'registrazione';
   /** Contesto della modale Auth: 'pro' = l'utente stava scegliendo un piano a pagamento. */
@@ -169,6 +178,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
   /** Avatar dell'utente (user_metadata.avatar_url / picture, es. login Google). */
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  /** Profilo autenticato senza nome/cognome → serve il mini-onboarding anagrafico. */
+  const [profiloIncompleto, setProfiloIncompleto] = useState(false);
 
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'registrazione'>('login');
@@ -591,6 +602,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { ok: Boolean(riga?.ok), crediti: Number(riga?.crediti ?? crediti) };
   }, [supabaseUserId, crediti]);
 
+  /**
+   * Verifica su profiles se nome/cognome sono compilati: alimenta il flag
+   * `profiloIncompleto` che fa scattare il mini-onboarding anagrafico.
+   */
+  const valutaProfiloIncompleto = useCallback(async (userId: string): Promise<void> => {
+    if (!supabase) {
+      setProfiloIncompleto(false);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('nome, cognome')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) {
+      console.warn('Verifica anagrafica profilo non riuscita:', error.message);
+      setProfiloIncompleto(false);
+      return;
+    }
+    const nome = String((data as { nome?: string | null } | null)?.nome ?? '').trim();
+    const cognome = String((data as { cognome?: string | null } | null)?.cognome ?? '').trim();
+    setProfiloIncompleto(!nome || !cognome);
+  }, []);
+
+  /** Salva i dati anagrafici sul profilo (profiles) e aggiorna lo stato locale. */
+  const aggiornaAnagrafica = useCallback(
+    async (d: { nome: string; cognome: string; genere?: 'M' | 'F' | null; eta?: number | null }): Promise<void> => {
+      if (!supabase) throw new Error('Supabase non configurato (modalità demo).');
+      const { data: sess, error: errSess } = await supabase.auth.getUser();
+      if (errSess || !sess.user) throw new Error('Sessione non attiva: effettua il login.');
+      const nome = d.nome.trim();
+      const cognome = d.cognome.trim();
+      const { error } = await supabase.from('profiles').upsert(
+        {
+          id: sess.user.id,
+          email: sess.user.email ?? '',
+          nome,
+          cognome,
+          genere: d.genere ?? null,
+          eta: d.eta ?? null,
+        },
+        { onConflict: 'id' },
+      );
+      if (error) throw error;
+      setUser((prev) =>
+        prev
+          ? { ...prev, nome, cognome, genere: d.genere ?? null, eta: d.eta ?? null }
+          : { nome, cognome, genere: d.genere ?? null, eta: d.eta ?? null, email: sess.user.email ?? '', password: '' },
+      );
+      setPref((prev) => ({ ...prev, genere: d.genere ?? null, eta: d.eta ?? null }));
+      setProfiloIncompleto(false);
+    },
+    [setUser, setPref],
+  );
+
   // All'avvio, se esiste una sessione Supabase, carica le preferenze salvate nel DB.
   useEffect(() => {
     if (!supabase) {
@@ -657,6 +723,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setCrediti(Number(data.crediti ?? 0));
           setNotificheUsate(Number(data.notifiche_usate ?? 0));
         }
+        // Mini-onboarding anagrafico: profilo senza nome/cognome?
+        void valutaProfiloIncompleto(au.id);
       } catch (err) {
         if (attivo) setLoading(false);
         console.warn('Caricamento profilo da Supabase non riuscito:', (err as Error).message);
@@ -665,7 +733,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       attivo = false;
     };
-  }, [setPref]);
+  }, [setPref, valutaProfiloIncompleto]);
 
   // Sincronizza la sessione Supabase Auth (es. redirect di ritorno da Google OAuth).
   // Qui NON forziamo cambi di rotta: la navigazione di ritorno è gestita unicamente
@@ -701,19 +769,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
           void client
             .from('profiles')
             .upsert({ id: session.user.id, email: session.user.email ?? '' }, { onConflict: 'id' })
-            .then(({ error }) => {
-              if (error) console.warn('Sincronizzazione profilo (profiles):', error.message);
-            });
+            .then(() => void valutaProfiloIncompleto(session.user.id));
+        } else {
+          // INITIAL_SESSION: la riga profilo esiste già (trigger auth.users) → verifica anagrafica.
+          void valutaProfiloIncompleto(session.user.id);
         }
       }
       if (event === 'SIGNED_OUT') {
         setUser(null);
         setSupabaseUserId(null);
         setAvatarUrl(null);
+        setProfiloIncompleto(false);
       }
     });
     return () => subscription.subscription.unsubscribe();
-  }, [setUser, setSupabaseUserId]);
+  }, [setUser, setSupabaseUserId, valutaProfiloIncompleto]);
 
   // Wizard Radar in attesa: se un utente NON autenticato ha cliccato "ATTIVA IL TUO RADAR",
   // al termine di login/registrazione si apre automaticamente il wizard di onboarding.
@@ -890,6 +960,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loading,
     supabaseUserId,
     avatarUrl,
+    profiloIncompleto,
+    aggiornaAnagrafica,
     authModalOpen,
     authModalMode,
     authModalCtx,

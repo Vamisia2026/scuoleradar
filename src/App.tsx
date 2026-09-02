@@ -10,6 +10,7 @@ import { ToastProvider } from '@/components/Toast';
 import { GoogleOneTap } from '@/components/GoogleOneTap';
 import { RadarWizardModal } from '@/components/RadarWizardModal';
 import { ForcePasswordModal } from '@/components/ForcePasswordModal';
+import { DatiProfiloModal } from '@/components/DatiProfiloModal';
 import { AuthCallback } from '@/pages/AuthCallback';
 import { LandingPage } from '@/pages/LandingPage';
 import { OnboardingPage } from '@/pages/OnboardingPage';
@@ -144,6 +145,7 @@ export default function App() {
           <GoogleOneTap />
           <RadarWizardModal />
           <ForcePasswordModal />
+          <DatiProfiloModal />
           <DevToolbar />
         </BrowserRouter>
       </ToastProvider>
