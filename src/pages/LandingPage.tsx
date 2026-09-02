@@ -112,7 +112,7 @@ export function LandingPage() {
       <section className="bg-primary-50 py-10">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="mb-6 text-center">
-            <h2 className="text-3xl font-bold text-primary-900">Ecco cosa riceverai</h2>
+            <h2 className="text-3xl font-bold text-primary-900">Cosa riceverai</h2>
             <p className="mt-3 text-primary-600">
               Esempi degli avvisi che il radar ti segnala, filtrati per il tuo profilo.
             </p>
@@ -146,7 +146,7 @@ export function LandingPage() {
               scadenza="05/10/2026"
             />
           </div>
-          <p className="mx-auto mt-6 max-w-2xl text-left text-sm text-primary-500">
+          <p className="mx-auto mt-6 max-w-2xl text-center text-base font-medium leading-relaxed text-primary-700">
             Inserisci il tuo profilo e vedrai solo le opportunità davvero pertinenti per te.
           </p>
         </div>
@@ -193,8 +193,8 @@ export function LandingPage() {
             />
             <ValueCard
               icon={<ShieldCheck className="h-6 w-6" />}
-              title="Niente rumore, solo pertinenza"
-              text="Inviamo notifiche solo ed esclusivamente quando c'è un'opportunità reale in linea con il tuo profilo."
+              title="Niente rumore, solo ciò che conta"
+              text="Inviamo notifiche solo quando c'è un'opportunità in linea con il tuo profilo."
             />
             <ValueCard
               icon={<Heart className="h-6 w-6" />}
@@ -219,7 +219,7 @@ export function LandingPage() {
             >
               <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-2xl">📡</span>
               <h3 className="mt-4 text-lg font-bold text-primary-800">Radar Scuole</h3>
-              <p className="mt-1 text-sm text-primary-500">Solo le opportunità che ti riguardano davvero</p>
+              <p className="mt-1.5 text-base text-primary-600">Solo le opportunità che ti riguardano davvero</p>
             </Link>
             <Link
               to="/servizi/moduli"
@@ -227,7 +227,7 @@ export function LandingPage() {
             >
               <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-2xl">📁</span>
               <h3 className="mt-4 text-lg font-bold text-primary-800">Moduli</h3>
-              <p className="mt-1 text-sm text-primary-500">Documenti e modulistica pronti all&apos;uso</p>
+              <p className="mt-1.5 text-base text-primary-600">Documenti e modulistica pronti all&apos;uso</p>
             </Link>
             <Link
               to="/dashboard/purefocus"
@@ -235,7 +235,7 @@ export function LandingPage() {
             >
               <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-2xl">🧘</span>
               <h3 className="mt-4 text-lg font-bold text-primary-800">Pure Focus</h3>
-              <p className="mt-1 text-sm text-primary-500">Studia e lavora su YouTube senza distrazioni</p>
+              <p className="mt-1.5 text-base text-primary-600">Studia e lavora su YouTube senza distrazioni</p>
             </Link>
           </div>
         </div>
@@ -387,7 +387,7 @@ function StepCard({
         {icon}
       </span>
       <h3 className="mt-4 text-lg font-bold text-primary-800">{title}</h3>
-      <p className="mt-2 text-sm leading-relaxed text-primary-600">{text}</p>
+      <p className="mt-2 text-base leading-relaxed text-primary-600">{text}</p>
     </div>
   );
 }
@@ -407,7 +407,7 @@ function ValueCard({
         {icon}
       </span>
       <h3 className="mt-4 text-lg font-bold text-primary-800">{title}</h3>
-      <p className="mt-2 text-sm leading-relaxed text-primary-600">{text}</p>
+      <p className="mt-2 text-base leading-relaxed text-primary-600">{text}</p>
     </div>
   );
 }
