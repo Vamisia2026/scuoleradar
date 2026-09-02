@@ -181,12 +181,12 @@ export function NotizieHero({
                   </span>
                   <span className="hidden sm:inline">Edizione Docenti &amp; ATA</span>
                 </div>
-                <h1 className="mt-2 font-display text-3xl font-black leading-tight tracking-tight text-primary-900 sm:text-4xl">
+                <h1 className="mt-2 font-display text-2xl font-black leading-tight tracking-tight text-primary-900 sm:text-4xl">
                   Notizie <span className="text-secondary-500">per chi lavora nella Scuola</span>
                 </h1>
               </div>
 
-              <p className="mt-3 max-w-xl text-base leading-relaxed text-primary-700 sm:text-lg">
+              <p className="mt-3 min-w-0 max-w-xl text-sm leading-relaxed text-primary-700 sm:text-lg">
                 {SOTTOTITOLO_NOTIZIE}
               </p>
 
@@ -217,9 +217,9 @@ export function NotizieHero({
                 <div
                   role="toolbar"
                   aria-label="Filtra le notizie per categoria"
-                  className="mt-4 flex flex-wrap items-center gap-1.5"
+                  className="mt-4 flex w-full min-w-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap py-1 no-scrollbar lg:flex-wrap lg:overflow-visible lg:whitespace-normal"
                 >
-                  <span className="mr-1 text-[11px] font-black uppercase tracking-[0.16em] text-secondary-600">
+                  <span className="mr-1 shrink-0 text-[11px] font-black uppercase tracking-[0.16em] text-secondary-600">
                     Categorie
                   </span>
                   {categorie.map((c) => {
@@ -231,7 +231,7 @@ export function NotizieHero({
                         type="button"
                         onClick={() => onCategoriaChange(c)}
                         aria-pressed={attiva}
-                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition ${
+                        className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition ${
                           attiva
                             ? 'bg-primary-700 text-white shadow-soft'
                             : 'bg-white text-primary-600 ring-1 ring-inset ring-primary-200 hover:bg-primary-50'

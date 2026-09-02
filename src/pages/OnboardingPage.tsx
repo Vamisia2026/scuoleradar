@@ -194,7 +194,7 @@ export function OnboardingPage() {
   const totalSteps = 4;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-primary-50 to-white">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-gradient-to-b from-primary-50 to-white">
       <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
         {/* Progress */}
         <div className="mb-8">

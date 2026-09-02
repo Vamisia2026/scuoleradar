@@ -9,7 +9,7 @@ import { NotizieDettaglio } from '@/departments/notizie';
  */
 export function NotizieDettaglioPage() {
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-50">
       <Header />
       <main>
         <section

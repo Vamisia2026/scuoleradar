@@ -96,7 +96,7 @@ export function AdminPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-50">
       <header className="border-b border-primary-100 bg-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3">

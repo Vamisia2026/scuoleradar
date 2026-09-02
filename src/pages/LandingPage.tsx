@@ -57,7 +57,7 @@ export function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden">
       <Header />
 
       {/* Hero */}

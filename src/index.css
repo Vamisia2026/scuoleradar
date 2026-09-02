@@ -16,6 +16,16 @@ body {
   max-width: 100%;
   margin: 0;
   padding: 0;
+  overflow-x: hidden;
+}
+
+/* Preferiamo overflow-x: clip dove supportato: evita lo scroll orizzontale
+   documentale senza creare un contenitore di scroll (preserva position:sticky). */
+@supports (overflow-x: clip) {
+  html,
+  body {
+    overflow-x: clip;
+  }
 }
 
 body {
@@ -26,6 +36,17 @@ body {
   width: 100%;
   max-width: 100%;
   min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Utility: nasconde la scrollbar dei contenitori scrollabili orizzontali
+   (es. riga delle categorie sul mobile) mantenendo lo swipe tattile. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* Focus ring for accessibility */

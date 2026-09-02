@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { BellRing, CheckCircle2, Radar, Database, SlidersHorizontal, UserPlus } from 'lucide-react';
 import { Header } from '@/components/Header';
@@ -29,7 +28,7 @@ export function DashboardLayout() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-50">
       <Header />
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         <nav className="flex gap-1 overflow-x-auto rounded-2xl border border-primary-100 bg-white p-1.5 shadow-card">
