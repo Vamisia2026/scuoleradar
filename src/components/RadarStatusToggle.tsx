@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { Loader2, Radar } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
+import { track } from '@/lib/analytics';
 
 export function RadarStatusToggle() {
   const { radarAttivo, aggiornaRadarAttivo, preferenze } = useApp();
@@ -16,6 +17,8 @@ export function RadarStatusToggle() {
     setInCorso(true);
     try {
       await aggiornaRadarAttivo(valore);
+      // Analytics funnel: toggle stato Radar (solo stato, nessun dato personale).
+      track('radar_status_toggled', { status: valore ? 'active' : 'paused' });
     } finally {
       setInCorso(false);
     }
@@ -45,15 +48,11 @@ export function RadarStatusToggle() {
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               {radarAttivo ? (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-emerald-700 ring-1 ring-inset ring-emerald-300">
-                  <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                  </span>
-                  🟢 Radar attivo
+                  🟢 RADAR ATTIVO
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-50 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-warning-700 ring-1 ring-inset ring-warning-300">
-                  🟡 In pausa
+                  🟡 IN PAUSA
                 </span>
               )}
               {provinceCount > 0 && (

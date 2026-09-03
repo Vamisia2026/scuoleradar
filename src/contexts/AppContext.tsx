@@ -92,12 +92,18 @@ interface AppContextValue extends AppState {
   piano: 'base' | 'pro' | 'free_forever';
   /** true = accesso completo PRO: piano 'pro' oppure 'free_forever' (accesso a vita). */
   hasProAccess: boolean;
+  /** true = il piano PRO in corso è la prova gratuita di 30 giorni (stato 'trialing'). */
+  trialAttivo: boolean;
+  /** Fine della prova PRO (ISO) se trialAttivo, altrimenti null. */
+  trialScadenza: string | null;
   /** Ricarica piano/abbonamento dal DB (modifiche admin senza logout; su focus/timer). */
   refreshProfilo: () => Promise<void>;
   /** Radar attivo: true = invia notifiche; false = "in pausa" (preferenze conservate). */
   radarAttivo: boolean;
   /** Imposta radar_attivo su profiles (senza perdere province/classi/preferenze). */
   aggiornaRadarAttivo: (attivo: boolean) => Promise<void>;
+  /** Concede la prova gratuita PRO di 30 giorni (solo se il piano è ancora Base). */
+  attivaTrialPro: () => Promise<void>;
   /** Salva/aggiorna i dati anagrafici mancanti (nome/cognome/genere/età) su profiles e nello stato. */
   aggiornaAnagrafica: (d: {
     nome: string;
@@ -186,6 +192,19 @@ function normalizzaPiano(raw: unknown): 'base' | 'pro' | 'free_forever' {
   return 'base';
 }
 
+/**
+ * Deduplica `signup_completed`: la creazione account email genera sia il track
+ * immediato in register() sia l'evento SIGNED_IN del listener OAuth (stessa
+ * registrazione, un solo evento nel funnel). Nessun dato personale: solo metodo.
+ */
+let ultimoTrackSignupMs = 0;
+function tracciaSignupCompletato(method: string, demo?: boolean): void {
+  const ora = Date.now();
+  if (ora - ultimoTrackSignupMs < 3000) return;
+  ultimoTrackSignupMs = ora;
+  track('signup_completed', demo ? { method, demo: true } : { method });
+}
+
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -200,6 +219,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [piano, setPiano] = useState<'base' | 'pro' | 'free_forever'>('base');
   /** Stato Radar Scuole letto da profiles.radar_attivo (default false). */
   const [radarAttivo, setRadarAttivo] = useState(false);
+  /** Fine della prova PRO (ISO) se `subscription_status = 'trialing'`, altrimenti null. */
+  const [trialScadenza, setTrialScadenza] = useState<string | null>(null);
   const [notificheUsate, setNotificheUsate] = useState(0);
   const [crediti, setCrediti] = useState(0);
   const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
@@ -275,11 +296,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           } else {
             // Account creato (o già registrato, in tal caso si riallaccia alla sessione).
             track('signup_success', { method: 'email' });
+            tracciaSignupCompletato('email');
           }
         });
       } else {
         // Modalità demo (Supabase non configurato): la registrazione è locale e immediata.
         track('signup_success', { method: 'email', demo: true });
+        tracciaSignupCompletato('email', true);
       }
     },
     [setUser],
@@ -711,7 +734,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     console.log('[refreshProfilo] utente attivo →', { id: sess.user.id, email: sess.user.email ?? '' });
     const { data, error } = await supabase
       .from('profiles')
-      .select('piano, abbonamento_scade_il, crediti, notifiche_usate, radar_attivo')
+      .select('piano, abbonamento_scade_il, subscription_status, crediti, notifiche_usate, radar_attivo, is_free_forever')
       .eq('id', sess.user.id)
       .maybeSingle();
     if (error || !data) {
@@ -725,7 +748,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Diagnostica: mostra la riga grezza restituita dal DB.
     console.log('[refreshProfilo] riga profiles (per id) →', data);
     const periodoOk = !data.abbonamento_scade_il || new Date(data.abbonamento_scade_il) > new Date();
-    const pianoCorrente = normalizzaPiano(data.piano);
+    // Il flag is_free_forever è la fonte canonica: sovrascrive qualsiasi alias testuale.
+    const pianoCorrente = data.is_free_forever === true ? 'free_forever' : normalizzaPiano(data.piano);
     const pianoGratuitoVita = pianoCorrente === 'free_forever';
     const hasAccessoPro = pianoCorrente !== 'base';
     setPiano(pianoCorrente);
@@ -733,8 +757,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCrediti(Number(data.crediti ?? 0));
     setNotificheUsate(Number(data.notifiche_usate ?? 0));
     setRadarAttivo(data.radar_attivo === true);
+    setTrialScadenza(
+      pianoCorrente === 'pro' && String(data.subscription_status ?? '').toLowerCase() === 'trialing'
+        ? data.abbonamento_scade_il
+          ? String(data.abbonamento_scade_il)
+          : null
+        : null,
+    );
     console.log('Logged user piano:', pianoCorrente, 'hasProAccess:', hasAccessoPro);
-  }, [setAbbonato, setCrediti, setNotificheUsate, setPiano, setRadarAttivo]);
+  }, [setAbbonato, setCrediti, setNotificheUsate, setPiano, setRadarAttivo, setTrialScadenza]);
 
   /**
    * Attiva/mette in pausa il Radar per l'utente autenticato (profiles.radar_attivo).
@@ -758,6 +789,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [setRadarAttivo],
   );
 
+  /**
+   * Trial gratuito: al termine dell'onboarding un utente Base riceve il piano
+   * PRO per 30 giorni (scadenza = oggi+30). Dal 2° anno si passa al prezzo
+   * pieno 49,90 €/anno (promo 50% disponibile per il 1° anno).
+   */
+  const attivaTrialPro = useCallback(async (): Promise<void> => {
+    if (!supabase) return;
+    if (piano !== 'base') return; // già PRO / Free Forever: nessun trial
+    const { data: sess } = await supabase.auth.getUser();
+    if (!sess.user) return;
+    const scadenza = new Date();
+    scadenza.setDate(scadenza.getDate() + 30);
+    const iso = scadenza.toISOString();
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        piano: 'pro',
+        abbonamento_scade_il: iso,
+        subscription_tier: 'pro_annuale',
+        subscription_status: 'trialing',
+        current_period_end: iso,
+      })
+      .eq('id', sess.user.id);
+    if (error) {
+      console.warn('[trial] attivazione PRO trial fallita:', error.message);
+      return;
+    }
+    await refreshProfilo();
+  }, [piano, refreshProfilo]);
+
   // All'avvio, se esiste una sessione Supabase, carica le preferenze salvate nel DB.
   useEffect(() => {
     if (!supabase) {
@@ -777,7 +838,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAvatarUrl(String(metaAu.avatar_url ?? metaAu.picture ?? '').trim() || null);
         const { data, error } = await supabase
           .from('profiles')
-          .select('province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, abbonamento_scade_il, crediti, notifiche_usate, radar_attivo, favorite_schools, ignored_schools')
+          .select('province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, abbonamento_scade_il, subscription_status, crediti, notifiche_usate, radar_attivo, is_free_forever, favorite_schools, ignored_schools')
           .eq('id', au.id)
           .maybeSingle();
         // Diagnostica caricamento profilo: id/email sessione + riga grezza restituita dal DB.
@@ -813,7 +874,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // NB: NON si selezionano più subscription_status / current_period_end
           // (assenti nello schema): prima quell'errore invalidava l'intero
           // caricamento del profilo e il piano restava su 'base'.
-          const pianoCorrente = normalizzaPiano(data.piano);
+          // Il flag is_free_forever è la fonte canonica: sovrascrive qualsiasi alias testuale.
+          const pianoCorrente = data.is_free_forever === true ? 'free_forever' : normalizzaPiano(data.piano);
           const periodoOk =
             !data.abbonamento_scade_il || new Date(data.abbonamento_scade_il) > new Date();
           // Piano Free Forever: accesso PRO permanente — mai soggetto a scadenza
@@ -825,6 +887,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setCrediti(Number(data.crediti ?? 0));
           setNotificheUsate(Number(data.notifiche_usate ?? 0));
           setRadarAttivo(data.radar_attivo === true);
+          setTrialScadenza(
+            pianoCorrente === 'pro' && String(data.subscription_status ?? '').toLowerCase() === 'trialing'
+              ? data.abbonamento_scade_il
+                ? String(data.abbonamento_scade_il)
+                : null
+              : null,
+          );
           console.log('Logged user piano:', pianoCorrente, 'hasProAccess:', hasAccessoPro);
         }
         // Mini-onboarding anagrafico: profilo senza nome/cognome?
@@ -855,6 +924,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setSupabaseUserId(session.user.id);
         // Analytics: collega l'ID anonimo all'ID utente (nessun dato personale inviato).
         identify(session.user.id);
+        // Funnel: segnala l'iscrizione completata quando il primo accesso coincide con la
+        // creazione dell'account (provider da app_metadata, MAI email o dati anagrafici).
+        const appMeta = (session.user.app_metadata ?? {}) as Record<string, unknown>;
+        const provider =
+          String(appMeta.provider ?? (Array.isArray(appMeta.providers) ? appMeta.providers[0] : '') ?? '') ||
+          'email';
+        const creato = session.user.created_at ? new Date(session.user.created_at).getTime() : 0;
+        const ultimoAccesso = session.user.last_sign_in_at
+          ? new Date(session.user.last_sign_in_at).getTime()
+          : creato;
+        if (creato > 0 && Math.abs(ultimoAccesso - creato) < 60_000) {
+          tracciaSignupCompletato(provider);
+        }
         const meta = (session.user.user_metadata ?? {}) as Record<string, unknown>;
         // Avatar Google OAuth: avatar_url (o picture come fallback) in user_metadata.
         setAvatarUrl(String(meta.avatar_url ?? meta.picture ?? '').trim() || null);
@@ -1068,6 +1150,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** Entitlement globale: accesso PRO completo con piano 'pro' oppure 'free_forever'. */
   const hasProAccess = piano === 'pro' || piano === 'free_forever';
 
+  /** Trial PRO attivo: piano 'pro' + stato Stripe 'trialing' + scadenza futura. */
+  const trialAttivo =
+    piano === 'pro' && trialScadenza !== null && new Date(trialScadenza).getTime() > Date.now();
+
   const value: AppContextValue = {
     user,
     preferenze,
@@ -1075,6 +1161,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     abbonato,
     piano,
     hasProAccess,
+    trialAttivo,
+    trialScadenza,
     crediti,
     esami,
     interpelliNotificati,
@@ -1096,6 +1184,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshProfilo,
     radarAttivo,
     aggiornaRadarAttivo,
+    attivaTrialPro,
     authModalOpen,
     authModalMode,
     authModalCtx,

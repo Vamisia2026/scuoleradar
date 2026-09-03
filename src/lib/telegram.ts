@@ -278,3 +278,88 @@ export async function inviaNotificaTelegram(
   const testo = formattaMessaggioTelegram(interpello, classe, opts.dashboardUrl, opts.tipo ?? 'welcome');
   return inviaMessaggioTelegram(chatId, testo);
 }
+
+/* ------------------- Canali regionali (pubblicazione interpelli) ------------------- */
+
+/** Dati minimi di un interpello per la pubblicazione sul canale regionale. */
+export interface InterpelloCanale {
+  title: string;
+  schoolName?: string | null;
+  province: string;
+  classCodes?: string[];
+  expirationDate?: string | null;
+  link?: string | null;
+}
+
+/**
+ * Canali Telegram regionali di acquisizione interpelli.
+ * Formato env TELEGRAM_CHANNELS (JSON, chiave = codice provincia):
+ *   {"MI":"@ScuoleRadar_Interpelli_Milano","TO":"@ScuoleRadar_Interpelli_Torino"}
+ * Il bot deve essere AMMINISTRATORE del canale (o il chat_id numerico -100… del canale).
+ */
+export function getTelegramChannels(): Record<string, string> {
+  const raw = (process.env.TELEGRAM_CHANNELS ?? '').trim();
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const canali: Record<string, string> = {};
+    for (const [prov, chat] of Object.entries(parsed)) {
+      if (typeof chat === 'string' && chat.trim()) canali[prov.trim().toUpperCase()] = chat.trim();
+    }
+    return canali;
+  } catch (err) {
+    console.warn(
+      '⚠ TELEGRAM_CHANNELS non è un JSON valido — pubblicazione canali disattivata:',
+      (err as Error).message,
+    );
+    return {};
+  }
+}
+
+/** Chat/canale configurato per una provincia (es. "MI"), o null. */
+export function canalePerProvincia(provincia: string): string | null {
+  const canali = getTelegramChannels();
+  const p = (provincia ?? '').trim().toUpperCase();
+  return p && canali[p] ? canali[p] : null;
+}
+
+/**
+ * Pubblica un interpello NUOVO sul canale Telegram regionale.
+ * Struttura del post:
+ *   🚨 NUOVO INTERPELLO - [CLASSE] - [PROVINCIA]
+ *   🏫 Scuola · 🗓 Scadenza · 🔗 Avviso
+ *   CTA footer: "Vuoi ricevere solo gli interpelli per la tua classe di concorso?
+ *               Attiva il tuo Radar su ScuoleRadar.it"
+ */
+export async function pubblicaInterpelloSuCanale(
+  interpello: InterpelloCanale,
+  chatId?: string,
+): Promise<EsitoTelegram> {
+  const canale = chatId?.trim() ?? canalePerProvincia(interpello.province);
+  if (!canale) return { ok: false, error: 'Nessun canale configurato per la provincia' };
+
+  const classe = (interpello.classCodes?.[0] ?? 'ND').toUpperCase();
+  const provincia = (interpello.province ?? '').trim().toUpperCase() || 'ND';
+  const scadenza = formatDataScadenza(interpello.expirationDate ?? null);
+
+  const righe: string[] = [
+    `🚨 NUOVO INTERPELLO - <b>${escapeHtml(classe)}</b> - ${provincia}`,
+    '',
+  ];
+
+  if (interpello.schoolName?.trim()) {
+    righe.push(`🏫 <b>${escapeHtml(interpello.schoolName.trim())}</b>`);
+  }
+  if (interpello.title?.trim()) {
+    righe.push(`📌 ${escapeHtml(interpello.title.trim())}`);
+  }
+  righe.push(`🗓 Scadenza: ${scadenza}`);
+  if (interpello.link?.trim()) {
+    righe.push(`🔗 <a href="${escapeHtml(interpello.link.trim())}">Vai all'avviso ufficiale</a>`);
+  }
+  righe.push('', 'Vuoi ricevere solo gli interpelli per la tua classe di concorso?');
+  righe.push(`<a href="${DASHBOARD_URL.replace(/\/+$/, '')}/">Attiva il tuo Radar su ScuoleRadar.it</a>`);
+
+  return inviaMessaggioTelegram(canale, righe.join('\n'));
+}
+

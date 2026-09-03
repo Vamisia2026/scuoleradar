@@ -568,9 +568,9 @@ export function OnboardingPage() {
 
           {step === 4 && (
             <div className="animate-fade-in">
-              <h2 className="text-xl font-bold text-primary-800">Canali di notifica (Account Base)</h2>
+              <h2 className="text-xl font-bold text-primary-800">Canali di notifica</h2>
               <p className="mt-1 text-sm text-primary-600">
-                Riceverai le tue 3 segnalazioni gratuite, su Telegram e in copia via email.
+                Ricevi gli avvisi direttamente su Telegram e via email.
               </p>
 
               <div className="mt-6 space-y-5">
@@ -632,10 +632,6 @@ export function OnboardingPage() {
                     className="input"
                   />
                 </label>
-
-                <div className="rounded-xl bg-accent-50 px-4 py-3 text-sm text-accent-700">
-                  Account Base: 3 segnalazioni incluse, nessun costo.
-                </div>
               </div>
             </div>
           )}

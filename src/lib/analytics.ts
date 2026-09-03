@@ -16,6 +16,9 @@
  *   - `checkout_started`       → avvio sessione checkout Stripe (piano/promo/quantità)
  *   - `signup_attempted`       → invio form di registrazione email
  *   - `signup_success`         → account creato (email) / modalità demo
+ *   - `signup_completed`       → iscrizione completata (email/google/telegram; solo metodo)
+ *   - `radar_configured`       → wizard Radar completato (solo conteggi province/classi)
+ *   - `radar_status_toggled`   → pausa/riattivazione Radar (status active|paused)
  *   - `signin_google_started`  → avvio login Google OAuth
  */
 

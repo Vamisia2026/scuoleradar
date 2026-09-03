@@ -1,9 +1,10 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { BellRing, CheckCircle2, Radar, Database, SlidersHorizontal, UserPlus } from 'lucide-react';
+import { Radar, Database, SlidersHorizontal, UserPlus } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { InterpelloCard } from '@/components/InterpelloCard';
 import { PreferenzeRadar } from '@/components/PreferenzeRadar';
-import { useApp, LIMITE_NOTIFICHE_PROVA } from '@/contexts/AppContext';
+import { RadarStatusToggle } from '@/components/RadarStatusToggle';
+import { useApp } from '@/contexts/AppContext';
 import { interpelli } from '@/data/interpelli';
 import { classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
@@ -19,9 +20,8 @@ interface TabNav {
 export function DashboardLayout() {
   const tabs: TabNav[] = [
     { to: '/dashboard/radar', label: '📡 Radar Scuole', end: true },
-    { to: '/dashboard/cv', label: '📄 Crea CV' },
-    { to: '/dashboard/cfu', label: '🎓 Calcolatore CFU' },
-    { to: '/dashboard/assistente-ai', label: '💬 Assistente Sindacalista Virtuale' },
+    // Feature in incubazione (temporaneamente nascoste dalla nav):
+    //   📄 Crea CV · 🎓 Calcolatore CFU · 💬 Assistente Sindacalista Virtuale
     { to: '/dashboard/moduli', label: '📁 Moduli' },
     { to: '/dashboard/purefocus', label: '🧘 Pure Focus' },
     { to: '/dashboard/invita', label: '🎁 Invita un Collega', accent: true },
@@ -70,20 +70,37 @@ export function DashboardPage() {
     user,
     interpelliFiltrati,
     preferenze,
-    notificheUsate,
     abbonato,
+    piano,
+    trialAttivo,
+    trialScadenza,
     openAuthModal,
     openRadarWizard,
   } = useApp();
-
-  const limiteRaggiunto = !abbonato && notificheUsate >= LIMITE_NOTIFICHE_PROVA;
-  const notificheRimanenti = Math.max(LIMITE_NOTIFICHE_PROVA - notificheUsate, 0);
 
   // Vetrina Freemium: gli utenti non loggati vedono un campione dell'offerta
   // (max 3 interpelli) prima di essere invitati a registrarsi.
   const feedVetrina = !user && interpelliFiltrati.length === 0 ? interpelli : interpelliFiltrati;
   const interpelliVisibili = abbonato ? feedVetrina : feedVetrina.slice(0, 3);
-  const limiteFeedRaggiunto = !abbonato && feedVetrina.length > 3;
+
+  // Banner stato piano (Dashboard Radar).
+  const giorniTrialRimasti =
+    trialAttivo && trialScadenza
+      ? Math.max(1, Math.ceil((new Date(trialScadenza).getTime() - Date.now()) / 86_400_000))
+      : 0;
+  const provinciaCount = preferenze.provinceCodici.length;
+  const classeMaterieCount =
+    preferenze.classiCodici.length + preferenze.materieId.length + preferenze.materieCustom.length;
+  const testoBannerBase = `Piano Base (${provinciaCount} ${
+    provinciaCount === 1 ? 'Provincia' : 'Province'
+  }, ${classeMaterieCount} ${classeMaterieCount === 1 ? 'Classe' : 'Classi'}) - Passa a PRO per avvisi istantanei e tutte le province.`;
+  const testoBannerAttivo = trialAttivo
+    ? `Piano PRO in prova (${giorniTrialRimasti} ${
+        giorniTrialRimasti === 1 ? 'giorno rimasto' : 'giorni rimasti'
+      }) - Notifiche illimitate attive.`
+    : piano === 'free_forever'
+      ? 'Account Free Forever - Notifiche illimitate attive.'
+      : 'Piano PRO attivo - Notifiche illimitate attive.';
 
   // Etichette per lo stato vuoto del Radar (dalle preferenze dell'utente).
   const classeEtichetta = preferenze.classiCodici
@@ -113,6 +130,9 @@ export function DashboardPage() {
           Servizio attivo
         </span>
       </div>
+
+      {/* Stato Radar utente autenticato: Attivo / In Pausa (interruttore) */}
+      {user && <RadarStatusToggle />}
 
       {/* Vetrina Freemium: copy di conversione per gli utenti non loggati */}
       {!user ? (
@@ -150,48 +170,32 @@ export function DashboardPage() {
         </div>
       ) : (
         <div
-          className={`rounded-2xl border p-5 shadow-card ${
-            abbonato
-              ? 'border-accent-200 bg-accent-50'
-              : limiteRaggiunto
-                ? 'border-secondary-200 bg-secondary-50'
-                : 'border-primary-100 bg-white'
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-5 shadow-card ${
+            piano === 'base'
+              ? 'border-primary-200 bg-primary-50'
+              : 'border-accent-200 bg-accent-50'
           }`}
         >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <span
-              className={`inline-flex h-10 w-10 items-center justify-center rounded-full ${
-                abbonato ? 'bg-accent-500 text-white' : 'bg-primary-500 text-white'
+              className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                piano === 'base' ? 'bg-primary-500 text-white' : 'bg-accent-500 text-white'
               }`}
             >
-              {abbonato ? <CheckCircle2 className="h-5 w-5" /> : <BellRing className="h-5 w-5" />}
+              <Radar className="h-5 w-5" />
             </span>
-            <div>
-              <p className="text-sm font-semibold text-primary-800">
-                {abbonato
-                  ? 'Sei abbonato: notifiche illimitate.'
-                  : notificheRimanenti > 0
-                    ? `Ti restano ${notificheRimanenti} di ${LIMITE_NOTIFICHE_PROVA} notifiche di prova`
-                    : 'Notifiche di prova completate'}
-              </p>
-              <p className="text-xs text-primary-500">
-                {abbonato
-                  ? 'Riceverai tutte le notifiche pertinenti, senza limiti.'
-                  : notificheRimanenti > 0
-                    ? 'Le notifiche dell\'anno: 3 gratuite, si rinnovano a ogni anno solare.'
-                    : 'Passa a PRO per continuare a ricevere notifiche.'}
-              </p>
-            </div>
+            <p className="min-w-0 text-sm font-semibold leading-relaxed text-primary-800">
+              {piano === 'base' ? testoBannerBase : testoBannerAttivo}
+            </p>
           </div>
-        </div>
-        {(limiteRaggiunto || limiteFeedRaggiunto) && (
-          <p className="mt-3 text-sm text-secondary-800">
-            Hai usato le tue {LIMITE_NOTIFICHE_PROVA} notifiche per quest&apos;anno: i contenuti
-            restano accessibili. Con il PRO ricevi notifiche illimitate, oppure riparti da 3 il
-            prossimo anno.
-          </p>
-        )}
+          {piano === 'base' && (
+            <Link
+              to="/prezzi"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-secondary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
+            >
+              Passa a PRO
+            </Link>
+          )}
         </div>
       )}
 

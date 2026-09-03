@@ -33,6 +33,7 @@ import {
   type InterpelloParsato,
 } from './parser.ts';
 import { notificaNuoviInterpelli } from '../lib/notifier.ts';
+import { getTelegramChannels, pubblicaInterpelloSuCanale } from '../lib/telegram.ts';
 
 /* ------------------------------- Tipi ------------------------------- */
 
@@ -384,6 +385,42 @@ function mappaRigaNotices(a: InterpelloParsato) {
 // riceve i nuovi interpelli, interroga il Matching Engine (findUtentiCompatibili)
 // per trovare gli utenti con preferenze compatibili e invia le mail via Resend.
 
+/* -------------------- Canali Telegram regionali (FASE 5) -------------------- */
+
+/**
+ * Pubblica gli interpelli NUOVI sui canali Telegram regionali configurati
+ * (env TELEGRAM_CHANNELS = JSON provincia → @canale/@chat). Il bot deve essere
+ * amministratore del canale. Nessuna azione se non ci sono canali configurati.
+ * Gli errori vengono loggati singolarmente: nessun fallimento silenzioso.
+ */
+async function pubblicaNuoviSuCanali(nuovi: AvvisoRilevato[]): Promise<void> {
+  const canali = getTelegramChannels();
+  const provinceConfigurate = Object.keys(canali);
+  if (provinceConfigurate.length === 0 || nuovi.length === 0) return;
+
+  console.log(
+    `• Pubblicazione canali Telegram: ${provinceConfigurate.length} canali configurati (${provinceConfigurate.join(', ')})`,
+  );
+  let pubblicati = 0;
+  for (const n of nuovi) {
+    const esito = await pubblicaInterpelloSuCanale({
+      title: n.title,
+      schoolName: n.schoolName,
+      province: n.province,
+      classCodes: n.classCodes,
+      expirationDate: n.expirationDate,
+      link: n.link,
+    });
+    if (esito.ok) {
+      pubblicati += 1;
+      console.log(`  ✓ Canale ${n.province}: ${n.title.slice(0, 60)}`);
+    } else {
+      console.warn(`  ✗ Canale ${n.province} non pubblicato (${n.title.slice(0, 60)}): ${esito.error}`);
+    }
+  }
+  console.log(`  ✓ Canali Telegram: ${pubblicati}/${nuovi.length} interpelli pubblicati`);
+}
+
 /* -------------------------------- main -------------------------------- */
 
 async function main() {
@@ -503,10 +540,19 @@ async function main() {
     if (!noEmail) {
       await notificaNuoviInterpelli(supabase, nuovi);
     }
+    // FASE 5 — canali Telegram regionali (solo interpelli NUOVI e fonti reali).
+    if (!useFixture) {
+      await pubblicaNuoviSuCanali(nuovi);
+    }
     return;
   }
 
   console.log(`✓ Upsert completato su interpelli (righe inviate: ${righeInterpelli.length}).`);
+
+  // FASE 5 — canali Telegram regionali (solo interpelli NUOVI e fonti reali).
+  if (!useFixture) {
+    await pubblicaNuoviSuCanali(nuovi);
+  }
 
   // FASE 4 — notifiche email per i soli interpelli nuovi
   if (!noEmail) {

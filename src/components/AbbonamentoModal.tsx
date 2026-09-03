@@ -116,7 +116,7 @@ export function AbbonamentoModal({ open, onClose, onConfirm }: AbbonamentoModalP
               </>
             ) : (
               <>
-                49€<span className="text-base font-normal">/anno</span>
+                49,90€<span className="text-base font-normal">/anno</span>
               </>
             )}
           </p>

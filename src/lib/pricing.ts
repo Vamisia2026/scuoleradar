@@ -7,6 +7,17 @@
 
 export type PianoId = 'pro_annuale' | 'pro_mensile' | 'a_consumo';
 
+/** Prezzo ancorato PRO annuale (€/anno) — fonte autorevole: Price ID Stripe server-side. */
+export const PREZZO_PRO_ANNUO_EUR = 49.9;
+/** Prezzo PRO annuale formattato per le UI. */
+export const PREZZO_PRO_ANNUO_ETICHETTA = '49,90 €';
+/** Durata del TRIAL gratuito concesso al termine dell'onboarding. */
+export const GIORNI_TRIAL_PRO = 30;
+/** Sconto promozionale primo anno (%) applicato prima della scadenza del trial. */
+export const SCONTO_PRIMO_ANNO_PERCENTO = 50;
+/** Prezzo scontato primo anno (24,95 €) — rinnovo poi al prezzo pieno. */
+export const PREZZO_PRIMO_ANNO_SCONTATO_EUR = PREZZO_PRO_ANNUO_EUR * (1 - SCONTO_PRIMO_ANNO_PERCENTO / 100);
+
 /** Piani disponibili (in ordine di presentazione). */
 export const PIANI: PianoId[] = ['pro_annuale', 'pro_mensile', 'a_consumo'];
 

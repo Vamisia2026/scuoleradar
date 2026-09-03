@@ -7,6 +7,7 @@ import {
 import { Modal } from '@/components/Modal';
 import { Pill } from '@/components/Pill';
 import { useApp, STORAGE_KEY_RADAR_WIZARD_PENDING } from '@/contexts/AppContext';
+import { track } from '@/lib/analytics';
 import { supabase } from '@/lib/supabase';
 import { ordiniScuola, materie, type OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso } from '@/data/classiConcorso';
@@ -52,7 +53,7 @@ export function RadarWizardModal() {
   const navigate = useNavigate();
   const {
     user, preferenze, radarWizardOpen, closeRadarWizard, completaOnboarding, salvaProfilo,
-    aggiornaRadarAttivo, openAuthModal,
+    aggiornaRadarAttivo, attivaTrialPro, openAuthModal,
   } = useApp();
 
   const [fase, setFase] = useState<'wizard' | 'done'>('wizard');
@@ -225,7 +226,16 @@ export function RadarWizardModal() {
       setSalvando(true);
       try {
         await aggiornaRadarAttivo(true);
+        await attivaTrialPro();
         await salvaProfilo(preferenzeFinali);
+        // Analytics funnel: configurazione completata (solo conteggi, nessun dato personale).
+        track('radar_configured', {
+          provinces: preferenzeFinali.provinceCodici.length,
+          classes:
+            preferenzeFinali.classiCodici.length +
+            preferenzeFinali.materieId.length +
+            preferenzeFinali.materieCustom.length,
+        });
         setFase('done');
       } finally {
         setSalvando(false);
@@ -267,9 +277,10 @@ export function RadarWizardModal() {
           </span>
           <h3 className="mt-4 text-xl font-bold text-primary-800">Il tuo Radar è attivo!</h3>
           <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-primary-600">
-            Preferenze salvate: {provinceCodici.length} {provinceCodici.length === 1 ? 'provincia' : 'province'},{' '}
-            {classiCodici.length + materieId.length} tra classi e materie. Ti avviseremo appena
-            esce un'opportunità per te.
+            Preferenze salvate: {provinceCodici.length}{' '}
+            {provinceCodici.length === 1 ? 'provincia' : 'province'},{' '}
+            {classiCodici.length + materieId.length + materieCustom.length} tra classi e materie. Ti
+            avviseremo appena esce un&apos;opportunità per te.
           </p>
           <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
             <button
@@ -391,7 +402,7 @@ export function RadarWizardModal() {
                 </div>
               )}
 
-              <div className="mt-3 max-h-72 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-2">
+              <div className="mt-3 max-h-56 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-2">
                 {provinceFiltrate.length === 0 ? (
                   <p className="p-4 text-center text-sm text-primary-400">Nessuna provincia trovata.</p>
                 ) : (
@@ -603,7 +614,7 @@ export function RadarWizardModal() {
             <div className="animate-fade-in">
               <h2 className="text-lg font-bold text-primary-800">Canali di notifica</h2>
               <p className="mt-1 text-sm text-primary-600">
-                3 segnalazioni incluse gratis, su Telegram ed email.
+                Ricevi gli avvisi direttamente su Telegram e via email.
               </p>
 
               <div className="mt-5 space-y-5">
@@ -659,14 +670,14 @@ export function RadarWizardModal() {
                 </label>
 
                 <div className="rounded-xl bg-accent-50 px-4 py-3 text-sm text-accent-700">
-                  Account Base: 3 segnalazioni incluse, nessun costo.
+                  Al termine della prova di 30 giorni riceverai un&apos;offerta col 50% di sconto sul piano PRO.
                 </div>
               </div>
             </div>
           )}
 
-          {/* Navigation */}
-          <div className="mt-5 flex items-center justify-between">
+          {/* Navigation — sticky in fondo al pannello: azioni sempre visibili anche a schermi bassi */}
+          <div className="sticky bottom-0 z-10 mt-5 flex items-center justify-between border-t border-primary-100 bg-white pb-1 pt-3">
             {step > 1 ? (
               <button
                 type="button"

@@ -21,7 +21,7 @@ export const servizi: Servizio[] = [
     caratteristiche: [
       'Filtri per ordine di scuola, classe di concorso, materia e provincia',
       'Notifiche Telegram + email quando esce qualcosa di pertinente',
-      '3 segnalazioni incluse gratis, poi PRO 49€/anno',
+      'Prova PRO gratis per 30 giorni: poi 49,90€/anno (50% di sconto il 1° anno)',
       "Niente risultati sfocati: se non c'è nulla, te lo diciamo.",
     ],
     destinatari: 'Docenti di ogni ordine e grado, supplenti, aspiranti docenti e personale ATA.',

@@ -70,7 +70,7 @@ const piani: Piano[] = [
   {
     plan: 'pro_annuale',
     nome: 'PRO Annuale',
-    prezzo: '49€',
+    prezzo: '49,90€',
     periodo: 'anno',
     descrizione: 'Il massimo dell\u2019offerta, al prezzo migliore.',
     evidenziato: true,

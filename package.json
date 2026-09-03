@@ -17,6 +17,7 @@
     "test:scadenze": "tsx scripts/test-scadenze.ts",
     "scadenze:sync": "tsx scripts/sync-deadlines.ts",
     "test:notifiche": "tsx scripts/test-notifiche.ts",
+    "test:notifier-dry": "tsx scripts/test-notifier-dry.ts",
     "test:pdf": "tsx scripts/test-pdf-mad.ts",
     "test:pdf:breve": "tsx scripts/test-pdf-breve.ts",
     "test:pdf:brevi": "tsx scripts/test-pdf-brevi.ts",

@@ -4,6 +4,7 @@ import {
   Radar, BellRing, ShieldCheck, Heart, ArrowRight, UserPlus, Send, CreditCard, MapPin, Calendar, Sparkles,
 } from 'lucide-react';
 import { Header } from '@/components/Header';
+import { FlightBoardInterpelli } from '@/components/FlightBoardInterpelli';
 import { SimulatorRadar } from '@/components/SimulatorRadar';
 import { useApp } from '@/contexts/AppContext';
 import { AdminAccessModal } from '@/pages/admin/AdminAccessModal';
@@ -126,6 +127,9 @@ export function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* Radar Live — flight board interpelli (subito sotto la CTA hero) */}
+      <FlightBoardInterpelli />
 
       {/* Ecco cosa riceverai — subito sotto l'hero, prima di "Come funziona". */}
       <section className="bg-primary-50 py-10">

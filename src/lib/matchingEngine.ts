@@ -139,7 +139,7 @@ export async function findUtentiCompatibili(
   try {
     const { data, error } = await client
       .from('profiles')
-      .select('id, email, email_notifica, nome, province_interesse, province_attive, classi_concorso, telegram_chat_id, piano, radar_attivo, notifiche_blocco_inviato, notifiche_recap_inviato');
+      .select('id, email, email_notifica, nome, province_interesse, province_attive, classi_concorso, telegram_chat_id, piano, radar_attivo, is_free_forever, notifiche_blocco_inviato, notifiche_recap_inviato');
 
     if (error) {
       console.warn('MatchingEngine — lettura profiles (utenti compatibili):', error.message);
@@ -174,7 +174,7 @@ export async function findUtentiCompatibili(
         province: provinceProfilo,
         classi: classiProfilo,
         telegramChatId: chatId || null,
-        piano: riga.piano ? String(riga.piano) : 'base',
+        piano: riga.is_free_forever === true ? 'free_forever' : riga.piano ? String(riga.piano) : 'base',
         notificheBloccoInviato: Boolean(riga.notifiche_blocco_inviato),
         notificheRecapInviato: Boolean(riga.notifiche_recap_inviato),
       });

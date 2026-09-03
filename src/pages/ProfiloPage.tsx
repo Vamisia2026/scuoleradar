@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Download, FolderOpen, Loader2, Lock, Trash2 } from 'lucide-react';
-import { useApp } from '@/contexts/AppContext';
+import { AlertTriangle, Download, FolderOpen, Loader2, Trash2 } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { supabase } from '@/lib/supabase';
 import {
@@ -14,7 +13,6 @@ import { Accordion } from '@/components/Accordion';
 import { RadarStatusToggle } from '@/components/RadarStatusToggle';
 
 export function ProfiloPage() {
-  const { abbonato } = useApp();
 
   // Storico dei modelli scaricati (condiviso con la pagina Moduli via localStorage)
   const [moduliScaricati, setModuliScaricati] = useLocalStorage<ModuloScaricato[]>(
@@ -90,10 +88,8 @@ export function ProfiloPage() {
       {/* Stato Radar: Attivo / In Pausa (preferenze conservate quando in pausa) */}
       <RadarStatusToggle />
 
-      {/* Gestione Moduli — tendina apribile/comprimibile (solo PRO);
-          per gli utenti Base una barra grigia compatta di upsell */}
-      {abbonato ? (
-        <Accordion
+      {/* Gestione Moduli — disponibile per tutti (Base, PRO, Free Forever) */}
+      <Accordion
           icona="📁"
           titolo="Modelli Scaricati di Recente"
           badge={moduliScaricati.length ? `${moduliScaricati.length} scaricati` : undefined}
@@ -157,20 +153,6 @@ export function ProfiloPage() {
             )}
           </div>
         </Accordion>
-      ) : (
-        <div className="flex flex-col items-start justify-between gap-3 rounded-2xl bg-slate-100 px-5 py-4 sm:flex-row sm:items-center">
-          <p className="flex items-center gap-2 text-sm font-semibold text-primary-600">
-            <Lock className="h-4 w-4 text-primary-400" />
-            Modelli Scaricati — Funzionalità PRO
-          </p>
-          <Link
-            to="/prezzi"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-secondary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
-          >
-            Strumento disponibile per gli utenti PRO
-          </Link>
-        </div>
-      )}
 
       {/* Sicurezza e Account */}
       <Accordion
