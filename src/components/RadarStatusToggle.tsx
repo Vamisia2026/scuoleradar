@@ -1,24 +1,96 @@
 /**
  * Radar Status Toggle — Attivo / In Pausa (Profilo / Dashboard).
- * Quando in pausa le preferenze (province, classi, canali) vengono CONSERVATE,
- * ma il Radar non invia notifiche finché non viene riattivato.
+ *
+ * SAFEGUARD: il Radar può essere attivato SOLO con criteri minimi validi
+ * (almeno 1 Provincia E almeno 1 Classe di Concorso/Materia). Senza configurazione
+ * si apre il setup Radar (soft); se chiuso/cancellato senza salvare criteri validi
+ * il toggle torna su OFF con toast:
+ *   "Non hai configurato il tuo Radar: il servizio rimane disattivato."
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2, Radar } from 'lucide-react';
-import { useApp } from '@/contexts/AppContext';
+import { supabase } from '@/lib/supabase';
+import { useApp, type Preferenze } from '@/contexts/AppContext';
+import { useToast } from '@/components/Toast';
 import { track } from '@/lib/analytics';
 
+/** Criteri minimi: 1 provincia + 1 classe/materia (stato locale, poi DB). */
+async function haCriteriMinimi(preferenze: Preferenze, userId?: string | null): Promise<boolean> {
+  const provLocal = preferenze.provinceCodici.length;
+  const classiLocal =
+    preferenze.classiCodici.length + preferenze.materieId.length + preferenze.materieCustom.length;
+  if (provLocal > 0 && classiLocal > 0) return true;
+  if (!supabase || !userId) return provLocal > 0 && classiLocal > 0;
+
+  const { data } = await supabase
+    .from('profiles')
+    .select('province_interesse, province_attive, classi_concorso, materie_id')
+    .eq('id', userId)
+    .maybeSingle();
+  if (!data) return false;
+  const prov =
+    (Array.isArray(data.province_interesse) ? data.province_interesse.length : 0) +
+    (Array.isArray(data.province_attive) ? data.province_attive.length : 0);
+  const classi =
+    (Array.isArray(data.classi_concorso) ? data.classi_concorso.length : 0) +
+    (Array.isArray(data.materie_id) ? data.materie_id.length : 0);
+  return prov > 0 && classi > 0;
+}
+
 export function RadarStatusToggle() {
-  const { radarAttivo, aggiornaRadarAttivo, preferenze } = useApp();
+  const { radarAttivo, aggiornaRadarAttivo, preferenze, supabaseUserId, radarWizardOpen, openRadarWizard } =
+    useApp();
+  const { mostraToast } = useToast();
   const [inCorso, setInCorso] = useState(false);
+  /** true se attendiamo il salvataggio del wizard per decidere il revert. */
+  const revertInSospeso = useRef(false);
+
+  // Quando il setup Radar si chiude (salvato OPPURE cancellato con X/ESC/backdrop)
+  // rivaluta i criteri: se ancora mancanti il Radar resta su OFF + toast di avviso.
+  useEffect(() => {
+    if (radarWizardOpen || !revertInSospeso.current) return;
+    const timeout = setTimeout(() => {
+      revertInSospeso.current = false;
+      void haCriteriMinimi(preferenze, supabaseUserId).then((ok) => {
+        if (ok) return; // criteri salvati dal wizard → Radar attivo
+        if (radarAttivo) void aggiornaRadarAttivo(false);
+        mostraToast(
+          'errore',
+          'Non hai configurato il tuo Radar: il servizio rimane disattivato.',
+        );
+      });
+    }, 600);
+    return () => clearTimeout(timeout);
+  }, [
+    radarWizardOpen,
+    revertInSospeso,
+    preferenze,
+    supabaseUserId,
+    radarAttivo,
+    aggiornaRadarAttivo,
+    mostraToast,
+  ]);
 
   const cambia = async (valore: boolean): Promise<void> => {
     if (inCorso) return;
     setInCorso(true);
     try {
-      await aggiornaRadarAttivo(valore);
-      // Analytics funnel: toggle stato Radar (solo stato, nessun dato personale).
-      track('radar_status_toggled', { status: valore ? 'active' : 'paused' });
+      if (!valore) {
+        await aggiornaRadarAttivo(false);
+        track('radar_status_toggled', { status: 'paused' });
+        return;
+      }
+      // SAFEGUARD: prima di attivare verifico i criteri minimi (DB come fonte).
+      const ok = await haCriteriMinimi(preferenze, supabaseUserId);
+      if (ok) {
+        await aggiornaRadarAttivo(true);
+        track('radar_status_toggled', { status: 'active' });
+        return;
+      }
+      // Configurazione mancante → apre il setup Radar; se chiuso senza salvare,
+      // l'effect sopra riporta il toggle su OFF con il toast.
+      revertInSospeso.current = true;
+      openRadarWizard();
     } finally {
       setInCorso(false);
     }
@@ -66,6 +138,11 @@ export function RadarStatusToggle() {
                 </span>
               )}
             </div>
+            {(provinceCount === 0 || classiCount === 0) && (
+              <p className="mt-1 text-[11px] text-error-600">
+                Configura almeno 1 provincia e 1 classe di concorso per attivare il Radar.
+              </p>
+            )}
           </div>
         </div>
 

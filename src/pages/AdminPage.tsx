@@ -115,11 +115,13 @@ export function AdminPage() {
       </header>
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        {DEV && !sessioneReale && (
+        {!sessioneReale && (
           <p className="mb-3 flex items-start gap-2 rounded-xl border border-warning-200 bg-warning-50 px-3 py-2 text-[11px] text-warning-700">
             <BadgeInfo className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            Accesso amministratore locale (demo): le operazioni che richiedono il database mostrano dati
-            di esempio. Per la gestione reale accedi con una sessione Supabase di un indirizzo autorizzato.
+            Accesso amministrativo locale/demo (nessuna sessione Supabase reale): la lista e le
+            operazioni mostrano dati di esempio o restano in sola lettura. Per la gestione completa
+            del database accedi con un account Google autorizzato (o con la password dell&apos;account
+            Supabase corrispondente).
           </p>
         )}
 

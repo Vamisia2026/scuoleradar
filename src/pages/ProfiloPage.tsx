@@ -10,6 +10,7 @@ import {
 } from '@/data/moduli';
 import { Modal } from '@/components/Modal';
 import { Accordion } from '@/components/Accordion';
+import { useToast } from '@/components/Toast';
 import { RadarStatusToggle } from '@/components/RadarStatusToggle';
 
 export function ProfiloPage() {
@@ -42,9 +43,13 @@ export function ProfiloPage() {
     }
   };
 
+  const { mostraToast } = useToast();
+
   const riscaricaModulo = (m: ModuloScaricato) => {
     setModuliScaricati(conAggiuntaInCima(moduliScaricati, m));
-    alert(`Download simulato di "${m.nome}" (${m.tipo}).`);
+    // Nessun dialogo di "download simulato": il documento esiste già in archivio
+    // e viene aperto/riscaricato come file statico dalla pagina Modulistica.
+    mostraToast('successo', 'Modulo già pronto: aprilo in "Modelli Scaricati" per vederlo e stamparlo.');
   };
 
   const rimuoviModulo = (id: string) =>

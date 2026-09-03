@@ -56,6 +56,12 @@ export interface AdminOpportunita {
 
 export type TabAdmin = 'utenti' | 'radar' | 'account';
 
+/**
+ * Chiave sessionStorage usata dal flusso "Accedi con Google" del pannello admin:
+ * dopo il ritorno dall'OAuth l'app reindirizza automaticamente su /admin.
+ */
+export const STORAGE_KEY_ADMIN_REDIRECT = 'sr_admin_redirect';
+
 /** Lista di base: email consentite per l'accesso admin. */
 export const ADMIN_EMAILS = ['bartoloansaldi@gmail.com', 'myvamisia@gmail.com'];
 

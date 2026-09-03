@@ -16,6 +16,8 @@
     "test:telegram": "tsx scripts/test-telegram.ts",
     "test:scadenze": "tsx scripts/test-scadenze.ts",
     "scadenze:sync": "tsx scripts/sync-deadlines.ts",
+    "provision:beta": "tsx scripts/provision-beta-users.ts",
+    "provision:beta:check": "tsx scripts/provision-beta-users.ts --check",
     "test:notifiche": "tsx scripts/test-notifiche.ts",
     "test:notifier-dry": "tsx scripts/test-notifier-dry.ts",
     "test:pdf": "tsx scripts/test-pdf-mad.ts",

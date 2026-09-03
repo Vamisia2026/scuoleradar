@@ -447,20 +447,24 @@ function etichettaProfilo(dimensione: string, valore: string): string {
   return valore.replace(/[_-]+/g, ' ');
 }
 
-/** Eliminato: nessun box "Guida alla compilazione" (documento compatto, note a piè di pagina). */
-function guidaCompilazione(_testo: string): string {
-  return '';
-}
-
 /** Cella compilabile vuota: solo una riga pulita per la scrittura a mano (nessun testo segnaposto). */
 function campoScrittura(): string {
   return `<div class="campo-scrittura"></div>`;
 }
 
-/** Campo a testo libero AMPIO (4-6 righe di scrittura) per nuclei fondanti,
- * obiettivi minimi e adattamento della programmazione. */
-function campoScritturaAmpio(righe = 5): string {
+/** Campo a testo libero AMPIO (6-8 righe di scrittura) per nuclei fondanti,
+ * obiettivi minimi/differenziati e adattamento della programmazione. */
+function campoScritturaAmpio(righe = 6): string {
   return `<div class="campo-scrittura-ampio">${Array.from({ length: righe }, () => '<div></div>').join('')}</div>`;
+}
+
+/** Campo AMPIO con micro-prompt guida grigio inline (righe di grafia reali).
+ * Usato nelle tabelle disciplinari del PEI: il docente trova il suggerimento
+ * discretamente DENTRO lo spazio di compilazione, mai box blu invasivi. */
+function campoAmpioGuidato(guida: string, righe = 6): string {
+  const prompt = `<p class="micro-prompt">${escapeHtml(guida)}</p>`;
+  const righeHtml = Array.from({ length: righe }, () => '<div></div>').join('');
+  return `<div class="campo-scrittura-ampio">${prompt}${righeHtml}</div>`;
 }
 
 /** Riga "etichetta → campo" (layout a 2 colonne: etichetta stretta, campo ampio con riga sottile). */
@@ -482,14 +486,25 @@ function voceCrocetta(testo: string): string {
 
 function sezioneCrocette(titolo: string, voci: string[], guida?: string, sotto = false): string {
   const tag = sotto ? 'h3' : 'h2';
-  const bloccoGuida = guida ? guidaCompilazione(guida) : '';
+  // La guida torna come micro-prompt grigio inline (mai più box "Guida alla compilazione").
+  const bloccoGuida = guida ? `<p class="micro-prompt">${escapeHtml(guida)}</p>` : '';
   return `<${tag}>${escapeHtml(titolo)}</${tag}>${bloccoGuida}<div class="crocette">${voci.map(voceCrocetta).join('')}</div>`;
 }
 
-function boxScrittura(titolo: string, guida?: string, alta = false, sotto = false): string {
+/**
+ * Box di scrittura guidata (PEI/PDP/verbali GLO e ogni documento inclusivo):
+ * riquadro bordato con micro-prompt grigio inline e righe di grafia a mano.
+ * MAI spazio bianco aperto: la struttura guida la compilazione a mano.
+ */
+function boxScrittura(titolo: string, guida?: string, alta = false, sotto = false, righe = 6): string {
   const tag = sotto ? 'h3' : 'h2';
-  const bloccoGuida = guida ? guidaCompilazione(guida) : '';
-  return `<${tag}>${escapeHtml(titolo)}</${tag}>${bloccoGuida}<div class="scrittura-mano${alta ? ' scrittura-mano--alta' : ''}"></div>`;
+  const classeAlta = alta ? ' spazio-scrittura--alta' : '';
+  const prompt = guida ? `<p class="micro-prompt">${escapeHtml(guida)}</p>` : '';
+  const righeHtml = Array.from({ length: righe }, () => '<div></div>').join('');
+  return `<${tag}>${escapeHtml(titolo)}</${tag}>
+    <div class="spazio-scrittura${classeAlta}">
+      ${prompt}<div class="righe-scrittura">${righeHtml}</div>
+    </div>`;
 }
 
 /**
@@ -497,6 +512,7 @@ function boxScrittura(titolo: string, guida?: string, alta = false, sotto = fals
  * tabella "Obiettivi minimi / Misure dispensative / Strumenti compensativi /
  * Valutazione" seguita da un box di approfondimento con gli obiettivi specifici.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- mantenuto come builder di riserva per i futuri moduli inclusivi a 5 pagine.
 function sezioneProgettazioneDisciplinare(titolo: string): string {
   return `<h2>${escapeHtml(titolo)}</h2>
     <table class="quadro-anagrafico quadro-descrittivo">
@@ -561,11 +577,19 @@ function tabellaProgettazioneDisciplina(materia: string): string {
   return `<h2>Progettazione disciplinare – ${m}</h2>
     <h3>Nuclei fondanti e adattamento della programmazione</h3>
     <table class="quadro-anagrafico">
-      ${rigaAnagrafica('Nuclei fondanti della materia', campoScritturaAmpio(5))}
-      ${rigaAnagrafica('Adattamento della programmazione', campoScritturaAmpio(5))}
-      ${rigaAnagrafica('Obiettivi minimi', campoScritturaAmpio(5))}
-      ${rigaAnagrafica('Contenuti essenziali / semplificazione', campoScritturaAmpio(5))}
+      ${rigaAnagrafica('Nuclei fondanti della materia', campoAmpioGuidato('Indicare i nuclei fondanti della disciplina e i contenuti essenziali irrinunciabili per l\'alunno/a.', 7))}
+      ${rigaAnagrafica('Adattamento della programmazione', campoAmpioGuidato('Descrivere in che modo la programmazione di classe viene adattata: tempi, consegne, mediatori didattici e modalità di verifica.', 6))}
+      ${rigaAnagrafica('Obiettivi minimi / differenziati', campoAmpioGuidato('Declinare gli obiettivi minimi di apprendimento (o differenziati ai sensi dell\'art. 10 D.I. 182/2020) per l\'alunno/a.', 7))}
+      ${rigaAnagrafica('Contenuti essenziali / semplificazione', campoAmpioGuidato('Elencare i contenuti essenziali e le forme di semplificazione e facilitazione previste per la disciplina.', 6))}
     </table>
+    <h3>Tipologia di adattamento della programmazione – ${m}</h3>
+    <div class="crocette">
+      <p class="voce"><span class="casella"></span>Semplificazione</p>
+      <p class="voce"><span class="casella"></span>Facilitazione</p>
+      <p class="voce"><span class="casella"></span>Riduzione quantitativa</p>
+      <p class="voce"><span class="casella"></span>Programmazione Differenziata (art. 10 D.I. 182/2020)</p>
+    </div>
+    <p class="micro-prompt">Barrare la/le modalità di adattamento prescelte per la disciplina. La programmazione differenziata (art. 10 D.I. 182/2020) richiede la formale deliberazione del Consiglio di Classe e la condivisione con la famiglia.</p>
     <h3>Misure dispensative applicate – ${m}</h3>
     <div class="crocette">
       ${dispense.map((d) => voceCrocetta(d)).join('\n')}
@@ -625,10 +649,10 @@ function sezionePianiUscita(): string {
 function sezioneProgettazioneCampi(titolo: string): string {
   return `<h2>${escapeHtml(titolo)}</h2>
     <table class="quadro-anagrafico quadro-descrittivo">
-      ${rigaAnagrafica('Traguardi di sviluppo e obiettivi', campoScrittura())}
-      ${rigaAnagrafica('Attività, materiali e strategie educative', campoScrittura())}
-      ${rigaAnagrafica('Risorse e facilitatori (anche con la famiglia)', campoScrittura())}
-      ${rigaAnagrafica('Osservazione e verifica degli esiti', campoScrittura())}
+      ${rigaAnagrafica('Traguardi di sviluppo e obiettivi', campoAmpioGuidato('Indicare i traguardi di sviluppo (Indicazioni Nazionali 2012) e gli obiettivi personalizzati per l\'alunno/a.', 4))}
+      ${rigaAnagrafica('Attività, materiali e strategie educative', campoAmpioGuidato('Descrivere attività, materiali e strategie educative previste per il Campo di Esperienza.', 4))}
+      ${rigaAnagrafica('Risorse e facilitatori (anche con la famiglia)', campoAmpioGuidato('Indicare risorse, figure di supporto e forme di collaborazione con la famiglia.', 3))}
+      ${rigaAnagrafica('Osservazione e verifica degli esiti', campoAmpioGuidato('Descrivere le modalità di osservazione e verifica degli esiti del percorso.', 3))}
     </table>`;
 }
 
@@ -687,14 +711,47 @@ function sezioneTutelaLegale(riferimenti: string[]): string {
     <p class="formula-dichiarazione">La scelta tra prove equipollenti e non equipollenti e tra programmazione per obiettivi minimi o differenziata è documentata nel presente piano e comunicata alla famiglia, ai sensi dell'art. 10 del D.I. 182/2020 e del D.Lgs. 62/2017, al fine di prevenire vizi di forma in sede di contenzioso.</p>`;
 }
 
-/** Blocco firme per l'ultima pagina dei documenti pedagogici/inclusivi: l'intero
- * team docente / GLO e la famiglia firmano (page-break-inside: avoid). */
+/**
+ * Tabella firme FORMALE del GLO (ultima pagina PEI/verbali, D.I. 182/2020):
+ * colonne esplicite Ruolo / Nome e Cognome / Firma Leggibile / Data per ogni
+ * componente. Include la clausola legale di approvazione e conservazione.
+ */
 function firmeRuoliEstese(): string {
+  const righe = [
+    'Dirigente Scolastico (o suo delegato)',
+    'Docente di Sostegno',
+    'Docenti Curricolari (almeno 2)',
+    'Genitori / Esercenti la responsabilità genitoriale',
+    'Specialista ASL / NPIA (se presente)',
+    'Educatore / Assistente all\u2019autonomia e alla comunicazione (se presente)',
+  ];
+  const righeHtml = righe
+    .map(
+      (ruolo) => `<tr>
+      <td>${escapeHtml(ruolo)}</td>
+      <td><span class="riga-firma"></span></td>
+      <td><span class="riga-firma"></span></td>
+      <td><span class="riga-firma"></span></td>
+    </tr>`,
+    )
+    .join('\n');
   return `<div class="firme-ruoli firme-estese">
-    <p class="titolo-chiusura">Firme del Consiglio di Classe / GLO</p>
-    <p>Componenti del GLO / Team docenti: <span class="riga-firma"></span></p>
-    <p>Famiglia / esercenti la responsabilità genitoriale: <span class="riga-firma"></span></p>
-    <p>Dirigente Scolastico: <span class="riga-firma"></span></p>
+    <p class="titolo-chiusura">Delibera di approvazione del GLO</p>
+    <p class="micro-copy">Il presente documento è stato condiviso e approvato dai componenti del GLO nella seduta del giorno ____ / ____ / ______.</p>
+    <table class="firme-concertate">
+      <thead>
+        <tr>
+          <th>Ruolo / Componente GLO</th>
+          <th>Nome e Cognome</th>
+          <th>Firma Leggibile</th>
+          <th>Data</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${righeHtml}
+      </tbody>
+    </table>
+    <p class="presa-atto">Il presente documento è redatto e approvato dal GLO ai sensi del D.Lgs. 66/2017 e del D.I. 182/2020. Copia conforme è conservata agli atti della scuola.</p>
   </div>`;
 }
 
@@ -970,6 +1027,7 @@ function quadroAnagrafico(famiglia: FamigliaDocumento, tipo: string): string {
     </table>`;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- il blocco "Contesto della richiesta" resta disattivato (il titolo riporta già tipo e ordine).
 function sezioniContesto(_profilo?: ProfiloIntervista): string {
   // Blocco "Contesto della richiesta" rimosso: il titolo del documento riporta già
   // tipo e ordine di scuola, senza metadati ridondanti nel corpo.
@@ -2311,25 +2369,25 @@ function costruisciSezioni(famiglia: FamigliaDocumento, tipo: string, ordine?: s
       `<h2>Quadro osservativo per dimensione (D.I. 182/2020)</h2>`,
       boxScrittura(
         'Dimensione Socializzazione / Interazione / Relazione',
-        'Osservazioni sulla dimensione sociale e relazionale (D.I. 182/2020): interazioni con pari e adulti, partecipazione, gestione delle emozioni.',
+        'Osservazioni sulla dimensione sociale e relazionale (D.I. 182/2020). Descrivere: modalità di interazione con pari e adulti, partecipazione alle attività, strategie di regolazione emotiva e supporti relazionali attivati.',
         true,
         true,
       ),
       boxScrittura(
         'Dimensione Comunicazione / Linguaggio',
-        'Osservazioni su comunicazione e linguaggio: modalità comunicative, comprensione, espressione, canali alternativi.',
+        'Descrivere: modalità comunicative prevalenti, comprensione ed espressione, uso di CAA o canali alternativi e strumenti compensativi impiegati.',
         true,
         true,
       ),
       boxScrittura(
         'Dimensione Autonomia / Orientamento',
-        'Osservazioni su autonomia personale, sociale e orientamento nello spazio e nel tempo.',
+        'Descrivere: livello di autonomia personale e sociale, capacità di spostamento negli ambienti scolastici, uso di sussidi e facilitatori, orientamento nello spazio e nel tempo.',
         true,
         true,
       ),
       boxScrittura(
         'Dimensione Cognitiva / Neuropsicologica / Apprendimento',
-        'Osservazioni su funzioni cognitive, memoria, attenzione, processi di apprendimento e stile cognitivo.',
+        'Descrivere: funzioni cognitive, memoria, attenzione, processi di apprendimento, stile cognitivo e strategie didattiche risultate efficaci.',
         true,
         true,
       ),
@@ -2338,11 +2396,11 @@ function costruisciSezioni(famiglia: FamigliaDocumento, tipo: string, ordine?: s
             `<h3>Griglia di osservazione per Campo di Esperienza</h3>
             <table class="quadro-anagrafico">
               <tr><td class="campo-etichetta">Campo di Esperienza</td><td class="campo-compilazione">Osservazioni e interventi previsti</td></tr>
-              ${rigaAnagrafica('Il sé e l\u2019altro', campoScrittura())}
-              ${rigaAnagrafica('Il corpo e il movimento', campoScrittura())}
-              ${rigaAnagrafica('Immagini, suoni, colori', campoScrittura())}
-              ${rigaAnagrafica('I discorsi e le parole', campoScrittura())}
-              ${rigaAnagrafica('La conoscenza del mondo', campoScrittura())}
+              ${rigaAnagrafica('Il sé e l\u2019altro', campoScritturaAmpio(3))}
+              ${rigaAnagrafica('Il corpo e il movimento', campoScritturaAmpio(3))}
+              ${rigaAnagrafica('Immagini, suoni, colori', campoScritturaAmpio(3))}
+              ${rigaAnagrafica('I discorsi e le parole', campoScritturaAmpio(3))}
+              ${rigaAnagrafica('La conoscenza del mondo', campoScritturaAmpio(3))}
             </table>`,
             sezioneProgettazioneCampi('Il sé e l\u2019altro'),
             sezioneProgettazioneCampi('Il corpo e il movimento'),
@@ -2354,12 +2412,12 @@ function costruisciSezioni(famiglia: FamigliaDocumento, tipo: string, ordine?: s
             `<h3>Griglia di osservazione per area disciplinare</h3>
             <table class="quadro-anagrafico">
               <tr><td class="campo-etichetta">Area disciplinare</td><td class="campo-compilazione">Osservazioni e interventi previsti</td></tr>
-              ${rigaAnagrafica('Italiano', campoScrittura())}
-              ${rigaAnagrafica('Matematica', campoScrittura())}
-              ${rigaAnagrafica('Inglese / Lingue straniere', campoScrittura())}
-              ${rigaAnagrafica('Storia / Geografia', campoScrittura())}
-              ${rigaAnagrafica('Scienze / Tecnologia', campoScrittura())}
-              ${rigaAnagrafica('Arte / Musica / Motoria', campoScrittura())}
+              ${rigaAnagrafica('Italiano', campoScritturaAmpio(3))}
+              ${rigaAnagrafica('Matematica', campoScritturaAmpio(3))}
+              ${rigaAnagrafica('Inglese / Lingue straniere', campoScritturaAmpio(3))}
+              ${rigaAnagrafica('Storia / Geografia', campoScritturaAmpio(3))}
+              ${rigaAnagrafica('Scienze / Tecnologia', campoScritturaAmpio(3))}
+              ${rigaAnagrafica('Arte / Musica / Motoria', campoScritturaAmpio(3))}
             </table>`,
             tabellaProgettazioneDisciplina('Italiano / Lingua e comunicazione'),
             tabellaProgettazioneDisciplina('Matematica'),
@@ -2615,10 +2673,10 @@ function costruisciModuloFormale(
   // Nota normativa pulita in calce (niente citazioni duplicate).
   const notaNormativa =
     tipo === 'pei'
-      ? 'Modello conforme ai modelli nazionali PEI (D.M. 182/2020, D.Lgs. 66/2017, L. 104/1992). Documento scaricato gratuitamente da ScuoleRadar.it.'
+      ? 'Modello conforme ai modelli nazionali PEI (D.M. 182/2020, D.Lgs. 66/2017, L. 104/1992). Documento rilasciato da ScuoleRadar.it.'
       : famiglia === 'istanza'
-        ? 'Modello conforme al D.Lgs. 66/2017, D.M. 182/2020 e D.I. 153/2023. Documento scaricato gratuitamente da ScuoleRadar.it.'
-        : `Modello conforme alle Linee Guida del Ministero dell\u2019Istruzione e del Merito. Riferimenti normativi: ${normativa}. Documento scaricato gratuitamente da ScuoleRadar.it.`;
+        ? 'Modello conforme al D.Lgs. 66/2017, D.M. 182/2020 e D.I. 153/2023. Documento rilasciato da ScuoleRadar.it.'
+        : `Modello conforme alle Linee Guida del Ministero dell\u2019Istruzione e del Merito. Riferimenti normativi: ${normativa}. Documento rilasciato da ScuoleRadar.it.`;
 
   // Classificazione rigida: i documenti pedagogici/inclusivi forzano il layout
   // esteso tramite un marcatore letto da `calcolaLayout`/`stimaPagine`.

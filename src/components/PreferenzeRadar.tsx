@@ -194,6 +194,8 @@ export function PreferenzeRadar() {
         ) : null}
       </div>
 
+      {/* Accordion preferenze — griglia responsive a 2 colonne (desktop) */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-start">
       {/* Ordini e Tipologie di Scuola — accordion */}
       <Accordion
         icona="📂"
@@ -612,6 +614,7 @@ export function PreferenzeRadar() {
           e usato per inviarti le notifiche Telegram.
         </p>
       </Accordion>
+      </div>
     </div>
   );
 }

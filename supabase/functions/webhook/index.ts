@@ -162,6 +162,38 @@ async function notificaAttivazione(userId: string, piano: string): Promise<void>
   }).catch(() => null);
 }
 
+/** Registra l'uso del coupon RADAR50 dopo un pagamento riuscito (monouso, anti-abuso). */
+async function registraUsoRadar50(userId: string, checkoutSessionId: string | null): Promise<boolean> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/registra_uso_coupon_radar50`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_user_id: userId, p_checkout_session_id: checkoutSessionId }),
+  });
+  return res.ok;
+}
+
+/**
+ * FLOW GUARD: chiude le sequenze drip/promozionali/scadenza pendenti al momento
+ * dell'attivazione PRO (il DB trigger trg_profiles_stop_drip_on_pro fa lo stesso
+ * automaticamente; qui è una doppia sicurezza esplicita).
+ */
+async function cancellaDripPro(userId: string): Promise<boolean> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/cancella_drip_pro`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_user_id: userId }),
+  });
+  return res.ok;
+}
+
 /** Converte un timestamp epoch (secondi) in data ISO, o null. */
 function epochToIso(epoch: number | null | undefined): string | null {
   if (!epoch) return null;
@@ -232,7 +264,14 @@ serve(async (req: Request) => {
           subscription_status: 'active',
         });
         console.log(`  → piano pro (subscription ${obj.id ?? '?'}, tier ${tier}): ${ok}`);
+        // FLOW GUARD: nessun drip residuo dopo l'upgrade a PRO + email di benvenuto.
+        await cancellaDripPro(userId);
         await notificaAttivazione(userId, 'pro');
+        // Coupon RADAR50: registra l'uso monouso (pagamento riuscito).
+        if (obj.metadata?.promo === 'RADAR50' && obj.payment_status === 'paid') {
+          const usato = await registraUsoRadar50(userId, obj.id ?? null);
+          console.log(`  → coupon RADAR50 registrato come usato: ${usato}`);
+        }
       }
 
       // Referral: se il checkout usava un codice promo, registra la ricompensa del referrer
@@ -260,6 +299,8 @@ serve(async (req: Request) => {
       console.log(
         `  → piano=${attivo ? 'pro' : 'base'} tier=${tier} status=${obj.status ?? '?'} scade=${scadenza}: ${ok}`,
       );
+      // FLOW GUARD: al primo passaggio a PRO attivo chiudi subito eventuali drip.
+      if (attivo) await cancellaDripPro(userId);
       break;
     }
 

@@ -8,6 +8,31 @@ const ADMIN_EMAILS = (Deno.env.get('ADMIN_EMAILS') ?? 'bartoloansaldi@gmail.com,
   .split(',')
   .map((s) => s.trim().toLowerCase());
 
+/**
+ * Password PROVVISORIA di default per gli utenti beta tester / pre-approvati.
+ * Al primo accesso l'utente è obbligato a impostarne una nuova personale
+ * (flag `force_password_change` su user_metadata → ForcePasswordModal).
+ */
+const PASSWORD_PROVVISORIA = 'Scuoleradar2026';
+
+/**
+ * Email PRE-APPROVATE (accesso beta automatico). L'azione `ensure_beta_users`
+ * verifica ogni indirizzo su auth.users, lo crea se manca e imposta/riallinea
+ * la password provvisoria + il flag di cambio obbligatorio al primo accesso.
+ */
+const EMAIL_PRE_APPROVATI = [
+  'piergiacomodileonardo@yahoo.it',
+  // Beta tester già presenti su profiles.is_beta_tester = true (rilevati sul DB):
+  'valentina.salla@gmail.com',
+  'valentina.salla@icsandamiano.edu.it',
+  'g.pampanaro@gmail.com',
+  'pampanaro.giuseppe@itisartom.edu.it',
+  'dineh3@gmail.com',
+  'fasogliomarco@gmail.com',
+  'bisonproductions@gmail.com',
+  'bartoloansaldi@gmail.com',
+];
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -52,6 +77,96 @@ async function verificaAdmin(req: Request) {
   const email = String(prof?.email ?? data.user.email ?? '').toLowerCase();
   if (!ADMIN_EMAILS.includes(email)) return { ok: false, status: 403, motivo: `non admin: ${email}` };
   return { ok: true, email, jwt };
+}
+
+/**
+ * Cerca un utente in auth.users per EMAIL esatta (case-insensitive).
+ * GoTrue non espone "getUserByEmail": si pagina `listUsers` fino a trovarlo.
+ */
+async function trovaUtenteAuthByEmail(sb: ReturnType<typeof createClient>, email: string) {
+  const target = String(email ?? '').trim().toLowerCase();
+  if (!target) return null;
+  let pagina = 1;
+  while (pagina <= 50) {
+    const { data, error } = await sb.auth.admin.listUsers({ page: pagina, perPage: 200 });
+    if (error) throw error;
+    const lista = data?.users ?? [];
+    const trovato = lista.find((u) => String(u.email ?? '').trim().toLowerCase() === target);
+    if (trovato) return trovato;
+    if (lista.length < 200) return null;
+    pagina += 1;
+  }
+  return null;
+}
+
+/**
+ * Provisioning idempotente di un utente beta / pre-approvato:
+ *  - assente su auth.users  → lo CREA con password provvisoria + force_password_change;
+ *  - presente senza accessi → riallinea password provvisoria + force_password_change;
+ *  - presente GIÀ attivo    → marca solo il profilo is_beta_tester (mai sovrascrivere
+ *    una password personale già in uso, a meno di `force` esplicito).
+ * Ritorna sempre un report strutturato (stato per email), MAI errori silenziosi.
+ */
+async function preparaAccessoBeta(
+  sb: ReturnType<typeof createClient>,
+  email: string,
+  opts: { force?: boolean; nome?: string; cognome?: string },
+): Promise<Record<string, unknown>> {
+  const em = String(email ?? '').trim().toLowerCase();
+  try {
+    const esistente = await trovaUtenteAuthByEmail(sb, em);
+
+    // ---- 1. Account assente → creazione automatica (invito al primo accesso).
+    if (!esistente) {
+      const nome = String(opts.nome ?? '').trim();
+      const cognome = String(opts.cognome ?? '').trim();
+      const { data: creato, error: errCreate } = await sb.auth.admin.createUser({
+        email: em,
+        password: PASSWORD_PROVVISORIA,
+        email_confirm: true,
+        user_metadata: { nome, cognome, force_password_change: true },
+      });
+      if (errCreate || !creato?.user) {
+        return { email: em, stato: 'errore', errore: errCreate?.message ?? 'creazione account non riuscita' };
+      }
+      const id = String(creato.user.id);
+      const { error: errProfilo } = await sb.from('profiles').upsert(
+        await rigaProfiles(sb, { id, email: em, nome, cognome, is_beta_tester: true, onboarded: false }),
+        { onConflict: 'id' },
+      );
+      return {
+        email: em,
+        stato: 'creato',
+        id,
+        ...(errProfilo ? { profilo: `profilo non salvato: ${errProfilo.message}` } : {}),
+      };
+    }
+
+    // ---- 2. Account esistente → marca il profilo come beta (piano intatto).
+    const id = String(esistente.id);
+    const meta = (esistente.user_metadata ?? {}) as Record<string, unknown>;
+    const giaAcceduto = Boolean(esistente.last_sign_in_at);
+    await sb.from('profiles').upsert(
+      await rigaProfiles(sb, { id, email: em, is_beta_tester: true }),
+      { onConflict: 'id' },
+    );
+
+    // ---- 3. Primo accesso (mai effettuato) o reset FORZATO esplicito:
+    //        password provvisoria + cambio obbligatorio al prossimo login.
+    if (!giaAcceduto || opts.force === true) {
+      const { error: errReset } = await sb.auth.admin.updateUserById(id, {
+        password: PASSWORD_PROVVISORIA,
+        user_metadata: { ...meta, force_password_change: true },
+      });
+      if (errReset) return { email: em, stato: 'errore', id, errore: errReset.message };
+      return { email: em, stato: giaAcceduto ? 'reset' : 'preparato', id };
+    }
+
+    // ---- 4. Account già attivo e nessun reset richiesto: password preservata.
+    return { email: em, stato: 'attivo', id, nota: 'password personale preservata' };
+  } catch (err) {
+    return { email: em, stato: 'errore', errore: (err as Error).message };
+  }
 }
 
 serve(async (req: Request) => {
@@ -252,6 +367,59 @@ serve(async (req: Request) => {
         ...(referrerByUser.get(String(u.id)) ?? {}),
       }));
       return risposta({ ok: true, utenti: lista });
+    }
+
+    // ============================================================
+    // ACCESSO BETA / UTENTI PRE-APPROVATI
+    // ============================================================
+    if (action === 'ensure_beta_users') {
+      const listaEmail =
+        Array.isArray(payload.emails) && payload.emails.length > 0
+          ? (payload.emails as unknown[]).map((e) => String(e ?? '').trim().toLowerCase()).filter(Boolean)
+          : EMAIL_PRE_APPROVATI;
+      if (listaEmail.length === 0) {
+        return risposta({ error: 'Nessuna email da processare.' }, 400);
+      }
+      const risultati: Array<Record<string, unknown>> = [];
+      for (const email of listaEmail) {
+        const esito = await preparaAccessoBeta(sb, email, {
+          force: payload.force === true,
+          nome: typeof payload.nome === 'string' ? payload.nome : undefined,
+          cognome: typeof payload.cognome === 'string' ? payload.cognome : undefined,
+        });
+        risultati.push(esito);
+      }
+      return risposta({ ok: true, password_provvisoria: PASSWORD_PROVVISORIA, risultati });
+    }
+
+    if (action === 'set_temp_password') {
+      const email = String(payload.email ?? '').trim().toLowerCase();
+      if (!email) return risposta({ error: 'email mancante' }, 400);
+      const esistente = await trovaUtenteAuthByEmail(sb, email);
+      if (!esistente) {
+        return risposta(
+          {
+            error:
+              `Nessun utente auth con email "${email}". ` +
+              'Per crearlo automaticamente usa l\'azione "ensure_beta_users".',
+          },
+          404,
+        );
+      }
+      const id = String(esistente.id);
+      const meta = (esistente.user_metadata ?? {}) as Record<string, unknown>;
+      const { error: errAggiorna } = await sb.auth.admin.updateUserById(id, {
+        password: PASSWORD_PROVVISORIA,
+        user_metadata: { ...meta, force_password_change: true },
+      });
+      if (errAggiorna) return risposta({ error: errAggiorna.message }, 500);
+      return risposta({
+        ok: true,
+        id,
+        email,
+        password_provvisoria: PASSWORD_PROVVISORIA,
+        force_password_change: true,
+      });
     }
 
     if (action === 'create_user') {

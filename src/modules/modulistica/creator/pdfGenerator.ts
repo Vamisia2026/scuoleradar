@@ -6,7 +6,7 @@
  * Wrappa l'HTML generato da DeepSeek in un documento completo con:
  *  - logo in alto a sinistra (42px) + linea divisoria 1px (#e5e7eb)
  *  - solo logo e titolo: nessun testo pubblicitario o marchi aggiuntivi
- *  - piè di pagina: "Documento scaricato gratuitamente da ScuoleRadar.it — Strumenti e risorse per la scuola" (sinistra)
+ *  - piè di pagina: riferimento essenziale "Documento rilasciato da ScuoleRadar.it" (sinistra)
  *    e numerazione "Pagina X di Y" (destra), via @page margin boxes
  *  - font Arial/Inter 11pt/12pt, interlinea 1.3, tabelle padding 8px e
  *    righe alternate chiarissime
@@ -16,21 +16,14 @@
 export const LOGO_DOCUMENTO = '/logo.png';
 
 const STILI_DOCUMENTO = `
+  /* Impostazioni foglio A4. Nessun "margin box" @page: i browser non li
+     stampano in modo affidabile e la numerazione lasciata al browser sporca
+     l'Atto Pubblico (data, URL, "Pagina X di Y" generati dal dialogo di
+     stampa). Intestazione e chiusura ufficiale vivono NEL layout del
+     documento; la stampa usa solo margini puliti (1cm). */
   @page {
     size: A4;
-    margin: 12mm 12mm 16mm 12mm;
-    @bottom-left {
-      content: "Documento scaricato gratuitamente da ScuoleRadar.it — Strumenti e risorse per la scuola";
-      font-family: Arial, sans-serif;
-      font-size: 8pt;
-      color: #64748b;
-    }
-    @bottom-right {
-      content: "Pagina " counter(page) " di " counter(pages);
-      font-family: Arial, sans-serif;
-      font-size: 8pt;
-      color: #64748b;
-    }
+    margin: 1cm;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
@@ -370,7 +363,153 @@ const STILI_DOCUMENTO = `
   .indice a { color: #2b6f9e; text-decoration: none; }
   strong, b { font-weight: 700; }
 
+  /* ============ REGOLA D'ORO 3 — INCLUSIONE (D.Lgs 66/2017 · D.I. 182/2020) ============
+     Famiglia A2: PEI, Verbali GLO, PDP, richieste sostegno. Documenti estesi,
+     rigorosi e legalmente difendibili: spazi di scrittura generosi sulle
+     dimensioni ICF, micro-prompt discreti e responsabilità esplicite. */
+
+  /* Micro-prompt: suggerimento grigio, non invadente, dentro gli spazi di
+     scrittura (mai box blu "da compilare": guida discreta per il docente). */
+  .micro-prompt {
+    color: #94a3b8;
+    font-size: 8pt;
+    font-style: italic;
+    font-weight: 400;
+    line-height: 1.35;
+    margin: 0 0 4px;
+    padding: 0;
+  }
+  /* Le dimensioni ICF chiave (Socializzazione/Comunicazione/Autonomia/Cognitiva)
+     non vanno MAI compresse in 2-3 righe: nei documenti estesi ogni box offre
+     spazio reale per la grafia a mano. */
+  body.layout-esteso .spazio-scrittura { min-height: 96px; }
+  body.layout-esteso .spazio-scrittura--media { min-height: 140px; }
+  body.layout-esteso .spazio-scrittura--alta { min-height: 190px; }
+  body.layout-esteso .quadro-descrittivo td.campo-compilazione .campo-scrittura {
+    min-height: 150px;
+    height: auto;
+  }
+  body.layout-esteso .micro-prompt { margin-bottom: 6px; }
+
+  /* Responsabilità condivisa: Consiglio di Classe + Specialist (ASL/Neuropsi-
+     chiatria) + Famiglia. Quadro firme concertate usato nei verbali GLO e nei
+     documenti di inclusione per schermare legalmente la scuola. */
+  .firme-concertate {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 18px;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .firme-concertate th {
+    background: #f8f9fa;
+    border: 1px solid #d1d5db;
+    padding: 7px 10px;
+    font-size: 9pt;
+    text-align: left;
+    color: #0c2235;
+  }
+  .firme-concertate td {
+    border: 1px solid #d1d5db;
+    padding: 30px 12px 10px;
+    vertical-align: bottom;
+    height: 96px;
+  }
+  .firme-concertate .ruolo-firmatario {
+    display: block;
+    font-size: 8pt;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 5px;
+  }
+  .firme-concertate .riga-firma { height: 18px; border-bottom: 1px dotted #333; }
+  body.layout-compatto .firme-concertate td { height: 58px; padding: 16px 8px 6px; }
+
+  /* Presa d'atto / condivisione esplicita (es. esiti GLO, scelte condivise). */
+  .presa-atto {
+    border: 1px solid #cbd5e1;
+    border-left: 4px solid #14354e;
+    background: #f8fafc;
+    padding: 10px 12px;
+    margin: 0 0 14px;
+    font-size: 9.5pt;
+    line-height: 1.5;
+    page-break-inside: avoid;
+  }
+  .presa-atto strong { color: #0f172a; }
+
+  /* ============ REGOLA D'ORO 6 — STAMPA & BOX DI SCRITTURA GUIDATI ============
+     Struttura a riquadri per i campi di scrittura (ICF, nuclei fondanti,
+     obiettivi minimi/differenziati): bordo discreto + micro-prompt grigio
+     inline + righe di grafia a mano. Mai spazi bianchi aperti. */
+  .spazio-scrittura {
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #fcfdff;
+    padding: 8px 12px 2px;
+    margin: 0 0 18px;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .spazio-scrittura .micro-prompt {
+    margin-bottom: 6px;
+    color: #8593a3;
+  }
+  .spazio-scrittura .righe-scrittura { margin: 2px 0 0; }
+  .spazio-scrittura .righe-scrittura div {
+    height: 26px;
+    margin: 0 0 3px;
+    border-bottom: 1px solid #dde3ea;
+  }
+  .campo-scrittura-ampio .micro-prompt {
+    color: #8593a3;
+    font-size: 8pt;
+    font-style: italic;
+    line-height: 1.35;
+    margin: 0 0 3px;
+  }
+
+  /* Tabella firme FORMALE del GLO (pagina di chiusura PEI/verbali):
+     ruoli a sinistra, righe di firma leggibile e data nelle colonne. */
+  .firme-concertate td {
+    height: auto;
+    padding: 10px 10px 4px;
+    vertical-align: top;
+  }
+  .firme-concertate td:first-child {
+    width: 34%;
+    font-weight: 600;
+    color: #334155;
+    font-size: 9pt;
+  }
+  .firme-concertate .riga-firma {
+    display: block;
+    margin-top: 16px;
+  }
+
+  /* Chiusura istituzionale elegante in calce all'ultima pagina (esteso). */
+  .footer-documento {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 26px;
+    padding-top: 8px;
+    border-top: 1px solid #cbd5e1;
+    font-size: 8pt;
+    color: #64748b;
+    line-height: 1.4;
+  }
+  .footer-documento strong { color: #334155; }
+
   @media print {
+    /* Stampa pulita "Atto Pubblico": margine uniforme 1cm e NESSUNA richiesta
+       di metadati browser (data/ora, URL, numerazione del dialogo di stampa)
+       nei margini. La numerazione e la chiusura sono disegnate nel documento:
+       intestazione nel layout, chiusura ufficiale in calce. */
+    @page {
+      size: A4;
+      margin: 1cm;
+    }
     .scrittura-mano,
     .tabella-firme,
     .intestazione-formale,
@@ -385,6 +524,18 @@ const STILI_DOCUMENTO = `
       page-break-inside: avoid;
     }
     h2, h3 { page-break-after: avoid; }
+    /* Atto Pubblico pulito: nessun timestamp/URL/header browser o rumore di
+       debug nella stampa; colori di sfondo fedeli all'anteprima. */
+    .no-print,
+    .browser-header,
+    .browser-footer,
+    .debug,
+    .debug-info,
+    [data-debug] { display: none !important; }
+    body {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
   }
   @media screen {
     body { padding: 24px; }
@@ -488,6 +639,16 @@ export function costruisciDocumento(titolo: string, contenutoHtml: string): Docu
   const corpo = conIndice ? aggiungiIndice(contenutoHtml) : contenutoHtml;
   const layout = calcolaLayout(contenutoHtml);
 
+  // Chiusura istituzionale in calce all'ultima pagina SOLO per i documenti
+  // estesi (PEI/PDP/verbali GLO...): i moduli compatti a 1 pagina non devono
+  // guadagnare righe in più (il Single Sign Box resta l'ultimo elemento).
+  const chiusura = layout === 'esteso'
+    ? `<footer class="footer-documento">
+  <span><strong>${escapeHtml(titoloPulito)}</strong> — Documento rilasciato da ScuoleRadar.it</span>
+  <span>Atto d\u2019ufficio · riproduzione per uso scolastico interno</span>
+</footer>`
+    : '';
+
   const html = `<!doctype html>
 <html lang="it">
 <head>
@@ -503,6 +664,7 @@ export function costruisciDocumento(titolo: string, contenutoHtml: string): Docu
 <hr class="divisore" />
 <h1 class="titolo-documento">${escapeHtml(titoloPulito)}</h1>
 <div class="contenuto-documento">${corpo}</div>
+${chiusura}
 </body>
 </html>`;
 

@@ -1,4 +1,9 @@
 ﻿import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import {
+  EMAIL_TEMPLATES,
+  getEmailScheda,
+  primoNome,
+} from '../_shared/emailTemplates.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
 const RESEND_FROM = Deno.env.get('RESEND_FROM_EMAIL') ?? 'ScuoleRadar (Notifiche Automatiche) <notifiche@scuoleradar.it>';
@@ -307,7 +312,34 @@ serve(async (req: Request) => {
       if (!email) email = (profilo.email_notifica || profilo.email || '').trim();
       if (!chatId) chatId = (profilo.telegram_chat_id ?? '').trim();
       if (!genere) genere = (profilo.genere ?? '').trim();
+      if (!nome) nome = primoNome(profilo.nome);
     }
+  }
+
+  // ------------------------------------------------------------
+  // TEMPLATE CENTRALIZZATI (email lifecycle — file _shared/emailTemplates.ts):
+  // FLUSSO 1 onboarding, FLUSSO 2 radar spento, FLUSSO 3 drip scadenza PRO.
+  // Oggetto/corpo/CTA provengono da un unico file con interpolazione {{nome}}
+  // e link canonici {{link_radar}} / {{link_checkout}} / {{link_purefocus}}.
+  // ------------------------------------------------------------
+  const scheda = EMAIL_TEMPLATES[tipo]
+    ? getEmailScheda(tipo as keyof typeof EMAIL_TEMPLATES, { nome })
+    : null;
+  if (scheda) {
+    const corpoHtml =
+      `<div style="max-width:600px;margin:0 auto;padding:24px;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;">` +
+      scheda.html +
+      `</div>`;
+    const errEmail = email
+      ? await inviaEmail(email, scheda.soggetto, corpoHtml)
+      : 'nessun indirizzo email';
+    const errTelegram = chatId ? await inviaTelegram(chatId, scheda.testo) : null;
+    if (errEmail) console.error(`[send-notification] ${tipo} → email ${email}: ${errEmail}`);
+    if (errTelegram) console.error(`[send-notification] ${tipo} → telegram ${chatId}: ${errTelegram}`);
+    return new Response(
+      JSON.stringify({ ok: !errEmail && !errTelegram, tipo, email: errEmail ?? 'ok', telegram: errTelegram ?? 'ok' }),
+      { status: 200, headers: CORS },
+    );
   }
 
   const testo = TESTI[tipo];

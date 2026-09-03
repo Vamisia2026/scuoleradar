@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FolderOpen, Loader2, UserPlus, X } from 'lucide-react';
+import { FolderOpen, UserPlus, X } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useApp } from '@/contexts/AppContext';
 import { useToast } from '@/components/Toast';
@@ -8,6 +8,7 @@ import {
   conAggiuntaInCima,
   macroAreaById,
   moduli,
+  trovaDocumentoModulisticaById,
   STORAGE_KEY_MODULI_SCARICATI,
   type DocumentoModulistica,
   type Modulo,
@@ -83,7 +84,6 @@ export function ModuliModule() {
   const [teaserAperto, setTeaserAperto] = useState(false);
   /** Modale "Moduli scaricati — Funzionalità PRO" per gli utenti Base. */
   const [proLockAperto, setProLockAperto] = useState(false);
-  const [recupero, setRecupero] = useState(false);
   const [moduliScaricati, setModuliScaricati] = useLocalStorage<ModuloScaricato[]>(
     STORAGE_KEY_MODULI_SCARICATI,
     [],
@@ -122,7 +122,11 @@ export function ModuliModule() {
     if (vista === 'miei') void caricaMieiDB();
   }, [vista, caricaMieiDB]);
 
-  /** Download dal catalogo: storico locale + persistenza su user_saved_modules. */
+  /**
+   * Download dal catalogo ("Scarica" nei Modelli Salvati): apre SUBITO
+   * l'anteprima dal template locale (zero latenza, nessuna attesa di rete,
+   * nessun errore visibile) e registra il download nel profilo in background.
+   */
   const handleDownload = useCallback(
     (m: Pick<Modulo, 'id' | 'nome' | 'tipo'>) => {
       // Vetrina: i download sono riservati agli account registrati (Free o PRO).
@@ -134,7 +138,14 @@ export function ModuliModule() {
       void registraDownloadCatalogo(m).then((res) => {
         if (res.ok) mostraToast('successo', 'Modulo salvato nei tuoi "Modelli Scaricati".');
       });
-      alert(`Download simulato di "${m.nome}" (${m.tipo}).`);
+      // Il documento esiste già nell'archivio: anteprima istantanea da template locale.
+      const completo = trovaDocumentoModulisticaById(m.id);
+      if (completo) {
+        setAnteprima({
+          modulo: creaDocumentoLocale(completo.nome, completo.profilo, completo.catalogoId),
+          cache: false,
+        });
+      }
     },
     [user, openVetrina, moduliScaricati, setModuliScaricati, mostraToast],
   );
@@ -165,35 +176,45 @@ export function ModuliModule() {
     [registraEAvvisa],
   );
 
-  /** Documento aperto dall'archivio (profilo già completo) → generazione cache-first. */
+  /**
+   * Documento aperto dall'archivio (profilo già completo).
+   *
+   * Strategia "file pre-esistente": l'anteprima si apre ISTANTANEAMENTE dal
+   * template locale (nessuna chiamata di rete, nessuna attesa, nessun toast di
+   * errore possibile). La cache del generatore viene interrogata SOLO in
+   * background come arricchimento best-effort: qualsiasi esito negativo resta
+   * completamente invisibile all'utente (solo console.warn di diagnostica).
+   */
   const apriDocumento = useCallback(
-    async (doc: DocumentoModulistica) => {
+    (doc: DocumentoModulistica) => {
       if (!user) {
         openVetrina('moduli');
         return;
       }
-      setRecupero(true);
-      try {
-        const res = await generaDocumento(doc.nome, doc.profilo, doc.catalogoId);
-        if (!res.ok || !res.esito) {
-          if (res.errore === 'NON_AUTENTICATO') richiediAccesso();
-          else mostraToast('errore', 'Ops, non siamo riusciti a preparare il documento. Riprova tra un istante.');
-          // Fallback locale: il pulsante "Apri documento" apre comunque l'anteprima.
-          apriAnteprima(creaDocumentoLocale(doc.nome, doc.profilo, doc.catalogoId), false);
-          return;
+      // Apertura immediata: il documento è già pronto localmente.
+      apriAnteprima(creaDocumentoLocale(doc.nome, doc.profilo, doc.catalogoId), false);
+
+      // Arricchimento silenzioso in background (mai errori/toast all'utente).
+      void (async () => {
+        try {
+          const res = await generaDocumento(doc.nome, doc.profilo, doc.catalogoId);
+          if (!res.ok || !res.esito) {
+            if (res.errore === 'NON_AUTENTICATO') richiediAccesso();
+            else console.warn('ModuliModule — arricchimento documento:', res.errore);
+            return;
+          }
+          // Sostituisce la bozza locale con la versione d'archivio (più ricca)
+          // SOLO se l'anteprima è ancora aperta sullo stesso documento.
+          setAnteprima((prev) => {
+            if (!prev || prev.modulo.title !== doc.nome) return prev;
+            return { modulo: res.esito!.modulo, cache: res.esito!.cache };
+          });
+        } catch (err) {
+          console.warn('ModuliModule — arricchimento documento:', err);
         }
-        apriAnteprima(res.esito.modulo, res.esito.cache);
-      } catch (err) {
-        console.warn('ModuliModule — apriDocumento:', err);
-        mostraToast('errore', 'Ops, non siamo riusciti a preparare il documento. Riprova tra un istante.');
-        // Fallback locale garantito anche in caso di errore imprevisto.
-        apriAnteprima(creaDocumentoLocale(doc.nome, doc.profilo, doc.catalogoId), false);
-      } finally {
-        // L'indicatore deve SEMPRE spegnersi, anche in caso di errore.
-        setRecupero(false);
-      }
+      })();
     },
-    [user, openVetrina, mostraToast, apriAnteprima, richiediAccesso],
+    [user, openVetrina, apriAnteprima, richiediAccesso],
   );
 
   /** Flusso chat dell'Archivista Capo: momentaneamente disattivato (teaser a Ottobre). */
@@ -372,16 +393,6 @@ export function ModuliModule() {
           compattato ? 'p-3 sm:p-4' : 'p-5'
         }`}
       >
-        {/* Indicatore di recupero INLINE (nessun overlay oscurante: l'archivio resta chiaro e interattivo) */}
-        {recupero && (
-          <div className="mb-3 flex items-center gap-2.5 rounded-xl border border-primary-100 bg-primary-50 px-4 py-2.5">
-            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-secondary-500" />
-            <p className="text-sm font-medium text-primary-700">
-              Recupero del documento in corso: controllo normativa e versioni recenti…
-            </p>
-          </div>
-        )}
-
         {/* Navigazione archivio / salvati (la ricerca filtra il catalogo) */}
         <ModuliNavigation vista={vista} onNaviga={apriTab} />
 

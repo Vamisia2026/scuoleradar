@@ -670,7 +670,16 @@ export function RadarWizardModal() {
                 </label>
 
                 <div className="rounded-xl bg-accent-50 px-4 py-3 text-sm text-accent-700">
-                  Al termine della prova di 30 giorni riceverai un&apos;offerta col 50% di sconto sul piano PRO.
+                  Il tuo account è attivo con <b>1 mese di PRO</b> offerto da{' '}
+                  <a
+                    href="https://purefocus.one"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-accent-800 underline decoration-accent-300 underline-offset-2 hover:text-accent-900"
+                  >
+                    PureFocus.one
+                  </a>
+                  : attiva il Radar e cerchiamo noi le opportunità per te.
                 </div>
               </div>
             </div>

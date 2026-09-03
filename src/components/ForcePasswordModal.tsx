@@ -22,15 +22,36 @@ export function ForcePasswordModal() {
     const verifica = async (): Promise<void> => {
       const { data } = await supabase!.auth.getUser();
       const meta = (data.user?.user_metadata ?? {}) as Record<string, unknown>;
+      // "Flag equivalente" a requires_password_change: vive su auth.users.user_metadata
+      // (impostato alla creazione/ripristino dall'admin) ed è la fonte canonica perché
+      // sopravvive al refresh del token e non richiede RLS aggiuntive su profiles.
       setAperto(meta.force_password_change === true);
     };
     void verifica();
     const { data: sub } = supabase!.auth.onAuthStateChange((evento) => {
-      if (evento === 'SIGNED_IN' || evento === 'TOKEN_REFRESHED') void verifica();
+      if (evento === 'SIGNED_IN' || evento === 'TOKEN_REFRESHED' || evento === 'USER_UPDATED') {
+        void verifica();
+      }
       if (evento === 'SIGNED_OUT') setAperto(false);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // Mentre la modale è aperta l'utente NON può aggirare il cambio password:
+  // blocco scroll di sfondo e tasto Escape (niente chiusure accidentali).
+  useEffect(() => {
+    if (!aperto) return;
+    const overflowPrecedente = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const bloccaEscape = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') e.preventDefault();
+    };
+    window.addEventListener('keydown', bloccaEscape, true);
+    return () => {
+      document.body.style.overflow = overflowPrecedente;
+      window.removeEventListener('keydown', bloccaEscape, true);
+    };
+  }, [aperto]);
 
   const salva = async (): Promise<void> => {
     if (nuova.length < 8) {
@@ -77,10 +98,11 @@ export function ForcePasswordModal() {
             <ShieldAlert className="h-5 w-5" />
           </span>
           <div>
-            <h2 className="text-sm font-bold text-primary-800">Cambia la tua password</h2>
+            <h2 className="text-sm font-bold text-primary-800">Imposta la tua password definitiva</h2>
             <p className="mt-1 text-xs leading-relaxed text-primary-500">
               Per accedere alla dashboard devi prima impostare una nuova password personale.
-              La password provvisoria non è più valida.
+              La password provvisoria ricevuta (accesso beta / pre-approvato) non è più valida
+              dopo questo passaggio.
             </p>
           </div>
         </div>
@@ -89,6 +111,7 @@ export function ForcePasswordModal() {
           <label className="block">
             <span className="text-[11px] font-bold uppercase tracking-wide text-primary-500">Nuova password</span>
             <input
+              autoFocus
               type="password"
               value={nuova}
               onChange={(e) => setNuova(e.target.value)}

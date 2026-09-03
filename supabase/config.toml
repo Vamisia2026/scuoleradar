@@ -1,0 +1,4 @@
+# Supabase CLI project config — ScuoleRadar (project ref: gwdmsgsshvdnfrplbjiv)
+# Creato per abilitare `supabase db push --db-url` da questa cartella.
+# Migrazioni lette da: project/supabase/migrations
+project_id = "gwdmsgsshvdnfrplbjiv"

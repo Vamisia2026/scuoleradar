@@ -1,18 +1,20 @@
 import { useEffect, type ReactNode } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { trackPageview } from '@/lib/analytics';
 import { AppProvider, useApp } from '@/contexts/AppContext';
 import { AuthModal } from '@/components/AuthModal';
 import { VetrinaModal } from '@/components/VetrinaModal';
 import { DevToolbar } from '@/components/DevToolbar';
 import { ScrollToTop } from '@/components/ScrollToTop';
-import { ToastProvider } from '@/components/Toast';
+import { ToastProvider, useToast } from '@/components/Toast';
 import { GoogleOneTap } from '@/components/GoogleOneTap';
 import { RadarWizardModal } from '@/components/RadarWizardModal';
 import { ForcePasswordModal } from '@/components/ForcePasswordModal';
+import { SoftOnboardingModal } from '@/components/SoftOnboardingModal';
 import { DatiProfiloModal } from '@/components/DatiProfiloModal';
 import { OAuthBounceModal } from '@/components/OAuthBounceModal';
 import { AuthCallback } from '@/pages/AuthCallback';
+import { CheckoutRedirectPage } from '@/pages/CheckoutRedirectPage';
 import { LandingPage } from '@/pages/LandingPage';
 import { OnboardingPage } from '@/pages/OnboardingPage';
 import { DashboardLayout, DashboardPage } from '@/pages/DashboardPage';
@@ -32,6 +34,7 @@ import { ServiziPage } from '@/pages/ServiziPage';
 import { ServizioPage } from '@/pages/ServizioPage';
 import { ContattiPage } from '@/pages/ContattiPage';
 import { AdminPage } from '@/pages/AdminPage';
+import { ADMIN_EMAILS, STORAGE_KEY_ADMIN_REDIRECT } from '@/pages/admin/types';
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading, openAuthModal } = useApp();
@@ -70,6 +73,82 @@ function RouteTracker() {
   return null;
 }
 
+/**
+ * Ritorno dal flusso "Accedi con Google" del pannello admin (AdminAccessModal):
+ * se il segnaposto `STORAGE_KEY_ADMIN_REDIRECT` (sessionStorage, max 10 min) è
+ * presente e l'account autenticato è in ADMIN_EMAILS, reindirizza su /admin.
+ * Il flag viene sempre ripulito (anche se scaduto o non autorizzato).
+ */
+function AdminReturnRouter() {
+  const { user, loading } = useApp();
+  const navigate = useNavigate();
+  const { mostraToast } = useToast();
+
+  useEffect(() => {
+    if (loading) return;
+    let raw: string | null = null;
+    try {
+      raw = sessionStorage.getItem(STORAGE_KEY_ADMIN_REDIRECT);
+    } catch {
+      return; // sessionStorage non disponibile: nessun ritorno automatico
+    }
+    if (!raw) return;
+    try {
+      sessionStorage.removeItem(STORAGE_KEY_ADMIN_REDIRECT);
+    } catch {
+      // il flag verrà scartato comunque al prossimo giro
+    }
+
+    let marcato = 0;
+    try {
+      marcato = Number((JSON.parse(raw) as { t?: number }).t ?? 0);
+    } catch {
+      marcato = 0;
+    }
+    // Il segnaposto scade dopo 10 minuti: non dirotta login Google non correlati.
+    if (!marcato || Date.now() - marcato > 10 * 60 * 1000) return;
+
+    if (user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) {
+      navigate('/admin', { replace: true });
+    } else if (user?.email) {
+      mostraToast('errore', 'Questo account Google non è autorizzato per il pannello admin.');
+    }
+  }, [user, loading, navigate, mostraToast]);
+
+  return null;
+}
+
+/**
+ * Deep link ?action=open-radar (es. /dashboard?action=open-radar): appena
+ * l'utente è autenticato apre automaticamente il setup Radar (wizard completo;
+ * il SoftOnboarding si occupa da solo dei profili incompleti al login).
+ */
+function RadarOpenDeepLink() {
+  const { user, loading, radarWizardOpen, openRadarWizard, openAuthModal } = useApp();
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('action') !== 'open-radar') return;
+    // Rimuove subito il parametro (niente ri-aperture su navigazioni successive).
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('action');
+      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    } catch {
+      // history non disponibile: il param resta ma la guardia radarWizardOpen evita duplicati
+    }
+    if (loading) return;
+    if (!user) {
+      openAuthModal('login');
+      return;
+    }
+    if (!radarWizardOpen) openRadarWizard();
+  }, [location.search, loading, user, radarWizardOpen, openRadarWizard, openAuthModal]);
+
+  return null;
+}
+
 export default function App() {
   return (
     <AppProvider>
@@ -79,6 +158,10 @@ export default function App() {
           <ScrollToTop />
           {/* Pageview + referrer/source visitatore a ogni cambio rotta */}
           <RouteTracker />
+          {/* Ritorno OAuth admin (segnaposto sessionStorage) → /admin */}
+          <AdminReturnRouter />
+          {/* Deep link ?action=open-radar → apertura automatica setup Radar */}
+          <RadarOpenDeepLink />
           <Routes>
             {/* Sito vetrina pubblico */}
             <Route path="/" element={<LandingPage />} />
@@ -91,6 +174,8 @@ export default function App() {
             <Route path="/notizie/:id" element={<NotizieDettaglioPage />} />
             <Route path="/contatti" element={<ContattiPage />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+            {/* Checkout diretto Stripe con coupon: /checkout/pro-annuale?coupon=RADAR50 */}
+            <Route path="/checkout/:plan" element={<CheckoutRedirectPage />} />
 
             {/* Area riservata (autenticazione) */}
             <Route
@@ -146,6 +231,7 @@ export default function App() {
           <GoogleOneTap />
           <RadarWizardModal />
           <ForcePasswordModal />
+          <SoftOnboardingModal />
           <DatiProfiloModal />
           <OAuthBounceModal />
           <DevToolbar />

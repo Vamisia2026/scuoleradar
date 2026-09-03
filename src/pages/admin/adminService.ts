@@ -95,6 +95,48 @@ export async function inviaResetPassword(email: string): Promise<void> {
   await chiamaAdmin<{ ok: boolean }>('reset_password', { email });
 }
 
+/** Stato di provisioning per una singola email pre-approvata. */
+export interface EsitoProvisioningBeta {
+  email: string;
+  stato: string;
+  id?: string;
+  ultimo_accesso?: string | null;
+  force_password_change?: boolean;
+  errore?: string;
+  nota?: string;
+}
+
+export interface RispostaProvisioningBeta {
+  password_provvisoria: string;
+  risultati: EsitoProvisioningBeta[];
+}
+
+/**
+ * Provisioning idempotente "accesso beta / pre-approvati":
+ * crea l'account se manca su auth.users e imposta la password provvisoria
+ * (Scuoleradar2026) + force_password_change (primo accesso → cambio obbligatorio).
+ * Usa `force = true` per ripristinare la password provvisoria anche sugli
+ * account già attivi (attenzione: invalida la password personale corrente).
+ */
+export async function garantisciAccessoBeta(
+  emails: string[],
+  force?: boolean,
+): Promise<RispostaProvisioningBeta> {
+  const token = await tokenAdmin();
+  if (!token) throw new AdminApiError('Richiede sessione Supabase attiva (provisioning beta reale).');
+  return chiamaAdmin<RispostaProvisioningBeta>('ensure_beta_users', {
+    emails,
+    force: force === true,
+  });
+}
+
+/** Imposta subito la password provvisoria + force_password_change su un account esistente. */
+export async function impostaPasswordProvvisoria(email: string): Promise<{ id: string }> {
+  const token = await tokenAdmin();
+  if (!token) throw new AdminApiError('Richiede sessione Supabase attiva.');
+  return chiamaAdmin<{ id: string }>('set_temp_password', { email });
+}
+
 export interface NuovoUtenteInput {
   email: string;
   password: string;

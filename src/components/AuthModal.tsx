@@ -4,6 +4,8 @@ import { LogIn, UserPlus, AlertCircle, Eye, EyeOff, Loader2, Sparkles } from 'lu
 import { useApp } from '@/contexts/AppContext';
 import { Modal } from '@/components/Modal';
 import { TelegramLoginButton } from '@/components/TelegramLoginButton';
+import { useToast } from '@/components/Toast';
+import { isSupabaseConfigurato } from '@/lib/supabase';
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -39,6 +41,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export function AuthModal() {
   const navigate = useNavigate();
+  const { mostraToast } = useToast();
   const {
     authModalOpen,
     authModalMode,
@@ -46,7 +49,7 @@ export function AuthModal() {
     closeAuthModal,
     openAuthModal,
     register,
-    login,
+    loginSupabase,
     preferenze,
     loginConGoogle,
   } = useApp();
@@ -62,6 +65,8 @@ export function AuthModal() {
   const [showPassword, setShowPassword] = useState(false);
   const [errore, setErrore] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
+  /** Attesa risposta Supabase al submit email (login). */
+  const [loginLoading, setLoginLoading] = useState(false);
   /** Soft sell registrazione: tipo account scelto (Base di default; PRO → /prezzi). */
   const [tipoAccount, setTipoAccount] = useState<'base' | 'pro'>('base');
 
@@ -77,6 +82,7 @@ export function AuthModal() {
       setShowPassword(false);
       setErrore('');
       setGoogleLoading(false);
+      setLoginLoading(false);
       setTipoAccount('base');
     }
   }, [authModalOpen]);
@@ -92,7 +98,7 @@ export function AuthModal() {
     navigate(preferenze.onboarded ? '/dashboard/radar' : '/onboarding');
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setErrore('');
 
@@ -125,11 +131,32 @@ export function AuthModal() {
       closeAuthModal();
       navigate('/onboarding');
     } else {
-      if (!login(email.trim(), password)) {
-        setErrore('Credenziali non valide. Controlla email e password oppure registrati.');
+      if (!email.trim() || !password) {
+        const msg = 'Inserisci email e password per accedere.';
+        setErrore(msg);
+        mostraToast('errore', msg);
         return;
       }
-      dopoLogin();
+      setLoginLoading(true);
+      try {
+        // Login email REALE: signInWithPassword su Supabase Auth quando configurato,
+        // fallback demo (localStorage) solo senza Supabase. Gli errori di Supabase
+        // vengono mostrati sia inline sia come toast — mai fallimenti silenziosi.
+        const esito = await loginSupabase(email.trim(), password);
+        if (!esito.ok) {
+          const msg = esito.errore ?? 'Accesso non riuscito. Riprova.';
+          setErrore(msg);
+          mostraToast('errore', msg);
+          return;
+        }
+        dopoLogin();
+      } catch (err) {
+        const msg = (err as { message?: string }).message ?? 'Accesso non riuscito. Riprova.';
+        setErrore(msg);
+        mostraToast('errore', msg);
+      } finally {
+        setLoginLoading(false);
+      }
     }
   };
 
@@ -338,9 +365,15 @@ export function AuthModal() {
 
           <button
             type="submit"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
+            disabled={loginLoading || googleLoading}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600 disabled:cursor-wait disabled:opacity-70"
           >
-            {isRegister ? (
+            {loginLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Accesso in corso…
+              </>
+            ) : isRegister ? (
               <>
                 <UserPlus className="h-4 w-4" />
                 Crea account
@@ -381,7 +414,9 @@ export function AuthModal() {
         </p>
 
         <p className="text-center text-xs text-primary-400">
-          Login email/Google reale via Supabase Auth. Prototipo dimostrativo: i dati restano sul tuo dispositivo.
+          {isSupabaseConfigurato
+            ? 'Accesso email/Google sicuro con Supabase Auth. Hai ricevuto una password provvisoria (beta)? Al primo accesso dovrai impostarne una nuova.'
+            : 'Prototipo dimostrativo senza Supabase: i dati restano solo sul tuo dispositivo.'}
         </p>
       </div>
     </Modal>

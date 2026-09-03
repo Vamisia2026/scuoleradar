@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { supabase } from '@/lib/supabase';
+import { traduciErroreAuthSupabase } from '@/lib/authErrors';
 import { interpelli, type Interpello } from '@/data/interpelli';
 import { getModuliScaricati } from '@/data/moduli';
 import { getFeedInterpelli } from '@/lib/matchingEngine';
@@ -73,6 +74,23 @@ interface AppState {
 interface AppContextValue extends AppState {
   register: (u: User) => void;
   login: (email: string, password: string) => boolean;
+  /**
+   * Login email REALE via Supabase Auth (signInWithPassword).
+   * Usato dal modal di login: restituisce un errore IT "actionabile" invece di
+   * fallire in silenzio (es. "Credenziali non valide", "Account non ancora attivato").
+   * In modalità demo (supabase === null) ricade sul confronto localStorage.
+   */
+  loginSupabase: (
+    email: string,
+    password: string,
+  ) => Promise<{ ok: boolean; errore?: string; code?: string }>;
+  /**
+   * Accesso LOCALE immediato (senza sessione Supabase): usato dal pannello admin
+   * quando un indirizzo autorizzato supera il check password di ambiente
+   * (VITE_ADMIN_PASSWORD) o la demo DEV. NON crea né attiva account su Supabase
+   * (a differenza di `register`): allinea solo lo stato locale per la UI.
+   */
+  accediDemo: (email: string) => void;
   logout: () => void;
   setPreferenze: (p: Partial<Preferenze>) => void;
   completaOnboarding: (p: Partial<Preferenze>) => void;
@@ -90,6 +108,12 @@ interface AppContextValue extends AppState {
   profiloIncompleto: boolean;
   /** Piano utente corrente letto da `profiles.piano`: 'base' | 'pro' | 'free_forever'. */
   piano: 'base' | 'pro' | 'free_forever';
+  /**
+   * Stato di caricamento del piano: 'loading' finché non c'è conferma dal DB
+   * (o dalla modalità demo). UI: il badge deve mostrare un indicatore di
+   * caricamento, MAI degradare a 'Base' per un valore non ancora letto.
+   */
+  pianoStato: 'loading' | 'pronto';
   /** true = accesso completo PRO: piano 'pro' oppure 'free_forever' (accesso a vita). */
   hasProAccess: boolean;
   /** true = il piano PRO in corso è la prova gratuita di 30 giorni (stato 'trialing'). */
@@ -102,7 +126,7 @@ interface AppContextValue extends AppState {
   radarAttivo: boolean;
   /** Imposta radar_attivo su profiles (senza perdere province/classi/preferenze). */
   aggiornaRadarAttivo: (attivo: boolean) => Promise<void>;
-  /** Concede la prova gratuita PRO di 30 giorni (solo se il piano è ancora Base). */
+  /** Concede la prova PRO gratuita di 30 giorni (trial sponsorizzato PureFocus) se il piano è ancora Base. */
   attivaTrialPro: () => Promise<void>;
   /** Salva/aggiorna i dati anagrafici mancanti (nome/cognome/genere/età) su profiles e nello stato. */
   aggiornaAnagrafica: (d: {
@@ -193,6 +217,45 @@ function normalizzaPiano(raw: unknown): 'base' | 'pro' | 'free_forever' {
 }
 
 /**
+ * Piano "di servizio" ricavato dalla riga profiles del DB.
+ * Fonti in ordine: 1) `piano` testuale (base|pro|free_forever/ffe/free forever);
+ * 2) `subscription_tier` (Account Bridge: base|pro_annuale|…|free_forever);
+ * 3) `is_free_forever` (colonna delle migrazioni recenti — SOLO se selezionata,
+ *    accettata per retrocompatibilità). Questo evita il "desync" da default
+ * 'Base' quando una delle colonne non esiste ancora nel DB remoto.
+ */
+function pianoDaProfilo(row: {
+  piano?: unknown;
+  subscription_tier?: unknown;
+  is_free_forever?: boolean | null;
+}): 'base' | 'pro' | 'free_forever' {
+  if (row.is_free_forever === true) return 'free_forever';
+  const piano = normalizzaPiano(row.piano);
+  if (piano === 'free_forever') return 'free_forever';
+  const tier = String(row.subscription_tier ?? '').trim().toLowerCase();
+  if (tier === 'free_forever' || tier === 'ffe' || tier === 'free forever') return 'free_forever';
+  return piano;
+}
+
+/**
+ * true se la riga profilo è una prova PRO 'trialing' con scadenza già passata
+ * → il trial di 30 giorni è finito e l'utente deve tornare naturalmente su Base.
+ */
+function provaProScaduta(row: {
+  piano?: unknown;
+  subscription_status?: unknown;
+  abbonamento_scade_il?: unknown;
+} | null | undefined): boolean {
+  if (!row) return false;
+  if (String(row.piano ?? '').trim().toLowerCase() !== 'pro') return false;
+  if (String(row.subscription_status ?? '').trim().toLowerCase() !== 'trialing') return false;
+  if (!row.abbonamento_scade_il) return false;
+  const scad = new Date(String(row.abbonamento_scade_il));
+  if (Number.isNaN(scad.getTime())) return false;
+  return scad.getTime() <= Date.now();
+}
+
+/**
  * Deduplica `signup_completed`: la creazione account email genera sia il track
  * immediato in register() sia l'evento SIGNED_IN del listener OAuth (stessa
  * registrazione, un solo evento nel funnel). Nessun dato personale: solo metodo.
@@ -217,6 +280,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [abbonato, setAbbonato] = useState(false);
   /** Piano letto da profiles.piano: 'base' | 'pro' | 'free_forever'. */
   const [piano, setPiano] = useState<'base' | 'pro' | 'free_forever'>('base');
+  /**
+   * 'loading' = piano NON ancora confermato dal DB (badge: indicatore, mai 'Base').
+   * 'pronto'  = piano letto/confermato dal DB (o modalità demo senza Supabase).
+   */
+  const [pianoStato, setPianoStato] = useState<'loading' | 'pronto'>('loading');
+  /** Id dell'ultima sessione per cui il piano è stato (ri)caricato dal DB. */
+  const pianoSessionUserIdRef = useRef<string | null>(null);
   /** Stato Radar Scuole letto da profiles.radar_attivo (default false). */
   const [radarAttivo, setRadarAttivo] = useState(false);
   /** Fine della prova PRO (ISO) se `subscription_status = 'trialing'`, altrimenti null. */
@@ -271,6 +341,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Analytics: tentativo di registrazione email.
       track('signup_attempted', { method: 'email' });
       setUser(u);
+      // Piano locale "pronto" per la UI demo; se Supabase risponde con una
+      // sessione reale il listener onAuthStateChange ricaricherà dal DB.
+      setPianoStato('pronto');
       // PASSO 3: crea anche l'utente reale su Supabase Auth (non bloccante per la demo).
       if (supabase) {
         // Password demo generata se assente (es. login Google simulato).
@@ -305,7 +378,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         tracciaSignupCompletato('email', true);
       }
     },
-    [setUser],
+    [setUser, setPianoStato],
   );
 
   const login = useCallback(
@@ -324,6 +397,92 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
+  /**
+   * Login email REALE su Supabase Auth (usato dal AuthModal).
+   *
+   * Per gli utenti creati da Admin / beta tester (es. pre-approvati con password
+   * provvisoria "Scuoleradar2026") NON esiste una riga in localStorage: il vecchio
+   * flusso demo falliva quindi sempre. Qui `signInWithPassword` è il percorso
+   * principale: se va a buon fine allinea subito lo stato locale `user` con la
+   * sessione (necessario perché ForcePasswordModal/RequireAuth funzionino), mentre
+   * ogni errore Supabase viene tradotto in un messaggio chiaro per il toast.
+   */
+  const loginSupabase = useCallback(
+    async (emailRaw: string, password: string): Promise<{ ok: boolean; errore?: string; code?: string }> => {
+      const email = emailRaw.trim().toLowerCase();
+
+      // Modalità demo (Supabase non configurato): autenticazione locale.
+      if (!supabase) {
+        const ok = Boolean(
+          user && user.email.toLowerCase() === email && user.password === password,
+        );
+        return ok
+          ? { ok: true }
+          : {
+              ok: false,
+              errore: 'Credenziali non valide. Controlla email e password oppure crea un account.',
+              code: 'demo',
+            };
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        console.warn('Supabase signInWithPassword:', error.message, '| code:', error.code ?? '');
+        return { ok: false, errore: traduciErroreAuthSupabase(error), code: error.code ?? undefined };
+      }
+
+      // Sessione ottenuta: allinea subito lo stato locale `user` così la navigazione
+      // post-login (RequireAuth) e il ForcePasswordModal vedono l'utente autenticato.
+      const au = data.user;
+      if (au?.email) {
+        const meta = (au.user_metadata ?? {}) as Record<string, unknown>;
+        const nomeCompleto = String(meta.full_name ?? meta.name ?? meta.nome ?? '').trim();
+        const [primoNome, ...resto] = nomeCompleto.split(' ');
+        const eta = meta.eta === null || meta.eta === undefined || Number.isNaN(Number(meta.eta))
+          ? null
+          : Number(meta.eta);
+        const genere = meta.genere === 'M' || meta.genere === 'F' ? (meta.genere as 'M' | 'F') : undefined;
+        setUser({
+          nome: primoNome || 'Docente',
+          cognome: String(meta.cognome ?? '').trim() || resto.join(' ').trim(),
+          email: au.email,
+          password: '',
+          genere,
+          eta,
+        });
+      }
+      return { ok: true };
+    },
+    [user, setUser],
+  );
+
+  /**
+   * Accesso locale immediato senza sessione Supabase (fallback pannello admin).
+   * A differenza di `register` non scatena alcun `signUp` remoto: imposta solo
+   * lo "user" locale così le guardie di navigazione e l'header vedono l'utente.
+   */
+  const accediDemo = useCallback(
+    (emailRaw: string): void => {
+      const email = emailRaw.trim().toLowerCase();
+      if (!email) return;
+      setUser((prev) =>
+        prev && prev.email.toLowerCase() === email
+          ? prev
+          : { nome: 'Admin', cognome: 'ScuoleRadar', email, password: '' },
+      );
+      // Accesso locale (fallback admin): nessuna sessione Supabase → piano demo pronto.
+      setPianoStato('pronto');
+    },
+    [setUser, setPianoStato],
+  );
+
+  // Modalità demo (Supabase non configurato): non c'è un DB da cui leggere il
+  // piano → il piano "pronto" è quello locale (Base/PRO simulati). In produzione
+  // il badge resta in 'loading' finché il DB non conferma il piano reale.
+  useEffect(() => {
+    if (!supabase) setPianoStato('pronto');
+  }, []);
+
   const logout = useCallback(() => {
     void supabase?.auth.signOut();
     setUser(null);
@@ -331,12 +490,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotificheUsate(0);
     setAbbonato(false);
     setPiano('base');
+    setPianoStato('pronto'); // nessun utente visibile: badge non mostrato
+    pianoSessionUserIdRef.current = null;
     setRadarAttivo(false);
     setCrediti(0);
     setSupabaseUserId(null);
     setEsamiState([]);
     setNotificati([]);
-  }, [setUser, setPref, setNotificheUsate, setAbbonato, setPiano, setRadarAttivo, setCrediti, setSupabaseUserId, setEsamiState, setNotificati]);
+  }, [setUser, setPref, setNotificheUsate, setAbbonato, setPiano, setPianoStato, setRadarAttivo, setCrediti, setSupabaseUserId, setEsamiState, setNotificati]);
 
   const setPreferenze = useCallback(
     (p: Partial<Preferenze>) => setPref((prev) => ({ ...prev, ...p })),
@@ -526,6 +687,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setNotificheUsate(0);
         setAbbonato(false);
         setPiano('base');
+        setPianoStato('pronto');
+        pianoSessionUserIdRef.current = null;
         setRadarAttivo(false);
         return;
       }
@@ -538,6 +701,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setUser(utenteDemo);
       setAbbonato(ruolo === 'pro');
       setPiano(ruolo === 'pro' ? 'pro' : 'base');
+      setPianoStato('pronto'); // simulazione demo: piano locale definito
       setNotificheUsate(0);
       setPref((prev) => ({
         ...prev,
@@ -559,12 +723,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotificheUsate(0);
     setAbbonato(false);
     setPiano('base');
+    setPianoStato('pronto');
+    pianoSessionUserIdRef.current = null;
     setRadarAttivo(false);
     setCrediti(0);
     setSupabaseUserId(null);
     setEsamiState([]);
     setNotificati([]);
-  }, [setUser, setPref, setNotificheUsate, setAbbonato, setPiano, setRadarAttivo, setCrediti, setSupabaseUserId, setEsamiState, setNotificati]);
+  }, [setUser, setPref, setNotificheUsate, setAbbonato, setPiano, setPianoStato, setRadarAttivo, setCrediti, setSupabaseUserId, setEsamiState, setNotificati]);
 
   /**
    * PASSO 3 — Persiste le preferenze utente (province di interesse e classi di concorso)
@@ -732,9 +898,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
     console.log('[refreshProfilo] utente attivo →', { id: sess.user.id, email: sess.user.email ?? '' });
+    // NB: NIENTE colonna `is_free_forever` qui: non esiste ancora nel DB remoto
+    // e un errore 42703 farebbe fallire l'intero refresh (piano bloccato su
+    // 'base'). Il piano si ricava da piano/subscription_tier (pianoDaProfilo).
     const { data, error } = await supabase
       .from('profiles')
-      .select('piano, abbonamento_scade_il, subscription_status, crediti, notifiche_usate, radar_attivo, is_free_forever')
+      .select(
+        'piano, subscription_tier, abbonamento_scade_il, subscription_status, crediti, notifiche_usate, radar_attivo',
+      )
       .eq('id', sess.user.id)
       .maybeSingle();
     if (error || !data) {
@@ -745,11 +916,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       return;
     }
-    // Diagnostica: mostra la riga grezza restituita dal DB.
+    // Prova PRO (30 gg) scaduta → ritorno NATURALE su Base (stato + DB, cron
+    // DB `reverti_prove_pro_scadute()` fa lo stesso ogni notte).
+    if (provaProScaduta(data)) {
+      data.piano = 'base';
+      data.subscription_tier = 'base';
+      data.subscription_status = 'inactive';
+      data.abbonamento_scade_il = null;
+      if (supabase) {
+        const { error: errRevert } = await supabase
+          .from('profiles')
+          .update({
+            piano: 'base',
+            subscription_tier: 'base',
+            subscription_status: 'inactive',
+            current_period_end: null,
+            abbonamento_scade_il: null,
+          })
+          .eq('id', sess.user.id);
+        if (errRevert) {
+          console.warn('[onboarding] ritorno a Base dopo prova scaduta non persistito:', errRevert.message);
+        }
+      }
+    }
+    // Diagnostica: mostra la riga (già normalizzata) restituita dal DB.
     console.log('[refreshProfilo] riga profiles (per id) →', data);
     const periodoOk = !data.abbonamento_scade_il || new Date(data.abbonamento_scade_il) > new Date();
-    // Il flag is_free_forever è la fonte canonica: sovrascrive qualsiasi alias testuale.
-    const pianoCorrente = data.is_free_forever === true ? 'free_forever' : normalizzaPiano(data.piano);
+    // Fonte canonica: colonna is_free_forever (se esiste) O alias testuali
+    // piano/subscription_tier — mai lasciare il default 'Base' in UI per un
+    // disallineamento di schema.
+    const pianoCorrente = pianoDaProfilo(data);
     const pianoGratuitoVita = pianoCorrente === 'free_forever';
     const hasAccessoPro = pianoCorrente !== 'base';
     setPiano(pianoCorrente);
@@ -765,7 +961,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         : null,
     );
     console.log('Logged user piano:', pianoCorrente, 'hasProAccess:', hasAccessoPro);
-  }, [setAbbonato, setCrediti, setNotificheUsate, setPiano, setRadarAttivo, setTrialScadenza]);
+    // Piano confermato dal DB: il badge può uscire dallo stato di caricamento.
+    setPianoStato('pronto');
+    pianoSessionUserIdRef.current = sess.user.id;
+  }, [setAbbonato, setCrediti, setNotificheUsate, setPiano, setPianoStato, setRadarAttivo, setTrialScadenza]);
 
   /**
    * Attiva/mette in pausa il Radar per l'utente autenticato (profiles.radar_attivo).
@@ -790,17 +989,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   /**
-   * Trial gratuito: al termine dell'onboarding un utente Base riceve il piano
-   * PRO per 30 giorni (scadenza = oggi+30). Dal 2° anno si passa al prezzo
-   * pieno 49,90 €/anno (promo 50% disponibile per il 1° anno).
+   * Trial PRO 30 giorni (sponsorizzato PureFocus): al termine dell'onboarding
+   * un utente Base riceve il piano PRO con scadenza = oggi+30 giorni. Dopo la
+   * scadenza l'utente torna naturalmente su Base (self-heal client + cron DB).
    */
   const attivaTrialPro = useCallback(async (): Promise<void> => {
     if (!supabase) return;
-    if (piano !== 'base') return; // già PRO / Free Forever: nessun trial
+    if (piano !== 'base') return; // già PRO / Free Forever: nessuna prova da concedere
     const { data: sess } = await supabase.auth.getUser();
     if (!sess.user) return;
     const scadenza = new Date();
-    scadenza.setDate(scadenza.getDate() + 30);
+    scadenza.setDate(scadenza.getDate() + 30); // prova PRO 30 giorni esatti
     const iso = scadenza.toISOString();
     const { error } = await supabase
       .from('profiles')
@@ -813,7 +1012,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })
       .eq('id', sess.user.id);
     if (error) {
-      console.warn('[trial] attivazione PRO trial fallita:', error.message);
+      console.warn('[onboarding] attivazione prova PRO 30 giorni fallita:', error.message);
       return;
     }
     await refreshProfilo();
@@ -836,9 +1035,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!au) return;
         const metaAu = (au.user_metadata ?? {}) as Record<string, unknown>;
         setAvatarUrl(String(metaAu.avatar_url ?? metaAu.picture ?? '').trim() || null);
+        // NB: NIENTE colonna `is_free_forever` qui (assente nel DB remoto →
+        // errore 42703 che bloccava il piano su 'base'). Il piano si ricava da
+        // piano/subscription_tier tramite pianoDaProfilo.
         const { data, error } = await supabase
           .from('profiles')
-          .select('province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, abbonamento_scade_il, subscription_status, crediti, notifiche_usate, radar_attivo, is_free_forever, favorite_schools, ignored_schools')
+          .select(
+            'province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, subscription_tier, abbonamento_scade_il, subscription_status, crediti, notifiche_usate, radar_attivo, favorite_schools, ignored_schools',
+          )
           .eq('id', au.id)
           .maybeSingle();
         // Diagnostica caricamento profilo: id/email sessione + riga grezza restituita dal DB.
@@ -846,6 +1050,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (error) console.warn('[profilo] query profiles (per id) fallita:', error.message);
         if (data) console.log('[profilo] riga profiles →', data);
         if (!error && data) {
+          // Prova PRO (30 gg) scaduta → ritorno naturale su Base (stato + DB).
+          if (provaProScaduta(data)) {
+            data.piano = 'base';
+            data.subscription_tier = 'base';
+            data.subscription_status = 'inactive';
+            data.abbonamento_scade_il = null;
+            if (supabase) {
+              const { error: errRevert } = await supabase
+                .from('profiles')
+                .update({
+                  piano: 'base',
+                  subscription_tier: 'base',
+                  subscription_status: 'inactive',
+                  current_period_end: null,
+                  abbonamento_scade_il: null,
+                })
+                .eq('id', au.id);
+              if (errRevert) {
+                console.warn('[onboarding] ritorno a Base non persistito (avvio):', errRevert.message);
+              }
+            }
+          }
           setPref((prev) => ({
             ...prev,
             ordini:
@@ -871,11 +1097,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 : prev.ignoredSchools,
           }));
           // FASE 6 — piano e scadenza letti dalle colonne REALI di profiles.
-          // NB: NON si selezionano più subscription_status / current_period_end
-          // (assenti nello schema): prima quell'errore invalidava l'intero
-          // caricamento del profilo e il piano restava su 'base'.
-          // Il flag is_free_forever è la fonte canonica: sovrascrive qualsiasi alias testuale.
-          const pianoCorrente = data.is_free_forever === true ? 'free_forever' : normalizzaPiano(data.piano);
+          // Fonte canonica: is_free_forever (se presente) oppure gli alias
+          // testuali piano/subscription_tier — mai lasciare il default 'Base'
+          // in UI per un disallineamento di schema tra repo e DB remoto.
+          const pianoCorrente = pianoDaProfilo(data);
           const periodoOk =
             !data.abbonamento_scade_il || new Date(data.abbonamento_scade_il) > new Date();
           // Piano Free Forever: accesso PRO permanente — mai soggetto a scadenza
@@ -895,6 +1120,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
               : null,
           );
           console.log('Logged user piano:', pianoCorrente, 'hasProAccess:', hasAccessoPro);
+          // Piano confermato dal DB all'avvio: il badge può uscire dal loading.
+          setPianoStato('pronto');
+          pianoSessionUserIdRef.current = au.id;
         }
         // Mini-onboarding anagrafico: profilo senza nome/cognome?
         void valutaProfiloIncompleto(au.id);
@@ -940,35 +1168,72 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const meta = (session.user.user_metadata ?? {}) as Record<string, unknown>;
         // Avatar Google OAuth: avatar_url (o picture come fallback) in user_metadata.
         setAvatarUrl(String(meta.avatar_url ?? meta.picture ?? '').trim() || null);
-        const fullName = String(meta.full_name ?? meta.name ?? '').trim();
-        if (fullName) {
-          const [nome, ...resto] = fullName.split(' ');
-          setUser({
-            nome: nome || 'Docente',
-            cognome: resto.join(' '),
-            email: session.user.email ?? '',
+        // Sincronizza lo "user" locale (usato da RequireAuth / navigazione / header)
+        // con la sessione Supabase REALE. Copre sia gli account Google (full_name)
+        // sia gli account email creati da Admin / beta tester (nome/cognome/genere/eta
+        // in user_metadata, senza full_name) che NON hanno riga in localStorage.
+        const nomeCompleto = String(meta.full_name ?? meta.name ?? meta.nome ?? '').trim();
+        const [primoNome, ...resto] = nomeCompleto.split(' ');
+        const emailSess = session.user.email ?? '';
+        const etaSess = meta.eta === null || meta.eta === undefined || Number.isNaN(Number(meta.eta))
+          ? null
+          : Number(meta.eta);
+        const genereSess = meta.genere === 'M' || meta.genere === 'F' ? (meta.genere as 'M' | 'F') : undefined;
+        setUser((prev) => {
+          // Utente già allineato (stessa email): aggiorna solo l'eventuale nome completo.
+          if (prev && prev.email.toLowerCase() === emailSess.toLowerCase()) {
+            if (!primoNome) return prev;
+            return {
+              ...prev,
+              nome: primoNome || prev.nome,
+              cognome: resto.join(' ').trim() || prev.cognome,
+            };
+          }
+          const cognomeSess = String(meta.cognome ?? '').trim() || resto.join(' ').trim();
+          return {
+            nome: primoNome || 'Docente',
+            cognome: cognomeSess,
+            email: emailSess,
             password: '',
-          });
-        }
+            genere: genereSess,
+            eta: etaSess,
+          };
+        });
         // Alla prima autenticazione crea/aggiorna la riga profilo (province/classi sincronizzate).
+        const idSessione = session.user.id;
         if (event === 'SIGNED_IN') {
           void client
             .from('profiles')
-            .upsert({ id: session.user.id, email: session.user.email ?? '' }, { onConflict: 'id' })
+            .upsert({ id: idSessione, email: session.user.email ?? '' }, { onConflict: 'id' })
             .then(() => {
-              void valutaProfiloIncompleto(session.user.id);
-              void refreshProfilo();
+              void valutaProfiloIncompleto(idSessione);
             });
         } else {
           // INITIAL_SESSION: la riga profilo esiste già (trigger auth.users) → verifica anagrafica.
-          void valutaProfiloIncompleto(session.user.id);
+          void valutaProfiloIncompleto(idSessione);
         }
+        // PULIZIA ANTI-STALE: se cambia l'utente azzeriamo piano/abbonato e
+        // ripartiamo dallo stato 'loading' — mai mostrare il piano del vecchio
+        // utente o un 'Base' non confermato dal DB.
+        if (pianoSessionUserIdRef.current !== idSessione) {
+          setPiano('base');
+          setAbbonato(false);
+          setPianoStato('loading');
+        }
+        // SINGLE SOURCE OF TRUTH: il piano/ruolo viene (ri)letto dal DB profiles
+        // a OGNI cambio di stato auth (SIGNED_IN e INITIAL_SESSION).
+        void refreshProfilo();
       }
       if (event === 'SIGNED_OUT') {
         setUser(null);
         setSupabaseUserId(null);
         setAvatarUrl(null);
         setProfiloIncompleto(false);
+        // Il piano del vecchio utente NON deve sopravvivere al logout.
+        setPiano('base');
+        setAbbonato(false);
+        setPianoStato('loading');
+        pianoSessionUserIdRef.current = null;
       }
     });
     return () => subscription.subscription.unsubscribe();
@@ -1160,6 +1425,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     notificheUsate,
     abbonato,
     piano,
+    pianoStato,
     hasProAccess,
     trialAttivo,
     trialScadenza,
@@ -1168,6 +1434,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     interpelliNotificati,
     register,
     login,
+    loginSupabase,
+    accediDemo,
     logout,
     setPreferenze,
     completaOnboarding,

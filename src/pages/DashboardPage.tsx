@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { Radar, Database, SlidersHorizontal, UserPlus } from 'lucide-react';
+import { Radar, Database, SlidersHorizontal } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { InterpelloCard } from '@/components/InterpelloCard';
 import { PreferenzeRadar } from '@/components/PreferenzeRadar';
@@ -72,8 +72,6 @@ export function DashboardPage() {
     preferenze,
     abbonato,
     piano,
-    trialAttivo,
-    trialScadenza,
     openAuthModal,
     openRadarWizard,
   } = useApp();
@@ -83,24 +81,14 @@ export function DashboardPage() {
   const feedVetrina = !user && interpelliFiltrati.length === 0 ? interpelli : interpelliFiltrati;
   const interpelliVisibili = abbonato ? feedVetrina : feedVetrina.slice(0, 3);
 
-  // Banner stato piano (Dashboard Radar).
-  const giorniTrialRimasti =
-    trialAttivo && trialScadenza
-      ? Math.max(1, Math.ceil((new Date(trialScadenza).getTime() - Date.now()) / 86_400_000))
-      : 0;
+  // Banner stato piano (Dashboard Radar) — solo per il piano Base (upsell).
+  // Per PRO / Free Forever non mostriamo banner promozionali (meno clutter).
   const provinciaCount = preferenze.provinceCodici.length;
   const classeMaterieCount =
     preferenze.classiCodici.length + preferenze.materieId.length + preferenze.materieCustom.length;
   const testoBannerBase = `Piano Base (${provinciaCount} ${
     provinciaCount === 1 ? 'Provincia' : 'Province'
   }, ${classeMaterieCount} ${classeMaterieCount === 1 ? 'Classe' : 'Classi'}) - Passa a PRO per avvisi istantanei e tutte le province.`;
-  const testoBannerAttivo = trialAttivo
-    ? `Piano PRO in prova (${giorniTrialRimasti} ${
-        giorniTrialRimasti === 1 ? 'giorno rimasto' : 'giorni rimasti'
-      }) - Notifiche illimitate attive.`
-    : piano === 'free_forever'
-      ? 'Account Free Forever - Notifiche illimitate attive.'
-      : 'Piano PRO attivo - Notifiche illimitate attive.';
 
   // Etichette per lo stato vuoto del Radar (dalle preferenze dell'utente).
   const classeEtichetta = preferenze.classiCodici
@@ -134,70 +122,56 @@ export function DashboardPage() {
       {/* Stato Radar utente autenticato: Attivo / In Pausa (interruttore) */}
       {user && <RadarStatusToggle />}
 
-      {/* Vetrina Freemium: copy di conversione per gli utenti non loggati */}
+      {/* Vetrina Freemium: hero Radar per visitatori non loggati (copy essenziale) */}
       {!user ? (
         <div className="rounded-2xl border border-secondary-200 bg-secondary-50 p-6 shadow-card">
           <h3 className="text-2xl font-bold text-primary-900">
-            Smetti di perdere tempo. Cerchiamo noi per te.
+            Smetti di cercare a mano. Monitoriamo noi la scuola per te.
           </h3>
-          <p className="mt-2 text-lg leading-relaxed text-primary-700">
-            Imposta qui i tuoi radar. Ti avvisiamo appena troviamo un&apos;opportunità per te, via
-            email e Telegram. Se non ricevi nulla, è perché non c&apos;è nulla di interessante. Non
-            ti preoccupare, fai altro.
+          <p className="mt-2 text-base leading-relaxed text-primary-700">
+            Imposta provincia e classe di concorso: ti avvisiamo istantaneamente su Telegram ed Email
+            non appena esce un&apos;opportunità adatta a te.
           </p>
-          <p className="mt-3 text-base leading-relaxed text-primary-700">
-            Ti facciamo provare il servizio con 3 segnalazioni su misura per te. Se trovi lavoro
-            grazie a noi e non vuoi pagare, siamo contenti per te. Dillo ai tuoi amici e siamo pari.
-            Se vuoi che continuiamo a monitorare le opportunità per te, la scelta più conveniente è
-            l&apos;abbonamento annuale da €49, che ti dà accesso a tutti i nostri servizi illimitati.
-            Te lo ripaghi con meno di due ore di lavoro all&apos;anno.
+          <p className="mt-3 text-sm font-semibold text-secondary-700">
+            🎁 Registrati oggi: per te 1 Mese PRO Gratis offerto da{' '}
+            <a
+              href="https://purefocus.one"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline decoration-secondary-300 underline-offset-2 transition hover:text-secondary-800"
+            >
+              PureFocus.one
+            </a>
           </p>
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <button
+              type="button"
               onClick={() => openAuthModal('registrazione')}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
+              className="inline-flex items-center gap-2 rounded-xl bg-primary-500 px-6 py-3 text-sm font-bold uppercase tracking-wide text-white shadow-soft transition hover:bg-primary-600"
             >
-              <UserPlus className="h-4 w-4" />
-              Iscriviti Gratis (Account Base)
+              <Radar className="h-4 w-4" />
+              Attiva il tuo Radar
             </button>
-            <Link
-              to="/prezzi"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
-            >
-              Passa a PRO
-            </Link>
           </div>
         </div>
-      ) : (
-        <div
-          className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-5 shadow-card ${
-            piano === 'base'
-              ? 'border-primary-200 bg-primary-50'
-              : 'border-accent-200 bg-accent-50'
-          }`}
-        >
+      ) : piano === 'base' ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary-200 bg-primary-50 p-5 shadow-card">
           <div className="flex min-w-0 items-center gap-3">
-            <span
-              className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-                piano === 'base' ? 'bg-primary-500 text-white' : 'bg-accent-500 text-white'
-              }`}
-            >
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-500 text-white">
               <Radar className="h-5 w-5" />
             </span>
             <p className="min-w-0 text-sm font-semibold leading-relaxed text-primary-800">
-              {piano === 'base' ? testoBannerBase : testoBannerAttivo}
+              {testoBannerBase}
             </p>
           </div>
-          {piano === 'base' && (
-            <Link
-              to="/prezzi"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-secondary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
-            >
-              Passa a PRO
-            </Link>
-          )}
+          <Link
+            to="/prezzi"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-secondary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
+          >
+            Passa a PRO
+          </Link>
         </div>
-      )}
+      ) : null}
 
       {/* Preferenze Radar — impostazioni e filtri del profilo (bacheca unificata) */}
       {user && <PreferenzeRadar />}

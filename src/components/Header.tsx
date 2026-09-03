@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { LogOut, User as UserIcon, Menu, X, Sparkles, ChevronDown, CreditCard, FileText } from 'lucide-react';
+import { LogOut, User as UserIcon, Menu, X, Sparkles, ChevronDown, CreditCard, FileText, Loader2 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 
 /** Link istituzionali / di supporto (barra superiore). */
@@ -28,7 +28,7 @@ const strumentiLinks: LinkStrumento[] = [
 ];
 
 export function Header() {
-  const { user, abbonato, piano, logout, openAuthModal, avatarUrl } = useApp();
+  const { user, abbonato, piano, pianoStato, logout, openAuthModal, avatarUrl } = useApp();
   const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuUtenteOpen, setMenuUtenteOpen] = useState(false);
@@ -116,7 +116,15 @@ export function Header() {
                   <span className="max-w-[60px] truncate text-sm font-semibold text-primary-800 lg:max-w-[110px]">
                     {user.nome}
                   </span>
-                  {piano === 'free_forever' ? (
+                  {pianoStato === 'loading' ? (
+                    <span
+                      title="Verifica del piano in corso…"
+                      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-semibold text-primary-400"
+                    >
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span className="sr-only">Verifica del piano in corso…</span>
+                    </span>
+                  ) : piano === 'free_forever' ? (
                     <span
                       title="Free Forever — accesso PRO a vita, incluso"
                       className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary-500 px-2 py-0.5 text-[10px] font-bold text-white"
@@ -350,10 +358,21 @@ export function Header() {
                   </span>
                   <span
                     className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                      abbonato ? 'bg-accent-500 text-white' : 'bg-primary-50 text-primary-600'
+                      piano === 'free_forever'
+                        ? 'bg-secondary-500 text-white'
+                        : abbonato
+                          ? 'bg-accent-500 text-white'
+                          : 'bg-primary-50 text-primary-600'
                     }`}
                   >
-                    {abbonato ? (
+                    {pianoStato === 'loading' ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <span className="sr-only">Verifica del piano in corso…</span>
+                      </>
+                    ) : piano === 'free_forever' ? (
+                      '✦ Free Forever'
+                    ) : abbonato ? (
                       <>
                         <Sparkles className="h-3 w-3" /> PRO
                       </>

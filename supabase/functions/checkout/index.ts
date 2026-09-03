@@ -109,6 +109,14 @@ const STRIPE_PRODUCT_IDS: Record<string, string> = {
  */
 const STRIPE_COUPON_BETA1ANNO = Deno.env.get('STRIPE_COUPON_BETA1ANNO') ?? 'XRxitsVf';
 
+/**
+ * Coupon Stripe RADAR50 (-50% sul PRO annuale) — applicato DIRETTAMENTE alla
+ * sessione solo dopo la validazione dinamica server-side (RPC valida_coupon_radar50:
+ * finestra 40 giorni dalla registrazione, monouso per utente, anti-abuso su
+ * Telegram/email). Richiede il secret STRIPE_COUPON_RADAR50 (Coupon ID Stripe).
+ */
+const STRIPE_COUPON_RADAR50 = Deno.env.get('STRIPE_COUPON_RADAR50') ?? '';
+
 /** Decodifica il payload (base64url) di un JWT senza verificarne la firma (il runtime la verifica con --verify-jwt). */
 function decodeJwt(token: string): { sub?: string; email?: string } | null {
   try {
@@ -173,6 +181,31 @@ async function validaPromo(
     codice: string;
   }>;
   return righe[0] ?? { valido: false };
+}
+
+/**
+ * Valida il coupon DINAMICO RADAR50 (RPC server-side): finestra 40 giorni dalla
+ * registrazione iniziale, monouso per utente e anti-abuso (stesso Telegram ID o
+ * email secondaria già usati da un altro account).
+ */
+async function validaRadar50(
+  userId: string,
+): Promise<{ ok: boolean; motivo?: string } | null> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/valida_coupon_radar50`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_user_id: userId }),
+  });
+  if (!res.ok) {
+    console.error('valida_coupon_radar50 fallita:', res.status, await res.text());
+    return null;
+  }
+  const righe = (await res.json()) as Array<{ ok: boolean; motivo: string; sconto_percent: number }>;
+  return righe[0] ?? { ok: false, motivo: 'Coupon non valido' };
 }
 
 /** Header CORS per richieste dal browser (l'app gira su un origin diverso da *.supabase.co). */
@@ -244,6 +277,7 @@ serve(async (req: Request) => {
         priceMancanti,
         productIds: STRIPE_PRODUCT_IDS,
         couponBeta1Anno: STRIPE_COUPON_BETA1ANNO,
+        couponRadar50: Boolean(STRIPE_COUPON_RADAR50),
         mode: STRIPE_MODE,
         webhookEndpoint: WEBHOOK_ENDPOINT,
         couponReferral: Boolean(COUPON_REFERRAL),
@@ -299,7 +333,31 @@ serve(async (req: Request) => {
     // 2) Codice referral (-10€): valida via RPC e applica il coupon automatico.
     if (body.promo) {
       const codiceUpp = body.promo.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-      if (codiceUpp === 'BETA1ANNO') {
+      if (codiceUpp === 'RADAR50') {
+        // Coupon DINAMICO 50% (PRO annuale): validazione server-side rigida.
+        if (plan !== 'pro_annuale') {
+          return risposta(
+            { success: false, error: 'Il coupon RADAR50 è valido solo sul piano PRO annuale.' },
+            400,
+          );
+        }
+        if (!STRIPE_COUPON_RADAR50) {
+          return risposta(
+            { success: false, error: 'Coupon RADAR50 non configurato: contatta il supporto.' },
+            500,
+          );
+        }
+        const esitoRadar = await validaRadar50(userId);
+        if (!esitoRadar?.ok) {
+          return risposta(
+            { success: false, error: esitoRadar?.motivo ?? 'Il coupon RADAR50 non è applicabile.' },
+            400,
+          );
+        }
+        campi['discounts[0][coupon]'] = STRIPE_COUPON_RADAR50;
+        campi['metadata[promo]'] = 'RADAR50';
+        console.log(`  → coupon RADAR50 applicato (${STRIPE_COUPON_RADAR50}) per user ${userId.slice(0, 8)}…`);
+      } else if (codiceUpp === 'BETA1ANNO') {
         campi['discounts[0][coupon]'] = STRIPE_COUPON_BETA1ANNO;
         campi['metadata[promo]'] = codiceUpp;
         console.log(`  → coupon Stripe applicato: ${codiceUpp} (${STRIPE_COUPON_BETA1ANNO})`);

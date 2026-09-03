@@ -23,8 +23,16 @@ export const PROMO_CODE_BETA1ANNO = 'BETA1ANNO';
  */
 export const PROMO_CODE_50_PRIMO_ANNO = 'SCUOLERADAR50';
 
+/**
+ * Coupon RADAR50 — 50% sul PRO annuale.
+ * Dinamico e monouso: valido solo nei primi 40 giorni dalla registrazione,
+ * una volta per utente (anti-abuso su Telegram ID / email secondaria).
+ * La validazione è server-side (RPC valida_coupon_radar50 → Edge checkout).
+ */
+export const PROMO_CODE_RADAR50 = 'RADAR50';
+
 /** Codici promo attivi accettati in pre-fill (mappati server-side sul coupon Stripe). */
-export const PROMO_CODES_ATTIVI = [PROMO_CODE_BETA1ANNO, PROMO_CODE_50_PRIMO_ANNO];
+export const PROMO_CODES_ATTIVI = [PROMO_CODE_BETA1ANNO, PROMO_CODE_50_PRIMO_ANNO, PROMO_CODE_RADAR50];
 
 /**
  * Valida un codice promo/referral contro promo_codes / profiles.referral_code

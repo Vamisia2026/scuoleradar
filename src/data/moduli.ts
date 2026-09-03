@@ -3966,3 +3966,28 @@ export function macroAreaById(id: string | null): MacroAreaModulistica | null {
   return macroAreeModulistica.find((m) => m.id === id) ?? null;
 }
 
+/**
+ * Cerca il documento terminale dell'archivio (variante con `profilo`) per id,
+ * attraversando l'albero normalizzato delle Macroaree. Usato per aprire
+ * l'anteprima locale istantanea anche dai "Modelli Scaricati" (storico).
+ */
+export function trovaDocumentoModulisticaById(id: string | null): DocumentoModulistica | null {
+  if (!id) return null;
+  const esploraNodi = (nodi: SottoCategoriaModulistica[]): DocumentoModulistica | null => {
+    for (const nodo of nodi) {
+      const diretto = nodo.documenti?.find((d) => d.id === id);
+      if (diretto) return diretto;
+      if (nodo.sotto?.length) {
+        const ricorsivo = esploraNodi(nodo.sotto);
+        if (ricorsivo) return ricorsivo;
+      }
+    }
+    return null;
+  };
+  for (const area of macroAreeModulistica) {
+    const trovato = esploraNodi(area.sotto);
+    if (trovato) return trovato;
+  }
+  return null;
+}
+
