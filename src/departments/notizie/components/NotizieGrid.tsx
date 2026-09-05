@@ -120,7 +120,7 @@ function NotizieCtaChiusura() {
       ? {
           etichetta: 'Radar ScuoleRadar',
           titolo:
-            'Fai lavorare il Radar per te. Configura i filtri e ricevi in tempo reale le migliori opportunità retribuite della tua zona.',
+            'Fai lavorare il nostro Radar per te. Configura i filtri e ricevi in tempo reale le migliori opportunità lavorative a Scuola nella tua zona.',
           testoBottone: 'Configura il Radar',
           iconaTestata: <Radar className="h-5 w-5 text-secondary-300" />,
           iconaBottone: <SlidersHorizontal className="h-4 w-4" />,
