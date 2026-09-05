@@ -625,14 +625,19 @@ export function PreferenzeRadar() {
           <label className="block">
             <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-primary-700">
               <Send className="h-4 w-4 text-primary-500" />
-              Username Telegram
+              Username Telegram (fortemente consigliato)
             </span>
             <input
               type="text"
               value={telegramUsername}
               onChange={(e) => setTelegramUsername(e.target.value)}
+              placeholder="es. mario_rossi (senza @)"
               className="input"
             />
+            <span className="mt-1.5 block text-xs leading-relaxed text-primary-500">
+              Indica il tuo username Telegram senza @ (lo trovi su Telegram in: Impostazioni &gt;
+              Modifica profilo &gt; Username. Se non ne hai uno, puoi crearlo lì al momento).
+            </span>
           </label>
           <label className="block">
             <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-primary-700">

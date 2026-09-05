@@ -394,13 +394,8 @@ export function RadarWizardModal() {
         </div>
       ) : (
         <>
-          {/* Framing note posizionamento */}
-          <p className="mb-3 rounded-xl bg-primary-50 px-4 py-2 text-center text-sm font-semibold text-primary-700">
-            Tu scegli cosa cercare. Al resto pensa il Radar.
-          </p>
-
           {/* Progress */}
-          <div className="mb-4">
+          <div className="mb-3">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-sm font-medium text-primary-600">
                 Passo {step} di {totalSteps}
@@ -624,7 +619,7 @@ export function RadarWizardModal() {
                     </div>
                   )}
 
-                  <div className="mt-2 max-h-24 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-1">
+                  <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-1">
                     {classiFiltrate.length === 0 ? (
                       <p className="p-4 text-center text-sm text-primary-400">Nessuna classe trovata.</p>
                     ) : (
@@ -691,7 +686,7 @@ export function RadarWizardModal() {
                       className="w-full rounded-xl border border-primary-200 bg-white py-2 pl-10 pr-4 text-sm text-primary-800"
                     />
                   </div>
-                  <div className="max-h-24 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-1">
+                  <div className="max-h-20 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-1">
                     {materieFiltrate.length === 0 ? (
                       <p className="p-4 text-center text-sm text-primary-400">Nessuna materia trovata.</p>
                     ) : (
@@ -744,13 +739,13 @@ export function RadarWizardModal() {
                         }
                       }}
                       placeholder="Es. Educazione motoria, Dizione, Robotica educativa…"
-                      className="input"
+                      className="w-full rounded-xl border border-primary-200 bg-white px-3 py-1.5 text-sm text-primary-800"
                     />
                     <button
                       type="button"
                       onClick={addCustomMateria}
                       disabled={!customMateriaInput.trim()}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600 disabled:opacity-50"
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary-500 px-3 py-1.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600 disabled:opacity-50"
                     >
                       <Plus className="h-4 w-4" />
                       Aggiungi
@@ -797,15 +792,20 @@ export function RadarWizardModal() {
                 <label className="block">
                   <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-primary-700">
                     <Send className="h-4 w-4 text-primary-500" />
-                    Username Telegram (opzionale)
+                    Username Telegram (fortemente consigliato)
                   </span>
                   <input
                     type="text"
                     value={telegramUsername}
                     onChange={(e) => setTelegramUsername(e.target.value)}
-                    placeholder="@iltuousername"
+                    placeholder="es. mario_rossi (senza @)"
                     className="input"
                   />
+                  <span className="mt-1.5 block text-xs leading-relaxed text-primary-500">
+                    Indica il tuo username Telegram senza @ (lo trovi su Telegram in: Impostazioni
+                    &gt; Modifica profilo &gt; Username. Se non ne hai uno, puoi crearlo lì al
+                    momento).
+                  </span>
                 </label>
 
                 <label className="block">
