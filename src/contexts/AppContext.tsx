@@ -503,6 +503,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void supabase?.auth.signOut();
     setUser(null);
     setPref(defaultPreferenze);
+    // Pulizia della ripresa del wizard Radar (bozza di un altro account/browser).
+    try {
+      localStorage.removeItem('sr_radar_wizard_step');
+    } catch {
+      // localStorage non disponibile
+    }
     setNotificheUsate(0);
     setAbbonato(false);
     setPiano('base');
@@ -731,7 +737,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const resettaTutto = useCallback(() => {
-    ['sr_user', 'sr_preferenze', 'sr_esami', 'sr_notificati'].forEach((k) =>
+    ['sr_user', 'sr_preferenze', 'sr_esami', 'sr_notificati', 'sr_radar_wizard_step'].forEach((k) =>
       localStorage.removeItem(k),
     );
     setUser(null);

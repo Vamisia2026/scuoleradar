@@ -8,6 +8,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { PROMO_CODES_ATTIVI, PROMO_CODE_BETA1ANNO } from '@/lib/promo';
 
 /** Progetto Supabase remoto dove sono deployate le Edge Functions. */
 const SUPABASE_URL_REMOTO = 'https://gwdmsgsshvdnfrplbjiv.supabase.co';
@@ -258,6 +259,49 @@ async function testFonteMim(): Promise<{ status: HealthCheckResult['status']; me
   }
 }
 
+/* ----------------------- Test: promo PRO BETA1ANNO ----------------------- */
+
+/**
+ * Verifica che il codice promo PRO "BETA1ANNO" sia ancora attivo:
+ *  1) è riconosciuto nei PROMO_CODES_ATTIVI del frontend;
+ *  2) se Supabase è configurato, la RPC `valida_codice_promo` lo conferma come
+ *     codice gratuito (seed promo_codes). Il coupon Stripe resta server-side.
+ */
+async function testPromoBeta1Anno(): Promise<{ status: HealthCheckResult['status']; message: string }> {
+  if (!PROMO_CODES_ATTIVI.includes(PROMO_CODE_BETA1ANNO)) {
+    return {
+      status: 'error',
+      message: 'BETA1ANNO non presente tra i codici promo attivi (lista frontend).',
+    };
+  }
+  if (!supabase) {
+    return {
+      status: 'ok',
+      message: 'BETA1ANNO riconosciuto tra i codici attivi (demo: coupon Stripe non verificabile).',
+    };
+  }
+  const { data, error } = await supabase.rpc('valida_codice_promo', {
+    p_codice: PROMO_CODE_BETA1ANNO,
+  });
+  if (error) {
+    return {
+      status: 'ok',
+      message: 'BETA1ANNO riconosciuto (lista attiva); RPC non disponibile — coupon gestito server-side.',
+    };
+  }
+  const riga =
+    Array.isArray(data) && data.length > 0
+      ? (data[0] as { valido?: boolean; gratuito?: boolean })
+      : null;
+  if (riga?.valido === true && riga.gratuito === true) {
+    return { status: 'ok', message: 'BETA1ANNO valido: codice promo gratuito PRO confermato dal DB.' };
+  }
+  return {
+    status: 'warning',
+    message: 'BETA1ANNO attivo come coupon Stripe server-side, ma non risulta nel DB promo_codes.',
+  };
+}
+
 /* ----------------------- Aggregatore ----------------------- */
 
 /** Esegue tutti i test diagnostici in parallelo (non blocca mai la UI). */
@@ -271,14 +315,15 @@ export async function eseguiHealthCheck(): Promise<HealthCheckResult[]> {
   }));
 
   const checks: Array<Promise<HealthCheckResult>> = [
-    misura('Supabase / Database', testDatabase),
-    misura('Supabase Auth / Sessione', testSessione),
-    misura('Chiavi & Segreti (Env)', testSegretiEnv),
-    misura('Edge Function contatto (mailer)', () => testContatto(pingContatto)),
-    misura('Edge Function checkout (pagamenti)', testCheckout),
-    misura('Rotte & Pagine (SPA)', testRotteSpa),
+    misura('Database (Supabase)', testDatabase),
+    misura('Sessione Auth (Supabase)', testSessione),
+    misura('Segreti & Chiavi (Env)', testSegretiEnv),
+    misura('Resend Mailer (Edge contatto)', () => testContatto(pingContatto)),
+    misura('Stripe Checkout (Edge Function)', testCheckout),
+    misura('Rotte SPA', testRotteSpa),
     misura('Servizio Email (Resend)', () => testResend(pingContatto)),
     misura('Fonte Notizie (MIM)', testFonteMim),
+    misura('Promo PRO BETA1ANNO', testPromoBeta1Anno),
   ];
   return Promise.all(checks);
 }

@@ -33,7 +33,7 @@ import {
   type InterpelloParsato,
 } from './parser.ts';
 import { notificaNuoviInterpelli } from '../lib/notifier.ts';
-import { getTelegramChannels, pubblicaInterpelloSuCanale } from '../lib/telegram.ts';
+import { getTelegramCanaliRegionali, getTelegramChannels, pubblicaInterpelloSuCanale } from '../lib/telegram.ts';
 
 /* ------------------------------- Tipi ------------------------------- */
 
@@ -388,19 +388,22 @@ function mappaRigaNotices(a: InterpelloParsato) {
 /* -------------------- Canali Telegram regionali (FASE 5) -------------------- */
 
 /**
- * Pubblica gli interpelli NUOVI sui canali Telegram regionali configurati
- * (env TELEGRAM_CHANNELS = JSON provincia → @canale/@chat). Il bot deve essere
- * amministratore del canale. Nessuna azione se non ci sono canali configurati.
- * Gli errori vengono loggati singolarmente: nessun fallimento silenzioso.
+ * Pubblica gli interpelli NUOVI sui canali Telegram delle 20 regioni italiane
+ * (configurazione ufficiale in src/lib/telegram.ts → CANALI_TELEGRAM_REGIONALI).
+ * Il bot deve essere amministratore di ciascun canale. Gli errori vengono loggati
+ * singolarmente: nessun fallimento silenzioso.
  */
 async function pubblicaNuoviSuCanali(nuovi: AvvisoRilevato[]): Promise<void> {
-  const canali = getTelegramChannels();
-  const provinceConfigurate = Object.keys(canali);
-  if (provinceConfigurate.length === 0 || nuovi.length === 0) return;
+  if (nuovi.length === 0) return;
+
+  const canaliRegionali = getTelegramCanaliRegionali();
+  const overrideProvince = getTelegramChannels();
+  if (Object.keys(canaliRegionali).length === 0 && Object.keys(overrideProvince).length === 0) return;
 
   console.log(
-    `• Pubblicazione canali Telegram: ${provinceConfigurate.length} canali configurati (${provinceConfigurate.join(', ')})`,
+    `• Pubblicazione canali Telegram: ${Object.keys(canaliRegionali).length} canali regionali ufficiali + ${Object.keys(overrideProvince).length} override per provincia`,
   );
+
   let pubblicati = 0;
   for (const n of nuovi) {
     const esito = await pubblicaInterpelloSuCanale({

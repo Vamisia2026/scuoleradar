@@ -63,6 +63,7 @@ const piani: Piano[] = [
     prezzo: '9€',
     periodo: 'mese',
     descrizione: 'Massima flessibilità, disdici quando vuoi.',
+    notaPrezzo: 'Equivalente a 108€/anno',
     evidenziato: false,
     vantaggi: VANTAGGI_PRO,
     cta: 'Attiva PRO Mensile',
@@ -98,8 +99,8 @@ const faq = [
     a: 'Sì. Un click e cancelliamo tutto: nessun rinnovo automatico nascosto.',
   },
   {
-    q: 'Come funzionano le 3 notifiche di prova?',
-    a: 'Ricevi una volta sola, in assoluto, fino a 3 avvisi di opportunità davvero pertinenti al tuo profilo, senza carta di credito e senza reset mensile. Se ti bastano, puoi fermarti lì; per continuare c\u2019è PRO.',
+    q: 'Come funziona il piano Base e quando conviene passare a PRO?',
+    a: 'Il piano Base include il monitoraggio di 1 provincia e fino a 2 classi di concorso, con un digest quotidiano delle opportunità alle 17:00. Con PRO ricevi avvisi istantanei in tempo reale e puoi monitorare fino a 4 province e 4 classi di concorso.',
   },
   {
     q: 'Le notifiche arrivano davvero solo se c\u2019è qualcosa di rilevante?',

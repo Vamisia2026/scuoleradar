@@ -7,8 +7,11 @@
 # - Trigger manuale: workflow_dispatch (GitHub → Actions → Run workflow)
 #
 # Secrets richiesti (repo Settings → Secrets and variables → Actions):
-#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, TELEGRAM_BOT_TOKEN,
-#   TELEGRAM_CHANNELS (JSON provincia → @canale, bot admin del canale)
+#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, TELEGRAM_BOT_TOKEN
+# Canali Telegram: 20 canali REGIONALI ufficiali già configurati nel codice
+#   (CANALI_TELEGRAM_REGIONALI in src/lib/telegram.ts, es. Lombardia → @scuoleradar_lombardia).
+#   Override opzionali: TELEGRAM_CHANNELS_REGIONALI (JSON Regione → @canale) e
+#   TELEGRAM_CHANNELS (retro-compatibile, JSON provincia → @canale).
 # ============================================================
 name: Scraper Interpelli
 

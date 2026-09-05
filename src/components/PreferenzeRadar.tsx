@@ -1,7 +1,7 @@
 /**
  * Preferenze Radar — tutte le impostazioni e i filtri del profilo, spostati
  * sotto Radar Scuole (bacheca unificata). Include: Ordini e Tipologie di Scuola,
- * Classi di Concorso, Materie e Competenze, Province di Interesse, Filtri
+ * Classi di Concorso, Materie e Competenze, Province ("Dove vuoi cercare?"), Filtri
  * Avanzati Scuole, Canali di Notifica e Telegram.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -17,6 +17,7 @@ import { materie, ordiniScuola, type OrdineScuola } from '@/data/ordiniMaterie';
 import { province } from '@/data/province';
 import { Pill } from '@/components/Pill';
 import { Accordion } from '@/components/Accordion';
+import { pianoLimits, limitaSelezione } from '@/lib/planLimits';
 
 const ordineIcons: Record<OrdineScuola, React.ReactNode> = {
   infanzia: <Baby className="h-5 w-5" />,
@@ -30,7 +31,12 @@ const ordineIcons: Record<OrdineScuola, React.ReactNode> = {
 };
 
 export function PreferenzeRadar() {
-  const { preferenze, setPreferenze, salvaProfilo } = useApp();
+  const { preferenze, setPreferenze, salvaProfilo, piano, hasProAccess, pianoStato } = useApp();
+
+  // Limiti del piano corrente (Base: 1 provincia / 2 classi · PRO: 4/4).
+  const limitiPiano = pianoLimits(piano, hasProAccess);
+  const maxProvince = limitiPiano.maxProvince;
+  const maxClassiConcorso = limitiPiano.maxClassiConcorso;
 
   const [ordini, setOrdini] = useState<OrdineScuola[]>(preferenze.ordini);
   const [classiCodici, setClassiCodici] = useState<string[]>(preferenze.classiCodici);
@@ -69,8 +75,10 @@ export function PreferenzeRadar() {
   const [statoSalvataggio, setStatoSalvataggio] = useState<'idle' | 'salvataggio' | 'salvato'>('idle');
   const primaEsecuzione = useRef(true);
 
+  // Tutti gli accordion partono CHIUSI: la griglia resta compatta sopra la piega
+  // e l'utente apre solo la sezione che gli serve.
   const [accordionAperti, setAccordionAperti] = useState<Record<string, boolean>>({
-    ordini: true,
+    ordini: false,
     classi: false,
     materie: false,
     province: false,
@@ -99,10 +107,15 @@ export function PreferenzeRadar() {
 
   const toggleOrdine = (id: OrdineScuola) =>
     setOrdini((prev) => (prev.includes(id) ? prev.filter((o) => o !== id) : [...prev, id]));
-  const toggleClasse = (codice: string) =>
-    setClassiCodici((prev) =>
-      prev.includes(codice) ? prev.filter((c) => c !== codice) : [...prev, codice],
-    );
+  const toggleClasse = (codice: string) => {
+    if (classiCodici.includes(codice)) {
+      setClassiCodici((prev) => prev.filter((c) => c !== codice));
+      return;
+    }
+    // Vincolo di piano: Base max 2 classi di concorso · PRO max 4.
+    if (classiCodici.length >= maxClassiConcorso) return;
+    setClassiCodici((prev) => [...prev, codice]);
+  };
   const toggleMateria = (id: string) =>
     setMaterieId((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
   const addCustomMateria = () => {
@@ -114,10 +127,15 @@ export function PreferenzeRadar() {
     setCustomMateriaInput('');
   };
   const removeCustomMateria = (m: string) => setMaterieCustom((prev) => prev.filter((x) => x !== m));
-  const toggleProvincia = (codice: string) =>
-    setProvinceCodici((prev) =>
-      prev.includes(codice) ? prev.filter((c) => c !== codice) : [...prev, codice],
-    );
+  const toggleProvincia = (codice: string) => {
+    if (provinceCodici.includes(codice)) {
+      setProvinceCodici((prev) => prev.filter((c) => c !== codice));
+      return;
+    }
+    // Vincolo di piano: Base 1 provincia · PRO fino a 4.
+    if (provinceCodici.length >= maxProvince) return;
+    setProvinceCodici((prev) => [...prev, codice]);
+  };
   const addFavoriteScuola = () => {
     const val = favoriteScuolaInput.trim();
     if (!val) return;
@@ -137,6 +155,19 @@ export function PreferenzeRadar() {
   };
   const removeIgnoredScuola = (s: string) => setIgnoredSchools((prev) => prev.filter((x) => x !== s));
 
+  // Vincoli di piano: se il piano cambia (es. fine del trial PRO → Base) o il profilo
+  // arriva con più selezioni del consentito, tronca province e classi al tetto corrente.
+  useEffect(() => {
+    if (pianoStato !== 'pronto') return;
+    setClassiCodici((prev) =>
+      prev.length > maxClassiConcorso ? prev.slice(0, maxClassiConcorso) : prev,
+    );
+    setProvinceCodici((prev) =>
+      prev.length > maxProvince ? prev.slice(0, maxProvince) : prev,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applicato quando cambia il piano
+  }, [pianoStato, maxProvince, maxClassiConcorso]);
+
   // AUTOSAVE con debounce (500ms): ad ogni modifica sincronizza context + Supabase.
   useEffect(() => {
     if (primaEsecuzione.current) {
@@ -145,10 +176,10 @@ export function PreferenzeRadar() {
     }
     const modifiche: Preferenze = {
       ordini,
-      classiCodici,
+      classiCodici: limitaSelezione(classiCodici, maxClassiConcorso),
       materieId,
       materieCustom,
-      provinceCodici,
+      provinceCodici: limitaSelezione(provinceCodici, maxProvince),
       telegramUsername: telegramUsername.trim(),
       telegramChatId: telegramChatIdInput.trim(),
       emailNotifica: emailNotifica.trim(),
@@ -180,7 +211,7 @@ export function PreferenzeRadar() {
   ]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-primary-800">Le tue preferenze Radar</h2>
         {statoSalvataggio === 'salvataggio' ? (
@@ -194,17 +225,22 @@ export function PreferenzeRadar() {
         ) : null}
       </div>
 
+      {/* Upsell piano unificato nella barra di stato Radar (Dashboard): NESSUN banner duplicato qui */}
+
       {/* Accordion preferenze — griglia responsive a 2 colonne (desktop) */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-start">
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:items-start">
       {/* Ordini e Tipologie di Scuola — accordion */}
       <Accordion
         icona="📂"
-        titolo="Ordini e Tipologie di Scuola"
+        titolo="Dove vuoi insegnare o lavorare?"
         badge={ordini.length ? `${ordini.length} selezionati` : undefined}
         aperto={!!accordionAperti.ordini}
         onToggle={() => toggleAccordion('ordini')}
       >
-        <p className="text-xs text-primary-500">Puoi selezionare più opzioni.</p>
+        <p className="text-xs text-primary-500">
+          Scegli gli ordini di scuola in cui vuoi insegnare o lavorare: il Radar cercherà in tutti
+          quelli selezionati.
+        </p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {ordiniScuola.map((o) => {
             const selected = ordini.includes(o.id);
@@ -230,11 +266,16 @@ export function PreferenzeRadar() {
       {/* Classi di Concorso — accordion */}
       <Accordion
         icona="🎓"
-        titolo="Classi di Concorso"
+        titolo="Per quali insegnamenti sei abilitato o qualificato?"
         badge={classiCodici.length ? `${classiCodici.length} selezionate` : undefined}
         aperto={!!accordionAperti.classi}
         onToggle={() => toggleAccordion('classi')}
       >
+        <p className="mb-3 rounded-lg bg-primary-50 px-3 py-2 text-xs leading-relaxed text-primary-600">
+          {limitiPiano.piano === 'pro'
+            ? 'PRO: puoi selezionare fino a 4 classi di concorso.'
+            : `Piano Base: ${maxClassiConcorso} classi di concorso incluse. Passa a PRO per arrivare a 4.`}
+        </p>
         {classiCodici.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {classiCodici.map((c) => (
@@ -271,12 +312,18 @@ export function PreferenzeRadar() {
         <div className="mt-3 max-h-56 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-2">
           {classiFiltrate.map((c) => {
             const selected = classiCodici.includes(c.codice);
+            const atLimit = classiCodici.length >= maxClassiConcorso && !selected;
             return (
               <button
                 key={c.codice}
+                disabled={atLimit}
                 onClick={() => toggleClasse(c.codice)}
                 className={`flex w-full items-center justify-between gap-2 rounded-lg p-2.5 text-left text-sm transition ${
-                  selected ? 'bg-accent-50 text-accent-800' : 'hover:bg-primary-50 text-primary-700'
+                  selected
+                    ? 'bg-accent-50 text-accent-800'
+                    : atLimit
+                      ? 'cursor-not-allowed opacity-50'
+                      : 'hover:bg-primary-50 text-primary-700'
                 }`}
               >
                 <span>
@@ -292,7 +339,7 @@ export function PreferenzeRadar() {
       {/* Materie e Competenze — accordion */}
       <Accordion
         icona="📚"
-        titolo="Materie e Competenze"
+        titolo="In cosa puoi lavorare, anche oltre la tua classe di concorso?"
         badge={
           materieId.length + materieCustom.length
             ? `${materieId.length + materieCustom.length} selezionate`
@@ -302,7 +349,7 @@ export function PreferenzeRadar() {
         onToggle={() => toggleAccordion('materie')}
       >
         <p className="mt-1 text-xs text-primary-500">
-          Seleziona le materie in cui sei competente, anche non collegate a una classe specifica.
+          Seleziona le competenze per intercettare bandi PNRR, progetti, corsi e laboratori.
         </p>
 
         {materieId.length > 0 && (
@@ -337,7 +384,9 @@ export function PreferenzeRadar() {
         </div>
 
         {/* Custom materie */}
-        <h4 className="mt-5 text-sm font-bold text-primary-700">Materie personalizzate</h4>
+        <h4 className="mt-5 text-sm font-bold text-primary-700">
+          Cerchi competenze particolari? Aggiungile qui.
+        </h4>
         {materieCustom.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {materieCustom.map((m) => (
@@ -370,14 +419,23 @@ export function PreferenzeRadar() {
         </div>
       </Accordion>
 
-      {/* Province di Interesse — accordion */}
+      {/* Province — "Dove vuoi cercare?" — accordion */}
       <Accordion
         icona="📍"
-        titolo="Province di Interesse"
+        titolo="Dove vuoi cercare?"
         badge={provinceCodici.length ? `${provinceCodici.length} selezionate` : undefined}
         aperto={!!accordionAperti.province}
         onToggle={() => toggleAccordion('province')}
       >
+        <p className="mb-3 rounded-lg bg-primary-50 px-3 py-2 text-xs leading-relaxed text-primary-600">
+          {limitiPiano.piano === 'pro'
+            ? 'PRO: puoi monitorare fino a 4 province.'
+            : `Piano Base: ${maxProvince} provincia monitorabile. Passa a PRO per arrivare a 4.`}
+        </p>
+        <p className="mb-3 text-xs text-primary-500">
+          Scegli dove vuoi cercare. Il Radar elimina la necessità di controllare manualmente decine
+          di siti provinciali.
+        </p>
         {provinceCodici.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {provinceCodici.map((c) => (
@@ -394,16 +452,18 @@ export function PreferenzeRadar() {
         <div className="mt-4 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-2">
           {provinceSorted.map((p) => {
             const selected = provinceCodici.includes(p.codice);
+            const atLimit = provinceCodici.length >= maxProvince && !selected;
             return (
               <label
                 key={p.codice}
                 className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition hover:bg-primary-50 ${
-                  selected ? 'bg-primary-50' : ''
+                  selected ? 'bg-primary-50' : atLimit ? 'cursor-not-allowed opacity-50 hover:bg-transparent' : ''
                 }`}
               >
                 <input
                   type="checkbox"
                   checked={selected}
+                  disabled={atLimit}
                   onChange={() => toggleProvincia(p.codice)}
                   className="h-4 w-4 rounded border-primary-300 text-primary-500"
                 />
@@ -429,8 +489,8 @@ export function PreferenzeRadar() {
         onToggle={() => toggleAccordion('filtri')}
       >
         <p className="text-sm text-primary-500">
-          Le scuole preferite ricevono notifiche prioritarie e un badge dedicato; quelle escluse
-          vengono nascoste dalla dashboard.
+          Tieni d&apos;occhio le scuole che ti interessano (priorità) e nascondi quelle che non vuoi
+          più vedere.
         </p>
 
         <datalist id="scuole-conosciute">
@@ -446,6 +506,10 @@ export function PreferenzeRadar() {
               <Star className="h-4 w-4 text-accent-500" />
               Scuole preferite (Notifiche Prioritarie)
             </h4>
+            <p className="mt-2 text-xs leading-relaxed text-accent-700">
+              Hai una scuola che vuoi tenere d&apos;occhio? Aggiungila per ricevere le sue pubblicazioni
+              anche se non c&apos;è un match perfetto col profilo.
+            </p>
             <div className="mt-3 flex gap-2">
               <input
                 type="text"
@@ -480,8 +544,11 @@ export function PreferenzeRadar() {
           <div className="rounded-xl border border-secondary-200 bg-secondary-50/50 p-4">
             <h4 className="flex items-center gap-1.5 text-sm font-semibold text-secondary-800">
               <Ban className="h-4 w-4 text-secondary-500" />
-              Scuole escluse (Nascondi Avvisi)
+              Scuole escluse (Blacklist)
             </h4>
+            <p className="mt-2 text-xs leading-relaxed text-secondary-700">
+              C&apos;è una scuola che non vuoi più vedere? Mettila in blacklist: smetteremo di segnalartela.
+            </p>
             <div className="mt-3 flex gap-2">
               <input
                 type="text"

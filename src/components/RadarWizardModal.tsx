@@ -6,12 +6,13 @@ import {
 } from 'lucide-react';
 import { Modal } from '@/components/Modal';
 import { Pill } from '@/components/Pill';
-import { useApp, STORAGE_KEY_RADAR_WIZARD_PENDING } from '@/contexts/AppContext';
+import { useApp, STORAGE_KEY_RADAR_WIZARD_PENDING, type Preferenze } from '@/contexts/AppContext';
 import { track } from '@/lib/analytics';
 import { supabase } from '@/lib/supabase';
 import { ordiniScuola, materie, type OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso } from '@/data/classiConcorso';
 import { province } from '@/data/province';
+import { pianoLimits, limitaSelezione } from '@/lib/planLimits';
 
 /** Alias codici di laurea (LM) → classi di concorso correlate, per la ricerca CDC. */
 const ALIAS_LAUREA_CLASSI: Record<string, string[]> = {
@@ -40,8 +41,14 @@ const TITOLI_STEP = [
   'Canali di Notifica',
 ];
 
-/** Limite fair use province per il piano Base. */
-const LIMITE_PROVINCE = 4;
+/**
+ * Chiave localStorage del passo corrente del wizard Radar: permette di
+ * riaprire il modal ESATTAMENTE dal passo in cui ci si era fermati
+ * (persistito a ogni transizione "Avanti/Indietro").
+ */
+const STORAGE_KEY_RADAR_WIZARD_STEP = 'sr_radar_wizard_step';
+
+// Limiti dinamici per piano (Base 1 provincia / 2 classi · PRO 4/4): vedi lib/planLimits.ts.
 
 /**
  * Wizard "Attiva il tuo Radar" a 4 passi (modal):
@@ -52,8 +59,8 @@ const LIMITE_PROVINCE = 4;
 export function RadarWizardModal() {
   const navigate = useNavigate();
   const {
-    user, preferenze, radarWizardOpen, closeRadarWizard, completaOnboarding, salvaProfilo,
-    aggiornaRadarAttivo, attivaTrialPro, openAuthModal,
+    user, preferenze, radarWizardOpen, closeRadarWizard, setPreferenze, completaOnboarding, salvaProfilo,
+    aggiornaRadarAttivo, attivaTrialPro, openAuthModal, piano, hasProAccess,
   } = useApp();
 
   const [fase, setFase] = useState<'wizard' | 'done'>('wizard');
@@ -67,17 +74,32 @@ export function RadarWizardModal() {
   const [provinceCodici, setProvinceCodici] = useState<string[]>([]);
   const [telegramUsername, setTelegramUsername] = useState('');
   const [emailNotifica, setEmailNotifica] = useState('');
+  const [classiWarning, setClassiWarning] = useState(false);
 
-  // All'apertura: prefill dalle preferenze salvate (ri-configurazione) e reset dello stato.
+  // Limiti del piano corrente (Base: 1 provincia / 2 classi · PRO: 4/4) —
+  // fonte condivisa in lib/planLimits.ts (uso anche per i banner di upsell).
+  const limitiPiano = pianoLimits(piano, hasProAccess);
+  const maxProvince = limitiPiano.maxProvince;
+  const maxClassiConcorso = limitiPiano.maxClassiConcorso;
+
+  // All'apertura: prefill dalle preferenze salvate (ri-configurazione) e RIPRESA
+  // del passo esatto in cui l'utente si era fermato (1..4), senza ripartire da 1.
   useEffect(() => {
     if (!radarWizardOpen) return;
     setFase('wizard');
-    setStep(1);
+    let passoRipreso = 1;
+    try {
+      const raw = Number(localStorage.getItem(STORAGE_KEY_RADAR_WIZARD_STEP) ?? '');
+      if (Number.isInteger(raw) && raw >= 1 && raw <= 4) passoRipreso = raw;
+    } catch {
+      // localStorage non disponibile: si riparte dal primo passo
+    }
+    setStep(passoRipreso);
     setOrdini(preferenze.ordini ?? []);
-    setClassiCodici(preferenze.classiCodici ?? []);
+    setClassiCodici(limitaSelezione(preferenze.classiCodici, maxClassiConcorso));
     setMaterieId(preferenze.materieId ?? []);
     setMaterieCustom(preferenze.materieCustom ?? []);
-    setProvinceCodici(preferenze.provinceCodici ?? []);
+    setProvinceCodici(limitaSelezione(preferenze.provinceCodici, maxProvince));
     setTelegramUsername(preferenze.telegramUsername ?? '');
     setEmailNotifica(preferenze.emailNotifica || user?.email || '');
     setQueryClasse('');
@@ -86,7 +108,8 @@ export function RadarWizardModal() {
     setMateriaFilter('');
     setCustomMateriaInput('');
     setProvinceWarning(false);
-  }, [radarWizardOpen, preferenze, user]);
+    setClassiWarning(false);
+  }, [radarWizardOpen, preferenze, user, maxProvince, maxClassiConcorso]);
 
   // Deeplink Telegram: https://t.me/ScuoleRadar_bot?start=<user_id> — il bot collega
   // automaticamente il Chat ID dell'utente al suo profilo (webhook /start).
@@ -157,9 +180,18 @@ export function RadarWizardModal() {
   };
 
   const toggleClasse = (codice: string) => {
-    setClassiCodici((prev) =>
-      prev.includes(codice) ? prev.filter((c) => c !== codice) : [...prev, codice],
-    );
+    if (classiCodici.includes(codice)) {
+      setClassiCodici((prev) => prev.filter((c) => c !== codice));
+      setClassiWarning(false);
+      return;
+    }
+    // Piano Base: massimo 2 classi di concorso · PRO: massimo 4.
+    if (classiCodici.length >= maxClassiConcorso) {
+      setClassiWarning(true);
+      return;
+    }
+    setClassiCodici((prev) => [...prev, codice]);
+    setClassiWarning(false);
   };
 
   const toggleMateria = (id: string) => {
@@ -185,7 +217,7 @@ export function RadarWizardModal() {
       setProvinceWarning(false);
       return;
     }
-    if (provinceCodici.length >= LIMITE_PROVINCE) {
+    if (provinceCodici.length >= maxProvince) {
       setProvinceWarning(true);
       return;
     }
@@ -201,14 +233,51 @@ export function RadarWizardModal() {
     return false;
   };
 
+  /**
+   * Bozza cumulativa del profilo (tutte le sezioni compilate finora).
+   * `onboarded` resta FALSE finché il passo 4/4 non viene completato.
+   */
+  const bozzaPreferenze = (): Preferenze => ({
+    ...preferenze,
+    ordini,
+    classiCodici: limitaSelezione(classiCodici, maxClassiConcorso),
+    materieId,
+    materieCustom,
+    provinceCodici: limitaSelezione(provinceCodici, maxProvince),
+    telegramUsername: telegramUsername.trim(),
+    telegramChatId: preferenze.telegramChatId || '',
+    emailNotifica: emailNotifica.trim(),
+    onboarded: false,
+    favoriteSchools: preferenze.favoriteSchools ?? [],
+    ignoredSchools: preferenze.ignoredSchools ?? [],
+  });
+
+  /**
+   * Transizione di passo (Avanti/Indietro): salva SUBITO la bozza delle
+   * preferenze (localStorage sr_preferenze + profilo Supabase per l'utente
+   * autenticato) e memorizza il nuovo passo per la ripresa.
+   */
+  const vaiAlPasso = (nuovoPasso: number) => {
+    if (nuovoPasso < 1 || nuovoPasso > 4) return;
+    const bozza = bozzaPreferenze();
+    setPreferenze(bozza); // localState + localStorage (useLocalStorage)
+    if (user && supabase) void salvaProfilo(bozza); // colonne profiles (draft, onboarded non ancora true)
+    try {
+      localStorage.setItem(STORAGE_KEY_RADAR_WIZARD_STEP, String(nuovoPasso));
+    } catch {
+      // localStorage non disponibile
+    }
+    setStep(nuovoPasso);
+  };
+
   /** Salva preferenze + canali notifica, attiva radar_attivo=true e mostra il completamento. */
   const handleFinish = async (): Promise<void> => {
     const preferenzeFinali = {
       ordini,
-      classiCodici,
+      classiCodici: limitaSelezione(classiCodici, maxClassiConcorso),
       materieId,
       materieCustom,
-      provinceCodici,
+      provinceCodici: limitaSelezione(provinceCodici, maxProvince),
       telegramUsername: telegramUsername.trim(),
       telegramChatId: preferenze.telegramChatId || '',
       emailNotifica: emailNotifica.trim(),
@@ -236,6 +305,12 @@ export function RadarWizardModal() {
             preferenzeFinali.materieId.length +
             preferenzeFinali.materieCustom.length,
         });
+        // Onboarding completato: azzera il passo salvato per il prossimo setup.
+        try {
+          localStorage.removeItem(STORAGE_KEY_RADAR_WIZARD_STEP);
+        } catch {
+          // localStorage non disponibile
+        }
         setFase('done');
       } finally {
         setSalvando(false);
@@ -300,6 +375,11 @@ export function RadarWizardModal() {
         </div>
       ) : (
         <>
+          {/* Framing note posizionamento */}
+          <p className="mb-3 rounded-xl bg-primary-50 px-4 py-2 text-center text-sm font-semibold text-primary-700">
+            Tu scegli cosa cercare. Al resto pensa il Radar.
+          </p>
+
           {/* Progress */}
           <div className="mb-4">
             <div className="mb-2 flex items-center justify-between">
@@ -320,7 +400,7 @@ export function RadarWizardModal() {
           {step === 1 && (
             <div className="animate-fade-in">
               <h2 className="text-lg font-bold text-primary-800">
-                In quale ordine vuoi insegnare o lavorare?
+                Dove vuoi insegnare o lavorare?
               </h2>
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 {ordiniScuola.map((o) => {
@@ -358,7 +438,11 @@ export function RadarWizardModal() {
           {/* Passo 2: Province */}
           {step === 2 && (
             <div className="animate-fade-in">
-              <h2 className="text-lg font-bold text-primary-800">Province di interesse</h2>
+              <h2 className="text-lg font-bold text-primary-800">Dove vuoi cercare?</h2>
+              <p className="mt-1 text-sm leading-relaxed text-primary-500">
+                Scegli dove vuoi cercare. Il Radar elimina la necessità di controllare manualmente
+                decine di siti provinciali.
+              </p>
 
               {provinceCodici.length > 0 && (
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -386,19 +470,21 @@ export function RadarWizardModal() {
                 </div>
                 <span
                   className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    provinceCodici.length >= LIMITE_PROVINCE
+                    provinceCodici.length >= maxProvince
                       ? 'bg-secondary-100 text-secondary-700'
                       : 'bg-primary-50 text-primary-600'
                   }`}
                 >
-                  {provinceCodici.length}/{LIMITE_PROVINCE} province
+                  {provinceCodici.length}/{maxProvince} province
                 </span>
               </div>
 
-              {(provinceWarning || provinceCodici.length >= LIMITE_PROVINCE) && (
+              {(provinceWarning || provinceCodici.length >= maxProvince) && (
                 <div className="mt-3 flex items-start gap-2 rounded-xl border border-secondary-200 bg-secondary-50 px-4 py-3 text-sm text-secondary-800">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  Puoi selezionare fino a {LIMITE_PROVINCE} province col tuo piano attuale.
+                  {limitiPiano.piano === 'pro'
+                    ? `Sei al massimo: PRO include fino a ${maxProvince} province monitorabili.`
+                    : 'Il piano Base include 1 provincia. Passa a PRO per avvisi istantanei e fino a 4 province.'}
                 </div>
               )}
 
@@ -408,7 +494,7 @@ export function RadarWizardModal() {
                 ) : (
                   provinceFiltrate.map((p) => {
                     const selected = provinceCodici.includes(p.codice);
-                    const atLimit = provinceCodici.length >= LIMITE_PROVINCE && !selected;
+                    const atLimit = provinceCodici.length >= maxProvince && !selected;
                     return (
                       <label
                         key={p.codice}
@@ -437,11 +523,31 @@ export function RadarWizardModal() {
           {/* Passo 3: Classi di Concorso / Materie */}
           {step === 3 && (
             <div className="animate-fade-in">
-              <h2 className="text-lg font-bold text-primary-800">Classi di concorso e materie</h2>
+              <h2 className="text-lg font-bold text-primary-800">
+                Per quali insegnamenti sei abilitato o qualificato?
+              </h2>
 
               <div className="mt-5 space-y-5">
                 <div>
-                  <h3 className="mb-2 text-sm font-bold text-primary-700">Classi di concorso</h3>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-primary-700">Classi di concorso</h3>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-600">
+                      {classiCodici.length}/{maxClassiConcorso} selezionate
+                    </span>
+                  </div>
+                  {limitiPiano.piano === 'base' && (
+                    <p className="mb-2 text-xs text-secondary-700">
+                      Piano Base: fino a 2 classi di concorso. Passa a PRO per aggiungerne fino a 4.
+                    </p>
+                  )}
+                  {(classiWarning || classiCodici.length >= maxClassiConcorso) && (
+                    <p className="mb-2 flex items-start gap-1.5 rounded-lg border border-secondary-200 bg-secondary-50 px-3 py-2 text-xs text-secondary-800">
+                      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      {limitiPiano.piano === 'pro'
+                        ? `Sei al massimo: PRO include fino a ${maxClassiConcorso} classi di concorso.`
+                        : 'Il piano Base include 2 classi di concorso. Passa a PRO per aggiungerne fino a 4.'}
+                    </p>
+                  )}
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="relative">
                       <select
@@ -483,15 +589,19 @@ export function RadarWizardModal() {
                     ) : (
                       classiFiltrate.map((c) => {
                         const selected = classiCodici.includes(c.codice);
+                        const atLimit = classiCodici.length >= maxClassiConcorso && !selected;
                         return (
                           <button
                             key={c.codice}
                             type="button"
+                            disabled={atLimit}
                             onClick={() => toggleClasse(c.codice)}
                             className={`flex w-full items-center justify-between gap-2 rounded-lg border p-3 text-left transition ${
                               selected
                                 ? 'border-accent-300 bg-accent-50'
-                                : 'border-transparent hover:bg-primary-50'
+                                : atLimit
+                                  ? 'cursor-not-allowed border-transparent opacity-50 hover:bg-transparent'
+                                  : 'border-transparent hover:bg-primary-50'
                             }`}
                           >
                             <span>
@@ -512,10 +622,11 @@ export function RadarWizardModal() {
 
                 {/* Materie */}
                 <div>
-                  <h3 className="mb-2 text-sm font-bold text-primary-700">Materie e competenze</h3>
+                  <h3 className="mb-2 text-sm font-bold text-primary-700">
+                    In cosa puoi lavorare, anche oltre la tua classe di concorso?
+                  </h3>
                   <p className="mb-3 text-xs text-primary-500">
-                    Seleziona le materie in cui sei competente, anche se non collegate a una
-                    classe di concorso specifica.
+                    Seleziona le competenze per intercettare bandi PNRR, progetti, corsi e laboratori.
                   </p>
                   {materieId.length > 0 && (
                     <div className="mb-3 flex flex-wrap gap-2">
@@ -568,7 +679,7 @@ export function RadarWizardModal() {
                 {/* Materia personalizzata */}
                 <div>
                   <h3 className="mb-2 text-sm font-bold text-primary-700">
-                    Aggiungi materia personalizzata
+                    Cerchi competenze particolari? Aggiungile qui.
                   </h3>
                   <p className="mb-3 text-xs text-primary-500">
                     Scrivi una materia o competenza non presente nell'elenco.
@@ -690,7 +801,7 @@ export function RadarWizardModal() {
             {step > 1 ? (
               <button
                 type="button"
-                onClick={() => setStep((s) => s - 1)}
+                onClick={() => vaiAlPasso(step - 1)}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-primary-200 px-4 py-2.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
               >
                 <ArrowLeft className="h-4 w-4" />
@@ -703,7 +814,7 @@ export function RadarWizardModal() {
             {step < totalSteps ? (
               <button
                 type="button"
-                onClick={() => setStep((s) => s + 1)}
+                onClick={() => vaiAlPasso(step + 1)}
                 disabled={!canNext()}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
               >

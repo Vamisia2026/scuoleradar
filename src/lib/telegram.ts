@@ -19,6 +19,7 @@ import {
   type DettagliNotifica,
   type TipoMessaggio,
 } from './resend.ts';
+import { province } from '../data/province.ts';
 
 /** Interfaccia per l'ambiente (evita la dipendenza da @types/node nel frontend). */
 declare const process: { env: Record<string, string | undefined> };
@@ -285,17 +286,72 @@ export async function inviaNotificaTelegram(
 export interface InterpelloCanale {
   title: string;
   schoolName?: string | null;
+  /** Codice provincia (es. "MI"). */
   province: string;
+  /** Comune, quando noto (es. estratto dal titolo/avviso). */
+  comune?: string | null;
+  /** Classi di concorso / profili coinvolti (es. ["A-026"], ["ADEE"]). */
   classCodes?: string[];
   expirationDate?: string | null;
   link?: string | null;
 }
 
 /**
- * Canali Telegram regionali di acquisizione interpelli.
- * Formato env TELEGRAM_CHANNELS (JSON, chiave = codice provincia):
- *   {"MI":"@ScuoleRadar_Interpelli_Milano","TO":"@ScuoleRadar_Interpelli_Torino"}
- * Il bot deve essere AMMINISTRATORE del canale (o il chat_id numerico -100… del canale).
+ * Canali Telegram UFFICIALI di pubblicazione, uno per ciascuna delle 20 regioni
+ * italiane. Il bot @ScuoleRadar_bot deve essere AMMINISTRATORE del canale
+ * (oppure è possibile usare il chat_id numerico -100… del canale).
+ */
+export const CANALI_TELEGRAM_REGIONALI: Record<string, string> = {
+  Piemonte: '@scuoleradar_piemonte',
+  Lombardia: '@scuoleradar_lombardia',
+  Veneto: '@scuoleradar_veneto',
+  'Emilia-Romagna': '@scuoleradar_emiliaromagna',
+  Toscana: '@scuoleradar_toscana',
+  Lazio: '@scuoleradar_lazio',
+  Campania: '@scuoleradar_campania',
+  Sicilia: '@scuoleradar_sicilia',
+  Puglia: '@scuoleradar_puglia',
+  Liguria: '@scuoleradar_liguria',
+  'Friuli-Venezia Giulia': '@scuoleradar_friuli',
+  Marche: '@scuoleradar_marche',
+  Umbria: '@scuoleradar_umbria',
+  Abruzzo: '@scuoleradar_abruzzo',
+  Calabria: '@scuoleradar_calabria',
+  Sardegna: '@scuoleradar_sardegna',
+  'Trentino-Alto Adige': '@scuoleradar_trentino',
+  Basilicata: '@scuoleradar_basilicata',
+  Molise: '@scuoleradar_molise',
+  "Valle d'Aosta": '@scuoleradar_valledaosta',
+};
+
+/**
+ * Canali Telegram effettivi per regione: i 20 canali ufficiali, con eventuale
+ * override via env TELEGRAM_CHANNELS_REGIONALI (JSON "Regione" → "@canale",
+ * utile per test o canali temporanei).
+ */
+export function getTelegramCanaliRegionali(): Record<string, string> {
+  const canali: Record<string, string> = { ...CANALI_TELEGRAM_REGIONALI };
+  const raw = (process.env.TELEGRAM_CHANNELS_REGIONALI ?? '').trim();
+  if (!raw) return canali;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    for (const [regione, chat] of Object.entries(parsed)) {
+      if (typeof chat === 'string' && chat.trim()) canali[regione.trim()] = chat.trim();
+    }
+  } catch (err) {
+    console.warn(
+      '⚠ TELEGRAM_CHANNELS_REGIONALI non è un JSON valido — uso i canali regionali di default:',
+      (err as Error).message,
+    );
+  }
+  return canali;
+}
+
+/**
+ * Override RETRO-COMPATIBILE per-provincia via env TELEGRAM_CHANNELS
+ * (JSON, chiave = codice provincia), es.:
+ *   {"MI":"@canale_test_Milano","TO":"@canale_test_Torino"}
+ * Se valorizzato per una provincia, vince sul canale regionale ufficiale.
  */
 export function getTelegramChannels(): Record<string, string> {
   const raw = (process.env.TELEGRAM_CHANNELS ?? '').trim();
@@ -309,57 +365,199 @@ export function getTelegramChannels(): Record<string, string> {
     return canali;
   } catch (err) {
     console.warn(
-      '⚠ TELEGRAM_CHANNELS non è un JSON valido — pubblicazione canali disattivata:',
+      '⚠ TELEGRAM_CHANNELS non è un JSON valido — override per-provincia disattivato:',
       (err as Error).message,
     );
     return {};
   }
 }
 
-/** Chat/canale configurato per una provincia (es. "MI"), o null. */
-export function canalePerProvincia(provincia: string): string | null {
-  const canali = getTelegramChannels();
-  const p = (provincia ?? '').trim().toUpperCase();
-  return p && canali[p] ? canali[p] : null;
+/** Regione di appartenenza di un codice provincia (es. "MI" → "Lombardia"). */
+export function regionePerProvincia(codiceProvincia: string): string | null {
+  const p = (codiceProvincia ?? '').trim().toUpperCase();
+  if (!p) return null;
+  return province.find((x) => x.codice === p)?.regione ?? null;
+}
+
+/** Nome esteso della provincia (es. "MI" → "Milano"). */
+export function nomeProvincia(codiceProvincia: string): string | null {
+  const p = (codiceProvincia ?? '').trim().toUpperCase();
+  if (!p) return null;
+  return province.find((x) => x.codice === p)?.nome ?? null;
+}
+
+/** Chat/canale ufficiale configurato per una regione, o null. */
+export function canalePerRegione(regione: string): string | null {
+  const nome = (regione ?? '').trim();
+  if (!nome) return null;
+  return getTelegramCanaliRegionali()[nome] ?? null;
 }
 
 /**
- * Pubblica un interpello NUOVO sul canale Telegram regionale.
- * Struttura del post:
- *   🚨 NUOVO INTERPELLO - [CLASSE] - [PROVINCIA]
- *   🏫 Scuola · 🗓 Scadenza · 🔗 Avviso
- *   CTA footer: "Vuoi ricevere solo gli interpelli per la tua classe di concorso?
- *               Attiva il tuo Radar su ScuoleRadar.it"
+ * Canale Telegram per una provincia:
+ *   1. override per-provincia TELEGRAM_CHANNELS (retro-compatibile, se presente);
+ *   2. altrimenti il canale UFFICIALE della regione di appartenenza.
+ */
+export function canalePerProvincia(provincia: string): string | null {
+  const override = getTelegramChannels();
+  const p = (provincia ?? '').trim().toUpperCase();
+  if (p && override[p]) return override[p];
+  const regione = regionePerProvincia(p);
+  return regione ? canalePerRegione(regione) : null;
+}
+
+/* ------------------- Formato post canali regionali (colori & hashtag) ------------------- */
+
+type CategoriaPost = 'interpello_docenti' | 'avviso_ata' | 'bando_pnrr_esperto';
+
+/** Testate cromatiche per tipologia di avviso. */
+const HEADER_POST: Record<CategoriaPost, string> = {
+  interpello_docenti: '🟢 [INTERPELLO DOCENTI]',
+  avviso_ata: '🔵 [AVVISO ATA]',
+  bando_pnrr_esperto: '🟣 [BANDO / PNRR / ESPERTO]',
+};
+
+/** Keyword profili ATA (amministrativi, tecnici, collaboratori scolastici). */
+const RE_ATA =
+  /\b(personale\s+ata|profilo\s+ata|ata)\b|\bcollaborator\w*\s+scolastic\w*\b|\bassistent\w*\s+amministrativ\w*\b|\bassistent\w*\s+tecn\w*\b|\bdsga\b|\bbidell\w*\b|\bguardarobier\w*\b/i;
+
+/** Keyword bandi/progetti/PNRR/incarichi per esperti e tutor. */
+const RE_BANDO =
+  /\bbando\b|\bselezion\w*\b|\breclutament\w*\b|\bespert\w*\b|\btutor\b|\bincarico\b|\bprocedura\b|\bmanifestazione\s+di\s+interesse\b|\bpnrr\b|\bpon\b|\bpor\b|\bprogetto\b|\bfinanziament\w*\b|\bfondi\b|\bfse\b|\bfesr\b|\bnext\s+generation\s+eu\b/i;
+
+/** Classi di concorso (A-026, ADEE, …) che identificano ruoli da docente. */
+const RE_CLASSE_CONCORSO = /\b(?:[A-Z]{1,2}-\d{2,3}|AD(?:[A-Z]{2,3}|\d{2}))\b/i;
+
+/** Token per hashtag Telegram: rimuove accenti, spazi e punteggiatura. */
+function hashtagToken(testo: string): string {
+  const token = (testo ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9]+/g, '');
+  return token || 'ScuoleRadar';
+}
+
+/** Profilo ATA specifico citato nel titolo (fallback "Personale ATA"). */
+function profiloAta(titolo: string): string {
+  const t = titolo.toLowerCase();
+  if (/\bdsga\b/.test(t)) return 'DSGA';
+  if (/\bcollaborator\w*\s+scolastic\w*/.test(t)) return 'Collaboratore scolastico';
+  if (/\bassistent\w*\s+amministrativ\w*/.test(t)) return 'Assistente amministrativo';
+  if (/\bassistent\w*\s+tecn\w*/.test(t)) return 'Assistente tecnico';
+  if (/\bguardarobier\w*/.test(t)) return 'Guardarobiere';
+  return 'Personale ATA';
+}
+
+/** Tipologia per hashtag quando l'avviso è un bando/progetto (PNRR > PON > POR > Esperto > Bando). */
+function tipologiaBando(titolo: string): string {
+  const t = titolo.toLowerCase();
+  if (/\bpnrr\b/.test(t)) return 'PNRR';
+  if (/\bpon\b/.test(t)) return 'PON';
+  if (/\bpor\b/.test(t)) return 'POR';
+  if (/\bespert\w*/.test(t) || /\btutor\b/.test(t)) return 'Esperto';
+  return 'Bando';
+}
+
+/** Ruolo / categoria mostrato nella riga "👩🏫 Ruolo / Categoria". */
+function ruoloPerCategoria(categoria: CategoriaPost, interpello: InterpelloCanale): string {
+  const titolo = interpello.title ?? '';
+  if (categoria === 'avviso_ata') return profiloAta(titolo);
+  if (categoria === 'bando_pnrr_esperto') {
+    if (/\bespert\w*/.test(titolo.toLowerCase())) return 'Esperto esterno';
+    if (/\btutor\b/.test(titolo.toLowerCase())) return 'Tutor';
+    return tipologiaBando(titolo);
+  }
+  const daTitolo = titolo.match(RE_CLASSE_CONCORSO)?.[0];
+  return (interpello.classCodes?.[0]?.trim() || daTitolo || '').toUpperCase() || 'Docente';
+}
+
+/** Comune best-effort: campo dedicato oppure coda del titolo dopo separatore o virgola. */
+function comuneAvviso(interpello: InterpelloCanale): string | null {
+  const esplicito = interpello.comune?.trim();
+  if (esplicito) return esplicito;
+  const coda = (interpello.title ?? '').split(/\s*[—–,]\s*/).pop()?.trim() ?? '';
+  if (coda.length < 2 || coda.length > 40 || /\d/.test(coda)) return null;
+  if (!/^[A-ZÀ-Ý]/.test(coda)) return null;
+  if (/(istituto|scuola|liceo|i\.?\s*c\.?|ist\.|convitto|cpia|circolo|comprensivo)/i.test(coda)) return null;
+  return coda;
+}
+
+/**
+ * Formatta il post per i canali Telegram regionali (struttura ufficiale):
+ *   riga 1 — emoji + tipologia colorata;
+ *   corpo  — 📍 Provincia ([PR]) — Comune · 🏫 Scuola · 👩🏫 Ruolo · 📅 Scadenza;
+ *   🔗 link ufficiale, ⚡ CTA per il servizio privato e hashtag finali.
+ */
+export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string {
+  const codice = (interpello.province ?? '').trim().toUpperCase() || 'ND';
+  const regione = regionePerProvincia(codice);
+  const provincia = nomeProvincia(codice);
+  const comune = comuneAvviso(interpello);
+  const titolo = interpello.title ?? '';
+
+  const categoria: CategoriaPost = RE_ATA.test(titolo)
+    ? 'avviso_ata'
+    : RE_BANDO.test(titolo)
+      ? 'bando_pnrr_esperto'
+      : 'interpello_docenti';
+  const ruolo = ruoloPerCategoria(categoria, interpello);
+
+  const dettagli: string[] = [
+    `📍 Provincia: <b>${escapeHtml(provincia ? `${provincia} (${codice})` : codice)}</b>${
+      comune ? ` — <b>${escapeHtml(comune)}</b>` : ''
+    }`,
+  ];
+  if (interpello.schoolName?.trim()) {
+    dettagli.push(`🏫 Scuola: <b>${escapeHtml(interpello.schoolName.trim())}</b>`);
+  }
+  dettagli.push(`👩🏫 Ruolo / Categoria: <b>${escapeHtml(ruolo)}</b>`);
+  dettagli.push(
+    `📅 Scadenza: <b>${
+      interpello.expirationDate ? escapeHtml(formatDataScadenza(interpello.expirationDate)) : 'Immediata'
+    }</b>`,
+  );
+
+  const tipologiaToken =
+    categoria === 'avviso_ata'
+      ? hashtagToken('ATA')
+      : hashtagToken(categoria === 'bando_pnrr_esperto' ? tipologiaBando(titolo) : 'Interpello');
+
+  const hashtag = [
+    regione ? `#${hashtagToken(regione)}` : '',
+    provincia ? `#${hashtagToken(provincia)}` : '',
+    `#${tipologiaToken}`,
+    `#${hashtagToken(ruolo)}`,
+    '#ScuoleRadar',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const linkRiga = interpello.link?.trim()
+    ? `🔗 <a href="${escapeHtml(interpello.link.trim())}">Leggi l'Avviso Originale</a>`
+    : '';
+
+  const cta = '⚡ Ricevi solo gli avvisi per la tua provincia e classe in privato:\n👉 https://scuoleradar.it';
+
+  const parti: string[] = [
+    HEADER_POST[categoria],
+    `📌 <b>${escapeHtml(titolo)}</b>`,
+    dettagli.join('\n'),
+  ];
+  if (linkRiga) parti.push(linkRiga);
+  parti.push(cta, hashtag);
+  return parti.join('\n\n');
+}
+
+/**
+ * Pubblica un interpello NUOVO sul canale Telegram della regione di appartenenza
+ * (o su un canale/chat esplicito, es. per i test). Usa la formattazione ufficiale.
  */
 export async function pubblicaInterpelloSuCanale(
   interpello: InterpelloCanale,
   chatId?: string,
 ): Promise<EsitoTelegram> {
   const canale = chatId?.trim() ?? canalePerProvincia(interpello.province);
-  if (!canale) return { ok: false, error: 'Nessun canale configurato per la provincia' };
-
-  const classe = (interpello.classCodes?.[0] ?? 'ND').toUpperCase();
-  const provincia = (interpello.province ?? '').trim().toUpperCase() || 'ND';
-  const scadenza = formatDataScadenza(interpello.expirationDate ?? null);
-
-  const righe: string[] = [
-    `🚨 NUOVO INTERPELLO - <b>${escapeHtml(classe)}</b> - ${provincia}`,
-    '',
-  ];
-
-  if (interpello.schoolName?.trim()) {
-    righe.push(`🏫 <b>${escapeHtml(interpello.schoolName.trim())}</b>`);
-  }
-  if (interpello.title?.trim()) {
-    righe.push(`📌 ${escapeHtml(interpello.title.trim())}`);
-  }
-  righe.push(`🗓 Scadenza: ${scadenza}`);
-  if (interpello.link?.trim()) {
-    righe.push(`🔗 <a href="${escapeHtml(interpello.link.trim())}">Vai all'avviso ufficiale</a>`);
-  }
-  righe.push('', 'Vuoi ricevere solo gli interpelli per la tua classe di concorso?');
-  righe.push(`<a href="${DASHBOARD_URL.replace(/\/+$/, '')}/">Attiva il tuo Radar su ScuoleRadar.it</a>`);
-
-  return inviaMessaggioTelegram(canale, righe.join('\n'));
+  if (!canale) return { ok: false, error: 'Nessun canale configurato per la provincia/regione' };
+  return inviaMessaggioTelegram(canale, formattaPostCanaleTelegram(interpello));
 }
 
