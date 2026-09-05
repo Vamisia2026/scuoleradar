@@ -58,6 +58,16 @@ const PAROLE_CATEGORIA: Record<string, string[]> = {
     'pnrr', 'piano nazionale di ripresa e resilienza', 'fondi pnrr', 'bandi pnrr',
     'scuola 4.0', 'nuove competenze',
   ],
+  'CCNL': [
+    'ccnl', 'contratto collettivo nazionale', 'comparto istruzione e ricerca',
+    'area istruzione e ricerca', 'verbale di accordo', 'contrattazione collettiva',
+  ],
+  'Assegnazioni Provvisorie': ['assegnazioni provvisorie', 'assegnazione provvisoria', 'utilizzazioni'],
+  'Ricostruzione Carriera': ['ricostruzione carriera', 'ricostruzione di carriera', 'ricongiunzione'],
+  'Riconoscimento Titoli': [
+    'riconoscimento titoli', 'riconoscimento dei titoli', 'titolo estero',
+    'titoli esteri', 'equipollenza', 'equiparazione',
+  ],
 };
 
 /** Parole che rendono la notizia OPERATIVA (accettabile). */
@@ -70,7 +80,10 @@ const PAROLE_ACCETTA: string[] = [
   'rettifica', 'integrazione', 'proroga', 'avviso di avvio', 'apertura delle domande',
   'riserva', 'assegnazione', 'conferimento', 'scelta delle sedi',
   'nomina', 'nomine', 'algoritmo', 'algoritmi', 'presa di servizio', 'primo settembre',
-  '1° settembre', 'pnrr', 'bollettini',
+  '1° settembre', 'pnrr', 'bollettini', 'ccnl', 'contratto collettivo',
+  'verbale di accordo', 'sottoscrizione', 'riconoscimento', 'equipollenza',
+  'ricostruzione', 'riscatto laurea', 'assegnazioni provvisorie', 'sentenza',
+  'deciso', 'conciliazione', 'ordinanza cautelare',
 ];
 
 /** Parole che segnalano contenuti NON vincolanti (zero rumore: da rifiutare). */
@@ -83,6 +96,8 @@ const PAROLE_RIFIUTA: string[] = [
   'campagna pubblicitaria', 'iniziativa promozionale', 'webinar', 'seminario',
   'video', 'podcast', 'mostra', 'fiera', 'concorso artistico', 'progetto di lettura',
   'bandiera', 'festa', 'evento sportivo', 'manifestazione', 'sondaggio',
+  'ipotesi', 'ipotesi di', 'bozza', 'bozze', 'preliminare', 'preliminari',
+  'in preparazione', 'proposta preliminare', 'draft', 'avvio dei lavori preparatori',
 ];
 
 const MESI_ITALIANI: Record<string, number> = {
@@ -177,7 +192,7 @@ REGOLE VINCOLANTI (strict editorial guidelines):
 1) ZERO RUMORE: rifiuta discorsi, interviste, dichiarazioni non vincolanti, comunicati stampa, campagne di comunicazione ed eventi promozionali. Accetta SOLO provvedimenti VINCOLANTI per il personale scolastico: decreti, ordinanze ministeriali, note, circolari, bandi, avvisi e scadenze operative (GPS, mobilità, concorsi, pensioni, sostegno, supplenze, graduatorie).
 2) VALIDITÀ GIURIDICA: la notizia DEVE riferirsi a un atto ufficiale preciso (Ordinanza Ministeriale, Decreto, articolo di legge, nota protocollata). Se titolo/descrizione non citano un riferimento ufficiale specifico, rilevanza = false.
 3) CAPACITÀ SETTIMANALE: al massimo 3 articoli ad alto valore per settimana. Se nessun provvedimento è vincolante, la risposta deve avere "items" vuoti (0 articoli pubblicati).
-4) CATEGORIA: una tra GPS, Mobilità, Concorsi, Pensioni, Sostegno, Graduatorie, Supplenze, Scuole, PNRR.
+4) CATEGORIA: una tra GPS, Mobilità, Assegnazioni Provvisorie, Concorsi, Pensioni, Ricostruzione Carriera, Riconoscimento Titoli, CCNL, Sostegno, Graduatorie, Supplenze, Scuole, PNRR.
 5) DEADLINE: la data di scadenza ufficiale in formato ISO (YYYY-MM-DD) se presente, altrimenti null.
 
 Rispondi SOLO in JSON:
@@ -194,10 +209,14 @@ export function punteggioRilevanza(categoria: string | null, hasDeadline: boolea
     Concorsi: 90,
     Sostegno: 88,
     Mobilità: 85,
+    'Assegnazioni Provvisorie': 86,
+    CCNL: 84,
     Pensioni: 82,
     Supplenze: 80,
     PNRR: 80,
     Graduatorie: 78,
+    'Ricostruzione Carriera': 76,
+    'Riconoscimento Titoli': 74,
     Scuole: 70,
   };
   const base = categoria ? (priorita[categoria] ?? 65) : 60;

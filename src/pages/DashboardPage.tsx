@@ -73,7 +73,7 @@ export function DashboardPage() {
     abbonato,
     piano,
     openAuthModal,
-    openRadarWizard,
+    openRadarSetup,
   } = useApp();
 
   // Vetrina Freemium: gli utenti non loggati vedono un campione dell'offerta
@@ -200,7 +200,7 @@ export function DashboardPage() {
                 </p>
                 <button
                   type="button"
-                  onClick={openRadarWizard}
+                  onClick={openRadarSetup}
                   className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
                 >
                   <SlidersHorizontal className="h-4 w-4" />
@@ -220,7 +220,7 @@ export function DashboardPage() {
                 </p>
                 <button
                   type="button"
-                  onClick={openRadarWizard}
+                  onClick={openRadarSetup}
                   className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
                 >
                   <SlidersHorizontal className="h-4 w-4" />

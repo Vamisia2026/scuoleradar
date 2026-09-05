@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Download, FolderOpen, Loader2, Trash2 } from 'lucide-react';
+import { Download, FolderOpen, Loader2, Trash2 } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { supabase } from '@/lib/supabase';
 import {
@@ -172,18 +172,18 @@ export function ProfiloPage() {
           la cancellazione dell&apos;account è irreversibile e comporta la perdita di profilo,
           preferenze, moduli scaricati e accesso a PureFocus.
         </p>
-        <div className="mt-4 rounded-xl border border-error-200 bg-error-50/40 p-5">
-          <h4 className="flex items-center gap-1.5 text-sm font-bold text-error-700">
-            <AlertTriangle className="h-4 w-4" />
+        <div className="mt-5 border-t border-primary-100 pt-4">
+          <h4 className="flex items-center gap-1.5 text-sm font-bold text-primary-800">
+            <Trash2 className="h-4 w-4 text-primary-400" />
             Disdetta e cancellazione account
           </h4>
-          <p className="mt-1 text-sm text-primary-600">
+          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-primary-600">
             La disdetta elimina definitivamente profilo, preferenze, moduli scaricati e accesso a
             PureFocus. L&apos;operazione è irreversibile.
           </p>
           <button
             onClick={() => setMostraModaleElimina(true)}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-error-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-error-600"
+            className="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-primary-200 bg-white px-4 py-2.5 text-sm font-medium text-primary-600 transition hover:bg-primary-50 hover:text-primary-800"
           >
             <Trash2 className="h-4 w-4" />
             Cancella il mio account
@@ -194,7 +194,7 @@ export function ProfiloPage() {
       <Modal
         open={mostraModaleElimina}
         onClose={() => setMostraModaleElimina(false)}
-        title="Cancellazione definitiva"
+        title="Se procedi, la tua cancellazione sarà definitiva"
         size="sm"
       >
         <div className="space-y-4">

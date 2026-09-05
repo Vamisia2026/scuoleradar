@@ -12,7 +12,7 @@ import { ADMIN_EMAILS } from '@/pages/admin/types';
 import { servizi } from '@/data/servizi';
 
 export function LandingPage() {
-  const { user, openAuthModal, hasProAccess, radarAttivo, openRadarWizard } = useApp();
+  const { user, openAuthModal, hasProAccess, radarAttivo, openRadarSetup } = useApp();
   const navigate = useNavigate();
 
   // Shimmer pseudo-casuale sul CTA "ATTIVA IL TUO RADAR": ogni 10–15 s (intervallo
@@ -48,15 +48,18 @@ export function LandingPage() {
   /** True se l'utente ha già configurato il Radar (preferenze + radar_attivo=true). */
   const radarPronto = Boolean(user && radarAttivo);
 
-  const handleInizia = () => {
+  /**
+   * CTA "ATTIVA IL TUO RADAR": prima si fa impostare il Radar (wizard), poi si
+   * chiedono i dati di registrazione (solo al termine del percorso, se guest).
+   * Nessun paywall e nessun login anticipato.
+   */
+  const handleRadarClick = () => {
     // Radar già attivo → gestione direttamente nella dashboard (preferenze precompilate).
     if (radarPronto) {
       navigate('/dashboard/radar');
       return;
     }
-    // Nessun paywall e nessun login anticipato: si configura subito il Radar.
-    // La registrazione gratuita arriva SOLO alla fine del percorso di configurazione.
-    openRadarWizard();
+    openRadarSetup();
   };
 
   const handleAccedi = () => {
@@ -91,7 +94,7 @@ export function LandingPage() {
               </p>
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <button
-                  onClick={handleInizia}
+                  onClick={handleRadarClick}
                   className={`btn-glint inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-base font-semibold text-white shadow-soft transition ${
                     radarPronto ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-[#2B6F9E] hover:bg-[#225a82]'
                   }${glintOn && !radarPronto ? ' btn-glint-on' : ''}`}
@@ -376,7 +379,7 @@ export function LandingPage() {
             {radarPronto ? 'Il tuo Radar è attivo' : 'ATTIVA IL TUO RADAR'}
           </h2>
           <button
-            onClick={handleInizia}
+            onClick={handleRadarClick}
             className={`mt-8 inline-flex items-center justify-center gap-2 rounded-xl px-8 py-4 text-base font-semibold text-white shadow-soft transition ${
               radarPronto
                 ? 'bg-emerald-600 hover:bg-emerald-700'

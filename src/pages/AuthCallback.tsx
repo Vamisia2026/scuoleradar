@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
+import { getPostLoginRedirect } from '@/lib/showroomRedirect';
 
 /**
  * Rotta di ritorno da Google OAuth.
@@ -15,7 +16,8 @@ export function AuthCallback() {
 
   useEffect(() => {
     if (!loading && user) {
-      navigate('/dashboard', { replace: true });
+      const redirect = getPostLoginRedirect();
+      navigate(redirect ?? '/dashboard', { replace: true });
     } else if (!loading && !user) {
       navigate('/', { replace: true });
     }

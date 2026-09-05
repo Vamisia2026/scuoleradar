@@ -316,7 +316,7 @@ export function ModuliModule() {
         <div className="flex items-center gap-2">
           <FolderOpen className="h-5 w-5 text-primary-600" />
           <h2 className="text-2xl font-bold text-primary-800">
-            Tutti i moduli che ti servono, senza cercarli ogni volta.
+            Tutti i moduli per la scuola che ti servono, senza cercarli ogni volta.
           </h2>
         </div>
         <VetrinaModulistica />
@@ -335,7 +335,7 @@ export function ModuliModule() {
             compattato ? 'text-lg font-bold text-primary-800' : 'text-2xl font-bold text-primary-800'
           }
         >
-          Tutti i moduli che ti servono, senza cercarli ogni volta.
+          Tutti i moduli per la scuola che ti servono, senza cercarli ogni volta.
         </h2>
       </div>
 

@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, UserPlus, AlertCircle, Eye, EyeOff, Loader2, Sparkles } from 'lucide-react';
+import { LogIn, AlertCircle, Eye, EyeOff, Loader2, Radar } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { Modal } from '@/components/Modal';
 import { TelegramLoginButton } from '@/components/TelegramLoginButton';
 import { useToast } from '@/components/Toast';
 import { isSupabaseConfigurato } from '@/lib/supabase';
+import { getPostLoginRedirect } from '@/lib/showroomRedirect';
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -67,9 +68,6 @@ export function AuthModal() {
   const [googleLoading, setGoogleLoading] = useState(false);
   /** Attesa risposta Supabase al submit email (login). */
   const [loginLoading, setLoginLoading] = useState(false);
-  /** Soft sell registrazione: tipo account scelto (Base di default; PRO → /prezzi). */
-  const [tipoAccount, setTipoAccount] = useState<'base' | 'pro'>('base');
-
   // Ripulisce il form quando la modale si chiude
   useEffect(() => {
     if (!authModalOpen) {
@@ -83,7 +81,6 @@ export function AuthModal() {
       setErrore('');
       setGoogleLoading(false);
       setLoginLoading(false);
-      setTipoAccount('base');
     }
   }, [authModalOpen]);
 
@@ -95,6 +92,12 @@ export function AuthModal() {
 
   const dopoLogin = () => {
     closeAuthModal();
+    // Redirect pendente da una showroom pubblica (es. /moduli → /dashboard/moduli)?
+    const redirect = getPostLoginRedirect();
+    if (redirect) {
+      navigate(redirect, { replace: true });
+      return;
+    }
     navigate(preferenze.onboarded ? '/dashboard/radar' : '/onboarding');
   };
 
@@ -129,7 +132,8 @@ export function AuthModal() {
         eta,
       });
       closeAuthModal();
-      navigate('/onboarding');
+      const redirect = getPostLoginRedirect();
+      navigate(redirect ?? '/onboarding');
     } else {
       if (!email.trim() || !password) {
         const msg = 'Inserisci email e password per accedere.';
@@ -174,12 +178,6 @@ export function AuthModal() {
     }
   };
 
-  /** Soft sell: la card PRO reindirizza alla pagina Prezzi. */
-  const scegliPro = () => {
-    closeAuthModal();
-    navigate('/prezzi');
-  };
-
   return (
     <Modal
       open={authModalOpen}
@@ -193,38 +191,15 @@ export function AuthModal() {
       }
       size="lg"
     >
-      <div className="space-y-5">
-        {/* Soft sell registrazione: scelta account Base (registrazione gratuita) o PRO (/prezzi) */}
+      <div className="space-y-3">
+        {/* Buone notizie: banner PRO trial (visibile solo in registrazione) */}
         {isRegister && (
-          <div className="rounded-2xl border border-primary-100 bg-slate-50 p-4">
-            <p className="mb-3 text-center text-sm font-bold text-primary-800">
-              Scegli il tuo account:
+          <div className="rounded-xl border border-accent-200 bg-accent-50 px-4 py-3 text-sm leading-relaxed text-accent-800">
+            <p className="font-semibold">Buone notizie! 🚀</p>
+            <p className="mt-0.5">
+              Ti diamo <strong>1 mese di PRO</strong> per provare il tuo radar personalizzato con
+              tutti i servizi inclusi. Fanne buon uso!
             </p>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setTipoAccount('base')}
-                aria-pressed={tipoAccount === 'base'}
-                className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 px-3 py-4 text-sm font-bold transition ${
-                  tipoAccount === 'base'
-                    ? 'border-secondary-500 bg-white text-secondary-700'
-                    : 'border-primary-200 bg-white text-primary-600 hover:bg-primary-50'
-                }`}
-              >
-                <UserPlus className="h-5 w-5" />
-                Account Base
-                <span className="text-xs font-medium">3 segnalazioni incluse</span>
-              </button>
-              <button
-                type="button"
-                onClick={scegliPro}
-                className="flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-secondary-500 bg-secondary-500 px-3 py-4 text-sm font-bold text-white shadow-soft transition hover:bg-secondary-600"
-              >
-                <Sparkles className="h-5 w-5" />
-                Account PRO
-                <span className="text-xs font-medium">Notifiche illimitate</span>
-              </button>
-            </div>
           </div>
         )}
 
@@ -233,7 +208,7 @@ export function AuthModal() {
           type="button"
           onClick={handleGoogle}
           disabled={googleLoading}
-          className="inline-flex w-full items-center justify-center gap-2.5 rounded-xl border border-primary-200 bg-white px-5 py-3 text-sm font-semibold text-primary-800 shadow-soft transition hover:bg-primary-50 disabled:cursor-wait disabled:opacity-70"
+          className="inline-flex w-full items-center justify-center gap-2.5 rounded-xl border border-primary-200 bg-white px-4 py-2.5 text-sm font-semibold text-primary-800 shadow-soft transition hover:bg-primary-50 disabled:cursor-wait disabled:opacity-70"
         >
           {googleLoading ? (
             <>
@@ -257,13 +232,13 @@ export function AuthModal() {
         </div>
 
         {errore && (
-          <div className="flex items-start gap-2 rounded-xl bg-error-50 px-4 py-3 text-sm text-error-700">
+          <div className="flex items-start gap-2 rounded-xl bg-error-50 px-4 py-2.5 text-sm text-error-700">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             {errore}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3">
           {isRegister && (
             <div className="grid grid-cols-2 gap-3">
               <Field label="Nome">
@@ -366,7 +341,7 @@ export function AuthModal() {
           <button
             type="submit"
             disabled={loginLoading || googleLoading}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-500 px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600 disabled:cursor-wait disabled:opacity-70"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600 disabled:cursor-wait disabled:opacity-70"
           >
             {loginLoading ? (
               <>
@@ -375,8 +350,8 @@ export function AuthModal() {
               </>
             ) : isRegister ? (
               <>
-                <UserPlus className="h-4 w-4" />
-                Crea account
+                <Radar className="h-4 w-4" />
+                Attiva il tuo Radar PRO
               </>
             ) : (
               <>

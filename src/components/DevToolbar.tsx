@@ -13,7 +13,7 @@ const ruoli: { id: RuoloSimulato; label: string; desc: string; icon: React.React
   {
     id: 'base',
     label: 'Base',
-    desc: 'Registrato · 3 segnalazioni incluse · Watermark su PDF',
+    desc: 'Registrato · 1 mese di PRO gratuito · Watermark su PDF',
     icon: <UserIcon className="h-4 w-4" />,
   },
   {

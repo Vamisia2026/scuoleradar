@@ -376,6 +376,13 @@ export function EsploraArchivio({
         ))}
       </nav>
 
+      {/* Descrizione della macroarea (visibile al primo livello, prima delle cartelle) */}
+      {percorso.length === 0 && macroArea.descrizione && (
+        <div className="mt-3 rounded-xl border border-primary-100 bg-primary-50/70 px-4 py-3 text-sm leading-relaxed text-primary-600">
+          {macroArea.descrizione}
+        </div>
+      )}
+
       {/* Griglia sottocategorie 3×3 con paginazione */}
       {sottoPagina.length > 0 && (
         <div className={compatto ? 'mt-2' : 'mt-4'}>

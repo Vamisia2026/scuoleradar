@@ -156,7 +156,7 @@ export function linkOpportunita(interpello: DettagliNotifica | null, dashboardUr
 /* --------------------------- Soggetti e copy --------------------------- */
 
 const SUBJECT: Record<TipoMessaggio, string> = {
-  welcome: 'Conferma attivazione: il tuo account Base è attivo',
+  welcome: 'Benvenuto in ScuoleRadar: il tuo mese di PRO è attivo',
   prova1: 'Questa è la prima opportunità che abbiamo trovato per te. Te ne restano 2',
   prova2: 'Questa è la seconda opportunità che abbiamo trovato per te. Te ne resta 1',
   prova3: 'Questa è la terza e ultima opportunità di prova che abbiamo trovato per te',
@@ -199,8 +199,8 @@ export const TIPI_CON_OPPORTUNITA: ReadonlySet<TipoMessaggio> = new Set([
 const CORPO_MESSAGGI: Record<TipoMessaggio, ContenutoMessaggio> = {
   welcome: {
     paragrafi: [
-      'Il tuo account <strong>Base</strong> è attivo: benvenuto in ScuoleRadar!',
-      'Hai già accesso gratuito a Modulistica, Crea CV, Calcolatore CFU e Radar Scuole con <strong>3 segnalazioni</strong> di opportunità.',
+      'Il tuo account è attivo: benvenuto in ScuoleRadar!',
+      'Per i primi 30 giorni hai il <strong>piano PRO gratuito</strong>: Radar Scuole con notifiche illimitate, Modulistica, Crea CV e Calcolatore CFU senza limiti.',
       'Quando vuoi sapere cosa succede di importante nella scuola, passa dal nostro Notiziario: controlliamo noi le fonti ufficiali per te.',
     ],
     cta: { label: 'Vai a ScuoleRadar →', destinazione: 'dashboard' },
@@ -227,7 +227,7 @@ const CORPO_MESSAGGI: Record<TipoMessaggio, ContenutoMessaggio> = {
   recap: {
     paragrafi: [
       'Questo è l\'ultimo avviso del periodo di prova.',
-      'Il servizio di notifiche automatiche dell\'Account Base è terminato: non riceverai più nuove segnalazioni.',
+      'Il mese di prova PRO è terminato: il tuo account torna al piano gratuito con Modulistica, Crea CV e Calcolatore CFU.',
       'Se vuoi riattivarlo, passa al piano PRO: notifiche illimitate e tutti gli strumenti ScuoleRadar.',
     ],
     cta: { label: 'Passa a PRO →', destinazione: 'prezzi' },

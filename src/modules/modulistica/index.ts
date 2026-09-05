@@ -9,4 +9,5 @@
  * e non è esposta all'esterno.
  */
 export { ModuliModule } from './ModuliModule';
+export { ModuliShowroom } from './showroom/ModuliShowroom';
 export type { ModuloSalvatoDB, VistaModulistica, VoceModulo } from './types';

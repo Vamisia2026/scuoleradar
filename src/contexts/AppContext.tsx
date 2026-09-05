@@ -149,6 +149,16 @@ interface AppContextValue extends AppState {
   radarWizardOpen: boolean;
   openRadarWizard: () => void;
   closeRadarWizard: () => void;
+  /** PRO-Gift "Sorpresa" (SoftOnboarding): MAI automatico, si apre solo da CTA esplicita. */
+  softOnboardingOpen: boolean;
+  openSoftOnboarding: () => void;
+  closeSoftOnboarding: () => void;
+  /**
+   * Entry point UNICO delle CTA "Attiva il tuo Radar" / tentativi di setup Radar:
+   * per gli utenti Base senza regole apre prima il PRO-Gift (poi il wizard),
+   * in ogni altro caso apre direttamente il wizard RadarWizardModal.
+   */
+  openRadarSetup: () => void;
   /** Vetrina Freemium: modal di conversione per gli utenti non autenticati. */
   vetrinaAperta: boolean;
   vetrinaSezione: string | null;
@@ -307,6 +317,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [radarWizardOpen, setRadarWizardOpen] = useState(false);
   const openRadarWizard = useCallback(() => setRadarWizardOpen(true), []);
   const closeRadarWizard = useCallback(() => setRadarWizardOpen(false), []);
+
+  // PRO-Gift / SoftOnboarding — MAI automatico al load/refresh: viene aperto
+  // SOLO da openRadarSetup() quando l'utente elegibile clicca una CTA Radar.
+  const [softOnboardingOpen, setSoftOnboardingOpen] = useState(false);
+  const openSoftOnboarding = useCallback(() => setSoftOnboardingOpen(true), []);
+  const closeSoftOnboarding = useCallback(() => setSoftOnboardingOpen(false), []);
 
   const openAuthModal = useCallback(
     (mode: 'login' | 'registrazione' = 'login', ctx: 'default' | 'pro' = 'default') => {
@@ -1419,6 +1435,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const trialAttivo =
     piano === 'pro' && trialScadenza !== null && new Date(trialScadenza).getTime() > Date.now();
 
+  /** Regole Radar presenti sul profilo (province + classi/materie), anche se Radar in pausa. */
+  const radarConfigurato =
+    preferenze.provinceCodici.length > 0 &&
+    (preferenze.classiCodici.length > 0 ||
+      preferenze.materieId.length > 0 ||
+      preferenze.materieCustom.length > 0);
+
+  /** Elegibile al PRO-Gift: autenticato, profilo letto, Base senza accesso PRO e senza regole Radar. */
+  const elegibileProGift =
+    Boolean(user || supabaseUserId) &&
+    pianoStato === 'pronto' &&
+    !hasProAccess &&
+    !abbonato &&
+    !radarConfigurato;
+
+  /**
+   * Entry point delle CTA "Attiva il tuo Radar" / tentativi di setup Radar.
+   *  - utente elegibile (Base, senza regole) → apre il PRO-Gift come interstitial;
+   *    il suo pulsante "Completa il tuo profilo per iniziare" aprirà il wizard;
+   *  - guest, utenti già configurati, PRO/Free Forever o abbonati → wizard direttamente.
+   */
+  const openRadarSetup = useCallback(() => {
+    if (elegibileProGift) openSoftOnboarding();
+    else openRadarWizard();
+  }, [elegibileProGift, openSoftOnboarding, openRadarWizard]);
+
+  // Guardia anti-stato: se il PRO-Gift è aperto ma l'account non è più elegibile
+  // (regole salvate altrove, piano cambiato, logout) il modal si chiude da solo.
+  useEffect(() => {
+    if (softOnboardingOpen && !elegibileProGift) closeSoftOnboarding();
+  }, [softOnboardingOpen, elegibileProGift, closeSoftOnboarding]);
+
   const value: AppContextValue = {
     user,
     preferenze,
@@ -1464,6 +1512,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     radarWizardOpen,
     openRadarWizard,
     closeRadarWizard,
+    softOnboardingOpen,
+    openSoftOnboarding,
+    closeSoftOnboarding,
+    openRadarSetup,
     vetrinaAperta,
     vetrinaSezione,
     openVetrina,

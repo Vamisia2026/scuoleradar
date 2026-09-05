@@ -17,7 +17,7 @@ export interface PromoValido {
 export const PROMO_CODE_BETA1ANNO = 'BETA1ANNO';
 
 /**
- * Promo "50% primo anno": 24,95 € (prezzo pieno 49,90 € dal 2° anno).
+ * Promo "50% primo anno": 24,50 € (prezzo pieno 49 € dal 2° anno).
  * Mappare il codice al coupon percentuale Stripe sul prodotto PRO annuale
  * nella Edge `checkout` (configurazione server-side, coupon "SCUOLERADAR50").
  */

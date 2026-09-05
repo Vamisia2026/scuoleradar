@@ -1,9 +1,21 @@
-import { FolderOpen } from 'lucide-react';
+import { FileText, FolderOpen, MessageSquare } from 'lucide-react';
 import {
   macroAreeModulistica,
   ordineMacroAree,
   type MacroAreaModulistica,
 } from '@/data/moduli';
+
+/** Icone disponibili per le Macroaree dell'archivio (fallback: cartella). */
+const ICONE_MACROAREA = { MessageSquare, FileText } as const;
+
+/** Icona della macroarea: usa l'icona dichiarata nel catalogo, altrimenti la cartella. */
+function IconaArea({ icona }: { icona?: 'MessageSquare' | 'FileText' }) {
+  if (icona && icona in ICONE_MACROAREA) {
+    const Icona = ICONE_MACROAREA[icona as keyof typeof ICONE_MACROAREA];
+    return <Icona className="h-4 w-4" />;
+  }
+  return <FolderOpen className="h-4 w-4" />;
+}
 
 interface MacroAreaMenuProps {
   /** Id della macroarea attualmente esplorata. */
@@ -49,7 +61,7 @@ export function MacroAreaMenu({ attiva, compatto = false, onSeleziona }: MacroAr
                 : 'text-primary-700 hover:bg-primary-50'
             }`}
           >
-            <FolderOpen className="h-4 w-4" />
+            <IconaArea icona={area.icona} />
             {area.nome}
           </button>
         );

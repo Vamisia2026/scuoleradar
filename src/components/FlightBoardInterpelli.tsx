@@ -78,7 +78,7 @@ function estraiScuolaDaTitolo(r: InterpelloLive): string | null {
 
 
 export function FlightBoardInterpelli() {
-  const { openRadarWizard } = useApp();
+  const { openRadarSetup } = useApp();
   // Stato iniziale vuoto → sezione dormiente finché non ci sono interpelli reali.
   const [righe, setRighe] = useState<InterpelloLive[]>([]);
   const [pagina, setPagina] = useState(0);
@@ -325,7 +325,7 @@ export function FlightBoardInterpelli() {
           </p>
           <button
             type="button"
-            onClick={openRadarWizard}
+            onClick={openRadarSetup}
             className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary-500 px-7 py-3.5 text-sm font-black uppercase tracking-wide text-white shadow-soft transition hover:bg-primary-600 hover:shadow-md active:scale-[0.98]"
           >
             <Radar className="h-5 w-5" />

@@ -38,7 +38,7 @@ async function haCriteriMinimi(preferenze: Preferenze, userId?: string | null): 
 }
 
 export function RadarStatusToggle() {
-  const { radarAttivo, aggiornaRadarAttivo, preferenze, supabaseUserId, radarWizardOpen, openRadarWizard } =
+  const { radarAttivo, aggiornaRadarAttivo, preferenze, supabaseUserId, radarWizardOpen, openRadarSetup } =
     useApp();
   const { mostraToast } = useToast();
   const [inCorso, setInCorso] = useState(false);
@@ -90,7 +90,7 @@ export function RadarStatusToggle() {
       // Configurazione mancante → apre il setup Radar; se chiuso senza salvare,
       // l'effect sopra riporta il toggle su OFF con il toast.
       revertInSospeso.current = true;
-      openRadarWizard();
+      openRadarSetup();
     } finally {
       setInCorso(false);
     }

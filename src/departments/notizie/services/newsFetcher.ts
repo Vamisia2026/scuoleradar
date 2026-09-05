@@ -241,6 +241,170 @@ export async function fetchNotizieGazzetta(): Promise<{ voci: VoceFonte[]; raggi
   return { voci: [], raggiunta };
 }
 
+/* ----------------------------------------------------------------------- */
+/* Espansione fonti istituzionali (ARAN · USR · INPS · Giurisdizione)       */
+/* ----------------------------------------------------------------------- */
+
+export interface FonteIstituzionale {
+  etichetta: string;
+  base: string;
+  /** Feed RSS/Atom ufficiali candidati (il primo che restituisce voci vince). */
+  rss: string[];
+  /** Pagine di elenco ufficiali usate come fallback di scraping (atti datati). */
+  liste: string[];
+}
+
+/**
+ * Registro delle nuove fonti istituzionali per la pipeline notizie.
+ * Ogni richiesta viene loggata esplicitamente dal cron (✓/✗ HTTP), così un
+ * endpoint da raffinare è sempre visibile nei log senza mai fallire in
+ * silenzio. Fonti senza feed RSS usano la pagina di elenco istituzionale.
+ */
+export const FONTI_ISTITUZIONALI: FonteIstituzionale[] = [
+  {
+    etichetta: 'ARAN',
+    base: 'https://www.aranagenzia.it',
+    rss: [
+      'https://www.aranagenzia.it/index.php?format=feed&type=rss',
+      'https://www.aranagenzia.it/index.php?format=feed&type=atom',
+    ],
+    liste: ['https://www.aranagenzia.it/contrattazione/contratti.html'],
+  },
+  {
+    etichetta: 'USR Piemonte',
+    base: 'https://www.mim.gov.it',
+    rss: [],
+    liste: ['https://www.mim.gov.it/web/usr-piemonte'],
+  },
+  {
+    etichetta: 'USR Lombardia',
+    base: 'https://www.mim.gov.it',
+    rss: [],
+    liste: ['https://www.mim.gov.it/web/usr-lombardia'],
+  },
+  {
+    etichetta: 'USR Lazio',
+    base: 'https://www.mim.gov.it',
+    rss: [],
+    liste: ['https://www.mim.gov.it/web/usr-lazio'],
+  },
+  {
+    etichetta: 'USR Campania',
+    base: 'https://www.mim.gov.it',
+    rss: [],
+    liste: ['https://www.mim.gov.it/web/usr-campania'],
+  },
+  {
+    etichetta: 'INPS',
+    base: 'https://www.inps.it',
+    rss: [
+      'https://www.inps.it/it/it/rss.xml',
+      'https://www.inps.it/rss.aspx',
+    ],
+    liste: ['https://www.inps.it/it/it/notizie.html'],
+  },
+  {
+    etichetta: 'Corte dei Conti',
+    base: 'https://www.corteconti.it',
+    rss: [
+      'https://www.corteconti.it/rss/notizie',
+      'https://www.corteconti.it/feed',
+    ],
+    liste: ['https://www.corteconti.it/home/notizie.html'],
+  },
+  {
+    etichetta: 'Consiglio di Stato',
+    base: 'https://www.giustizia-amministrativa.it',
+    rss: [],
+    liste: ['https://www.giustizia-amministrativa.it/-/decisioni-e-pareri'],
+  },
+];
+
+/** Percorsi che NON sono un atto/articolo singolo (indici, home, ricerca). */
+const PERCORSI_NON_ARTICOLO = new Set([
+  '', '/', '/home', '/index', '/index.html', '/notizie', '/news',
+  '/ricerca', '/web/guest/home', '/web/guest/notizie', '/contratti.html',
+]);
+
+/** Prova i feed RSS candidati di una fonte; ritorna le prime voci utili. */
+async function raccogliRssFonte(fonte: FonteIstituzionale): Promise<VoceFonte[]> {
+  for (const url of fonte.rss) {
+    const { testo, status } = await fetchTestoConStato(url);
+    if (status !== null && status >= 200 && status < 400 && testo) {
+      const voci = parseRss(testo, fonte.etichetta, fonte.base);
+      if (voci.length > 0) {
+        console.log(`• ${fonte.etichetta} RSS: ${voci.length} voci da ${url}`);
+        return voci.slice(0, 30);
+      }
+    }
+  }
+  return [];
+}
+
+/**
+ * Fallback di scraping: estrae dalla prima pagina di elenco raggiungibile i
+ * link ad atti/articoli reali (stesso dominio, testo lungo, NON pagine di
+ * indice). La data viene letta vicino al link quando disponibile.
+ */
+async function scrapeListaFonte(fonte: FonteIstituzionale): Promise<VoceFonte[]> {
+  const voci: VoceFonte[] = [];
+  for (const url of fonte.liste) {
+    const { testo, status } = await fetchTestoConStato(url);
+    if (!testo || status === null || status < 200 || status >= 400) continue;
+    const $ = cheerio.load(testo);
+    const hostFonte = new URL(fonte.base).hostname;
+    $('a[href]').each((_, el) => {
+      if (voci.length >= 30) return;
+      const $el = $(el);
+      const title = $el.text().replace(/\s+/g, ' ').trim();
+      if (!title || title.length < 25) return;
+      const href = $el.attr('href');
+      if (!href) return;
+      const link = urlAssoluto(href, fonte.base);
+      let parsed: URL;
+      try {
+        parsed = new URL(link);
+      } catch {
+        return;
+      }
+      if (parsed.hostname !== hostFonte) return;
+      if (PERCORSI_NON_ARTICOLO.has(parsed.pathname.replace(/\/$/, ''))) return;
+      // Evita menù/navigazione: i link d'atto hanno path lunghi e testi descrittivi.
+      if (parsed.pathname.length < 10 && !parsed.pathname.includes('-')) return;
+      if (voci.some((v) => v.link === link)) return;
+      // Data: cerca nel contesto del link (testo + genitori), max 300 caratteri.
+      const contesto = `${title} ${$el.closest('article, li, div').first().text().replace(/\s+/g, ' ').slice(0, 300)}`;
+      voci.push({
+        title,
+        link,
+        pubDate: estraiDeadline(contesto),
+        description: contesto,
+        fonte: fonte.etichetta,
+      });
+    });
+    if (voci.length > 0) {
+      console.log(`• ${fonte.etichetta} scraping: ${voci.length} voci da ${url}`);
+      return voci;
+    }
+  }
+  return [];
+}
+
+/** Raccolta per una singola nuova fonte (RSS first, poi scraping di lista). */
+export async function fetchDaFonteIstituzionale(
+  fonte: FonteIstituzionale,
+): Promise<{ voci: VoceFonte[]; raggiunta: boolean }> {
+  const rssVoci = fonte.rss.length > 0 ? await raccogliRssFonte(fonte) : [];
+  if (rssVoci.length > 0) return { voci: rssVoci, raggiunta: true };
+
+  const listeVoci = await scrapeListaFonte(fonte);
+  if (listeVoci.length > 0) return { voci: listeVoci, raggiunta: true };
+
+  // Nessuna pagina/feed risponde: la fonte resta tracciata ma non raggiunta.
+  console.warn(`⚠ ${fonte.etichetta}: nessuna voce disponibile (RSS o pagina di elenco).`);
+  return { voci: [], raggiunta: false };
+}
+
 /** Esito aggregato della raccolta: voci + numero di fonti raggiunte (0-2). */
 export interface EsitoRaccolta {
   voci: VoceFonte[];
@@ -249,13 +413,16 @@ export interface EsitoRaccolta {
 
 /** Aggrega le voci da tutte le fonti ufficiali, tracciando quali hanno risposto. */
 export async function raccogliNotizieRaw(): Promise<EsitoRaccolta> {
-  const [mim, gu] = await Promise.allSettled([
+  const legacy = await Promise.allSettled([
     fetchNotizieMim(),
     fetchNotizieGazzetta(),
   ]);
+  const nuove = await Promise.allSettled(
+    FONTI_ISTITUZIONALI.map((f) => fetchDaFonteIstituzionale(f)),
+  );
   const voci: VoceFonte[] = [];
   let fontiRaggiunte = 0;
-  for (const r of [mim, gu]) {
+  for (const r of [...legacy, ...nuove]) {
     if (r.status === 'fulfilled') {
       voci.push(...r.value.voci);
       if (r.value.raggiunta) fontiRaggiunte += 1;

@@ -50,7 +50,7 @@ export function ArchivistaCapo({
 }: ArchivistaCapoProps) {
   const [fase, setFase] = useState<Fase>('domanda');
   const [messaggio, setMessaggio] = useState('Buongiorno. Indichi la modulistica di cui necessita.');
-  const [domanda, setDomanda] = useState<DomandaCorrente | null>(null);
+  const [, setDomanda] = useState<DomandaCorrente | null>(null);
   const [rispostaUtente, setRispostaUtente] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);

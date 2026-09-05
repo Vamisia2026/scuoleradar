@@ -1,4 +1,4 @@
-﻿import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import {
   EMAIL_TEMPLATES,
   getEmailScheda,
@@ -92,22 +92,22 @@ const TESTI: Record<
     email: (_o, genere) =>
       `${benvenuto(genere)} in Scuole Radar.<br/><br/>
 Questo è un sito per chi lavora o cerca lavoro nella scuola. Ti aiutiamo a trovare informazioni e opportunità, senza perdere tempo.<br/><br/>
-Con il tuo account <b>Base</b> hai accesso gratuito a:<br/>
+Con il tuo account hai accesso gratuito a:<br/>
 • Modulistica scolastica<br/>
 • Crea CV<br/>
 • Calcolatore CFU<br/>
-• Radar Scuole, con <b>3 segnalazioni</b> di opportunità di lavoro<br/><br/>
+• Radar Scuole con <b>notifiche illimitate</b> per i primi 30 giorni<br/><br/>
 Radar Scuole è il servizio di cui siamo più orgogliosi.<br/>
 Cerchiamo per te opportunità di lavoro nelle scuole, che spesso sono difficili da trovare, perché nascoste nei siti istituzionali. Quando ce n'è una, il tempo è fondamentale.<br/><br/>
 Per sfruttare Radar Scuole al meglio, scarica Telegram e attiva le notifiche: è lì che ti arriveranno le nostre segnalazioni.<br/><br/>
-Hai <b>3 segnalazioni gratuite</b>. Dopo potrai decidere se passare a PRO e lasciarci continuare la ricerca per te, oppure usare solo l'account Base.<br/><br/>
+Per i primi 30 giorni hai il <b>piano PRO gratuito</b>: nessun limite di segnalazioni. Dopo potrai decidere se continuare con PRO o tornare al piano gratuito.<br/><br/>
 Non ti mandiamo comunicazioni inutili. Se ti scriviamo, apri il messaggio.<br/><br/>
 Hai appena cominciato a conoscere Scuole Radar. Gli strumenti PRO sono molti di più, ma lasciamo che sia tu a scoprirli, un po' alla volta.<br/><br/>
 E niente newsletter quotidiane.<br/><br/>
 Quando vuoi sapere cosa succede di importante nella scuola, vai su <a href="${BLOG_URL}">ScuoleRadar.it → Notizie</a>.<br/><br/>
 ${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua vita professionale, facendoti risparmiare tempo.`,
     telegram: (_o, genere) =>
-      `${benvenuto(genere)} in Scuole Radar! 🎉\nCerchiamo per te opportunità di lavoro nelle scuole, spesso nascoste nei siti istituzionali. Hai 3 segnalazioni gratuite: attiva le notifiche su Telegram. Quando vuoi, tutto su https://www.scuoleradar.it/notizie`,
+      `${benvenuto(genere)} in Scuole Radar! 🎉\nCerchiamo per te opportunità di lavoro nelle scuole, spesso nascoste nei siti istituzionali. Hai 1 mese di PRO gratuito con notifiche illimitate: attiva le notifiche su Telegram. Quando vuoi, tutto su https://www.scuoleradar.it/notizie`,
   },
   step2: {
     soggetto: 'Questa è la prima opportunità che abbiamo trovato per te. Te ne restano 2',
@@ -133,11 +133,11 @@ ${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua
   step5: {
     soggetto: 'Le tue notifiche di prova sono finite',
     email: () =>
-      'Le tue notifiche di prova sono finite. <b>Passa al piano PRO</b> per continuare a ricevere notifiche illimitate in tempo reale, oppure resta con l\u2019Account Base.<br/><a href="' +
+      'Le tue notifiche di prova sono finite. <b>Passa al piano PRO</b> per continuare a ricevere notifiche illimitate in tempo reale.<br/><a href="' +
       PREZZI_URL +
       '">Passa a PRO</a>',
     telegram: () =>
-      'Le tue notifiche di prova sono finite. <b>Passa al piano PRO</b> per continuare a ricevere notifiche illimitate in tempo reale, oppure resta con l\u2019Account Base.\n👉 ' +
+      'Le tue notifiche di prova sono finite. <b>Passa al piano PRO</b> per continuare a ricevere notifiche illimitate in tempo reale.\n👉 ' +
       PREZZI_URL,
   },
   notifica_pro: {
@@ -153,11 +153,11 @@ ${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua
       `${caro(genere)}, benvenuto ${stato(genere)} nel piano PRO di ScuoleRadar! 👑\nhttps://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
   },
   conferma_base: {
-    soggetto: 'Conferma attivazione: il tuo account Base è attivo',
+    soggetto: 'Conferma attivazione: il tuo mese di PRO è attivo',
     email: (_o, genere) =>
-      `${benvenuto(genere)} in ScuoleRadar!<br/><br/>Il tuo account <b>Base</b> è attivo e puoi iniziare subito.<br/>Hai già accesso gratuito a Modulistica scolastica, Crea CV, Calcolatore CFU e Radar Scuole con <b>3 segnalazioni</b> di opportunità.<br/><br/>Quando vuoi sapere cosa succede di importante nella scuola, vai su <a href="${BLOG_URL}">ScuoleRadar.it → Notizie</a>.<br/><br/>Non ti mandiamo comunicazioni inutili: quando ti scriviamo, apri il messaggio.`,
+      `${benvenuto(genere)} in ScuoleRadar!<br/><br/>Per i primi 30 giorni hai il <b>piano PRO gratuito</b>: Radar Scuole con notifiche illimitate, Modulistica, Crea CV e Calcolatore CFU a portata di mano.<br/><br/>Quando vuoi sapere cosa succede di importante nella scuola, vai su <a href="${BLOG_URL}">ScuoleRadar.it → Notizie</a>.<br/><br/>Non ti mandiamo comunicazioni inutili: quando ti scriviamo, apri il messaggio.`,
     telegram: (_o, genere) =>
-      `${benvenuto(genere)} in ScuoleRadar! 🎉 Il tuo account Base è attivo: hai accesso gratuito a Modulistica, Crea CV, Calcolatore CFU e Radar con 3 segnalazioni. Novità su https://www.scuoleradar.it/notizie`,
+      `${benvenuto(genere)} in ScuoleRadar! 🎉 Il tuo account è attivo: per i primi 30 giorni hai il piano PRO gratuito con notifiche illimitate, Modulistica, Crea CV e Calcolatore CFU. Novità su https://www.scuoleradar.it/notizie`,
   },
   conferma_attivazione: {
     soggetto: (_genere, o) =>

@@ -22,6 +22,7 @@ import { CvPage } from '@/pages/CvPage';
 import { CfuPage } from '@/pages/CfuPage';
 import { AssistenteAIPage } from '@/pages/AssistenteAIPage';
 import { ModuliPage } from '@/pages/ModuliPage';
+import { ModuliShowroomPage } from '@/pages/ModuliShowroomPage';
 import { PureFocusPage } from '@/pages/PureFocusPage';
 import { ProfiloPage } from '@/pages/ProfiloPage';
 import { InvitaPage } from '@/pages/InvitaPage';
@@ -120,11 +121,12 @@ function AdminReturnRouter() {
 
 /**
  * Deep link ?action=open-radar (es. /dashboard?action=open-radar): appena
- * l'utente è autenticato apre automaticamente il setup Radar (wizard completo;
- * il SoftOnboarding si occupa da solo dei profili incompleti al login).
+ * l'utente è autenticato avvia il setup Radar esplicito. Per gli utenti Base
+ * senza regole `openRadarSetup` mostra prima il PRO-Gift (mai automatico),
+ * poi il wizard completo a 4 passi.
  */
 function RadarOpenDeepLink() {
-  const { user, loading, radarWizardOpen, openRadarWizard, openAuthModal } = useApp();
+  const { user, loading, radarWizardOpen, softOnboardingOpen, openRadarSetup, openAuthModal } = useApp();
   const location = useLocation();
 
   useEffect(() => {
@@ -143,8 +145,8 @@ function RadarOpenDeepLink() {
       openAuthModal('login');
       return;
     }
-    if (!radarWizardOpen) openRadarWizard();
-  }, [location.search, loading, user, radarWizardOpen, openRadarWizard, openAuthModal]);
+    if (!radarWizardOpen && !softOnboardingOpen) openRadarSetup();
+  }, [location.search, loading, user, radarWizardOpen, softOnboardingOpen, openRadarSetup, openAuthModal]);
 
   return null;
 }
@@ -173,6 +175,8 @@ export default function App() {
             <Route path="/notizie" element={<NotiziePage />} />
             <Route path="/notizie/:id" element={<NotizieDettaglioPage />} />
             <Route path="/contatti" element={<ContattiPage />} />
+            {/* Showroom SEO pubblici: /moduli (anteprima) → /dashboard/moduli (tool) */}
+            <Route path="/moduli" element={<ModuliShowroomPage />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             {/* Checkout diretto Stripe con coupon: /checkout/pro-annuale?coupon=RADAR50 */}
             <Route path="/checkout/:plan" element={<CheckoutRedirectPage />} />

@@ -84,10 +84,10 @@ interface TestoTelegram {
 
 const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
   welcome: {
-    testa: '🎉 Account Base attivo — benvenuto in ScuoleRadar!',
+    testa: '🎉 Mese di PRO attivo — benvenuto in ScuoleRadar!',
     paragrafi: [
-      'Il tuo account Base è attivo.',
-      'Hai già accesso gratuito a Modulistica, Crea CV, Calcolatore CFU e Radar Scuole con 3 segnalazioni di opportunità.',
+      'Per i primi 30 giorni hai il piano PRO gratuito.',
+      'Hai accesso a Modulistica, Crea CV, Calcolatore CFU e Radar Scuole con notifiche illimitate.',
       'Quando vuoi sapere cosa succede di importante nella scuola, passa dal nostro Notiziario.',
     ],
     cta: (dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
@@ -119,7 +119,7 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
     testa: '📋 Avviso finale: servizio di notifica sospeso',
     paragrafi: [
       'Questo è l\'ultimo avviso del periodo di prova.',
-      'Il servizio di notifiche automatiche dell\'Account Base è terminato: non riceverai più nuove segnalazioni.',
+      'Il mese di prova PRO è terminato: non riceverai più nuove notifiche.',
       'Passa a PRO per riattivarlo.',
     ],
     cta: (linkPro) => `👉 <a href="${linkPro}">Passa a PRO</a>`,

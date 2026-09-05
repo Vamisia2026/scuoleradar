@@ -59,7 +59,7 @@ export function ChiSiamoPage() {
               Unisciti a noi
             </button>
             <p className="mt-3 text-sm text-primary-500">
-              3 segnalazioni di prova in assoluto, senza carta di credito.
+              1 mese di PRO gratuito, senza carta di credito.
             </p>
           </div>
         </div>

@@ -61,7 +61,7 @@ export function VetrinaModal() {
     closeVetrina();
 
     if (piano === 'free') {
-      // Account Base: solo registrazione (mai checkout).
+      // Account gratuito con 1 mese di PRO: solo registrazione (mai checkout).
       if (!user) openAuthModal('registrazione', 'default');
       return;
     }
@@ -102,8 +102,8 @@ export function VetrinaModal() {
 
         <p className="text-sm text-primary-600">
           {user
-            ? 'Sei già nel tuo account Base: continua gratis oppure passa al PRO per notifiche illimitate.'
-            : 'Crea il tuo account gratuito e inizia subito. Scegli il piano che preferisci:'}
+            ? 'Il tuo account è attivo: passa al PRO per notifiche illimitate e servizi senza limiti.'
+            : 'Registrati gratis e ricevi subito 1 mese di PRO per provare tutto. Scegli come iniziare:'}
         </p>
 
         <div className="space-y-2">
@@ -114,7 +114,7 @@ export function VetrinaModal() {
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-primary-200 px-5 py-3 text-sm font-semibold text-primary-700 transition hover:bg-primary-50"
             >
               <ShieldCheck className="h-4 w-4" />
-              Continua con Account Base
+              Prosegui con il tuo account
             </button>
           ) : (
             <button
@@ -123,7 +123,7 @@ export function VetrinaModal() {
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-primary-200 px-5 py-3 text-sm font-semibold text-primary-700 transition hover:bg-primary-50"
             >
               <UserPlus className="h-4 w-4" />
-              Registrati (Account Base - Gratis)
+              Registrati gratis (1 mese di PRO)
             </button>
           )}
           <button

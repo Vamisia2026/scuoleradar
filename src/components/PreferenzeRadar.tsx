@@ -530,7 +530,7 @@ export function PreferenzeRadar() {
           Configura i canali su cui ricevere gli avvisi dei nuovi interpelli in tempo reale.
         </p>
         <p className="mt-2 rounded-xl bg-primary-50 px-3 py-2 text-xs text-primary-600">
-          Piano Base: 3 segnalazioni incluse; con il PRO segnalazioni illimitate.
+          Piano PRO (mese di prova): notifiche e segnalazioni illimitate.
         </p>
         <div className="mt-4 space-y-4">
           <label className="block">

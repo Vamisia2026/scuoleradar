@@ -29,7 +29,7 @@ export function VetrinaModulistica() {
           Oltre 1.000 moduli per la scuola, pronti all&apos;uso.
         </h2>
         <p className="mx-auto mt-4 max-w-3xl text-lg font-semibold text-accent-300">
-          Disponibili gratuitamente per tutti gli utenti registrati, anche con Account Base.
+          Oltre 1.000 moduli pronti all&apos;uso per la scuola italiana, disponibili per tutti.
         </p>
         <p className="mx-auto mt-2 max-w-3xl text-base leading-relaxed text-primary-100 sm:text-lg">
           Scuole Radar mette a tua disposizione oltre 1.000 moduli per la scuola (insegnanti,

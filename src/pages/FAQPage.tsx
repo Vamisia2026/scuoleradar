@@ -22,7 +22,7 @@ const FAQ_ITEMS: Array<{ id?: string; q: string; a: string }> = [
   },
   {
     q: 'Non ho un curriculum pronto o aggiornato, come faccio?',
-    a: 'Abbiamo a disposizione il nostro strumento per costruire il CV. Puoi copiare e incollare un vecchio CV o ti aiutiamo noi a costruirne uno da zero. Si può usare liberamente anche con l’account Base.',
+    a: 'Abbiamo a disposizione il nostro strumento per costruire il CV. Puoi copiare e incollare un vecchio CV o ti aiutiamo noi a costruirne uno da zero. Si può usare liberamente anche durante il mese di prova PRO.',
   },
   {
     q: 'Non so a quali classi di concorso posso accedere col mio titolo.',

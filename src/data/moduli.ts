@@ -145,7 +145,8 @@ export type NomeMacroArea =
   | 'Università'
   | 'Enti'
   | 'Altro'
-  | 'Sostegno';
+  | 'Sostegno'
+  | 'Comunicazione Interna';
 
 /** Ordine esatto di visualizzazione delle Macroaree (menu a schede). */
 export const ordineMacroAree: NomeMacroArea[] = [
@@ -157,6 +158,7 @@ export const ordineMacroAree: NomeMacroArea[] = [
   'Enti',
   'Altro',
   'Sostegno',
+  'Comunicazione Interna',
 ];
 
 /** Documento terminale dell'archivio: la variante esatta del modulo. */
@@ -188,6 +190,10 @@ export interface SottoCategoriaModulistica {
 export interface MacroAreaModulistica {
   id: string;
   nome: NomeMacroArea;
+  /** Descrizione della macroarea (mostrata come sottotitolo quando la si apre). */
+  descrizione?: string;
+  /** Icona lucide della macroarea (fallback: FolderOpen nel menu a schede). */
+  icona?: 'MessageSquare' | 'FileText';
   sotto: SottoCategoriaModulistica[];
 }
 
@@ -3888,6 +3894,248 @@ const macroAreeRaw: MacroAreaModulistica[] = [
             descrizione: 'Modello di segnalazione per lo sportello del cittadino.',
             tipo: 'PDF',
             profilo: { tipo: 'autocertificazione' },
+          },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'comunicazione-interna',
+    nome: 'Comunicazione Interna',
+    icona: 'MessageSquare',
+    descrizione:
+      'Modulistica gestionale per Personale ATA, Docenti e Collaboratori per la gestione interna e cartacea.',
+    sotto: [
+      {
+        id: 'ci-personale-ata-collaboratori',
+        nome: 'Personale ATA e Collaboratori',
+        descrizione:
+          'Richieste, segnalazioni e registri per il Personale ATA e i collaboratori scolastici.',
+        sotto: [
+          {
+            id: 'ci-cambio-turno-sostituzione',
+            nome: 'Richiesta Cambio Turno e Sostituzione',
+            descrizione:
+              'Modulo per la richiesta di cambio turno e di sostituzione di un collega.',
+            documenti: [
+              {
+                id: 'ci-richiesta-cambio-turno-sostituzione',
+                nome: 'Richiesta cambio turno e sostituzione',
+                descrizione:
+                  'Template compilabile per richiedere il cambio di turno e l’eventuale sostituzione, da consegnare alla segreteria.',
+                tipo: 'DOCX',
+                profilo: {
+                  tipo: 'comunicazione_interna',
+                  area: 'personale_ata',
+                  pratica: 'cambio_turno',
+                },
+              },
+            ],
+          },
+          {
+            id: 'ci-segnalazione-guasti-manutenzione',
+            nome: 'Segnalazione Guasti e Manutenzione Plesso',
+            descrizione:
+              'Segnalazione di guasti e richiesta di intervento di manutenzione nel plesso.',
+            documenti: [
+              {
+                id: 'ci-segnalazione-guasto-pleso',
+                nome: 'Segnalazione guasti e manutenzione plesso',
+                descrizione:
+                  'Modulo per segnalare guasti o criticità e richiedere l’intervento di manutenzione dell’edificio scolastico.',
+                tipo: 'DOCX',
+                profilo: {
+                  tipo: 'comunicazione_interna',
+                  area: 'personale_ata',
+                  pratica: 'guasti_manutenzione',
+                },
+              },
+            ],
+          },
+          {
+            id: 'ci-registro-consegna-materiali-chiavi',
+            nome: 'Registro Consegna Materiali e Chiavi',
+            descrizione:
+              'Registro per la tracciabilità di consegna e riconsegna di materiali e chiavi.',
+            documenti: [
+              {
+                id: 'ci-registro-consegne-materiali-chiavi',
+                nome: 'Registro consegna materiali e chiavi',
+                descrizione:
+                  'Registro DOCX da compilare per la consegna e la riconsegna di materiali e chiavi in uso al personale.',
+                tipo: 'DOCX',
+                profilo: {
+                  tipo: 'comunicazione_interna',
+                  area: 'personale_ata',
+                  pratica: 'registro_consegne',
+                },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'ci-circolari-verbali',
+        nome: 'Circolari e Verbali',
+        descrizione:
+          'Verbali di riunione e dichiarazioni di presa visione delle circolari interne.',
+        sotto: [
+          {
+            id: 'ci-verbale-riunione-dipartimento',
+            nome: 'Verbale Riunione di Dipartimento',
+            descrizione:
+              'Modello di verbale per la riunione di dipartimento disciplinare.',
+            documenti: [
+              {
+                id: 'ci-verbale-riunione-dipartimento-modello',
+                nome: 'Verbale riunione di dipartimento',
+                descrizione:
+                  'Verbale compilabile della riunione di dipartimento: ordine del giorno, interventi, decisioni e firme dei partecipanti.',
+                tipo: 'PDF',
+                profilo: {
+                  tipo: 'comunicazione_interna',
+                  area: 'circolari_verbali',
+                  pratica: 'verbale_dipartimento',
+                },
+              },
+            ],
+          },
+          {
+            id: 'ci-dichiarazione-presa-visione-circolare',
+            nome: 'Dichiarazione Presa Visione Circolare',
+            descrizione:
+              'Dichiarazione di presa visione di una circolare interna.',
+            documenti: [
+              {
+                id: 'ci-dichiarazione-presa-visione-circolare-modello',
+                nome: 'Dichiarazione presa visione circolare',
+                descrizione:
+                  'Dichiarazione da firmare per attestare la presa visione di una circolare interna dell’istituto.',
+                tipo: 'PDF',
+                profilo: {
+                  tipo: 'comunicazione_interna',
+                  area: 'circolari_verbali',
+                  pratica: 'presa_visione_circolare',
+                },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'ci-permessi-assenze-cartaceo',
+        nome: 'Permessi e Assenze (Cartaceo)',
+        descrizione:
+          'Modulistica cartacea per permessi, assenze e congedi del personale.',
+        sotto: [
+          {
+            id: 'ci-permesso-breve-recupero-ore',
+            nome: 'Richiesta Permesso Breve e Recupero Ore',
+            descrizione:
+              'Richiesta di permesso breve o di recupero ore da consegnare alla segreteria.',
+            documenti: [
+              {
+                id: 'ci-richiesta-permesso-breve-recupero-ore',
+                nome: 'Richiesta permesso breve e recupero ore',
+                descrizione:
+                  'Modulo per richiedere un permesso breve e concordare il recupero delle ore.',
+                tipo: 'DOCX',
+                profilo: {
+                  tipo: 'comunicazione_interna',
+                  area: 'permessi_assenze',
+                  pratica: 'permesso_breve_recupero_ore',
+                },
+              },
+            ],
+          },
+          {
+            id: 'ci-assenza-visita-medica',
+            nome: 'Comunicazione Assenza e Visita Medica',
+            descrizione:
+              'Comunicazione di assenza dal servizio per malattia o visita medica.',
+            documenti: [
+              {
+                id: 'ci-comunicazione-assenza-visita-medica',
+                nome: 'Comunicazione assenza e visita medica',
+                descrizione:
+                  'Comunicazione di assenza dal servizio con allegazione del certificato di visita medica.',
+                tipo: 'DOCX',
+                profilo: {
+                  tipo: 'comunicazione_interna',
+                  area: 'permessi_assenze',
+                  pratica: 'assenza_visita_medica',
+                },
+              },
+            ],
+          },
+          {
+            id: 'ci-congedo-l104',
+            nome: 'Richiesta Congedo e L. 104',
+            descrizione:
+              'Richiesta di congedo ai sensi della Legge 104/1992.',
+            documenti: [
+              {
+                id: 'ci-richiesta-congedo-l104',
+                nome: 'Richiesta congedo e L. 104',
+                descrizione:
+                  'Domanda di congedo o di permessi ex L. 104/1992 da presentare all’ufficio del personale.',
+                tipo: 'PDF',
+                profilo: {
+                  tipo: 'comunicazione_interna',
+                  area: 'permessi_assenze',
+                  pratica: 'congedo_l104',
+                },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'ci-incarichi-progetti-interni',
+        nome: 'Incarichi e Progetti Interni',
+        descrizione:
+          'Candidature a incarichi e funzioni strumentali e relazioni finali delle attività.',
+        sotto: [
+          {
+            id: 'ci-candidatura-incarico-funzione-strumentale',
+            nome: 'Candidatura Incarico o Funzione Strumentale',
+            descrizione:
+              'Candidatura a un incarico o a una funzione strumentale del PTOF.',
+            documenti: [
+              {
+                id: 'ci-candidatura-incarico-funzione-strumentale-modello',
+                nome: 'Candidatura incarico o funzione strumentale',
+                descrizione:
+                  'Domanda di candidatura per l’attribuzione di un incarico o di una funzione strumentale.',
+                tipo: 'DOCX',
+                profilo: {
+                  tipo: 'comunicazione_interna',
+                  area: 'incarichi_progetti',
+                  pratica: 'candidatura_incarico',
+                },
+              },
+            ],
+          },
+          {
+            id: 'ci-relazione-finale-attivita-aggiuntiva',
+            nome: 'Relazione Finale Attività Aggiuntiva',
+            descrizione:
+              'Relazione conclusiva delle attività aggiuntive svolte.',
+            documenti: [
+              {
+                id: 'ci-relazione-finale-attivita-aggiuntiva-modello',
+                nome: 'Relazione finale attività aggiuntiva',
+                descrizione:
+                  'Relazione finale da presentare al termine delle attività aggiuntive e dei progetti interni.',
+                tipo: 'DOCX',
+                profilo: {
+                  tipo: 'comunicazione_interna',
+                  area: 'incarichi_progetti',
+                  pratica: 'relazione_finale_attivita',
+                },
+              },
+            ],
           },
         ],
       },
