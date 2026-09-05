@@ -567,12 +567,23 @@ export function RadarWizardModal() {
                         : 'Il piano Base include 2 classi di concorso. Passa a PRO per aggiungerne fino a 4.'}
                     </p>
                   )}
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     <div className="relative">
                       <select
                         value={materiaFilter}
-                        onChange={(e) => setMateriaFilter(e.target.value)}
-                        className="w-full appearance-none rounded-xl border border-primary-200 bg-white px-4 py-2.5 pr-10 text-sm text-primary-800"
+                        onChange={(e) => {
+                          const valore = e.target.value;
+                          setMateriaFilter(valore);
+                          if (valore) setQueryClasse('');
+                        }}
+                        aria-label="Filtra per materia"
+                        className={`w-full appearance-none rounded-xl border px-3 py-2 pr-9 text-sm transition ${
+                          materiaFilter
+                            ? 'border-blue-500 bg-white text-primary-800 ring-2 ring-blue-500'
+                            : queryClasse.trim()
+                              ? 'border-primary-100 bg-primary-50/60 text-primary-400 opacity-80'
+                              : 'border-primary-200 bg-white text-primary-800 hover:border-primary-300'
+                        }`}
                       >
                         <option value="">Filtra per materia</option>
                         {materie.map((m) => (
@@ -587,9 +598,20 @@ export function RadarWizardModal() {
                       <input
                         type="text"
                         value={queryClasse}
-                        onChange={(e) => setQueryClasse(e.target.value)}
+                        onChange={(e) => {
+                          const testo = e.target.value;
+                          setQueryClasse(testo);
+                          if (testo.trim()) setMateriaFilter('');
+                        }}
                         placeholder="Es. A-18, A-22, Filosofia..."
-                        className="w-full rounded-xl border border-primary-200 bg-white py-2.5 pl-10 pr-4 text-sm text-primary-800"
+                        aria-label="Cerca classe di concorso"
+                        className={`w-full rounded-xl border py-2 pl-10 pr-3 text-sm transition ${
+                          queryClasse.trim()
+                            ? 'border-blue-500 bg-white text-primary-800 ring-2 ring-blue-500'
+                            : materiaFilter
+                              ? 'border-primary-100 bg-primary-50/60 text-primary-400 opacity-80'
+                              : 'border-primary-200 bg-white text-primary-800 hover:border-primary-300'
+                        }`}
                       />
                     </div>
                   </div>

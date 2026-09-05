@@ -284,11 +284,22 @@ export function PreferenzeRadar() {
           </div>
         )}
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <select
             value={materiaFilter}
-            onChange={(e) => setMateriaFilter(e.target.value)}
-            className="input"
+            onChange={(e) => {
+              const valore = e.target.value;
+              setMateriaFilter(valore);
+              if (valore) setQueryClasse('');
+            }}
+            aria-label="Filtra per materia"
+            className={`input ${
+              materiaFilter
+                ? '!border-blue-500 bg-white ring-2 ring-blue-500'
+                : queryClasse.trim()
+                  ? 'bg-primary-50/60 opacity-80'
+                  : ''
+            }`}
           >
             <option value="">Filtra per materia</option>
             {materie.map((m) => (
@@ -302,9 +313,20 @@ export function PreferenzeRadar() {
             <input
               type="text"
               value={queryClasse}
-              onChange={(e) => setQueryClasse(e.target.value)}
+              onChange={(e) => {
+                const testo = e.target.value;
+                setQueryClasse(testo);
+                if (testo.trim()) setMateriaFilter('');
+              }}
               placeholder="Cerca classe (es. A-12)"
-              className="input pl-10"
+              aria-label="Cerca classe di concorso"
+              className={`input pl-10 ${
+                queryClasse.trim()
+                  ? '!border-blue-500 bg-white ring-2 ring-blue-500'
+                  : materiaFilter
+                    ? 'bg-primary-50/60 opacity-80'
+                    : ''
+              }`}
             />
           </div>
         </div>
