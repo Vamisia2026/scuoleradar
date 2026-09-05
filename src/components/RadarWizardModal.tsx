@@ -195,7 +195,12 @@ export function RadarWizardModal() {
   };
 
   const toggleMateria = (id: string) => {
-    setMaterieId((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
+    const prossime = materieId.includes(id)
+      ? materieId.filter((m) => m !== id)
+      : [...materieId, id];
+    setMaterieId(prossime);
+    // Sync IMMEDIATO della bozza (keyword predefinite): non si perdono cambiando passo.
+    persistiDraft({ ...bozzaPreferenze(), materieId: prossime });
   };
 
   const addCustomMateria = () => {
@@ -536,12 +541,12 @@ export function RadarWizardModal() {
 
           {/* Passo 3: Classi di Concorso / Materie */}
           {step === 3 && (
-            <div className="animate-fade-in">
+            <div className="animate-fade-in overflow-y-hidden">
               <h2 className="text-lg font-bold text-primary-800">
                 Per quali insegnamenti sei abilitato o qualificato?
               </h2>
 
-              <div className="mt-3 space-y-2">
+              <div className="mt-2 space-y-2">
                 <div>
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-sm font-bold text-primary-700">Classi di concorso</h3>
@@ -597,7 +602,7 @@ export function RadarWizardModal() {
                     </div>
                   )}
 
-                  <div className="mt-2 max-h-28 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-1">
+                  <div className="mt-2 max-h-24 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-1">
                     {classiFiltrate.length === 0 ? (
                       <p className="p-4 text-center text-sm text-primary-400">Nessuna classe trovata.</p>
                     ) : (
@@ -664,7 +669,7 @@ export function RadarWizardModal() {
                       className="w-full rounded-xl border border-primary-200 bg-white py-2 pl-10 pr-4 text-sm text-primary-800"
                     />
                   </div>
-                  <div className="max-h-28 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-1">
+                  <div className="max-h-24 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-1">
                     {materieFiltrate.length === 0 ? (
                       <p className="p-4 text-center text-sm text-primary-400">Nessuna materia trovata.</p>
                     ) : (
