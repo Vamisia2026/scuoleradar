@@ -1,11 +1,13 @@
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { useState } from 'react';
+import { NavLink, Outlet } from 'react-router-dom';
 import { Radar, SlidersHorizontal } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { InterpelloCard } from '@/components/InterpelloCard';
 import { PreferenzeRadar } from '@/components/PreferenzeRadar';
 import { RadarStatusToggle } from '@/components/RadarStatusToggle';
+import { Accordion } from '@/components/Accordion';
+import { ProFeatureModal } from '@/components/ProFeatureModal';
 import { useApp } from '@/contexts/AppContext';
-import { interpelli } from '@/data/interpelli';
 import { classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import { Footer } from './LandingPage';
@@ -16,6 +18,33 @@ interface TabNav {
   end?: boolean;
   accent?: boolean;
 }
+
+/* --------------------- Urgenza scadenza (color-coding) --------------------- */
+
+type UrgenzaScadenza = 'urgente' | 'media' | 'regolare';
+
+/** Urgenza in base ai giorni rimanenti: <48h urgente · <5 giorni media · oltre regolare. */
+function urgenzaScadenza(dataScadenza: string): UrgenzaScadenza {
+  const ms = new Date(dataScadenza).getTime() - Date.now();
+  if (ms <= 2 * 86_400_000) return 'urgente'; // < 48 ore
+  if (ms <= 5 * 86_400_000) return 'media'; // < 5 giorni
+  return 'regolare';
+}
+
+const URGENZA_STILE: Record<UrgenzaScadenza, { etichetta: string; cls: string }> = {
+  urgente: {
+    etichetta: '⏳ Urgente · <48h',
+    cls: 'bg-error-50 text-error-700 ring-1 ring-inset ring-error-200',
+  },
+  media: {
+    etichetta: '🕐 Entro 5 giorni',
+    cls: 'bg-warning-50 text-warning-700 ring-1 ring-inset ring-warning-300',
+  },
+  regolare: {
+    etichetta: '✓ Opportunità attiva',
+    cls: 'bg-accent-50 text-accent-700 ring-1 ring-inset ring-accent-200',
+  },
+};
 
 export function DashboardLayout() {
   const tabs: TabNav[] = [
@@ -89,10 +118,21 @@ export function DashboardPage() {
     .filter((i) => !i.dataScadenza || new Date(i.dataScadenza).getTime() > oraAttuale)
     .sort((a, b) => new Date(a.dataScadenza).getTime() - new Date(b.dataScadenza).getTime());
 
-  // Vetrina Freemium: i visitatori non loggati vedono un campione dell'offerta
-  // (max 3 opportunità attive) prima di essere invitati a registrarsi.
-  const feedVetrina = !user && opportunitaAttive.length === 0 ? interpelli : opportunitaAttive;
-  const interpelliVisibili = !user ? feedVetrina.slice(0, 3) : opportunitaAttive;
+  // Accordion "Opportunità mappate": chiuso di default (console design) + modal paywall PRO.
+  const [opportunitaAperte, setOpportunitaAperte] = useState(false);
+  const [proFeatureAperto, setProFeatureAperto] = useState(false);
+
+  // Per i visitatori non loggati mostriamo al massimo 3 opportunità (vetrina freemium).
+  const listaOpportunita = user ? opportunitaAttive : opportunitaAttive.slice(0, 3);
+
+  /** Click sull'accordion: Base onboarded → apre il paywall modal (mai l'elenco). */
+  const toggleOpportunita = () => {
+    if (feedBloccatoBase) {
+      setProFeatureAperto(true);
+      return;
+    }
+    setOpportunitaAperte((aperto) => !aperto);
+  };
 
   // Onboarding iniziato (bozza salvata) ma non completato → banner di ripresa.
   const haBozzaOnboarding =
@@ -180,92 +220,73 @@ export function DashboardPage() {
       {/* Preferenze Radar — impostazioni e filtri del profilo (bacheca unificata) */}
       {user && <PreferenzeRadar />}
 
-      {/* Feed — "Opportunità mappate" (PRO) / preview paywall (Base) */}
-      <div className="mb-3">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <Radar className="h-5 w-5 text-primary-600" />
-          <h2 className="text-xl font-bold text-primary-800">Opportunità mappate</h2>
-          {!feedBloccatoBase && (
-            <span className="rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-medium text-primary-600">
-              {opportunitaAttive.length}
-            </span>
-          )}
-        </div>
-
-        {feedBloccatoBase ? (
-          <div className="animate-fade-in rounded-2xl border border-secondary-200 bg-secondary-50 p-6 text-center shadow-card">
-            <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-secondary-100">
-              <Radar className="h-7 w-7 text-secondary-600" />
-            </span>
-            <h3 className="mt-3 text-lg font-bold text-primary-900">
-              Opportunità riservate agli account PRO
-            </h3>
-            <p className="mx-auto mt-1 max-w-lg text-sm leading-relaxed text-primary-600">
-              Questo strumento è disponibile per gli account PRO. Passa a PRO per consultare
-              l&apos;archivio completo delle opportunità attive.
+      {/* Opportunità mappate — accordion console (chiuso di default; paywall modal per Base) */}
+      <Accordion
+        icona="📡"
+        titolo="Opportunità mappate"
+        badge={
+          hasAccessoPro
+            ? `${opportunitaAttive.length} ${
+                opportunitaAttive.length === 1 ? 'opportunità attiva' : 'opportunità attive'
+              }`
+            : '🔒 PRO'
+        }
+        aperto={opportunitaAperte}
+        onToggle={toggleOpportunita}
+      >
+        {user && !preferenze.onboarded ? (
+          <div className="rounded-xl border border-primary-100 bg-primary-50 px-4 py-3 text-center">
+            <p className="text-sm text-primary-600">
+              Configura prima il tuo profilo: il Radar potrà mostrarti le opportunità che ti
+              riguardano davvero.
             </p>
-            <Link
-              to="/prezzi"
-              className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-secondary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600"
+            <button
+              type="button"
+              onClick={openRadarSetup}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-600"
             >
-              Passa a PRO
-            </Link>
+              <SlidersHorizontal className="h-4 w-4" />
+              Completa il profilo
+            </button>
           </div>
         ) : opportunitaAttive.length === 0 ? (
-          <div className="animate-fade-in rounded-2xl border border-primary-100 bg-white p-8 text-left shadow-card">
-            <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary-50">
-              <Radar className="h-6 w-6 text-primary-400" />
-            </span>
-            {!preferenze.onboarded ? (
-              <>
-                <h3 className="mt-3 text-lg font-bold text-primary-800">Configura il tuo profilo</h3>
-                <p className="mx-auto mt-1 max-w-md text-sm text-primary-500">
-                  Scegli province, classi di concorso e materie per vedere solo le opportunità che ti
-                  riguardano davvero.
-                </p>
-                <button
-                  type="button"
-                  onClick={openRadarSetup}
-                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
-                >
-                  <SlidersHorizontal className="h-4 w-4" />
-                  Completa il profilo
-                </button>
-              </>
-            ) : (
-              <>
-                <h3 className="mt-3 text-lg font-bold text-primary-800">
-                  Nessuna nuova opportunità oggi
-                  {classeEtichetta ? ` per la classe ${classeEtichetta}` : ''}
-                  {provinciaEtichetta ? ` in provincia di ${provinciaEtichetta}` : ''}.
-                </h3>
-                <p className="mx-auto mt-1 max-w-md text-sm text-primary-500">
-                  Imposta il tuo Radar e rilassati: ti avvisiamo noi appena esce qualcosa di
-                  interessante per te!
-                </p>
-                <button
-                  type="button"
-                  onClick={openRadarSetup}
-                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600"
-                >
-                  <SlidersHorizontal className="h-4 w-4" />
-                  Imposta il tuo Radar
-                </button>
-              </>
-            )}
+          <div className="rounded-xl border border-primary-100 bg-primary-50 px-4 py-3 text-center text-sm text-primary-600">
+            Nessuna nuova opportunità attiva al momento
+            {classeEtichetta ? ` per ${classeEtichetta}` : ''}
+            {provinciaEtichetta ? ` in ${provinciaEtichetta}` : ''}.
           </div>
         ) : (
-          <div className="animate-fade-in grid gap-3">
-            {interpelliVisibili.map((i) => (
-              <InterpelloCard key={i.id} interpello={i} />
-            ))}
+          <div className="animate-fade-in space-y-3">
+            {listaOpportunita.map((i) => {
+              const urg = urgenzaScadenza(i.dataScadenza);
+              return (
+                <div
+                  key={i.id}
+                  className="overflow-hidden rounded-2xl border border-primary-100 bg-white shadow-card"
+                >
+                  <div className="flex items-center justify-between gap-2 border-b border-primary-100 bg-slate-50 px-3 py-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary-400">
+                      {new Date(i.dataScadenza).toLocaleDateString('it-IT', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </span>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${URGENZA_STILE[urg].cls}`}
+                    >
+                      {URGENZA_STILE[urg].etichetta}
+                    </span>
+                  </div>
+                  <InterpelloCard interpello={i} />
+                </div>
+              );
+            })}
           </div>
         )}
+      </Accordion>
 
-        <p className="mt-3 max-w-2xl text-left text-xs text-primary-500">
-          Interpelli, bandi per esperti, CPIA e progetti scolastici: mostriamo solo ciò che ti riguarda davvero.
-        </p>
-      </div>
+      <ProFeatureModal open={proFeatureAperto} onClose={() => setProFeatureAperto(false)} />
 
     </div>
   );
