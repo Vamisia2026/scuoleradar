@@ -160,26 +160,16 @@ ${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua
       `${benvenuto(genere)} in ScuoleRadar! 🎉 Il tuo account è attivo: per i primi 30 giorni hai il piano PRO gratuito con notifiche illimitate, Modulistica, Crea CV e Calcolatore CFU. Novità su https://www.scuoleradar.it/notizie`,
   },
   conferma_attivazione: {
-    soggetto: (_genere, o) =>
-      o?.piano === 'free_forever'
-        ? 'Conferma attivazione piano Free Forever su Scuole Radar!'
-        : 'Conferma attivazione: il tuo piano PRO è attivo',
+    soggetto: '🎯 Scuole Radar: il tuo Radar è attivo e operativo!',
     // NB: il saluto "Caro/Cara {{nome}}" viene PREPOSTO dal corpo email
     // (riga `corpoEmail = saluto + testo.email`): qui NON va ripetuto un
     // secondo "Ciao/Caro", altrimenti si crea un saluto duplicato.
-    email: (o) =>
-      o.piano === 'free_forever'
-        ? `Grazie per credere in <b>Scuole Radar</b>.<br/><br/>
-Per dimostrarti la nostra riconoscenza, il tuo account <b>PRO</b> sarà <b>gratis per sempre</b>.<br/><br/>
-Avrai accesso <b>illimitato</b> a tutti i nostri servizi: Radar Scuole, Modulistica, Crea CV, Calcolatore CFU, PureFocus, Assistente Sindacalista Virtuale e tutti gli altri strumenti PRO.<br/><br/>
-Continueremo a cercare per te le opportunità più interessanti nella scuola e, quando ne troveremo una adatta al tuo profilo, te la segnaleremo. Non devi fare nulla.<br/><br/>
-Non ti intaseremo l'email di comunicazioni inutili. Quando vuoi sapere cosa succede di importante nella Scuola, guarda la sezione Notizie del nostro sito: <a href="https://www.scuoleradar.it/notizie">https://www.scuoleradar.it/notizie</a><br/><br/>
-Speriamo che Scuole Radar contribuisca a migliorare la tua vita professionale, facendoti trovare opportunità e risparmiare tempo.`
-        : `La tua attivazione è confermata: il piano <b>PRO</b> di ScuoleRadar è attivo. Da ora hai notifiche illimitate, strumenti docenti completi e moduli sempre aggiornati a norma di legge.<br/><br/>Inizia subito su <a href="https://www.scuoleradar.it/">www.scuoleradar.it</a> e resta aggiornato con <a href="${BLOG_URL}">www.scuoleradar.it/notizie</a>.`,
-    telegram: (o, genere) =>
-      o.piano === 'free_forever'
-        ? `${caro(genere)}, il tuo account PRO sarà gratis per sempre! 🎁 Accesso illimitato a Radar Scuole, Modulistica, Crea CV, Calcolatore CFU, PureFocus e tutti gli strumenti PRO. Novità su https://www.scuoleradar.it/notizie`
-        : `${caro(genere)}, la tua attivazione è confermata: il piano PRO di ScuoleRadar è attivo! Notifiche illimitate e strumenti docenti completi.\nhttps://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
+    email: () =>
+      'Ti confermiamo che abbiamo attivato il tuo Radar con le impostazioni che hai scelto. Puoi cambiarle quando vuoi, andando sul tuo profilo su scuoleradar.it.<br/><br/>' +
+      'Ora controlleremo noi per te sui canali ufficiali, quando ci saranno delle opportunità interessanti per te.<br/>' +
+      'Non inviamo spam, solo segnalazioni rilevanti, perciò, quando ricevi una nostra segnalazione, è importante aprirla ed eventualmente applicare al più presto.',
+    telegram: () =>
+      '🎯 Radar attivato con successo!\n\nOra puoi rilassarti: il tuo Radar è attivo e sta già lavorando per te.\n\nNon ti invieremo comunicazioni inutili e spam. Quando vedi un nostro messaggio qui su Telegram, aprilo subito: abbiamo intercettato un\'opportunità per te!',
   },
   free_forever_preavviso: {
     soggetto: 'Piano PRO Free Forever: il rinnovo gratuito è automatico',
@@ -358,8 +348,8 @@ serve(async (req: Request) => {
   };
 
   const saluto = nome ? `${caro(genere)} ${escapeHtml(nome)},<br/>` : '';
-  const corpoEmail = saluto + testo.email(opp, genere) + '<br/><br/>' + FIRMA + '<br/>P.S. Approfondimenti e novità sul blog: <a href="' + BLOG_URL + '">scuoleradar.it/notizie</a>' + DISCLAIMER_EMAIL;
-  const corpoTelegram = testo.telegram(opp, genere) + '\n\n' + FIRMA;
+  const corpoEmail = saluto + testo.email(opp, genere) + '<br/><br/>' + FIRMA + '<br/>📌 Quando vuoi sapere cosa succede di importante, vieni qui: <a href="' + BLOG_URL + '">scuoleradar.it/notizie</a>' + DISCLAIMER_EMAIL;
+  const corpoTelegram = testo.telegram(opp, genere) + '\n\n' + FIRMA + '\n📌 Quando vuoi sapere cosa succede di importante, vieni qui: https://www.scuoleradar.it/notizie';
   const soggetto = typeof testo.soggetto === 'function' ? testo.soggetto(genere, opp) : testo.soggetto;
   const errEmail = email ? await inviaEmail(email, soggetto, corpoEmail) : 'nessun indirizzo email';
   const errTelegram = chatId ? await inviaTelegram(chatId, corpoTelegram) : null;

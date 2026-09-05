@@ -138,13 +138,12 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
     cta: (dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
   },
   conferma_attivazione: {
-    testa: '🎉 Conferma attivazione: il tuo piano PRO è attivo!',
+    testa: '🎯 Radar attivato con successo!',
     paragrafi: [
-      'La tua attivazione è confermata: il piano PRO di ScuoleRadar è attivo.',
-      'Notifiche illimitate, strumenti docenti completi, modulistica sempre aggiornata e Pure Focus.',
-      'Nessun altro passaggio: noi continuiamo a cercare per te.',
+      'Ora puoi rilassarti: il tuo Radar è attivo e sta già lavorando per te.',
+      "Non ti invieremo comunicazioni inutili e spam. Quando vedi un nostro messaggio qui su Telegram, aprilo subito: abbiamo intercettato un'opportunità per te!",
     ],
-    cta: (dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
+    cta: (dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`
   },
   free_forever_preavviso: {
     testa: '🎁 PRO Free Forever: il rinnovo gratuito è automatico',
@@ -214,6 +213,7 @@ export function formattaMessaggioTelegram(
   if (copy.paragrafi.length) parti.push(copy.paragrafi.join('\n'));
   if (copy.cta) parti.push(copy.cta(linkPro, linkOpp));
   parti.push('I tuoi colleghi di <b>Scuole Radar</b>');
+  parti.push('📌 Quando vuoi sapere cosa succede di importante, vieni qui: https://www.scuoleradar.it/notizie');
 
   return parti.join('\n\n');
 }

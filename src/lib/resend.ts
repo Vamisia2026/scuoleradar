@@ -165,7 +165,7 @@ const SUBJECT: Record<TipoMessaggio, string> = {
   recap: 'Avviso finale: le notifiche di prova sono terminate',
   welcome_pro: 'Benvenuto in ScuoleRadar PRO!',
   notifica_pro: 'Nuova opportunità trovata per te!',
-  conferma_attivazione: 'Conferma attivazione: il tuo piano PRO è attivo',
+  conferma_attivazione: '🎯 Scuole Radar: il tuo Radar è attivo e operativo!',
   free_forever_preavviso: 'Piano PRO Free Forever: il rinnovo gratuito è automatico',
 };
 
@@ -246,9 +246,9 @@ const CORPO_MESSAGGI: Record<TipoMessaggio, ContenutoMessaggio> = {
   },
   conferma_attivazione: {
     paragrafi: [
-      'La tua attivazione è confermata: il piano <strong>PRO</strong> di ScuoleRadar è attivo.',
-      'Hai accesso a notifiche illimitate, strumenti docenti completi, modulistica sempre aggiornata e Pure Focus.',
-      'Nessun altro passaggio: noi continuiamo a cercare per te.',
+      'Ti confermiamo che abbiamo attivato il tuo Radar con le impostazioni che hai scelto. Puoi cambiarle quando vuoi, andando sul tuo profilo su scuoleradar.it.',
+      'Ora controlleremo noi per te sui canali ufficiali, quando ci saranno delle opportunità interessanti per te.',
+      'Non inviamo spam, solo segnalazioni rilevanti, perciò, quando ricevi una nostra segnalazione, è importante aprirla ed eventualmente applicare al più presto.',
     ],
     cta: { label: 'Vai a ScuoleRadar →', destinazione: 'dashboard' },
   },
@@ -374,7 +374,7 @@ export function renderEmailHtml(
                 ${ctaHtml}
 
                 <p style="margin:20px 0 0; font-size:15px; line-height:1.6; color:#14354e;"><b>I tuoi colleghi di Scuole Radar</b></p>
-                <p style="margin:10px 0 0; font-size:13px; line-height:1.5; color:#64748b;">P.S. Approfondimenti e novità sul blog: <a href="https://scuoleradar.it/notizie" style="color:#2B6F9E;">scuoleradar.it/notizie</a></p>
+                <p style="margin:10px 0 0; font-size:13px; line-height:1.5; color:#64748b;">P.S. 📌 Quando vuoi sapere cosa succede di importante, vieni qui: <a href="https://scuoleradar.it/notizie" style="color:#2B6F9E;">scuoleradar.it/notizie</a></p>
 
                 <p style="margin:14px 0 0; font-size:12px; line-height:1.5; color:#94a3b8;">
                   ⚠️ Questa è un'email automatica generata dal sistema. Ti preghiamo di non rispondere a questo

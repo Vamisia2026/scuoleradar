@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { LogOut, User as UserIcon, Menu, X, Sparkles, ChevronDown, CreditCard, FileText, Loader2 } from 'lucide-react';
+import { LogOut, User as UserIcon, Menu, X, Sparkles, ChevronDown, CreditCard, FileText, Loader2, Radar } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 
 /** Link istituzionali / di supporto (barra superiore). */
@@ -201,6 +201,14 @@ export function Header() {
                       >
                         <UserIcon className="h-4 w-4 text-primary-400" />
                         Il mio profilo
+                      </Link>
+                      <Link
+                        to="/dashboard/radar"
+                        onClick={chiudiMenuUtente}
+                        className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
+                      >
+                        <Radar className="h-4 w-4 text-primary-400" />
+                        Il mio Radar
                       </Link>
                       <Link
                         to="/dashboard/moduli"
