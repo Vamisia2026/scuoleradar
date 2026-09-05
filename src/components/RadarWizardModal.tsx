@@ -60,7 +60,7 @@ export function RadarWizardModal() {
   const navigate = useNavigate();
   const {
     user, preferenze, radarWizardOpen, closeRadarWizard, setPreferenze, completaOnboarding, salvaProfilo,
-    aggiornaRadarAttivo, attivaTrialPro, openAuthModal, piano, hasProAccess,
+    aggiornaRadarAttivo, attivaTrialPro, openAuthModal, piano, hasProAccess, trialAttivo,
   } = useApp();
 
   const [fase, setFase] = useState<'wizard' | 'done'>('wizard');
@@ -81,6 +81,11 @@ export function RadarWizardModal() {
   const limitiPiano = pianoLimits(piano, hasProAccess);
   const maxProvince = limitiPiano.maxProvince;
   const maxClassiConcorso = limitiPiano.maxClassiConcorso;
+
+  // Livello account per la copy del Passo 4 (Canali di Notifica).
+  const isFreeForever = piano === 'free_forever';
+  const isProAttivo = isFreeForever || (piano === 'pro' && !trialAttivo);
+  const isTrialAttivo = piano === 'pro' && trialAttivo;
 
   // All'apertura: prefill dalle preferenze salvate (ri-configurazione) e RIPRESA
   // del passo esatto in cui l'utente si era fermato (1..4), senza ripartire da 1.
@@ -822,16 +827,30 @@ export function RadarWizardModal() {
                 </label>
 
                 <div className="rounded-xl bg-accent-50 px-4 py-3 text-sm text-accent-700">
-                  Il tuo account è attivo con <b>1 mese di PRO</b> offerto da{' '}
-                  <a
-                    href="https://purefocus.one"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-semibold text-accent-800 underline decoration-accent-300 underline-offset-2 hover:text-accent-900"
-                  >
-                    PureFocus.one
-                  </a>
-                  : attiva il Radar e cerchiamo noi le opportunità per te.
+                  {isProAttivo ? (
+                    <p>
+                      Il tuo account PRO è attivo: attiva il Radar e cerchiamo noi le opportunità
+                      per te.
+                    </p>
+                  ) : isTrialAttivo ? (
+                    <p>
+                      Il tuo account è attivo con <b>1 mese di PRO</b> offerto da{' '}
+                      <a
+                        href="https://purefocus.one"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-semibold text-accent-800 underline decoration-accent-300 underline-offset-2 hover:text-accent-900"
+                      >
+                        PureFocus.one
+                      </a>
+                      : attiva il Radar e cerchiamo noi le opportunità per te.
+                    </p>
+                  ) : (
+                    <p className="text-primary-600">
+                      Il tuo account Base è attivo: attiva il Radar e inizia a ricevere le
+                      opportunità su misura per te.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
