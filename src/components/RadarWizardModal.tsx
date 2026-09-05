@@ -201,14 +201,24 @@ export function RadarWizardModal() {
   const addCustomMateria = () => {
     const val = customMateriaInput.trim();
     if (!val) return;
-    if (!materieCustom.some((m) => m.toLowerCase() === val.toLowerCase())) {
-      setMaterieCustom((prev) => [...prev, val]);
+    const giaPresente = materieCustom.some((m) => m.toLowerCase() === val.toLowerCase());
+    if (giaPresente) {
+      // Dedup: niente duplicati, il campo viene comunque pulito.
+      setCustomMateriaInput('');
+      return;
     }
+    const next = [...materieCustom, val];
+    setMaterieCustom(next);
     setCustomMateriaInput('');
+    // Sync IMMEDIATO della bozza (localStorage + profilo): il tag non si perde
+    // cambiando passo o chiudendo/riaprendo il wizard.
+    persistiDraft({ ...bozzaPreferenze(), materieCustom: next });
   };
 
   const removeCustomMateria = (m: string) => {
-    setMaterieCustom((prev) => prev.filter((x) => x !== m));
+    const next = materieCustom.filter((x) => x !== m);
+    setMaterieCustom(next);
+    persistiDraft({ ...bozzaPreferenze(), materieCustom: next });
   };
 
   const toggleProvincia = (codice: string) => {
@@ -252,6 +262,12 @@ export function RadarWizardModal() {
     ignoredSchools: preferenze.ignoredSchools ?? [],
   });
 
+  /** Persiste subito una bozza (context/localStorage + profilo Supabase). */
+  const persistiDraft = (bozza: Preferenze) => {
+    setPreferenze(bozza);
+    if (user && supabase) void salvaProfilo(bozza);
+  };
+
   /**
    * Transizione di passo (Avanti/Indietro): salva SUBITO la bozza delle
    * preferenze (localStorage sr_preferenze + profilo Supabase per l'utente
@@ -259,9 +275,7 @@ export function RadarWizardModal() {
    */
   const vaiAlPasso = (nuovoPasso: number) => {
     if (nuovoPasso < 1 || nuovoPasso > 4) return;
-    const bozza = bozzaPreferenze();
-    setPreferenze(bozza); // localState + localStorage (useLocalStorage)
-    if (user && supabase) void salvaProfilo(bozza); // colonne profiles (draft, onboarded non ancora true)
+    persistiDraft(bozzaPreferenze());
     try {
       localStorage.setItem(STORAGE_KEY_RADAR_WIZARD_STEP, String(nuovoPasso));
     } catch {
@@ -527,7 +541,7 @@ export function RadarWizardModal() {
                 Per quali insegnamenti sei abilitato o qualificato?
               </h2>
 
-              <div className="mt-5 space-y-5">
+              <div className="mt-3 space-y-2">
                 <div>
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-sm font-bold text-primary-700">Classi di concorso</h3>
@@ -583,7 +597,7 @@ export function RadarWizardModal() {
                     </div>
                   )}
 
-                  <div className="mt-3 max-h-40 space-y-1.5 overflow-y-auto rounded-xl border border-primary-100 p-1.5">
+                  <div className="mt-2 max-h-28 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-1">
                     {classiFiltrate.length === 0 ? (
                       <p className="p-4 text-center text-sm text-primary-400">Nessuna classe trovata.</p>
                     ) : (
@@ -625,11 +639,11 @@ export function RadarWizardModal() {
                   <h3 className="mb-2 text-sm font-bold text-primary-700">
                     In cosa puoi lavorare, anche oltre la tua classe di concorso?
                   </h3>
-                  <p className="mb-3 text-xs text-primary-500">
+                  <p className="mb-2 text-xs text-primary-500">
                     Seleziona le competenze per intercettare bandi PNRR, progetti, corsi e laboratori.
                   </p>
                   {materieId.length > 0 && (
-                    <div className="mb-3 flex flex-wrap gap-2">
+                    <div className="mb-2 flex flex-wrap gap-1.5">
                       {materieId.map((id) => (
                         <Pill
                           key={id}
@@ -640,17 +654,17 @@ export function RadarWizardModal() {
                       ))}
                     </div>
                   )}
-                  <div className="relative mb-3">
+                  <div className="relative mb-2">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary-400" />
                     <input
                       type="text"
                       value={queryMateria}
                       onChange={(e) => setQueryMateria(e.target.value)}
                       placeholder="Cerca materia…"
-                      className="w-full rounded-xl border border-primary-200 bg-white py-2.5 pl-10 pr-4 text-sm text-primary-800"
+                      className="w-full rounded-xl border border-primary-200 bg-white py-2 pl-10 pr-4 text-sm text-primary-800"
                     />
                   </div>
-                  <div className="max-h-36 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-1.5">
+                  <div className="max-h-28 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-1">
                     {materieFiltrate.length === 0 ? (
                       <p className="p-4 text-center text-sm text-primary-400">Nessuna materia trovata.</p>
                     ) : (
@@ -681,11 +695,11 @@ export function RadarWizardModal() {
                   <h3 className="mb-2 text-sm font-bold text-primary-700">
                     Cerchi competenze particolari? Aggiungile qui.
                   </h3>
-                  <p className="mb-3 text-xs text-primary-500">
+                  <p className="mb-2 text-xs text-primary-500">
                     Scrivi una materia o competenza non presente nell'elenco.
                   </p>
                   {materieCustom.length > 0 && (
-                    <div className="mb-3 flex flex-wrap gap-2">
+                    <div className="mb-2 flex flex-wrap gap-1.5">
                       {materieCustom.map((m) => (
                         <Pill key={m} label={m} onRemove={() => removeCustomMateria(m)} color="secondary" />
                       ))}
