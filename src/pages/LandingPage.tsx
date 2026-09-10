@@ -252,7 +252,7 @@ export function LandingPage() {
               className="group rounded-2xl border border-primary-100 bg-white p-6 shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
             >
               <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-2xl">📁</span>
-              <h3 className="mt-4 text-lg font-bold text-primary-800">Moduli</h3>
+              <h3 className="mt-4 text-lg font-bold text-primary-800">Modulistica</h3>
               <p className="mt-1.5 text-base text-primary-600">Documenti e modulistica pronti all&apos;uso</p>
             </Link>
             <Link

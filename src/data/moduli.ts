@@ -4139,6 +4139,193 @@ const macroAreeRaw: MacroAreaModulistica[] = [
           },
         ],
       },
+
+      {
+        id: 'ci-economici-fis',
+        nome: 'Economici & FIS',
+        descrizione:
+          'Ore eccedenti, progetti PTOF, sostituzioni e rimborsi: modulistica economico-finanziaria del personale (FIS e fondi di Istituto).',
+        sotto: [
+          {
+            id: 'ci-ore-eccedenti-sostituzioni',
+            nome: 'Ore eccedenti e sostituzioni',
+            descrizione: 'Autorizzazione delle ore eccedenti e moduli di sostituzione tra colleghi.',
+            sotto: [
+              {
+                id: 'ci-richiesta-ore-eccedenti',
+                nome: 'Richiesta autorizzazione ore eccedenti',
+                descrizione:
+                  'Richiesta di autorizzazione allo svolgimento di ore eccedenti l\u2019orario d\u2019obbligo, da inoltrare al Dirigente Scolastico.',
+                documenti: [
+                  {
+                    id: 'ci-richiesta-ore-eccedenti-modello',
+                    nome: 'Richiesta autorizzazione ore eccedenti',
+                    descrizione:
+                      'Modulo per richiedere l\u2019autorizzazione alle ore eccedenti (FIS / fondi di Istituto) con quadro delle ore e recupero.',
+                    tipo: 'PDF',
+                    profilo: {
+                      tipo: 'comunicazione_interna',
+                      area: 'economici_fis',
+                      pratica: 'ore_eccedenti',
+                    },
+                  },
+                ],
+              },
+              {
+                id: 'ci-sostituzione-collega',
+                nome: 'Modulo sostituzione collega',
+                descrizione:
+                  'Accordo di sostituzione di un collega con eventuale recupero, per assenze brevi o impreviste.',
+                documenti: [
+                  {
+                    id: 'ci-sostituzione-collega-modello',
+                    nome: 'Modulo sostituzione collega e recupero',
+                    descrizione:
+                      'Modulo di sostituzione di un collega assente con impegno di recupero, da consegnare alla segreteria.',
+                    tipo: 'PDF',
+                    profilo: {
+                      tipo: 'comunicazione_interna',
+                      area: 'economici_fis',
+                      pratica: 'sostituzione_collega',
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            id: 'ci-progetti-ptof-fis',
+            nome: 'Progetti PTOF e rendicontazioni',
+            descrizione:
+              'Schede di attivazione dei progetti del PTOF e rendicontazione delle attività finanziate con il FIS.',
+            sotto: [
+              {
+                id: 'ci-attivazione-progetto-ptof',
+                nome: 'Scheda attivazione progetto PTOF',
+                descrizione: 'Scheda di proposta e attivazione di un progetto previsto nel PTOF.',
+                documenti: [
+                  {
+                    id: 'ci-attivazione-progetto-ptof-modello',
+                    nome: 'Scheda attivazione progetto PTOF',
+                    descrizione:
+                      'Scheda per proporre e attivare un progetto PTOF: obiettivi, destinatari, tempi, risorse e referente.',
+                    tipo: 'PDF',
+                    profilo: {
+                      tipo: 'comunicazione_interna',
+                      area: 'economici_fis',
+                      pratica: 'progetto_ptof',
+                    },
+                  },
+                ],
+              },
+              {
+                id: 'ci-rendicontazione-fis',
+                nome: 'Rendicontazione attività FIS',
+                descrizione: 'Rendicontazione finale delle ore e delle attività finanziate con il FIS.',
+                documenti: [
+                  {
+                    id: 'ci-rendicontazione-fis-modello',
+                    nome: 'Rendicontazione attività FIS',
+                    descrizione:
+                      'Modulo di rendicontazione delle attività svolte con il Fondo per l\u2019Istituzione Scolastica (FIS).',
+                    tipo: 'PDF',
+                    profilo: {
+                      tipo: 'comunicazione_interna',
+                      area: 'economici_fis',
+                      pratica: 'rendicontazione_fis',
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            id: 'ci-rimborsi-missioni-uscite',
+            nome: 'Rimborsi missioni e uscite',
+            descrizione: 'Rimborso delle spese sostenute per missioni, trasferte e uscite didattiche.',
+            documenti: [
+              {
+                id: 'ci-richiesta-rimborso-spese',
+                nome: 'Richiesta rimborso spese missione / uscita',
+                descrizione:
+                  'Richiesta di rimborso delle spese sostenute dal personale in occasione di missioni, trasferte e uscite didattiche.',
+                tipo: 'PDF',
+                profilo: {
+                  tipo: 'comunicazione_interna',
+                  area: 'economici_fis',
+                  pratica: 'rimborso_spese',
+                },
+              },
+            ],
+          },
+        ],
+      },
+
+      {
+        id: 'ci-tutela-sicurezza',
+        nome: 'Tutela legale e sicurezza',
+        descrizione:
+          'Verbali di infortunio, segnalazioni di rischio al RSPP e registri di consegna beni: documentazione per la tutela legale e la sicurezza.',
+        sotto: [
+          {
+            id: 'ci-infortuni-alunni',
+            nome: 'Infortuni e incidenti',
+            descrizione: 'Verbali e comunicazioni relativi a infortuni di alunni e incidenti a scuola.',
+            documenti: [
+              {
+                id: 'ci-verbale-infortunio-alunno',
+                nome: 'Verbale infortunio alunno',
+                descrizione:
+                  'Verbale di rilevazione dell\u2019infortunio occorso a un alunno: dinamica, interventi e comunicazioni alle famiglie.',
+                tipo: 'PDF',
+                profilo: {
+                  tipo: 'comunicazione_interna',
+                  area: 'tutela_sicurezza',
+                  pratica: 'infortunio_alunno',
+                },
+              },
+            ],
+          },
+          {
+            id: 'ci-sicurezza-rspp',
+            nome: 'Sicurezza e RSPP',
+            descrizione: 'Segnalazioni di rischi e di criticità dei locali al RSPP e al datore di lavoro.',
+            documenti: [
+              {
+                id: 'ci-segnalazione-rischio-rspp',
+                nome: 'Segnalazione rischio / locali (RSPP)',
+                descrizione:
+                  'Segnalazione di un rischio o di una criticità dei locali al Responsabile del Servizio di Prevenzione e Protezione (RSPP).',
+                tipo: 'PDF',
+                profilo: {
+                  tipo: 'comunicazione_interna',
+                  area: 'tutela_sicurezza',
+                  pratica: 'segnalazione_rischio',
+                },
+              },
+            ],
+          },
+          {
+            id: 'ci-consegna-ben',
+            nome: 'Consegna e riconsegna beni',
+            descrizione: 'Verbali di consegna e riconsegna di beni, materiali e attrezzature.',
+            documenti: [
+              {
+                id: 'ci-verbale-consegna-riconsegna-beni',
+                nome: 'Verbale consegna / riconsegna beni',
+                descrizione:
+                  'Verbale per la consegna e la riconsegna di beni, attrezzature e materiali in uso al personale.',
+                tipo: 'PDF',
+                profilo: {
+                  tipo: 'comunicazione_interna',
+                  area: 'tutela_sicurezza',
+                  pratica: 'consegna_riconsegna_beni',
+                },
+              },
+            ],
+          },
+        ],
+      },
     ],
   },
 

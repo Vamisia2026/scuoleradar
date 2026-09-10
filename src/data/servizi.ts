@@ -79,7 +79,7 @@ export const servizi: Servizio[] = [
   {
     slug: 'moduli',
     emoji: '📁',
-    titolo: 'Moduli',
+    titolo: 'Modulistica',
     sottotitolo: "Documenti e modulistica pronti all'uso",
     descrizione:
       'Oltre 1.000 moduli per la scuola, pronti all\'uso. Disponibili gratuitamente per tutti gli utenti registrati, anche durante il mese di prova PRO.',

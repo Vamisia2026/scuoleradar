@@ -4,13 +4,14 @@ import { FolderOpen, UserPlus, X } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useApp } from '@/contexts/AppContext';
 import { useToast } from '@/components/Toast';
+import { haTemplatePrescrittivo } from './creator/templatePrescrittivi';
 import {
   conAggiuntaInCima,
-  macroAreaById,
   moduli,
   trovaDocumentoModulisticaById,
   STORAGE_KEY_MODULI_SCARICATI,
   type DocumentoModulistica,
+  type MacroAreaModulistica,
   type Modulo,
   type ModuloScaricato,
 } from '@/data/moduli';
@@ -55,7 +56,9 @@ export function ModuliModule() {
     const tab = searchParams.get('tab');
     return tab === 'miei' ? 'miei' : 'archivio';
   });
-  const [macroAreaId, setMacroAreaId] = useState<string | null>(null);
+  /** Macroarea selezionata dal menu (oggetto: supporta anche la scheda unita "Enti e Altro"). */
+  const [areaSelezionata, setAreaSelezionata] = useState<MacroAreaModulistica | null>(null);
+  const macroAreaId = areaSelezionata?.id ?? null;
   /** Filtro live della ricerca standard sui moduli. */
   const [filtro, setFiltro] = useState('');
   /** "Labor Illusion": true durante la consultazione (~2s) dopo l'invio della ricerca. */
@@ -99,7 +102,7 @@ export function ModuliModule() {
   const richiediAccesso = useCallback(() => setNotaAccesso(true), []);
   const chiudiNotaAccesso = useCallback(() => setNotaAccesso(false), []);
 
-  const macroArea = useMemo(() => macroAreaById(macroAreaId), [macroAreaId]);
+  const macroArea = areaSelezionata;
 
   /** Compatta banner e padding quando l'utente cerca o esplora una macroarea. */
   const compattato = macroAreaId !== null || filtro.trim() !== '';
@@ -193,6 +196,11 @@ export function ModuliModule() {
       }
       // Apertura immediata: il documento è già pronto localmente.
       apriAnteprima(creaDocumentoLocale(doc.nome, doc.profilo, doc.catalogoId), false);
+
+      // I moduli con template PRESCRITTIVO (cambio turno, verbale dipartimento,
+      // congedo L.104) hanno struttura, campi e firme legali definite a mano:
+      // NON vengono sovrascritti dall'arricchimento AI in background.
+      if (haTemplatePrescrittivo(doc.profilo)) return;
 
       // Arricchimento silenzioso in background (mai errori/toast all'utente).
       void (async () => {
@@ -313,11 +321,16 @@ export function ModuliModule() {
   if (!user) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-2">
-          <FolderOpen className="h-5 w-5 text-primary-600" />
-          <h2 className="text-2xl font-bold text-primary-800">
-            Tutti i moduli per la scuola che ti servono, senza cercarli ogni volta.
-          </h2>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary-400">
+            Dipartimento Modulistica
+          </p>
+          <div className="mt-1 flex items-center gap-2">
+            <FolderOpen className="h-5 w-5 text-primary-600" />
+            <h2 className="text-2xl font-bold text-primary-800">
+              Tutti i moduli per la scuola che ti servono, senza cercarli ogni volta.
+            </h2>
+          </div>
         </div>
         <VetrinaModulistica />
       </div>
@@ -326,17 +339,22 @@ export function ModuliModule() {
 
   return (
     <div className={compattato ? 'space-y-3' : 'space-y-6'}>
-      <div className={compattato ? 'flex flex-wrap items-center gap-1.5' : 'flex flex-wrap items-center gap-2'}>
-        <FolderOpen
-          className={compattato ? 'h-4 w-4 text-primary-600' : 'h-5 w-5 text-primary-600'}
-        />
-        <h2
-          className={
-            compattato ? 'text-lg font-bold text-primary-800' : 'text-2xl font-bold text-primary-800'
-          }
-        >
-          Tutti i moduli per la scuola che ti servono, senza cercarli ogni volta.
-        </h2>
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary-400">
+          Dipartimento Modulistica
+        </p>
+        <div className={compattato ? 'mt-1 flex flex-wrap items-center gap-1.5' : 'mt-1 flex flex-wrap items-center gap-2'}>
+          <FolderOpen
+            className={compattato ? 'h-4 w-4 text-primary-600' : 'h-5 w-5 text-primary-600'}
+          />
+          <h2
+            className={
+              compattato ? 'text-lg font-bold text-primary-800' : 'text-2xl font-bold text-primary-800'
+            }
+          >
+            Tutti i moduli per la scuola che ti servono, senza cercarli ogni volta.
+          </h2>
+        </div>
       </div>
 
       {/* Avviso di accesso (customer care "Bezos style"): visibile SOLO se davvero non sei autenticato */}
@@ -374,7 +392,7 @@ export function ModuliModule() {
         attiva={macroAreaId}
         compatto={compattato}
         onSeleziona={(area) => {
-          setMacroAreaId(area.id);
+          setAreaSelezionata(area);
           apriTab('archivio');
         }}
       />

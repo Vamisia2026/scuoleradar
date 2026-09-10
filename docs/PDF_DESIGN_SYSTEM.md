@@ -32,7 +32,7 @@
    - Vietati campi riepilogativi intermedi: "Contesto della richiesta", "Oggetto generico", box duplicati.
 
 3. **ESTETICA E RIGORE TIPOGRAFICO SCHEDA**
-   - Righe di scrittura a mano: **interlinea reale 24px**, colore `#e0e0e0` (`.righe-scrittura`).
+   - Righe di scrittura a mano: **altezza minima 28px**, colore `#ccc` (`.righe-scrittura`).
    - Tabelle anagrafiche "**Clean Institutional**": intestazioni `#f8f9fa`, bordi sottili `1px #d1d5db`,
      font senza grazie (Inter/Roboto/Arial), titoli **max 16pt**, testi **10pt**, note **8pt**.
 
@@ -86,9 +86,10 @@
 ## 4. Branding e posizionamento ufficiale
 
 - Logo **ScuoleRadar nitido nell'header in alto a sinistra** (`.intestazione-documento img`, 42px).
-- **Footer fisso su OGNI pagina** (`@page @bottom-left`):
+- **Margini `@page` A4 = 15mm** (sia a schermo sia in stampa) e **footer fisso su OGNI pagina**
+  (`.pie-documento-fisso`, ripetuto in stampa via `position: fixed`):
 
-  > Documento scaricato gratuitamente da ScuoleRadar.it — Strumenti e risorse per la scuola
+  > Documento scaricato gratuitamente da ScuoleRadar.it — La piattaforma di supporto per la scuola italiana.
 
 - **Parole VIETATE**: "generato", "creato", "automatico".
   Il linguaggio deve sempre richiamare un **archivio istituzionale ufficiale e già pronto**:
@@ -100,8 +101,9 @@
 
 | File | Ruolo |
 |---|---|
-| `src/modules/modulistica/creator/pdfGenerator.ts` | Stylesheet condivisa: `@page`, footer ufficiale, tabelle anagrafiche, crocette, scrittura a righe, chiusura/convalida, `costruisciDocumento` |
-| `src/modules/modulistica/creator/cacheService.ts` | Template del documento formale locale: intestazione 2 colonne, anno "20____ / 20____", chiusura standard, `nota-normativa` |
+| `src/modules/modulistica/creator/pdfGenerator.ts` | Stylesheet condivisa: `@page 15mm`, footer ufficiale ripetuto su ogni pagina (`.pie-documento-fisso`), tabelle anagrafiche, crocette, righe di scrittura 28px, chiusura/convalida, `costruisciDocumento` |
+| `src/modules/modulistica/creator/templatePrescrittivi.ts` | Template prescrittivi legali-rigidi: cambio turno (2 firme), verbale riunione di dipartimento (OdG/presenze/delibere, firme Segretario+Coordinatore), congedo/permessi L.104 (GDPR, unicità assistenza) |
+| `src/modules/modulistica/creator/cacheService.ts` | Template del documento formale locale: intestazione 2 colonne, anno "20____ / 20____", chiusura standard, `nota-normativa`; hook sui template prescrittivi |
 | `supabase/functions/genera-modulo/index.ts` | `SISTEMA_PROMPT` (regole non negoziabili per DeepSeek) |
 | `scripts/test-pdf-mad.ts` | Test di generazione HTML (→ "Salva come PDF") |
 

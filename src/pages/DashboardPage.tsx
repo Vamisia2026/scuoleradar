@@ -49,9 +49,10 @@ const URGENZA_STILE: Record<UrgenzaScadenza, { etichetta: string; cls: string }>
 export function DashboardLayout() {
   const tabs: TabNav[] = [
     { to: '/dashboard/radar', label: '📡 Radar Scuole', end: true },
+    { to: '/dashboard/calcolatore-cfu', label: '🎓 Calcolatore CFU' },
     // Feature in incubazione (temporaneamente nascoste dalla nav):
-    //   📄 Crea CV · 🎓 Calcolatore CFU · 💬 Assistente Sindacalista Virtuale
-    { to: '/dashboard/moduli', label: '📁 Moduli' },
+    //   📄 Crea CV · 💬 Assistente Sindacalista Virtuale
+    { to: '/dashboard/moduli', label: '📁 Modulistica' },
     { to: '/dashboard/purefocus', label: '🧘 Pure Focus' },
     { to: '/dashboard/invita', label: '🎁 Invita un Collega', accent: true },
   ];

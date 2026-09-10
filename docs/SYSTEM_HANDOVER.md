@@ -312,7 +312,7 @@ Supabase DB (pg_cron + trigger):
 | File | Righe | Responsabilità |
 |---|---|---|
 | `index.ts` | 522 | Pipeline scraper interpelli (§5.3): env, province attive da `profiles`, fonti per provincia, dedupe hash_id, upsert `interpelli`/`notices`, notifiche ai nuovi |
-| `parser.ts` | 184 | Parser: `rilevaClassi` (regex A-XX/ADEE), `rilevaCategoriaAvviso`, `sembraOpportunita`, `estraiDataScadenza`, `generaHashId` (SHA-256 provincia+title+data), `parseInterpello` |
+| `parser.ts` | ~370 | Parser: `rilevaClassi` (regex A-XX/ADEE), `rilevaCategoriaAvviso`, `sembraOpportunita`, `estraiProvincia`/`estraiScuola` (dai dati reali), `estraiDataPubblicazione`/`estraiDataScadenza` (pubblicazione ≠ scadenza), `generaHashId` (SHA-256 provincia+title+data), `parseInterpello` |
 
 ### 2.13 `src/services/` + `src/types/`
 
@@ -322,7 +322,7 @@ Supabase DB (pg_cron + trigger):
 | `types/google-one-tap.d.ts` | Tipi GSI (`google.accounts.id`) |
 | `vite-env.d.ts` | Tipi import.meta.env |
 
-### 2.14 `supabase/functions/` — 8 Edge Functions (Deno)
+### 2.14 `supabase/functions/` — 9 Edge Functions (Deno)
 
 | Funzione | Righe | Auth | Scopo / payload |
 |---|---|---|---|
@@ -334,6 +334,7 @@ Supabase DB (pg_cron + trigger):
 | `contatto` | — | pubblico + anti-spam | Form contatti → Resend a `CONTACT_SUPPORT_EMAIL`; honeypot, alfabeti, impronte spam, max 3 link |
 | `elimina-account` | 80 | JWT | Cancella utente da `auth.users` via `admin.auth.deleteUser` (cascade su profiles) |
 | `telegram-webhook` | 128 | `X-Telegram-Bot-Api-Secret-Token` | `/start <user_id>` → aggiorna `profiles.telegram_chat_id` + conferma |
+| `telegram-admin-webhook` | ~270 | secret header + `ADMIN_TELEGRAM_ID` | Bot Telegram ADMIN **separato** dal bot pubblico: accetta comandi SOLO da `ADMIN_TELEGRAM_ID`, li logga in `admin_telegram_log` e li inoltra (opz.) a `ADMIN_COMMAND_FORWARD_URL` |
 
 ### 2.15 `supabase/migrations/` — 24 migration (§13 e §14 per dettagli)
 
@@ -493,9 +494,10 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--fixture`, `--no-email`):
 3. Per ogni provincia: scarica la fonte (pagina regione → post del giorno → interpelli)
    o fixture offline; `parseAvvisi(html, provincia, source)`.
 4. **Parser** (`parser.ts`): `rilevaClassi` (regex `\b(?:[A-Z]{1,2}-\d{2,3}|AD(?:[A-Z]{2,3}|\d{2}))\b`),
-   `rilevaCategoriaAvviso` (Interpello/PNRR/PON/Esperti…), `estraiDataScadenza`
-   (numerica `gg/mm/aaaa` o testuale italiana), `generaHashId(provincia, title, data)`
-   = SHA-256 univoco.
+   `rilevaCategoriaAvviso` (Interpello/PNRR/PON/Esperti…), `estraiProvincia`/`estraiScuola`
+   (dai dati reali), `estraiDataPubblicazione` (intestazione) e `estraiDataScadenza`
+   (solo se dichiarata o da termine relativo: mai scambiare la pubblicazione per scadenza),
+   `generaHashId(provincia, title, data)` = SHA-256 univoco.
 5. Dedupe per `hashId`; `verifica` link raggiungibili (HTTP).
 6. **Upsert** in `interpelli` (`onConflict: 'hash_id', ignoreDuplicates: true`); se la
    tabella non esiste → fallback `notices`.
@@ -870,9 +872,11 @@ Trigger: `set_profiles_updated_at` (before update), `set_referral_code` (before 
 `id uuid PK`, `hash_id text unique not null` (SHA-256 provincia+title+data),
 `title text not null`, `province text not null`, `class_codes text[] default '{}'`,
 `school_name text`, `school_code text`, `source_url text not null`,
-`expiration_date timestamptz`, `created_at timestamptz`.
+`published_at timestamptz` (data di pubblicazione dell'avviso), `expiration_date timestamptz`
+(scadenza REALE del bando), `created_at timestamptz`.
 Indici: `interpelli_province_idx` (province), `interpelli_class_codes_idx` (GIN class_codes),
-`interpelli_expiration_idx` (expiration_date). Policy "read interpelli" select true.
+`interpelli_expiration_idx` (expiration_date), `interpelli_published_idx` (published_at).
+Policy "read interpelli" select true.
 Legacy `notices` (fallback dello scraper).
 
 ### 13.3 `public.generated_modules` (RLS: select a tutti; scrittura service_role)
@@ -903,6 +907,12 @@ UNIQUE `(user_id, module_key)`. Indice `(user_id, created_at desc)`.
 ### 13.7 `public.app_settings` (KV)
 `key text PK`, `value text not null`. Contiene `send_notification_url` e
 `send_notification_secret` per le chiamate pg_cron/trigger → Edge Function.
+
+### 13.8 `public.admin_telegram_log` (RLS: nessun accesso client — solo service_role)
+`id uuid PK`, `telegram_id bigint not null`, `chat_id bigint`, `username text`,
+`command text not null`, `payload text`, `autorizzato boolean default false`, `created_at`.
+Audit dei comandi del bot Telegram ADMIN (Edge `telegram-admin-webhook`); registra anche i
+tentativi NON autorizzati. Indici su `created_at desc` e `telegram_id`.
 
 ---
 
@@ -939,6 +949,7 @@ UNIQUE `(user_id, module_key)`. Indice `(user_id, created_at desc)`.
 | `contatto` | `/functions/v1/contatto` | `{ email, dipartimento, oggetto?, messaggio, website?, utenteLoggato?, allegato? }` | `{ ok }` |
 | `elimina-account` | `/functions/v1/elimina-account` (JWT) | `{}` | `{ ok }` |
 | `telegram-webhook` | `/functions/v1/telegram-webhook` (secret header) | update Telegram (message `/start <user_id>`) | `ok` |
+| `telegram-admin-webhook` | `/functions/v1/telegram-admin-webhook` (secret header + `ADMIN_TELEGRAM_ID`) | update Telegram (comandi `/ping` `/id` `/stato` `/log [n]` `/forward <testo>` o testo libero) | `ok` |
 
 ### 15.1 Esternalizzazioni (API di terze parti)
 - **Supabase Auth/REST/RPC**: URL base progetto + `VITE_SUPABASE_ANON_KEY` (frontend) /
@@ -1002,6 +1013,8 @@ UNIQUE `(user_id, module_key)`. Indice `(user_id, created_at desc)`.
 (e `_CONSUMO`/`_ALACARTE`), `STRIPE_COUPON_REFERRAL_10` —, `SEND_NOTIFICATION_SECRET`,
 `RESEND_API_KEY`, `RESEND_FROM_EMAIL`,
 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`,
+`ADMIN_TELEGRAM_BOT_TOKEN`, `ADMIN_TELEGRAM_ID`, `ADMIN_TELEGRAM_WEBHOOK_SECRET`,
+`ADMIN_COMMAND_FORWARD_URL`, `ADMIN_COMMAND_FORWARD_SECRET`,
 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_EMAILS`, `CONTACT_SUPPORT_EMAIL`, `APP_URL`.
 
 ---

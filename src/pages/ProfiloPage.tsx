@@ -103,7 +103,7 @@ export function ProfiloPage() {
         >
           {moduliScaricati.length === 0 ? (
             <p className="text-sm text-primary-400">
-              Non hai ancora scaricato modelli. Visita la pagina Moduli per trovare documenti e
+              Non hai ancora scaricato modelli. Visita la pagina Modulistica per trovare documenti e
               template pronti all&apos;uso.
             </p>
           ) : (
@@ -146,7 +146,7 @@ export function ProfiloPage() {
               className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-600"
             >
               <FolderOpen className="h-3.5 w-3.5" />
-              Vai alla pagina Moduli
+              Vai alla pagina Modulistica
             </Link>
             {moduliScaricati.length > 0 && (
               <button

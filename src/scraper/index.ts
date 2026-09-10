@@ -27,13 +27,18 @@ import * as cheerio from 'cheerio';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
   parseInterpello,
-  estraiDataScadenza,
+  estraiDataPubblicazione,
   rilevaCategoriaAvviso,
   sembraOpportunita,
   type InterpelloParsato,
 } from './parser.ts';
 import { notificaNuoviInterpelli } from '../lib/notifier.ts';
-import { getTelegramCanaliRegionali, getTelegramChannels, pubblicaInterpelloSuCanale } from '../lib/telegram.ts';
+import {
+  CHIAVE_CANALE_ATA_NAZIONALE,
+  getTelegramCanaliRegionali,
+  getTelegramChannels,
+  pubblicaInterpelloSuCanali,
+} from '../lib/telegram.ts';
 
 /* ------------------------------- Tipi ------------------------------- */
 
@@ -122,9 +127,10 @@ export function parseAvvisi(html: string, provincia: string, source: string): Av
     if (!sembraOpportunita(contesto)) return;
     if (testo.length < 10) return;
 
-    // Data di scadenza: cerca nel link e nel contenitore (li / article / entry)
+    // Scadenza e pubblicazione sono estratte dal PARSER in modo contestuale
+    // (qui si passa solo il testo del link + del contenitore, senza pre-assegnare
+    // la prima data trovata alla scadenza).
     const contenitore = $el.closest('li, article, .entry, .post, .avviso').text().replace(/\s+/g, ' ');
-    const data = estraiDataScadenza(`${testo} ${contenitore}`);
 
     let link = href;
     if (href && !href.startsWith('http')) {
@@ -142,7 +148,6 @@ export function parseAvvisi(html: string, provincia: string, source: string): Av
         provincia,
         source,
         corpo: contenitore,
-        dataNota: data,
       }),
     );
   });
@@ -215,7 +220,8 @@ export function parsePostInterpelli(
     if (/facebook|linkedin|t\.me|altervista|iubenda|freepik|pinterest|instagram|twitter/.test(href)) return;
 
     const contesto = $el.closest('li, p, td, div').text().replace(/\s+/g, ' ');
-    const data = estraiDataScadenza(`${testo} ${contesto}`) ?? estraiDataScadenza(titoloPost);
+    // Il titolo del post è l'INTESTAZIONE: la sua data è la PUBBLICAZIONE (non la scadenza).
+    const dataPubblicazione = estraiDataPubblicazione(titoloPost);
     // Ripulisce il titolo da annotazioni tipo "[478 KB]"
     const titolo = testo.replace(/\s*\[\d+(?:[.,]\d+)?\s*(?:KB|MB)\]\s*$/i, '').trim() || testo;
 
@@ -226,7 +232,7 @@ export function parsePostInterpelli(
         provincia,
         source,
         corpo: contesto,
-        dataNota: data,
+        dataPubblicazione,
       }),
     );
   });
@@ -234,8 +240,9 @@ export function parsePostInterpelli(
   return risultato;
 }
 
-// Conversione delle date testuali italiane ("22 agosto 2026") e numeriche:
-// gestita dal parser in src/scraper/parser.ts (estraiDataScadenza).
+// Conversione delle date testuali italiane ("22 agosto 2026") e numeriche, con
+// distinzione tra PUBBLICAZIONE e SCADENZA: gestita dal parser in
+// src/scraper/parser.ts (estraiDataPubblicazione / estraiDataScadenza).
 
 /** Verifica che un link sia raggiungibile (HEAD con fallback GET). */
 async function verificaLink(url: string): Promise<boolean> {
@@ -363,6 +370,7 @@ function mappaRigaInterpelli(a: InterpelloParsato) {
     school_name: a.schoolName,
     school_code: a.schoolCode,
     source_url: a.link,
+    published_at: a.publishedAt,
     expiration_date: a.expirationDate,
   };
 }
@@ -388,25 +396,34 @@ function mappaRigaNotices(a: InterpelloParsato) {
 /* -------------------- Canali Telegram regionali (FASE 5) -------------------- */
 
 /**
- * Pubblica gli interpelli NUOVI sui canali Telegram delle 20 regioni italiane
- * (configurazione ufficiale in src/lib/telegram.ts → CANALI_TELEGRAM_REGIONALI).
- * Il bot deve essere amministratore di ciascun canale. Gli errori vengono loggati
- * singolarmente: nessun fallimento silenzioso.
+ * Pubblica gli avvisi NUOVI sulle destinazioni Telegram corrette:
+ *   - il canale REGIONALE attivo della provincia (9 canali regionali attivi
+ *     configurati in src/lib/telegram.ts → CANALI_TELEGRAM_REGIONALI);
+ *   - il canale ATA nazionale @scuoleradar_ata in AGGIUNTA per ogni
+ *     🔵 [AVVISO ATA], da qualunque regione d'Italia.
+ * Gli errori vengono loggati singolarmente: nessun fallimento silenzioso.
  */
 async function pubblicaNuoviSuCanali(nuovi: AvvisoRilevato[]): Promise<void> {
   if (nuovi.length === 0) return;
 
-  const canaliRegionali = getTelegramCanaliRegionali();
+  const canaliAttivi = getTelegramCanaliRegionali();
+  const canaleAta = canaliAttivi[CHIAVE_CANALE_ATA_NAZIONALE] ?? null;
   const overrideProvince = getTelegramChannels();
-  if (Object.keys(canaliRegionali).length === 0 && Object.keys(overrideProvince).length === 0) return;
+  if (Object.keys(canaliAttivi).length === 0 && Object.keys(overrideProvince).length === 0) return;
 
+  const regionaliAttivi = Object.keys(canaliAttivi).filter(
+    (chiave) => chiave !== CHIAVE_CANALE_ATA_NAZIONALE,
+  );
   console.log(
-    `• Pubblicazione canali Telegram: ${Object.keys(canaliRegionali).length} canali regionali ufficiali + ${Object.keys(overrideProvince).length} override per provincia`,
+    `• Pubblicazione Telegram: ${regionaliAttivi.length} canali regionali attivi${
+      canaleAta ? ` + ATA nazionale (${canaleAta})` : ''
+    } + ${Object.keys(overrideProvince).length} override per provincia`,
   );
 
-  let pubblicati = 0;
+  let inviiRiusciti = 0;
+  let inviiAttesi = 0;
   for (const n of nuovi) {
-    const esito = await pubblicaInterpelloSuCanale({
+    const esito = await pubblicaInterpelloSuCanali({
       title: n.title,
       schoolName: n.schoolName,
       province: n.province,
@@ -414,14 +431,27 @@ async function pubblicaNuoviSuCanali(nuovi: AvvisoRilevato[]): Promise<void> {
       expirationDate: n.expirationDate,
       link: n.link,
     });
-    if (esito.ok) {
-      pubblicati += 1;
-      console.log(`  ✓ Canale ${n.province}: ${n.title.slice(0, 60)}`);
+    inviiAttesi += esito.destinazioni.length;
+    if (esito.destinazioni.length === 0) {
+      console.warn(
+        `  – [${n.province}] nessun canale attivo per la regione (${n.title.slice(0, 60)})`,
+      );
+      continue;
+    }
+    inviiRiusciti += esito.pubblicati;
+    if (esito.errori.length === 0) {
+      console.log(
+        `  ✓ [${n.province}] → ${esito.destinazioni.join(', ')}: ${n.title.slice(0, 50)}`,
+      );
     } else {
-      console.warn(`  ✗ Canale ${n.province} non pubblicato (${n.title.slice(0, 60)}): ${esito.error}`);
+      for (const e of esito.errori) {
+        console.warn(`  ✗ [${n.province}] → ${e.canale}: ${e.errore} (${n.title.slice(0, 50)})`);
+      }
     }
   }
-  console.log(`  ✓ Canali Telegram: ${pubblicati}/${nuovi.length} interpelli pubblicati`);
+  console.log(
+    `  ✓ Canali Telegram: ${inviiRiusciti}/${inviiAttesi} invii riusciti (${nuovi.length} avvisi)`,
+  );
 }
 
 /* -------------------------------- main -------------------------------- */
@@ -543,7 +573,7 @@ async function main() {
     if (!noEmail) {
       await notificaNuoviInterpelli(supabase, nuovi);
     }
-    // FASE 5 — canali Telegram regionali (solo interpelli NUOVI e fonti reali).
+    // FASE 5 — canali Telegram regionali + ATA nazionale (solo avvisi NUOVI e fonti reali).
     if (!useFixture) {
       await pubblicaNuoviSuCanali(nuovi);
     }
@@ -552,7 +582,7 @@ async function main() {
 
   console.log(`✓ Upsert completato su interpelli (righe inviate: ${righeInterpelli.length}).`);
 
-  // FASE 5 — canali Telegram regionali (solo interpelli NUOVI e fonti reali).
+  // FASE 5 — canali Telegram regionali + ATA nazionale (solo avvisi NUOVI e fonti reali).
   if (!useFixture) {
     await pubblicaNuoviSuCanali(nuovi);
   }

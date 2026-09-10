@@ -2,3 +2,9 @@
 # Creato per abilitare `supabase db push --db-url` da questa cartella.
 # Migrazioni lette da: project/supabase/migrations
 project_id = "gwdmsgsshvdnfrplbjiv"
+
+# Bot Telegram ADMIN (controllo amministrativo): webhook pubblico protetto da
+# secret (ADMIN_TELEGRAM_WEBHOOK_SECRET) + allowlist mittente (ADMIN_TELEGRAM_ID),
+# quindi nessuna verifica JWT. Separato dal bot pubblico degli interpelli.
+[functions.telegram-admin-webhook]
+verify_jwt = false

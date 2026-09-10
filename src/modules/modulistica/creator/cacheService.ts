@@ -20,6 +20,7 @@
  */
 import { supabase } from '@/lib/supabase';
 import { escapeHtml } from './pdfGenerator';
+import { costruisciCorpoPrescrittivo } from './templatePrescrittivi';
 import type { ModuloSalvatoDB } from '../types';
 import {
   macroAreeModulistica,
@@ -2652,6 +2653,13 @@ function costruisciModuloFormale(
 ): string {
   const tipo = profilo?.tipo ?? '';
   const famiglia = famigliaDi(profilo);
+
+  // Template PRESCRITTIVI (pratiche legali-rigide: cambio turno, verbale di
+  // dipartimento, congedo/permessi L.104): il corpo dedicato bypassa il flusso
+  // generico (quadri, sezioni, firme e note normative sono già specifici).
+  const corpoPrescrittivo = costruisciCorpoPrescrittivo(profilo);
+  if (corpoPrescrittivo) return corpoPrescrittivo;
+
   const normativa =
     tipo === 'delega_famiglia' && profilo?.ordine === 'infanzia'
       ? 'DPR 445/2000, Regolamento d\u2019Istituto'

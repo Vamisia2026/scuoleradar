@@ -15,15 +15,24 @@
 
 export const LOGO_DOCUMENTO = '/logo.png';
 
+/** Footer ufficiale (testo esatto) stampato in calce a ogni pagina. */
+export const FOOTER_UFFICIALE_DOCUMENTO =
+  'Documento scaricato gratuitamente da ScuoleRadar.it — La piattaforma di supporto per la scuola italiana.';
+
 const STILI_DOCUMENTO = `
   /* Impostazioni foglio A4. Nessun "margin box" @page: i browser non li
-     stampano in modo affidabile e la numerazione lasciata al browser sporca
-     l'Atto Pubblico (data, URL, "Pagina X di Y" generati dal dialogo di
-     stampa). Intestazione e chiusura ufficiale vivono NEL layout del
-     documento; la stampa usa solo margini puliti (1cm). */
+     stampano in modo affidabile. Margini 15mm con body-padding a piè di
+     pagina: il footer ufficiale di ScuoleRadar è disegnato NEL documento e
+     si ripete su ogni pagina (fixed in @media print). I metadati del browser
+     (timestamp, URL, titolo "localhost:…") non entrano nel layout e i
+     margini @page lasciano pulito il foglio. */
   @page {
     size: A4;
-    margin: 1cm;
+    margin: 15mm;
+  }
+  @media print {
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { padding: 0 0 11mm 0; }
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
@@ -160,15 +169,15 @@ const STILI_DOCUMENTO = `
   }
   .guida-compilazione strong { font-style: normal; color: #14354e; }
   .scrittura-mano {
-    min-height: 90px;
+    min-height: 92px;
     margin: 0 0 18px;
     padding: 2px 0;
     background-image: repeating-linear-gradient(
       to bottom,
       transparent 0,
-      transparent 23px,
-      #e0e0e0 23px,
-      #e0e0e0 24px
+      transparent 27px,
+      #ccc 27px,
+      #ccc 28px
     );
     page-break-inside: avoid;
   }
@@ -235,20 +244,22 @@ const STILI_DOCUMENTO = `
     margin: 0 0 8px;
   }
   .griglia-2 .crocette { margin: 0; }
-  /* Righe guida visibili per la scrittura a mano: interlinea reale 24px, grigio discreto. */
+  /* Righe guida visibili per la scrittura a mano: altezza reale 28px (minimo
+     ergonomico), riga orizzontale discreta #ccc — mai testo precaricato. */
   .righe-scrittura { margin: 0 0 18px; line-height: 1.5; }
   .righe-scrittura div {
-    height: 24px;
-    border-bottom: 1px solid #e0e0e0;
-    margin-bottom: 6px;
+    height: 28px;
+    min-height: 28px;
+    border-bottom: 1px solid #ccc;
+    margin: 0 0 2px;
   }
   /* Dichiarazione sostitutiva (DPR 445/2000): righe di compilazione spaziate ma
      calibrate per mantenere la struttura rigida a 1 pagina (Pagina 1 di 1):
      il blocco "Firma e Protocollo" non deve scivolare a pagina 2. */
   .righe-dichiarazione { margin: 8px 0 0; }
-  .righe-dichiarazione div { height: 24px; margin-bottom: 6px; }
+  .righe-dichiarazione div { height: 28px; min-height: 28px; margin-bottom: 2px; }
   body.layout-compatto .righe-scrittura.righe-dichiarazione div:nth-child(n+4) { display: block; }
-  body.layout-compatto .righe-dichiarazione div { height: 24px; margin-bottom: 6px; }
+  body.layout-compatto .righe-dichiarazione div { height: 28px; margin-bottom: 2px; }
   .tabella-firme {
     width: 100%;
     border-collapse: collapse;
@@ -263,14 +274,14 @@ const STILI_DOCUMENTO = `
     vertical-align: bottom;
   }
   .tabella-firme th { background: #eef2f7; text-align: left; }
-  .riga-firma { height: 20px; border-bottom: 1px dotted #333; }
-  .campo-scrittura { height: 22px; min-height: 22px; line-height: 1.5; }
-  /* Campi a testo libero AMPI: 4-6 righe di scrittura reale. */
+  .riga-firma { height: 28px; min-height: 28px; border-bottom: 1px dotted #333; }
+  .campo-scrittura { height: 28px; min-height: 28px; line-height: 1.5; }
+  /* Campi a testo libero AMPI: righe di scrittura reali da 28px. */
   .campo-scrittura-ampio div {
-    height: 24px;
-    min-height: 24px;
+    height: 28px;
+    min-height: 28px;
     line-height: 1.5;
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid #ccc;
   }
   .nota-normativa {
     font-size: 8pt;
@@ -308,21 +319,21 @@ const STILI_DOCUMENTO = `
   body.layout-compatto .crocette { padding: 4px 6px; }
   body.layout-compatto .intestazione-formale td,
   body.layout-compatto .quadro-anagrafico td { padding: 8px 12px; }
-  body.layout-compatto .righe-scrittura div { margin-bottom: 4px; }
+  body.layout-compatto .righe-scrittura div { margin-bottom: 2px; }
   body.layout-compatto .righe-scrittura div:nth-child(n+4) { display: none; }
-  body.layout-compatto .scrittura-mano { min-height: 64px; }
-  body.layout-compatto .scrittura-mano--media { min-height: 80px; }
-  body.layout-compatto .scrittura-mano--alta { min-height: 100px; }
+  body.layout-compatto .scrittura-mano { min-height: 72px; }
+  body.layout-compatto .scrittura-mano--media { min-height: 88px; }
+  body.layout-compatto .scrittura-mano--alta { min-height: 108px; }
   body.layout-compatto .chiusura-documento,
   body.layout-compatto .convalida { padding: 5px 8px; }
   body.layout-compatto .chiusura-documento .riga-firma,
   body.layout-compatto .convalida .riga-firma,
-  body.layout-compatto .firme-ruoli .riga-firma { height: 18px; }
-  body.layout-compatto .campo-scrittura { height: 18px; min-height: 18px; }
+  body.layout-compatto .firme-ruoli .riga-firma { height: 26px; }
+  body.layout-compatto .campo-scrittura { height: 28px; min-height: 28px; }
   body.layout-compatto .blocco-convalida-unico { padding: 3px 6px; }
   body.layout-compatto .blocco-convalida-unico p { margin-bottom: 3px; }
   body.layout-compatto .blocco-convalida-unico .titolo-chiusura { margin-bottom: 4px; }
-  body.layout-compatto .blocco-convalida-unico .riga-firma { height: 13px; }
+  body.layout-compatto .blocco-convalida-unico .riga-firma { height: 22px; }
   /* Modulo esteso (≥6 sezioni, es. PEI/PDP/Ricorsi): 2 pagine con spazio omogeneo. */
   body.layout-esteso .scrittura-mano { min-height: 110px; }
   body.layout-esteso .scrittura-mano--media { min-height: 170px; }
@@ -457,9 +468,9 @@ const STILI_DOCUMENTO = `
   }
   .spazio-scrittura .righe-scrittura { margin: 2px 0 0; }
   .spazio-scrittura .righe-scrittura div {
-    height: 26px;
+    height: 28px;
     margin: 0 0 3px;
-    border-bottom: 1px solid #dde3ea;
+    border-bottom: 1px solid #ccc;
   }
   .campo-scrittura-ampio .micro-prompt {
     color: #8593a3;
@@ -501,14 +512,59 @@ const STILI_DOCUMENTO = `
   }
   .footer-documento strong { color: #334155; }
 
+  /* Footer ufficiale ScuoleRadar: testo esatto, ripetuto automaticamente su
+     OGNI pagina stampata. Nascosto a schermo (l'anteprima non deve mostrare
+     un duplicato flottante). */
+  .pie-documento-fisso { display: none; }
+
+  /* Blocco firme "bipartito" per i moduli con DUE sottoscrittori (es. cambio
+     turno: Richiedente + Sostituto; verbale: Segretario + Coordinatore). */
+  .firme-bipartite {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 10px;
+    border: 1px solid #cbd5e1;
+    background: #fbfcfe;
+    padding: 8px 10px;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .firme-bipartite .riquadro-firma {
+    border: none;
+    background: none;
+    padding: 0;
+    margin: 0;
+  }
+  .firme-bipartite .riquadro-firma + .riquadro-firma {
+    border-left: 1px solid #e5e7eb;
+    padding-left: 10px;
+  }
+  .firme-bipartite p { margin: 0 0 6px; font-size: 10pt; }
+  .firme-bipartite .titolo-firma { font-weight: 700; color: #14354e; }
+  .firme-bipartite .riga-firma { display: block; height: 26px; margin-top: 18px; }
+
   @media print {
-    /* Stampa pulita "Atto Pubblico": margine uniforme 1cm e NESSUNA richiesta
+    /* Stampa pulita "Atto Pubblico": margine uniforme 15mm e NESSUNA richiesta
        di metadati browser (data/ora, URL, numerazione del dialogo di stampa)
-       nei margini. La numerazione e la chiusura sono disegnate nel documento:
-       intestazione nel layout, chiusura ufficiale in calce. */
+       nei margini. Il footer ufficiale è disegnato nel documento e si ripete
+       su ogni pagina tramite posizionamento fisso. */
     @page {
       size: A4;
-      margin: 1cm;
+      margin: 15mm;
+    }
+    .pie-documento-fisso {
+      display: block;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 7.5pt;
+      color: #64748b;
+      line-height: 1.35;
+      padding: 1.5mm 0 0;
+      border-top: 0.5pt solid #cbd5e1;
+      background: #fff;
     }
     .scrittura-mano,
     .tabella-firme,
@@ -665,6 +721,7 @@ export function costruisciDocumento(titolo: string, contenutoHtml: string): Docu
 <h1 class="titolo-documento">${escapeHtml(titoloPulito)}</h1>
 <div class="contenuto-documento">${corpo}</div>
 ${chiusura}
+<footer class="pie-documento-fisso">${FOOTER_UFFICIALE_DOCUMENTO}</footer>
 </body>
 </html>`;
 

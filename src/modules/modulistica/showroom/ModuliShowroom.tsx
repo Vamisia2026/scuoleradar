@@ -111,7 +111,7 @@ export function ModuliShowroom() {
         <div className="bg-gradient-to-br from-primary-900 via-primary-800 to-primary-600 px-6 py-10 text-center sm:px-10 sm:py-12">
           <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-accent-200">
             <FileText className="h-3.5 w-3.5" />
-            Moduli scolastici PDF gratuiti per docenti e ATA
+            Dipartimento Modulistica · PDF gratuiti per docenti e ATA
           </span>
           <h1 className="mx-auto mt-4 max-w-4xl text-3xl font-extrabold leading-tight text-white sm:text-4xl">
             Tutti i moduli per la scuola che ti servono, senza cercarli ogni volta.
@@ -132,7 +132,7 @@ export function ModuliShowroom() {
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-secondary-500 px-7 py-3.5 text-sm font-bold uppercase tracking-wide text-white shadow-soft transition hover:bg-secondary-600"
             >
               <Sparkles className="h-4 w-4" />
-              Usa Moduli nella Dashboard
+              Usa Modulistica nella Dashboard
               <ArrowRight className="h-4 w-4" />
             </button>
             <a

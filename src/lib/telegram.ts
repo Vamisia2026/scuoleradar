@@ -296,10 +296,17 @@ export interface InterpelloCanale {
   link?: string | null;
 }
 
+/** Chiave del canale nazionale ATA dentro CANALI_TELEGRAM_REGIONALI. */
+export const CHIAVE_CANALE_ATA_NAZIONALE = 'ATA Italia (National)';
+
 /**
- * Canali Telegram UFFICIALI di pubblicazione, uno per ciascuna delle 20 regioni
- * italiane. Il bot @ScuoleRadar_bot deve essere AMMINISTRATORE del canale
+ * Canali Telegram UFFICIALI ATTIVI (10): i 9 canali regionali + ATA Nazionale.
+ * Il bot @ScuoleRadar_bot deve essere AMMINISTRATORE del canale
  * (oppure è possibile usare il chat_id numerico -100… del canale).
+ *
+ * Le regioni NON ancora attive non hanno un canale regionale: per gli avvisi
+ * di quelle regioni l'unico canale è ATA Italia. Il canale @scuoleradar_ata
+ * riceve OGNI 🔵 [AVVISO ATA] d'Italia (in aggiunta al canale regionale).
  */
 export const CANALI_TELEGRAM_REGIONALI: Record<string, string> = {
   Piemonte: '@scuoleradar_piemonte',
@@ -311,23 +318,14 @@ export const CANALI_TELEGRAM_REGIONALI: Record<string, string> = {
   Campania: '@scuoleradar_campania',
   Sicilia: '@scuoleradar_sicilia',
   Puglia: '@scuoleradar_puglia',
-  Liguria: '@scuoleradar_liguria',
-  'Friuli-Venezia Giulia': '@scuoleradar_friuli',
-  Marche: '@scuoleradar_marche',
-  Umbria: '@scuoleradar_umbria',
-  Abruzzo: '@scuoleradar_abruzzo',
-  Calabria: '@scuoleradar_calabria',
-  Sardegna: '@scuoleradar_sardegna',
-  'Trentino-Alto Adige': '@scuoleradar_trentino',
-  Basilicata: '@scuoleradar_basilicata',
-  Molise: '@scuoleradar_molise',
-  "Valle d'Aosta": '@scuoleradar_valledaosta',
+  [CHIAVE_CANALE_ATA_NAZIONALE]: '@scuoleradar_ata',
 };
 
 /**
- * Canali Telegram effettivi per regione: i 20 canali ufficiali, con eventuale
- * override via env TELEGRAM_CHANNELS_REGIONALI (JSON "Regione" → "@canale",
- * utile per test o canali temporanei).
+ * Canali Telegram effettivi: i 10 canali ATTIVI (9 regionali + ATA nazionale),
+ * con eventuale override via env TELEGRAM_CHANNELS_REGIONALI (JSON
+ * "Regione"/"ATA Italia (National)" → "@canale", utile per test o canali
+ * temporanei).
  */
 export function getTelegramCanaliRegionali(): Record<string, string> {
   const canali: Record<string, string> = { ...CANALI_TELEGRAM_REGIONALI };
@@ -345,6 +343,12 @@ export function getTelegramCanaliRegionali(): Record<string, string> {
     );
   }
   return canali;
+}
+
+/** Canale nazionale ATA (@scuoleradar_ata): riceve ogni 🔵 [AVVISO ATA] d'Italia. */
+export function canaleAtaNazionale(): string | null {
+  // Passa da canalePerRegione per beneficiare del confronto normalizzato.
+  return canalePerRegione(CHIAVE_CANALE_ATA_NAZIONALE);
 }
 
 /**
@@ -386,11 +390,36 @@ export function nomeProvincia(codiceProvincia: string): string | null {
   return province.find((x) => x.codice === p)?.nome ?? null;
 }
 
-/** Chat/canale ufficiale configurato per una regione, o null. */
+/**
+ * Normalizza un nome di regione/chiave canale per confronti tolleranti:
+ * minuscole, senza accenti né separatori (es. "Emilia Romagna" ≡
+ * "Emilia-Romagna", "Valle D'Aosta" ≡ "Valle d'Aosta").
+ */
+function chiaveCanale(testo: string): string {
+  return (testo ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '')
+    .toLowerCase();
+}
+
+/**
+ * Chat/canale ufficiale configurato per una regione, o null.
+ * L'uguaglianza esatta ha la precedenza; in subordine si accetta una
+ * corrispondenza normalizzata, così nessuna regione può "cadere" in modo
+ * silenzioso su un canale sbagliato (o su nessun canale) per una differenza
+ * di maiuscole, accenti o separatori nel nome.
+ */
 export function canalePerRegione(regione: string): string | null {
   const nome = (regione ?? '').trim();
   if (!nome) return null;
-  return getTelegramCanaliRegionali()[nome] ?? null;
+  const canali = getTelegramCanaliRegionali();
+  if (canali[nome]) return canali[nome];
+  const chiave = chiaveCanale(nome);
+  for (const [regioneConfigurata, canale] of Object.entries(canali)) {
+    if (chiaveCanale(regioneConfigurata) === chiave) return canale;
+  }
+  return null;
 }
 
 /**
@@ -408,7 +437,7 @@ export function canalePerProvincia(provincia: string): string | null {
 
 /* ------------------- Formato post canali regionali (colori & hashtag) ------------------- */
 
-type CategoriaPost = 'interpello_docenti' | 'avviso_ata' | 'bando_pnrr_esperto';
+export type CategoriaPost = 'interpello_docenti' | 'avviso_ata' | 'bando_pnrr_esperto';
 
 /** Testate cromatiche per tipologia di avviso. */
 const HEADER_POST: Record<CategoriaPost, string> = {
@@ -427,6 +456,14 @@ const RE_BANDO =
 
 /** Classi di concorso (A-026, ADEE, …) che identificano ruoli da docente. */
 const RE_CLASSE_CONCORSO = /\b(?:[A-Z]{1,2}-\d{2,3}|AD(?:[A-Z]{2,3}|\d{2}))\b/i;
+
+/**
+ * Codici dei profili ATA definiti nel catalogo (`src/data/classiConcorso.ts`,
+ * ordine 'ata': 'ATA-CS', 'ATA-AT', 'ATA-AA') più le abbreviazioni sintetiche
+ * 'AA' / 'AT' / 'CS' e il ruolo 'DSGA'. Serve a riconoscere come 🔵 [AVVISO ATA]
+ * anche i bandi in cui il profilo ATA è indicato solo nel codice classe.
+ */
+const RE_CLASSE_ATA = /^(?:ATA(?:[-_][A-Z]{2})?|AA|AT|CS|DSGA)$/i;
 
 /** Token per hashtag Telegram: rimuove accenti, spazi e punteggiatura. */
 function hashtagToken(testo: string): string {
@@ -483,10 +520,32 @@ function comuneAvviso(interpello: InterpelloCanale): string | null {
 }
 
 /**
- * Formatta il post per i canali Telegram regionali (struttura ufficiale):
- *   riga 1 — emoji + tipologia colorata;
- *   corpo  — 📍 Provincia ([PR]) — Comune · 🏫 Scuola · 👩🏫 Ruolo · 📅 Scadenza;
- *   🔗 link ufficiale, ⚡ CTA per il servizio privato e hashtag finali.
+ * Classifica l'avviso in una delle tre categorie del post canale.
+ * 🔵 ATA ha la priorità: un titolo "Personale ATA" / "Assistente amministrativo"
+ * NON deve mai essere etichettato come interpello docenti o bando PNRR. Il
+ * profilo ATA viene riconosciuto sia dal titolo sia dal codice classe
+ * (`ATA-AA` / `ATA-AT` / `ATA-CS`, abbreviazioni `AA`/`AT`/`CS`, `DSGA`).
+ */
+export function classificaCategoriaPost(interpello: InterpelloCanale): CategoriaPost {
+  const titolo = (interpello.title ?? '').trim();
+  if (RE_ATA.test(titolo)) return 'avviso_ata';
+  const classiAta = (interpello.classCodes ?? []).some((codice) =>
+    RE_CLASSE_ATA.test((codice ?? '').trim()),
+  );
+  if (classiAta) return 'avviso_ata';
+  if (RE_BANDO.test(titolo)) return 'bando_pnrr_esperto';
+  return 'interpello_docenti';
+}
+
+/**
+ * Formatta il post canale Telegram (STRUTTURA UFFICIALE — 5 sezioni fisse):
+ *   1. HEADER   → emoji + tipologia: 🟢 [INTERPELLO DOCENTI] / 🔵 [AVVISO ATA]
+ *                 / 🟣 [BANDO / PNRR / ESPERTO];
+ *   2. DETTAGLI → 📍 Provincia ([PR]) — Comune · 🏫 Scuola · 👩🏫 Ruolo · 📅 Scadenza;
+ *   3. LINK     → 🔗 Leggi l'Avviso Originale (link ufficiale della fonte);
+ *   4. CTA      → ⚡ Ricevi solo gli avvisi per la tua provincia e classe: 👉 scuoleradar.it;
+ *   5. HASHTAG  → #Regione #Provincia #Tipologia #Ruolo #ScuoleRadar.
+ * Nessuna riga extra (nessun 📌 titolo): i blocchi pubblicati sono sempre 5.
  */
 export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string {
   const codice = (interpello.province ?? '').trim().toUpperCase() || 'ND';
@@ -495,11 +554,7 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
   const comune = comuneAvviso(interpello);
   const titolo = interpello.title ?? '';
 
-  const categoria: CategoriaPost = RE_ATA.test(titolo)
-    ? 'avviso_ata'
-    : RE_BANDO.test(titolo)
-      ? 'bando_pnrr_esperto'
-      : 'interpello_docenti';
+  const categoria = classificaCategoriaPost(interpello);
   const ruolo = ruoloPerCategoria(categoria, interpello);
 
   const dettagli: string[] = [
@@ -538,26 +593,60 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
 
   const cta = '⚡ Ricevi solo gli avvisi per la tua provincia e classe in privato:\n👉 https://scuoleradar.it';
 
-  const parti: string[] = [
-    HEADER_POST[categoria],
-    `📌 <b>${escapeHtml(titolo)}</b>`,
-    dettagli.join('\n'),
-  ];
+  const parti: string[] = [HEADER_POST[categoria], dettagli.join('\n')];
   if (linkRiga) parti.push(linkRiga);
   parti.push(cta, hashtag);
   return parti.join('\n\n');
 }
 
 /**
- * Pubblica un interpello NUOVO sul canale Telegram della regione di appartenenza
- * (o su un canale/chat esplicito, es. per i test). Usa la formattazione ufficiale.
+ * Destinazioni di pubblicazione per un avviso (ordine di invio):
+ *   1. il canale REGIONALE attivo della provincia (se la regione è tra le 10
+ *      attive — altrimenti nessun canale regionale);
+ *   2. il canale ATA nazionale per OGNI 🔵 [AVVISO ATA], in qualunque regione
+ *      d'Italia (in AGGIUNTA al canale regionale).
  */
-export async function pubblicaInterpelloSuCanale(
+export function destinazioniPubblicazione(interpello: InterpelloCanale): string[] {
+  const destinazioni = new Set<string>();
+  const regionale = canalePerProvincia(interpello.province);
+  if (regionale) destinazioni.add(regionale);
+  if (classificaCategoriaPost(interpello) === 'avviso_ata') {
+    const ata = canaleAtaNazionale();
+    if (ata) destinazioni.add(ata);
+  }
+  return [...destinazioni];
+}
+
+/** Esito della pubblicazione multi-canale di un avviso. */
+export interface EsitoPubblicazioneCanali {
+  /** Canali a cui l'avviso doveva andare (vuoto = nessun canale attivo). */
+  destinazioni: string[];
+  /** Numero di invii andati a buon fine. */
+  pubblicati: number;
+  /** Errori per singolo canale. */
+  errori: { canale: string; errore: string }[];
+}
+
+/**
+ * Pubblica un avviso NUOVO su TUTTE le destinazioni corrette:
+ *   - regionale: solo se la regione della provincia è tra i canali attivi;
+ *   - ATA nazionale: SEMPRE in aggiunta se l'avviso è 🔵 [AVVISO ATA].
+ */
+export async function pubblicaInterpelloSuCanali(
   interpello: InterpelloCanale,
-  chatId?: string,
-): Promise<EsitoTelegram> {
-  const canale = chatId?.trim() ?? canalePerProvincia(interpello.province);
-  if (!canale) return { ok: false, error: 'Nessun canale configurato per la provincia/regione' };
-  return inviaMessaggioTelegram(canale, formattaPostCanaleTelegram(interpello));
+): Promise<EsitoPubblicazioneCanali> {
+  const destinazioni = destinazioniPubblicazione(interpello);
+  const testo = formattaPostCanaleTelegram(interpello);
+  const errori: { canale: string; errore: string }[] = [];
+  let pubblicati = 0;
+  for (const canale of destinazioni) {
+    const esito = await inviaMessaggioTelegram(canale, testo);
+    if (esito.ok) {
+      pubblicati += 1;
+    } else {
+      errori.push({ canale, errore: esito.error ?? 'errore sconosciuto' });
+    }
+  }
+  return { destinazioni, pubblicati, errori };
 }
 

@@ -20,6 +20,8 @@ import { OnboardingPage } from '@/pages/OnboardingPage';
 import { DashboardLayout, DashboardPage } from '@/pages/DashboardPage';
 import { CvPage } from '@/pages/CvPage';
 import { CfuPage } from '@/pages/CfuPage';
+import { CalcolatoreCFUPage } from '@/pages/CalcolatoreCFUPage';
+import { CalcolatoreCFUDashboardPage } from '@/pages/dashboard/CalcolatoreCFUDashboardPage';
 import { AssistenteAIPage } from '@/pages/AssistenteAIPage';
 import { ModuliPage } from '@/pages/ModuliPage';
 import { ModuliShowroomPage } from '@/pages/ModuliShowroomPage';
@@ -177,6 +179,7 @@ export default function App() {
             <Route path="/contatti" element={<ContattiPage />} />
             {/* Showroom SEO pubblici: /moduli (anteprima) → /dashboard/moduli (tool) */}
             <Route path="/moduli" element={<ModuliShowroomPage />} />
+            <Route path="/calcolatore-cfu" element={<CalcolatoreCFUPage />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             {/* Checkout diretto Stripe con coupon: /checkout/pro-annuale?coupon=RADAR50 */}
             <Route path="/checkout/:plan" element={<CheckoutRedirectPage />} />
@@ -197,6 +200,15 @@ export default function App() {
               <Route path="radar" element={<DashboardPage />} />
               <Route path="cv" element={<CvPage />} />
               <Route path="cfu" element={<CfuPage />} />
+              {/* Calcolatore CFU: strumento privato (nuovo Dipartimento CFU) */}
+              <Route
+                path="calcolatore-cfu"
+                element={
+                  <RequireAuth>
+                    <CalcolatoreCFUDashboardPage />
+                  </RequireAuth>
+                }
+              />
               <Route path="assistente-ai" element={<AssistenteAIPage />} />
               <Route path="moduli" element={<ModuliPage />} />
               <Route path="purefocus" element={<PureFocusPage />} />

@@ -110,11 +110,11 @@ export function ModuloPreview({ open, onClose, modulo, cache, onSalva }: ModuloP
         )}
 
         <p className="text-xs leading-relaxed text-primary-400">
-          Stampando scegli "Salva come PDF" per ottenere il file. Intestazione e piè di pagina
-          (logo e numerazione) vengono aggiunti automaticamente: basta chiudere la finestra di
-          stampa quando hai finito. Per un documento pulito da inoltrare come atto d&apos;ufficio,
-          nella finestra di stampa disattiva &quot;Intestazioni e piè di pagina&quot; del browser:
-          il layout interno del documento è già completo di intestazione, titolo e chiusura.
+          Il documento è già completo di intestazione, titolo, righe di scrittura a mano e footer
+          ufficiale su ogni pagina: scegli &quot;Salva come PDF&quot; nella finestra di stampa. Per
+          evitare timestamp, URL e titolo del browser nei margini, disattiva &quot;Intestazioni e
+          piè di pagina&quot; (o &quot;Header and footers&quot;) prima di salvare: i margini @page
+          (15 mm A4) sono già impostati per un output pulito.
         </p>
       </div>
     </Modal>
