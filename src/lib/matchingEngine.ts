@@ -85,8 +85,12 @@ export async function searchInterpelli(
     query = query.overlaps('class_codes', classi);
   }
 
+  // Esclude gli interpelli SCADUTI dalle liste attive pubbliche
+  // (senza scadenza → mantenuti: non dimostrabili come scaduti).
+  const oggiIso = new Date().toISOString().slice(0, 10);
   const { data, error } = await query
-    .order('expiration_date', { ascending: true })
+    .or(`expiration_date.is.null,expiration_date.gte.${oggiIso}`)
+    .order('expiration_date', { ascending: true, nullsFirst: false })
     .limit(limit ?? 100);
 
   if (error) {

@@ -1,0 +1,46 @@
+# ============================================================
+# Pulizia automatica interpelli SCADUTI
+#
+# Rimuove dalle liste pubbliche (tabella `interpelli`/`notices`) gli avvisi
+# la cui scadenza è passata, così i feed restano sempre "attivi".
+#
+# - Frequenza: ogni giorno alle 04:00 UTC
+# - Trigger manuale: workflow_dispatch
+# Secrets richiesti: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+# ============================================================
+name: Pulizia interpelli scaduti
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: pulizia-scaduti
+  cancel-in-progress: false
+
+jobs:
+  pulisci:
+    name: Rimozione interpelli scaduti
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Installazione dipendenze
+        run: npm ci
+
+      - name: Rimuove gli interpelli scaduti
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run dati:pulisci-scaduti -- --apply
