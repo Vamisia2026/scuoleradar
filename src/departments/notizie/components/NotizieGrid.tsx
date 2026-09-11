@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   CalendarDays,
+  ChevronLeft,
   ChevronRight,
   FileText,
   Radar,
@@ -50,8 +51,6 @@ function NotizieCard({ articolo }: { articolo: NewsArticle }) {
       <h3 className="mt-3 min-w-0 text-base font-bold leading-snug text-primary-900">
         <Link
           to={`/notizie/${articolo.id}`}
-          target="_blank"
-          rel="noopener noreferrer"
           className="break-words transition hover:text-primary-600"
         >
           {articolo.title}
@@ -84,8 +83,6 @@ function NotizieCard({ articolo }: { articolo: NewsArticle }) {
           )}
           <Link
             to={`/notizie/${articolo.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
             className="inline-flex items-center gap-1 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-primary-600"
           >
             Leggi
@@ -160,7 +157,13 @@ function NotizieCtaChiusura() {
  * Layout pulito a schede (senza immagini), filtro per categoria e
  * badge di scadenza quando presente. Accessibile pubblicamente, senza login.
  */
+/** Numero massimo di articoli visualizzati per pagina nella griglia. */
+const PER_PAGINA_NOTIZIE = 9;
+
 export function NotizieGrid({ articoli = newsArticles, categoria = 'Tutte' }: NotizieGridProps) {
+  const [pagina, setPagina] = useState(1);
+  const inizioGrigliaRef = useRef<HTMLDivElement | null>(null);
+
   const filtrate = useMemo(() => {
     const ordinate = [...articoli].sort(
       (a, b) =>
@@ -172,8 +175,24 @@ export function NotizieGrid({ articoli = newsArticles, categoria = 'Tutte' }: No
       : ordinate.filter((n) => n.category === categoria);
   }, [articoli, categoria]);
 
+  // Cambio categoria → si riparte sempre dalla prima pagina.
+  useEffect(() => {
+    setPagina(1);
+  }, [categoria]);
+
+  const totalePagine = Math.max(1, Math.ceil(filtrate.length / PER_PAGINA_NOTIZIE));
+  // Clamp difensivo: se la lista si riduce, la pagina corrente resta sempre valida.
+  const paginaCorrente = Math.min(pagina, totalePagine);
+  const inizio = (paginaCorrente - 1) * PER_PAGINA_NOTIZIE;
+  const visibili = filtrate.slice(inizio, inizio + PER_PAGINA_NOTIZIE);
+
+  const vaiAPagina = (p: number): void => {
+    setPagina(Math.min(Math.max(1, p), totalePagine));
+    inizioGrigliaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
-    <div>
+    <div ref={inizioGrigliaRef}>
       {/* Griglia delle notizie: parte subito sotto la linea di allineamento
           creata dal menu Categorie (Hero) e dal fondo del box Scadenze. */}
       {filtrate.length === 0 ? (
@@ -181,11 +200,63 @@ export function NotizieGrid({ articoli = newsArticles, categoria = 'Tutte' }: No
           Nessuna notizia in questa categoria per il momento.
         </p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtrate.map((n) => (
-            <NotizieCard key={n.id} articolo={n} />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {visibili.map((n) => (
+              <NotizieCard key={n.id} articolo={n} />
+            ))}
+          </div>
+
+          {/* Paginazione (max 9 articoli per pagina) */}
+          {totalePagine > 1 && (
+            <nav
+              aria-label="Paginazione notizie"
+              className="mt-8 flex flex-col items-center gap-3"
+            >
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => vaiAPagina(paginaCorrente - 1)}
+                  disabled={paginaCorrente === 1}
+                  className="inline-flex items-center gap-1 rounded-lg border border-primary-200 bg-white px-3 py-2 text-sm font-semibold text-primary-700 transition hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                  Precedente
+                </button>
+
+                {Array.from({ length: totalePagine }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => vaiAPagina(p)}
+                    aria-label={`Vai alla pagina ${p}`}
+                    aria-current={p === paginaCorrente ? 'page' : undefined}
+                    className={`inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-lg px-3 text-sm font-bold tabular-nums transition ${
+                      p === paginaCorrente
+                        ? 'bg-primary-500 text-white shadow-soft'
+                        : 'border border-primary-200 bg-white text-primary-700 hover:bg-primary-50'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => vaiAPagina(paginaCorrente + 1)}
+                  disabled={paginaCorrente === totalePagine}
+                  className="inline-flex items-center gap-1 rounded-lg border border-primary-200 bg-white px-3 py-2 text-sm font-semibold text-primary-700 transition hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Successiva
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+              <p className="text-xs text-primary-400" aria-live="polite">
+                Pagina {paginaCorrente} di {totalePagine} · {filtrate.length} notizie
+              </p>
+            </nav>
+          )}
+        </>
       )}
 
       {/* CTA dinamica di chiusura (ospite / Base / PRO) */}
