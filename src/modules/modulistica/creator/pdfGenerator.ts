@@ -3,21 +3,25 @@
  *
  * Riferimento permanente: docs/PDF_DESIGN_SYSTEM.md
  *
- * Wrappa l'HTML generato da DeepSeek in un documento completo con:
- *  - logo in alto a sinistra (42px) + linea divisoria 1px (#e5e7eb)
+ * Wrappa l'HTML generato in un documento completo con:
+ *  - logo in alto a sinistra (42px, INLINE base64) + linea divisoria 1px
  *  - solo logo e titolo: nessun testo pubblicitario o marchi aggiuntivi
- *  - piè di pagina: riferimento essenziale "Documento rilasciato da ScuoleRadar.it" (sinistra)
- *    e numerazione "Pagina X di Y" (destra), via @page margin boxes
+ *  - piè di pagina ufficiale (testo esatto) ripetuto su OGNI pagina stampata
  *  - font Arial/Inter 11pt/12pt, interlinea 1.3, tabelle padding 8px e
  *    righe alternate chiarissime
  *  - indice automatico (TOC) solo per documenti stimati > 3 pagine
  */
+import { LOGO_DOCUMENTO_DATA_URI } from './logoDataUri';
 
-export const LOGO_DOCUMENTO = '/logo.png';
+/**
+ * Logo del documento in DATA URI (base64, inline): si renderizza SEMPRE, in
+ * ogni contesto di anteprima/stampa, senza dipendere da `/logo.png`.
+ */
+export const LOGO_DOCUMENTO = LOGO_DOCUMENTO_DATA_URI;
 
 /** Footer ufficiale (testo esatto) stampato in calce a ogni pagina. */
 export const FOOTER_UFFICIALE_DOCUMENTO =
-  'Documento scaricato gratuitamente da ScuoleRadar.it — La piattaforma di supporto per la scuola italiana.';
+  'Questo modulo è stato scaricato gratuitamente da scuoleradar.it';
 
 const STILI_DOCUMENTO = `
   /* Impostazioni foglio A4. Nessun "margin box" @page: i browser non li
@@ -512,10 +516,20 @@ const STILI_DOCUMENTO = `
   }
   .footer-documento strong { color: #334155; }
 
-  /* Footer ufficiale ScuoleRadar: testo esatto, ripetuto automaticamente su
-     OGNI pagina stampata. Nascosto a schermo (l'anteprima non deve mostrare
-     un duplicato flottante). */
-  .pie-documento-fisso { display: none; }
+  /* Footer ufficiale ScuoleRadar: testo esatto, presente in OGNI documento.
+     A schermo è un blocco statico a fine documento (visibile in anteprima);
+     in stampa diventa fisso e si ripete su ogni pagina. */
+  .pie-documento-fisso {
+    display: block;
+    position: static;
+    text-align: center;
+    margin-top: 22px;
+    padding-top: 6px;
+    border-top: 0.5pt solid #cbd5e1;
+    font-size: 7.5pt;
+    color: #64748b;
+    line-height: 1.35;
+  }
 
   /* Blocco firme "bipartito" per i moduli con DUE sottoscrittori (es. cambio
      turno: Richiedente + Sostituto; verbale: Segretario + Coordinatore). */
@@ -558,6 +572,7 @@ const STILI_DOCUMENTO = `
       bottom: 0;
       left: 0;
       right: 0;
+      margin-top: 0;
       text-align: center;
       font-size: 7.5pt;
       color: #64748b;
@@ -695,16 +710,6 @@ export function costruisciDocumento(titolo: string, contenutoHtml: string): Docu
   const corpo = conIndice ? aggiungiIndice(contenutoHtml) : contenutoHtml;
   const layout = calcolaLayout(contenutoHtml);
 
-  // Chiusura istituzionale in calce all'ultima pagina SOLO per i documenti
-  // estesi (PEI/PDP/verbali GLO...): i moduli compatti a 1 pagina non devono
-  // guadagnare righe in più (il Single Sign Box resta l'ultimo elemento).
-  const chiusura = layout === 'esteso'
-    ? `<footer class="footer-documento">
-  <span><strong>${escapeHtml(titoloPulito)}</strong> — Documento rilasciato da ScuoleRadar.it</span>
-  <span>Atto d\u2019ufficio · riproduzione per uso scolastico interno</span>
-</footer>`
-    : '';
-
   const html = `<!doctype html>
 <html lang="it">
 <head>
@@ -720,7 +725,6 @@ export function costruisciDocumento(titolo: string, contenutoHtml: string): Docu
 <hr class="divisore" />
 <h1 class="titolo-documento">${escapeHtml(titoloPulito)}</h1>
 <div class="contenuto-documento">${corpo}</div>
-${chiusura}
 <footer class="pie-documento-fisso">${FOOTER_UFFICIALE_DOCUMENTO}</footer>
 </body>
 </html>`;

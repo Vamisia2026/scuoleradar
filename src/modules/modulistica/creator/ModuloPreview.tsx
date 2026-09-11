@@ -108,14 +108,6 @@ export function ModuloPreview({ open, onClose, modulo, cache, onSalva }: ModuloP
             Nessun documento da visualizzare.
           </div>
         )}
-
-        <p className="text-xs leading-relaxed text-primary-400">
-          Il documento è già completo di intestazione, titolo, righe di scrittura a mano e footer
-          ufficiale su ogni pagina: scegli &quot;Salva come PDF&quot; nella finestra di stampa. Per
-          evitare timestamp, URL e titolo del browser nei margini, disattiva &quot;Intestazioni e
-          piè di pagina&quot; (o &quot;Header and footers&quot;) prima di salvare: i margini @page
-          (15 mm A4) sono già impostati per un output pulito.
-        </p>
       </div>
     </Modal>
   );

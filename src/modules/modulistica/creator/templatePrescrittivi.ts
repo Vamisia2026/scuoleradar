@@ -113,7 +113,7 @@ function corpoCambioTurno(): string {
       { titolo: 'Firma del Richiedente', riga: 'Docente richiedente (leggibile)' },
       { titolo: 'Firma del Docente Accettante / Sostituto', riga: 'Docente sostituto (leggibile)' },
     )}
-    <p class="nota-normativa">Riferimenti: CCNL Istruzione e Ricerca vigente, regolamento di Istituto, circolari interne su turni e sostituzioni. Documento rilasciato da ScuoleRadar.it.</p>
+    <p class="nota-normativa">Riferimenti: CCNL Istruzione e Ricerca vigente, regolamento di Istituto, circolari interne su turni e sostituzioni.</p>
   </div>`;
 }
 
@@ -170,7 +170,7 @@ function corpoVerbaleDipartimento(): string {
       { titolo: 'Firma del Segretario', riga: 'Segretario verbalizzante (leggibile)' },
       { titolo: 'Firma del Coordinatore', riga: 'Coordinatore di Dipartimento (leggibile)' },
     )}
-    <p class="nota-normativa">Riferimenti: D.P.R. 275/1999 (autonomia scolastica), D.Lgs. 297/1994, regolamento di Istituto, disposizioni del Dirigente Scolastico sugli organi collegiali. Documento rilasciato da ScuoleRadar.it.</p>
+    <p class="nota-normativa">Riferimenti: D.P.R. 275/1999 (autonomia scolastica), D.Lgs. 297/1994, regolamento di Istituto, disposizioni del Dirigente Scolastico sugli organi collegiali.</p>
   </div>`;
 }
 
@@ -236,7 +236,7 @@ function corpoCongedoL104(): string {
       { titolo: 'Firma del Richiedente', riga: 'Dipendente (leggibile)' },
       { titolo: 'Riservato all\u2019Ufficio del Personale', riga: 'Protocollo / Data / Timbro' },
     )}
-    <p class="nota-normativa">Riferimenti: L. 104/1992, art. 33; D.Lgs. 151/2001, art. 42; D.P.R. 445/2000; CCNL Scuola vigente; Reg. UE 2016/679 (GDPR). Documento rilasciato da ScuoleRadar.it.</p>
+    <p class="nota-normativa">Riferimenti: L. 104/1992, art. 33; D.Lgs. 151/2001, art. 42; D.P.R. 445/2000; CCNL Scuola vigente; Reg. UE 2016/679 (GDPR).</p>
   </div>`;
 }
 

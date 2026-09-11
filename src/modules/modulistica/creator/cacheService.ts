@@ -255,6 +255,8 @@ const NORMATIVA_PER_TIPO: Record<string, string> = {
   lettera: 'DPR 275/1999, D.Lgs. 297/1994',
   mobilita: 'L. 107/2015, CCNL Scuola',
   delega_privacy: 'Reg. UE 2016/679 (GDPR), D.Lgs. 196/2003',
+  concorso: 'D.P.R. 487/1994, D.Lgs. 165/2001, D.P.R. 445/2000',
+  istanza_enti: 'L. 241/1990, D.P.R. 445/2000',
   iscrizione: 'L. 241/1990, D.P.R. 275/1999, Circolare ministeriale iscrizioni MIM',
   checklist: 'D.Lgs. 297/1994, L. 107/2015',
   biblioteca: 'DPR 275/1999, L. 145/2018',
@@ -321,6 +323,8 @@ const TITOLO_PER_TIPO: Record<string, string> = {
   lettera: 'Lettera di presentazione',
   mobilita: 'Istanza di mobilità e trasferimento',
   delega_privacy: 'Delega e consenso al trattamento dei dati personali',
+  concorso: 'Domanda di partecipazione a concorso',
+  istanza_enti: 'Istanza a Ente / Istituzione',
   iscrizione: 'Domanda di iscrizione',
   checklist: 'Checklist documentale',
   biblioteca: 'Modulo di Adesione / Prestito Biblioteca Scolastica',
@@ -1037,8 +1041,234 @@ function sezioniContesto(_profilo?: ProfiloIntervista): string {
 
 
 
+/**
+ * Sezioni SPECIFICHE per i tipi di documento senza famiglia dedicata
+ * (modulistica "Enti / Altro": deleghe privacy, concorsi, istanze, lettere,
+ * checklist). Ogni documento rende i PROPRI campi reali — delegato, requisiti,
+ * allegati, dichiarazioni — invece del solo template generico.
+ * Ritorna `null` quando il tipo non è gestito qui.
+ */
+function sezioniSpecifiche(tipo: string, ordine?: string): string[] | null {
+  if (tipo === 'delega_privacy') {
+    return [
+      `<h2>Soggetti della delega</h2>
+      <table class="quadro-anagrafico">
+        ${rigaAnagrafica('Nome e cognome del delegante', campoScrittura())}
+        ${rigaAnagrafica('Nome e cognome del delegato', campoScrittura())}
+        ${rigaAnagrafica('Codice fiscale del delegato', campoScrittura())}
+        ${rigaAnagrafica('Documento d\u2019identità del delegato (tipo e numero)', campoScrittura())}
+        ${rigaAnagrafica('Legame con il delegante / l\u2019interessato', campoScrittura())}
+        ${rigaAnagrafica('Periodo di validità della delega', campoScrittura())}
+      </table>`,
+      sezioneCrocette(
+        'La delega è conferita per',
+        [
+          'Ritiro di documenti e comunicazioni',
+          'Ritiro dell\u2019alunno/a da scuola',
+          'Accompagnamento a visite mediche / attività',
+          'Accesso a informazioni sulla posizione personale',
+          'Altro (specificare)',
+        ],
+        'Barrare le attività delegate. La delega è valida solo se sottoscritta dal delegante.',
+        true,
+      ),
+      sezioneCrocette(
+        'Consensi al trattamento dei dati (Reg. UE 2016/679)',
+        [
+          'Consenso al trattamento dei dati personali per le finalità indicate',
+          'Consenso all\u2019uso di immagini e riprese video (fini istituzionali)',
+          'Consenso alla comunicazione dei dati a enti e uffici competenti',
+          'Presa visione dell\u2019informativa privacy',
+        ],
+        'Senza il consenso al trattamento dei dati la delega non può essere gestita.',
+        true,
+      ),
+      `<h2>Revoca</h2>
+      <p class="formula-dichiarazione">Il delegante può revocare la presente delega in ogni momento con comunicazione scritta all\u2019ufficio destinatario; il consenso al trattamento è revocabile ai sensi dell\u2019art. 7 del Reg. UE 2016/679.</p>
+      ${righeScrittura(2)}`,
+    ];
+  }
+  if (tipo === 'concorso') {
+    return [
+      `<h2>Riferimenti della procedura</h2>
+      <table class="quadro-anagrafico">
+        ${rigaAnagrafica('Bando / procedura (denominazione o D.D.G.)', campoScrittura())}
+        ${rigaAnagrafica('Ente banditore', campoScrittura())}
+        ${rigaAnagrafica('Posti / profilo per cui si concorre', campoScrittura())}
+        ${rigaAnagrafica('Classe di concorso / area', campoScrittura())}
+      </table>`,
+      sezioneCrocette(
+        'Requisiti di ammissione posseduti',
+        [
+          'Cittadinanza italiana o di uno Stato dell\u2019Unione Europea',
+          'Titolo di studio richiesto dal bando',
+          'Abilitazione / iscrizione alla graduatoria di riferimento',
+          'Godimento dei diritti civili e politici',
+          'Altro requisito previsto dal bando (specificare)',
+        ],
+        'Il candidato dichiara il possesso dei requisiti di ammissione ai sensi del DPR 445/2000.',
+        true,
+      ),
+      `<h2>Titoli dichiarati e servizi svolti</h2>
+      <table class="quadro-anagrafico">
+        ${rigaAnagrafica('Titoli culturali e professionali', campoScrittura())}
+        ${rigaAnagrafica('Servizi di insegnamento prestati (anni e istituti)', campoScrittura())}
+        ${rigaAnagrafica('Altri titoli valutabili', campoScrittura())}
+      </table>`,
+      sezioneCrocette(
+        'Documenti allegati alla domanda',
+        [
+          'Copia del documento d\u2019identità in corso di validità',
+          'Curriculum vitae (firmato)',
+          'Autocertificazione dei titoli e dei servizi posseduti',
+          'Ricevuta del versamento del contributo di iscrizione (se previsto)',
+          'Eventuali titoli di preferenza / riserve',
+        ],
+        'Elencare la documentazione effettivamente allegata alla domanda.',
+        true,
+      ),
+      `<h2>Dichiarazioni del candidato</h2>
+      <p class="formula-dichiarazione">Il/La sottoscritto/a, consapevole delle sanzioni penali previste dall\u2019art. 76 del DPR 445/2000 per le dichiarazioni mendaci e la formazione o l\u2019uso di atti falsi, dichiara sotto la propria responsabilità la veridicità di quanto dichiarato e l\u2019assenza di cause di incompatibilità.</p>
+      ${righeScrittura(3)}`,
+    ];
+  }
+  if (tipo === 'istanza_enti') {
+    return [
+      `<h2>Oggetto dell\u2019istanza</h2>
+      ${righeScrittura(2)}`,
+      `<h2>Motivazione della richiesta</h2>
+      ${righeScrittura(4)}`,
+      `<h2>Riferimenti della pratica</h2>
+      <table class="quadro-anagrafico">
+        ${rigaAnagrafica('Numero / protocollo della pratica (se disponibile)', campoScrittura())}
+        ${rigaAnagrafica('Ufficio competente', campoScrittura())}
+      </table>`,
+      sezioneCrocette(
+        'Documenti allegati',
+        [
+          'Copia del documento d\u2019identità del richiedente',
+          'Documentazione a supporto della richiesta',
+          'Autocertificazione dei fatti dichiarati (se applicabile)',
+        ],
+        'Allegare solo i documenti necessari e conservare la ricevuta di presentazione.',
+        true,
+      ),
+      `<h2>Richiesta di riscontro</h2>
+      <p class="formula-dichiarazione">Si richiede riscontro scritto sull\u2019esito dell\u2019istanza, ai sensi della L. 241/1990, all\u2019indirizzo indicato nel quadro anagrafico.</p>`,
+    ];
+  }
+  if (tipo === 'lettera') {
+    return [
+      `<h2>Oggetto della comunicazione</h2>
+      ${righeScrittura(1)}`,
+      `<h2>Corpo della comunicazione</h2>
+      ${righeScrittura(6)}`,
+      sezioneCrocette(
+        'Documentazione di riferimento',
+        [
+          'Documentazione allegata alla presente',
+          'Comunicazione a cui si risponde',
+          'Altro (specificare)',
+        ],
+        'Indicare gli eventuali documenti allegati alla comunicazione.',
+        true,
+      ),
+      `<h2>Richiesta di riscontro</h2>
+      <p class="formula-dichiarazione">Si resta in attesa di un riscontro scritto da parte dell\u2019ufficio destinatario.</p>`,
+    ];
+  }
+  if (tipo === 'checklist') {
+    return [
+      sezioneCrocette(
+        'Documenti da predisporre',
+        [
+          'Documento d\u2019identità in corso di validità',
+          'Codice fiscale / tessera sanitaria',
+          'Autocertificazione dei titoli e dei servizi',
+          'Documentazione specifica della pratica',
+          'Ricevuta / attestazione di pagamento (se prevista)',
+          'Moduli firmati e datati',
+        ],
+        'Spuntare i documenti predisposti prima della presentazione della pratica.',
+        true,
+      ),
+      `<h2>Note e scadenze</h2>
+      ${righeScrittura(4)}`,
+    ];
+  }
+  if (tipo === 'comunicazione_interna') {
+    return [
+      `<h2>Destinatario e riferimenti</h2>
+      <table class="quadro-anagrafico">
+        ${rigaAnagrafica('Destinatario / ufficio', campoScrittura())}
+        ${rigaAnagrafica('Oggetto', campoScrittura())}
+        ${rigaAnagrafica('Data di riferimento / decorrenza', campoScrittura())}
+      </table>`,
+      `<h2>Contenuto della comunicazione</h2>
+      ${righeScrittura(6)}`,
+      sezioneCrocette(
+        'Allegati e adempimenti richiesti',
+        [
+          'Documentazione allegata alla presente',
+          'Richiesta di presa visione / firma',
+          'Richiesta di riscontro scritto',
+          'Altro (specificare)',
+        ],
+        'Indicare gli allegati e le azioni richieste al destinatario.',
+        true,
+      ),
+      `<h2>Uso interno</h2>
+      <p class="formula-dichiarazione">Comunicazione interna per uso organizzativo dell\u2019Istituto, da protocollare a cura dell\u2019ufficio destinatario.</p>`,
+    ];
+  }
+  if (tipo === 'iscrizione') {
+    return [
+      `<h2>Dati del percorso di studi</h2>
+      <table class="quadro-anagrafico">
+        ${rigaAnagrafica('Ateneo / Università', campoScrittura())}
+        ${rigaAnagrafica('Corso di laurea / dipartimento', campoScrittura())}
+        ${rigaAnagrafica('Anno accademico', campoScrittura())}
+        ${rigaAnagrafica('Anno di corso / coorte', campoScrittura())}
+      </table>`,
+      sezioneCrocette(
+        'Tipo di istanza',
+        [
+          'Immatricolazione / prima iscrizione',
+          'Iscrizione ad anni successivi',
+          'Corsi singoli / secondo titolo',
+          'Iscrizione a tempo parziale',
+          'Passaggio di corso / trasferimento',
+        ],
+        'Barrare la tipologia di istanza presentata.',
+        true,
+      ),
+      `<h2>Motivazione e note</h2>
+      ${righeScrittura(3)}`,
+      sezioneCrocette(
+        'Documenti allegati',
+        [
+          'Copia del documento d\u2019identità e codice fiscale',
+          'Diploma / titolo di studio di provenienza',
+          'Autocertificazione dei titoli e dei crediti maturati',
+          'Ricevuta del versamento della prima rata',
+        ],
+        'Elencare la documentazione effettivamente allegata alla domanda.',
+        true,
+      ),
+      `<h2>Dichiarazioni</h2>
+      <p class="formula-dichiarazione">Il/La sottoscritto/a dichiara, ai sensi del D.P.R. 445/2000, la veridicità dei dati e dei titoli dichiarati e di essere a conoscenza delle sanzioni previste per le dichiarazioni mendaci.</p>
+      ${righeScrittura(2)}`,
+    ];
+  }
+  return null;
+}
+
 /** Sezioni del documento formale, alternate a [BOX GUIDA] e [SPAZIO DI SCRITTURA]. */
 function costruisciSezioni(famiglia: FamigliaDocumento, tipo: string, ordine?: string): string[] {
+  // Sezioni SPECIFICHE per tipo (Enti/Altro): priorità sul fallback generico.
+  const specifiche = sezioniSpecifiche(tipo, ordine);
+  if (specifiche) return specifiche;
+
   if (famiglia === 'istanza') {
     // Istanza amministrativa (sostegno / certificazione L.104): oggetto + documenti da allegare.
     // Nessun riquadro didattico (strumenti compensativi, misure dispensative…): solo PEI.
@@ -2681,10 +2911,10 @@ function costruisciModuloFormale(
   // Nota normativa pulita in calce (niente citazioni duplicate).
   const notaNormativa =
     tipo === 'pei'
-      ? 'Modello conforme ai modelli nazionali PEI (D.M. 182/2020, D.Lgs. 66/2017, L. 104/1992). Documento rilasciato da ScuoleRadar.it.'
+      ? 'Modello conforme ai modelli nazionali PEI (D.M. 182/2020, D.Lgs. 66/2017, L. 104/1992).'
       : famiglia === 'istanza'
-        ? 'Modello conforme al D.Lgs. 66/2017, D.M. 182/2020 e D.I. 153/2023. Documento rilasciato da ScuoleRadar.it.'
-        : `Modello conforme alle Linee Guida del Ministero dell\u2019Istruzione e del Merito. Riferimenti normativi: ${normativa}. Documento rilasciato da ScuoleRadar.it.`;
+        ? 'Modello conforme al D.Lgs. 66/2017, D.M. 182/2020 e D.I. 153/2023.'
+        : `Modello conforme alle Linee Guida del Ministero dell\u2019Istruzione e del Merito. Riferimenti normativi: ${normativa}.`;
 
   // Classificazione rigida: i documenti pedagogici/inclusivi forzano il layout
   // esteso tramite un marcatore letto da `calcolaLayout`/`stimaPagine`.
@@ -2731,11 +2961,23 @@ export function creaDocumentoLocale(
   catalogoId?: string,
 ): DocumentoGenerato {
   const tipo = profilo?.tipo ?? '';
-  const base =
-    tipo === 'delega_famiglia' && profilo?.ordine === 'infanzia'
+  // Il titolo è quello del DOCUMENTO SELEZIONATO (nome nel catalogo): così la
+  // card e l'anteprima coincidono sempre. Si ricade sul titolo formale della
+  // tipologia SOLO quando non è disponibile un nome (es. query libera).
+  const nomeDocumento = (query ?? '').trim();
+  // Se il documento ha un nome (catalogo), il titolo è ESATTAMENTE quello:
+  // card e anteprima coincidono, senza suffissi. Altrimenti si usa il titolo
+  // formale della tipologia (+ ordine di scuola).
+  const usaTitoloFormale = nomeDocumento.length === 0;
+  const base = usaTitoloFormale
+    ? tipo === 'delega_famiglia' && profilo?.ordine === 'infanzia'
       ? 'Delega al ritiro dell\u2019alunno/a da parte di terzi maggiorenni'
-      : (TITOLO_PER_TIPO[tipo] ?? ((query ?? '').trim() || 'Modulo ufficiale'));
-  const ordine = profilo?.ordine ? ` – ${etichettaProfilo('ordine', profilo.ordine)}` : '';
+      : TITOLO_PER_TIPO[tipo] || 'Modulo ufficiale'
+    : nomeDocumento;
+  const ordine =
+    usaTitoloFormale && profilo?.ordine
+      ? ` – ${etichettaProfilo('ordine', profilo.ordine)}`
+      : '';
   const titolo = `${base}${ordine}`;
 
   return {
