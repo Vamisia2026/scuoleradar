@@ -179,6 +179,13 @@ body {
   transition: none;
 }
 
+/* Durante lo swipe touch/mouse il track segue il dito senza transizione
+   (il movimento è 1:1); la transizione torna attiva al rilascio per lo
+   scatto morbido verso lo slide successivo/precedente. */
+.revolver-track.revolver-dragging {
+  transition: none;
+}
+
 @keyframes revolver-progress {
   from {
     transform: scaleX(1);

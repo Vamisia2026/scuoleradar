@@ -8,7 +8,7 @@
  * gli item scaduti e fa entrare in rotazione il successivo in ordine di tempo.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarClock,
   ChevronLeft,
@@ -22,6 +22,10 @@ import { caricaScadenzeMaster, scadenzeFallback } from '../deadlinesService';
 const DURATA_TRANSIZIONE_MS = 620;
 /** Frequenza tick orologio con cui la coda verifica le scadenze. */
 const TICK_OROLOGIO_MS = 30_000;
+/** Soglia (px) oltre la quale uno swipe cambia slide (touch/mouse). */
+const SOGLIA_SWIPE_PX = 44;
+/** Distanza (px) oltre la quale il trascinamento rallenta (effetto gomma). */
+const LIMITE_TRASCINAMENTO_PX = 140;
 
 /**
  * RIGA 3 — Descrizione sintetica dell'evento/attività, in MAIUSCOLO.
@@ -119,6 +123,22 @@ export function RevolverScadenze({
   const [inPausa, setInPausa] = useState(false);
   const [ridotto, setRidotto] = useState(false);
 
+  // Larghezza REALE (px) di uno slide = viewport del carosello. Il track si
+  // sposta di multipli ESATTI di questa misura: così lo slide resta allineato
+  // a QUALSIASI breakpoint (mobile/tablet/desktop), senza le ambiguità del
+  // `translateX(percentuale)` su un flex-container a larghezza automatica.
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const [larghezza, setLarghezza] = useState(0);
+
+  // Stato del trascinamento (swipe touch/mouse): offset corrente in px.
+  const dragRef = useRef<{ attivo: boolean; partenzaX: number; deltaX: number }>({
+    attivo: false,
+    partenzaX: 0,
+    deltaX: 0,
+  });
+  const [trascinando, setTrascinando] = useState(false);
+  const [dragX, setDragX] = useState(0);
+
   // Rispetto di prefers-reduced-motion: nessun movimento se ridotto.
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -130,6 +150,22 @@ export function RevolverScadenze({
     }
     mq.addListener(aggiorna);
     return () => mq.removeListener(aggiorna);
+  }, []);
+
+  // Misura continua della larghezza dello slide: il carosello resta allineato
+  // anche a rotazione schermo / passaggio di breakpoint (mobile ↔ tablet).
+  useLayoutEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const misura = (): void => setLarghezza(el.clientWidth);
+    misura();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', misura);
+      return () => window.removeEventListener('resize', misura);
+    }
+    const ro = new ResizeObserver(misura);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   // Override dinamico: Supabase/API quando disponibile, altrimenti fallback.
@@ -196,12 +232,12 @@ export function RevolverScadenze({
 
   // Autoplay: avanza di uno slide ogni `intervallo` (5 s di default).
   useEffect(() => {
-    if (totale <= 1 || inPausa || ridotto) return;
+    if (totale <= 1 || inPausa || ridotto || trascinando) return;
     const t = window.setTimeout(() => {
       setPos((p) => (p >= totale ? p : p + 1));
     }, intervallo);
     return () => window.clearTimeout(t);
-  }, [pos, totale, inPausa, ridotto, intervallo]);
+  }, [pos, totale, inPausa, ridotto, trascinando, intervallo]);
 
   // Quando il track arriva sul clone di testa, riscatta a 0 senza transizione.
   useEffect(() => {
@@ -223,6 +259,58 @@ export function RevolverScadenze({
   const avanti = (): void => vaiA(indiceVisibile + 1);
   const indietro = (): void => vaiA(indiceVisibile - 1);
 
+  /* ----------------------- Swipe (touch + mouse) ----------------------- */
+
+  /** Inizio trascinamento: memorizza il punto di partenza (clientX). */
+  function inizioTrascinamento(x: number): void {
+    if (totale <= 1) return;
+    dragRef.current = { attivo: true, partenzaX: x, deltaX: 0 };
+    setTrascinando(true);
+    setDragX(0);
+  }
+
+  /**
+   * Movimento: applica l'offset con un leggero attrito oltre la soglia
+   * (effetto "gomma") per evitare scivolamenti eccessivi.
+   */
+  function muoviTrascinamento(x: number): void {
+    const drag = dragRef.current;
+    if (!drag.attivo) return;
+    const delta = x - drag.partenzaX;
+    drag.deltaX = delta;
+    const oltre = Math.abs(delta) - LIMITE_TRASCINAMENTO_PX;
+    const limitato =
+      oltre > 0
+        ? Math.sign(delta) * (LIMITE_TRASCINAMENTO_PX + oltre * 0.15)
+        : delta;
+    setDragX(limitato);
+  }
+
+  /** Rilascio: se lo spostamento supera la soglia cambia slide, altrimenti torna. */
+  function fineTrascinamento(): void {
+    const drag = dragRef.current;
+    if (!drag.attivo) return;
+    drag.attivo = false;
+    const delta = drag.deltaX;
+    drag.deltaX = 0;
+    setTrascinando(false);
+    setDragX(0);
+    if (Math.abs(delta) >= SOGLIA_SWIPE_PX) {
+      if (delta < 0) vaiA(indiceVisibile + 1);
+      else vaiA(indiceVisibile - 1);
+    }
+  }
+
+  /** Annullamento (pointercancel, uscita): riporta il track senza cambiare slide. */
+  function annullaTrascinamento(): void {
+    const drag = dragRef.current;
+    if (!drag.attivo) return;
+    drag.attivo = false;
+    drag.deltaX = 0;
+    setTrascinando(false);
+    setDragX(0);
+  }
+
   return (
     <section
       aria-roledescription="carousel"
@@ -239,7 +327,20 @@ export function RevolverScadenze({
         </p>
       </header>
 
-      <div className="relative min-h-[152px] flex-1 overflow-hidden">
+      <div
+        ref={viewportRef}
+        className={`relative min-h-[170px] flex-1 touch-pan-y select-none overflow-hidden sm:min-h-[152px] ${
+          trascinando ? 'cursor-grabbing' : 'cursor-grab'
+        }`}
+        onPointerDown={(e) => {
+          if (e.pointerType === 'mouse' && e.button !== 0) return;
+          inizioTrascinamento(e.clientX);
+          e.currentTarget.setPointerCapture?.(e.pointerId);
+        }}
+        onPointerMove={(e) => muoviTrascinamento(e.clientX)}
+        onPointerUp={fineTrascinamento}
+        onPointerCancel={annullaTrascinamento}
+      >
         {totale > 0 && (
           <span
             key={indiceVisibile}
@@ -247,7 +348,7 @@ export function RevolverScadenze({
             className="revolver-progress absolute left-0 top-0 z-10 h-0.5 w-full rounded-r-full bg-secondary-400/80"
             style={{
               animationDuration: `${intervallo}ms`,
-              animationPlayState: inPausa || ridotto ? 'paused' : 'running',
+              animationPlayState: inPausa || ridotto || trascinando ? 'paused' : 'running',
             }}
           />
         )}
@@ -256,8 +357,8 @@ export function RevolverScadenze({
           <div
             className={`revolver-track flex h-full ${
               conAnimazione ? '' : 'revolver-no-anim'
-            }`}
-            style={{ transform: `translateX(-${pos * 100}%)` }}
+            } ${trascinando ? 'revolver-dragging' : ''}`}
+            style={{ transform: `translateX(${-pos * larghezza + dragX}px)` }}
           >
             {piste.map((occ, i) => {
               const target = targetScadenza(occ);
@@ -297,32 +398,32 @@ export function RevolverScadenze({
 
         {totale > 1 && (
           <>
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex w-8 items-center justify-start pl-1 sm:w-10">
+            <div className="pointer-events-none absolute inset-y-0 left-0 z-20 flex w-10 items-center justify-start pl-0.5">
               <button
                 type="button"
                 onClick={indietro}
                 aria-label="Scadenza precedente"
-                className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full border border-primary-100 bg-white/90 text-primary-600 shadow-soft transition hover:bg-primary-50 hover:text-primary-800"
+                className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border border-primary-100 bg-white/90 text-primary-600 shadow-soft transition hover:bg-primary-50 hover:text-primary-800 active:scale-95 sm:h-8 sm:w-8"
               >
-                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                <ChevronLeft className="h-5 w-5 sm:h-4 sm:w-4" aria-hidden="true" />
               </button>
             </div>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex w-8 items-center justify-end pr-1 sm:w-10">
+            <div className="pointer-events-none absolute inset-y-0 right-0 z-20 flex w-10 items-center justify-end pr-0.5">
               <button
                 type="button"
                 onClick={avanti}
                 aria-label="Prossima scadenza"
-                className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full border border-primary-100 bg-white/90 text-primary-600 shadow-soft transition hover:bg-primary-50 hover:text-primary-800"
+                className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border border-primary-100 bg-white/90 text-primary-600 shadow-soft transition hover:bg-primary-50 hover:text-primary-800 active:scale-95 sm:h-8 sm:w-8"
               >
-                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                <ChevronRight className="h-5 w-5 sm:h-4 sm:w-4" aria-hidden="true" />
               </button>
             </div>
           </>
         )}
       </div>
 
-      {/* Progress indicator: dots */}
-      <div className="flex min-h-0 flex-wrap items-center justify-center gap-1.5 px-4 pb-2 pt-1 sm:pb-2.5">
+      {/* Progress indicator: dots/impaginazione (target touch ≥ ~24px su mobile) */}
+      <div className="flex min-h-0 flex-wrap items-center justify-center gap-0.5 px-4 pb-2 pt-1 sm:gap-1 sm:pb-2.5">
         {coda.map((occ, i) => (
           <button
             key={occ.record.id}
@@ -330,12 +431,16 @@ export function RevolverScadenze({
             onClick={() => vaiA(i)}
             aria-label={`Vai alla scadenza ${i + 1}: ${occ.record.title}`}
             aria-current={i === indiceVisibile ? 'true' : undefined}
-            className={`h-1.5 rounded-full transition-all duration-300 ${
-              i === indiceVisibile
-                ? 'w-5 bg-primary-500'
-                : 'w-1.5 bg-primary-200 hover:bg-primary-300'
-            }`}
-          />
+            className="group flex items-center justify-center rounded-full p-1.5"
+          >
+            <span
+              className={`block h-2 rounded-full transition-all duration-300 ${
+                i === indiceVisibile
+                  ? 'w-6 bg-primary-500'
+                  : 'w-2 bg-primary-200 group-hover:bg-primary-300'
+              }`}
+            />
+          </button>
         ))}
       </div>
     </section>
