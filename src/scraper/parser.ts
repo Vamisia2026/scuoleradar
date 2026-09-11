@@ -61,6 +61,10 @@ export interface InterpelloParsato {
   source: string;
   schoolName: string | null;
   schoolCode: string | null;
+  /** Materia/settore inferito quando manca la classe di concorso (es. "Matematica"). */
+  materia: string | null;
+  /** Email di candidatura trovata nel testo o nel link (`mailto:`), se presente. */
+  contactEmail: string | null;
 }
 
 /* --------------------- Regex per le classi di concorso --------------------- */
@@ -69,12 +73,148 @@ export interface InterpelloParsato {
  * Rileva i codici di classe di concorso:
  *  - formato classico: A-12, A-026, B-02, B-001
  *  - speciali sostegno: ADEE, ADSS, ADMM, AD24, ...
+ *  - formato COMPATTO di alcune fonti: A042 → A-042; AB25, AH56, BA02, AR01 (validi)
  */
 const RE_CLASSI = /\b(?:[A-Z]{1,2}-\d{2,3}|AD(?:[A-Z]{2,3}|\d{2}))\b/g;
+/** 1 lettera + 3 cifre (A042, A040, A028) → normalizzato in A-042, A-040, A-028. */
+const RE_CLASSE_COMPATTA_NUM = /\b([A-Z])(\d{3})\b/g;
+/** 2 lettere + 2 cifre (AB25, AH56, AR01, BA02, BB02): già il codice reale. */
+const RE_CLASSE_COMPATTA_ALFA = /\b([A-Z]{2}\d{2})\b/g;
 
 export function rilevaClassi(testo: string): string[] {
-  const trovate = testo.match(RE_CLASSI) ?? [];
-  return [...new Set(trovate.map((c) => c.toUpperCase()))];
+  const t = (testo ?? '').toUpperCase();
+  const trovate = new Set<string>(t.match(RE_CLASSI) ?? []);
+
+  let m: RegExpExecArray | null;
+  RE_CLASSE_COMPATTA_NUM.lastIndex = 0;
+  while ((m = RE_CLASSE_COMPATTA_NUM.exec(t)) !== null) trovate.add(`${m[1]}-${m[2]}`);
+  RE_CLASSE_COMPATTA_ALFA.lastIndex = 0;
+  while ((m = RE_CLASSE_COMPATTA_ALFA.exec(t)) !== null) trovate.add(m[1]);
+
+  // Esclude placeholder generici non informativi (AAAA, EEEE, …).
+  trovate.delete('AAAA');
+  trovate.delete('EEEE');
+  return [...trovate];
+}
+
+/* ----------------- Materia/settore e contatto (dai dati reali) ----------------- */
+
+/**
+ * Mappa parola chiave → materia per inferire il settore di un generico "DOCENTE"
+ * dai dati della fonte (es. titolo "Avviso per il conferimento di supplenza —
+ * DOCENTE"). Ordine significativo: i pattern più specifici vengono PRIMA.
+ */
+const MATERIE_DA_TESTO: { re: RegExp; materia: string }[] = [
+  { re: /sostegno|\badee\b|\badss\b|\badmm\b|\bad24\b/i, materia: 'Sostegno' },
+  { re: /scienze?\s+motorie|educazione fisica|motor[ie]|sportiv/i, materia: 'Scienze motorie' },
+  { re: /scienze?\s+umane|filosof|pedagogi|psicolog|diritto|economic/i, materia: 'Filosofia / Scienze umane' },
+  { re: /matematic/i, materia: 'Matematica' },
+  { re: /\bfisica\b/i, materia: 'Fisica' },
+  { re: /scienz[ea]|biolog|chimic|geolog|naturali/i, materia: 'Scienze' },
+  { re: /italian|letteratur|lettere|\bstori[ae]\b|\blatino\b|\bgreco\b/i, materia: 'Italiano / Storia / Lettere' },
+  { re: /inglese|francese|spagnol|tedesc|lingua straniera|linguistico/i, materia: 'Lingue straniere' },
+  { re: /informatic/i, materia: 'Informatica' },
+  { re: /\barte\b|artistic|disegn|grafic/i, materia: 'Arte' },
+  { re: /musica|musicale/i, materia: 'Musica' },
+  { re: /religione|\birc\b/i, materia: 'Religione Cattolica' },
+  { re: /tecnolog|elettronic|meccanic|elettrotecnic|\bedil|agrar/i, materia: 'Discipline tecniche' },
+  { re: /\bprimaria\b|\binfanzia\b/i, materia: 'Scuola primaria/infanzia' },
+  { re: /educatore|pedagogist/i, materia: 'Educatore' },
+];
+
+/**
+ * Inferisce la materia/settore da un titolo/contesto generico: serve a NON
+ * mostrare la sola etichetta "Docente". Ritorna null se non riconoscibile.
+ */
+export function inferisciMateria(testo: string): string | null {
+  const t = (testo ?? '').trim();
+  if (!t) return null;
+  for (const { re, materia } of MATERIE_DA_TESTO) {
+    if (re.test(t)) return materia;
+  }
+  return null;
+}
+
+/** Riconosce un indirizzo email (con TLD) nel testo o in un link `mailto:`. */
+const RE_EMAIL = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/;
+
+/**
+ * Email di candidatura per l'invio delle domande, se presente nella fonte:
+ *   · `mailto:` nel link dell'avviso;
+ *   · altrimenti un indirizzo email nel testo dell'avviso.
+ */
+export function estraiEmail(link?: string | null, testo?: string | null): string | null {
+  const daLink = (link ?? '').trim();
+  if (/^mailto:/i.test(daLink)) {
+    const email = daLink.slice(7).split(/[?;,]/)[0]?.trim() ?? '';
+    if (RE_EMAIL.test(email)) return email;
+  }
+  const m = (testo ?? '').match(RE_EMAIL);
+  return m ? m[0].replace(/[.,;:]+$/, '') : null;
+}
+
+/* ------------------- Validazione fonte (anti-mock / anti-dummy) ------------------- */
+
+/**
+ * Segnali di URL NON reale: mock, placeholder, ambienti di test/locali.
+ * Applicato alla FONTE (URL) per rifiutare dati fittizi o di prova.
+ */
+const RE_SEGNALE_URL =
+  /(example\.(com|org|net)|localhost|127\.0\.0\.1|0\.0\.0\.0|:5173|:3000|:8080|mockup|\bmock\b|\bsample\b|\bdummy\b|placeholder|\bfixture\b|esempio|\btest\b|\bdemo\b)/i;
+
+/** Segnali di test/mock nel TITOLO (set ristretto, per evitare falsi positivi). */
+const RE_SEGNALE_TITOLO =
+  /(example\.(com|org|net)|\bmock\b|\bsample\b|\bdummy\b|placeholder|\bfixture\b|esempio)/i;
+
+/** Piattaforme NON istituzionali: social, hosting/blog generici, URL shortener. */
+const RE_HOST_NON_ISTITUZIONALE =
+  /(facebook|instagram|twitter|(^|\.)x\.com|linkedin|t\.me|telegram|pinterest|whatsapp|youtube|(^|\.)google\.|altervista|blogspot|wordpress\.com|wixsite|iubenda|freepik|bit\.ly|tinyurl)/i;
+
+/**
+ * True se l'URL è una FONTE ufficiale VERIFICABILE:
+ *   · http(s) valido;
+ *   · nessun segnale di mock/test/placeholder;
+ *   · host NON su piattaforme non istituzionali;
+ *   · deep-link (non la sola root del dominio).
+ */
+export function eSorgenteVerificata(url?: string | null): boolean {
+  const u = (url ?? '').trim();
+  if (!/^https?:\/\//i.test(u)) return false;
+  if (RE_SEGNALE_URL.test(u)) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(u);
+  } catch {
+    return false;
+  }
+  if (RE_HOST_NON_ISTITUZIONALE.test(parsed.host)) return false;
+  // Deve rimandare a una pagina/documento specifico (non la homepage del dominio).
+  if (parsed.pathname === '/' && !parsed.search) return false;
+  return true;
+}
+
+export interface EsitoVerificaAvviso {
+  ok: boolean;
+  /** Motivo del rifiuto (undefined se ok). */
+  motivo?: string;
+}
+
+/**
+ * Verifica un avviso PRIMA del salvataggio: rifiuta titoli vuoti/troppo corti,
+ * titoli con segnali di test/mock e fonti non ufficiali/non verificabili.
+ * Regola anti-dummy della pipeline di ingestione.
+ */
+export function verificaAvviso(a: {
+  title?: string | null;
+  link?: string | null;
+}): EsitoVerificaAvviso {
+  const titolo = (a.title ?? '').trim();
+  if (titolo.length < 8) return { ok: false, motivo: 'titolo troppo corto' };
+  if (RE_SEGNALE_TITOLO.test(titolo)) return { ok: false, motivo: 'titolo con segnali test/mock' };
+  const url = (a.link ?? '').trim();
+  if (!url) return { ok: false, motivo: 'fonte mancante' };
+  if (!eSorgenteVerificata(url)) return { ok: false, motivo: 'fonte non ufficiale/non verificabile' };
+  return { ok: true };
 }
 
 /**
@@ -402,6 +542,8 @@ function pulisciScuola(grezzo: string): string | null {
   s = s.replace(/[\s\-–—.,;:]+$/, '').trim();
   if (s.length < 3 || s.length > 90) return null;
   if (/\d/.test(s)) return null; // numeri ⇒ classe di concorso / codice, non un nome
+  if (/^visualizza/i.test(s)) return null; // etichetta generica della fonte
+  if (!/[a-zà-ÿ]/.test(s)) return null; // solo sigle/codici (es. "EEEE", "ADEE | EEEE")
   const chiave = senzaAccenti(s).replace(/[^a-z0-9]+/g, ' ').trim();
   if (SCUOLE_GENERICHE.has(chiave)) return null;
   if (eNomeCitta(s)) return null; // è una città, non una scuola
@@ -463,11 +605,20 @@ export function parseInterpello(input: InterpelloInput): InterpelloParsato {
   // Scuola emittente: dal campo esplicito, altrimenti estratta dal titolo/contesto.
   const scuola = input.schoolName?.trim() || estraiScuola(input.title) || estraiScuola(testoCompleto);
 
+  // Classi di concorso esplicite (A-12, ADEE…); se assenti, inferisci la
+  // materia/settore dal testo per non mostrare la sola etichetta "Docente".
+  const classCodes = rilevaClassi(testoCompleto);
+  const materia =
+    classCodes.length > 0 ? null : inferisciMateria(`${input.title} ${input.corpo ?? ''}`);
+
+  // Email di candidatura: `mailto:` nel link oppure email nel testo della fonte.
+  const contactEmail = estraiEmail(input.link, testoCompleto);
+
   return {
     title: input.title.trim(),
     link: input.link,
     province: provincia,
-    classCodes: rilevaClassi(testoCompleto),
+    classCodes,
     publishedAt,
     expirationDate,
     // L'hash resta ancorato alla provincia della FONTE: identità stabile nel tempo.
@@ -475,5 +626,7 @@ export function parseInterpello(input: InterpelloInput): InterpelloParsato {
     source: input.source,
     schoolName: scuola || null,
     schoolCode: input.schoolCode?.trim() || null,
+    materia,
+    contactEmail,
   };
 }

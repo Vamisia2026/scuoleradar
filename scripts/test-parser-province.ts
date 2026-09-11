@@ -95,7 +95,7 @@ check('codice non valido → null', null, estraiProvinciaDaCodiceScuola('XXIC812
 
 console.log('\n— Istituto emittente estratto dal testo —');
 const casiScuola: [string, string | null, string][] = [
-  ['Interpello supplenza 18 ore — Liceo "Vincenzo Monti" di Torino (Classe A-022)', 'Liceo "Vincenzo Monti" di Torino', 'liceo con nome proprio'],
+  ['Interpello supplenza 18 ore — Liceo "Augusto Monti" di Asti (Classe A-022)', 'Liceo "Augusto Monti" di Asti', 'liceo con nome proprio'],
   ['Avviso Personale ATA — Assistente amministrativo, IC "Giuseppe Giacosa" di Milano', 'IC "Giuseppe Giacosa" di Milano', 'istituto comprensivo'],
   ['Bando PNRR — Esperto esterno in Biologia (A-050), Liceo scientifico di Roma', 'Liceo scientifico di Roma', 'liceo scientifico di Roma'],
   ['Interpello ADSS sostegno secondaria di II grado — Bergamo', null, 'solo città: nessuna scuola'],

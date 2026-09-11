@@ -18,8 +18,8 @@ import {
   TIPI_CON_OPPORTUNITA,
   type DettagliNotifica,
   type TipoMessaggio,
-} from './resend.ts';
-import { province } from '../data/province.ts';
+} from './resend';
+import { province } from '../data/province';
 
 /** Interfaccia per l'ambiente (evita la dipendenza da @types/node nel frontend). */
 declare const process: { env: Record<string, string | undefined> };
@@ -60,6 +60,25 @@ function proUrl(dashboardUrl: string): string {
   } catch {
     return 'https://scuoleradar.it/prezzi';
   }
+}
+
+/** True se l'URL punta a un file PDF (es. avviso pubblicato in PDF sull'Albo). */
+function eLinkPdf(url?: string | null): boolean {
+  try {
+    return new URL(url ?? '').pathname.toLowerCase().endsWith('.pdf');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Barra/CTA blu cliccabile per il PDF ufficiale: da usare al posto del generico
+ * link di fonte quando l'avviso è un PDF, così l'utente vede subito un invito
+ * chiaro ad aprirlo/scaricarlo (invece della sola icona PDF del link preview).
+ */
+function barraPdf(url: string): string {
+  const href = escapeHtml(url.trim());
+  return `📄 <b>PDF Ufficiale</b>\n📥 <a href="${href}">APRI / SCARICA IL PDF</a>`;
 }
 
 /** Restituisce il token del bot o `null` se non configurato (o placeholder). */
@@ -119,7 +138,7 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
   recap: {
     testa: '📋 Avviso finale: servizio di notifica sospeso',
     paragrafi: [
-      'Questo è l\'ultimo avviso del periodo di prova.',
+      "Questo è l'ultimo avviso del periodo di prova.",
       'Il mese di prova PRO è terminato: non riceverai più nuove notifiche.',
       'Passa a PRO per riattivarlo.',
     ],
@@ -143,7 +162,7 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
       'Ora puoi rilassarti: il tuo Radar è attivo e sta già lavorando per te.',
       "Non ti invieremo comunicazioni inutili e spam. Quando vedi un nostro messaggio qui su Telegram, aprilo subito: abbiamo intercettato un'opportunità per te!",
     ],
-    cta: (dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`
+    cta: (dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
   },
   free_forever_preavviso: {
     testa: '🎁 PRO Free Forever: il rinnovo gratuito è automatico',
@@ -201,9 +220,12 @@ export function formattaMessaggioTelegram(
     dettagli = righe.join('\n');
   }
 
+  const linkFonte = interpello?.link?.trim() ?? '';
   const linkRiga =
-    interpello && interpello.link && TIPI_CON_OPPORTUNITA.has(tipo)
-      ? `🔗 <a href="${escapeHtml(interpello.link)}">Fonte ufficiale verificata (Albo Pretorio) — apri e candidati</a>`
+    linkFonte && TIPI_CON_OPPORTUNITA.has(tipo)
+      ? eLinkPdf(linkFonte)
+        ? barraPdf(linkFonte)
+        : `🔗 <a href="${escapeHtml(linkFonte)}">Fonte ufficiale verificata (Albo Pretorio) — apri e candidati</a>`
       : '';
 
   const parti: string[] = [copy.testa];
@@ -292,6 +314,10 @@ export interface InterpelloCanale {
   comune?: string | null;
   /** Classi di concorso / profili coinvolti (es. ["A-026"], ["ADEE"]). */
   classCodes?: string[];
+  /** Materia/settore inferito quando manca la classe di concorso (es. "Matematica"). */
+  materia?: string | null;
+  /** Email di candidatura per l'invio delle domande, se disponibile nella fonte. */
+  contactEmail?: string | null;
   expirationDate?: string | null;
   link?: string | null;
 }
@@ -505,7 +531,11 @@ function ruoloPerCategoria(categoria: CategoriaPost, interpello: InterpelloCanal
     return tipologiaBando(titolo);
   }
   const daTitolo = titolo.match(RE_CLASSE_CONCORSO)?.[0];
-  return (interpello.classCodes?.[0]?.trim() || daTitolo || '').toUpperCase() || 'Docente';
+  const codice = (interpello.classCodes?.[0]?.trim() || daTitolo || '').toUpperCase();
+  if (codice) return codice;
+  // Nessuna classe di concorso esplicita: mostra la MATERIA/settore inferita
+  // dal titolo/contesto (evita la sola etichetta generica "Docente").
+  return interpello.materia?.trim() || 'Docente';
 }
 
 /** Comune best-effort: campo dedicato oppure coda del titolo dopo separatore o virgola. */
@@ -540,7 +570,7 @@ export function classificaCategoriaPost(interpello: InterpelloCanale): Categoria
 /**
  * Formatta il post canale Telegram (STRUTTURA UFFICIALE — 5 sezioni fisse):
  *   1. HEADER   → emoji + tipologia: 🟢 [INTERPELLO DOCENTI] / 🔵 [AVVISO ATA]
- *                 / 🟣 [BANDO / PNRR / ESPERTO];
+ *                / 🟣 [BANDO / PNRR / ESPERTO];
  *   2. DETTAGLI → 📍 Provincia ([PR]) — Comune · 🏫 Scuola · 👩🏫 Ruolo · 📅 Scadenza;
  *   3. LINK     → 🔗 Leggi l'Avviso Originale (link ufficiale della fonte);
  *   4. CTA      → ⚡ Ricevi solo gli avvisi per la tua provincia e classe: 👉 scuoleradar.it;
@@ -587,14 +617,26 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
     .filter(Boolean)
     .join(' ');
 
-  const linkRiga = interpello.link?.trim()
-    ? `🔗 <a href="${escapeHtml(interpello.link.trim())}">Leggi l'Avviso Originale</a>`
+  // Link alla fonte: se è un PDF mostriamo una BARRA BLU dedicata e cliccabile
+  // ("APRI / SCARICA IL PDF") invece del generico link; altrimenti il link normale.
+  const linkFonte = interpello.link?.trim() ?? '';
+  const linkRiga = linkFonte
+    ? eLinkPdf(linkFonte)
+      ? barraPdf(linkFonte)
+      : `🔗 <a href="${escapeHtml(linkFonte)}">Leggi l'Avviso Originale</a>`
+    : '';
+
+  // Email di candidatura per l'invio delle domande (se presente nella fonte).
+  const email = interpello.contactEmail?.trim() ?? '';
+  const emailRiga = email
+    ? `📧 Candidature: <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`
     : '';
 
   const cta = '⚡ Ricevi solo gli avvisi per la tua provincia e classe in privato:\n👉 https://scuoleradar.it';
 
   const parti: string[] = [HEADER_POST[categoria], dettagli.join('\n')];
   if (linkRiga) parti.push(linkRiga);
+  if (emailRiga) parti.push(emailRiga);
   parti.push(cta, hashtag);
   return parti.join('\n\n');
 }
@@ -649,4 +691,3 @@ export async function pubblicaInterpelloSuCanali(
   }
   return { destinazioni, pubblicati, errori };
 }
-
