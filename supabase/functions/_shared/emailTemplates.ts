@@ -15,6 +15,9 @@
  *   {{link_radar}}      https://scuoleradar.it/dashboard?action=open-radar
  *   {{link_checkout}}   https://scuoleradar.it/checkout/pro-annuale?coupon=RADAR50
  *   {{link_purefocus}}  https://purefocus.one
+ *   {{link_prezzi}}     https://scuoleradar.it/prezzi
+ *   {{giorni}}          giorni rimanenti (promemoria di rinnovo, finestra 3–5 gg)
+ *   {{scadenza}}        data di scadenza formattata (DD/MM/YYYY)
  */
 
 // ----------------------------------------------------------------
@@ -23,11 +26,13 @@
 export const LINK_RADAR = 'https://scuoleradar.it/dashboard?action=open-radar';
 export const LINK_CHECKOUT_RADAR50 = 'https://scuoleradar.it/checkout/pro-annuale?coupon=RADAR50';
 export const LINK_PUREFOCUS = 'https://purefocus.one';
+export const LINK_PREZZI = 'https://scuoleradar.it/prezzi';
 
 export const LINKS = {
   link_radar: LINK_RADAR,
   link_checkout: LINK_CHECKOUT_RADAR50,
   link_purefocus: LINK_PUREFOCUS,
+  link_prezzi: LINK_PREZZI,
 };
 
 // ----------------------------------------------------------------
@@ -291,6 +296,47 @@ Codice: RADAR50
 [ TORNA A PRO ] -> {{link_checkout}}
 
 A presto!
+I tuoi colleghi di Scuole Radar`,
+  },
+
+  // ---------- FLUSSO 3 — Promemoria di rinnovo (finestra 3–5 giorni) ----------
+  // Inviati dal cron DB `rinnovo-preavvisi-3-5g` → public.invia_preavvisi_rinnovo()
+  // (migrazione 20260903100000). Variabili: {{nome}} · {{giorni}} · {{scadenza}}.
+  email_3_5_rinnovo_prova: {
+    chiave: 'email_3_5_rinnovo_prova',
+    soggetto: 'Il tuo mese PRO gratuito scade tra {{giorni}} giorni',
+    corpo: `Ciao {{nome}},
+
+il tuo mese di PRO gratuito su Scuole Radar sta per terminare: scade il {{scadenza}}, tra {{giorni}} giorni.
+
+In queste settimane hai avuto accesso gratuito a tutto: Radar Scuole con notifiche illimitate, Modulistica, Crea CV e Calcolatore CFU.
+
+Se il servizio ti è stato utile, puoi continuare senza interruzioni con il piano PRO.
+
+[ SCOPRI IL PIANO PRO ] -> {{link_prezzi}}
+
+Se non l'hai ancora usato, il codice RADAR50 ti dà il 50% di sconto sul primo anno.
+
+Se preferisci non rinnovare, non devi fare nulla: alla scadenza il tuo account tornerà al piano Base e i tuoi dati resteranno al sicuro.
+
+Un saluto,
+I tuoi colleghi di Scuole Radar`,
+  },
+
+  email_3_6_rinnovo_pro: {
+    chiave: 'email_3_6_rinnovo_pro',
+    soggetto: 'Il tuo abbonamento PRO scade tra {{giorni}} giorni',
+    corpo: `Ciao {{nome}},
+
+il tuo abbonamento PRO a Scuole Radar scade il {{scadenza}}, tra {{giorni}} giorni.
+
+Con il piano PRO il tuo Radar continua a cercare per te le opportunità di lavoro pubblicate dalle scuole, con notifiche illimitate in tempo reale: rinnovare ti permette di non perderne nessuna.
+
+[ RINNOVA IL PIANO PRO ] -> {{link_prezzi}}
+
+Se hai già attivato il rinnovo automatico, non devi fare nulla.
+
+Un saluto,
 I tuoi colleghi di Scuole Radar`,
   },
 };

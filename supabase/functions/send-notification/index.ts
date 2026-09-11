@@ -209,6 +209,19 @@ ${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua
 // quel tipo, finché il trigger non viene migrato a 'conferma_base'.
 TESTI.step1 = { ...TESTI.conferma_base };
 
+// Alias retro-compatibili → template centralizzati (EMAIL_TEMPLATES).
+// Il cron DB `scadenza-avvisi-multistep` (public.invia_avvisi_scadenza_abbonamento)
+// invia i tipi storici `scadenza_preavviso_*` / `scadenza_finale`, che non erano
+// mappati su nessun template: la Edge rispondeva 400 e gli avvisi NON partivano.
+// Qui vengono agganciati al FLUSSO 3 già esistente (email + Telegram).
+const TIPO_ALIAS: Record<string, keyof typeof EMAIL_TEMPLATES> = {
+  scadenza_preavviso_5d: 'email_3_1_scadenza_5',
+  scadenza_preavviso_7d: 'email_3_1_scadenza_5',
+  scadenza_preavviso_3d: 'email_3_2_scadenza_3',
+  scadenza_preavviso_1d: 'email_3_3_scadenza_1',
+  scadenza_finale: 'email_3_4_scadenza_0',
+};
+
 async function inviaTelegram(chatId: string, testo: string): Promise<string | null> {
   if (!TELEGRAM_TOKEN) return 'TELEGRAM_BOT_TOKEN non configurato';
   let res: Response;
@@ -311,9 +324,15 @@ serve(async (req: Request) => {
   // FLUSSO 1 onboarding, FLUSSO 2 radar spento, FLUSSO 3 drip scadenza PRO.
   // Oggetto/corpo/CTA provengono da un unico file con interpolazione {{nome}}
   // e link canonici {{link_radar}} / {{link_checkout}} / {{link_purefocus}}.
+  // Promemoria di rinnovo (trial/PRO, finestra 3–5 gg): {{giorni}} + {{scadenza}}.
   // ------------------------------------------------------------
-  const scheda = EMAIL_TEMPLATES[tipo]
-    ? getEmailScheda(tipo as keyof typeof EMAIL_TEMPLATES, { nome })
+  const chiaveTemplate = (TIPO_ALIAS[tipo] ?? tipo) as keyof typeof EMAIL_TEMPLATES;
+  const scheda = EMAIL_TEMPLATES[chiaveTemplate]
+    ? getEmailScheda(chiaveTemplate, {
+        nome,
+        giorni: body.giorni ? String(body.giorni) : '',
+        scadenza: body.scadenza ? String(body.scadenza) : '',
+      })
     : null;
   if (scheda) {
     const corpoHtml =
