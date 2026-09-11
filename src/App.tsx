@@ -24,7 +24,6 @@ import { CalcolatoreCFUPage } from '@/pages/CalcolatoreCFUPage';
 import { CalcolatoreCFUDashboardPage } from '@/pages/dashboard/CalcolatoreCFUDashboardPage';
 import { AssistenteAIPage } from '@/pages/AssistenteAIPage';
 import { ModuliPage } from '@/pages/ModuliPage';
-import { ModuliShowroomPage } from '@/pages/ModuliShowroomPage';
 import { PureFocusPage } from '@/pages/PureFocusPage';
 import { ProfiloPage } from '@/pages/ProfiloPage';
 import { InvitaPage } from '@/pages/InvitaPage';
@@ -177,8 +176,9 @@ export default function App() {
             <Route path="/notizie" element={<NotiziePage />} />
             <Route path="/notizie/:id" element={<NotizieDettaglioPage />} />
             <Route path="/contatti" element={<ContattiPage />} />
-            {/* Showroom SEO pubblici: /moduli (anteprima) → /dashboard/moduli (tool) */}
-            <Route path="/moduli" element={<ModuliShowroomPage />} />
+            {/* La Modulistica porta DIRETTAMENTE alla dashboard completa: la
+                vecchia landing di anteprima /moduli è stata rimossa (redirect). */}
+            <Route path="/moduli" element={<Navigate to="/dashboard/moduli" replace />} />
             <Route path="/calcolatore-cfu" element={<CalcolatoreCFUPage />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             {/* Checkout diretto Stripe con coupon: /checkout/pro-annuale?coupon=RADAR50 */}

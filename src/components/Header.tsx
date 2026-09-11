@@ -22,7 +22,7 @@ interface LinkStrumento {
 /** Ordine ufficiale della barra servizi (Guest, Base, PRO): Radar Scuole → ... */
 const strumentiLinks: LinkStrumento[] = [
   { to: '/dashboard/radar', label: '📡 Radar Scuole' },
-  { to: '/moduli', label: '📁 Modulistica' },
+  { to: '/dashboard/moduli', label: '📁 Modulistica' },
   { to: '/calcolatore-cfu', label: '🎓 Calcolatore CFU' },
   { to: '/dashboard/purefocus', label: '🧘 Pure Focus' },
   { to: '/dashboard/invita', label: '🎁 Invita un Collega', accent: true },

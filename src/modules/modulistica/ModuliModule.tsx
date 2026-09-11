@@ -316,29 +316,12 @@ export function ModuliModule() {
     return [...locali, ...remoti];
   }, [moduliScaricati, moduliDB]);
 
-  // Vetrina Freemium: gli utenti NON registrati vedono solo la landing
-  // promozionale orientata alla registrazione gratuita.
-  if (!user) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary-400">
-            Dipartimento Modulistica
-          </p>
-          <div className="mt-1 flex items-center gap-2">
-            <FolderOpen className="h-5 w-5 text-primary-600" />
-            <h2 className="text-2xl font-bold text-primary-800">
-              Tutti i moduli per la scuola che ti servono, senza cercarli ogni volta.
-            </h2>
-          </div>
-        </div>
-        <VetrinaModulistica />
-      </div>
-    );
-  }
-
   return (
     <div className={compattato ? 'space-y-3' : 'space-y-6'}>
+      {/* Hero banner per gli utenti NON registrati: benvenuto + invito a
+          esplorare. La dashboard (macroaree + ricerca) resta disponibile
+          SUBITO qui sotto, senza schermate intermedie. */}
+      {!user && <VetrinaModulistica />}
       <div>
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary-400">
           Dipartimento Modulistica
