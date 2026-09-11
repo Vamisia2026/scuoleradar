@@ -232,9 +232,12 @@ async function main(): Promise<void> {
 
   // Archiviazione ACCUMULATIVA + IGIENE: le nuove notizie si aggiungono a
   // quelle già presenti (dedupe per id), ma i record preesistenti che non
-  // superano più le regole STRICT (URL canonico, niente login/area riservata,
-  // fonte HTTP) vengono rimossi, così l'archivio resta sempre valido.
-  const esistentiValidi = notizieIngestite.filter((a) => articoloValido(a));
+  // superano più le regole STRICT (URL canonico, niente login/area riservata)
+  // o che non passano più il gate di rilevanza (avvisi tecnici generali)
+  // vengono rimossi, così l'archivio resta sempre pertinente e valido.
+  const esistentiValidi = notizieIngestite.filter(
+    (a) => articoloValido(a) && valutaRilevanza({ title: a.title }).rilevante,
+  );
   const purgate = notizieIngestite.length - esistentiValidi.length;
   if (purgate > 0) {
     console.log(`⚠ Igiene archivio: ${purgate} notizia/e preesistente/i non più valida/e rimossa/e.`);

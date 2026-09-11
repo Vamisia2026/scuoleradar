@@ -16,9 +16,11 @@
  *  - tetto articoli: MASSIMO `MAX_ARTICOLI_FINESTRA` (6) articoli ad alto valore
  *    nella finestra di lookback di 15 giorni (`FINESTRA_LOOKBACK_GIORNI`) —
  *    ~3 a settimana; se non ci sono provvedimenti vincolanti si pubblicano 0;
- *  - soglia di rilevanza per l'AVVIO ANNO SCOLASTICO: parole operative
- *    (interpelli, presa di servizio, supplenze, nomine, reggenze…) e categoria
- *    inferita quando il titolo non ne contiene una mappata;
+ *  - soglia di rilevanza per l'AVVIO ANNO SCOLASTICO: oltre al gate operativo,
+ *    la categoria si assegna SOLO se il titolo ha una parola-categoria ufficiale
+ *    oppure un termine "FORTE" di avvio anno (`PAROLE_FORTI_INIZIO_ANNO`:
+ *    interpelli, supplenze, presa di servizio, reggenze, bollettini…), così si
+ *    scartano gli avvisi tecnici/amministrativi generali;
  *  - integrità degli URL: niente mockup né root-domain generici, solo link di
  *    approfondimento reali validati HTTP 200;
  *  - PDF ufficiali: se la fonte è un PDF, il link dedicato deve aprire il PDF
@@ -91,6 +93,19 @@ const PAROLE_ACCETTA: string[] = [
   // servizio, interpelli, supplenze, nomine, reggenze, assegnazioni, bollettini.
   'interpello', 'interpelli', 'reggenza', 'reggenze', 'supplenza',
   'bollettino', 'assegnazioni', 'presa in servizio',
+];
+
+/**
+ * Parole "FORTI" dell'avvio anno scolastico: sono la CONDIZIONE NECESSARIA per
+ * assegnare la categoria INFERITA quando il titolo non contiene una
+ * parola-categoria ufficiale. Servono a scartare gli avvisi tecnici/
+ * amministrativi generali (bandi di raffrescamento, enti del Terzo settore,
+ * manifestazioni, ecc.) che non interessano a docenti e personale ATA.
+ */
+export const PAROLE_FORTI_INIZIO_ANNO: string[] = [
+  'interpello', 'interpelli', 'supplenza', 'supplenze',
+  'presa di servizio', 'presa in servizio', 'reggenza', 'reggenze',
+  'bollettino', 'bollettini',
 ];
 
 /** Parole che segnalano contenuti NON vincolanti (zero rumore: da rifiutare). */
@@ -194,11 +209,14 @@ function categoriaInizioAnno(testo: string): string | null {
  * Regola: niente contenuti non vincolanti; solo provvedimenti, note e
  * scadenze operative per il personale scolastico.
  *
- * SOGLIA RILASSATA (avvio anno scolastico): resta obbligatorio il gate
- * OPERATIVO (almeno una parola di `PAROLE_ACCETTA`), ma il vincolo di categoria
- * stretta è allentato — se il titolo non contiene una parola-categoria mappata
- * si inferisce la categoria dall'avvio dell'anno e in ultima istanza si usa
- * 'Scuole'. Il filtro anti-rumore (`PAROLE_RIFIUTA`) resta pienamente attivo.
+ * SOGLIA (avvio anno scolastico): resta obbligatorio il gate OPERATIVO (almeno
+ * una parola di `PAROLE_ACCETTA`). La categoria si assegna SOLO se:
+ *   1. il titolo contiene una parola-categoria ufficiale (`PAROLE_CATEGORIA`); oppure
+ *   2. contiene un termine "FORTE" di avvio anno (`PAROLE_FORTI_INIZIO_ANNO`) →
+ *      categoria inferita (`CATEGORIE_INIZIO_ANNO`, fallback 'Scuole').
+ * In assenza di entrambi, l'avviso viene SCARTATO: sono gli avvisi tecnici/
+ * amministrativi generali che non interessano a docenti e ATA. Il filtro
+ * anti-rumore (`PAROLE_RIFIUTA`) resta pienamente attivo.
  */
 export function valutaRilevanza(voce: VoceInValutazione): ValutazioneNotizia {
   const testo = `${voce.title} ${voce.description ?? ''}`.toLowerCase();
@@ -214,20 +232,38 @@ export function valutaRilevanza(voce: VoceInValutazione): ValutazioneNotizia {
     }
   }
 
-  const categoriaMappata = classificaCategoria(testo);
   const operativa = PAROLE_ACCETTA.some((p) => testo.includes(p));
-
   if (!operativa) {
     return {
       rilevante: false,
-      categoria: categoriaMappata,
+      categoria: null,
       deadline: null,
       motivo: 'Annuncio generico o non inerente a scadenze per il personale scolastico',
     };
   }
 
-  const categoria = categoriaMappata ?? categoriaInizioAnno(testo) ?? 'Scuole';
-  return { rilevante: true, categoria, deadline: estraiDeadline(testo) };
+  // 1) Categoria UFFICIALE mappata: specifica per il personale scolastico → basta.
+  const categoriaMappata = classificaCategoria(testo);
+  if (categoriaMappata) {
+    return { rilevante: true, categoria: categoriaMappata, deadline: estraiDeadline(testo) };
+  }
+
+  // 2) Nessuna categoria mappata: serve un termine "FORTE" di avvio anno per
+  //    assegnare la categoria inferita (altrimenti è un avviso generico).
+  if (PAROLE_FORTI_INIZIO_ANNO.some((p) => testo.includes(p))) {
+    return {
+      rilevante: true,
+      categoria: categoriaInizioAnno(testo) ?? 'Scuole',
+      deadline: estraiDeadline(testo),
+    };
+  }
+
+  return {
+    rilevante: false,
+    categoria: null,
+    deadline: null,
+    motivo: 'Avviso tecnico/amministrativo generale non pertinente a docenti e ATA',
+  };
 }
 
 /**

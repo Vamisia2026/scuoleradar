@@ -28,6 +28,12 @@
    - **ACCETTA SOLO** provvedimenti vincolanti: decreti, Ordinanze Ministeriali,
      note, circolari, bandi, avvisi e scadenze operative per GPS, mobilità,
      concorsi, pensioni, sostegno, supplenze e graduatorie.
+   - **Soglia categoria (avvio anno)**: la categoria viene assegnata SOLO se il
+     titolo contiene una **parola-categoria ufficiale** oppure un termine **"forte"**
+     dell'avvio anno (`interpelli`, `supplenze`, `presa di servizio`, `reggenze`,
+     `bollettini` — `PAROLE_FORTI_INIZIO_ANNO`). Gli **avvisi tecnici/amministrativi
+     generali** (es. bandi di raffrescamento, enti del Terzo settore, manifestazioni)
+     vengono **scartati** perché non interessano a docenti e personale ATA.
 
 3. **VALIDITÀ SCIENTIFICA E GIURIDICA**
    - Ogni articolo DEVE citare **il riferimento ufficiale esatto**: Ordinanza
@@ -148,7 +154,7 @@
 
 | File | Ruolo |
 |---|---|
-| `src/departments/notizie/services/relevanceEngine.ts` | Motore puro: `valutaRilevanza` (soglia abbassata per l'avvio anno: `PAROLE_ACCETTA` + categoria inferita via `CATEGORIE_INIZIO_ANNO`), `PAROLE_RIFIUTA`, `URL_PORTALI`, `validaUrlDeepLink`, `èLinkPdf`, `èFonteCanonica`, `limitaArticoliSettimanali` (`MAX_ARTICOLI_FINESTRA = 6`, `FINESTRA_LOOKBACK_GIORNI = 15`), `promptFiltroLLM`, `promptScritturaArticolo`, `generaArticoloEditoriale` |
+| `src/departments/notizie/services/relevanceEngine.ts` | Motore puro: `valutaRilevanza` (avvio anno: `PAROLE_ACCETTA` + categoria ufficiale, oppure termine "forte" `PAROLE_FORTI_INIZIO_ANNO` → categoria inferita `CATEGORIE_INIZIO_ANNO`), `PAROLE_RIFIUTA`, `URL_PORTALI`, `validaUrlDeepLink`, `èLinkPdf`, `èFonteCanonica`, `limitaArticoliSettimanali` (`MAX_ARTICOLI_FINESTRA = 6`, `FINESTRA_LOOKBACK_GIORNI = 15`), `promptFiltroLLM`, `promptScritturaArticolo`, `generaArticoloEditoriale` |
 | `src/departments/notizie/services/newsFetcher.ts` | Raccolta fonti ufficiali (MIM, G.U.) + `verificaUrlUfficiale` (HTTP 200/3xx) |
 | `src/departments/notizie/services/ingestNotizie.ts` | Pipeline: lookback 15 gg → filtro → validazione URL → generazione → tetto articoli (6) → accumulo con dedupe |
 | `src/departments/notizie/data/notizieSeed.ts` | Articoli seed curati a mano (conformi alle regole) |
