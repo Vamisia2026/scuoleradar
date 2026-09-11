@@ -256,7 +256,7 @@ Supabase DB (pg_cron + trigger):
 | `data/notizieIngestite.ts` | — | **File GENERATO** dall'ingestione (accumulo, dedupe per id; attualmente 4 articoli) |
 | `services/newsFetcher.ts` | ~200 | **Node-only** — fetch fonti ufficiali (MIM, Gazzetta Ufficiale), `parseRss`, `verificaUrlUfficiale` (HEAD→GET), `fetchTesto` |
 | `services/relevanceEngine.ts` | ~560 | **Node-only, puro** — regole editoriali (§9) |
-| `services/ingestNotizie.ts` | ~130 | **Node-only** — CLI pipeline: raccogli → filtra → tetto 3/settimana → scrive `notizieIngestite.ts` |
+| `services/ingestNotizie.ts` | ~140 | **Node-only** — CLI pipeline: raccogli → lookback 15 gg → filtra → tetto 6 (finestra 15 gg) → scrive `notizieIngestite.ts` |
 | `services/newsService.ts` | ~70 | Frontend: `newsArticles` (seed+ingested, dedupe), `categorieNotizie`, `getNotiziaById`, `formatDataNotizia`, `newsFallback` |
 | `components/NotizieHero.tsx` | — | Hero editoriale pagina Notizie + `SeoMeta` |
 | `components/NotizieGrid.tsx` | — | Griglia articoli + filtro categoria + CTA radar |
@@ -759,8 +759,10 @@ Client tipizzato dell'Edge `genera-modulo` + motore locale cache-first:
   `classificaCategoria(testo)`; `punteggioRilevanza(categoria, hasDeadline)`;
   `estraiDeadline(testo, oggi)` (date italiane con ordinali `1°luglio` + anno implicito;
   formato numerico `gg/mm/aaaa`).
-- **`MAX_ARTICOLI_SETTIMANA = 3`** + `limitaArticoliSettimanali(articoli, oggi, max)`:
-  finestra mobile di 7 giorni; se non ci sono provvedimenti vincolanti → **0 articoli**.
+- **`MAX_ARTICOLI_FINESTRA = 6`** + **`FINESTRA_LOOKBACK_GIORNI = 15`** con
+  `limitaArticoliSettimanali(articoli, oggi, max)`: finestra di lookback di 15
+  giorni (avvio anno scolastico, ≈3/settimana); se non ci sono provvedimenti
+  vincolanti → **0 articoli**.
 - `generaArticoloEditoriale(dati)` (acronimi spiegati, link di approfondimento reali,
   brand ScuoleRadar) + `promptScritturaArticolo`/`promptFiltroLLM`.
 - `validaUrlDeepLink`, `èLinkPdf`, `èFonteCanonica`, `articoloValido`.

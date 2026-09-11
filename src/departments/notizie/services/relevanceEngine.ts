@@ -13,9 +13,12 @@
  *  - validità giuridica: la notizia deve riferirsi a un atto ufficiale preciso
  *    (Ordinanza Ministeriale, Decreto, articolo di legge), mai a generiche
  *    comunicazioni;
- *  - tetto settimanale: MASSIMO 3 articoli ad alto valore a settimana
- *    (`MAX_ARTICOLI_SETTIMANA`); se non ci sono provvedimenti vincolanti si
- *    pubblicano 0 articoli;
+ *  - tetto articoli: MASSIMO `MAX_ARTICOLI_FINESTRA` (6) articoli ad alto valore
+ *    nella finestra di lookback di 15 giorni (`FINESTRA_LOOKBACK_GIORNI`) —
+ *    ~3 a settimana; se non ci sono provvedimenti vincolanti si pubblicano 0;
+ *  - soglia di rilevanza per l'AVVIO ANNO SCOLASTICO: parole operative
+ *    (interpelli, presa di servizio, supplenze, nomine, reggenze…) e categoria
+ *    inferita quando il titolo non ne contiene una mappata;
  *  - integrità degli URL: niente mockup né root-domain generici, solo link di
  *    approfondimento reali validati HTTP 200;
  *  - PDF ufficiali: se la fonte è un PDF, il link dedicato deve aprire il PDF
@@ -84,6 +87,10 @@ const PAROLE_ACCETTA: string[] = [
   'verbale di accordo', 'sottoscrizione', 'riconoscimento', 'equipollenza',
   'ricostruzione', 'riscatto laurea', 'assegnazioni provvisorie', 'sentenza',
   'deciso', 'conciliazione', 'ordinanza cautelare',
+  // AVVIO ANNO SCOLASTICO — soglia di rilevanza abbassata: cattura presa di
+  // servizio, interpelli, supplenze, nomine, reggenze, assegnazioni, bollettini.
+  'interpello', 'interpelli', 'reggenza', 'reggenze', 'supplenza',
+  'bollettino', 'assegnazioni', 'presa in servizio',
 ];
 
 /** Parole che segnalano contenuti NON vincolanti (zero rumore: da rifiutare). */
@@ -147,9 +154,51 @@ export function classificaCategoria(testo: string): string | null {
 }
 
 /**
+ * Categorie di FALLBACK per l'AVVIO dell'anno scolastico: quando il titolo è
+ * chiaramente operativo (interpelli, supplenze, nomine, reggenze, presa di
+ * servizio…) ma non contiene una parola-categoria mappata, si assegna la
+ * categoria più coerente. Il gate operativo resta comunque obbligatorio.
+ */
+const CATEGORIE_INIZIO_ANNO: Array<{ categoria: string; parole: string[] }> = [
+  {
+    categoria: 'Supplenze',
+    parole: [
+      'interpello', 'interpelli', 'supplenza', 'supplenze', 'nomina', 'nomine',
+      'reggenza', 'reggenze', 'messa a disposizione', 'contratto a tempo determinato',
+    ],
+  },
+  {
+    categoria: 'Graduatorie',
+    parole: ['bollettino', 'bollettini', 'graduatoria', 'graduatorie'],
+  },
+  {
+    categoria: 'Scuole',
+    parole: [
+      'presa di servizio', 'presa in servizio', 'avvio anno scolastico',
+      'inizio anno scolastico', 'calendario scolastico', 'assegnazione',
+      'assegnazioni', 'conferimento',
+    ],
+  },
+];
+
+/** Categoria inferita per l'avvio dell'anno scolastico (o null se non deducibile). */
+function categoriaInizioAnno(testo: string): string | null {
+  for (const { categoria, parole } of CATEGORIE_INIZIO_ANNO) {
+    if (parole.some((p) => testo.includes(p))) return categoria;
+  }
+  return null;
+}
+
+/**
  * Valuta la rilevanza editoriale di una notizia in ingresso.
  * Regola: niente contenuti non vincolanti; solo provvedimenti, note e
  * scadenze operative per il personale scolastico.
+ *
+ * SOGLIA RILASSATA (avvio anno scolastico): resta obbligatorio il gate
+ * OPERATIVO (almeno una parola di `PAROLE_ACCETTA`), ma il vincolo di categoria
+ * stretta è allentato — se il titolo non contiene una parola-categoria mappata
+ * si inferisce la categoria dall'avvio dell'anno e in ultima istanza si usa
+ * 'Scuole'. Il filtro anti-rumore (`PAROLE_RIFIUTA`) resta pienamente attivo.
  */
 export function valutaRilevanza(voce: VoceInValutazione): ValutazioneNotizia {
   const testo = `${voce.title} ${voce.description ?? ''}`.toLowerCase();
@@ -165,18 +214,19 @@ export function valutaRilevanza(voce: VoceInValutazione): ValutazioneNotizia {
     }
   }
 
-  const categoria = classificaCategoria(testo);
+  const categoriaMappata = classificaCategoria(testo);
   const operativa = PAROLE_ACCETTA.some((p) => testo.includes(p));
 
-  if (!categoria || !operativa) {
+  if (!operativa) {
     return {
       rilevante: false,
-      categoria,
+      categoria: categoriaMappata,
       deadline: null,
       motivo: 'Annuncio generico o non inerente a scadenze per il personale scolastico',
     };
   }
 
+  const categoria = categoriaMappata ?? categoriaInizioAnno(testo) ?? 'Scuole';
   return { rilevante: true, categoria, deadline: estraiDeadline(testo) };
 }
 
@@ -223,8 +273,22 @@ export function punteggioRilevanza(categoria: string | null, hasDeadline: boolea
   return Math.min(100, base + (hasDeadline ? 8 : 0));
 }
 
-/** Tetto settimanale: massimo 3 articoli ad alto valore ogni 7 giorni. */
+/** Tetto settimanale "di riferimento": ~3 articoli ad alto valore a settimana. */
 export const MAX_ARTICOLI_SETTIMANA = 3;
+
+/**
+ * Finestra di LOOKBACK (giorni) della pipeline Notizie: copre l'avvio
+ * dell'anno scolastico (presa di servizio, interpelli, supplenze…). Le notizie
+ * pubblicate oltre questa finestra non vengono acquisite; le voci senza data
+ * restano ammesse (non dimostrabili come "vecchie").
+ */
+export const FINESTRA_LOOKBACK_GIORNI = 15;
+
+/**
+ * Tetto articoli ad alto valore nella finestra di lookback: ~3 a settimana su
+ * 15 giorni → 6 (copre le due settimane di avvio anno scolastico).
+ */
+export const MAX_ARTICOLI_FINESTRA = 6;
 
 /**
  * Portali istituzionali il cui dominio RADICE È la destinazione operativa del
@@ -241,6 +305,15 @@ const PORTALI_SERVIZIO = new Set<string>([
 const SEGNALI_MOCKUP = [
   'example.com', 'example.org', 'localhost', 'mockup', 'placeholder',
   'yourdomain', 'lorem-ipsum', '.test', ':3000', ':5173',
+];
+
+/**
+ * Segnali di pagine generiche di ACCESSO (login / area riservata): non sono
+ * contenuti informativi e vengono scartate (anti-rumore, es. `/aran/login`).
+ */
+const SEGNALI_LOGIN = [
+  '/login', '/log-in', '/signin', '/sign-in', '/accedi',
+  '/area-riservata', '/areariservata', '/area_riservata', '/accesso-riservato',
 ];
 
 /** True se l'URL punta a un file PDF (es. fonte ufficiale in PDF). */
@@ -267,8 +340,9 @@ const PERCORSI_GENERICI = new Set([
 /**
  * True se l'URL è una FONTE CANONICA (il singolo articolo/atto) e non una
  * pagina generica del sito (es. `https://www.mim.gov.it/web/guest/home`).
- * Per il dominio MIM è richiesto il pattern canonico degli articoli
- * `/web/guest/-/<slug>`.
+ * Per il dominio MIM (incluse le pagine USR regionali) è richiesto il pattern
+ * canonico degli articoli Liferay `/web/<sito>/-/<slug>` — es. `/web/guest/-/…`
+ * oppure `/web/usr-lombardia/-/…`.
  */
 export function èFonteCanonica(url: string): boolean {
   try {
@@ -276,9 +350,9 @@ export function èFonteCanonica(url: string): boolean {
     let percorso = parsed.pathname.toLowerCase();
     if (percorso.length > 1 && percorso.endsWith('/')) percorso = percorso.slice(0, -1);
     if (PERCORSI_GENERICI.has(percorso)) return false;
-    // MIM: gli articoli canonici seguono il pattern /web/guest/-/<slug>.
+    // MIM + siti regionali (USR): articoli canonici `/web/<sito>/-/<slug>`.
     if (parsed.hostname.endsWith('mim.gov.it')) {
-      return /\/web\/guest\/-\//.test(percorso);
+      return /\/web\/[^/]+\/-\/.+/.test(percorso);
     }
     return true;
   } catch {
@@ -291,7 +365,8 @@ export function èFonteCanonica(url: string): boolean {
  *  - solo http(s);
  *  - mai root-domain generici (es. https://www.mim.gov.it/) a meno che il
  *    dominio non sia un portale di servizio esplicitamente autorizzato;
- *  - mai segnaposto/mockup.
+ *  - mai segnaposto/mockup;
+ *  - mai pagine generiche di login/area riservata.
  * Ritorna null se valido, altrimenti una stringa col motivo del rifiuto.
  */
 export function validaUrlDeepLink(url: string): string | null {
@@ -306,6 +381,11 @@ export function validaUrlDeepLink(url: string): string | null {
   if (SEGNALI_MOCKUP.some((m) => indizi.includes(m))) {
     return 'URL segnaposto/mockup non consentito';
   }
+  // Anti-rumore: le pagine di login/area riservata non sono contenuti informativi.
+  const percorso = parsed.pathname.toLowerCase();
+  if (SEGNALI_LOGIN.some((s) => percorso.includes(s))) {
+    return 'Pagina di login/area riservata non consentita';
+  }
   const radiceNuda = parsed.pathname === '' || parsed.pathname === '/';
   if (radiceNuda && !PORTALI_SERVIZIO.has(parsed.origin)) {
     return `Root-domain generico non consentito (${parsed.origin}/)`;
@@ -314,17 +394,18 @@ export function validaUrlDeepLink(url: string): string | null {
 }
 
 /**
- * Applica il tetto settimanale: al massimo `max` articoli con data di
- * pubblicazione nella finestra mobile degli ultimi 7 giorni. Gli articoli più
- * rilevanti (punteggio, poi data) vengono tenuti; gli esuberi sono scartati.
- * Gli articoli più vecchi della finestra non vengono toccati (accumulo).
+ * Applica il tetto articoli: al massimo `max` articoli con data di
+ * pubblicazione nella finestra di lookback (`FINESTRA_LOOKBACK_GIORNI`, 15 gg).
+ * Gli articoli più rilevanti (punteggio, poi data) vengono tenuti; gli esuberi
+ * sono scartati. Gli articoli più vecchi della finestra non vengono toccati
+ * (accumulo).
  */
 export function limitaArticoliSettimanali(
   articoli: NewsArticle[],
   oggi: Date = new Date(),
-  max: number = MAX_ARTICOLI_SETTIMANA,
+  max: number = MAX_ARTICOLI_FINESTRA,
 ): { mantenuti: NewsArticle[]; rimossi: NewsArticle[] } {
-  const soglia = oggi.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const soglia = oggi.getTime() - FINESTRA_LOOKBACK_GIORNI * 24 * 60 * 60 * 1000;
   const recenti: NewsArticle[] = [];
   const storici: NewsArticle[] = [];
   for (const a of articoli) {

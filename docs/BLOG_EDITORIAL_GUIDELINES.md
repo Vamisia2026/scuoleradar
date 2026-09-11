@@ -11,8 +11,11 @@
 
 ## ⭐ Regole d'Oro (algoritmo editoriale)
 
-1. **CAPACITÀ SETTIMANALE — MASSIMO 3 ARTICOLI AD ALTO VALORE**
-   - Al massimo **3 articoli** per settimana (finestra mobile di 7 giorni).
+1. **CAPACITÀ — MASSIMO 6 ARTICOLI PER FINESTRA DI 15 GIORNI (≈3/SETTIMANA)**
+   - Lookback di **15 giorni** (`FINESTRA_LOOKBACK_GIORNI`) per coprire l'avvio
+     dell'anno scolastico (presa di servizio, interpelli, supplenze, nomine…).
+   - Al massimo **6 articoli** ad alto valore nella finestra (`MAX_ARTICOLI_FINESTRA`,
+     ≈3 a settimana).
    - Se non ci sono **decreti ufficiali o aggiornamenti vincolanti** per il
      personale scolastico → **0 articoli**. La bacheca non riempie il vuoto.
    - Il tetto si applica in ingestione tramite `limitaArticoliSettimanali`
@@ -51,6 +54,10 @@
      **HTTP 200** in fase di ingestione (niente link rotti in pubblicazione).
    - Uniche radici ammesse: i **portali di servizio** dove la radice È l'accesso
      operativo (InPA, INPS). Istanze Online/POLIS ha una pagina canonica dedicata.
+   - Sono ammessi anche gli **articoli dei siti regionali USR** (pattern canonico
+     Liferay `/web/usr-*/-/<slug>`), oltre a quelli del MIM `/web/guest/-/<slug>`.
+   - Sono **rifiutate le pagine generiche di accesso** (login e area riservata:
+     `/login`, `/accedi`, `/area-riservata`…): non sono contenuti informativi.
 
 6. **GESTIONE PDF UFFICIALI**
    - Se la fonte è un **documento PDF ufficiale** (o l'avviso fornisce un PDF
@@ -63,7 +70,7 @@
 
 ## 1. Soglia settimanale e selezione
 
-- Finestra mobile: **ultimi 7 giorni** dalla data di ingestione.
+- Finestra (lookback): **ultimi 15 giorni** dalla data di ingestione (`FINESTRA_LOOKBACK_GIORNI`).
 - Selezione in caso di esubero: prima per **punteggio di rilevanza**
   (`relevance_score`), poi per data di pubblicazione più recente.
 - Gli articoli più vecchi della finestra non vengono mai toccati (accumulo).
@@ -141,9 +148,9 @@
 
 | File | Ruolo |
 |---|---|
-| `src/departments/notizie/services/relevanceEngine.ts` | Motore puro: `valutaRilevanza`, `PAROLE_ACCETTA/RIFIUTA`, `URL_PORTALI`, `validaUrlDeepLink`, `èLinkPdf`, `èFonteCanonica`, `limitaArticoliSettimanali` (`MAX_ARTICOLI_SETTIMANA`), `promptFiltroLLM`, `promptScritturaArticolo`, `generaArticoloEditoriale` |
+| `src/departments/notizie/services/relevanceEngine.ts` | Motore puro: `valutaRilevanza` (soglia abbassata per l'avvio anno: `PAROLE_ACCETTA` + categoria inferita via `CATEGORIE_INIZIO_ANNO`), `PAROLE_RIFIUTA`, `URL_PORTALI`, `validaUrlDeepLink`, `èLinkPdf`, `èFonteCanonica`, `limitaArticoliSettimanali` (`MAX_ARTICOLI_FINESTRA = 6`, `FINESTRA_LOOKBACK_GIORNI = 15`), `promptFiltroLLM`, `promptScritturaArticolo`, `generaArticoloEditoriale` |
 | `src/departments/notizie/services/newsFetcher.ts` | Raccolta fonti ufficiali (MIM, G.U.) + `verificaUrlUfficiale` (HTTP 200/3xx) |
-| `src/departments/notizie/services/ingestNotizie.ts` | Pipeline: filtro → validazione URL → generazione → tetto settimanale → accumulo con dedupe |
+| `src/departments/notizie/services/ingestNotizie.ts` | Pipeline: lookback 15 gg → filtro → validazione URL → generazione → tetto articoli (6) → accumulo con dedupe |
 | `src/departments/notizie/data/notizieSeed.ts` | Articoli seed curati a mano (conformi alle regole) |
 | `src/departments/notizie/data/notizieIngestite.ts` | Archivio generato dall'ingestione (accumulo) |
 | `src/departments/notizie/components/NotizieGrid.tsx` | Card con badge PDF ufficiale dedicato |
@@ -153,7 +160,7 @@
 
 ## Checklist di conformità (un articolo è "pronto" solo se…)
 
-- [ ] **Max 3 articoli** per settimana (finestra mobile 7 giorni); 0 se nessun
+- [ ] **Max 6 articoli** nella finestra di 15 giorni (≈3/settimana); 0 se nessun
       provvedimento vincolante
 - [ ] Cita il **riferimento ufficiale esatto** (Ordinanza Ministeriale, Decreto,
       Nota prot., articolo di legge)

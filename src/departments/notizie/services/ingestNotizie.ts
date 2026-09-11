@@ -11,8 +11,9 @@
  *      HTTP 200/3xx;
  *   4. estrae la data di scadenza ufficiale e genera l'articolo editoriale
  *      (date esatte, acronimi spiegati, link di approfondimento reali);
- *   5. applica il tetto settimanale (max 3 articoli ad alto valore per
- *      settimana, finestra mobile di 7 giorni);
+ *   5. applica il LOOKBACK di 15 giorni (avvio anno scolastico: presa di
+ *      servizio, interpelli, supplenze…) e il tetto articoli (max 6 ad alto
+ *      valore nella finestra, ≈3/settimana);
  *   6. AGGIUNGE le nuove notizie all'archivio esistente (accumulo con dedupe
  *      per id: la bacheca non si svuota mai) e scrive il risultato in
  *      `src/departments/notizie/data/notizieIngestite.ts`.
@@ -42,7 +43,8 @@ import {
   validaUrlDeepLink,
   èFonteCanonica,
   limitaArticoliSettimanali,
-  MAX_ARTICOLI_SETTIMANA,
+  FINESTRA_LOOKBACK_GIORNI,
+  MAX_ARTICOLI_FINESTRA,
   type ValutazioneNotizia,
 } from './relevanceEngine.ts';
 import type { NewsArticle } from '../types.ts';
@@ -163,6 +165,31 @@ async function costruisciArticolo(v: VoceFonte): Promise<NewsArticle | null> {
   return articolo;
 }
 
+/**
+ * Scrive l'archivio notizie (accumulo) su `notizieIngestite.ts`.
+ * Il file è GENERATO: non modificarlo a mano.
+ */
+function scriviArchivio(articoli: NewsArticle[]): void {
+  const contenuto = `/**
+ * ScuoleRadar.it — Notizie ingestite (dati reali).
+ *
+ * File GENERATO automaticamente dal servizio di ingestione:
+ *   npm run scrape:notizie
+ * Non modificarlo a mano: il contenuto viene rigenerato ad ogni ingestione
+ * (accumulo incrementale con dedupe per id, validazione URL HTTP 200 e tetto
+ * di 6 articoli nella finestra di 15 giorni: le notizie già presenti restano,
+ * le nuove si aggiungono; le voci non più valide vengono rimosse).
+ */
+import type { NewsArticle } from '../types';
+
+/** Notizie reali ingressate dalle fonti ufficiali (MIM, Gazzetta Ufficiale). */
+export const notizieIngestite: NewsArticle[] = ${JSON.stringify(articoli, null, 2)};
+`;
+
+  mkdirSync(dirname(FILE_USCITA), { recursive: true });
+  writeFileSync(FILE_USCITA, contenuto, 'utf8');
+}
+
 async function main(): Promise<void> {
   const isDryRun = process.argv.includes('--dry-run');
   console.log('=== Ingestione Notizie ScuoleRadar ===');
@@ -184,20 +211,44 @@ async function main(): Promise<void> {
   const unici = [...new Map(voci.map((v) => [v.link, v])).values()];
   console.log(`• Voci uniche: ${unici.length}`);
 
+  // LOOKBACK 15 giorni (avvio anno scolastico): si considerano solo le notizie
+  // pubblicate nella finestra; una data assente non è dimostrabile come
+  // "vecchia" → la voce resta (il gate operativo la filtra comunque).
+  const sogliaLookback = Date.now() - FINESTRA_LOOKBACK_GIORNI * 24 * 60 * 60 * 1000;
+  const inFinestra = unici.filter((v) => {
+    if (!v.pubDate) return true;
+    const t = new Date(v.pubDate).getTime();
+    return Number.isNaN(t) || t >= sogliaLookback;
+  });
+  console.log(
+    `• Voci nella finestra di ${FINESTRA_LOOKBACK_GIORNI} giorni: ${inFinestra.length}/${unici.length}`,
+  );
+
   // Filtro editoriale + STRICT URL INTEGRITY (validazione locale e HTTP 200/3xx).
   const articoli = (
-    await Promise.all(unici.map(costruisciArticolo))
+    await Promise.all(inFinestra.map(costruisciArticolo))
   ).filter((a): a is NewsArticle => a !== null);
   console.log(`• Articoli che soddisfano i criteri editoriali: ${articoli.length}`);
 
-  // Archiviazione ACCUMULATIVA: le nuove notizie si aggiungono a quelle già
-  // presenti nell'archivio (dedupe per id), così la bacheca non si svuota mai.
-  const esistenti = notizieIngestite;
+  // Archiviazione ACCUMULATIVA + IGIENE: le nuove notizie si aggiungono a
+  // quelle già presenti (dedupe per id), ma i record preesistenti che non
+  // superano più le regole STRICT (URL canonico, niente login/area riservata,
+  // fonte HTTP) vengono rimossi, così l'archivio resta sempre valido.
+  const esistentiValidi = notizieIngestite.filter((a) => articoloValido(a));
+  const purgate = notizieIngestite.length - esistentiValidi.length;
+  if (purgate > 0) {
+    console.log(`⚠ Igiene archivio: ${purgate} notizia/e preesistente/i non più valida/e rimossa/e.`);
+  }
+  const esistenti = esistentiValidi;
   const nuovi = articoli.filter((a) => !esistenti.some((e) => e.id === a.id));
 
   if (nuovi.length === 0) {
     console.log('✓ HTTP 200 - 0 new posts criteria matched');
-    if (esistenti.length === 0) {
+    if (!isDryRun && purgate > 0) {
+      // Persistisci la sola pulizia dell'archivio (nessuna nuova notizia).
+      scriviArchivio(esistenti);
+      console.log(`✓ Scritti ${esistenti.length} articoli in ${FILE_USCITA} (igiene archivio)`);
+    } else if (esistenti.length === 0) {
       console.log('L\u2019archivio notizie è vuoto: resta attivo il fallback editoriale.');
     } else {
       console.log('L\u2019archivio notizie resta invariato (nessun commit necessario).');
@@ -210,14 +261,14 @@ async function main(): Promise<void> {
     (b.published_at || '').localeCompare(a.published_at || ''),
   );
 
-  // Tetto settimanale: massimo MAX_ARTICOLI_SETTIMANA articoli ad alto valore
-  // nella finestra mobile degli ultimi 7 giorni; gli esuberi recenti decadono.
+  // Tetto articoli: massimo MAX_ARTICOLI_FINESTRA ad alto valore nella finestra
+  // di lookback (15 giorni ≈ 3/settimana); gli esuberi recenti decadono.
   const { mantenuti, rimossi } = limitaArticoliSettimanali(combinati);
   if (rimossi.length > 0) {
     console.log(
-      `⚠ Tetto settimanale attivo (max ${MAX_ARTICOLI_SETTIMANA} articoli a settimana): ${rimossi.length} articolo/i in esubero scartato/i.`,
+      `⚠ Tetto attivo (max ${MAX_ARTICOLI_FINESTRA} articoli per ${FINESTRA_LOOKBACK_GIORNI} giorni): ${rimossi.length} articolo/i in esubero scartato/i.`,
     );
-    rimossi.forEach((r) => console.log(`  ✗ RIMOSSO (cap settimanale): ${r.title.slice(0, 70)}`));
+    rimossi.forEach((r) => console.log(`  ✗ RIMOSSO (cap finestra): ${r.title.slice(0, 70)}`));
   }
   const aggiunti = nuovi.filter((n) => mantenuti.some((m) => m.id === n.id));
 
@@ -238,23 +289,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const contenuto = `/**
- * ScuoleRadar.it — Notizie ingestite (dati reali).
- *
- * File GENERATO automaticamente dal servizio di ingestione:
- *   npm run scrape:notizie
- * Non modificarlo a mano: il contenuto viene rigenerato ad ogni ingestione
- * (accumulo incrementale con dedupe per id, validazione URL HTTP 200 e tetto
- * settimanale di 3 articoli: le notizie già presenti restano, le nuove si aggiungono).
- */
-import type { NewsArticle } from '../types';
-
-/** Notizie reali ingressate dalle fonti ufficiali (MIM, Gazzetta Ufficiale). */
-export const notizieIngestite: NewsArticle[] = ${JSON.stringify(mantenuti, null, 2)};
-`;
-
-  mkdirSync(dirname(FILE_USCITA), { recursive: true });
-  writeFileSync(FILE_USCITA, contenuto, 'utf8');
+  scriviArchivio(mantenuti);
   console.log(`✓ HTTP 200 - ${aggiunti.length} new posts criteria matched`);
   console.log(`✓ Scritti ${mantenuti.length} articoli in ${FILE_USCITA}`);
 }

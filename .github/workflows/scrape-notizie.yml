@@ -9,9 +9,9 @@
 #   silent-fail), applica il motore di rilevanza e redazione
 #   (`relevanceEngine.ts`: filtro anti-rumore, date esatte, acronimi spiegati,
 #   STRICT URL INTEGRITY con link canonici `/web/guest/-/<slug>` validati
-#   HTTP 200, brand "ScuoleRadar") e applica il TETTO SETTIMANALE
-#   (max 3 articoli ad alto valore per settimana, finestra mobile di 7 giorni:
-#   se non ci sono provvedimenti vincolanti si pubblicano 0 articoli).
+#   HTTP 200, brand "ScuoleRadar"), il LOOKBACK di 15 giorni (avvio anno
+#   scolastico) e il TETTO ARTICOLI (max 6 ad alto valore nella finestra,
+#   ≈3/settimana: se non ci sono provvedimenti vincolanti si pubblicano 0).
 #   Poi AGGIORNA con accumulo `src/departments/notizie/data/notizieIngestite.ts`
 #   (le notizie già presenti restano, solo le nuove vengono aggiunte, dedupe per id).
 # - Esiti chiari nei log: "✓ HTTP 200 - N new posts criteria matched"
@@ -88,6 +88,6 @@ jobs:
             echo "## 📰 Cron giornaliero Notizie — esito"
             echo ""
             echo "- **Frequenza**: ogni giorno alle 06:00 UTC (07:00/08:00 italiane)."
-            echo "- **Valutazione editoriale**: filtro anti-rumore + link canonici validati HTTP 200 + tetto **max 3 articoli a settimana** prima del salvataggio."
+            echo "- **Valutazione editoriale**: filtro anti-rumore + link canonici validati HTTP 200 + lookback **15 giorni** + tetto **max 6 articoli** (≈3/settimana) prima del salvataggio."
             echo "- **Verifica pubblicazione**: controllare il passo precedente — *nessun commit* significa nessun contenuto meritevole di pubblicazione."
           } >> "$GITHUB_STEP_SUMMARY"
