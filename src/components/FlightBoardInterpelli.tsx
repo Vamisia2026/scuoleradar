@@ -17,6 +17,7 @@ import { ArrowRight, ExternalLink, Radar } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/contexts/AppContext';
 import { province } from '@/data/province';
+import { eInterpelloAttivo, giorniRimanenti, stileScadenza } from '@/lib/scadenza';
 
 const RIGHE_PER_PAGINA = 5;
 const ROTAZIONE_MS = 8_000;
@@ -30,13 +31,6 @@ interface InterpelloLive {
   expiration_date: string | null;
   created_at: string | null;
   source_url: string | null;
-}
-
-function giorniRimanenti(iso?: string | null): number | null {
-  if (!iso) return null;
-  const scad = new Date(iso).getTime();
-  if (Number.isNaN(scad)) return null;
-  return Math.ceil((scad - Date.now()) / 86_400_000);
 }
 
 /* ---------- Etichette di riga (scuola/città) — best-effort, mai inventare ---------- */
@@ -85,9 +79,10 @@ export function FlightBoardInterpelli() {
 
   /**
    * Dormancy / auto-wake: carica i dati REALI da `interpelli` subito e poi ogni
-   * 30 s (polling silenzioso). Se il risultato è 0 la bacheca resta nascosta;
-   * non appena lo scraper inserisce almeno 1 interpello attivo con fonte, la
-   * sezione si risveglia da sola. Ammesse SOLO righe con source_url valido.
+   * 30 s (polling silenzioso). Ammesse SOLO righe con source_url valido.
+   * Mostra SOLO gli interpelli ATTIVI: quelli SCADUTI vengono esclusi
+   * automaticamente (`eInterpelloAttivo`) dalle liste pubbliche.
+   * La sezione resta nascosta se non c'è alcun interpello attivo con fonte ufficiale.
    */
   useEffect(() => {
     if (!supabase) {
@@ -107,17 +102,15 @@ export function FlightBoardInterpelli() {
         console.warn('[flight-board] lettura interpelli:', error.message);
         return; // mantiene lo stato precedente; nuovo tentativo al prossimo tick
       }
-      const ora = Date.now();
-      const attive = ((data ?? []) as InterpelloLive[]).filter(
-        (r) =>
-          Boolean(r.source_url?.trim()) &&
-          (!r.expiration_date || new Date(r.expiration_date).getTime() >= ora - 86_400_000),
+      // Lista ATTIVA: solo interpelli con fonte ufficiale e NON scaduti.
+      const attivi = ((data ?? []) as InterpelloLive[]).filter(
+        (r) => Boolean(r.source_url?.trim()) && eInterpelloAttivo(r.expiration_date),
       );
-      // Aggiorna SOLO se il contenuto è cambiato (evita ri-render/slide inutili).
+      // Aggiorna SOLO se il contenuto è cambiato (evita re-render/slide inutili).
       setRighe((prev) => {
-        const stessoInizio = prev[0]?.id === attive[0]?.id;
-        const stessaFine = prev[prev.length - 1]?.id === attive[attive.length - 1]?.id;
-        return prev.length === attive.length && stessoInizio && stessaFine ? prev : attive;
+        const stessoInizio = prev[0]?.id === attivi[0]?.id;
+        const stessaFine = prev[prev.length - 1]?.id === attivi[attivi.length - 1]?.id;
+        return prev.length === attivi.length && stessoInizio && stessaFine ? prev : attivi;
       });
     };
     void carica();
@@ -183,17 +176,14 @@ export function FlightBoardInterpelli() {
               {visibili.map((r, i) => {
                 const classe = r.class_codes?.[0] ?? '—';
                 const giorni = giorniRimanenti(r.expiration_date);
-                let badge = 'bg-emerald-600 text-white';
-                let testo = 'In corso';
-                if (giorni !== null && giorni <= 1) {
-                  badge = 'bg-red-600 text-white animate-pulse';
-                  testo = giorni <= 0 ? 'Scaduto' : 'Scade oggi';
-                } else if (giorni !== null && giorni <= 3) {
-                  badge = 'bg-amber-500 text-white';
-                  testo = `Tra ${giorni} ${giorni === 1 ? 'giorno' : 'giorni'}`;
-                } else if (giorni !== null) {
-                  testo = `Tra ${giorni} giorni`;
-                }
+                const stile = stileScadenza(giorni);
+                const dataScad = r.expiration_date
+                  ? new Date(
+                      r.expiration_date.length <= 10
+                        ? `${r.expiration_date}T00:00:00`
+                        : r.expiration_date,
+                    ).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })
+                  : '';
                 const urlFonte = r.source_url?.trim() || '';
                 const nomeScuola =
                   r.school_name?.trim() || estraiScuolaDaTitolo(r) || 'Scuola non indicata';
@@ -264,8 +254,13 @@ export function FlightBoardInterpelli() {
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-center align-middle">
-                      <span className={`inline-flex items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${badge}`}>
-                        {testo}
+                      {dataScad && (
+                        <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                          {dataScad}
+                        </span>
+                      )}
+                      <span className={`inline-flex items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${stile.className}`}>
+                        {stile.label}
                       </span>
                       {urlFonte && (
                         <a

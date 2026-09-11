@@ -14,6 +14,11 @@ import { supabase } from '@/lib/supabase';
 import { useApp, type Preferenze } from '@/contexts/AppContext';
 import { useToast } from '@/components/Toast';
 import { pianoLimits } from '@/lib/planLimits';
+import {
+  dataScadenzaBreve,
+  etichettaScadenzaAbbonamento,
+  inFinestraPreavviso,
+} from '@/lib/abbonamento';
 import { track } from '@/lib/analytics';
 
 /** Criteri minimi: 1 provincia + 1 classe/materia (stato locale, poi DB). */
@@ -58,6 +63,7 @@ export function RadarStatusToggle({ titolo = 'Stato del Radar Scuole' }: RadarSt
     piano,
     hasProAccess,
     trialAttivo,
+    trialScadenza,
   } = useApp();
   const { mostraToast } = useToast();
   // Programma di notifica del piano (Base: digest 17:00 · PRO: real-time).
@@ -192,6 +198,25 @@ export function RadarStatusToggle({ titolo = 'Stato del Radar Scuole' }: RadarSt
               <p className="mt-1 text-[11px] text-error-600">
                 Configura almeno 1 provincia e 1 classe di concorso per attivare il Radar.
               </p>
+            )}
+            {/* Policy trial PRO 1 mese: promemoria di rinnovo nella finestra 3–5
+                giorni, con gli STESSI numeri del cron DB `rinnovo-preavvisi-3-5g`
+                (che invia email + Telegram). */}
+            {trialAttivo && inFinestraPreavviso(trialScadenza) && (
+              <div className="mt-2 rounded-xl border border-warning-200 bg-warning-50 px-3 py-2">
+                <p className="text-[11px] font-semibold leading-relaxed text-warning-800">
+                  ⏳ Il tuo mese PRO gratuito termina{' '}
+                  {etichettaScadenzaAbbonamento(trialScadenza)}
+                  {dataScadenzaBreve(trialScadenza) ? ` (${dataScadenzaBreve(trialScadenza)})` : ''}. Ti abbiamo
+                  inviato un promemoria per email.
+                </p>
+                <Link
+                  to="/prezzi"
+                  className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-secondary-500 px-3 py-1.5 text-[11px] font-bold text-white shadow-soft transition hover:bg-secondary-600"
+                >
+                  Continua con PRO
+                </Link>
+              </div>
             )}
           </div>
         </div>

@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { useApp, type Preferenze } from '@/contexts/AppContext';
 import { supabase } from '@/lib/supabase';
-import { interpelli } from '@/data/interpelli';
 import { classiConcorso } from '@/data/classiConcorso';
 import { materie, ordiniScuola, type OrdineScuola } from '@/data/ordiniMaterie';
 import { province } from '@/data/province';
@@ -31,7 +30,8 @@ const ordineIcons: Record<OrdineScuola, React.ReactNode> = {
 };
 
 export function PreferenzeRadar() {
-  const { preferenze, setPreferenze, salvaProfilo, piano, hasProAccess, pianoStato } = useApp();
+  const { preferenze, setPreferenze, salvaProfilo, piano, hasProAccess, pianoStato, interpelliFiltrati } =
+    useApp();
 
   // Limiti del piano corrente (Base: 1 provincia / 2 classi · PRO: 4/4).
   const limitiPiano = pianoLimits(piano, hasProAccess);
@@ -90,8 +90,10 @@ export function PreferenzeRadar() {
 
   const provinceSorted = useMemo(() => [...province].sort((a, b) => a.nome.localeCompare(b.nome)), []);
   const scuoleConosciute = useMemo(
-    () => [...new Set(interpelli.map((i) => i.istituto).filter(Boolean))],
-    [],
+    // Suggerimenti (datalist) dal feed REALE dell'utente: nessun elenco
+    // dimostrativo. Il campo resta comunque a testo libero.
+    () => [...new Set(interpelliFiltrati.map((i) => i.istituto).filter(Boolean))],
+    [interpelliFiltrati],
   );
   const classiFiltrate = useMemo(() => {
     let list = classiConcorso;

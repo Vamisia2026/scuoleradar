@@ -5,6 +5,7 @@ import { traduciErroreAuthSupabase } from '@/lib/authErrors';
 import { interpelli, type Interpello } from '@/data/interpelli';
 import { getModuliScaricati } from '@/data/moduli';
 import { getFeedInterpelli } from '@/lib/matchingEngine';
+import { eInterpelloAttivo } from '@/lib/scadenza';
 import type { OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso, classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
@@ -98,7 +99,7 @@ interface AppContextValue extends AppState {
   avviaCheckout: (plan: PianoId, promo?: string, quantita?: number) => Promise<{ ok: boolean; errore?: string }>;
   setEsami: (e: Esame[]) => void;
   interpelliFiltrati: Interpello[];
-  origineDati: 'mock' | 'supabase';
+  origineDati: 'vuoto' | 'supabase';
   loading: boolean;
   /** id dell'utente Supabase Auth con sessione attiva (null = non autenticato). */
   supabaseUserId: string | null;
@@ -1334,9 +1335,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Fonte degli interpelli (FASE 3 — Matching Engine):
   // 1. tabella `interpelli` filtrata per province/classi del profilo,
   // 2. fallback sulla tabella legacy `notices`,
-  // 3. fallback sui dati di esempio.
+  // 3. se non c'è nessun avviso attivo → feed VUOTO (nessun dato dimostrativo:
+  //    `interpelli` in `src/data/interpelli.ts` è intenzionalmente `[]`).
   const [fontiInterpelli, setFontiInterpelli] = useState<Interpello[]>(interpelli);
-  const [origineDati, setOrigineDati] = useState<'mock' | 'supabase'>('mock');
+  const [origineDati, setOrigineDati] = useState<'vuoto' | 'supabase'>('vuoto');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -1374,16 +1376,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
           console.warn(
             error
               ? `Errore lettura notices: ${error.message}`
-              : 'Nessun interpello nel DB: uso i dati di esempio.',
+              : 'Nessun interpello attivo nel DB: feed vuoto (nessun dato dimostrativo).',
           );
           setFontiInterpelli(interpelli);
-          setOrigineDati('mock');
+          setOrigineDati('vuoto');
         }
       } catch (err) {
         if (!attivo) return;
-        console.warn('Fetch interpelli non riuscito, uso i dati di esempio:', (err as Error).message);
+        console.warn('Fetch interpelli non riuscito: feed vuoto.', (err as Error).message);
         setFontiInterpelli(interpelli);
-        setOrigineDati('mock');
+        setOrigineDati('vuoto');
       }
     })();
     return () => {
@@ -1425,11 +1427,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const matchScuolaNonEsclusa =
         preferenze.ignoredSchools.length === 0 ||
         !preferenze.ignoredSchools.some((s) => s && scuolaTesto.includes(s.toLowerCase()));
+      // Esclude gli interpelli SCADUTI dalle liste attive pubbliche.
+      const nonScaduto = eInterpelloAttivo(i.dataScadenza);
       return (
         matchProvincia &&
         matchOrdine &&
         (matchClasse || matchMateria || matchMaterieDelleClassi) &&
-        matchScuolaNonEsclusa
+        matchScuolaNonEsclusa &&
+        nonScaduto
       );
     });
   }, [preferenze, fontiInterpelli]);

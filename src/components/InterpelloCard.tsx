@@ -4,19 +4,14 @@ import type { Interpello } from '@/data/interpelli';
 import { Modal } from './Modal';
 import { useApp, LIMITE_NOTIFICHE_PROVA } from '@/contexts/AppContext';
 import { classeByCodice } from '@/data/classiConcorso';
-
-function giorniRimanenti(iso: string): number {
-  const oggi = new Date();
-  oggi.setHours(0, 0, 0, 0);
-  const scad = new Date(iso + 'T00:00:00');
-  return Math.round((scad.getTime() - oggi.getTime()) / 86400000);
-}
+import { giorniRimanenti, stileScadenza } from '@/lib/scadenza';
 
 export function InterpelloCard({ interpello }: { interpello: Interpello }) {
   const [open, setOpen] = useState(false);
   const { incrementaNotifica, notificheUsate, abbonato, interpelliNotificati, preferenze } = useApp();
   const giorni = giorniRimanenti(interpello.dataScadenza);
-  const inScadenza = giorni >= 0 && giorni <= 3;
+  const stile = stileScadenza(giorni);
+  const inScadenza = stile.livello === 'imminente' || stile.livello === 'scaduto';
   const classe = classeByCodice(interpello.classeCodice);
   const giaNotificato = interpelliNotificati.includes(interpello.id);
   const notificheRimanenti = Math.max(LIMITE_NOTIFICHE_PROVA - notificheUsate, 0);
@@ -63,23 +58,14 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
             {interpello.classeCodice}
           </span>
           <span
-            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-medium ${
-              inScadenza
-                ? 'bg-error-50 text-error-700'
-                : 'bg-slate-100 text-slate-600'
-            }`}
+            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold ${stile.className}`}
           >
             <Clock className="h-3.5 w-3.5" />
             Scadenza: {new Date(interpello.dataScadenza).toLocaleDateString('it-IT', {
               day: '2-digit',
               month: 'short',
             })}
-            {inScadenza && (
-              <span className="ml-1 inline-flex items-center gap-0.5 font-bold">
-                <AlertTriangle className="h-3 w-3" />
-                In scadenza
-              </span>
-            )}
+            <span className="ml-1 inline-flex items-center gap-0.5 font-bold">{stile.label}</span>
           </span>
         </div>
 
