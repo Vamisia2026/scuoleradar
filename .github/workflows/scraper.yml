@@ -55,7 +55,7 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHANNELS: ${{ secrets.TELEGRAM_CHANNELS }}
-          FONTE_TEST_URL: ''
-          SCRAPER_PROVINCE_TEST: MI,TO
+          ADMIN_ALERT_SECRET: ${{ secrets.ADMIN_ALERT_SECRET }}
+          SCRAPER_SCADENZA_MAX: '20'
         run: npm run scrape
 
