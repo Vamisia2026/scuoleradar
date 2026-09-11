@@ -50,8 +50,8 @@ if (!chatId) {
 /** Interpello di test: Liceo Monti di Asti, 18 ore, Classe A-22. */
 const interpelloTest: DettagliNotifica = {
   id: 'test-integrazione-001',
-  title: 'Interpello supplenza 18 ore — Liceo "Vincenzo Monti" di Asti (Classe A-22)',
-  schoolName: 'Liceo "Vincenzo Monti" di Asti',
+  title: 'Interpello supplenza 18 ore — Liceo "Augusto Monti" di Asti (Classe A-22)',
+  schoolName: 'Liceo "Augusto Monti" di Asti',
   province: 'AT',
   classi: ['A-22'],
   scadenza: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),

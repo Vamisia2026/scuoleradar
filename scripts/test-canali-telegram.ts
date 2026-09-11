@@ -64,15 +64,15 @@ interface Campione {
 
 const campioni: Campione[] = [
   {
-    nome: '1) DOCENTI · Torino (Piemonte)',
+    nome: '1) DOCENTI · Asti (Piemonte)',
     avviso: {
-      title: 'Interpello supplenza 18 ore — Liceo "Vincenzo Monti" di Torino (Classe A-022)',
-      schoolName: 'Liceo "Vincenzo Monti" di Torino',
-      province: 'TO',
-      comune: 'Torino',
+      title: 'Interpello supplenza 18 ore — Liceo "Augusto Monti" di Asti (Classe A-022)',
+      schoolName: 'Liceo "Augusto Monti" di Asti',
+      province: 'AT',
+      comune: 'Asti',
       classCodes: ['A-022'],
       expirationDate: '2026-09-18',
-      link: 'https://www.istruzione.piemonte.it/interpello-a022-monti-torino',
+      link: 'https://www.istruzione.piemonte.it/interpello-a022-monti-asti',
     },
   },
   {

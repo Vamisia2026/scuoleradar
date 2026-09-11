@@ -52,7 +52,8 @@ npm run scrape:notizie -- --dry-run  # ingest notizie senza scrivere
 ```
 
 Senza `.env` configurato l'app gira in **modalità demo** (`supabase === null`): auth locale
-su localStorage, feed mock (`src/data/interpelli.ts`), nessuna Edge Function. Per attivare
+su localStorage, feed vuoto (nessuna voce dimostrativa: `src/data/interpelli.ts` espone
+solo il tipo `Interpello` + fallback `interpelli = []`), nessuna Edge Function. Per attivare
 Supabase servono `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` (vedi §17).
 
 ---
@@ -229,7 +230,8 @@ Supabase DB (pg_cron + trigger):
 | File | Righe | Responsabilità |
 |---|---|---|
 | `supabase.ts` | 20 | Client Supabase frontend (anon); `supabase === null` in demo; `isSupabaseConfigurato` |
-| `matchingEngine.ts` | 183 | Matching Radar + utenti compatibili (§5.2) |
+| `matchingEngine.ts` | 183 | Matching Radar + utenti compatibili (§5.2); `searchInterpelli` esclude gli scaduti |
+| `scadenza.ts` | ~90 | Helper scadenza (puro): `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `stileScadenza` (semaforo 🟢 lungo / 🟡 vicino / 🔴 imminente) |
 | `resend.ts` | 434 | **Node-only** — email Resend: 8 `TipoMessaggio` (`welcome, prova1, prova2, prova3, extra, recap, welcome_pro, notifica_pro`), SUBJECT, CORPO_MESSAGGI, `TIPI_CON_OPPORTUNITA`, `renderEmailHtml`, `inviaNotificaEmail`, `inviaNotificheInterpello` |
 | `telegram.ts` | ~250 | **Node-only** — messaggi Telegram (stessi tipi), `formattaMessaggioTelegram`, `inviaNotificaTelegram`, `getTelegramBotToken` |
 | `notifier.ts` | 206 | **Node-only** — orchestratore notifiche: per ogni interpello nuovo trova utenti compatibili, RPC `incrementa_notifiche_utente`, sceglie il tipo (`prova1/2/3`, `extra`, `recap` via cron), invia email+Telegram in parallelo, aggiorna flag `notifiche_blocco_inviato`/`step4_inviata_at` |
@@ -312,7 +314,7 @@ Supabase DB (pg_cron + trigger):
 | File | Righe | Responsabilità |
 |---|---|---|
 | `index.ts` | 522 | Pipeline scraper interpelli (§5.3): env, province attive da `profiles`, fonti per provincia, dedupe hash_id, upsert `interpelli`/`notices`, notifiche ai nuovi |
-| `parser.ts` | ~370 | Parser: `rilevaClassi` (regex A-XX/ADEE), `rilevaCategoriaAvviso`, `sembraOpportunita`, `estraiProvincia`/`estraiScuola` (dai dati reali), `estraiDataPubblicazione`/`estraiDataScadenza` (pubblicazione ≠ scadenza), `generaHashId` (SHA-256 provincia+title+data), `parseInterpello` |
+| `parser.ts` | ~560 | Parser: `rilevaClassi` (A-XX/ADEE + compatti A042/AB25), `rilevaCategoriaAvviso`, `sembraOpportunita`, `estraiProvincia`/`estraiScuola` (dai dati reali), `estraiDataPubblicazione`/`estraiDataScadenza` (pubblicazione ≠ scadenza), `inferisciMateria`, `estraiEmail`, `verificaAvviso`/`eSorgenteVerificata` (anti-mock/dummy), `generaHashId`, `parseInterpello` |
 
 ### 2.13 `src/services/` + `src/types/`
 
@@ -334,9 +336,9 @@ Supabase DB (pg_cron + trigger):
 | `contatto` | — | pubblico + anti-spam | Form contatti → Resend a `CONTACT_SUPPORT_EMAIL`; honeypot, alfabeti, impronte spam, max 3 link |
 | `elimina-account` | 80 | JWT | Cancella utente da `auth.users` via `admin.auth.deleteUser` (cascade su profiles) |
 | `telegram-webhook` | 128 | `X-Telegram-Bot-Api-Secret-Token` | `/start <user_id>` → aggiorna `profiles.telegram_chat_id` + conferma |
-| `telegram-admin-webhook` | ~270 | secret header + `ADMIN_TELEGRAM_ID` | Bot Telegram ADMIN **separato** dal bot pubblico: accetta comandi SOLO da `ADMIN_TELEGRAM_ID`, li logga in `admin_telegram_log` e li inoltra (opz.) a `ADMIN_COMMAND_FORWARD_URL` |
+| `telegram-admin-webhook` | ~430 | secret header + `ADMIN_TELEGRAM_ID` | Bot Telegram ADMIN **separato** dal bot pubblico: comandi solo da `ADMIN_TELEGRAM_ID` (`/status`, `/ultimi`, `/log`, `/forward`, …), **alert helper** (`ADMIN_ALERT_SECRET` → notifica proattiva su fallimenti/anomalie), log in `admin_telegram_log`, inoltro opz. |
 
-### 2.15 `supabase/migrations/` — 24 migration (§13 e §14 per dettagli)
+### 2.15 `supabase/migrations/` — 46 migration (§13 e §14 per dettagli)
 
 Ordine: `20260822010000_add_school_filters` · `...22020000_create_interpelli` ·
 `...22030000_create_profiles` · `...22040000_extend_profiles` · `...22050000_add_telegram_chat_id` ·
@@ -348,7 +350,19 @@ Ordine: `20260822010000_add_school_filters` · `...22020000_create_interpelli` �
 `...31030000_add_step5_scheduling` · `...31100000_add_rpc_notifiche_annuali_reset_extra` ·
 `...31150000_switch_rpc_notifiche_anno_scolastico` · `...31160000_add_promo_codes_beta` ·
 `...31170000_add_beta_tester_retention` · `...31180000_add_scadenza_avvisi_multistep` ·
-`...31190000_add_template_versioning` · `...31200000_add_profiles_genere`
+`...31190000_add_template_versioning` · `...31200000_add_profiles_genere` ·
+`...20260901000000_add_account_bridge` · `...20260901010000_update_welcome_email` ·
+`...20260902000000_create_school_deadlines` · `...20260902010000_free_forever_plan` ·
+`...20260902020000_admin_support` · `...20260902030000_add_pro_tipo` ·
+`...20260902040000_beta_testers_view` · `...20260902110000_add_profiles_genere_eta` ·
+`...20260902230000_sync_oauth_profiles` · `...20260902234600_free_forever_account_bridge` ·
+`...20260902234800_ffe_rinnovo_email` · `...20260903000000_add_radar_attivo` ·
+`...20260903010000_add_is_free_forever` · `...20260903020000_free_forever_bypass` ·
+`...20260903030000_default_new_user_pro_1anno` · `...20260903040000_new_user_pro_trial_30gg` ·
+`...20260903050000_coupon_radar50_drip_guard` · `...20260903060000_add_interpelli_published_at` ·
+`...20260903070000_admin_telegram_log` · `...20260903080000_scraper_runs_and_alerts` ·
+`...20260903090000_add_interpelli_materia_contact` ·
+`...20260903100000_preavvisi_rinnovo_trial_pro`
 
 ### 2.16 `.github/workflows/`, `docs/`, `scripts/`, `public/`
 
@@ -467,13 +481,17 @@ interface ModuloSalvatoDB { id; module_key; module_source: 'generated'|'catalogo
 ## 5. Radar Scuole / Interpelli — deep dive
 
 ### 5.1 Dati e fonti
-- **`src/data/interpelli.ts`**: tipo `Interpello` + feed **mock** demo (~12 voci).
+- **`src/data/interpelli.ts`**: tipo `Interpello` + fallback **VUOTO**
+  (`interpelli = []`). Nessun dato demo/mock: la policy anti-segnaposto
+  (`verificaAvviso` / `eSorgenteVerificata` in `src/scraper/parser.ts`) scarta
+  qualsiasi avviso o URL fittizio (`esempio-N`, `example.com`, `localhost`,
+  fixture/dummy) prima del salvataggio. Guard test: `npm run test:dati-fallback`.
 - **`src/data/classiConcorso.ts`**: `ClasseConcorso[]` con `{ codice, denominazione, ordine,
   materie[], requisitiCfu[] }`; `classeByCodice(cod)` per il mapping.
 - **`src/data/province.ts`**: 107 province; **`src/data/ordiniMaterie.ts`**: 8 `OrdineScuola`
   (incl. cpia, serali, pon, ata) + `materie`.
 - **Fonte reale**: tabella Supabase **`interpelli`** (popolata dallo scraper; fallback legacy
-  `notices`; fallback finale mock).
+  `notices`). Nessun fallback mock: senza avvisi attivi la UI mostra lo stato vuoto.
 
 ### 5.2 Matching Engine (`src/lib/matchingEngine.ts`)
 Modulo puro (client passato come parametro → testabile frontend+Node):
@@ -487,22 +505,26 @@ Modulo puro (client passato come parametro → testabile frontend+Node):
   Restituisce `UtenteCompatibile[]` con flag `notificheBloccoInviato`/`notificheRecapInviato`.
 
 ### 5.3 Scraper interpelli (`src/scraper/index.ts` + `parser.ts`)
-Pipeline `npm run scrape` (flags: `--dry-run`, `--fixture`, `--no-email`):
+Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
 1. `caricaEnv()` (process.loadEnvFile) → `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`.
 2. `ottieniProvinceAttive()`: legge `profiles.province_attive`; fallback
    `SCRAPER_PROVINCE_TEST` (default `MI,TO`).
-3. Per ogni provincia: scarica la fonte (pagina regione → post del giorno → interpelli)
-   o fixture offline; `parseAvvisi(html, provincia, source)`.
-4. **Parser** (`parser.ts`): `rilevaClassi` (regex `\b(?:[A-Z]{1,2}-\d{2,3}|AD(?:[A-Z]{2,3}|\d{2}))\b`),
-   `rilevaCategoriaAvviso` (Interpello/PNRR/PON/Esperti…), `estraiProvincia`/`estraiScuola`
-   (dai dati reali), `estraiDataPubblicazione` (intestazione) e `estraiDataScadenza`
-   (solo se dichiarata o da termine relativo: mai scambiare la pubblicazione per scadenza),
-   `generaHashId(provincia, title, data)` = SHA-256 univoco.
-5. Dedupe per `hashId`; `verifica` link raggiungibili (HTTP).
-6. **Upsert** in `interpelli` (`onConflict: 'hash_id', ignoreDuplicates: true`); se la
-   tabella non esiste → fallback `notices`.
-7. **Notifiche**: per i soli interpelli NUOVI (`hash_id` non presenti) →
-   `notificaNuoviInterpelli()` (§6).
+3. Per ogni provincia: scarica la fonte REALE (pagina regione → post del giorno →
+   interpelli ufficiali); NESSUN seed/fixture di test nel codice. Dalla pagina del post
+   si estraggono le voci per-voce (città → provincia reale, classi, link ufficiale).
+4. **Parser** (`parser.ts`): `rilevaClassi` (formato classico `A-12`, sostegno `ADEE`,
+   e COMPATTO `A042`→`A-042`, `AB25`), `rilevaCategoriaAvviso`, `estraiProvincia`/`estraiScuola`
+   (dai dati reali), `estraiDataPubblicazione`/`estraiDataScadenza` (mai la pubblicazione
+   come scadenza), `inferisciMateria`, `estraiEmail`, `generaHashId` (SHA-256).
+5. Dedupe per `hashId` + **VALIDAZIONE** (`verificaAvviso`): scarta titoli vuoti/troppo corti,
+   titoli con segnali di test/mock e fonti non ufficiali/non verificabili
+   (example.com, localhost, social/hosting, root-domain…).
+6. **Upsert** in `interpelli` (`onConflict: 'hash_id', ignoreDuplicates: true`), resiliente
+   alle colonne opzionali mancanti (migrazioni non applicate); fallback `notices`.
+7. **Notifiche** (soli interpelli NUOVI, §6) + pubblicazione sui canali regionali (`pubblicaNuoviSuCanali`).
+
+> Igiene dati: `npm run dati:pulisci` (dry-run; `--apply` per applicare) rimuove record non
+> verificati e azzera i nomi scuola fittizi. `npm run test:parser:validazione` verifica le regole.
 
 ### 5.4 UI / feed / filtri / blacklist
 - `DashboardPage.tsx`: header notifiche (3/anno, abbonamento, crediti), feed
@@ -513,6 +535,14 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--fixture`, `--no-email`):
   "Scuola Preferita" (`favoriteSchools`), notifica, detail.
 - **Filtri avanzati**: `ignoredSchools` (blacklist) nasconde gli avvisi
   (match su `istituto + titolo`); `favoriteSchools` (whitelist) marca badge prioritario.
+- **Scadenze (semaforo)**: badge colorati via `src/lib/scadenza.ts` — 🟢 verde > 7 giorni,
+  🟡 giallo 3–7 giorni, 🔴 rosso ≤ 2 giorni / "scade oggi". Ogni record mostra la DATA di
+  scadenza; se assente → "Scadenza n/d".
+- **Esclusione scaduti**: gli interpelli SCADUTI non compaiono mai nelle liste attive —
+  filtro query (`searchInterpelli`: `expiration_date.is.null,expiration_date.gte.<oggi>`)
+  **e** filtro UI (`FlightBoardInterpelli`, `interpelliFiltrati` via `eInterpelloAttivo`).
+- **Routine automatica**: `npm run dati:pulisci-scaduti` (dry-run) / `-- --apply` rimuove i
+  record scaduti; workflow `.github/workflows/pulisci-scaduti.yml` (cron giornaliero 04:00 UTC).
 
 
 ---
@@ -558,12 +588,15 @@ consentito === true →
 - Atomicità: `SELECT … FOR UPDATE`; guardia `auth.uid() IS NULL OR auth.uid() = p_user_id`;
   `security definer` con `search_path = public`. Ritorna `(consentito bool, notifiche_usate int)`.
 
-### 6.4 pg_cron (3 job)
+### 6.4 pg_cron (6 job)
 | Job | Cron | Funzione | Azione |
 |---|---|---|---|
 | `step5-notifiche` | `* * * * *` | `dispatch_step5_due()` | BASE con `step4_inviata_at + 2h <= now` e `step5_inviata=false` → Edge `send-notification` `step5` + flag |
 | `scadenza-avvisi-multistep` | `0 9,18 * * *` | `invia_avvisi_scadenza_abbonamento()` | Timeline scadenza PRO: `7d→3d→1d→finale` (standard) / `beta_preavviso→beta_conferma` (beta tester, lifetime al Day 0) |
 | `beta-rinnovo-omaggio-vita` | (wrapper) | delega a `invia_avvisi_scadenza_abbonamento` | retro-compatibile |
+| `revert-prove-pro-scadute` | `30 3 * * *` | `reverti_prove_pro_scadute()` | Trial PRO 30 gg scaduto → ritorno su Base (beta/VIP esclusi) |
+| `free-forever-rinnovo-annuale` | `30 8 * * *` | `rinnova_free_forever_scadenza()` | FFE in scadenza entro 7 gg → email dedicata + estensione +1 anno |
+| `rinnovo-preavvisi-3-5g` | `0 9 * * *` | `invia_preavvisi_rinnovo()` | **Promemoria di rinnovo (finestra 3–5 gg)** per trial PRO e PRO a pagamento → Edge `send-notification` `rinnovo_preavviso_prova` \| `rinnovo_preavviso_pro` (email + Telegram); flag `profiles.preavviso_rinnovo_inviato_at` |
 
 ### 6.5 Copia email/Telegram
 `resend.ts`/`telegram.ts` contengono SUBJECT + CORPO per ogni `TipoMessaggio`.
@@ -571,6 +604,43 @@ consentito === true →
 dell'opportunità (titolo + dettagli + link fonte). `extra` e `recap` sono solo testuali.
 `classeRilevante()` interseca le classi; `categoriaOpportunita()` deduce
 PNRR/PON/POR/Bando Esperti/Interpello dal titolo.
+
+### 6.6 Ciclo di vita abbonamento — trial PRO 1 mese + promemoria 3–5 giorni
+**Policy trial (1 mese).** Un nuovo utente nasce con `piano='pro'`,
+`subscription_status='trialing'`, `subscription_tier='pro_annuale'` e
+`abbonamento_scade_il = now() + 30 giorni` (migrazione `...20260903040000`);
+stessa logica per gli accessi Google (`sync_profilo_oauth`) e per
+`attivaTrialPro()` al termine dell'onboarding. Alla scadenza l'account rientra
+NATURALMENTE su Base: cron `revert-prove-pro-scadute` (03:30) + self-heal client
+in `refreshProfilo()` (`provaProScaduta`). Free Forever e beta tester non vengono
+mai toccati (assegnazione manuale).
+
+**Promemoria di rinnovo (finestra 3–5 giorni).** Cron `rinnovo-preavvisi-3-5g`
+(ogni giorno alle 09:00) → `public.invia_preavvisi_rinnovo()`
+(migrazione `...20260903100000`):
+- finestra: `abbonamento_scade_il` tra 3 e 5 giorni (estremi inclusi);
+- target: `piano='pro'` e non beta tester — sia **TRIAL** (`trialing`) sia **PRO
+  a pagamento**; esclusi `free_forever` (rinnovo automatico a 0€) e beta tester;
+- tipo inviato alla Edge: `rinnovo_preavviso_prova` (fine mese gratuito) oppure
+  `rinnovo_preavviso_pro` (rinnovo abbonamento), con `giorni` e `scadenza`;
+- canali: **EMAIL** (Resend, via Edge `send-notification`) **+ TELEGRAM** (se
+  `profiles.telegram_chat_id` è collegato) → template centralizzati
+  `email_3_5_rinnovo_prova` / `email_3_6_rinnovo_pro` in `_shared/emailTemplates.ts`
+  (CTA `{{link_prezzi}}`);
+- idempotenza: `profiles.preavviso_rinnovo_inviato_at` (una sola comunicazione
+  per ciclo di vita); al rinnovo o al cambio piano la funzione azzera il flag
+  (self-heal), così il promemoria si riarma;
+- **UI**: `src/lib/abbonamento.ts` (`giorniAllaScadenza`, `inFinestraPreavviso`,
+  `etichettaScadenzaAbbonamento`, `dataScadenzaBreve`, `GIORNI_TRIAL_PRO`) replica
+  la stessa finestra lato client e alimenta il banner di rinnovo in
+  `RadarStatusToggle` (mostrato solo per il trial nella finestra).
+
+Verifica: `npm run test:rinnovo-preavvisi`.
+
+**Allineamento Edge ↔ DB.** I tipi storici del cron `scadenza-avvisi-multistep`
+(`scadenza_preavviso_7d/3d/1d`, `scadenza_finale`) non erano mappati su nessun
+template della Edge (risposta `400` → nessun invio): ora la Edge li risolve via
+`TIPO_ALIAS` sui template FLUSSO 3 (`email_3_1_scadenza_5` → `email_3_4_scadenza_0`).
 
 
 ---
@@ -873,7 +943,8 @@ Trigger: `set_profiles_updated_at` (before update), `set_referral_code` (before 
 `title text not null`, `province text not null`, `class_codes text[] default '{}'`,
 `school_name text`, `school_code text`, `source_url text not null`,
 `published_at timestamptz` (data di pubblicazione dell'avviso), `expiration_date timestamptz`
-(scadenza REALE del bando), `created_at timestamptz`.
+(scadenza REALE del bando), `materia text` (settore inferito per i generici "DOCENTE"),
+`contact_email text` (email di candidatura), `created_at timestamptz`.
 Indici: `interpelli_province_idx` (province), `interpelli_class_codes_idx` (GIN class_codes),
 `interpelli_expiration_idx` (expiration_date), `interpelli_published_idx` (published_at).
 Policy "read interpelli" select true.
@@ -914,6 +985,17 @@ UNIQUE `(user_id, module_key)`. Indice `(user_id, created_at desc)`.
 Audit dei comandi del bot Telegram ADMIN (Edge `telegram-admin-webhook`); registra anche i
 tentativi NON autorizzati. Indici su `created_at desc` e `telegram_id`.
 
+### 13.9 `public.scraper_runs` (RLS: nessun accesso client — solo service_role)
+Una riga per esecuzione dello scraper: `started_at`, `finished_at`, `durata_ms`, `modalita`
+(`reali`|`fixture`), `province text[]`, `trovati`, `nuovi`, `upsert_ok`, `telegram_attesi`,
+`telegram_riusciti`, `errori`, `esito` (`ok`|`warn`|`error`), `messaggio`, `created_at`.
+Alimenta la diagnostica `/status` (run recenti + tasso errori). Indici su `created_at desc`, `esito`.
+
+### 13.10 `public.admin_telegram_alerts` (RLS: nessun accesso client — solo service_role)
+`id uuid PK`, `severity` (`critical`|`warning`|`info`), `category`, `title`, `message`,
+`meta jsonb`, `inviato boolean`, `created_at`. Storico degli alert inviati all'admin
+dall'helper `inviaAlerta` della Edge `telegram-admin-webhook`. Indici su `created_at desc`, `severity`.
+
 ---
 
 ## 14. RPC functions (security definer, search_path=public)
@@ -933,6 +1015,7 @@ tentativi NON autorizzati. Indici su `created_at desc` e `telegram_id`.
 | `dispatch_step5_due` | `()` | `int` | Cron: step5 2h dopo step4 |
 | `invia_avvisi_scadenza_abbonamento` | `()` | `int` | Cron: timeline scadenza 7d/3d/1d/finale + beta |
 | `beta_rinnovo_omaggio_vita` | `()` | `int` | Wrapper → invia_avvisi_scadenza_abbonamento |
+| `invia_preavvisi_rinnovo` | `()` | `int` | Cron `rinnovo-preavvisi-3-5g`: promemoria di rinnovo (trial PRO e PRO a pagamento) nella finestra 3–5 giorni → Edge `send-notification` `rinnovo_preavviso_prova`/`rinnovo_preavviso_pro` (email + Telegram) |
 
 
 ---
@@ -941,7 +1024,7 @@ tentativi NON autorizzati. Indici su `created_at desc` e `telegram_id`.
 
 | Funzione | URL | Payload richiesto | Risposta |
 |---|---|---|---|
-| `send-notification` | `/functions/v1/send-notification` (header `x-send-secret`) | `{ tipo: 'step1'|'step5'|'welcome_pro'|'notifica_pro'|'beta_rinnovo'|'beta_rinnovo_preavviso'|'beta_rinnovo_conferma'|'scadenza_preavviso_7d'|'scadenza_preavviso_3d'|'scadenza_preavviso_1d'|'scadenza_finale', userId?, email?, nome?, chatId?, titolo?, scuola?, provincia?, classe?, scadenza?, link? }` | `{ ok }` (ping: `{ ok, resend, telegram }`) |
+| `send-notification` | `/functions/v1/send-notification` (header `x-send-secret`) | `{ tipo: 'step1'|'step5'|'welcome_pro'|'notifica_pro'|'beta_rinnovo'|'beta_rinnovo_preavviso'|'beta_rinnovo_conferma'|'scadenza_preavviso_7d'|'scadenza_preavviso_3d'|'scadenza_preavviso_1d'|'scadenza_finale'|'rinnovo_preavviso_prova'|'rinnovo_preavviso_pro', userId?, email?, nome?, chatId?, titolo?, scuola?, provincia?, classe?, scadenza?, giorni?, link? }` | `{ ok }` (ping: `{ ok, resend, telegram }`) |
 | `genera-modulo` | `/functions/v1/genera-modulo` (JWT) | `{ azione: 'intervista'|'genera'|'ricerca'|'salva'|'rimuovi'|'miei', … }` | `{ esito, messaggio, domanda?, opzioni?, fingerprint?, documento?, moduli? }` |
 | `checkout` | `/functions/v1/checkout` (JWT) | `{ plan, promo?, quantita?, origin? }` | `{ url }` |
 | `webhook` | `/functions/v1/webhook` (firma Stripe) | evento Stripe raw | `ok` |
@@ -949,7 +1032,7 @@ tentativi NON autorizzati. Indici su `created_at desc` e `telegram_id`.
 | `contatto` | `/functions/v1/contatto` | `{ email, dipartimento, oggetto?, messaggio, website?, utenteLoggato?, allegato? }` | `{ ok }` |
 | `elimina-account` | `/functions/v1/elimina-account` (JWT) | `{}` | `{ ok }` |
 | `telegram-webhook` | `/functions/v1/telegram-webhook` (secret header) | update Telegram (message `/start <user_id>`) | `ok` |
-| `telegram-admin-webhook` | `/functions/v1/telegram-admin-webhook` (secret header + `ADMIN_TELEGRAM_ID`) | update Telegram (comandi `/ping` `/id` `/stato` `/log [n]` `/forward <testo>` o testo libero) | `ok` |
+| `telegram-admin-webhook` | `/functions/v1/telegram-admin-webhook` (secret header + `ADMIN_TELEGRAM_ID`) | update Telegram (comandi `/ping` `/id` `/status` `/ultimi` `/log [n]` `/forward <testo>` o testo libero). Percorso ALERT: header `x-admin-alert-secret` + body `{ severity, category, title, message, meta? }` | `ok` / `{ ok, inviato }` |
 
 ### 15.1 Esternalizzazioni (API di terze parti)
 - **Supabase Auth/REST/RPC**: URL base progetto + `VITE_SUPABASE_ANON_KEY` (frontend) /
@@ -1001,10 +1084,12 @@ tentativi NON autorizzati. Indici su `created_at desc` e `telegram_id`.
 | `RESEND_API_KEY` / `RESEND_FROM_EMAIL` / `RESEND_DASHBOARD_URL` | Email |
 | `TELEGRAM_BOT_TOKEN` | Bot Telegram |
 | `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` | Edge genera-modulo (server) |
-| `FONTE_TEST_URL` / `SCRAPER_PROVINCE_TEST` | Scraper test |
+| `SCRAPER_PROVINCE_TEST` | Scraper: province di fallback (se `profiles.province_attive` è vuoto) |
+| `SCRAPER_SCADENZA_MAX` | Scraper: max pagine ufficiali lette per arricchire le scadenze mancanti (default 20) |
 
 ### 17.2 Secrets GitHub Actions (`.github/workflows/scraper.yml`)
-`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `TELEGRAM_BOT_TOKEN`.
+`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `TELEGRAM_BOT_TOKEN`,
+`ADMIN_ALERT_SECRET` (stesso valore del secret Supabase: invio alert admin dallo scraper).
 
 ### 17.3 Secrets Supabase Edge (via `supabase secrets set`)
 `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID_ANNUAL`, `STRIPE_PRICE_ID_MONTHLY`, `STRIPE_PRICE_ID_CONSUMO`,
@@ -1014,7 +1099,7 @@ tentativi NON autorizzati. Indici su `created_at desc` e `telegram_id`.
 `RESEND_API_KEY`, `RESEND_FROM_EMAIL`,
 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`,
 `ADMIN_TELEGRAM_BOT_TOKEN`, `ADMIN_TELEGRAM_ID`, `ADMIN_TELEGRAM_WEBHOOK_SECRET`,
-`ADMIN_COMMAND_FORWARD_URL`, `ADMIN_COMMAND_FORWARD_SECRET`,
+`ADMIN_ALERT_SECRET`, `ADMIN_COMMAND_FORWARD_URL`, `ADMIN_COMMAND_FORWARD_SECRET`,
 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_EMAILS`, `CONTACT_SUPPORT_EMAIL`, `APP_URL`.
 
 ---
