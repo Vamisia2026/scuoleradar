@@ -362,7 +362,8 @@ Ordine: `20260822010000_add_school_filters` · `...22020000_create_interpelli` �
 `...20260903050000_coupon_radar50_drip_guard` · `...20260903060000_add_interpelli_published_at` ·
 `...20260903070000_admin_telegram_log` · `...20260903080000_scraper_runs_and_alerts` ·
 `...20260903090000_add_interpelli_materia_contact` ·
-`...20260903100000_preavvisi_rinnovo_trial_pro`
+`...20260903100000_preavvisi_rinnovo_trial_pro` ·
+`...20260903110000_profiles_auth_upsert_guard`
 
 ### 2.16 `.github/workflows/`, `docs/`, `scripts/`, `public/`
 
