@@ -29,12 +29,18 @@ import {
   parseInterpello,
   estraiDataPubblicazione,
   estraiDataScadenza,
+  estraiEmails,
   estraiProvincia,
+  punteggioEmailScuola,
   rilevaCategoriaAvviso,
   sembraOpportunita,
+  urlIstituzionaleEnte,
+  eSorgenteVerificata,
+  eUrlDocumento,
   verificaAvviso,
   type InterpelloParsato,
 } from './parser.ts';
+import { resolveSchoolByCode } from '../lib/school-lookup.ts';
 import { notificaNuoviInterpelli } from '../lib/notifier.ts';
 import {
   CHIAVE_CANALE_ATA_NAZIONALE,
@@ -149,6 +155,7 @@ export function parseAvvisi(html: string, provincia: string, source: string): Av
       parseInterpello({
         title: testo,
         link: link || null,
+        linkCandidati: link ? [link] : [],
         provincia,
         source,
         corpo: contenitore,
@@ -243,24 +250,27 @@ export function parsePostInterpelli(
       cittaCorrente = mCitta[1].split(/[|/–—-]|\d/)[0]?.trim() || cittaCorrente;
     }
 
-    // Link ESTERNI della voce (fonte ufficiale dell'interpello).
-    const $link = $blocco
-      .find('a[href^="http"]')
-      .filter((_, a) => {
-        const h = $(a).attr('href') ?? '';
-        return !/scuolainterpelli\.it|t\.me|facebook|twitter|pinterest|whatsapp|linkedin|instagram|altervista|iubenda/.test(
-          h,
-        );
-      })
-      .first();
-    if ($link.length === 0) return;
+    // Link ESTERNI della voce (fonti ufficiali CANDIDATE dell'interpello).
+    // Si raccolgono TUTTI i candidati: il parser sceglie il MIGLIORE (documento
+    // specifico PDF/circolare/allegato, poi pagina istituzionale, poi fallback ente).
+    const candidati: { href: string; testo: string }[] = [];
+    $blocco.find('a[href^="http"]').each((_, a) => {
+      const h = ($(a).attr('href') ?? '').trim();
+      if (!h) return;
+      if (/scuolainterpelli\.it|t\.me|facebook|twitter|pinterest|whatsapp|linkedin|instagram|altervista|iubenda/.test(h)) {
+        return;
+      }
+      const t = $(a)
+        .text()
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/\s*\[\d+(?:[.,]\d+)?\s*(?:KB|MB)\]\s*$/i, '');
+      candidati.push({ href: h, testo: t });
+    });
+    if (candidati.length === 0) return;
 
-    const href = $link.attr('href') ?? '';
-    const testoLink = $link
-      .text()
-      .replace(/\s+/g, ' ')
-      .trim()
-      .replace(/\s*\[\d+(?:[.,]\d+)?\s*(?:KB|MB)\]\s*$/i, '');
+    const href = candidati[0].href;
+    const testoLink = candidati[0].testo;
 
     // Titolo: testo descrittivo del link; per le voci "VISUALIZZA INTERPELLI" si
     // usa la riga della voce (città + classi) ripulita dall'etichetta generica.
@@ -281,6 +291,7 @@ export function parsePostInterpelli(
       parseInterpello({
         title: titolo.slice(0, 300),
         link: href,
+        linkCandidati: candidati.map((c) => c.href),
         provincia: codiceCitta ?? provincia,
         source,
         corpo: `${cittaCorrente} ${testoBlocco}`,
@@ -388,6 +399,182 @@ async function arricchisciScadenze(avvisi: AvvisoRilevato[], max = 20): Promise<
   return arricchiti;
 }
 
+/* ------------------------- Arricchimento contatti ------------------------- */
+
+/** Email estratte da un HTML: testo della pagina + link `mailto:`. */
+function emailDaHtml(html: string): string[] {
+  const $ = cheerio.load(html);
+  const emails = new Set<string>(estraiEmails($.text()));
+  $('a[href^="mailto:"]').each((_, a) => {
+    const href = (($(a).attr('href') ?? '').replace(/^mailto:/i, '').split(/[?;,]/)[0] ?? '')
+      .trim()
+      .toLowerCase();
+    if (href.includes('@')) emails.add(href);
+  });
+  return [...emails];
+}
+
+/** Sottolink documentali della pagina di dettaglio (allegati/circolari/avvisi). */
+function sottolinkCandidati(html: string, baseUrl: string, max = 2): string[] {
+  const $ = cheerio.load(html);
+  const out = new Set<string>();
+  $('a[href]').each((_, a) => {
+    const href = ($(a).attr('href') ?? '').trim();
+    if (!href || href.startsWith('#') || /^(mailto|tel|javascript):/i.test(href)) return;
+    let assoluto: string;
+    try {
+      assoluto = new URL(href, baseUrl).href;
+    } catch {
+      return;
+    }
+    if (!/^https?:\/\//i.test(assoluto)) return;
+    if (!eUrlDocumento(assoluto) && !eSorgenteVerificata(assoluto)) return;
+    if (
+      /(bando|avviso|interpell|supplenz|allegato|circolare|documento|protocollo|convocazione|domanda|graduator)/i.test(
+        assoluto,
+      )
+    ) {
+      out.add(assoluto);
+    }
+  });
+  return [...out].slice(0, max);
+}
+
+/** True per URL di cui NON possiamo leggere il testo (documenti binari). */
+function eDocumentoBinario(url: string): boolean {
+  return /\.(pdf|docx?|odt|xlsx?|pptx?|zip)($|\?)/i.test(url);
+}
+
+/**
+ * Cerca l'email di candidatura su PIÙ fonti collegate all'avviso:
+ *   1. il link di dettaglio e gli altri link candidati della voce;
+ *   2. i sottolink documentali (allegati/circolari) della pagina di dettaglio.
+ * Sceglie l'indirizzo più pertinente all'istituto. Non inventa nulla.
+ */
+async function cercaEmailNelleFonti(a: AvvisoRilevato): Promise<string | null> {
+  const ctx = { schoolCode: a.schoolCode, schoolName: a.schoolName };
+  const radici = [...new Set([a.link, ...(a.linkCandidati ?? [])].filter((u): u is string => Boolean(u)))]
+    .filter((u) => /^https?:\/\//i.test(u) && !eDocumentoBinario(u))
+    .slice(0, 2);
+  if (radici.length === 0) return null;
+
+  const visitate = new Set<string>();
+  const emailTrovate = new Set<string>();
+  const pagine: { html: string; url: string }[] = [];
+
+  // Livello 1: pagine di dettaglio / link candidati (testo + mailto:).
+  for (const url of radici) {
+    if (visitate.has(url)) continue;
+    visitate.add(url);
+    try {
+      const html = await scaricaPagina(url);
+      pagine.push({ html, url });
+      for (const e of emailDaHtml(html)) emailTrovate.add(e);
+    } catch {
+      // pagina non raggiungibile: si prosegue
+    }
+  }
+
+  // Livello 2 (solo se ancora nulla): un livello di profondità verso gli allegati.
+  if (emailTrovate.size === 0) {
+    for (const { html, url } of pagine) {
+      for (const sub of sottolinkCandidati(html, url, 2)) {
+        if (visitate.has(sub) || eDocumentoBinario(sub)) continue;
+        visitate.add(sub);
+        try {
+          for (const e of emailDaHtml(await scaricaPagina(sub))) emailTrovate.add(e);
+        } catch {
+          // allegato non raggiungibile
+        }
+      }
+    }
+  }
+
+  let migliore: string | null = null;
+  let migliorPunteggio = -Infinity;
+  for (const e of emailTrovate) {
+    const p = punteggioEmailScuola(e, ctx);
+    if (p > migliorPunteggio) {
+      migliorPunteggio = p;
+      migliore = e;
+    }
+  }
+  return migliore;
+}
+
+/** Email istituzionale derivata dal codice meccanografico (convenzione MIM). */
+function emailIstituzionaleDaCodice(schoolCode?: string | null): string | null {
+  const info = resolveSchoolByCode(schoolCode ?? null);
+  return info?.peoEmail ?? null;
+}
+
+/** Sotto questa soglia l'email è considerata debole → vale la pena approfondire. */
+const SOGLIA_EMAIL_AFFIDABILE = 30;
+
+/**
+ * Arricchisce l'EMAIL di candidatura scavando su più fonti (pagina di dettaglio,
+ * allegati, altri link candidati) e confrontando la pertinenza con l'istituto.
+ * Ultima ratio: email istituzionale derivata dal codice meccanografico
+ * (convenzione MIM, vedi `school-lookup.ts`). "Email non disponibile" resta solo
+ * se NESSUNA fonte produce un indirizzo. Non inventa nulla oltre tale convenzione.
+ */
+async function arricchisciContatti(
+  avvisi: AvvisoRilevato[],
+  max = 20,
+  usaCodice = true,
+): Promise<number> {
+  if (avvisi.length === 0) return 0;
+
+  // Priorità agli avvisi SENZA email (poi a quelli con email).
+  const ordinati = [...avvisi].sort(
+    (x, y) => (x.contactEmail ? 1 : 0) - (y.contactEmail ? 1 : 0),
+  );
+  const campione = ordinati.slice(0, max);
+
+  let migliorati = 0;
+  let daPagine = 0;
+  let daCodice = 0;
+  for (const a of campione) {
+    const ctx = { schoolCode: a.schoolCode, schoolName: a.schoolName };
+    const attuale = a.contactEmail ?? null;
+    let migliore = attuale;
+    let migliorPunteggio = attuale ? punteggioEmailScuola(attuale, ctx) : -Infinity;
+
+    // Approfondisce su più fonti solo se manca l'email o è debole.
+    if (migliorPunteggio < SOGLIA_EMAIL_AFFIDABILE) {
+      const trovata = await cercaEmailNelleFonti(a);
+      if (trovata) {
+        const p = punteggioEmailScuola(trovata, ctx);
+        if (p > migliorPunteggio) {
+          migliore = trovata;
+          migliorPunteggio = p;
+          daPagine += 1;
+        }
+      }
+    }
+
+    // Ultima ratio: convenzione MIM sul codice meccanografico.
+    if (usaCodice && !migliore && a.schoolCode) {
+      const derivata = emailIstituzionaleDaCodice(a.schoolCode);
+      if (derivata) {
+        migliore = derivata;
+        daCodice += 1;
+      }
+    }
+
+    if (migliore && migliore !== attuale) {
+      a.contactEmail = migliore;
+      migliorati += 1;
+    }
+  }
+
+  console.log(
+    `• Contatti: ${migliorati} email trovate/migliorate su ${campione.length} avvisi ` +
+      `(${daPagine} dalle pagine collegate, ${daCodice} derivate dal codice meccanografico).`,
+  );
+  return migliorati;
+}
+
 /* ------------------- Nessun seed di test nella pipeline ------------------- */
 
 // La vecchia FIXTURE_HTML (dati di esempio usati per i test offline) è stata
@@ -427,6 +614,23 @@ function mappaRigaNotices(a: InterpelloParsato) {
     class_codes: a.classCodes,
     expiration_date: a.expirationDate,
   };
+}
+
+/**
+ * True se l'URL è SPECIFICO (non è il fallback alla radice dell'ente/regione).
+ * Serve a deduplicare le notifiche per identità stabile: i fallback alla
+ * homepage USR/USP sono condivisi da più avvisi distinti e NON vanno usati
+ * come chiave di deduplica.
+ */
+function eUrlSpecifico(url?: string | null): url is string {
+  const u = (url ?? '').trim();
+  if (!/^https?:\/\//i.test(u)) return false;
+  try {
+    const p = new URL(u);
+    return p.pathname.split('/').filter(Boolean).length > 0 || Boolean(p.search);
+  } catch {
+    return false;
+  }
 }
 
 /* ------------------------ Upsert resiliente interpelli ------------------------ */
@@ -627,13 +831,22 @@ async function main() {
   const raggiungibiliList: AvvisoRilevato[] = [];
   let raggiungibili = 0;
   for (const a of trovati) {
-    const ok = await verificaLink(a.link ?? '');
-    if (ok) {
+    if (await verificaLink(a.link ?? '')) {
       raggiungibili++;
       raggiungibiliList.push(a);
-    } else {
-      console.warn(`  ✗ scartato (link non raggiungibile): ${a.link}`);
+      continue;
     }
+    // Link specifico non raggiungibile → fallback all'ente (USP/USR), se mappato
+    // e raggiungibile. Nessun link rotto viene mai persistito.
+    const ente = urlIstituzionaleEnte(a.province);
+    if (ente && (await verificaLink(ente))) {
+      console.warn(`  ↩ [${a.province}] link non raggiungibile → fallback ente: ${ente}`);
+      a.link = ente;
+      raggiungibili++;
+      raggiungibiliList.push(a);
+      continue;
+    }
+    console.warn(`  ✗ scartato (link non raggiungibile): ${a.link}`);
   }
   console.log(`• Link raggiungibili: ${raggiungibili}/${trovati.length}`);
   trovati = raggiungibiliList;
@@ -641,11 +854,26 @@ async function main() {
   // Scadenze mancanti: prova a estrarle dalla pagina ufficiale (best-effort).
   await arricchisciScadenze(trovati, Number(env.SCRAPER_SCADENZA_MAX ?? 20));
 
+  // Email mancanti/deboli: arricchimento multi-fonte (pagina di dettaglio,
+  // allegati, altri link) + ultima ratio dal codice meccanografico (MIM).
+  await arricchisciContatti(
+    trovati,
+    Number(env.SCRAPER_CONTATTI_MAX ?? 20),
+    env.SCRAPER_EMAIL_DA_CODICE !== '0',
+  );
+
   // Dedupe per hash_id + VALIDAZIONE anti-dummy (solo fonti ufficiali verificabili).
   const dedup = [...new Map(trovati.map((t) => [t.hashId, t])).values()];
   const scartatiValidazione: { motivo: string; title: string }[] = [];
   const unici = dedup.filter((a) => {
-    const esito = verificaAvviso({ title: a.title, link: a.link });
+    // Un link che coincide col fallback istituzionale dell'ente è accettato
+    // anche se è la radice del dominio (vedi `fonteEnte` in verificaAvviso).
+    const ente = urlIstituzionaleEnte(a.province);
+    const esito = verificaAvviso({
+      title: a.title,
+      link: a.link,
+      fonteEnte: Boolean(ente && a.link === ente),
+    });
     if (!esito.ok) {
       scartatiValidazione.push({ motivo: esito.motivo ?? 'non verificato', title: a.title });
       return false;
@@ -719,17 +947,37 @@ async function main() {
     return;
   }
 
-  // FASE 4 — determina quali interpelli sono realmente NUOVI (per le notifiche email)
-  const { data: righeEsistenti } = (await supabase
-    .from('interpelli')
-    .select('hash_id')
-    .in('hash_id', unici.map((u) => u.hashId))) as {
-    data: { hash_id: string }[] | null;
-    error: { message: string } | null;
-  };
-  const hashEsistenti = new Set((righeEsistenti ?? []).map((r) => r.hash_id));
-  const nuovi = unici.filter((u) => !hashEsistenti.has(u.hashId));
-  console.log(`• Interpelli NUOVI nel DB: ${nuovi.length} (candidati alle notifiche email)`);
+  // FASE 4 — determina quali interpelli sono realmente NUOVI (per le notifiche).
+  // L'identità primaria resta l'hash_id, ma l'hash include titolo/data che sulla
+  // pagina sorgente possono variare tra un run e l'altro: per NON ri-notificare
+  // lo STESSO avviso (loop sul record) si escludono anche le voci il cui URL di
+  // fonte è già presente in DB. La deduplica per URL vale solo per gli URL
+  // SPECIFICI: i fallback alla radice dell'ente (condivisi da più avvisi) no.
+  const hashCandidati = unici.map((u) => u.hashId);
+  const linkSpecifici = unici.map((u) => u.link).filter(eUrlSpecifico);
+  const esistentiPerHash = hashCandidati.length
+    ? ((await supabase
+        .from('interpelli')
+        .select('hash_id, source_url')
+        .in('hash_id', hashCandidati)) as { data: { hash_id: string; source_url: string }[] | null })
+        .data
+    : [];
+  const esistentiPerUrl = linkSpecifici.length
+    ? ((await supabase
+        .from('interpelli')
+        .select('hash_id, source_url')
+        .in('source_url', linkSpecifici)) as { data: { hash_id: string; source_url: string }[] | null })
+        .data
+    : [];
+  const hashEsistenti = new Set((esistentiPerHash ?? []).map((r) => r.hash_id));
+  const urlEsistenti = new Set((esistentiPerUrl ?? []).map((r) => r.source_url));
+  const nuovi = unici.filter(
+    (u) => !hashEsistenti.has(u.hashId) && !(eUrlSpecifico(u.link) && urlEsistenti.has(u.link)),
+  );
+  console.log(
+    `• Interpelli NUOVI nel DB: ${nuovi.length} (candidati alle notifiche; ` +
+      `${unici.length - nuovi.length} già presenti per hash/fonte)`,
+  );
 
   // Upsert nella tabella `interpelli` (nuovo schema FASE 2, con school_name/school_code).
   // `onConflict: 'hash_id'` + `ignoreDuplicates` evita di reinserire gli stessi avvisi.

@@ -55,6 +55,14 @@ export async function notificaNuoviInterpelli(
 
   const { dryRun = false, dashboardUrl } = opts;
 
+  // Stato PER-RUN. La lista utenti è uno snapshot letto dal DB una volta per
+  // interpello: senza questi set, quando in un solo run arrivano PIÙ interpelli
+  // nuovi, lo stesso utente verrebbe riprocessato e riceverebbe più volte
+  // l'avviso "periodo di prova terminato" (extra) perché il flag letto in
+  // memoria resta `false` anche dopo l'update su DB → loop sullo stesso record.
+  const utentiBloccoGiaAvvisati = new Set<string>();
+  const utentiEsauriti = new Set<string>();
+
   for (const interpello of nuovi) {
     // Matching Engine: utenti con provincia e almeno una classe in comune
     const utenti = await findUtentiCompatibili(client, {
@@ -73,12 +81,18 @@ export async function notificaNuoviInterpelli(
       schoolName: interpello.schoolName,
       province: interpello.province,
       classi: interpello.classCodes,
+      materia: interpello.materia,
       scadenza: interpello.expirationDate,
       link: interpello.link,
+      contactEmail: interpello.contactEmail,
     };
 
     const risultati = await Promise.all(
       utenti.map(async (utente) => {
+        // Utente già saturato in questo run (BASE oltre il limite): nessun
+        // ulteriore processamento, il cron `step5-notifiche` gestirà il recap.
+        if (utentiEsauriti.has(utente.id)) return [];
+
         // FASE 6 — guardia server-side: RPC atomica del contatore notifiche.
         // base → max 3 per ANNO SCOLASTICO (reset automatico a settembre);
         // pro → sempre consentito.
@@ -107,10 +121,15 @@ export async function notificaNuoviInterpelli(
               // `step5-notifiche` (Edge Function, 2 ore dopo l'avviso).
               if (pianoIllimitato(utente.piano)) {
                 tipo = 'notifica_pro';
-              } else if (!utente.notificheBloccoInviato) {
-                tipo = 'extra'; // Email 5 — warning: periodo di prova terminato
+              } else if (!utente.notificheBloccoInviato && !utentiBloccoGiaAvvisati.has(utente.id)) {
+                // Email 5 — warning "periodo di prova terminato": UNA SOLA VOLTA.
+                // Il set per-run evita di ripeterlo per ogni altro interpello del
+                // batch (il flag `notifiche_blocco_inviato` in memoria è ancora false).
+                tipo = 'extra';
+                utentiBloccoGiaAvvisati.add(utente.id);
               } else {
                 skip = true;
+                utentiEsauriti.add(utente.id);
               }
             } else {
               const usate = Number(rpcData[0].notifiche_usate);

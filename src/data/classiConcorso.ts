@@ -1,4 +1,4 @@
-import type { OrdineScuola } from './ordiniMaterie';
+import { materie as catalogoMaterie, type OrdineScuola } from './ordiniMaterie';
 
 export interface RequisitoCfu {
   ambito: string;
@@ -803,8 +803,55 @@ export const classiConcorso: ClasseConcorso[] = [
   },
 ];
 
-export const classeByCodice = (codice: string): ClasseConcorso | undefined =>
-  classiConcorso.find((c) => c.codice === codice);
+/**
+ * Normalizza un codice di classe per il CONFRONTO: le fonti ufficiali scrivono
+ * spesso il formato a 3 cifre (`A-026`) o compatto (`A042`), mentre il catalogo
+ * usa il formato a 2 cifre (`A-26`). Senza normalizzazione la ricerca fallisce.
+ */
+const normalizzaCodice = (codice?: string | null): string => {
+  const c = (codice ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!c) return '';
+  const m = c.match(/^([A-Z]{1,2})-0*(\d{1,3})$/) ?? c.match(/^([A-Z])0*(\d{2,3})$/);
+  return m ? `${m[1]}-${Number(m[2])}` : c;
+};
+
+/** Dizionario id-materia → nome leggibile (dal catalogo `ordiniMaterie`). */
+const nomeMateria = new Map(catalogoMaterie.map((m) => [m.id, m.nome]));
+
+export const classeByCodice = (codice: string): ClasseConcorso | undefined => {
+  const target = normalizzaCodice(codice);
+  return classiConcorso.find((c) => normalizzaCodice(c.codice) === target);
+};
 
 export const classiByMateria = (materiaId: string): ClasseConcorso[] =>
   classiConcorso.filter((c) => c.materie.includes(materiaId));
+
+/**
+ * Materia ufficiale da mostrare ACCANTO al codice di classe di concorso
+ * (es. `A-12 · Italiano, Storia, Geografia, Latino`). Priorità:
+ *   1. materia esplicita dell'avviso (estratta dal testo dallo scraper);
+ *   2. elenco materie ufficiale del dizionario (`classiConcorso`);
+ *   3. denominazione estesa della classe (es. classi senza materie: infanzia/primaria).
+ * Ritorna `null` se il codice non è riconosciuto e nessuna materia è fornita.
+ */
+export function materiaClasse(
+  codice?: string | null,
+  materiaEsplicita?: string | null,
+): string | null {
+  const esplicita = (materiaEsplicita ?? '').trim();
+  if (esplicita) return esplicita;
+  const classe = classeByCodice(codice ?? '');
+  if (!classe) return null;
+  const nomi = classe.materie.map((id) => nomeMateria.get(id) ?? id).filter(Boolean);
+  return nomi.length > 0 ? nomi.join(', ') : classe.denominazione || null;
+}
+
+/** Etichetta compatta `codice · materia` (o solo il codice). */
+export function etichettaClasseMateria(
+  codice?: string | null,
+  materiaEsplicita?: string | null,
+): string {
+  const code = (codice ?? '').trim();
+  const materia = materiaClasse(code, materiaEsplicita);
+  return materia ? `${code} · ${materia}` : code;
+}

@@ -71,6 +71,7 @@ const campioni: Campione[] = [
       province: 'AT',
       comune: 'Asti',
       classCodes: ['A-022'],
+      contactEmail: 'prot@liceomonti.edu.it',
       expirationDate: '2026-09-18',
       link: 'https://www.istruzione.piemonte.it/interpello-a022-monti-asti',
     },
@@ -125,6 +126,11 @@ function verificaStruttura(avviso: InterpelloCanale, testo: string): string[] {
   if (!testo.includes('📅 Scadenza: <b>')) problemi.push('manca la riga "📅 Scadenza:"');
   if (!testo.includes('🔗 <a href="') || !testo.includes('Leggi l\'Avviso Originale')) {
     problemi.push('manca il blocco link "🔗 Leggi l\'Avviso Originale"');
+  }
+  // La riga email deve essere SEMPRE presente nel blocco contatti: se l'email è
+  // disponibile si mostra, altrimenti la dicitura "Email non disponibile".
+  if (!/📧 (Candidature:|Email non disponibile)/.test(testo)) {
+    problemi.push('manca la riga email candidature (📧 Candidature: … oppure 📧 Email non disponibile)');
   }
   if (!testo.includes('⚡ Ricevi solo gli avvisi per la tua provincia e classe in privato:')) {
     problemi.push('manca la CTA "⚡ Ricevi solo gli avvisi…"');

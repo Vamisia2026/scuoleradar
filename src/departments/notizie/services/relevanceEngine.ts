@@ -50,7 +50,7 @@ const PAROLE_CATEGORIA: Record<string, string[]> = {
     'nomina', 'nomine', 'algoritmo', 'algoritmi',
   ],
   'Mobilità': ['mobilità', 'mobilita', 'trasferimento', 'assegnazione provvisoria', 'utilizzazione', 'comma 5'],
-  'Concorsi': ['concorso', 'bando di concorso', 'selezione', 'assunzione', 'immissione in ruolo', 'reclutamento'],
+  'Concorsi': ['concorso', 'concorsi', 'bando di concorso', 'selezione', 'assunzione', 'immissione in ruolo', 'reclutamento'],
   'Pensioni': ['pensione', 'pensioni', 'cessazione dal servizio', 'riscatto', 'buonuscita', 'quota'],
   'Sostegno': ['sostegno', 'pei', 'inclusione', 'disabilità', 'disabilita', 'bes', 'assistente all’autonomia', 'glo'],
   'Graduatorie': ['graduatoria', 'graduatorie', 'gae', 'gps', 'istanze online'],
@@ -81,9 +81,10 @@ const PAROLE_ACCETTA: string[] = [
   'bando', 'avviso', 'scadenza', 'termine', 'termine ultimo', 'entro il', 'domande',
   'domanda', 'istanza', 'presentazione', 'pubblicato', 'pubblicazione', 'aggiornamento',
   'calendario', 'requisiti', 'modalità', 'modalita', 'graduatoria', 'graduatorie',
-  'assunzione', 'concorso', 'mobilità', 'mobilita', 'pensioni', 'supplenze', 'sostegno',
+  'assunzione', 'assunzioni', 'concorso', 'concorsi', 'reclutamento',
+  'mobilità', 'mobilita', 'pensioni', 'supplenze', 'sostegno',
   'rettifica', 'integrazione', 'proroga', 'avviso di avvio', 'apertura delle domande',
-  'riserva', 'assegnazione', 'conferimento', 'scelta delle sedi',
+  'riserva', 'assegnazione', 'assegnazioni', 'conferimento', 'scelta delle sedi',
   'nomina', 'nomine', 'algoritmo', 'algoritmi', 'presa di servizio', 'primo settembre',
   '1° settembre', 'pnrr', 'bollettini', 'ccnl', 'contratto collettivo',
   'verbale di accordo', 'sottoscrizione', 'riconoscimento', 'equipollenza',
@@ -374,11 +375,27 @@ const PERCORSI_GENERICI = new Set([
 ]);
 
 /**
+ * Slug delle PAGINE OPERATIVE delle USR/MIM pubblicate a `/web/<sito>/<slug>`
+ * (senza il segmento Liferay `/-/`): sono la destinazione corrente e stabile
+ * di provvedimenti per il personale scolastico (elenchi interpelli, mobilità,
+ * concorsi, graduatorie, calendario regionale…). A differenza delle homepage e
+ * delle pagine di elenco generiche, hanno un contenuto operativo specifico e
+ * vengono accettate come fonte canonica (il gate di rilevanza le filtra comunque).
+ */
+const RE_SLUG_OPERATIVO =
+  /interpell|supplenz|graduator|concors|reclutament|assunz|mobilita|assegnazion|nomine?|reggenz|avvis|selezion|contratt|personale|organico|trasferiment|pension|sostegno|calendario-scolastic|prese-di-servizio|ricerca-supplenti/;
+
+/**
  * True se l'URL è una FONTE CANONICA (il singolo articolo/atto) e non una
  * pagina generica del sito (es. `https://www.mim.gov.it/web/guest/home`).
- * Per il dominio MIM (incluse le pagine USR regionali) è richiesto il pattern
- * canonico degli articoli Liferay `/web/<sito>/-/<slug>` — es. `/web/guest/-/…`
- * oppure `/web/usr-lombardia/-/…`.
+ * Per il dominio MIM (incluse le pagine USR regionali) sono accettati:
+ *   1. gli articoli canonici Liferay `/web/<sito>/-/<slug>` — es.
+ *      `/web/guest/-/…` oppure `/web/usr-lombardia/-/…`;
+ *   2. le PAGINE OPERATIVE delle USR `/web/<sito>/<slug>` (es.
+ *      `/web/usr-lombardia/interpelli-ricerca-supplenti`), che dal 2026 sono la
+ *      destinazione stabile di interpelli/concorsi/graduatorie: senza questo
+ *      caso la pipeline non trova più alcuna fonte nuova (stallo).
+ * Homepage, indici e pagine di elenco generiche restano sempre escluse.
  */
 export function èFonteCanonica(url: string): boolean {
   try {
@@ -386,9 +403,13 @@ export function èFonteCanonica(url: string): boolean {
     let percorso = parsed.pathname.toLowerCase();
     if (percorso.length > 1 && percorso.endsWith('/')) percorso = percorso.slice(0, -1);
     if (PERCORSI_GENERICI.has(percorso)) return false;
-    // MIM + siti regionali (USR): articoli canonici `/web/<sito>/-/<slug>`.
+    // MIM + siti regionali (USR)
     if (parsed.hostname.endsWith('mim.gov.it')) {
-      return /\/web\/[^/]+\/-\/.+/.test(percorso);
+      // 1. Articolo canonico Liferay.
+      if (/\/web\/[^/]+\/-\/.+/.test(percorso)) return true;
+      // 2. Pagina operativa USR/MIM: `/web/<sito>/<slug-operativo>`.
+      const m = percorso.match(/^\/web\/[^/]+\/([^/]+)$/);
+      return Boolean(m && RE_SLUG_OPERATIVO.test(m[1]));
     }
     return true;
   } catch {

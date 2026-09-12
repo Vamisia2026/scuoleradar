@@ -13,6 +13,7 @@
  */
 
 import { Resend } from 'resend';
+import { etichettaClasseMateria } from '../data/classiConcorso';
 
 /** Interfaccia per l'ambiente (evita la dipendenza da @types/node nel frontend). */
 declare const process: { env: Record<string, string | undefined> };
@@ -36,9 +37,14 @@ export interface DettagliNotifica {
   province: string;
   /** Classi di concorso dell'opportunità (es. ['A-22', 'ADEE']) */
   classi: string[];
+  /** Materia/settore dell'avviso (dal testo) o nome ufficiale della classe. */
+  materia?: string | null;
   scadenza: string | null;
   /** URL del bando/avviso originale */
   link: string | null;
+  /** Email di candidatura della scuola (PEC/istituzionale), se presente nei dati. */
+  contactEmail?: string | null;
+
 }
 
 export interface EsitoInvio {
@@ -145,10 +151,22 @@ function proUrl(dashboardUrl: string): string {
   }
 }
 
-/** Link dell'opportunità (bando originale, con fallback alla pagina di dettaglio). */
+/**
+ * Link dell'opportunità: usa SEMPRE il link diretto alla risorsa più specifica
+ * (allegato/PDF o pagina ufficiale dell'interpello). Se assente o malformato →
+ * pagina di dettaglio, quindi la dashboard. Mai link relativi/rotti.
+ */
 export function linkOpportunita(interpello: DettagliNotifica | null, dashboardUrl: string): string {
   if (!interpello) return dashboardUrl;
-  if (interpello.link) return interpello.link;
+  const link = (interpello.link ?? '').trim();
+  if (/^https?:\/\//i.test(link)) {
+    try {
+      new URL(link);
+      return link;
+    } catch {
+      // link malformato → si prosegue con il fallback
+    }
+  }
   if (interpello.id) return `${baseUrl(dashboardUrl)}interpello/${encodeURIComponent(interpello.id)}`;
   return dashboardUrl;
 }
@@ -302,7 +320,10 @@ export function renderEmailHtml(
           const classe = classeRilevante(interpello, destinatario);
           const dettagli: string[] = [];
           if (interpello.schoolName) dettagli.push(`🏫 ${escapeHtml(interpello.schoolName)}`);
-          if (classe) dettagli.push(`📚 ${escapeHtml(classe)}`);
+          // Codice classe + materia ufficiale (es. "A-12 · Italiano, Storia, …").
+          if (classe) {
+            dettagli.push(`📚 ${escapeHtml(etichettaClasseMateria(classe, interpello.materia))}`);
+          }
           dettagli.push(`📍 ${escapeHtml(interpello.province)}`);
           dettagli.push(`🏷️ ${escapeHtml(categoriaOpportunita(interpello.title))}`);
           return `
@@ -312,6 +333,7 @@ export function renderEmailHtml(
                       <h2 style="margin:0 0 8px; font-size:18px; font-weight:800; line-height:1.35; color:#14354e;"><b>${escapeHtml(interpello.title)}</b></h2>
                       <p style="margin:0; font-size:14px; line-height:1.6; color:#475569;">${dettagli.join(' · ')}</p>
                       <p style="margin:8px 0 0; font-size:13px; color:#64748b;">⏳ Scadenza: ${formatDataScadenza(interpello.scadenza)}</p>
+                      <p style="margin:8px 0 0; font-size:13px; color:#64748b;">📧 Candidature: ${interpello.contactEmail ? `<a href="mailto:${escapeHtml(interpello.contactEmail)}" style="color:#2B6F9E;">${escapeHtml(interpello.contactEmail)}</a>` : 'Email non disponibile'}</p>
                       <p style="margin:12px 0 0;">${interpello.link ? `<a href="${escapeHtml(interpello.link)}" target="_blank" rel="noopener" style="font-size:14px; font-weight:700; color:#2B6F9E; text-decoration:underline;">🔗 Fonte ufficiale verificata (Albo Pretorio) — apri e candidati →</a>` : ''}</p>
                     </td>
                   </tr>

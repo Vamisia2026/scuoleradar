@@ -26,10 +26,14 @@ export interface Interpello {
   classeCodice: string;
   /** Tutti i codici di classe rilevati (popolato dai dati reali di `notices`) */
   classiCodes?: string[];
+  /** Materia/settore dell'avviso (dal testo) o nome ufficiale della classe, se disponibile. */
+  materia?: string | null;
   ordine: OrdineScuola;
   dataScadenza: string; // ISO date
   descrizione: string;
   linkFonte: string;
+  /** Email di candidatura della scuola (PEC/istituzionale), se disponibile. */
+  contactEmail?: string | null;
   compatibilita: number; // 0-100
 }
 

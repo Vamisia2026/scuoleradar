@@ -93,6 +93,54 @@ export const notizieIngestite: NewsArticle[] = [
     "published_at": ""
   },
   {
+    "id": "notizia-personale-docente-concorsi-e-reclutamento-usr-lombardia",
+    "title": "Personale docente Concorsi e reclutamento",
+    "category": "Concorsi",
+    "deadline_date": null,
+    "summary_points": [
+      "Personale docente Concorsi e reclutamento",
+      "Interessati: candidati in possesso dei requisiti indicati nel bando per la classe di concorso di interesse.",
+      "Come: procedi su InPA."
+    ],
+    "content_html": "<p>È stato pubblicato un bando di concorso per l’accesso o il passaggio di ruolo nella scuola, con l’avviso «Personale docente Concorsi e reclutamento». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.inpa.gov.it/\" target=\"_blank\" rel=\"noopener noreferrer\">InPA</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda candidati in possesso dei requisiti indicati nel bando per la classe di concorso di interesse. La selezione prevede una o più prove e la valutazione dei titoli: conviene leggere il bando per intero prima di compilare la domanda, perché requisiti e modalità cambiano di bando in bando.</p>\n    <p>La domanda si presenta online dal portale <a href=\"https://www.inpa.gov.it/\" target=\"_blank\" rel=\"noopener noreferrer\">InPA</a> (Portale del Reclutamento della Pubblica Amministrazione) con accesso SPID o CIE, entro i termini indicati nel bando. Predisponi in anticipo i titoli e l’autocertificazione.</p>",
+    "official_source_url": "https://www.mim.gov.it/web/usr-lombardia/concorsi-e-reclutamento-docenti",
+    "official_pdf_url": null,
+    "relevance_score": 90,
+    "published_at": ""
+  },
+  {
+    "id": "notizia-concorsi-dirigenti-scolastici-usr-lombardia",
+    "title": "Concorsi Dirigenti Scolastici",
+    "category": "Concorsi",
+    "deadline_date": null,
+    "summary_points": [
+      "Concorsi Dirigenti Scolastici",
+      "Interessati: candidati in possesso dei requisiti indicati nel bando per la classe di concorso di interesse.",
+      "Come: procedi su InPA."
+    ],
+    "content_html": "<p>È stato pubblicato un bando di concorso per l’accesso o il passaggio di ruolo nella scuola, con l’avviso «Concorsi Dirigenti Scolastici». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.inpa.gov.it/\" target=\"_blank\" rel=\"noopener noreferrer\">InPA</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda candidati in possesso dei requisiti indicati nel bando per la classe di concorso di interesse. La selezione prevede una o più prove e la valutazione dei titoli: conviene leggere il bando per intero prima di compilare la domanda, perché requisiti e modalità cambiano di bando in bando.</p>\n    <p>La domanda si presenta online dal portale <a href=\"https://www.inpa.gov.it/\" target=\"_blank\" rel=\"noopener noreferrer\">InPA</a> (Portale del Reclutamento della Pubblica Amministrazione) con accesso SPID o CIE, entro i termini indicati nel bando. Predisponi in anticipo i titoli e l’autocertificazione.</p>",
+    "official_source_url": "https://www.mim.gov.it/web/usr-lombardia/concorsi-dirigenti-scolastici-1",
+    "official_pdf_url": null,
+    "relevance_score": 90,
+    "published_at": ""
+  },
+  {
+    "id": "notizia-personale-ata-concorsi-e-procedure-selettive-usr-lombardia",
+    "title": "Personale ATA Concorsi e procedure selettive",
+    "category": "Concorsi",
+    "deadline_date": null,
+    "summary_points": [
+      "Personale ATA Concorsi e procedure selettive",
+      "Interessati: candidati in possesso dei requisiti indicati nel bando per la classe di concorso di interesse.",
+      "Come: procedi su InPA."
+    ],
+    "content_html": "<p>È stato pubblicato un bando di concorso per l’accesso o il passaggio di ruolo nella scuola, con l’avviso «Personale ATA Concorsi e procedure selettive». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.inpa.gov.it/\" target=\"_blank\" rel=\"noopener noreferrer\">InPA</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda candidati in possesso dei requisiti indicati nel bando per la classe di concorso di interesse. La selezione prevede una o più prove e la valutazione dei titoli: conviene leggere il bando per intero prima di compilare la domanda, perché requisiti e modalità cambiano di bando in bando.</p>\n    <p>La domanda si presenta online dal portale <a href=\"https://www.inpa.gov.it/\" target=\"_blank\" rel=\"noopener noreferrer\">InPA</a> (Portale del Reclutamento della Pubblica Amministrazione) con accesso SPID o CIE, entro i termini indicati nel bando. Predisponi in anticipo i titoli e l’autocertificazione.</p>",
+    "official_source_url": "https://www.mim.gov.it/web/usr-lombardia/concorsi-e-selezione-personale-ata",
+    "official_pdf_url": null,
+    "relevance_score": 90,
+    "published_at": ""
+  },
+  {
     "id": "notizia-rettifica-assegnazione-reggenze-annuali-e-temporanee-a-s-202-usr-lombardia",
     "title": "Rettifica assegnazione reggenze annuali e temporanee a.s. 2026/27",
     "category": "Supplenze",
@@ -104,6 +152,22 @@ export const notizieIngestite: NewsArticle[] = [
     ],
     "content_html": "<p>Il Ministero dell’Istruzione e del Merito (MIM) ha aggiornato le regole per supplenze e incarichi del personale docente, con l’avviso «Rettifica assegnazione reggenze annuali e temporanee a.s. 2026/27». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda docenti in graduatoria, aspiranti supplenti e personale che presenta la messa a disposizione. Le convocazioni seguono l’ordine di graduatoria: chi non risponde nei tempi previsti può essere saltato, quindi conviene tenere monitorata la propria posizione.</p>\n    <p>Domande e accettazioni si gestiscono online dal portale <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online</a> con identità SPID o CIE. Tieni a portata di mano la documentazione di servizio.</p>",
     "official_source_url": "https://www.mim.gov.it/web/usr-lombardia/-/rettifica-assegnazione-reggenze-annuali-e-temporanee-a-s-2026-27",
+    "official_pdf_url": null,
+    "relevance_score": 80,
+    "published_at": ""
+  },
+  {
+    "id": "notizia-personale-a-tempo-determinato-interpelli-usr-lombardia",
+    "title": "Personale a Tempo Determinato Interpelli",
+    "category": "Supplenze",
+    "deadline_date": null,
+    "summary_points": [
+      "Personale a Tempo Determinato Interpelli",
+      "Interessati: docenti in graduatoria, aspiranti supplenti e personale che presenta la messa a disposizione.",
+      "Come: procedi su Istanze Online."
+    ],
+    "content_html": "<p>Il Ministero dell’Istruzione e del Merito (MIM) ha aggiornato le regole per supplenze e incarichi del personale docente, con l’avviso «Personale a Tempo Determinato Interpelli». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda docenti in graduatoria, aspiranti supplenti e personale che presenta la messa a disposizione. Le convocazioni seguono l’ordine di graduatoria: chi non risponde nei tempi previsti può essere saltato, quindi conviene tenere monitorata la propria posizione.</p>\n    <p>Domande e accettazioni si gestiscono online dal portale <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online</a> con identità SPID o CIE. Tieni a portata di mano la documentazione di servizio.</p>",
+    "official_source_url": "https://www.mim.gov.it/web/usr-lombardia/interpelli-ricerca-supplenti",
     "official_pdf_url": null,
     "relevance_score": 80,
     "published_at": ""

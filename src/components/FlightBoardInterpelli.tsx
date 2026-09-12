@@ -18,6 +18,8 @@ import { supabase } from '@/lib/supabase';
 import { useApp } from '@/contexts/AppContext';
 import { province } from '@/data/province';
 import { eInterpelloAttivo, giorniRimanenti, stileScadenza } from '@/lib/scadenza';
+import { enteEmittenteDaTitolo } from '@/lib/matchingEngine';
+import { materiaClasse } from '@/data/classiConcorso';
 
 const RIGHE_PER_PAGINA = 5;
 const ROTAZIONE_MS = 8_000;
@@ -28,6 +30,8 @@ interface InterpelloLive {
   school_name: string | null;
   province: string;
   class_codes: string[] | null;
+  /** Materia/settore inferito dallo scraper quando manca una classe esplicita. */
+  materia: string | null;
   expiration_date: string | null;
   created_at: string | null;
   source_url: string | null;
@@ -71,6 +75,39 @@ function estraiScuolaDaTitolo(r: InterpelloLive): string | null {
 }
 
 
+/**
+ * URL http(s) assoluto e valido, altrimenti `null`.
+ * Garantisce che la tabella esponga SOLO link apribili (mai relativi/malformati).
+ */
+function urlValido(url?: string | null): string | null {
+  const u = (url ?? '').trim();
+  if (!/^https?:\/\//i.test(u)) return null;
+  try {
+    new URL(u);
+    return u;
+  } catch {
+    return null;
+  }
+}
+
+/** True se il link punta a un documento PDF (risorsa specifica, non un tabellone). */
+function ePdf(url: string): boolean {
+  try {
+    return new URL(url).pathname.toLowerCase().endsWith('.pdf');
+  } catch {
+    return false;
+  }
+}
+
+/** Host del link: chiarisce la destinazione nel tooltip (nessun link ambiguo). */
+function hostDi(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return '';
+  }
+}
+
 export function FlightBoardInterpelli() {
   const { openRadarSetup } = useApp();
   // Stato iniziale vuoto → sezione dormiente finché non ci sono interpelli reali.
@@ -94,7 +131,7 @@ export function FlightBoardInterpelli() {
     const carica = async (): Promise<void> => {
       const { data, error } = await client
         .from('interpelli')
-        .select('id, title, school_name, province, class_codes, expiration_date, created_at, source_url')
+        .select('id, title, school_name, province, class_codes, materia, expiration_date, created_at, source_url')
         .order('created_at', { ascending: false })
         .limit(500);
       if (!attivo) return;
@@ -102,9 +139,9 @@ export function FlightBoardInterpelli() {
         console.warn('[flight-board] lettura interpelli:', error.message);
         return; // mantiene lo stato precedente; nuovo tentativo al prossimo tick
       }
-      // Lista ATTIVA: solo interpelli con fonte ufficiale e NON scaduti.
+      // Lista ATTIVA: solo interpelli con FONTE APRIBILE (http/https valido) e NON scaduti.
       const attivi = ((data ?? []) as InterpelloLive[]).filter(
-        (r) => Boolean(r.source_url?.trim()) && eInterpelloAttivo(r.expiration_date),
+        (r) => Boolean(urlValido(r.source_url)) && eInterpelloAttivo(r.expiration_date),
       );
       // Aggiorna SOLO se il contenuto è cambiato (evita re-render/slide inutili).
       setRighe((prev) => {
@@ -175,6 +212,10 @@ export function FlightBoardInterpelli() {
             <tbody className="divide-y divide-slate-800/60">
               {visibili.map((r, i) => {
                 const classe = r.class_codes?.[0] ?? '—';
+                // Materia ufficiale accanto al codice classe (es. "A-22 · …").
+                const materia = r.class_codes?.[0]
+                  ? materiaClasse(r.class_codes[0], r.materia)
+                  : null;
                 const giorni = giorniRimanenti(r.expiration_date);
                 const stile = stileScadenza(giorni);
                 const dataScad = r.expiration_date
@@ -184,9 +225,19 @@ export function FlightBoardInterpelli() {
                         : r.expiration_date,
                     ).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })
                   : '';
-                const urlFonte = r.source_url?.trim() || '';
+                // Link diretto alla risorsa PIÙ SPECIFICA disponibile: il parser
+                // ha già scelto allegato/PDF → pagina ufficiale → fallback ente.
+                const urlFonte = urlValido(r.source_url);
+                const titoloLink = urlFonte
+                  ? `${ePdf(urlFonte) ? 'Apri il PDF ufficiale' : 'Apri la pagina ufficiale'}${
+                      hostDi(urlFonte) ? ` (${hostDi(urlFonte)})` : ''
+                    }`
+                  : "Apri l'avviso ufficiale";
                 const nomeScuola =
-                  r.school_name?.trim() || estraiScuolaDaTitolo(r) || 'Scuola non indicata';
+                  r.school_name?.trim() ||
+                  estraiScuolaDaTitolo(r) ||
+                  enteEmittenteDaTitolo(r.title, r.province) ||
+                  'Scuola non indicata';
                 const citta = estraiCitta(r);
                 const etichettaScuola =
                   citta && !nomeScuola.toUpperCase().includes(citta.toUpperCase())
@@ -202,7 +253,7 @@ export function FlightBoardInterpelli() {
                     role={urlFonte ? 'link' : undefined}
                     tabIndex={urlFonte ? 0 : undefined}
                     aria-label={
-                      urlFonte ? `Apri l'avviso ufficiale: ${r.school_name || r.title}` : undefined
+                      urlFonte ? `${titoloLink}: ${r.school_name || r.title}` : undefined
                     }
                     onClick={(ev) => {
                       if (!urlFonte) return;
@@ -220,21 +271,33 @@ export function FlightBoardInterpelli() {
                     className={`${rigaClasse} ${urlFonte ? 'cursor-pointer' : ''}`}
                     style={{ height: '3.5rem' }} // altezza FISSA per riga: il pannello non si muove
                   >
-                    <td className="px-4 py-2.5 font-mono text-xs font-bold uppercase tracking-wide">{classe}</td>
+                    <td className="px-4 py-2.5">
+                      <span className="block font-mono text-xs font-bold uppercase tracking-wide">{classe}</span>
+                      {materia && (
+                        <span className="block max-w-[16rem] truncate text-[11px] font-medium normal-case tracking-normal text-primary-400">
+                          {materia}
+                        </span>
+                      )}
+                    </td>
                     <td className="min-w-0 px-4 py-2.5">
                       {urlFonte ? (
                         <a
                           href={urlFonte}
                           target="_blank"
                           rel="noopener noreferrer"
-                          title="Apri l'avviso ufficiale (nuova scheda)"
-                          aria-label={`Apri l'avviso ufficiale: ${r.school_name || r.title}`}
+                          title={`${titoloLink} — nuova scheda`}
+                          aria-label={`${titoloLink}: ${r.school_name || r.title}`}
                           className="group block min-w-0"
                         >
                           <span className="flex min-w-0 items-center gap-1.5">
                             <span className="min-w-0 truncate font-semibold underline-offset-4 group-hover:text-accent-600 group-hover:underline">
                               {etichettaScuola}
                             </span>
+                            {ePdf(urlFonte) && (
+                              <span className="shrink-0 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-rose-700">
+                                PDF
+                              </span>
+                            )}
                             <ExternalLink className="h-3.5 w-3.5 shrink-0 text-primary-400 transition group-hover:text-accent-500" />
                           </span>
                           <span className="block max-w-md truncate text-xs text-primary-400 group-hover:text-primary-600">

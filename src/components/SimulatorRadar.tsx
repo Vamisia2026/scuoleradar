@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, ChevronDown, Radar, BellRing, ArrowRight, Loader2, ExternalLink } from 'lucide-react';
 import { classiConcorso } from '@/data/classiConcorso';
 import { province } from '@/data/province';
+import { enteEmittenteDaTitolo } from '@/lib/matchingEngine';
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/contexts/AppContext';
 
@@ -184,7 +185,10 @@ export function SimulatorRadar() {
                                 {o.title}
                               </span>
                               <span className="block text-xs text-primary-500">
-                                {o.school_name ?? 'Scuola non indicata'} · {o.province}
+                                {o.school_name?.trim() ||
+                                  enteEmittenteDaTitolo(o.title, o.province) ||
+                                  'Scuola non indicata'}{' '}
+                                · {o.province}
                               </span>
                             </span>
                             <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-500" />

@@ -20,6 +20,7 @@ import {
   type TipoMessaggio,
 } from './resend';
 import { province } from '../data/province';
+import { etichettaClasseMateria, materiaClasse } from '../data/classiConcorso';
 
 /** Interfaccia per l'ambiente (evita la dipendenza da @types/node nel frontend). */
 declare const process: { env: Record<string, string | undefined> };
@@ -72,6 +73,22 @@ function eLinkPdf(url?: string | null): boolean {
 }
 
 /**
+ * Restituisce l'URL SOLO se è http(s) assoluto e valido, altrimenti `null`.
+ * Evita di inviare a Telegram/email link relativi o malformati (che farebbero
+ * fallire l'invio o porterebbero l'utente su una pagina rotta).
+ */
+export function urlAssolutaValida(url?: string | null): string | null {
+  const u = (url ?? '').trim();
+  if (!/^https?:\/\//i.test(u)) return null;
+  try {
+    new URL(u);
+    return u;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Barra/CTA blu cliccabile per il PDF ufficiale: da usare al posto del generico
  * link di fonte quando l'avviso è un PDF, così l'utente vede subito un invito
  * chiaro ad aprirlo/scaricarlo (invece della sola icona PDF del link preview).
@@ -98,8 +115,11 @@ interface TestoTelegram {
   testa: string;
   /** Corpo del messaggio. */
   paragrafi: string[];
-  /** Blocco CTA finale (facoltativo). */
-  cta?: (linkPro: string, linkOpp: string) => string;
+  /**
+   * Blocco CTA finale (facoltativo). Riceve i link GIÀ risolti:
+   * `linkPro` (pagina prezzi), `linkOpp` (opportunità) e `dashboardUrl` (piattaforma).
+   */
+  cta?: (linkPro: string, linkOpp: string, dashboardUrl: string) => string;
 }
 
 const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
@@ -110,7 +130,7 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
       'Hai accesso a Modulistica, Crea CV, Calcolatore CFU e Radar Scuole con notifiche illimitate.',
       'Quando vuoi sapere cosa succede di importante nella scuola, passa dal nostro Notiziario.',
     ],
-    cta: (dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
+    cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
   },
   prova1: {
     testa: '🎯 Prima opportunità',
@@ -154,7 +174,7 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
       'Noi continuiamo a cercare per te!',
       'A presto!',
     ],
-    cta: (dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
+    cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
   },
   conferma_attivazione: {
     testa: '🎯 Radar attivato con successo!',
@@ -162,7 +182,7 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
       'Ora puoi rilassarti: il tuo Radar è attivo e sta già lavorando per te.',
       "Non ti invieremo comunicazioni inutili e spam. Quando vedi un nostro messaggio qui su Telegram, aprilo subito: abbiamo intercettato un'opportunità per te!",
     ],
-    cta: (dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
+    cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
   },
   free_forever_preavviso: {
     testa: '🎁 PRO Free Forever: il rinnovo gratuito è automatico',
@@ -171,7 +191,7 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
       'Nessun pagamento e nessuna azione richiesta: alla scadenza il rinnovo parte automaticamente a 0€, per sempre.',
       'Non riceverai mai solleciti di pagamento né avvisi di mancato rinnovo.',
     ],
-    cta: (dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
+    cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
   },
   notifica_pro: {
     testa: '🎯 Nuova opportunità trovata per te!',
@@ -212,7 +232,8 @@ export function formattaMessaggioTelegram(
       righe.push(`🏫 ${escapeHtml(interpello.schoolName)}`);
     }
     if (classe && !tLower.includes(classe.toLowerCase())) {
-      righe.push(`📚 ${escapeHtml(classe)}`);
+      // Materia ufficiale accanto al codice (es. "A-22 · Lingua inglese, …").
+      righe.push(`📚 ${escapeHtml(etichettaClasseMateria(classe, interpello.materia))}`);
     }
     righe.push(`📍 ${escapeHtml(interpello.province)}`);
     righe.push(`⏳ Scadenza: ${formatDataScadenza(interpello.scadenza)}`);
@@ -220,7 +241,7 @@ export function formattaMessaggioTelegram(
     dettagli = righe.join('\n');
   }
 
-  const linkFonte = interpello?.link?.trim() ?? '';
+  const linkFonte = urlAssolutaValida(interpello?.link);
   const linkRiga =
     linkFonte && TIPI_CON_OPPORTUNITA.has(tipo)
       ? eLinkPdf(linkFonte)
@@ -228,12 +249,22 @@ export function formattaMessaggioTelegram(
         : `🔗 <a href="${escapeHtml(linkFonte)}">Fonte ufficiale verificata (Albo Pretorio) — apri e candidati</a>`
       : '';
 
+  // Email di candidatura della scuola: mostrata per i tipi con opportunità.
+  // Se assente nei dati → dicitura pulita (mai email inventate/ipotizzate).
+  const emailContatto = interpello?.contactEmail?.trim() ?? '';
+  const emailRiga = TIPI_CON_OPPORTUNITA.has(tipo)
+    ? emailContatto
+      ? `📧 Candidature: <a href="mailto:${escapeHtml(emailContatto)}">${escapeHtml(emailContatto)}</a>`
+      : '📧 Email non disponibile'
+    : '';
+
   const parti: string[] = [copy.testa];
   if (titolo) parti.push(titolo);
   if (dettagli) parti.push(dettagli);
   if (linkRiga) parti.push(linkRiga);
+  if (emailRiga) parti.push(emailRiga);
   if (copy.paragrafi.length) parti.push(copy.paragrafi.join('\n'));
-  if (copy.cta) parti.push(copy.cta(linkPro, linkOpp));
+  if (copy.cta) parti.push(copy.cta(linkPro, linkOpp, dashboardUrl));
   parti.push('I tuoi colleghi di <b>Scuole Radar</b>');
   parti.push('📌 Quando vuoi sapere cosa succede di importante, vieni qui: https://www.scuoleradar.it/notizie');
 
@@ -247,42 +278,83 @@ export interface EsitoTelegram {
   error?: string;
 }
 
+/** Timeout per singola chiamata alla Bot API (evita blocchi su rete lenta). */
+const TELEGRAM_TIMEOUT_MS = 10_000;
+/** Tentativi massimi per errori transitori (429 / 5xx / timeout). */
+const TELEGRAM_MAX_TENTATIVI = 3;
+
+/** Attesa non bloccante (retry/backoff). */
+function attendi(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Invia un messaggio di testo al chat_id indicato tramite le Bot API.
  * `parse_mode: 'HTML'` per la formattazione (bold, link).
+ *
+ * ROBUSTEZZA: timeout per tentativo + RETRY con backoff sui soli errori
+ * transitori (HTTP 429 rispettando `retry_after`, 5xx, errori di rete/timeout).
+ * Non lancia MAI eccezioni: restituisce sempre `{ ok, error }`, così l'errore
+ * è SEMPRE visibile al chiamante (nessun fallimento silenzioso).
  */
 export async function inviaMessaggioTelegram(
   chatId: string,
   testo: string,
 ): Promise<EsitoTelegram> {
-  const token = getTelegramBotToken();
+  const token = getTelegramBotToken()?.trim();
   if (!token) return { ok: false, error: 'Token non configurato' };
-  if (!chatId.trim()) return { ok: false, error: 'Chat ID mancante' };
+  const destinatario = chatId.trim();
+  if (!destinatario) return { ok: false, error: 'Chat ID mancante' };
 
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId.trim(),
-        text: testo,
-        parse_mode: 'HTML',
-        disable_web_page_preview: false,
-      }),
-    });
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  let ultimoErrore = 'errore sconosciuto';
 
-    const data = (await res.json().catch(() => null)) as {
-      ok?: boolean;
-      description?: string;
-    } | null;
+  for (let tentativo = 1; tentativo <= TELEGRAM_MAX_TENTATIVI; tentativo += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TELEGRAM_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: destinatario,
+          text: testo,
+          parse_mode: 'HTML',
+          disable_web_page_preview: false,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
 
-    if (!res.ok || !data?.ok) {
-      return { ok: false, error: data?.description ?? `HTTP ${res.status}` };
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        description?: string;
+        parameters?: { retry_after?: number };
+      } | null;
+
+      if (res.ok && data?.ok) return { ok: true };
+
+      ultimoErrore = data?.description ?? `HTTP ${res.status}`;
+      const transitorio = res.status === 429 || res.status >= 500;
+      if (!transitorio || tentativo === TELEGRAM_MAX_TENTATIVI) break;
+
+      const retryAfter = Number(data?.parameters?.retry_after ?? 0);
+      const attesaMs = retryAfter > 0 ? retryAfter * 1000 : tentativo * 1000;
+      console.warn(
+        `  ⏳ Telegram ${res.status} su ${destinatario}: nuovo tentativo tra ${Math.round(
+          attesaMs / 1000,
+        )}s (${tentativo + 1}/${TELEGRAM_MAX_TENTATIVI}).`,
+      );
+      await attendi(attesaMs);
+    } catch (err) {
+      clearTimeout(timer);
+      const e = err as Error;
+      ultimoErrore = e.name === 'AbortError' ? 'timeout' : e.message;
+      if (tentativo === TELEGRAM_MAX_TENTATIVI) break;
+      await attendi(tentativo * 1000);
     }
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: (err as Error).message };
   }
+  return { ok: false, error: ultimoErrore };
 }
 
 /** Invia la notifica Telegram per una delle 8 tipologie, usando la classe in comune. */
@@ -596,6 +668,15 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
     dettagli.push(`🏫 Scuola: <b>${escapeHtml(interpello.schoolName.trim())}</b>`);
   }
   dettagli.push(`👩🏫 Ruolo / Categoria: <b>${escapeHtml(ruolo)}</b>`);
+  // Materia ufficiale accanto al codice di classe (solo se un codice esiste, per
+  // non duplicare il ruolo quando è già la materia inferita).
+  const codiceClasse = (
+    interpello.classCodes?.[0]?.trim() ||
+    titolo.match(RE_CLASSE_CONCORSO)?.[0] ||
+    ''
+  ).toUpperCase();
+  const materiaAvviso = codiceClasse ? materiaClasse(codiceClasse, interpello.materia) : null;
+  if (materiaAvviso) dettagli.push(`📚 Materia: <b>${escapeHtml(materiaAvviso)}</b>`);
   dettagli.push(
     `📅 Scadenza: <b>${
       interpello.expirationDate ? escapeHtml(formatDataScadenza(interpello.expirationDate)) : 'Immediata'
@@ -617,27 +698,29 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
     .filter(Boolean)
     .join(' ');
 
-  // Link alla fonte: se è un PDF mostriamo una BARRA BLU dedicata e cliccabile
-  // ("APRI / SCARICA IL PDF") invece del generico link; altrimenti il link normale.
-  const linkFonte = interpello.link?.trim() ?? '';
+  // Link alla fonte: SOLO se è un http(s) assoluto valido (mai link relativi/
+  // malformati). Se è un PDF, barra blu dedicata "APRI / SCARICA IL PDF".
+  const linkFonte = urlAssolutaValida(interpello.link);
   const linkRiga = linkFonte
     ? eLinkPdf(linkFonte)
       ? barraPdf(linkFonte)
       : `🔗 <a href="${escapeHtml(linkFonte)}">Leggi l'Avviso Originale</a>`
     : '';
 
-  // Email di candidatura per l'invio delle domande (se presente nella fonte).
+  // Email di candidatura. Se assente nei dati → "Email non disponibile"
+  // (ultima ratio: mai email inventate/ipotizzate).
   const email = interpello.contactEmail?.trim() ?? '';
   const emailRiga = email
     ? `📧 Candidature: <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`
-    : '';
+    : '📧 Email non disponibile';
 
   const cta = '⚡ Ricevi solo gli avvisi per la tua provincia e classe in privato:\n👉 https://scuoleradar.it';
 
-  const parti: string[] = [HEADER_POST[categoria], dettagli.join('\n')];
-  if (linkRiga) parti.push(linkRiga);
-  if (emailRiga) parti.push(emailRiga);
-  parti.push(cta, hashtag);
+  // Blocco CONTATTO = link ufficiale (se valido) + email raggruppati in UNA sola
+  // sezione: la struttura pubblicata resta FISSA a 5 blocchi
+  // (header · dettagli · contatto · CTA · hashtag).
+  const bloccoContatto = [linkRiga, emailRiga].filter(Boolean).join('\n');
+  const parti: string[] = [HEADER_POST[categoria], dettagli.join('\n'), bloccoContatto, cta, hashtag];
   return parti.join('\n\n');
 }
 

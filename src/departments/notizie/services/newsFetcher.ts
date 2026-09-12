@@ -212,6 +212,9 @@ export async function scrapeMimNotizie(): Promise<{ voci: VoceFonte[]; raggiunta
       voci.push({ title, link, pubDate, description: '', fonte: 'MIM' });
     }
   });
+  // Log esplicito (nessun silent-fail): senza questa riga un cambio di markup
+  // del MIM che azzera le voci non sarebbe distinguibile da "0 notizie".
+  console.log(`• MIM scraping: ${voci.length} voci da ${BASE_MIM}/web/guest/notizie`);
   return { voci: voci.slice(0, 40), raggiunta };
 }
 

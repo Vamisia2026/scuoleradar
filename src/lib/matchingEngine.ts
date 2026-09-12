@@ -30,6 +30,10 @@ export interface InterpelloDB {
   source_url: string;
   expiration_date: string | null;
   created_at: string | null;
+  /** Email di candidatura della scuola (PEC/istituzionale), se presente. */
+  contact_email: string | null;
+  /** Materia/settore inferito dallo scraper quando manca una classe esplicita. */
+  materia: string | null;
 }
 
 export interface MatchingCriteri {
@@ -41,6 +45,34 @@ export interface MatchingCriteri {
   limit?: number;
 }
 
+/**
+ * Ente emittente (USP/USR) riconosciuto dal TITOLO e dalla provincia dell'avviso.
+ * Serve come fallback quando `school_name` è vuoto: evita la dicitura generica
+ * "Scuola non indicata" per gli avvisi pubblicati da uffici scolastici.
+ * Lato DB il parser (server) salva già il nome canonico; qui copriamo le righe
+ * storiche prive di `school_name`.
+ */
+export function enteEmittenteDaTitolo(
+  title?: string | null,
+  provincia?: string | null,
+): string | null {
+  const t = (title ?? '').toLowerCase();
+  if (!t) return null;
+  const codice = (provincia ?? '').trim().toUpperCase();
+  const prov = province.find((x) => x.codice === codice) ?? null;
+  if (/\busr\b|ufficio scolastico regionale/.test(t)) {
+    return prov?.regione ? `USR ${prov.regione}` : 'USR';
+  }
+  if (
+    /ufficio scolastico (territoriale|provinciale)|\busp\b|ambito territoriale|\buat\b|ufficio\s+(i|ii|iii|iv|v|vi|vii|viii|ix|x)\b/.test(
+      t,
+    )
+  ) {
+    return prov?.nome ? `USP ${prov.nome}` : 'USP';
+  }
+  return null;
+}
+
 /** Converte una riga della tabella `interpelli` nel tipo `Interpello` usato dalla dashboard. */
 export function mapInterpelloDBToInterpello(r: InterpelloDB): Interpello {
   const codici = (r.class_codes ?? []).filter(Boolean);
@@ -50,15 +82,17 @@ export function mapInterpelloDBToInterpello(r: InterpelloDB): Interpello {
   return {
     id: r.id,
     titolo: r.title ?? 'Avviso non classificato',
-    istituto: r.school_name ?? '',
+    istituto: r.school_name?.trim() || enteEmittenteDaTitolo(r.title, r.province) || '',
     provinciaCodice,
     provinciaNome: province.find((p) => p.codice === provinciaCodice)?.nome ?? provinciaCodice,
     classeCodice: primaClasse,
     classiCodes: codici,
+    materia: r.materia ?? null,
     ordine: classe?.ordine ?? 'secondaria2',
     dataScadenza: r.expiration_date ?? '',
     descrizione: r.title ?? '',
     linkFonte: r.source_url ?? '',
+    contactEmail: r.contact_email ?? null,
     compatibilita: 100,
   };
 }
@@ -131,6 +165,26 @@ export interface UtenteCompatibile {
 }
 
 /**
+ * Normalizza un codice di classe di concorso per il CONFRONTO profilo↔interpello.
+ *
+ * Il catalogo dell'app (`src/data/classiConcorso.ts`) usa il formato compatto
+ * (`A-22`, `A-26`), mentre le fonti ufficiali citano spesso il formato a 3 cifre
+ * (`A-022`, `A-026`) e alcune il formato senza trattino (`A042`). Un confronto
+ * letterale (`'A-026' === 'A-26'` → false) fa fallire il match e l'utente non
+ * riceve MAI le notifiche reali: qui entrambi i lati vengono ricondotti alla
+ * forma `PREFISSO-NUMERO` senza zeri iniziali (`A-026` → `A-26`, `A-042` → `A-42`).
+ * I codici sostegno (`ADEE`, `ADSS`, `AD24`, …) restano invariati.
+ */
+export function normalizzaClasse(codice?: string | null): string {
+  const c = (codice ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!c) return '';
+  // Formato con trattino (A-026, B-001, A-02) oppure compatto a una lettera (A042).
+  const m = c.match(/^([A-Z]{1,2})-0*(\d{1,3})$/) ?? c.match(/^([A-Z])0*(\d{2,3})$/);
+  if (!m) return c;
+  return `${m[1]}-${Number(m[2])}`;
+}
+
+/**
  * FASE 4 — Trova nella tabella `profiles` gli utenti compatibili con un interpello:
  * email di notifica valida, provincia in comune e almeno una classe in comune.
  */
@@ -164,11 +218,16 @@ export async function findUtentiCompatibili(
 
       const provinceProfilo: string[] = riga.province_interesse ?? riga.province_attive ?? [];
       const classiProfilo: string[] = riga.classi_concorso ?? [];
+      // Confronto NORMALIZZATO delle classi (A-026 ≡ A-26 ≡ A042): senza questa
+      // canonicalizzazione il catalogo (A-22) non incontrerebbe mai le classi
+      // estratte dalle fonti (A-022) e l'utente non riceverebbe notifiche reali.
+      const classiProfiloNormalizzate = new Set(classiProfilo.map(normalizzaClasse));
 
       const matchProvincia =
         provinceProfilo.length === 0 || provinceProfilo.includes(interpello.province);
       const matchClasse =
-        classiProfilo.length === 0 || interpello.classi.some((c) => classiProfilo.includes(c));
+        classiProfilo.length === 0 ||
+        interpello.classi.some((c) => classiProfiloNormalizzate.has(normalizzaClasse(c)));
       if (!matchProvincia || !matchClasse) continue;
 
       compatibili.push({

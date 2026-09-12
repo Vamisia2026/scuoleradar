@@ -10,6 +10,7 @@
  */
 
 import {
+  estraiEnteEmittente,
   estraiProvincia,
   estraiProvinciaDaCodiceScuola,
   estraiScuola,
@@ -110,6 +111,55 @@ console.log('\n— Estrazione puntuale (funzioni pure) —');
 check('estraiProvincia("Torino") = TO', 'TO', estraiProvincia('Torino'));
 check('estraiProvincia("nessun comune qui") = null', null, estraiProvincia('nessun comune qui'));
 check('estraiScuola("nessun istituto") = null', null, estraiScuola('nessun istituto'));
+
+console.log('\n— Ente emittente (USP / USR / Ambito) —');
+check(
+  'USP di Macerata (provincia MC)',
+  'USP Macerata',
+  estraiEnteEmittente('Interpello supplenza A-022 — USP di Macerata', 'MC')?.nome,
+);
+check(
+  'Ufficio Scolastico Territoriale di Macerata',
+  'USP Macerata',
+  estraiEnteEmittente('Avviso Ufficio Scolastico Territoriale di Macerata', null)?.nome,
+);
+check(
+  'USR Piemonte (regione esplicita)',
+  'USR Piemonte',
+  estraiEnteEmittente('Ufficio Scolastico Regionale per il Piemonte — avviso', 'TO')?.nome,
+);
+check(
+  'USR dedotto dalla provincia',
+  'USR Marche',
+  estraiEnteEmittente('USR — comunicazione interpelli', 'MC')?.nome,
+);
+check(
+  'Ambito Territoriale (città esplicita)',
+  'USP Macerata',
+  estraiEnteEmittente('Ambito Territoriale di Macerata', null)?.nome,
+);
+check(
+  'Ufficio IV → USP della provincia',
+  'USP Macerata',
+  estraiEnteEmittente('Decreto Ufficio IV — nomine', 'MC')?.nome,
+);
+check(
+  'nessun indizio → null (nessuna invenzione)',
+  null,
+  estraiEnteEmittente('Interpello supplenza A-026 Matematica', 'MC')?.nome ?? null,
+);
+
+const avvisoUsp = parseInterpello({
+  title: 'Interpello supplenza A-022 Italiano — USP di Macerata',
+  link: 'https://www.mim.gov.it/web/macerata/-/interpello-a022',
+  provincia: 'MC',
+  source: 'test',
+});
+check(
+  'parseInterpello: schoolName canonicalizzato in "USP Macerata"',
+  'USP Macerata',
+  avvisoUsp.schoolName,
+);
 
 console.log('\n──────────────────────────────────────────────────────────');
 if (falliti === 0) {

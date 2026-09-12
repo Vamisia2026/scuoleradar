@@ -35,7 +35,9 @@ function clientStub(): unknown {
       nome: 'Docente Dry Run',
       province_interesse: ['MI'],
       province_attive: ['MI'],
-      classi_concorso: ['A-026'],
+      // Formato CATALOGO (A-26): deve combaciare con l'interpello 'A-026'
+      // (formato delle fonti) grazie alla normalizzazione del Matching Engine.
+      classi_concorso: ['A-26'],
       telegram_chat_id: null, // nessun invio Telegram possibile
       piano: 'free_forever',
       radar_attivo: true,
@@ -51,7 +53,7 @@ function clientStub(): unknown {
       nome: 'Docente in Pausa',
       province_interesse: ['MI'],
       province_attive: ['MI'],
-      classi_concorso: ['A-026'],
+      classi_concorso: ['A-26'],
       telegram_chat_id: null,
       piano: 'base',
       radar_attivo: false,

@@ -28,6 +28,12 @@ export interface InterpelloInput {
   title: string;
   /** URL della fonte ufficiale */
   link: string | null;
+  /**
+   * URL alternativi trovati nella stessa voce (es. PDF/circolare/allegato oltre
+   * alla pagina). Se presenti, il parser sceglie la fonte MIGLIORE (documento
+   * specifico → pagina istituzionale → fallback all'ente). Opzionale.
+   */
+  linkCandidati?: (string | null)[];
   /** Codice provincia della FONTE (fallback usato solo se il testo non ne indica una). */
   provincia: string;
   /** Nome della sorgente (URL pagina / 'fixture') */
@@ -65,6 +71,8 @@ export interface InterpelloParsato {
   materia: string | null;
   /** Email di candidatura trovata nel testo o nel link (`mailto:`), se presente. */
   contactEmail: string | null;
+  /** Link candidati della voce (dettaglio + allegati) usati per l'arricchimento contatti. */
+  linkCandidati?: string[];
 }
 
 /* --------------------- Regex per le classi di concorso --------------------- */
@@ -138,10 +146,24 @@ export function inferisciMateria(testo: string): string | null {
 /** Riconosce un indirizzo email (con TLD) nel testo o in un link `mailto:`. */
 const RE_EMAIL = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/;
 
+/** Regex GLOBALE per raccogliere TUTTE le email di un testo. */
+const RE_EMAIL_G = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
+
+/** Tutti gli indirizzi email di un testo (univoci, minuscoli, senza punteggiatura finale). */
+export function estraiEmails(testo?: string | null): string[] {
+  const unici = new Set<string>();
+  for (const m of (testo ?? '').matchAll(RE_EMAIL_G)) {
+    const email = m[0].replace(/[.,;:]+$/, '').toLowerCase();
+    if (email.includes('@')) unici.add(email);
+  }
+  return [...unici];
+}
+
 /**
  * Email di candidatura per l'invio delle domande, se presente nella fonte:
  *   · `mailto:` nel link dell'avviso;
- *   · altrimenti un indirizzo email nel testo dell'avviso.
+ *   · altrimenti il PRIMO indirizzo email nel testo (best-effort, senza scoring).
+ * Per la scelta "intelligente" tra più indirizzi usa `estraiEmailScuola`.
  */
 export function estraiEmail(link?: string | null, testo?: string | null): string | null {
   const daLink = (link ?? '').trim();
@@ -151,6 +173,125 @@ export function estraiEmail(link?: string | null, testo?: string | null): string
   }
   const m = (testo ?? '').match(RE_EMAIL);
   return m ? m[0].replace(/[.,;:]+$/, '') : null;
+}
+
+/**
+ * Email ISTITUZIONALE/PEC "forte": dominio affidabile (`.edu.it`, `istruzione.it`,
+ * `pec.istruzione.it`). È il segnale più forte di una casella scolastica.
+ */
+export const RE_EMAIL_SCUOLA =
+  /\b[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9.-]+\.edu\.it|pec\.istruzione\.it|istruzione\.it)\b/i;
+
+/** Etichette tipiche di un dominio scolastico (es. `iclorenzini.edu.it`, `iisverdi.it`). */
+const RE_DOMINIO_SCUOLA =
+  /(^|\.)(ic|ics|cd|sm|scuola|scuole|istitut|istcomp|iis|ips|ipsia|itc|itg|itis|itn|ipsct|liceo|licei|convitto|cpia|lgs|lgt|direzionedidattica)[a-z0-9-]*\./i;
+
+/** Parole/etichette tipiche di una casella scolastica (segreteria, protocollo…). */
+const RE_LOCAL_SCUOLA =
+  /(^|[._-])(ic|ics|cd|sm|scuola|istituto|iis|ips|ipsia|itc|itg|itis|liceo|licei|convitto|cpia|segreteria|protocollo|direzione|dirigenza|presidenza|amministrazione|urp|personale)/i;
+
+/** Domini personali/generici: esistono nei testi ma NON sono la casella di candidatura. */
+const RE_DOMINIO_GENERICO =
+  /(gmail|googlemail|libero|hotmail|outlook|live|yahoo|virgilio|tiscali|alice|icloud|me\.com|proton|pm\.me)/i;
+
+export interface ContestoEmailScuola {
+  /** Codice meccanografico della scuola (per correlare l'email all'istituto). */
+  schoolCode?: string | null;
+  /** Nome della scuola (per correlare l'email all'istituto). */
+  schoolName?: string | null;
+}
+
+/** Token significativi del nome scuola (esclude le parole generiche). */
+function tokenNomeScuola(nome?: string | null): string[] {
+  const GENERICHE = new Set([
+    'liceo', 'licei', 'istituto', 'scuola', 'scuole', 'comprensivo', 'comprensiva',
+    'statale', 'superiore', 'superiori', 'tecnico', 'tecnica', 'professionale',
+    'primaria', 'secondaria', 'grado', 'dell', 'della', 'delle', 'degli', 'istruzione',
+  ]);
+  return (nome ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 4 && !GENERICHE.has(t));
+}
+
+/**
+ * Punteggio di pertinenza scolastica di un'email (più alto = più probabile che
+ * sia la casella giusta per candidarsi). Serve a scegliere tra più indirizzi.
+ */
+export function punteggioEmailScuola(email: string, ctx: ContestoEmailScuola = {}): number {
+  const e = (email ?? '').toLowerCase();
+  const at = e.indexOf('@');
+  if (at < 1) return -Infinity;
+  const local = e.slice(0, at);
+  const dominio = e.slice(at + 1);
+  let p = 0;
+
+  if (RE_EMAIL_SCUOLA.test(e)) p += 50; // .edu.it / istruzione.it / pec.istruzione.it
+  if (RE_DOMINIO_SCUOLA.test(dominio)) p += 30; // dominio tipo ic/iis/liceo…
+  if (RE_LOCAL_SCUOLA.test(local)) p += 15; // casella tipo segreteria/protocollo/ic…
+  if (/(segreteria|protocollo|direzione|dirigenza|presidenza|amministrazione|urp|personale)/.test(local)) p += 10;
+  if (/pec\./.test(dominio)) p += 5;
+
+  // Correlazione diretta con l'istituto (codice meccanografico / nome).
+  const codice = (ctx.schoolCode ?? '').trim().toLowerCase();
+  if (codice && (e.includes(codice) || dominio.includes(codice))) p += 60;
+  for (const tk of tokenNomeScuola(ctx.schoolName)) {
+    if (dominio.includes(tk) || local.includes(tk)) {
+      p += 25;
+      break;
+    }
+  }
+
+  // Rumore: caselle personali/generiche non sono l'indirizzo di candidatura.
+  if (RE_DOMINIO_GENERICO.test(dominio)) p -= 40;
+  return p;
+}
+
+/**
+ * Email di candidatura della scuola scelta tra PIÙ fonti (mai inventata):
+ *   · `mailto:` nel link;
+ *   · TUTTE le email del testo (non solo la prima);
+ *   · preferenza per domini/caselle scolastiche e per l'istituto (codice/nome).
+ * Restituisce `null` SOLO se non esiste alcun indirizzo → "Email non disponibile".
+ */
+export function estraiEmailScuola(
+  link?: string | null,
+  testo?: string | null,
+  ctx: ContestoEmailScuola = {},
+): string | null {
+  const candidati = new Set<string>();
+  const daLink = (link ?? '').trim();
+  if (/^mailto:/i.test(daLink)) {
+    const email = daLink.slice(7).split(/[?;,]/)[0]?.trim().toLowerCase() ?? '';
+    if (RE_EMAIL.test(email)) candidati.add(email);
+  }
+  for (const email of estraiEmails(testo)) candidati.add(email);
+  if (candidati.size === 0) return null;
+
+  let migliore: string | null = null;
+  let migliorPunteggio = -Infinity;
+  for (const email of candidati) {
+    const p = punteggioEmailScuola(email, ctx);
+    if (p > migliorPunteggio) {
+      migliorPunteggio = p;
+      migliore = email;
+    }
+  }
+  return migliore;
+}
+
+/**
+ * Codice meccanografico della scuola (es. `BSIS02900X`), se presente nel testo.
+ * Serve a RICONOSCERE il portale/le pagine istituzionali legate alla scuola.
+ */
+const RE_CODICE_MECCANOGRAFICO = /\b([A-Z]{2}[A-Z0-9]{4}\d{3}[A-Z0-9])\b/i;
+
+/** Estrae il codice meccanografico dal testo (mai inventato), altrimenti null. */
+export function estraiCodiceMeccanografico(testo?: string | null): string | null {
+  const m = (testo ?? '').match(RE_CODICE_MECCANOGRAFICO);
+  return m ? m[1].toUpperCase() : null;
 }
 
 /* ------------------- Validazione fonte (anti-mock / anti-dummy) ------------------- */
@@ -169,6 +310,117 @@ const RE_SEGNALE_TITOLO =
 /** Piattaforme NON istituzionali: social, hosting/blog generici, URL shortener. */
 const RE_HOST_NON_ISTITUZIONALE =
   /(facebook|instagram|twitter|(^|\.)x\.com|linkedin|t\.me|telegram|pinterest|whatsapp|youtube|(^|\.)google\.|altervista|blogspot|wordpress\.com|wixsite|iubenda|freepik|bit\.ly|tinyurl)/i;
+
+/* ------------- Fallback istituzionale dell'ente (USP/USR/Scuola) ------------- */
+
+/**
+ * Pagine istituzionali di fallback per REGIONE (Ufficio Scolastico Regionale),
+ * usate SOLO quando non esiste un link specifico/verificato dell'avviso.
+ *
+ * ⚠️ Solo URL UFFICIALI VERIFICATI: se una regione non è mappata non si inventa
+ * nulla → si resta sul link specifico (o l'avviso viene scartato a monte). Lo
+ * scraper testa comunque a runtime ogni URL (verificaLink): nessun link rotto
+ * viene mai persistito. Per aggiungere una regione: verificare prima la URL.
+ */
+export const REGIONI_USR: Record<string, string> = {
+  Piemonte: 'https://www.istruzionepiemonte.it/',
+  Veneto: 'https://www.istruzioneveneto.gov.it/',
+  'Emilia-Romagna': 'https://www.istruzioneer.gov.it/',
+  Liguria: 'https://www.istruzioneliguria.it/',
+  Sicilia: 'https://www.usr-sicilia.it/',
+};
+
+/** Suffissi di host riconosciuti come istituzionali (Pubblica Amministrazione/scuola). */
+const RE_HOST_ISTITUZIONALE = /(\.edu\.it|\.istruzione\.it|\.gov\.it)$/i;
+
+/** Host degli enti mappati non coperti dai suffissi (es. istruzionepiemonte.it). */
+const HOST_ENTI_MAPPATI = new Set<string>(
+  Object.values(REGIONI_USR)
+    .map((u) => {
+      try {
+        return new URL(u).host.toLowerCase();
+      } catch {
+        return '';
+      }
+    })
+    .filter(Boolean),
+);
+
+/** True se l'host dell'URL è quello di un ente istituzionale (USP/USR/Scuola). */
+export function eHostIstituzionale(url?: string | null): boolean {
+  let host = '';
+  try {
+    host = new URL((url ?? '').trim()).host.toLowerCase();
+  } catch {
+    return false;
+  }
+  return RE_HOST_ISTITUZIONALE.test(host) || HOST_ENTI_MAPPATI.has(host);
+}
+
+/**
+ * True se l'URL è accettabile come FALLBACK all'ente: http(s), host istituzionale
+ * (anche la radice del dominio, es. `https://www.istruzionepiemonte.it/`) e
+ * nessun segnale di mock/segnaposto. NON è un social né un aggregatore.
+ */
+export function eFonteEnte(url?: string | null): boolean {
+  const u = (url ?? '').trim();
+  if (!/^https?:\/\//i.test(u)) return false;
+  if (RE_SEGNALE_URL.test(u)) return false;
+  return eHostIstituzionale(u);
+}
+
+/** Pagina istituzionale dell'ente competente per una provincia, se mappata. */
+export function urlIstituzionaleEnte(provincia: string): string | null {
+  const codice = (provincia ?? '').trim().toUpperCase();
+  const regione = province.find((p) => p.codice === codice)?.regione;
+  return regione ? (REGIONI_USR[regione] ?? null) : null;
+}
+
+/** True se l'URL punta a un DOCUMENTO specifico (PDF, circolare, allegato, upload). */
+export function eUrlDocumento(url?: string | null): boolean {
+  const u = (url ?? '').trim();
+  if (!/^https?:\/\//i.test(u)) return false;
+  try {
+    const p = new URL(u);
+    const path = `${p.pathname}${p.search}`.toLowerCase();
+    return /(\.pdf|\.docx?|\.odt|allegato|circolare|documento|protocollo|wp-content\/uploads)/i.test(path);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sceglie la fonte MIGLIORE per l'interpello:
+ *   1. documento specifico (PDF/circolare/allegato) verificato;
+ *   2. pagina istituzionale specifica (preferendo quella legata alla scuola);
+ *   3. qualsiasi pagina specifica verificata;
+ *   4. fallback: pagina istituzionale generica dell'ente (USP/USR), se mappata;
+ *   5. `null` (nessun link inventato: l'avviso viene scartato a monte).
+ */
+export function scegliUrlFonte(
+  candidati: Array<string | null | undefined>,
+  ctx: { provincia: string; schoolCode?: string | null } = { provincia: '' },
+): string | null {
+  const validi = [...new Set(candidati.map((c) => (c ?? '').trim()).filter(Boolean))].filter((c) =>
+    eSorgenteVerificata(c),
+  );
+
+  const documento = validi.find((c) => eUrlDocumento(c));
+  if (documento) return documento;
+
+  const codice = (ctx.schoolCode ?? '').trim().toUpperCase();
+  const dellaScuola = codice
+    ? validi.find((c) => eHostIstituzionale(c) && c.toUpperCase().includes(codice))
+    : undefined;
+  if (dellaScuola) return dellaScuola;
+
+  const istituzionale = validi.find((c) => eHostIstituzionale(c));
+  if (istituzionale) return istituzionale;
+
+  if (validi.length > 0) return validi[0];
+
+  return urlIstituzionaleEnte(ctx.provincia);
+}
 
 /**
  * True se l'URL è una FONTE ufficiale VERIFICABILE:
@@ -203,17 +455,23 @@ export interface EsitoVerificaAvviso {
  * Verifica un avviso PRIMA del salvataggio: rifiuta titoli vuoti/troppo corti,
  * titoli con segnali di test/mock e fonti non ufficiali/non verificabili.
  * Regola anti-dummy della pipeline di ingestione.
+ *
+ * `fonteEnte` = true quando il link è il FALLBACK istituzionale dell'ente
+ * (USP/USR): in quel caso è ammessa anche la radice del dominio (es.
+ * `https://www.istruzionepiemonte.it/`), che `eSorgenteVerificata` rifiuta.
  */
 export function verificaAvviso(a: {
   title?: string | null;
   link?: string | null;
+  fonteEnte?: boolean;
 }): EsitoVerificaAvviso {
   const titolo = (a.title ?? '').trim();
   if (titolo.length < 8) return { ok: false, motivo: 'titolo troppo corto' };
   if (RE_SEGNALE_TITOLO.test(titolo)) return { ok: false, motivo: 'titolo con segnali test/mock' };
   const url = (a.link ?? '').trim();
   if (!url) return { ok: false, motivo: 'fonte mancante' };
-  if (!eSorgenteVerificata(url)) return { ok: false, motivo: 'fonte non ufficiale/non verificabile' };
+  const valida = a.fonteEnte ? eFonteEnte(url) : eSorgenteVerificata(url);
+  if (!valida) return { ok: false, motivo: 'fonte non ufficiale/non verificabile' };
   return { ok: true };
 }
 
@@ -571,6 +829,100 @@ export function estraiScuola(testo: string): string | null {
   return pulisciScuola((parti[parti.length - 1] ?? '').trim());
 }
 
+/* -------------------- Ente emittente (USP / USR / Ambito) -------------------- */
+
+export type TipoEnte = 'USR' | 'USP' | 'MIM';
+
+/** Ente emittente riconosciuto (ufficio scolastico / ministero). */
+export interface EnteEmittente {
+  /** Nome canonico da mostrare (es. "USP Macerata", "USR Piemonte"). */
+  nome: string;
+  tipo: TipoEnte;
+}
+
+/** Regioni italiane (dai dati province), dal nome più lungo al più corto. */
+const REGIONI_ITALIA = [...new Set(province.map((p) => p.regione))].sort(
+  (a, b) => b.length - a.length,
+);
+
+/** Nome provincia completo dal codice (es. "MC" → "Macerata"). */
+function nomeProvinciaDaCodice(codice?: string | null): string | null {
+  const c = (codice ?? '').trim().toUpperCase();
+  return province.find((p) => p.codice === c)?.nome ?? null;
+}
+
+/** Regione dal codice provincia (es. "MC" → "Marche"). */
+function regioneDaCodice(codice?: string | null): string | null {
+  const c = (codice ?? '').trim().toUpperCase();
+  return province.find((p) => p.codice === c)?.regione ?? null;
+}
+
+/** Diciture che designano un Ufficio Scolastico Regionale (su testo normalizzato). */
+const RE_ENTE_USR = /\busr\b|ufficio scolastico regionale|direzione generale regionale/;
+/** Diciture che designano un Ufficio Scolastico Territoriale/Provinciale o un Ambito. */
+const RE_ENTE_USP =
+  /ufficio scolastico (?:territoriale|provinciale)|\busp\b|ambito territoriale|\bambito di\b|\buat\b|\bat di\b/;
+/** Uffici numerati ("Ufficio IV", "Ufficio V"): competenza provinciale. */
+const RE_ENTE_UFFICIO_NUM = /\bufficio\s+(?:i|ii|iii|iv|v|vi|vii|viii|ix|x|xi|xii)\b/;
+/** Ministero dell'Istruzione e del Merito. */
+const RE_ENTE_MIM = /ministero dell'?istruzione|\bmim\b/;
+
+/** True se la stringa contiene una dicitura di ufficio scolastico (USP/USR). */
+export function eDicituraEnte(testo?: string | null): boolean {
+  const tn = senzaAccenti(testo ?? '');
+  return RE_ENTE_USR.test(tn) || RE_ENTE_USP.test(tn) || RE_ENTE_UFFICIO_NUM.test(tn);
+}
+
+/**
+ * Estrae l'ENTE EMITTENTE (USP / USR / Ambito / MIM) da titolo/contesto quando
+ * l'avviso non fa capo a un singolo istituto:
+ *   1. USR → "Ufficio Scolastico Regionale per …" / "USR …" (regione esplicita o dedotta);
+ *   2. USP → "USP di …", "Ufficio Scolastico Territoriale/Provinciale di …",
+ *      "Ambito Territoriale di …" (città esplicita o provincia associata);
+ *   3. Ufficio numerato ("Ufficio IV") → USP della provincia associata;
+ *   4. MIM → Ministero dell'Istruzione e del Merito.
+ * Nessuna invenzione: ritorna `null` se non c'è alcun indizio di ufficio.
+ */
+export function estraiEnteEmittente(
+  testo: string,
+  provincia?: string | null,
+): EnteEmittente | null {
+  const t = (testo ?? '').replace(/\s+/g, ' ').trim();
+  if (!t) return null;
+  const tn = senzaAccenti(t);
+  const provinciaNome = nomeProvinciaDaCodice(provincia);
+  const regioneProv = regioneDaCodice(provincia);
+
+  // 1) USR — Ufficio Scolastico Regionale.
+  if (RE_ENTE_USR.test(tn)) {
+    const regione = REGIONI_ITALIA.find((r) => tn.includes(senzaAccenti(r))) ?? regioneProv ?? null;
+    if (regione) return { nome: `USR ${regione}`, tipo: 'USR' };
+  }
+
+  // 2) USP / Ambito — ufficio territoriale/provinciale.
+  if (RE_ENTE_USP.test(tn)) {
+    const frammento =
+      tn.match(
+        /(?:ufficio scolastico (?:territoriale|provinciale)|\busp\b|ambito territoriale|\bambito di\b|\buat\b|\bat di\b)\s*(?:di|per|del|dello|della|dei|degli|delle|–|-|:)?\s*([a-z0-9 ]{3,40})/,
+      )?.[1] ?? '';
+    const codiceCitta = frammento ? estraiProvincia(frammento) : null;
+    const nome = nomeProvinciaDaCodice(codiceCitta) ?? provinciaNome;
+    if (nome) return { nome: `USP ${nome}`, tipo: 'USP' };
+  }
+
+  // 3) Ufficio numerato ("Ufficio IV"): lo USP competente è quello della provincia.
+  if (RE_ENTE_UFFICIO_NUM.test(tn) && provinciaNome) {
+    return { nome: `USP ${provinciaNome}`, tipo: 'USP' };
+  }
+
+  // 4) Ministero (MIM).
+  if (RE_ENTE_MIM.test(tn)) {
+    return { nome: "Ministero dell'Istruzione e del Merito", tipo: 'MIM' };
+  }
+
+  return null;
+}
+
 /* ------------------------------- Parser ------------------------------- */
 
 /**
@@ -593,17 +945,31 @@ export function parseInterpello(input: InterpelloInput): InterpelloParsato {
     normalizzaData(input.dataNota) ??
     estraiDataScadenza(testoCompleto, publishedAt);
 
+  // Codice meccanografico della scuola: dal campo esplicito, altrimenti estratto
+  // dal testo. Serve a RICONOSCERE le pagine istituzionali legate alla scuola.
+  const codiceScuola =
+    input.schoolCode?.trim() || estraiCodiceMeccanografico(testoCompleto) || null;
+
   // Provincia REALE dell'istituto: prima dal titolo, poi dal contesto, poi dal
   // codice meccanografico; solo come ultima spiaggia la provincia della fonte
   // (dinamica — mai una provincia fissa tipo Torino).
   const provincia =
     estraiProvincia(input.title) ??
     estraiProvincia(testoCompleto) ??
-    estraiProvinciaDaCodiceScuola(input.schoolCode) ??
+    estraiProvinciaDaCodiceScuola(codiceScuola) ??
     input.provincia.trim().toUpperCase();
 
   // Scuola emittente: dal campo esplicito, altrimenti estratta dal titolo/contesto.
   const scuola = input.schoolName?.trim() || estraiScuola(input.title) || estraiScuola(testoCompleto);
+
+  // ENTE EMITTENTE (USP/USR/Ambito): usato quando NON c'è un singolo istituto o
+  // quando il nome "scuola" è in realtà un ufficio. Canonicalizza la dicitura
+  // (es. "USP di Macerata" → "USP Macerata") così "Scuola non indicata" resta
+  // l'ultima ratio assoluta.
+  const ente = estraiEnteEmittente(testoCompleto, provincia);
+  const scuolaSembraUfficio = scuola ? eDicituraEnte(scuola) : false;
+  const intestatario =
+    scuola && !scuolaSembraUfficio ? scuola : (ente?.nome ?? scuola ?? null);
 
   // Classi di concorso esplicite (A-12, ADEE…); se assenti, inferisci la
   // materia/settore dal testo per non mostrare la sola etichetta "Docente".
@@ -611,12 +977,32 @@ export function parseInterpello(input: InterpelloInput): InterpelloParsato {
   const materia =
     classCodes.length > 0 ? null : inferisciMateria(`${input.title} ${input.corpo ?? ''}`);
 
-  // Email di candidatura: `mailto:` nel link oppure email nel testo della fonte.
-  const contactEmail = estraiEmail(input.link, testoCompleto);
+  // FONTE: preferisce il documento specifico (PDF/circolare/allegato), poi la
+  // pagina istituzionale specifica, quindi il fallback all'ente (USP/USR/Scuola).
+  const link = scegliUrlFonte([...(input.linkCandidati ?? []), input.link], {
+    provincia,
+    schoolCode: codiceScuola,
+  });
+
+  // Tutti i link candidati della voce (per l'arricchimento contatti a valle).
+  const linkCandidati = [
+    ...new Set(
+      [...(input.linkCandidati ?? []), input.link].map((c) => (c ?? '').trim()).filter(Boolean),
+    ),
+  ];
+
+  // Email di candidatura della scuola: `mailto:` nel link oppure TUTTE le email
+  // del testo (non solo la prima), scelte per pertinenza scolastica e per
+  // correlazione con l'istituto (codice meccanografico/nome). Nessuna email è
+  // mai inventata: se assente resta `null` → "Email non disponibile".
+  const contactEmail = estraiEmailScuola(link, testoCompleto, {
+    schoolCode: codiceScuola,
+    schoolName: scuola || null,
+  });
 
   return {
     title: input.title.trim(),
-    link: input.link,
+    link,
     province: provincia,
     classCodes,
     publishedAt,
@@ -624,9 +1010,10 @@ export function parseInterpello(input: InterpelloInput): InterpelloParsato {
     // L'hash resta ancorato alla provincia della FONTE: identità stabile nel tempo.
     hashId: generaHashId(input.provincia, input.title, expirationDate),
     source: input.source,
-    schoolName: scuola || null,
-    schoolCode: input.schoolCode?.trim() || null,
+    schoolName: intestatario,
+    schoolCode: codiceScuola,
     materia,
     contactEmail,
+    linkCandidati,
   };
 }
