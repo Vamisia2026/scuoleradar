@@ -47,7 +47,35 @@ function unisciNotizie(): NewsArticle[] {
   return uniche.length > 0 ? uniche : [newsFallback];
 }
 
-export const newsArticles: NewsArticle[] = unisciNotizie();
+/**
+ * ORDINAMENTO STRETTO del feed: **PUBBLICAZIONE DECRESCENTE** (la più recente
+ * prima). Il punteggio di rilevanza NON decide la posizione: è solo il
+ * tie-break a parità di data (poi l'id, per stabilità). Un articolo senza data
+ * scivola in fondo: non deve mai stare in cima al feed.
+ *
+ * Nota di regressione: ordinando prima per `relevance_score` un articolo seed
+ * datato 26 agosto (score 95) scavalcava gli aggiornamenti nazionali freschi
+ * (score 70): la prima card restava ancorata ad agosto. La data vince sempre.
+ */
+export function ordinaNotizie(articoli: NewsArticle[]): NewsArticle[] {
+  const tempo = (iso: string | null | undefined): number => {
+    if (!iso) return Number.NEGATIVE_INFINITY;
+    const t = new Date(iso).getTime();
+    return Number.isNaN(t) ? Number.NEGATIVE_INFINITY : t;
+  };
+  return [...articoli].sort((a, b) => {
+    const ta = tempo(a.published_at);
+    const tb = tempo(b.published_at);
+    if (tb !== ta) return tb - ta; // 1) data di pubblicazione DESC (newest first)
+    if (b.relevance_score !== a.relevance_score) {
+      return b.relevance_score - a.relevance_score; // 2) punteggio (tie-break)
+    }
+    return a.id.localeCompare(b.id); // 3) id, per ordine deterministico
+  });
+}
+
+/** Elenco dei feed GIÀ ordinato (data di pubblicazione decrescente). */
+export const newsArticles: NewsArticle[] = ordinaNotizie(unisciNotizie());
 
 /** Elenco delle categorie presenti, ordinate per frequenza. */
 export function categorieNotizie(): string[] {

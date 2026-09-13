@@ -82,6 +82,15 @@ jobs:
             echo "::warning::Nessun articolo negli ultimi 7 giorni: la sezione Notizie è FERMA. Verificare fonti/parser/URL canonici."
           fi
 
+      - name: Verifica ordinamento e cadenza del feed (data decrescente, 1–3/settimana)
+        continue-on-error: true
+        run: |
+          if npm run test:notizie-feed; then
+            echo "::notice::Feed Notizie ordinato per data decrescente e cadenza settimanale (1–3) rispettata."
+          else
+            echo "::warning::Ordine o cadenza del feed Notizie non conformi: verificare newsService/limitaCadenzaSettimanale."
+          fi
+
       - name: Verifica invariante NAZIONALE (nessuna fonte regionale)
         continue-on-error: true
         run: |
@@ -113,7 +122,8 @@ jobs:
             echo "- **Frequenza**: ogni giorno alle 06:00 UTC (07:00/08:00 italiane)."
             echo "- **Fonti (waterfall NAZIONALE)**: 1. MIM (notizie/avvisi/home) → 2. Gazzetta Ufficiale → 3. ARAN → 4. giurisdizione/previdenza. Ci si ferma al primo livello con articoli validi."
             echo "- **Policy**: SOLO copertura nazionale — le fonti regionali (USR \`/web/usr-*\`) sono escluse e rimosse dall'archivio."
-            echo "- **Valutazione editoriale**: filtro anti-rumore + atti nazionali numerati e recenti + link canonici validati HTTP 200; lookback **15 gg** (notizie), **60 gg** (CCNL), **45 gg** (atti numerati) + tetto **max 6 articoli** (≈3/settimana)."
+            echo "- **Valutazione editoriale**: filtro anti-rumore + atti nazionali numerati e recenti + link canonici validati HTTP 200; lookback **15 gg** (notizie), **60 gg** (CCNL), **45 gg** (atti numerati) + **cadenza settimanale bloccata 1–3 articoli** (max 3 datati negli ultimi 7 giorni)."
+            echo "- **Ordine del feed**: sempre per **data di pubblicazione decrescente** (la prima card è l'aggiornamento nazionale più recente)."
             echo "- **Verifica pubblicazione**: controllare il passo precedente — *nessun commit* significa nessun contenuto meritevole di pubblicazione."
             echo "- **Cadenza settimanale**: controllo automatico ≥ 1 notizia negli ultimi 7 giorni (\`npm run test:notizie-rate\`) e invariante nazionale (\`npm run test:notizie-nazionale\`)."
             echo "- **Nota**: le voci senza data di fonte non consumano il tetto settimanale; l'archivio è ripulito dalle fonti regionali ad ogni esecuzione."

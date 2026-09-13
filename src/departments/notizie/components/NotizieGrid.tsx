@@ -11,7 +11,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
-import { newsArticles, formatDataNotizia } from '../services/newsService';
+import { newsArticles, formatDataNotizia, ordinaNotizie } from '../services/newsService';
 import { èLinkPdf } from '../services/relevanceEngine';
 import type { NewsArticle } from '../types';
 
@@ -165,11 +165,10 @@ export function NotizieGrid({ articoli = newsArticles, categoria = 'Tutte' }: No
   const inizioGrigliaRef = useRef<HTMLDivElement | null>(null);
 
   const filtrate = useMemo(() => {
-    const ordinate = [...articoli].sort(
-      (a, b) =>
-        b.relevance_score - a.relevance_score ||
-        (b.published_at || '').localeCompare(a.published_at || ''),
-    );
+    // ORDINE STRETTO: data di pubblicazione DECRESCENTE (la più recente nella
+    // prima card in alto a sinistra). Vedi `ordinaNotizie` per il perché il
+    // punteggio di rilevanza NON deve decidere la posizione.
+    const ordinate = ordinaNotizie(articoli);
     return categoria === 'Tutte'
       ? ordinate
       : ordinate.filter((n) => n.category === categoria);

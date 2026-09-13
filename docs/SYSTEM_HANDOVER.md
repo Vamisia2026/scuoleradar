@@ -257,9 +257,9 @@ Supabase DB (pg_cron + trigger):
 | `data/notizieSeed.ts` | — | Articoli editoriali seed |
 | `data/notizieIngestite.ts` | — | **File GENERATO** dall'ingestione (accumulo, dedupe per id, refresh delle voci esistenti, SOLO fonti nazionali) |
 | `services/newsFetcher.ts` | ~560 | **Node-only** — fetch fonti **NAZIONALI**: MIM (`/web/guest/notizie`, `/web/guest/avvisi`, home, `/notizie`) + Gazzetta Ufficiale (RSS + elenco atti `/home`) + ARAN/giurisdizione; **waterfall** `LIVELLI_NAZIONALI`/`raccogliLivello` |
-| `services/relevanceEngine.ts` | ~640 | **Node-only, puro** — regole editoriali (§9), `èFonteNazionale`/`èFonteMim`, atti nazionali numerati, finestre `FINESTRA_LOOKBACK_NAZIONALE_GIORNI`/`FINESTRA_ATTI_NAZIONALI_GIORNI` |
+| `services/relevanceEngine.ts` | ~700 | **Node-only, puro** — regole editoriali (§9), `èFonteNazionale`/`èFonteMim`, atti nazionali numerati, finestre `FINESTRA_LOOKBACK_NAZIONALE_GIORNI`/`FINESTRA_ATTI_NAZIONALI_GIORNI`, **`limitaCadenzaSettimanale`** (max 3 articoli datati/7 giorni, 1–3 a settimana) |
 | `services/ingestNotizie.ts` | ~250 | **Node-only** — CLI pipeline: **waterfall** livelli 1→4 → filtra → tetto 6 (finestra 15 gg) → igiene nazionale → scrive `notizieIngestite.ts` |
-| `services/newsService.ts` | ~70 | Frontend: `newsArticles` (seed+ingested, dedupe), `categorieNotizie`, `getNotiziaById`, `formatDataNotizia`, `newsFallback` |
+| `services/newsService.ts` | ~105 | Frontend: `unisciNotizie` (seed+ingested, dedupe), **`ordinaNotizie`** (data di pubblicazione DECRESCENTE; il punteggio è solo tie-break), `newsArticles` (feed già ordinato), `categorieNotizie`, `getNotiziaById`, `formatDataNotizia`, `newsFallback` |
 | `components/NotizieHero.tsx` | — | Hero editoriale pagina Notizie + `SeoMeta` |
 | `components/NotizieGrid.tsx` | — | Griglia articoli + filtro categoria + CTA radar |
 | `components/NotizieDettaglio.tsx` | — | Dettaglio articolo (in sintesi, link PDF, fonte) |

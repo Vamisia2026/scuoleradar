@@ -48,9 +48,11 @@ import {
   validaUrlDeepLink,
   èFonteCanonica,
   limitaArticoliSettimanali,
+  limitaCadenzaSettimanale,
   FINESTRA_LOOKBACK_GIORNI,
   FINESTRA_LOOKBACK_NAZIONALE_GIORNI,
   MAX_ARTICOLI_FINESTRA,
+  MAX_ARTICOLI_SETTIMANA,
   èFonteNazionale,
   type ValutazioneNotizia,
 } from './relevanceEngine.ts';
@@ -349,21 +351,9 @@ async function main(): Promise<void> {
     (e, i) => JSON.stringify(e) !== JSON.stringify(esistentiFreschi[i]),
   ).length;
 
-  if (nuovi.length === 0 && aggiornati === 0) {
-    console.log('✓ HTTP 200 - 0 new posts criteria matched');
-    if (!isDryRun && purgate > 0) {
-      // Persistisci la sola pulizia dell'archivio (nessuna nuova notizia).
-      scriviArchivio(esistenti);
-      console.log(`✓ Scritti ${esistenti.length} articoli in ${FILE_USCITA} (igiene archivio)`);
-    } else if (esistenti.length === 0) {
-      console.log('L\u2019archivio notizie è vuoto: resta attivo il fallback editoriale.');
-    } else {
-      console.log('L\u2019archivio notizie resta invariato (nessun commit necessario).');
-    }
-    reportCadenza(esistenti);
-    if (isDryRun) console.log('=== DRY-RUN (nessuna scrittura) ===');
-    return;
-  }
+  // NB: nessun early-return qui. Anche quando non arriva nulla di nuovo,
+  // l'archivio viene comunque ripulito (igiene) e riportato ai limiti
+  // (cap finestra + cadenza settimanale) prima di decidere se scrivere.
 
   const combinati = [...esistentiFreschi, ...nuovi].sort((a, b) =>
     (b.published_at || '').localeCompare(a.published_at || ''),
@@ -371,17 +361,45 @@ async function main(): Promise<void> {
 
   // Tetto articoli: massimo MAX_ARTICOLI_FINESTRA ad alto valore nella finestra
   // di lookback (15 giorni ≈ 3/settimana); gli esuberi recenti decadono.
-  const { mantenuti, rimossi } = limitaArticoliSettimanali(combinati);
+  const { mantenuti: dopoFinestra, rimossi } = limitaArticoliSettimanali(combinati);
   if (rimossi.length > 0) {
     console.log(
       `⚠ Tetto attivo (max ${MAX_ARTICOLI_FINESTRA} articoli per ${FINESTRA_LOOKBACK_GIORNI} giorni): ${rimossi.length} articolo/i in esubero scartato/i.`,
     );
     rimossi.forEach((r) => console.log(`  ✗ RIMOSSO (cap finestra): ${r.title.slice(0, 70)}`));
   }
+
+  // CADENZA SETTIMANALE BLOCCATA (1–3 articoli/settimana): negli ultimi 7 giorni
+  // restano al massimo MAX_ARTICOLI_SETTIMANA articoli DATATI. Vince la
+  // freschezza (i più recenti restano): il feed mostra subito gli aggiornamenti
+  // nazionali del momento. Lo storico più vecchio di 7 giorni non è toccato.
+  const { mantenuti, rimossi: rimossiCadenza } = limitaCadenzaSettimanale(dopoFinestra);
+  if (rimossiCadenza.length > 0) {
+    console.log(
+      `⚠ Cadenza settimanale (max ${MAX_ARTICOLI_SETTIMANA} articoli datati negli ultimi 7 giorni): ${rimossiCadenza.length} articolo/i in esubero scartato/i.`,
+    );
+    rimossiCadenza.forEach((r) =>
+      console.log(`  ✗ RIMOSSO (cadenza settimanale): ${r.title.slice(0, 70)}`),
+    );
+  }
   const aggiunti = nuovi.filter((n) => mantenuti.some((m) => m.id === n.id));
 
-  if (aggiunti.length === 0 && aggiornati === 0) {
-    console.log('✓ HTTP 200 - 0 new posts criteria matched (esuberi scartati dal tetto settimanale)');
+  // Scrittura SOLO se l'archivio cambia davvero: nuovi articoli, refresh di una
+  // voce esistente, igiene o POTATURA da cap/cadenza. Così i limiti (compresa la
+  // cadenza 1–3 a settimana) vengono imposti anche quando non arriva nulla di
+  // nuovo, e la bacheca resta sempre allineata alle regole.
+  const idsAttuali = notizieIngestite.map((a) => a.id).join('|');
+  const idsFinali = mantenuti.map((a) => a.id).join('|');
+  const potati = rimossi.length + rimossiCadenza.length;
+  const archivioCambiato = idsAttuali !== idsFinali || aggiornati > 0;
+
+  if (!archivioCambiato) {
+    console.log('✓ HTTP 200 - 0 new posts criteria matched');
+    if (esistenti.length === 0) {
+      console.log('L\u2019archivio notizie è vuoto: resta attivo il fallback editoriale.');
+    } else {
+      console.log('L\u2019archivio notizie resta invariato (nessun commit necessario).');
+    }
     reportCadenza(mantenuti);
     if (isDryRun) console.log('=== DRY-RUN (nessuna scrittura) ===');
     return;
@@ -395,7 +413,7 @@ async function main(): Promise<void> {
       );
     });
     console.log(
-      `✓ HTTP 200 - ${aggiunti.length} new posts criteria matched${aggiornati > 0 ? ` (${aggiornati} aggiornati)` : ''}`,
+      `✓ HTTP 200 - ${aggiunti.length} new posts criteria matched${aggiornati > 0 ? ` (${aggiornati} aggiornati)` : ''}${potati > 0 ? ` (${potati} potati)` : ''}`,
     );
     reportCadenza(mantenuti);
     return;
@@ -403,7 +421,7 @@ async function main(): Promise<void> {
 
   scriviArchivio(mantenuti);
   console.log(
-    `✓ HTTP 200 - ${aggiunti.length} new posts criteria matched${aggiornati > 0 ? ` (${aggiornati} aggiornati)` : ''}`,
+    `✓ HTTP 200 - ${aggiunti.length} new posts criteria matched${aggiornati > 0 ? ` (${aggiornati} aggiornati)` : ''}${potati > 0 ? ` (${potati} potati)` : ''}`,
   );
   console.log(`✓ Scritti ${mantenuti.length} articoli in ${FILE_USCITA}`);
   reportCadenza(mantenuti);

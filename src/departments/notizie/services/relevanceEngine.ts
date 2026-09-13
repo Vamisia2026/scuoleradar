@@ -628,6 +628,39 @@ export function limitaArticoliSettimanali(
   return { mantenuti: [...storici, ...tenuti], rimossi };
 }
 
+/* ---------------------- Cadenza settimanale (1–3 / settimana) ---------------------- */
+
+/**
+ * CADENZA SETTIMANALE BLOCCATA (1–3 articoli/settimana): mantiene al massimo
+ * `max` articoli **datati** nella finestra di 7 giorni; gli altri articoli
+ * recenti vengono scartati, mentre lo storico (più vecchio di 7 giorni) resta
+ * intatto e non consuma la cadenza.
+ *
+ * Criterio di scelta: prima la **data più recente**, poi il punteggio. La
+ * freschezza vince: il feed mostra sempre gli aggiornamenti nazionali del
+ * momento (`newsArticles` è ordinato per data decrescente).
+ */
+export function limitaCadenzaSettimanale(
+  articoli: NewsArticle[],
+  oggi: Date = new Date(),
+  max: number = MAX_ARTICOLI_SETTIMANA,
+): { mantenuti: NewsArticle[]; rimossi: NewsArticle[] } {
+  const soglia = oggi.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const recenti: NewsArticle[] = [];
+  const storici: NewsArticle[] = [];
+  for (const a of articoli) {
+    const t = a.published_at ? new Date(a.published_at).getTime() : Number.NaN;
+    if (!Number.isNaN(t) && t >= soglia) recenti.push(a);
+    else storici.push(a);
+  }
+  recenti.sort(
+    (a, b) =>
+      (b.published_at || '').localeCompare(a.published_at || '') ||
+      b.relevance_score - a.relevance_score,
+  );
+  return { mantenuti: [...storici, ...recenti.slice(0, max)], rimossi: recenti.slice(max) };
+}
+
 /** Valida la coerenza di un articolo costruito prima dell'inserimento. */
 export function articoloValido(a: NewsArticle): boolean {
   const base =

@@ -41,6 +41,16 @@
      personale scolastico → **0 articoli**. La bacheca non riempie il vuoto.
    - Il tetto si applica in ingestione tramite `limitaArticoliSettimanali`
      (gli articoli più rilevanti restano, gli esuberi recenti vengono scartati).
+   - **CADENZA SETTIMANALE BLOCCATA (1–3 / settimana)**: negli ultimi **7 giorni**
+     restano al massimo **3** articoli datati (`limitaCadenzaSettimanale`,
+     `MAX_ARTICOLI_SETTIMANA = 3`). Vince la **freschezza** (restano i più
+     recenti); lo storico più vecchio di 7 giorni non è toccato e non consuma la
+     cadenza. La potatura viene applicata ad **ogni** ingestione, anche quando
+     non arriva nulla di nuovo.
+   - **ORDINE DI VISUALIZZAZIONE**: il feed è sempre ordinato per **data di
+     pubblicazione DECRESCENTE** (`ordinaNotizie`): la prima card in alto a
+     sinistra è l'aggiornamento nazionale più recente. Il punteggio di rilevanza
+     NON decide la posizione (solo tie-break a parità di data).
 
 2. **ZERO RUMORE MARKETING / PRESS-RELEASE**
    - **RIFIUTA SEMPRE**: discorsi, interviste, dichiarazioni non vincolanti,

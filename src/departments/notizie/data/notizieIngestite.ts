@@ -127,21 +127,5 @@ export const notizieIngestite: NewsArticle[] = [
     "official_pdf_url": null,
     "relevance_score": 70,
     "published_at": "2026-09-09T00:00:00.000Z"
-  },
-  {
-    "id": "notizia-decreto-direttoriale-n-1983-del-7-settembre-2026-mim",
-    "title": "Decreto Direttoriale n. 1983 del 7 settembre 2026",
-    "category": "Scuole",
-    "deadline_date": null,
-    "summary_points": [
-      "Decreto Direttoriale n. 1983 del 7 settembre 2026",
-      "Interessati: dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie.",
-      "Come: procedi su Notizie del Ministero."
-    ],
-    "content_html": "<p>Il Ministero dell’Istruzione e del Merito (MIM) ha pubblicato un aggiornamento sull’organizzazione dell’anno scolastico, con la comunicazione «Decreto Direttoriale n. 1983 del 7 settembre 2026». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Notizie del Ministero</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie. La comunicazione introduce novità o conferme su scadenze e adempimenti dell’anno: i dettagli completi sono riportati nella pagina ufficiale.</p>\n    <p>Le informazioni complete sono consultabili sul sito del <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Ministero</a>. Se la notizia riguarda la tua scuola, la segreteria provvederà a comunicare le scadenze interne.</p>",
-    "official_source_url": "https://www.mim.gov.it/web/guest/-/decreto-direttoriale-n-1983-del-7-settembre-2026",
-    "official_pdf_url": null,
-    "relevance_score": 70,
-    "published_at": "2026-09-09T00:00:00.000Z"
   }
 ];
