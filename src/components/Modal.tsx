@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ModalProps {
   open: boolean;
@@ -32,7 +33,11 @@ export function Modal({ open, onClose, title, children, size = 'md', zClass = 'z
 
   const maxW = size === 'sm' ? 'max-w-md' : size === 'lg' ? 'max-w-3xl' : size === 'xl' ? 'max-w-5xl' : 'max-w-xl';
 
-  return (
+  // PORTAL su `document.body`: il modal DEVE essere relativo al viewport.
+  // Renderizzato inline, un antenato con `transform` (es. `animate-fade-in`,
+  // che mantiene `translateY(0)` con fill `both`) diventa containing block di
+  // `position: fixed` → l'overlay comparirebbe in fondo alla pagina ("card persa").
+  return createPortal(
     <div
       className={`fixed inset-0 ${zClass} flex items-center justify-center p-4`}
       role="dialog"
@@ -58,6 +63,7 @@ export function Modal({ open, onClose, title, children, size = 'md', zClass = 'z
         </div>
         <div className="p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

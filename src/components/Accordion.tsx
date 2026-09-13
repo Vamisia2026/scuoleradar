@@ -6,6 +6,7 @@ export function Accordion({
   icona,
   titolo,
   badge,
+  sommario,
   aperto,
   onToggle,
   children,
@@ -13,6 +14,12 @@ export function Accordion({
   icona: ReactNode;
   titolo: string;
   badge?: string;
+  /**
+   * Contenuto SEMPRE visibile sotto l'intestazione (anche a tendina chiusa):
+   * usato per mostrare a colpo d'occhio i chip/tag già selezionati
+   * ("pinned") con rimozione immediata.
+   */
+  sommario?: ReactNode;
   aperto: boolean;
   onToggle: () => void;
   children: ReactNode;
@@ -35,6 +42,7 @@ export function Accordion({
           className={`h-4 w-4 shrink-0 text-primary-400 transition-transform ${aperto ? 'rotate-180' : ''}`}
         />
       </button>
+      {sommario ? <div className="px-5 pb-3">{sommario}</div> : null}
       {aperto && <div className="border-t border-primary-100 px-5 py-4">{children}</div>}
     </section>
   );

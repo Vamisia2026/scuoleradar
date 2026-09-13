@@ -229,7 +229,10 @@ export async function findUtentiCompatibili(
 
     const compatibili: UtenteCompatibile[] = [];
     for (const riga of data ?? []) {
-      const email = String(riga.email_notifica ?? riga.email ?? '').trim();
+      // Fallback ROBUSTO: `email_notifica` spesso è stringa VUOTA ('' non è null,
+      // quindi `??` non ricadrebbe su `email`) → l'utente risultava privo di canale
+      // e veniva ESCLUSO dal matching, pur avendo un'email valida sul profilo.
+      const email = String(riga.email_notifica || riga.email || '').trim();
       const emailValida = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
       const chatId = riga.telegram_chat_id ? String(riga.telegram_chat_id).trim() : '';
       // Ammesso se ha almeno un canale di notifica (email valida o Telegram collegato)

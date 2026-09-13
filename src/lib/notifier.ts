@@ -15,7 +15,7 @@ import {
   type TipoMessaggio,
 } from './resend.ts';
 import { inviaNotificaTelegram } from './telegram.ts';
-import { findUtentiCompatibili } from './matchingEngine.ts';
+import { findUtentiCompatibili, normalizzaClasse, searchInterpelli } from './matchingEngine.ts';
 
 export interface NotificheOptions {
   /** Logga le notifiche senza inviarle (per test). */
@@ -36,6 +36,45 @@ type EsitoJob = { ok: boolean };
 /** Piani con notifiche illimitate (PRO a pagamento + PRO Free Forever). */
 function pianoIllimitato(piano?: string): boolean {
   return piano === 'pro' || piano === 'free_forever';
+}
+
+/**
+ * Deduplica per (utente, interpello): usa la tabella `notifications_log`
+ * (migrazione `20260914010000_notifications_log.sql`). Se la tabella non esiste
+ * ancora le letture/scritture sono best-effort (nessun blocco dell'invio).
+ */
+async function giaNotificato(
+  client: SupabaseClient,
+  userId: string,
+  hash: string,
+): Promise<boolean> {
+  try {
+    const { data, error } = await client
+      .from('notifications_log')
+      .select('interpello_hash')
+      .eq('user_id', userId)
+      .eq('interpello_hash', hash)
+      .limit(1);
+    if (error) return false;
+    return (data?.length ?? 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function registraNotifica(
+  client: SupabaseClient,
+  userId: string,
+  hash: string,
+  canale: 'email' | 'telegram',
+): Promise<void> {
+  try {
+    await client
+      .from('notifications_log')
+      .upsert({ user_id: userId, interpello_hash: hash, canale }, { onConflict: 'user_id,interpello_hash,canale' });
+  } catch {
+    /* tabella assente: nessun blocco */
+  }
 }
 
 export async function notificaNuoviInterpelli(
@@ -214,6 +253,12 @@ export async function notificaNuoviInterpelli(
             console.warn(`  ⚠ flag sequenza post-prova non aggiornato per ${utente.id.slice(0, 8)}… (${errFlag.message})`);
           }
         }
+        // Ledger anti-duplicato: registra i canali andati a buon fine (best-effort).
+        if (client) {
+          for (const c of completati) {
+            if (c.valore.ok) await registraNotifica(client, utente.id, interpello.hashId, c.tipo);
+          }
+        }
         return completati;
       }),
     );
@@ -238,3 +283,162 @@ export async function notificaNuoviInterpelli(
   );
   return esito;
 }
+
+/* -------------------- Dispatch immediato per singolo utente -------------------- */
+
+export interface EsitoDispatchUtente extends EsitoNotifiche {
+  /** Interpelli ATTIVI compatibili con il profilo. */
+  interpelli: number;
+  /** Interpelli saltati perché già notificati (ledger). */
+  saltati: number;
+}
+
+/**
+ * DISPATCH IMMEDIATO per un utente: notifica OGNI interpello ATTIVO compatibile
+ * con il suo profilo (province + classi), anche se già presente in DB — colma il
+ * caso in cui un'opportunità è in bacheca ma non è mai stata notificata (perché
+ * l'utente non era matchato al momento dell'inserimento, o il matching era
+ * disallineato). Ogni notifica include l'EMAIL DI CANDIDATURA dell'avviso.
+ *
+ * Dedupe tramite `notifications_log` (best-effort se la tabella non esiste):
+ * una seconda esecuzione NON rispedisce gli stessi interpelli.
+ * Non lancia eccezioni: ogni errore è loggato e conteggiato.
+ */
+export async function notificaInterpelliPerUtente(
+  client: SupabaseClient | null,
+  target: { userId?: string; email?: string },
+  opts: NotificheOptions = {},
+): Promise<EsitoDispatchUtente> {
+  const esito: EsitoDispatchUtente = {
+    inviate: 0,
+    fallite: 0,
+    telegramInviate: 0,
+    telegramFallite: 0,
+    interpelli: 0,
+    saltati: 0,
+  };
+  if (!client) {
+    console.warn('⚠ dispatch: client Supabase mancante.');
+    return esito;
+  }
+
+  // 1. Profilo (per id o per email, case-insensitive).
+  let q = client
+    .from('profiles')
+    .select(
+      'id,email,email_notifica,nome,province_interesse,province_attive,classi_concorso,telegram_chat_id,piano,is_free_forever,radar_attivo',
+    );
+  q = target.userId
+    ? q.eq('id', target.userId)
+    : q.eq('email', String(target.email ?? '').trim().toLowerCase());
+  const { data: prof, error } = await q.maybeSingle();
+  if (error || !prof) {
+    console.warn(`⚠ dispatch: profilo non trovato (${error?.message ?? 'nessuna riga'}).`);
+    return esito;
+  }
+  if (prof.radar_attivo === false) {
+    console.warn(`⚠ dispatch: Radar in PAUSA per ${prof.email} — nessun invio.`);
+    return esito;
+  }
+
+  const email = String(prof.email_notifica || prof.email || '').trim();
+  const chatId = prof.telegram_chat_id ? String(prof.telegram_chat_id).trim() : '';
+  const province = (prof.province_interesse ?? prof.province_attive ?? []) as string[];
+  const classiProfilo = (prof.classi_concorso ?? []) as string[];
+  const classiNorm = new Set(classiProfilo.map(normalizzaClasse));
+  const piano = prof.is_free_forever === true ? 'free_forever' : String(prof.piano ?? 'base');
+  const resend = getResendClient();
+
+  if (!email && !chatId) {
+    console.warn(`⚠ dispatch: nessun canale (email/Telegram) per ${prof.email}.`);
+    return esito;
+  }
+
+  // 2. Interpelli ATTIVI nelle province del profilo (nessun filtro classe qui:
+  //    il match classe è applicato sotto con la normalizzazione A-26≡A-026).
+  const righe = (await searchInterpelli(client, { province })) ?? [];
+  const oggi = Date.now();
+
+  for (const r of righe) {
+    if (r.expiration_date && new Date(r.expiration_date).getTime() < oggi) continue;
+    const classiInterpello = (r.class_codes ?? []).filter(Boolean);
+    const matchClasse =
+      classiProfilo.length === 0 ||
+      classiInterpello.length === 0 ||
+      classiInterpello.some((c) => classiNorm.has(normalizzaClasse(c)));
+    if (!matchClasse) continue;
+    esito.interpelli += 1;
+
+    if (await giaNotificato(client, String(prof.id), r.hash_id)) {
+      esito.saltati += 1;
+      continue;
+    }
+
+    const dettagli: DettagliNotifica = {
+      id: r.hash_id,
+      title: r.title,
+      schoolName: r.school_name,
+      province: r.province,
+      classi: classiInterpello,
+      materia: r.materia,
+      scadenza: r.expiration_date,
+      link: r.source_url,
+      contactEmail: r.contact_email,
+    };
+    const tipo: TipoMessaggio = pianoIllimitato(piano) ? 'notifica_pro' : 'prova1';
+
+    let okAny = false;
+    if (email && resend) {
+      const destinatario: DestinatarioNotifica = {
+        email,
+        nome: prof.nome ? String(prof.nome) : undefined,
+        province,
+        classi: classiProfilo,
+      };
+      const e = await inviaNotificaEmail(resend, dettagli, destinatario, {
+        dryRun: opts.dryRun,
+        dashboardUrl: opts.dashboardUrl,
+        tipo,
+      });
+      if (e.inviata) {
+        esito.inviate += 1;
+        okAny = true;
+        if (!opts.dryRun) await registraNotifica(client, String(prof.id), r.hash_id, 'email');
+      } else {
+        esito.fallite += 1;
+        console.warn(`  ✗ Email a ${email} fallita: ${e.error ?? 'errore sconosciuto'}`);
+      }
+    }
+
+    if (chatId) {
+      if (opts.dryRun) {
+        console.log(`  ✈ [DRY-RUN] Telegram ${chatId} ← ${r.title.slice(0, 60)}`);
+        esito.telegramInviate += 1;
+        okAny = true;
+      } else {
+        const t = await inviaNotificaTelegram(chatId, dettagli, {
+          classiUtente: classiProfilo,
+          dashboardUrl: opts.dashboardUrl,
+          tipo,
+        });
+        if (t.ok) {
+          esito.telegramInviate += 1;
+          okAny = true;
+          await registraNotifica(client, String(prof.id), r.hash_id, 'telegram');
+        } else {
+          esito.telegramFallite += 1;
+          console.warn(`  ✗ Telegram a ${chatId} fallito: ${t.error ?? 'errore'}`);
+        }
+      }
+    }
+
+    if (!okAny) console.warn(`  ⚠ Nessun canale disponibile per "${r.title.slice(0, 60)}".`);
+  }
+
+  console.log(
+    `✓ Dispatch ${prof.email}: ${esito.interpelli} interpelli compatibili · ${esito.saltati} già notificati · ` +
+      `${esito.inviate} email · ${esito.telegramInviate} Telegram.`,
+  );
+  return esito;
+}
+

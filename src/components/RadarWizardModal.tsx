@@ -751,7 +751,7 @@ export function RadarWizardModal() {
                   {materieCustom.length > 0 && (
                     <div className="mb-2 flex flex-wrap gap-1.5">
                       {materieCustom.map((m) => (
-                        <Pill key={m} label={m} onRemove={() => removeCustomMateria(m)} color="secondary" />
+                        <Pill key={m} label={m} onRemove={() => removeCustomMateria(m)} color="primary" />
                       ))}
                     </div>
                   )}

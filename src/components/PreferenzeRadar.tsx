@@ -107,6 +107,12 @@ export function PreferenzeRadar() {
     return list;
   }, [queryClasse, materiaFilter]);
 
+  /** Etichetta compatta di una classe di concorso per i chip "pinned". */
+  const labelClasse = (codice: string): string => {
+    const d = classiConcorso.find((c) => c.codice === codice)?.denominazione ?? '';
+    return d ? `${codice} · ${d.length > 44 ? `${d.slice(0, 42)}…` : d}` : codice;
+  };
+
   const toggleOrdine = (id: OrdineScuola) =>
     setOrdini((prev) => (prev.includes(id) ? prev.filter((o) => o !== id) : [...prev, id]));
   const toggleClasse = (codice: string) => {
@@ -268,8 +274,26 @@ export function PreferenzeRadar() {
       {/* Classi di Concorso — accordion */}
       <Accordion
         icona="🎓"
-        titolo="Per quali insegnamenti sei abilitato o qualificato?"
+        titolo="Classi di concorso"
         badge={classiCodici.length ? `${classiCodici.length} selezionate` : undefined}
+        sommario={
+          <div className="flex flex-wrap gap-1.5">
+            {classiCodici.length === 0 ? (
+              <span className="text-xs text-primary-400">
+                Nessuna classe selezionata: apri per scegliere le tue abilitazioni.
+              </span>
+            ) : (
+              classiCodici.map((c) => (
+                <Pill
+                  key={c}
+                  label={labelClasse(c)}
+                  onRemove={() => toggleClasse(c)}
+                  color="accent"
+                />
+              ))
+            )}
+          </div>
+        }
         aperto={!!accordionAperti.classi}
         onToggle={() => toggleAccordion('classi')}
       >
@@ -278,13 +302,6 @@ export function PreferenzeRadar() {
             ? 'PRO: puoi selezionare fino a 4 classi di concorso.'
             : `Piano Base: ${maxClassiConcorso} classi di concorso incluse. Passa a PRO per arrivare a 4.`}
         </p>
-        {classiCodici.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {classiCodici.map((c) => (
-              <Pill key={c} label={c} onRemove={() => toggleClasse(c)} color="accent" />
-            ))}
-          </div>
-        )}
 
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <select
@@ -414,7 +431,7 @@ export function PreferenzeRadar() {
         {materieCustom.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {materieCustom.map((m) => (
-              <Pill key={m} label={m} onRemove={() => removeCustomMateria(m)} color="secondary" />
+              <Pill key={m} label={m} onRemove={() => removeCustomMateria(m)} color="primary" />
             ))}
           </div>
         )}
@@ -448,6 +465,24 @@ export function PreferenzeRadar() {
         icona="📍"
         titolo="Dove vuoi cercare?"
         badge={provinceCodici.length ? `${provinceCodici.length} selezionate` : undefined}
+        sommario={
+          <div className="flex flex-wrap gap-1.5">
+            {provinceCodici.length === 0 ? (
+              <span className="text-xs text-primary-400">
+                Nessuna provincia selezionata: aggiungila dal menu qui sotto.
+              </span>
+            ) : (
+              provinceCodici.map((c) => (
+                <Pill
+                  key={c}
+                  label={`${province.find((p) => p.codice === c)?.nome ?? c} (${c})`}
+                  onRemove={() => toggleProvincia(c)}
+                  color="primary"
+                />
+              ))
+            )}
+          </div>
+        }
         aperto={!!accordionAperti.province}
         onToggle={() => toggleAccordion('province')}
       >
@@ -456,48 +491,39 @@ export function PreferenzeRadar() {
             ? 'PRO: puoi monitorare fino a 4 province.'
             : `Piano Base: ${maxProvince} provincia monitorabile. Passa a PRO per arrivare a 4.`}
         </p>
-        <p className="mb-3 text-xs text-primary-500">
-          Scegli dove vuoi cercare. Il Radar elimina la necessità di controllare manualmente decine
-          di siti provinciali.
+        <label className="block">
+          <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-primary-700">
+            <MapPin className="h-4 w-4 text-primary-500" />
+            Aggiungi una provincia
+          </span>
+          <select
+            value=""
+            disabled={provinceCodici.length >= maxProvince}
+            onChange={(e) => {
+              const valore = e.target.value;
+              if (valore) toggleProvincia(valore);
+            }}
+            aria-label="Aggiungi una provincia"
+            className="input"
+          >
+            <option value="">
+              {provinceCodici.length >= maxProvince
+                ? 'Limite province raggiunto'
+                : 'Scegli una provincia…'}
+            </option>
+            {provinceSorted
+              .filter((p) => !provinceCodici.includes(p.codice))
+              .map((p) => (
+                <option key={p.codice} value={p.codice}>
+                  {p.nome} ({p.codice})
+                </option>
+              ))}
+          </select>
+        </label>
+        <p className="mt-3 text-xs text-primary-500">
+          Le province scelte restano in cima come tag: tocca la ✕ per rimuoverle. Il Radar elimina la
+          necessità di controllare manualmente decine di siti provinciali.
         </p>
-        {provinceCodici.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {provinceCodici.map((c) => (
-              <Pill
-                key={c}
-                label={province.find((p) => p.codice === c)?.nome ?? c}
-                onRemove={() => toggleProvincia(c)}
-                color="primary"
-              />
-            ))}
-          </div>
-        )}
-
-        <div className="mt-4 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-primary-100 p-2">
-          {provinceSorted.map((p) => {
-            const selected = provinceCodici.includes(p.codice);
-            const atLimit = provinceCodici.length >= maxProvince && !selected;
-            return (
-              <label
-                key={p.codice}
-                className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition hover:bg-primary-50 ${
-                  selected ? 'bg-primary-50' : atLimit ? 'cursor-not-allowed opacity-50 hover:bg-transparent' : ''
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={selected}
-                  disabled={atLimit}
-                  onChange={() => toggleProvincia(p.codice)}
-                  className="h-4 w-4 rounded border-primary-300 text-primary-500"
-                />
-                <MapPin className="h-4 w-4 text-primary-400" />
-                <span className="text-sm text-primary-800">{p.nome}</span>
-                <span className="ml-auto text-xs text-primary-400">{p.codice}</span>
-              </label>
-            );
-          })}
-        </div>
       </Accordion>
 
       {/* Filtri Avanzati Scuole — accordion */}

@@ -452,7 +452,7 @@ export function OnboardingPage() {
                   {materieCustom.length > 0 && (
                     <div className="mb-3 flex flex-wrap gap-2">
                       {materieCustom.map((m) => (
-                        <Pill key={m} label={m} onRemove={() => removeCustomMateria(m)} color="secondary" />
+                        <Pill key={m} label={m} onRemove={() => removeCustomMateria(m)} color="primary" />
                       ))}
                     </div>
                   )}
