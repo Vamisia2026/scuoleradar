@@ -4,13 +4,17 @@
  * File GENERATO automaticamente dal servizio di ingestione:
  *   npm run scrape:notizie
  * Non modificarlo a mano: il contenuto viene rigenerato ad ogni ingestione
- * (accumulo incrementale con dedupe per id, validazione URL HTTP 200 e tetto
- * di 6 articoli nella finestra di 15 giorni: le notizie già presenti restano,
- * le nuove si aggiungono; le voci non più valide vengono rimosse).
+ * (accelerazione ACCUMULATIVA con dedupe per id, REFRESH delle voci esistenti,
+ * validazione URL HTTP 200, tetto di 6 articoli nella finestra di 15 giorni).
+ *
+ * POLICY NAZIONALE: sono ammesse SOLO fonti nazionali accreditate (MIM,
+ * Gazzetta Ufficiale, ARAN, giurisdizione contabile/amministrativa). Le pagine
+ * REGIONALI (USR) sono escluse: le voci regionali eventualmente presenti
+ * vengono rimosse dall'igiene dell'archivio.
  */
 import type { NewsArticle } from '../types';
 
-/** Notizie reali ingressate dalle fonti ufficiali (MIM, Gazzetta Ufficiale). */
+/** Notizie reali ingressate dalle fonti ufficiali NAZIONALI (MIM, Gazzetta Ufficiale, ARAN). */
 export const notizieIngestite: NewsArticle[] = [
   {
     "id": "notizia-supplenze-e-ruoli-docenti-2026-al-via-la-scelta-delle-150-se-mim",
@@ -77,115 +81,67 @@ export const notizieIngestite: NewsArticle[] = [
     "published_at": "2026-06-15T00:00:00.000Z"
   },
   {
-    "id": "notizia-aggiornamento-concorso-d-d-g-2939-2025-usr-lombardia",
-    "title": "Aggiornamento Concorso D.D.G. 2939/2025",
-    "category": "Concorsi",
-    "deadline_date": null,
-    "summary_points": [
-      "Aggiornamento Concorso D.D.G. 2939/2025",
-      "Interessati: candidati in possesso dei requisiti indicati nel bando per la classe di concorso di interesse.",
-      "Come: procedi su InPA."
-    ],
-    "content_html": "<p>È stato pubblicato un bando di concorso per l’accesso o il passaggio di ruolo nella scuola, con l’avviso «Aggiornamento Concorso D.D.G. 2939/2025». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.inpa.gov.it/\" target=\"_blank\" rel=\"noopener noreferrer\">InPA</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda candidati in possesso dei requisiti indicati nel bando per la classe di concorso di interesse. La selezione prevede una o più prove e la valutazione dei titoli: conviene leggere il bando per intero prima di compilare la domanda, perché requisiti e modalità cambiano di bando in bando.</p>\n    <p>La domanda si presenta online dal portale <a href=\"https://www.inpa.gov.it/\" target=\"_blank\" rel=\"noopener noreferrer\">InPA</a> (Portale del Reclutamento della Pubblica Amministrazione) con accesso SPID o CIE, entro i termini indicati nel bando. Predisponi in anticipo i titoli e l’autocertificazione.</p>",
-    "official_source_url": "https://www.mim.gov.it/web/usr-lombardia/-/aggiornamento-concorso-d-d-g-2939-2025-118",
-    "official_pdf_url": null,
-    "relevance_score": 90,
-    "published_at": ""
-  },
-  {
-    "id": "notizia-personale-docente-concorsi-e-reclutamento-usr-lombardia",
-    "title": "Personale docente Concorsi e reclutamento",
-    "category": "Concorsi",
-    "deadline_date": null,
-    "summary_points": [
-      "Personale docente Concorsi e reclutamento",
-      "Interessati: candidati in possesso dei requisiti indicati nel bando per la classe di concorso di interesse.",
-      "Come: procedi su InPA."
-    ],
-    "content_html": "<p>È stato pubblicato un bando di concorso per l’accesso o il passaggio di ruolo nella scuola, con l’avviso «Personale docente Concorsi e reclutamento». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.inpa.gov.it/\" target=\"_blank\" rel=\"noopener noreferrer\">InPA</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda candidati in possesso dei requisiti indicati nel bando per la classe di concorso di interesse. La selezione prevede una o più prove e la valutazione dei titoli: conviene leggere il bando per intero prima di compilare la domanda, perché requisiti e modalità cambiano di bando in bando.</p>\n    <p>La domanda si presenta online dal portale <a href=\"https://www.inpa.gov.it/\" target=\"_blank\" rel=\"noopener noreferrer\">InPA</a> (Portale del Reclutamento della Pubblica Amministrazione) con accesso SPID o CIE, entro i termini indicati nel bando. Predisponi in anticipo i titoli e l’autocertificazione.</p>",
-    "official_source_url": "https://www.mim.gov.it/web/usr-lombardia/concorsi-e-reclutamento-docenti",
-    "official_pdf_url": null,
-    "relevance_score": 90,
-    "published_at": ""
-  },
-  {
-    "id": "notizia-concorsi-dirigenti-scolastici-usr-lombardia",
-    "title": "Concorsi Dirigenti Scolastici",
-    "category": "Concorsi",
-    "deadline_date": null,
-    "summary_points": [
-      "Concorsi Dirigenti Scolastici",
-      "Interessati: candidati in possesso dei requisiti indicati nel bando per la classe di concorso di interesse.",
-      "Come: procedi su InPA."
-    ],
-    "content_html": "<p>È stato pubblicato un bando di concorso per l’accesso o il passaggio di ruolo nella scuola, con l’avviso «Concorsi Dirigenti Scolastici». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.inpa.gov.it/\" target=\"_blank\" rel=\"noopener noreferrer\">InPA</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda candidati in possesso dei requisiti indicati nel bando per la classe di concorso di interesse. La selezione prevede una o più prove e la valutazione dei titoli: conviene leggere il bando per intero prima di compilare la domanda, perché requisiti e modalità cambiano di bando in bando.</p>\n    <p>La domanda si presenta online dal portale <a href=\"https://www.inpa.gov.it/\" target=\"_blank\" rel=\"noopener noreferrer\">InPA</a> (Portale del Reclutamento della Pubblica Amministrazione) con accesso SPID o CIE, entro i termini indicati nel bando. Predisponi in anticipo i titoli e l’autocertificazione.</p>",
-    "official_source_url": "https://www.mim.gov.it/web/usr-lombardia/concorsi-dirigenti-scolastici-1",
-    "official_pdf_url": null,
-    "relevance_score": 90,
-    "published_at": ""
-  },
-  {
-    "id": "notizia-personale-ata-concorsi-e-procedure-selettive-usr-lombardia",
-    "title": "Personale ATA Concorsi e procedure selettive",
-    "category": "Concorsi",
-    "deadline_date": null,
-    "summary_points": [
-      "Personale ATA Concorsi e procedure selettive",
-      "Interessati: candidati in possesso dei requisiti indicati nel bando per la classe di concorso di interesse.",
-      "Come: procedi su InPA."
-    ],
-    "content_html": "<p>È stato pubblicato un bando di concorso per l’accesso o il passaggio di ruolo nella scuola, con l’avviso «Personale ATA Concorsi e procedure selettive». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.inpa.gov.it/\" target=\"_blank\" rel=\"noopener noreferrer\">InPA</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda candidati in possesso dei requisiti indicati nel bando per la classe di concorso di interesse. La selezione prevede una o più prove e la valutazione dei titoli: conviene leggere il bando per intero prima di compilare la domanda, perché requisiti e modalità cambiano di bando in bando.</p>\n    <p>La domanda si presenta online dal portale <a href=\"https://www.inpa.gov.it/\" target=\"_blank\" rel=\"noopener noreferrer\">InPA</a> (Portale del Reclutamento della Pubblica Amministrazione) con accesso SPID o CIE, entro i termini indicati nel bando. Predisponi in anticipo i titoli e l’autocertificazione.</p>",
-    "official_source_url": "https://www.mim.gov.it/web/usr-lombardia/concorsi-e-selezione-personale-ata",
-    "official_pdf_url": null,
-    "relevance_score": 90,
-    "published_at": ""
-  },
-  {
-    "id": "notizia-rettifica-assegnazione-reggenze-annuali-e-temporanee-a-s-202-usr-lombardia",
-    "title": "Rettifica assegnazione reggenze annuali e temporanee a.s. 2026/27",
-    "category": "Supplenze",
-    "deadline_date": null,
-    "summary_points": [
-      "Rettifica assegnazione reggenze annuali e temporanee a.s. 2026/27",
-      "Interessati: docenti in graduatoria, aspiranti supplenti e personale che presenta la messa a disposizione.",
-      "Come: procedi su Istanze Online."
-    ],
-    "content_html": "<p>Il Ministero dell’Istruzione e del Merito (MIM) ha aggiornato le regole per supplenze e incarichi del personale docente, con l’avviso «Rettifica assegnazione reggenze annuali e temporanee a.s. 2026/27». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda docenti in graduatoria, aspiranti supplenti e personale che presenta la messa a disposizione. Le convocazioni seguono l’ordine di graduatoria: chi non risponde nei tempi previsti può essere saltato, quindi conviene tenere monitorata la propria posizione.</p>\n    <p>Domande e accettazioni si gestiscono online dal portale <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online</a> con identità SPID o CIE. Tieni a portata di mano la documentazione di servizio.</p>",
-    "official_source_url": "https://www.mim.gov.it/web/usr-lombardia/-/rettifica-assegnazione-reggenze-annuali-e-temporanee-a-s-2026-27",
-    "official_pdf_url": null,
-    "relevance_score": 80,
-    "published_at": ""
-  },
-  {
-    "id": "notizia-personale-a-tempo-determinato-interpelli-usr-lombardia",
-    "title": "Personale a Tempo Determinato Interpelli",
-    "category": "Supplenze",
-    "deadline_date": null,
-    "summary_points": [
-      "Personale a Tempo Determinato Interpelli",
-      "Interessati: docenti in graduatoria, aspiranti supplenti e personale che presenta la messa a disposizione.",
-      "Come: procedi su Istanze Online."
-    ],
-    "content_html": "<p>Il Ministero dell’Istruzione e del Merito (MIM) ha aggiornato le regole per supplenze e incarichi del personale docente, con l’avviso «Personale a Tempo Determinato Interpelli». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda docenti in graduatoria, aspiranti supplenti e personale che presenta la messa a disposizione. Le convocazioni seguono l’ordine di graduatoria: chi non risponde nei tempi previsti può essere saltato, quindi conviene tenere monitorata la propria posizione.</p>\n    <p>Domande e accettazioni si gestiscono online dal portale <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online</a> con identità SPID o CIE. Tieni a portata di mano la documentazione di servizio.</p>",
-    "official_source_url": "https://www.mim.gov.it/web/usr-lombardia/interpelli-ricerca-supplenti",
-    "official_pdf_url": null,
-    "relevance_score": 80,
-    "published_at": ""
-  },
-  {
-    "id": "notizia-calendario-scolastico-regionale-usr-lombardia",
-    "title": "Calendario scolastico regionale",
+    "id": "notizia-ordinanza-ministeriale-n-163-del-7-agosto-2026-mim",
+    "title": "Ordinanza Ministeriale n. 163 del 7 agosto 2026",
     "category": "Scuole",
     "deadline_date": null,
     "summary_points": [
-      "Calendario scolastico regionale",
+      "Ordinanza Ministeriale n. 163 del 7 agosto 2026",
       "Interessati: dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie.",
       "Come: procedi su Notizie del Ministero."
     ],
-    "content_html": "<p>Il Ministero dell’Istruzione e del Merito (MIM) ha pubblicato un aggiornamento sull’organizzazione dell’anno scolastico, con la comunicazione «Calendario scolastico regionale». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Notizie del Ministero</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie. La comunicazione introduce novità o conferme su scadenze e adempimenti dell’anno: i dettagli completi sono riportati nella pagina ufficiale.</p>\n    <p>Le informazioni complete sono consultabili sul sito del <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Ministero</a>. Se la notizia riguarda la tua scuola, la segreteria provvederà a comunicare le scadenze interne.</p>",
-    "official_source_url": "https://www.mim.gov.it/web/usr-lombardia/calendario-scolastico-regionale",
+    "content_html": "<p>Il Ministero dell’Istruzione e del Merito (MIM) ha pubblicato un aggiornamento sull’organizzazione dell’anno scolastico, con la comunicazione «Ordinanza Ministeriale n. 163 del 7 agosto 2026». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Notizie del Ministero</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie. La comunicazione introduce novità o conferme su scadenze e adempimenti dell’anno: i dettagli completi sono riportati nella pagina ufficiale.</p>\n    <p>Le informazioni complete sono consultabili sul sito del <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Ministero</a>. Se la notizia riguarda la tua scuola, la segreteria provvederà a comunicare le scadenze interne.</p>",
+    "official_source_url": "https://www.mim.gov.it/web/guest/-/ordinanza-ministeriale-n-163-del-7-agosto-2026",
     "official_pdf_url": null,
     "relevance_score": 70,
-    "published_at": "2026-09-13T14:03:07.629Z"
+    "published_at": "2026-09-11T00:00:00.000Z"
+  },
+  {
+    "id": "notizia-decreto-direttoriale-n-1095-del-10-settembre-2026-mim",
+    "title": "Decreto Direttoriale n. 1095 del 10 settembre 2026",
+    "category": "Scuole",
+    "deadline_date": null,
+    "summary_points": [
+      "Decreto Direttoriale n. 1095 del 10 settembre 2026",
+      "Interessati: dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie.",
+      "Come: procedi su Notizie del Ministero."
+    ],
+    "content_html": "<p>Il Ministero dell’Istruzione e del Merito (MIM) ha pubblicato un aggiornamento sull’organizzazione dell’anno scolastico, con la comunicazione «Decreto Direttoriale n. 1095 del 10 settembre 2026». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Notizie del Ministero</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie. La comunicazione introduce novità o conferme su scadenze e adempimenti dell’anno: i dettagli completi sono riportati nella pagina ufficiale.</p>\n    <p>Le informazioni complete sono consultabili sul sito del <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Ministero</a>. Se la notizia riguarda la tua scuola, la segreteria provvederà a comunicare le scadenze interne.</p>",
+    "official_source_url": "https://www.mim.gov.it/web/guest/-/decreto-direttoriale-n-1095-del-10-settembre-2026",
+    "official_pdf_url": null,
+    "relevance_score": 70,
+    "published_at": "2026-09-11T00:00:00.000Z"
+  },
+  {
+    "id": "notizia-decreto-direttoriale-n-1988-dell-8-settembre-2026-mim",
+    "title": "Decreto Direttoriale n. 1988 dell'8 settembre 2026",
+    "category": "Scuole",
+    "deadline_date": null,
+    "summary_points": [
+      "Decreto Direttoriale n. 1988 dell'8 settembre 2026",
+      "Interessati: dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie.",
+      "Come: procedi su Notizie del Ministero."
+    ],
+    "content_html": "<p>Il Ministero dell’Istruzione e del Merito (MIM) ha pubblicato un aggiornamento sull’organizzazione dell’anno scolastico, con la comunicazione «Decreto Direttoriale n. 1988 dell'8 settembre 2026». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Notizie del Ministero</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie. La comunicazione introduce novità o conferme su scadenze e adempimenti dell’anno: i dettagli completi sono riportati nella pagina ufficiale.</p>\n    <p>Le informazioni complete sono consultabili sul sito del <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Ministero</a>. Se la notizia riguarda la tua scuola, la segreteria provvederà a comunicare le scadenze interne.</p>",
+    "official_source_url": "https://www.mim.gov.it/web/guest/-/decreto-direttoriale-n-1988-dell-8-settembre-2026",
+    "official_pdf_url": null,
+    "relevance_score": 70,
+    "published_at": "2026-09-09T00:00:00.000Z"
+  },
+  {
+    "id": "notizia-decreto-direttoriale-n-1983-del-7-settembre-2026-mim",
+    "title": "Decreto Direttoriale n. 1983 del 7 settembre 2026",
+    "category": "Scuole",
+    "deadline_date": null,
+    "summary_points": [
+      "Decreto Direttoriale n. 1983 del 7 settembre 2026",
+      "Interessati: dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie.",
+      "Come: procedi su Notizie del Ministero."
+    ],
+    "content_html": "<p>Il Ministero dell’Istruzione e del Merito (MIM) ha pubblicato un aggiornamento sull’organizzazione dell’anno scolastico, con la comunicazione «Decreto Direttoriale n. 1983 del 7 settembre 2026». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Notizie del Ministero</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie. La comunicazione introduce novità o conferme su scadenze e adempimenti dell’anno: i dettagli completi sono riportati nella pagina ufficiale.</p>\n    <p>Le informazioni complete sono consultabili sul sito del <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Ministero</a>. Se la notizia riguarda la tua scuola, la segreteria provvederà a comunicare le scadenze interne.</p>",
+    "official_source_url": "https://www.mim.gov.it/web/guest/-/decreto-direttoriale-n-1983-del-7-settembre-2026",
+    "official_pdf_url": null,
+    "relevance_score": 70,
+    "published_at": "2026-09-09T00:00:00.000Z"
   }
 ];

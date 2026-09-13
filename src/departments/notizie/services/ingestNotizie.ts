@@ -33,7 +33,12 @@ import process from 'node:process';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { raccogliNotizieRaw, verificaUrlUfficiale, type VoceFonte } from './newsFetcher.ts';
+import {
+  LIVELLI_NAZIONALI,
+  raccogliLivello,
+  verificaUrlUfficiale,
+  type VoceFonte,
+} from './newsFetcher.ts';
 import { notizieIngestite } from '../data/notizieIngestite.ts';
 import {
   valutaRilevanza,
@@ -44,7 +49,9 @@ import {
   èFonteCanonica,
   limitaArticoliSettimanali,
   FINESTRA_LOOKBACK_GIORNI,
+  FINESTRA_LOOKBACK_NAZIONALE_GIORNI,
   MAX_ARTICOLI_FINESTRA,
+  èFonteNazionale,
   type ValutazioneNotizia,
 } from './relevanceEngine.ts';
 import type { NewsArticle } from '../types.ts';
@@ -119,6 +126,8 @@ async function costruisciArticolo(v: VoceFonte): Promise<NewsArticle | null> {
   const valutazione: ValutazioneNotizia = valutaRilevanza({
     title: v.title,
     description: v.description,
+    url: v.link,
+    data: v.pubDate,
   });
   if (!valutazione.rilevante) {
     console.log(
@@ -204,13 +213,17 @@ function scriviArchivio(articoli: NewsArticle[]): void {
  * File GENERATO automaticamente dal servizio di ingestione:
  *   npm run scrape:notizie
  * Non modificarlo a mano: il contenuto viene rigenerato ad ogni ingestione
- * (accumulo incrementale con dedupe per id, validazione URL HTTP 200 e tetto
- * di 6 articoli nella finestra di 15 giorni: le notizie già presenti restano,
- * le nuove si aggiungono; le voci non più valide vengono rimosse).
+ * (accelerazione ACCUMULATIVA con dedupe per id, REFRESH delle voci esistenti,
+ * validazione URL HTTP 200, tetto di 6 articoli nella finestra di 15 giorni).
+ *
+ * POLICY NAZIONALE: sono ammesse SOLO fonti nazionali accreditate (MIM,
+ * Gazzetta Ufficiale, ARAN, giurisdizione contabile/amministrativa). Le pagine
+ * REGIONALI (USR) sono escluse: le voci regionali eventualmente presenti
+ * vengono rimosse dall'igiene dell'archivio.
  */
 import type { NewsArticle } from '../types';
 
-/** Notizie reali ingressate dalle fonti ufficiali (MIM, Gazzetta Ufficiale). */
+/** Notizie reali ingressate dalle fonti ufficiali NAZIONALI (MIM, Gazzetta Ufficiale, ARAN). */
 export const notizieIngestite: NewsArticle[] = ${JSON.stringify(articoli, null, 2)};
 `;
 
@@ -218,44 +231,85 @@ export const notizieIngestite: NewsArticle[] = ${JSON.stringify(articoli, null, 
   writeFileSync(FILE_USCITA, contenuto, 'utf8');
 }
 
+/**
+ * WATERFALL NAZIONALE (requisito editoriale): interroga i livelli in ordine di
+ * priorità — 1. MIM nazionale → 2. Gazzetta Ufficiale → 3. ARAN →
+ * 4. giurisdizione/previdenza — e si FERMA al primo che produce almeno un
+ * articolo valido. Ogni livello applica la propria finestra di lookback:
+ *   · 15 giorni per le NOTIZIE quotidiane (MIM/GU);
+ *   · 60 giorni per gli ATTI NAZIONALI STRUTTURALI (CCNL, decreti ministeriali),
+ *     che restano vincolanti per mesi.
+ * Nel dubbio NON si inventa nulla: se nessun livello produce articoli, la
+ * bacheca resta invariata (0 pubblicati) e i log lo dicono esplicitamente.
+ */
+async function raccogliConWaterfall(): Promise<{
+  fontiRaggiunte: number;
+  vociValutate: number;
+  articoli: NewsArticle[];
+  livello: number | null;
+}> {
+  let fontiRaggiunte = 0;
+  let vociValutate = 0;
+
+  for (const meta of LIVELLI_NAZIONALI) {
+    const raccolta = await raccogliLivello(meta.priorita);
+    if (!raccolta) continue;
+    if (raccolta.raggiunta) fontiRaggiunte += 1;
+
+    // Dedupe per link.
+    const unici = [...new Map(raccolta.voci.map((v) => [v.link, v])).values()];
+    vociValutate += unici.length;
+
+    const giorni =
+      meta.priorita >= 3 ? FINESTRA_LOOKBACK_NAZIONALE_GIORNI : FINESTRA_LOOKBACK_GIORNI;
+    const soglia = Date.now() - giorni * 24 * 60 * 60 * 1000;
+    const inFinestra = unici.filter((v) => {
+      if (!v.pubDate) return true;
+      const t = new Date(v.pubDate).getTime();
+      return Number.isNaN(t) || t >= soglia;
+    });
+    console.log(
+      `• LIVELLO ${meta.priorita} — ${meta.etichetta}: ${inFinestra.length}/${unici.length} voci nella finestra di ${giorni} giorni`,
+    );
+    if (inFinestra.length === 0) {
+      console.log('  ↳ nessuna voce nella finestra: passo al livello successivo.');
+      continue;
+    }
+
+    // Filtro editoriale + STRICT URL INTEGRITY (validazione locale e HTTP 200/3xx).
+    const articoli = (await Promise.all(inFinestra.map(costruisciArticolo))).filter(
+      (a): a is NewsArticle => a !== null,
+    );
+    console.log(`  ↳ articoli validi: ${articoli.length}`);
+    if (articoli.length > 0) {
+      console.log(
+        `✓ LIVELLO ${meta.priorita} (${meta.etichetta}) produttivo: waterfall interrotto.`,
+      );
+      return { fontiRaggiunte, vociValutate, articoli, livello: meta.priorita };
+    }
+    console.log('  ↳ nessun articolo valido: passo al livello successivo.');
+  }
+
+  return { fontiRaggiunte, vociValutate, articoli: [], livello: null };
+}
+
 async function main(): Promise<void> {
   const isDryRun = process.argv.includes('--dry-run');
   console.log('=== Ingestione Notizie ScuoleRadar ===');
 
-  const { voci, fontiRaggiunte } = await raccogliNotizieRaw();
-  console.log(`• Voci raccolte: ${voci.length} | fonti raggiunte: ${fontiRaggiunte}`);
+  const { fontiRaggiunte, vociValutate, articoli } = await raccogliConWaterfall();
+  console.log(`• Voci valutate: ${vociValutate} | fonti raggiunte: ${fontiRaggiunte}`);
 
   // Nessuna fonte ufficiale raggiunta (HTTP 2xx/3xx): niente silent-fail.
   // Il workflow GitHub trasforma l'exit code in warning visibile nei log.
   if (fontiRaggiunte === 0) {
     console.error(
-      '✗ HTTP FAIL - fonti ufficiali non raggiungibili (MIM / Gazzetta Ufficiale). Nessuna ingestione eseguita.',
+      '✗ HTTP FAIL - fonti ufficiali NAZIONALI non raggiungibili. Nessuna ingestione eseguita.',
     );
     process.exitCode = 1;
     return;
   }
 
-  // De-duplica per link.
-  const unici = [...new Map(voci.map((v) => [v.link, v])).values()];
-  console.log(`• Voci uniche: ${unici.length}`);
-
-  // LOOKBACK 15 giorni (avvio anno scolastico): si considerano solo le notizie
-  // pubblicate nella finestra; una data assente non è dimostrabile come
-  // "vecchia" → la voce resta (il gate operativo la filtra comunque).
-  const sogliaLookback = Date.now() - FINESTRA_LOOKBACK_GIORNI * 24 * 60 * 60 * 1000;
-  const inFinestra = unici.filter((v) => {
-    if (!v.pubDate) return true;
-    const t = new Date(v.pubDate).getTime();
-    return Number.isNaN(t) || t >= sogliaLookback;
-  });
-  console.log(
-    `• Voci nella finestra di ${FINESTRA_LOOKBACK_GIORNI} giorni: ${inFinestra.length}/${unici.length}`,
-  );
-
-  // Filtro editoriale + STRICT URL INTEGRITY (validazione locale e HTTP 200/3xx).
-  const articoli = (
-    await Promise.all(inFinestra.map(costruisciArticolo))
-  ).filter((a): a is NewsArticle => a !== null);
   console.log(`• Articoli che soddisfano i criteri editoriali: ${articoli.length}`);
 
   // Archiviazione ACCUMULATIVA + IGIENE: le nuove notizie si aggiungono a
@@ -268,16 +322,34 @@ async function main(): Promise<void> {
   // NON consumano il tetto settimanale (vedi `limitaArticoliSettimanali`),
   // altrimenti occuperebbero tutti gli slot e bloccherebbero ogni nuovo articolo.
   const esistentiValidi = notizieIngestite.filter(
-    (a) => articoloValido(a) && valutaRilevanza({ title: a.title }).rilevante,
+    (a) =>
+      articoloValido(a) &&
+      valutaRilevanza({ title: a.title, url: a.official_source_url }).rilevante,
   );
   const purgate = notizieIngestite.length - esistentiValidi.length;
   if (purgate > 0) {
     console.log(`⚠ Igiene archivio: ${purgate} notizia/e preesistente/i non più valida/e rimossa/e.`);
   }
+  // Policy NAZIONALE: le voci da fonti regionali/locali (es. pagine USR) escono
+  // dall'archivio, così la bacheca resta di copertura nazionale.
+  const regionali = notizieIngestite.filter((a) => !èFonteNazionale(a.official_source_url)).length;
+  if (regionali > 0) {
+    console.log(
+      `⚠ Igiene nazionale: ${regionali} notizia/e da fonti REGIONALI/locali rimossa/e (ScuoleRadar pubblica solo copertura nazionale).`,
+    );
+  }
   const esistenti = esistentiValidi;
+  const perId = new Map(articoli.map((a) => [a.id, a]));
   const nuovi = articoli.filter((a) => !esistenti.some((e) => e.id === a.id));
+  // REFRESH: un avviso già in archivio viene aggiornato con la versione fresca
+  // (stesso id): le correzioni editoriali (scadenza, titolo, contenuto) si
+  // propagano senza duplicare la voce.
+  const esistentiFreschi = esistenti.map((e) => perId.get(e.id) ?? e);
+  const aggiornati = esistenti.filter(
+    (e, i) => JSON.stringify(e) !== JSON.stringify(esistentiFreschi[i]),
+  ).length;
 
-  if (nuovi.length === 0) {
+  if (nuovi.length === 0 && aggiornati === 0) {
     console.log('✓ HTTP 200 - 0 new posts criteria matched');
     if (!isDryRun && purgate > 0) {
       // Persistisci la sola pulizia dell'archivio (nessuna nuova notizia).
@@ -293,7 +365,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const combinati = [...esistenti, ...nuovi].sort((a, b) =>
+  const combinati = [...esistentiFreschi, ...nuovi].sort((a, b) =>
     (b.published_at || '').localeCompare(a.published_at || ''),
   );
 
@@ -308,7 +380,7 @@ async function main(): Promise<void> {
   }
   const aggiunti = nuovi.filter((n) => mantenuti.some((m) => m.id === n.id));
 
-  if (aggiunti.length === 0) {
+  if (aggiunti.length === 0 && aggiornati === 0) {
     console.log('✓ HTTP 200 - 0 new posts criteria matched (esuberi scartati dal tetto settimanale)');
     reportCadenza(mantenuti);
     if (isDryRun) console.log('=== DRY-RUN (nessuna scrittura) ===');
@@ -322,13 +394,17 @@ async function main(): Promise<void> {
         `  ✓ [${a.category}] ${a.title.slice(0, 70)} | scad: ${a.deadline_date ?? 'n/d'}`,
       );
     });
-    console.log(`✓ HTTP 200 - ${aggiunti.length} new posts criteria matched`);
+    console.log(
+      `✓ HTTP 200 - ${aggiunti.length} new posts criteria matched${aggiornati > 0 ? ` (${aggiornati} aggiornati)` : ''}`,
+    );
     reportCadenza(mantenuti);
     return;
   }
 
   scriviArchivio(mantenuti);
-  console.log(`✓ HTTP 200 - ${aggiunti.length} new posts criteria matched`);
+  console.log(
+    `✓ HTTP 200 - ${aggiunti.length} new posts criteria matched${aggiornati > 0 ? ` (${aggiornati} aggiornati)` : ''}`,
+  );
   console.log(`✓ Scritti ${mantenuti.length} articoli in ${FILE_USCITA}`);
   reportCadenza(mantenuti);
 }

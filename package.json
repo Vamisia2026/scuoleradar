@@ -41,6 +41,7 @@
     "test:radar": "tsx scripts/test-radar-validation.ts",
     "test:moduli": "tsx scripts/test-moduli-integrity.ts",
     "test:notizie-rate": "tsx scripts/test-notizie-rate.ts",
+    "test:notizie-nazionale": "tsx scripts/test-notizie-nazionale.ts",
     "test:alert": "tsx scripts/test-alert-avviso.ts",
     "test:email": "tsx scripts/test-email-template.ts",
     "test:link": "tsx scripts/test-link-fonte.ts",

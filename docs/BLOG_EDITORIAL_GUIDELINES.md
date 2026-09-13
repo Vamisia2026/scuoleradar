@@ -11,6 +11,27 @@
 
 ## ⭐ Regole d'Oro (algoritmo editoriale)
 
+0. **PERIMETRO NAZIONALE — SOLO FONTI NAZIONALI ACCREDITATE (waterfall)**
+   - ScuoleRadar è una piattaforma **nazionale**: si pubblicano solo aggiornamenti
+     nazionali (MIM, Gazzetta Ufficiale, ARAN, giurisdizione contabile/
+     amministrativa). Le pagine **REGIONALI/LOCALI** (USR `/web/usr-*`, AT
+     provinciali) sono **escluse** (`èFonteNazionale`) e vengono **rimosse**
+     dall'archivio dall'igiene dell'ingestione.
+   - **Waterfall delle fonti**: la pipeline interroga i livelli in ordine di
+     priorità `1 MIM → 2 Gazzetta Ufficiale → 3 ARAN → 4 giurisdizione/previdenza`
+     (`raccogliLivello`) e **si ferma al primo livello che produce articoli
+     validi**; scende al successivo solo se il precedente non ne ha.
+   - **Finestre di lookback**: **15 giorni** per le notizie quotidiane;
+     **60 giorni** per gli atti nazionali strutturali (CCNL —
+     `FINESTRA_LOOKBACK_NAZIONALE_GIORNI`); **45 giorni** per gli atti numerati
+     (decreti/ordinanze — `FINESTRA_ATTI_NAZIONALI_GIORNI`).
+   - **Atti nazionali**: un decreto/ordinanza ministeriale **numerato** e
+     **recente** è un provvedimento vincolante e viene ammesso (categoria
+     inferita, `Scuole` come default; la data dell'atto NON è una scadenza).
+     Sono **respinti**: la cronaca di stampa ("Valditara: …"), gli atti senza
+     numero, gli atti non recenti e i CCNL di **altri comparti** (Sanità,
+     Funzioni Locali, PCM…).
+
 1. **CAPACITÀ — MASSIMO 6 ARTICOLI PER FINESTRA DI 15 GIORNI (≈3/SETTIMANA)**
    - Lookback di **15 giorni** (`FINESTRA_LOOKBACK_GIORNI`) per coprire l'avvio
      dell'anno scolastico (presa di servizio, interpelli, supplenze, nomine…).

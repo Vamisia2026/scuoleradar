@@ -4,14 +4,19 @@
 # - Pianificazione: ogni giorno alle 06:00 UTC
 #   (= 07:00 italiane in inverno, 08:00 in estate)
 # - Trigger manuale: workflow_dispatch (GitHub → Actions → Run workflow)
-# - Esegue `npm run scrape:notizie`: raccoglie le notizie reali dal MIM e
-#   dalla Gazzetta Ufficiale (log HTTP esplicito per ogni fonte, nessun
-#   silent-fail), applica il motore di rilevanza e redazione
-#   (`relevanceEngine.ts`: filtro anti-rumore, date esatte, acronimi spiegati,
-#   STRICT URL INTEGRITY con link canonici `/web/guest/-/<slug>` validati
-#   HTTP 200, brand "ScuoleRadar"), il LOOKBACK di 15 giorni (avvio anno
-#   scolastico) e il TETTO ARTICOLI (max 6 ad alto valore nella finestra,
-#   ≈3/settimana: se non ci sono provvedimenti vincolanti si pubblicano 0).
+# - Esegue `npm run scrape:notizie`: raccoglie le notizie reali dalle fonti
+#   NAZIONALI con log HTTP esplicito per ogni fonte (nessun silent-fail) e
+#   applica il WATERFALL di priorità:
+#     1. MIM nazionale (notizie + avvisi + home)  2. Gazzetta Ufficiale
+#     3. ARAN (contrattazione nazionale)          4. giurisdizione/previdenza
+#   La pipeline si ferma al PRIMO livello che produce articoli validi.
+#   POLICY NAZIONALE: le fonti REGIONALI (USR /web/usr-*) sono ESCLUSE e le
+#   eventuali voci regionali già in archivio vengono rimosse.
+#   Il motore di rilevanza applica il filtro anti-rumore, le date esatte,
+#   gli acronimi spiegati, la STRICT URL INTEGRITY (link canonici validati
+#   HTTP 200) e il brand "ScuoleRadar"; lookback 15 giorni per le notizie,
+#   60 giorni per gli atti strutturali (CCNL) e 45 per gli atti numerati
+#   (decreti/ordinanze), con tetto di 6 articoli nella finestra (~3/settimana).
 #   Poi AGGIORNA con accumulo `src/departments/notizie/data/notizieIngestite.ts`
 #   (le notizie già presenti restano, solo le nuove vengono aggiunte, dedupe per id).
 # - Esiti chiari nei log: "✓ HTTP 200 - N new posts criteria matched"
@@ -77,6 +82,15 @@ jobs:
             echo "::warning::Nessun articolo negli ultimi 7 giorni: la sezione Notizie è FERMA. Verificare fonti/parser/URL canonici."
           fi
 
+      - name: Verifica invariante NAZIONALE (nessuna fonte regionale)
+        continue-on-error: true
+        run: |
+          if npm run test:notizie-nazionale; then
+            echo "::notice::Invariante nazionale rispettata (solo fonti nazionali in archivio)."
+          else
+            echo "::warning::Violazione della policy nazionale: verificare fonti/archivio Notizie."
+          fi
+
       - name: Commit e push dei dati aggiornati
         run: |
           git config user.name "github-actions[bot]"
@@ -97,8 +111,10 @@ jobs:
             echo "## 📰 Cron giornaliero Notizie — esito"
             echo ""
             echo "- **Frequenza**: ogni giorno alle 06:00 UTC (07:00/08:00 italiane)."
-            echo "- **Valutazione editoriale**: filtro anti-rumore + link canonici validati HTTP 200 + lookback **15 giorni** + tetto **max 6 articoli** (≈3/settimana) prima del salvataggio."
+            echo "- **Fonti (waterfall NAZIONALE)**: 1. MIM (notizie/avvisi/home) → 2. Gazzetta Ufficiale → 3. ARAN → 4. giurisdizione/previdenza. Ci si ferma al primo livello con articoli validi."
+            echo "- **Policy**: SOLO copertura nazionale — le fonti regionali (USR \`/web/usr-*\`) sono escluse e rimosse dall'archivio."
+            echo "- **Valutazione editoriale**: filtro anti-rumore + atti nazionali numerati e recenti + link canonici validati HTTP 200; lookback **15 gg** (notizie), **60 gg** (CCNL), **45 gg** (atti numerati) + tetto **max 6 articoli** (≈3/settimana)."
             echo "- **Verifica pubblicazione**: controllare il passo precedente — *nessun commit* significa nessun contenuto meritevole di pubblicazione."
-            echo "- **Cadenza settimanale**: controllo automatico ≥ 1 notizia negli ultimi 7 giorni (`npm run test:notizie-rate`)."
-            echo "- **Nota**: gli articoli senza data di fonte (pagine operative USR) NON consumano il tetto settimanale e restano in archivio."
+            echo "- **Cadenza settimanale**: controllo automatico ≥ 1 notizia negli ultimi 7 giorni (\`npm run test:notizie-rate\`) e invariante nazionale (\`npm run test:notizie-nazionale\`)."
+            echo "- **Nota**: le voci senza data di fonte non consumano il tetto settimanale; l'archivio è ripulito dalle fonti regionali ad ogni esecuzione."
           } >> "$GITHUB_STEP_SUMMARY"

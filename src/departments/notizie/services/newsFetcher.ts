@@ -187,12 +187,16 @@ export async function fetchNotizieMim(): Promise<{ voci: VoceFonte[]; raggiunta:
 }
 
 /**
- * Pagine di elenco nazionali MIM (server-rendered, canonical + legacy Liferay).
- * La prima che espone le card `/web/guest/-/<slug>` viene usata; le altre
- * servono da fallback se il MIM cambia markup/URL (nessun silent-fail).
+ * Pagine di elenco NAZIONALI del MIM (canonical + legacy Liferay).
+ * NB NAZIONALI: le pagine regionali `/web/usr-*` sono ESCLUSE per policy —
+ * ScuoleRadar copre il livello nazionale (MIM + Gazzetta Ufficiale).
+ * Le voci di TUTTE le pagine vengono UNITE con dedupe per link, così una
+ * pagina con meno card (es. "avvisi") non viene mai persa.
  */
 const PAGINE_MIM_NOTIZIE = [
   `${BASE_MIM}/web/guest/notizie`,
+  `${BASE_MIM}/web/guest/avvisi`,
+  `${BASE_MIM}/`,
   `${BASE_MIM}/notizie`,
 ];
 
@@ -203,8 +207,8 @@ const PAGINE_MIM_NOTIZIE = [
  */
 export async function scrapeMimNotizie(): Promise<{ voci: VoceFonte[]; raggiunta: boolean }> {
   let raggiunta = false;
-  let voci: VoceFonte[] = [];
-  let paginaUsata = PAGINE_MIM_NOTIZIE[0];
+  const voci: VoceFonte[] = [];
+  const linkVisti = new Set<string>();
   for (const pagina of PAGINE_MIM_NOTIZIE) {
     const { testo, status } = await fetchTestoConStato(pagina);
     if (status !== null && status >= 200 && status < 400) raggiunta = true;
@@ -218,24 +222,43 @@ export async function scrapeMimNotizie(): Promise<{ voci: VoceFonte[]; raggiunta
       if (!title || !href || title.length < 12) return;
       const link = urlAssoluto(href, BASE_MIM);
       if (!link.includes('/web/guest/-/')) return;
-      // La data è nel contenitore della card (span.date).
-      const card = $el.closest('h3').parent();
-      const dataTesto = card.find('.date, time, [class*="date"]').first().text().trim();
+      // Data: si cerca nel PRIMO contenitore che la espone. Le pagine MIM usano
+      // sia `h3` + `.date` (pagina notizie) sia `li.li-asset-tab-home` con
+      // `<time datetime="gg/mm/aaaa">` (home/avvisi). Si preferisce `datetime`.
+      const contenitori = [
+        $el.closest('li').first(),
+        $el.closest('article').first(),
+        $el.closest('h3').parent(),
+        $el.closest('div').first(),
+      ];
+      let dataTesto = '';
+      for (const c of contenitori) {
+        if (c.length === 0) continue;
+        const attr = c.find('time[datetime]').first().attr('datetime');
+        if (attr) {
+          dataTesto = attr;
+          break;
+        }
+        const testo = c.find('time, .date, [class*="date"]').first().text().trim();
+        if (testo) {
+          dataTesto = testo;
+          break;
+        }
+      }
       const pubDate = dataTesto ? (estraiDeadline(dataTesto) ?? null) : null;
-      if (!trovate.some((v) => v.link === link)) {
+      if (!trovate.some((v) => v.link === link) && !linkVisti.has(link)) {
         trovate.push({ title, link, pubDate, description: '', fonte: 'MIM' });
       }
     });
-    if (trovate.length > 0) {
-      voci = trovate;
-      paginaUsata = pagina;
-      break;
+    // Log esplicito (nessun silent-fail): senza questa riga un cambio di markup
+    // del MIM che azzera le voci non sarebbe distinguibile da "0 notizie".
+    console.log(`• MIM scraping: ${trovate.length} voci da ${pagina}`);
+    for (const v of trovate) {
+      linkVisti.add(v.link);
+      voci.push(v);
     }
   }
-  // Log esplicito (nessun silent-fail): senza questa riga un cambio di markup
-  // del MIM che azzera le voci non sarebbe distinguibile da "0 notizie".
-  console.log(`• MIM scraping: ${voci.length} voci da ${paginaUsata}`);
-  return { voci: voci.slice(0, 40), raggiunta };
+  return { voci: voci.slice(0, 60), raggiunta };
 }
 
 /* ------------------------- Gazzetta Ufficiale ------------------------- */
@@ -247,7 +270,50 @@ const FONTI_GU_RSS = [
   'https://www.gazzettaufficiale.it/feed/istruzione',
 ];
 
-/** Recupera gli aggiornamenti della Gazzetta Ufficiale (sezione istruzione). */
+/**
+ * Scraping dell'elenco ATTI della home della Gazzetta Ufficiale.
+ * I feed RSS storici sono stati dismessi (oggi restituiscono HTML): la home
+ * espone i link canonici degli atti `/eli/id/AAAA/MM/GG/<codice>/<serie>`
+ * insieme al titolo ufficiale ("D.L. 10 settembre 2026, n. 157"). La data di
+ * pubblicazione si ricava dal PERCORSO dell'URL (fonte certa, nessuna data
+ * inventata). Gazzetta Ufficiale = fonte NAZIONALE per definizione.
+ */
+export async function scrapeGazzettaHome(): Promise<{ voci: VoceFonte[]; raggiunta: boolean }> {
+  const pagina = `${BASE_GU}/home`;
+  const { testo, status } = await fetchTestoConStato(pagina);
+  const raggiunta = status !== null && status >= 200 && status < 400;
+  if (!testo) return { voci: [], raggiunta };
+  const $ = cheerio.load(testo);
+  const voci: VoceFonte[] = [];
+  const visti = new Set<string>();
+  $('a[href*="/eli/id/"]').each((_, el) => {
+    const $el = $(el);
+    const href = ($el.attr('href') ?? '').trim();
+    const titolo = $el.text().replace(/\s+/g, ' ').trim();
+    if (!href || titolo.length < 6) return;
+    let link: string;
+    try {
+      link = new URL(href, BASE_GU).toString();
+    } catch {
+      return;
+    }
+    link = link.replace(/^http:\/\//i, 'https://');
+    if (visti.has(link)) return;
+    visti.add(link);
+    const m = link.match(/\/eli\/id\/(\d{4})\/(\d{2})\/(\d{2})\//);
+    voci.push({
+      title: titolo,
+      link,
+      pubDate: m ? `${m[1]}-${m[2]}-${m[3]}` : null,
+      description: '',
+      fonte: 'Gazzetta Ufficiale',
+    });
+  });
+  console.log(`• Gazzetta Ufficiale scraping: ${voci.length} voci da ${pagina}`);
+  return { voci: voci.slice(0, 40), raggiunta };
+}
+
+/** Recupera gli aggiornamenti della Gazzetta Ufficiale (feed RSS, poi elenco atti). */
 export async function fetchNotizieGazzetta(): Promise<{ voci: VoceFonte[]; raggiunta: boolean }> {
   let raggiunta = false;
   for (const url of FONTI_GU_RSS) {
@@ -260,33 +326,55 @@ export async function fetchNotizieGazzetta(): Promise<{ voci: VoceFonte[]; raggi
       return { voci, raggiunta };
     }
   }
-  if (!raggiunta) console.warn('⚠ Gazzetta Ufficiale: nessun feed raggiungibile.');
-  return { voci: [], raggiunta };
+  // Fallback (i feed RSS sono dismessi): elenco ATTI dalla home della Gazzetta.
+  const scraping = await scrapeGazzettaHome();
+  if (scraping.voci.length === 0 && !raggiunta && !scraping.raggiunta) {
+    console.warn('⚠ Gazzetta Ufficiale: nessun feed né elenco atti raggiungibile.');
+  }
+  return { voci: scraping.voci, raggiunta: raggiunta || scraping.raggiunta };
 }
 
 /* ----------------------------------------------------------------------- */
-/* Espansione fonti istituzionali (ARAN · USR · INPS · Giurisdizione)       */
+/* Fonti NAZIONALI del waterfall (ARAN · giurisdizione · previdenza)        */
 /* ----------------------------------------------------------------------- */
 
 export interface FonteIstituzionale {
   etichetta: string;
   base: string;
+  /**
+   * LIVELLO di priorità nel waterfall NAZIONALE:
+   *   1 = MIM (nazionale) · 2 = Gazzetta Ufficiale · 3 = ARAN · 4 = giurisdizione/previdenza.
+   * La pipeline scende al livello successivo SOLO se quello corrente non produce
+   * alcun articolo valido (vedi `raccogliNotizieRawPerLivello`).
+   */
+  priorita: number;
   /** Feed RSS/Atom ufficiali candidati (il primo che restituisce voci vince). */
   rss: string[];
   /** Pagine di elenco ufficiali usate come fallback di scraping (atti datati). */
   liste: string[];
 }
 
+/** Livelli del waterfall nazionale (etichette per i log della pipeline). */
+export const LIVELLI_NAZIONALI: Array<{ priorita: number; etichetta: string }> = [
+  { priorita: 1, etichetta: 'MIM (nazionale)' },
+  { priorita: 2, etichetta: 'Gazzetta Ufficiale' },
+  { priorita: 3, etichetta: 'ARAN (contrattazione nazionale)' },
+  { priorita: 4, etichetta: 'Giurisdizione e previdenza' },
+];
+
 /**
- * Registro delle nuove fonti istituzionali per la pipeline notizie.
- * Ogni richiesta viene loggata esplicitamente dal cron (✓/✗ HTTP), così un
- * endpoint da raffinare è sempre visibile nei log senza mai fallire in
- * silenzio. Fonti senza feed RSS usano la pagina di elenco istituzionale.
+ * Registro delle fonti istituzionali NAZIONALI (ScuoleRadar è nazionale).
+ *
+ * POLICY: le fonti REGIONALI/LOCALI (pagine USR `/web/usr-*`, AT provinciali)
+ * sono state RIMOSSE: la bacheca pubblica solo copertura nazionale (MIM,
+ * Gazzetta Ufficiale, ARAN, giurisdizione contabile/amministrativa, previdenza).
+ * Ogni richiesta è loggata esplicitamente (✓/✗ HTTP), nessun silent-fail.
  */
 export const FONTI_ISTITUZIONALI: FonteIstituzionale[] = [
   {
     etichetta: 'ARAN',
     base: 'https://www.aranagenzia.it',
+    priorita: 3,
     rss: [
       'https://www.aranagenzia.it/index.php?format=feed&type=rss',
       'https://www.aranagenzia.it/index.php?format=feed&type=atom',
@@ -294,26 +382,9 @@ export const FONTI_ISTITUZIONALI: FonteIstituzionale[] = [
     liste: ['https://www.aranagenzia.it/contrattazione/contratti.html'],
   },
   {
-    etichetta: 'USR Lombardia',
-    base: 'https://www.mim.gov.it',
-    rss: [],
-    liste: ['https://www.mim.gov.it/web/usr-lombardia'],
-  },
-  {
-    etichetta: 'USR Sardegna',
-    base: 'https://www.mim.gov.it',
-    rss: [],
-    liste: ['https://www.mim.gov.it/web/usr-sardegna'],
-  },
-  // NOTA (audit 2026-09): le pagine `/web/usr-piemonte`, `/web/usr-lazio` e
-  // `/web/usr-campania` rispondono HTTP 404 (MIM ha migrato al nuovo portale solo
-  // Lombardia e Sardegna con lo slug `/web/usr-<regione>`). Sono state sostituite
-  // con la fonte verificata `usr-sardegna`; le altre regioni vanno ri-collegate
-  // quando il MIM pubblica i nuovi slug (nessun silent-fail: il log HTTP le
-  // segnalerebbe immediatamente).
-  {
     etichetta: 'INPS',
     base: 'https://www.inps.it',
+    priorita: 4,
     rss: [
       'https://www.inps.it/it/it/rss.xml',
       'https://www.inps.it/rss.aspx',
@@ -323,6 +394,7 @@ export const FONTI_ISTITUZIONALI: FonteIstituzionale[] = [
   {
     etichetta: 'Corte dei Conti',
     base: 'https://www.corteconti.it',
+    priorita: 4,
     rss: [
       'https://www.corteconti.it/rss/notizie',
       'https://www.corteconti.it/feed',
@@ -332,6 +404,7 @@ export const FONTI_ISTITUZIONALI: FonteIstituzionale[] = [
   {
     etichetta: 'Consiglio di Stato',
     base: 'https://www.giustizia-amministrativa.it',
+    priorita: 4,
     rss: [],
     liste: ['https://www.giustizia-amministrativa.it/-/decisioni-e-pareri'],
   },
@@ -426,6 +499,52 @@ export async function fetchDaFonteIstituzionale(
 export interface EsitoRaccolta {
   voci: VoceFonte[];
   fontiRaggiunte: number;
+}
+
+/** Esito di un LIVELLO del waterfall nazionale. */
+export interface LivelloRaccolta {
+  priorita: number;
+  etichetta: string;
+  voci: VoceFonte[];
+  raggiunta: boolean;
+}
+
+/**
+ * WATERFALL NAZIONALE — raccoglie le voci di UN livello, in ordine di priorità:
+ *   1. MIM (nazionale)               → feed RSS (dismessi) + pagine notizie/avvisi/home;
+ *   2. Gazzetta Ufficiale            → feed RSS + elenco atti della home;
+ *   3. ARAN                          → contrattazione nazionale (CCNL);
+ *   4. Giurisdizione e previdenza    → Corte dei Conti, INPS, Consiglio di Stato.
+ *
+ * La pipeline (`ingestNotizie`) interroga un livello alla volta e scende al
+ * successivo SOLO se quello corrente non produce articoli validi.
+ */
+export async function raccogliLivello(priorita: number): Promise<LivelloRaccolta | null> {
+  const meta = LIVELLI_NAZIONALI.find((l) => l.priorita === priorita);
+  if (!meta) return null;
+
+  if (priorita === 1) {
+    const r = await fetchNotizieMim();
+    return { priorita, etichetta: meta.etichetta, voci: r.voci, raggiunta: r.raggiunta };
+  }
+  if (priorita === 2) {
+    const r = await fetchNotizieGazzetta();
+    return { priorita, etichetta: meta.etichetta, voci: r.voci, raggiunta: r.raggiunta };
+  }
+
+  const fonti = FONTI_ISTITUZIONALI.filter((f) => f.priorita === priorita);
+  const voci: VoceFonte[] = [];
+  let raggiunta = false;
+  const esiti = await Promise.allSettled(fonti.map((f) => fetchDaFonteIstituzionale(f)));
+  for (const r of esiti) {
+    if (r.status === 'fulfilled') {
+      voci.push(...r.value.voci);
+      if (r.value.raggiunta) raggiunta = true;
+    } else {
+      console.warn('⚠ Fonte non disponibile:', (r.reason as Error)?.message);
+    }
+  }
+  return { priorita, etichetta: meta.etichetta, voci, raggiunta };
 }
 
 /** Aggrega le voci da tutte le fonti ufficiali, tracciando quali hanno risposto. */

@@ -41,6 +41,10 @@ export interface ValutazioneNotizia {
 export interface VoceInValutazione {
   title: string;
   description?: string;
+  /** URL della fonte ufficiale (serve al gate NAZIONALE e agli atti MIM). */
+  url?: string;
+  /** Data di pubblicazione dichiarata dalla fonte (ISO), se disponibile. */
+  data?: string | null;
 }
 
 /** Parole che identificano l'ambito/categoria del personale scolastico. */
@@ -122,6 +126,66 @@ const PAROLE_RIFIUTA: string[] = [
   'ipotesi', 'ipotesi di', 'bozza', 'bozze', 'preliminare', 'preliminari',
   'in preparazione', 'proposta preliminare', 'draft', 'avvio dei lavori preparatori',
 ];
+
+/* ============ PERIMETRO NAZIONALE (ScuoleRadar è una piattaforma nazionale) ============ */
+
+/**
+ * Siti ACCREDITATI a livello NAZIONALE. ScuoleRadar copre il livello nazionale:
+ * MIM (Ministero dell'Istruzione e del Merito), Gazzetta Ufficiale, ARAN
+ * (contrattazione), giurisdizione contabile/amministrativa e previdenza.
+ * Le pagine REGIONALI (`/web/usr-*`, USR/AT) sono ESCLUSE per policy.
+ */
+const HOST_NAZIONALI = [
+  'mim.gov.it',
+  'istruzione.it',
+  'gazzettaufficiale.it',
+  'aranagenzia.it',
+  'corteconti.it',
+  'giustizia-amministrativa.it',
+  'inps.it',
+  'inpa.gov.it',
+];
+
+/** True se l'URL appartiene a una fonte NAZIONALE accreditata (e non regionale). */
+export function èFonteNazionale(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const percorso = parsed.pathname.toLowerCase();
+    // Le pagine regionali del MIM (USR) non sono nazionali.
+    if (/\/web\/usr-/.test(percorso)) return false;
+    return HOST_NAZIONALI.some((h) => host === h || host.endsWith(`.${h}`));
+  } catch {
+    return false;
+  }
+}
+
+/** True se l'URL è pubblicato dal MIM (o dal dominio storico istruzione.it). */
+export function èFonteMim(url?: string | null): boolean {
+  try {
+    const host = new URL(url ?? '').hostname.toLowerCase();
+    return host.endsWith('mim.gov.it') || host.endsWith('istruzione.it');
+  } catch {
+    return false;
+  }
+}
+
+/** Designazione formale di un ATTO ufficiale (provvedimento vincolante). */
+const RE_ATTO_UFFICIALE =
+  /\b(?:ordinanza\s+ministeriale|decreto\s+(?:ministeriale|direttoriale|dirigenziale|legislativo|del\s+presidente)|d\.?\s*m\.?|d\.?\s*d\.?|d\.?\s*p\.?\s*r\.?|d\.?\s*p\.?\s*c\.?\s*m\.?|legge|nota\s+prot(?:ocollo)?|circolare)\b/;
+
+/** Riferimento NUMERICO dell'atto (n. 1095, 2939/2025, L. 157): rende l'atto
+ *  identificabile e verificabile. Senza numero si tratta di cronaca, non di atto.
+ *  NB: `(?<![\\d/])` evita di scambiare una DATA `gg/mm/aaaa` per un riferimento
+ *  d'atto (es. "04/08/2026" non deve produrre "08/2026"). */
+const RE_RIF_ATTO = /(?:\bn\.?\s?\d{1,6}\b)|(?:(?<![\d/])\d{1,4}\/\d{4}\b)/;
+
+/** Finestra (giorni) entro cui un ATTO nazionale è considerato corrente. */
+export const FINESTRA_ATTI_NAZIONALI_GIORNI = 45;
+
+/** Parole del COMPARTO SCUOLA (docenti, ATA, dirigenti scolastici…). */
+const PAROLE_SCUOLA =
+  /(?:istruzione e ricerca|comparto istruzione|scuol|docenti|personale ata|\bata\b|dirigenti scolastici|supplent|graduator|interpell|organico|sostegno|scrutini|valutazion|iscrizion|studenti|alunni|educazione|reclutament|mobilit[aà])/;
 
 const MESI_ITALIANI: Record<string, number> = {
   gennaio: 1, febbraio: 2, marzo: 3, aprile: 4, maggio: 5, giugno: 6,
@@ -233,6 +297,67 @@ export function valutaRilevanza(voce: VoceInValutazione): ValutazioneNotizia {
     }
   }
 
+  // 0) ATTO UFFICIALE NAZIONALE: decreti/ordinanze/DM numerati e datati sono
+  //    PROVVEDIMENTI VINCOLANTI (es. "Decreto Direttoriale n. 1095 del 10
+  //    settembre 2026", "Ordinanza Ministeriale n. 163 del 7 agosto 2026").
+  //    Sono ammessi se pubblicati dal MIM (comparto implicito) o se citano
+  //    esplicitamente il comparto scuola (il resto della Gazzetta Ufficiale no).
+  if (RE_ATTO_UFFICIALE.test(testo) && RE_RIF_ATTO.test(testo)) {
+    if (èFonteMim(voce.url) || PAROLE_SCUOLA.test(testo)) {
+      // GUARDIA DI FRESCHEZZA: la data dell'atto si legge dal TITOLO (es.
+      // "Decreto Direttoriale n. 1095 del 10 settembre 2026"); se il titolo non
+      // la contiene (es. contratti "triennio 2022-2024"), vale la data della
+      // FONTE. Un atto formalmente corretto ma datato mesi fa resta materiale
+      // d'archivio: non deve entrare come "novità" (niente cronaca, niente vecchi
+      // avvisi rispolverati dagli elenchi di homepage).
+      const daTitolo = estraiDeadline(voce.title);
+      const rifMs = daTitolo
+        ? new Date(daTitolo).getTime()
+        : voce.data
+          ? new Date(voce.data).getTime()
+          : Number.NaN;
+      const soglia = Date.now() - FINESTRA_ATTI_NAZIONALI_GIORNI * 24 * 60 * 60 * 1000;
+      if (!Number.isNaN(rifMs) && rifMs < soglia) {
+        return {
+          rilevante: false,
+          categoria: null,
+          deadline: null,
+          motivo: `Atto non recente (oltre ${FINESTRA_ATTI_NAZIONALI_GIORNI} giorni)`,
+        };
+      }
+      // Nessuna data risolvibile: si scartano gli atti che citano solo anni vecchi.
+      if (Number.isNaN(rifMs)) {
+        const annoCorrente = new Date().getUTCFullYear();
+        const anni = [...testo.matchAll(/\b(?:19|20)\d{2}\b/g)].map((m) => Number(m[0]));
+        if (anni.length > 0 && Math.max(...anni) < annoCorrente - 1) {
+          return {
+            rilevante: false,
+            categoria: null,
+            deadline: null,
+            motivo: "Atto d'archivio (riferimenti non recenti)",
+          };
+        }
+      }
+      // La DATA dell'atto non è una SCADENZA: si registra come deadline solo se
+      // il testo la presenta esplicitamente come termine di presentazione.
+      const keywordScadenza =
+        /(entro il|entro e non oltre|scadenza|scade il|termine ultimo|termine di presentazione|termine per la presentazione)/.test(
+          testo,
+        );
+      return {
+        rilevante: true,
+        categoria: classificaCategoria(testo) ?? 'Scuole',
+        deadline: keywordScadenza ? estraiDeadline(testo) : null,
+      };
+    }
+    return {
+      rilevante: false,
+      categoria: null,
+      deadline: null,
+      motivo: 'Atto nazionale non pertinente al comparto scuola',
+    };
+  }
+
   const operativa = PAROLE_ACCETTA.some((p) => testo.includes(p));
   if (!operativa) {
     return {
@@ -246,6 +371,17 @@ export function valutaRilevanza(voce: VoceInValutazione): ValutazioneNotizia {
   // 1) Categoria UFFICIALE mappata: specifica per il personale scolastico → basta.
   const categoriaMappata = classificaCategoria(testo);
   if (categoriaMappata) {
+    // I contratti collettivi valgono SOLO per il comparto SCUOLA: i CCNL di
+    // Sanità, Funzioni Locali, Presidenza del Consiglio… non interessano a
+    // docenti e ATA (ScuoleRadar è una piattaforma nazionale per la scuola).
+    if (categoriaMappata === 'CCNL' && !PAROLE_SCUOLA.test(testo)) {
+      return {
+        rilevante: false,
+        categoria: null,
+        deadline: null,
+        motivo: 'Contratto non pertinente al comparto scuola',
+      };
+    }
     return { rilevante: true, categoria: categoriaMappata, deadline: estraiDeadline(testo) };
   }
 
@@ -320,6 +456,14 @@ export const MAX_ARTICOLI_SETTIMANA = 3;
  * restano ammesse (non dimostrabili come "vecchie").
  */
 export const FINESTRA_LOOKBACK_GIORNI = 15;
+
+/**
+ * Finestra di lookback per gli ATTI NAZIONALI STRUTTURALI (contratti collettivi,
+ * decreti e ordinanze ministeriali): un CCNL firmato o un decreto nazionale
+ * restano vincolanti per mesi, quindi una finestra di 15 giorni li
+ * scarterebbe. NON si applica alle pagine di notizie quotidiane.
+ */
+export const FINESTRA_LOOKBACK_NAZIONALE_GIORNI = 60;
 
 /**
  * Tetto articoli ad alto valore nella finestra di lookback: ~3 a settimana su
@@ -500,6 +644,16 @@ export function articoloValido(a: NewsArticle): boolean {
   if (!èFonteCanonica(a.official_source_url)) {
     console.warn(
       `✗ Articolo scartato (${a.id}): la fonte non è un URL canonico di articolo — ${a.official_source_url}`,
+    );
+    return false;
+  }
+  // PERIMETRO NAZIONALE: fuori le fonti regionali/locali (es. pagine USR
+  // `/web/usr-*`): ScuoleRadar pubblica solo copertura nazionale (MIM, Gazzetta
+  // Ufficiale, ARAN, giurisdizione). L'igiene dell'archivio rimuove le voci
+  // regionali già presenti.
+  if (!èFonteNazionale(a.official_source_url)) {
+    console.warn(
+      `✗ Articolo scartato (${a.id}): fonte non nazionale — ${a.official_source_url}`,
     );
     return false;
   }
