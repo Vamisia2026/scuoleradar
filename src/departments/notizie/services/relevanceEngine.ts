@@ -467,7 +467,11 @@ export function limitaArticoliSettimanali(
   const storici: NewsArticle[] = [];
   for (const a of articoli) {
     const t = a.published_at ? new Date(a.published_at).getTime() : Number.NaN;
-    if (Number.isNaN(t) || t >= soglia) recenti.push(a);
+    // Gli articoli SENZA data di fonte (pagine operative USR "evergreen") vanno
+    // negli storici: NON consumano il tetto settimanale. Se li trattassimo come
+    // recenti occuperebbero tutti gli slot del cap (max 6) bloccando ogni nuovo
+    // articolo → bacheca "ferma".
+    if (!Number.isNaN(t) && t >= soglia) recenti.push(a);
     else storici.push(a);
   }
   recenti.sort(

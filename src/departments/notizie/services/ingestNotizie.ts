@@ -68,6 +68,33 @@ function dataPubblicazione(pubDate: string | null): string {
   return Number.isNaN(d.getTime()) ? '' : d.toISOString();
 }
 
+/**
+ * Data di RILEVAZIONE (fallback): se la fonte ufficiale non dichiara una data di
+ * pubblicazione (es. pagine operative USR sempre aggiornate), l'articolo assume
+ * la data di ingestione. Così la bacheca mostra correttamente l'aggiornamento
+ * (non resta "ferma" su agosto) e la cadenza settimanale è misurabile.
+ */
+function dataRilevazione(): string {
+  return new Date().toISOString();
+}
+
+/**
+ * Report di CADENZA: quanti articoli risultano pubblicati negli ultimi 7 giorni.
+ * Target editoriale: almeno 1 notizia a settimana. Se zero, emette un warning
+ * esplicito (visibile nei log del cron) senza far fallire la pipeline.
+ */
+function reportCadenza(articoli: NewsArticle[]): void {
+  const soglia = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const recenti = articoli.filter((a) => {
+    const t = a.published_at ? new Date(a.published_at).getTime() : Number.NaN;
+    return !Number.isNaN(t) && t >= soglia;
+  }).length;
+  console.log(`📈 Cadenza settimanale: ${recenti} articolo/i negli ultimi 7 giorni (target ≥ 1).`);
+  if (recenti === 0) {
+    console.warn('⚠ RATE: nessun articolo negli ultimi 7 giorni — verificare fonti/cron di ingestione.');
+  }
+}
+
 /** Estrae un eventuale link PDF dal sommario HTML della fonte (assolutizzato). */
 function cercaPdf(descrizione: string, baseUrl: string): string | null {
   const m = descrizione.match(/href="([^"]+\.pdf[^"]*)"|src="([^"]+\.pdf[^"]*)"/i);
@@ -143,7 +170,8 @@ async function costruisciArticolo(v: VoceFonte): Promise<NewsArticle | null> {
     official_source_url: v.link,
     official_pdf_url: cercaPdf(v.description ?? '', v.link),
     relevance_score: punteggioRilevanza(valutazione.categoria, Boolean(valutazione.deadline)),
-    published_at: dataPubblicazione(v.pubDate),
+    // Data della fonte se dichiarata, altrimenti data di rilevazione (fallback).
+    published_at: dataPubblicazione(v.pubDate) || dataRilevazione(),
   };
   if (!articoloValido(articolo)) {
     console.log(`  ✗ RIFIUTATA (articolo non valido): ${v.title.slice(0, 70)}`);
@@ -235,6 +263,10 @@ async function main(): Promise<void> {
   // superano più le regole STRICT (URL canonico, niente login/area riservata)
   // o che non passano più il gate di rilevanza (avvisi tecnici generali)
   // vengono rimossi, così l'archivio resta sempre pertinente e valido.
+  // NOTA: gli articoli preesistenti SENZA data di fonte (pagine operative USR
+  // "evergreen") NON vengono datati: restano nella loro sottocartella storica e
+  // NON consumano il tetto settimanale (vedi `limitaArticoliSettimanali`),
+  // altrimenti occuperebbero tutti gli slot e bloccherebbero ogni nuovo articolo.
   const esistentiValidi = notizieIngestite.filter(
     (a) => articoloValido(a) && valutaRilevanza({ title: a.title }).rilevante,
   );
@@ -256,6 +288,7 @@ async function main(): Promise<void> {
     } else {
       console.log('L\u2019archivio notizie resta invariato (nessun commit necessario).');
     }
+    reportCadenza(esistenti);
     if (isDryRun) console.log('=== DRY-RUN (nessuna scrittura) ===');
     return;
   }
@@ -277,6 +310,7 @@ async function main(): Promise<void> {
 
   if (aggiunti.length === 0) {
     console.log('✓ HTTP 200 - 0 new posts criteria matched (esuberi scartati dal tetto settimanale)');
+    reportCadenza(mantenuti);
     if (isDryRun) console.log('=== DRY-RUN (nessuna scrittura) ===');
     return;
   }
@@ -289,12 +323,14 @@ async function main(): Promise<void> {
       );
     });
     console.log(`✓ HTTP 200 - ${aggiunti.length} new posts criteria matched`);
+    reportCadenza(mantenuti);
     return;
   }
 
   scriviArchivio(mantenuti);
   console.log(`✓ HTTP 200 - ${aggiunti.length} new posts criteria matched`);
   console.log(`✓ Scritti ${mantenuti.length} articoli in ${FILE_USCITA}`);
+  reportCadenza(mantenuti);
 }
 
 main().catch((err) => {

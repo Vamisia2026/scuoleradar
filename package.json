@@ -34,6 +34,8 @@
     "test:notifier-dry": "tsx scripts/test-notifier-dry.ts",
     "test:materia": "tsx scripts/test-materia-classe.ts",
     "test:radar": "tsx scripts/test-radar-validation.ts",
+    "test:moduli": "tsx scripts/test-moduli-integrity.ts",
+    "test:notizie-rate": "tsx scripts/test-notizie-rate.ts",
     "test:pdf": "tsx scripts/test-pdf-mad.ts",
     "test:pdf:breve": "tsx scripts/test-pdf-breve.ts",
     "test:pdf:brevi": "tsx scripts/test-pdf-brevi.ts",
