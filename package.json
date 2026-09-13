@@ -30,6 +30,7 @@
     "provision:beta": "tsx scripts/provision-beta-users.ts",
     "provision:beta:check": "tsx scripts/provision-beta-users.ts --check",
     "admin:profiles": "tsx scripts/admin-profiles-manutenzione.ts",
+    "admin:fix-pampararo": "tsx scripts/admin-fix-pampararo.ts",
     "test:notifiche": "tsx scripts/test-notifiche.ts",
     "test:notifier-dry": "tsx scripts/test-notifier-dry.ts",
     "test:materia": "tsx scripts/test-materia-classe.ts",

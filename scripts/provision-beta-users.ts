@@ -36,8 +36,8 @@ export const EMAIL_PRE_APPROVATI = [
   // Beta tester già presenti su profiles.is_beta_tester = true (rilevati sul DB):
   'valentina.salla@gmail.com',
   'valentina.salla@icsandamiano.edu.it',
-  'g.pampanaro@gmail.com',
-  'pampanaro.giuseppe@itisartom.edu.it',
+  'g.pampararo@gmail.com',
+  'pampararo.giuseppe@itisartom.edu.it',
   'dineh3@gmail.com',
   'fasogliomarco@gmail.com',
   'bisonproductions@gmail.com',
