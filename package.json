@@ -15,6 +15,7 @@
     "scrape:notizie": "tsx src/departments/notizie/services/ingestNotizie.ts",
     "scrape:notizie:check": "tsc --noEmit -p tsconfig.notizie.json",
     "test:telegram": "tsx scripts/test-telegram.ts",
+    "test:telegram:template": "tsx scripts/test-telegram-template.ts",
     "test:telegram:canali": "tsx scripts/test-canali-telegram.ts",
     "test:parser": "tsx scripts/test-parser-province.ts",
     "test:parser:tabelle": "tsx scripts/test-parser-tabelle.ts",

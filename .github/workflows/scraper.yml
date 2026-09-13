@@ -48,6 +48,15 @@ jobs:
       - name: Validazione TypeScript dello scraper
         run: npm run scrape:check
 
+      - name: Verifica template notifiche (copy, gerarchia, scadenze, link, footer)
+        continue-on-error: true
+        run: |
+          if npm run test:telegram:template; then
+            echo "::notice::Template Telegram/alert conformi (copy, gerarchia, scadenze, link etichettati, footer)."
+          else
+            echo "::warning::Template notifiche non conformi: verificare telegram.ts / alertInterpello.ts."
+          fi
+
       - name: Esecuzione scraper e inserimento in Supabase
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

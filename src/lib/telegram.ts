@@ -12,7 +12,6 @@
  */
 
 import {
-  categoriaOpportunita,
   classeRilevante,
   linkOpportunita,
   TIPI_CON_OPPORTUNITA,
@@ -20,7 +19,13 @@ import {
   type TipoMessaggio,
 } from './resend';
 import { province } from '../data/province';
-import { ICONA_RIGA, costruisciAvviso, etichettaFonteLink, pulisciTitoloAvviso } from './alertInterpello';
+import {
+  ICONA_RIGA,
+  costruisciAvviso,
+  etichettaFonteLink,
+  pulisciTitoloAvviso,
+  scegliClasseRilevante,
+} from './alertInterpello';
 
 /** Interfaccia per l'ambiente (evita la dipendenza da @types/node nel frontend). */
 declare const process: { env: Record<string, string | undefined> };
@@ -135,19 +140,19 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
   },
   prova1: {
     testa: '🎯 Prima opportunità',
-    paragrafi: ['Questa è la <b>prima opportunità</b> che abbiamo trovato per te. Te ne <b>restano 2</b>.'],
+    paragrafi: ['Te ne restano <b>2</b>.'],
     cta: (_linkPro, linkOpp, _dashboardUrl, etichettaOpp) =>
       `👉 <a href="${linkOpp}">${etichettaOpp}</a>`,
   },
   prova2: {
     testa: '🎯 Seconda opportunità',
-    paragrafi: ['Questa è la <b>seconda opportunità</b> che abbiamo trovato per te. Te ne <b>resta 1</b>.'],
+    paragrafi: ['Te ne resta <b>1</b>.'],
     cta: (_linkPro, linkOpp, _dashboardUrl, etichettaOpp) =>
       `👉 <a href="${linkOpp}">${etichettaOpp}</a>`,
   },
   prova3: {
     testa: '🎯 Terza e ultima opportunità',
-    paragrafi: ['Questa è la <b>terza e ultima opportunità</b> di prova che abbiamo trovato per te.'],
+    paragrafi: ["Questa è l'ultima del periodo di prova."],
     cta: (_linkPro, linkOpp, _dashboardUrl, etichettaOpp) =>
       `👉 <a href="${linkOpp}">${etichettaOpp}</a>`,
   },
@@ -198,12 +203,8 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
     cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
   },
   notifica_pro: {
-    testa: '🎯 Nuova opportunità trovata per te!',
-    paragrafi: [
-      'Abbiamo trovato una <b>nuova opportunità</b> per te.',
-      'Continuiamo a cercare per te.',
-      'A presto!',
-    ],
+    testa: 'Abbiamo trovato una nuova opportunità per te!',
+    paragrafi: [],
     cta: (_linkPro, linkOpp, _dashboardUrl, etichettaOpp) =>
       `👉 <a href="${linkOpp}">${etichettaOpp}</a>`,
   },
@@ -241,6 +242,9 @@ export function formattaMessaggioTelegram(
       materia: interpello.materia,
       scadenza: interpello.scadenza,
       schoolName: interpello.schoolName,
+      // Il titolo serve solo a rendere il LIVELLO coerente con la classe e a
+      // dedurlo quando la classe manca (nessuna contraddizione nei campi).
+      titolo: interpello.title,
     });
     const righe: string[] = [];
     for (const r of avviso.obbligatorie) {
@@ -249,7 +253,8 @@ export function formattaMessaggioTelegram(
     for (const r of avviso.opzionali) {
       righe.push(`${ICONA_RIGA[r.etichetta] ?? '•'} ${escapeHtml(r.valore)}`);
     }
-    righe.push(`🏷️ ${escapeHtml(categoriaOpportunita(interpello.title))}`);
+    // NB: nessuna riga "🏷️ <categoria>" — era un metadato vuoto e ripetitivo
+    // (spesso conteneva solo la parola "Opportunità").
     dettagli = righe.join('\n');
   }
 
@@ -259,14 +264,14 @@ export function formattaMessaggioTelegram(
   // stata rimossa: puntava allo stesso URL del bottone.
   const etichettaOpp = etichettaFonteLink(linkOpp);
 
-  // Email di candidatura della scuola: mostrata per i tipi con opportunità.
-  // Se assente nei dati → dicitura pulita (mai email inventate/ipotizzate).
+  // Email di candidatura della scuola: mostrata SOLO se estratta con certezza.
+  // Se manca si OMETTE la riga (mai "Email non disponibile": nessuno stato
+  // negativo nel messaggio).
   const emailContatto = interpello?.contactEmail?.trim() ?? '';
-  const emailRiga = TIPI_CON_OPPORTUNITA.has(tipo)
-    ? emailContatto
+  const emailRiga =
+    TIPI_CON_OPPORTUNITA.has(tipo) && emailContatto
       ? `📧 Candidature: <a href="mailto:${escapeHtml(emailContatto)}">${escapeHtml(emailContatto)}</a>`
-      : '📧 Email non disponibile'
-    : '';
+      : '';
 
   const parti: string[] = [copy.testa];
   if (titolo) parti.push(titolo);
@@ -274,8 +279,11 @@ export function formattaMessaggioTelegram(
   if (emailRiga) parti.push(emailRiga);
   if (copy.paragrafi.length) parti.push(copy.paragrafi.join('\n'));
   if (copy.cta) parti.push(copy.cta(linkPro, linkOpp, dashboardUrl, etichettaOpp));
-  parti.push('I tuoi colleghi di <b>Scuole Radar</b>');
-  parti.push('📌 Quando vuoi sapere cosa succede di importante, vieni qui: https://www.scuoleradar.it/notizie');
+  // FOOTER PERSONALE (radar): UNA sola riga, nessuna firma promozionale.
+  // URL sempre come link ETICHETTATO (mai URL nudo: evita il popup "Apri link").
+  parti.push(
+    '📌 Quando vuoi sapere cosa succede di importante, vieni qui: <a href="https://www.scuoleradar.it/notizie">scuoleradar.it/notizie</a>',
+  );
 
   return parti.join('\n\n');
 }
@@ -612,7 +620,11 @@ function ruoloPerCategoria(categoria: CategoriaPost, interpello: InterpelloCanal
     return tipologiaBando(titolo);
   }
   const daTitolo = titolo.match(RE_CLASSE_CONCORSO)?.[0];
-  const codice = (interpello.classCodes?.[0]?.trim() || daTitolo || '').toUpperCase();
+  const codice = (
+    scegliClasseRilevante(interpello.classCodes, titolo) ||
+    daTitolo ||
+    ''
+  ).toUpperCase();
   if (codice) return codice;
   // Nessuna classe di concorso esplicita: mostra la MATERIA/settore inferita
   // dal titolo/contesto (evita la sola etichetta generica "Docente").
@@ -668,9 +680,11 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
   const categoria = classificaCategoriaPost(interpello);
   const ruolo = ruoloPerCategoria(categoria, interpello);
 
-  // Codice classe (per etichetta leggibile + ordine di scuola) e avviso strutturato.
+  // Codice classe COERENTE con il titolo (il primo della tabella sorgente può
+  // essere di un altro livello: era la causa della contraddizione "Primaria" +
+  // titolo della secondaria) + avviso strutturato.
   const codiceClasse = (
-    interpello.classCodes?.[0]?.trim() ||
+    scegliClasseRilevante(interpello.classCodes, titolo) ||
     titolo.match(RE_CLASSE_CONCORSO)?.[0] ||
     ''
   ).toUpperCase();
@@ -680,6 +694,9 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
     materia: interpello.materia,
     scadenza: interpello.expirationDate,
     schoolName: interpello.schoolName?.trim() || null,
+    // Serve solo a dedurre il livello quando manca la classe (nessun campo
+    // contraddittorio: Ordine di scuola sempre coerente con Classe/Materia).
+    titolo,
   });
   const ordineScuola = avviso.obbligatorie.find((r) => r.etichetta === 'Ordine di scuola')?.valore ?? '';
   const materiaAvviso = avviso.obbligatorie.find((r) => r.etichetta === 'Classe / Materia')?.valore ?? '';
@@ -693,9 +710,17 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
   if (interpello.schoolName?.trim()) {
     dettagli.push(`🏫 Scuola: <b>${escapeHtml(interpello.schoolName.trim())}</b>`);
   }
-  // Ordine di scuola: OBBLIGATORIO (dedotto dalla classe).
+  // Ordine di scuola: OBBLIGATORIO (dedotto dalla classe, coerente con essa).
   if (ordineScuola) dettagli.push(`🎓 Ordine di scuola: <b>${escapeHtml(ordineScuola)}</b>`);
-  dettagli.push(`👩🏫 Ruolo / Categoria: <b>${escapeHtml(ruolo)}</b>`);
+  // Ruolo/Categoria: omesso quando RIPETE la Classe/Materia (nessuna riga
+  // ridondante: es. "👩🏫 A-041" + "📚 A-041 - Scienze…" → resta solo la classe).
+  const ruoloRidondante =
+    Boolean(ruolo.trim()) &&
+    Boolean(materiaAvviso) &&
+    materiaAvviso.toLowerCase().includes(ruolo.trim().toLowerCase());
+  if (!ruoloRidondante) {
+    dettagli.push(`👩🏫 Ruolo / Categoria: <b>${escapeHtml(ruolo)}</b>`);
+  }
   // Classe/Materia: OBBLIGATORIO — etichetta leggibile (codice + nome ufficiale).
   if (materiaAvviso) dettagli.push(`📚 Classe/Materia: <b>${escapeHtml(materiaAvviso)}</b>`);
   // Scadenza: OBBLIGATORIA — omessa garbatamente se la fonte non la dichiara.
@@ -724,17 +749,20 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
   const linkRiga = linkFonte
     ? eLinkPdf(linkFonte)
       ? barraPdf(linkFonte)
-      : `🔗 <a href="${escapeHtml(linkFonte)}">Leggi l'Avviso Originale</a>`
+      : `🔗 <a href="${escapeHtml(linkFonte)}">${escapeHtml(etichettaFonteLink(linkFonte))}</a>`
     : '';
 
-  // Email di candidatura. Se assente nei dati → "Email non disponibile"
-  // (ultima ratio: mai email inventate/ipotizzate).
+  // Email di candidatura: OMESSA se non estratta (mai "Email non disponibile":
+  // nessuno stato negativo, nessuna email inventata).
   const email = interpello.contactEmail?.trim() ?? '';
   const emailRiga = email
     ? `📧 Candidature: <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`
-    : '📧 Email non disponibile';
+    : '';
 
-  const cta = '⚡ Ricevi solo gli avvisi per la tua provincia e classe in privato:\n👉 https://scuoleradar.it';
+  // FOOTER CANALE (broadcast regionale/generale): invito al radar privato.
+  // URL etichettato, mai nudo (evita il popup nativo "Apri link" di Telegram).
+  const cta =
+    '⚡ Ricevi gli avvisi per la tua provincia e classe in privato: 👉 <a href="https://scuoleradar.it">scuoleradar.it</a>';
 
   // Blocco CONTATTO = link ufficiale (se valido) + email raggruppati in UNA sola
   // sezione: la struttura pubblicata resta FISSA a 5 blocchi

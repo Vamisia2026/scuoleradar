@@ -13,7 +13,13 @@
  */
 
 import { Resend } from 'resend';
-import { ICONA_RIGA, costruisciAvviso, etichettaFonteLink, pulisciTitoloAvviso } from './alertInterpello';
+import {
+  ICONA_RIGA,
+  costruisciAvviso,
+  etichettaFonteLink,
+  pulisciTitoloAvviso,
+  scegliClasseRilevante,
+} from './alertInterpello';
 import { urlSchedaInterpello } from './interpelloRouting';
 
 /** Interfaccia per l'ambiente (evita la dipendenza da @types/node nel frontend). */
@@ -114,13 +120,22 @@ function formatDataScadenza(data: string | null): string {
   return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
 }
 
-/** Sceglie la classe di concorso più rilevante: intersezione con le classi dell'utente. */
+/**
+ * Sceglie la classe di concorso più rilevante per il DESTINATARIO (intersezione
+ * con le sue classi) e, tra le candidate, quella COERENTE con il titolo
+ * (`scegliClasseRilevante`): evita alert con "Scuola Primaria" e un titolo della
+ * secondaria, e mantiene Ordine di scuola ↔ Classe/Materia sempre allineati.
+ */
 export function classeRilevante(
   interpello: DettagliNotifica,
   destinatario: DestinatarioNotifica,
 ): string {
-  const comune = interpello.classi.find((c) => destinatario.classi.includes(c));
-  return comune ?? interpello.classi[0] ?? '';
+  const classi = interpello.classi ?? [];
+  if (classi.length === 0) return '';
+  const comuni = classi.filter((c) => destinatario.classi.includes(c));
+  const candidate = comuni.length > 0 ? comuni : classi;
+  if (candidate.length === 1) return candidate[0];
+  return scegliClasseRilevante(candidate, interpello.title) || candidate[0];
 }
 
 /** Rileva la categoria dell'opportunità dal titolo (Interpelli, PNRR, PON, Bandi Esperti). */
@@ -282,11 +297,7 @@ const CORPO_MESSAGGI: Record<TipoMessaggio, ContenutoMessaggio> = {
     cta: { label: 'Vai a ScuoleRadar →', destinazione: 'dashboard' },
   },
   notifica_pro: {
-    paragrafi: [
-      'Abbiamo trovato una <strong>nuova opportunità</strong> per te.',
-      'Continuiamo a cercare per te.',
-      'A presto!',
-    ],
+    paragrafi: ['Abbiamo trovato una <strong>nuova opportunità</strong> per te.'],
     cta: { label: "Apri l'avviso ufficiale →", destinazione: 'opportunita' },
   },
 };
@@ -334,16 +345,20 @@ export function renderEmailHtml(
           const avviso = costruisciAvviso({
             provincia: interpello.province,
             classCode: classe,
+            classCodes: interpello.classi,
             materia: interpello.materia,
             scadenza: interpello.scadenza,
             schoolName: interpello.schoolName,
+            // Il titolo rende il LIVELLO coerente con la classe mostrata e lo
+            // deduce quando la classe manca (nessun campo contraddittorio).
+            titolo: interpello.title,
           });
           const dettagli: string[] = [];
           for (const r of avviso.obbligatorie) {
             if (r.etichetta === 'Scadenza') continue; // riga dedicata sotto
             dettagli.push(`${ICONA_RIGA[r.etichetta] ?? '•'} ${escapeHtml(r.valore)}`);
           }
-          dettagli.push(`🏷️ ${escapeHtml(categoriaOpportunita(interpello.title))}`);
+          // NB: nessuna riga "🏷️ <categoria>" — metadato vuoto e ripetitivo.
           const scadenzaRiga = avviso.scadenzaValida
             ? `<p style="margin:8px 0 0; font-size:13px; color:#64748b;">📅 Scadenza: ${escapeHtml(formatDataScadenza(interpello.scadenza))}</p>`
             : '';
@@ -354,7 +369,7 @@ export function renderEmailHtml(
                       <h2 style="margin:0 0 8px; font-size:18px; font-weight:800; line-height:1.35; color:#14354e;"><b>${escapeHtml(pulisciTitoloAvviso(interpello.title, `Interpello ${[classe, interpello.province].filter(Boolean).join(' — ')}`))}</b></h2>
                       <p style="margin:0; font-size:14px; line-height:1.6; color:#475569;">${dettagli.join(' · ')}</p>
                       ${scadenzaRiga}
-                      <p style="margin:8px 0 0; font-size:13px; color:#64748b;">📧 Candidature: ${interpello.contactEmail ? `<a href="mailto:${escapeHtml(interpello.contactEmail)}" style="color:#2B6F9E;">${escapeHtml(interpello.contactEmail)}</a>` : 'Email non disponibile'}</p>
+                      ${interpello.contactEmail ? `<p style="margin:8px 0 0; font-size:13px; color:#64748b;">📧 Candidature: <a href="mailto:${escapeHtml(interpello.contactEmail)}" style="color:#2B6F9E;">${escapeHtml(interpello.contactEmail)}</a></p>` : ''}
                     </td>
                   </tr>
                 </table>`;

@@ -53,6 +53,15 @@ function escapeHtml(v: string): string {
   return v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/** True se la scadenza è una data reale e NON già passata (mai scadenze nel passato). */
+function scadenzaValida(valore: string): boolean {
+  const d = new Date(valore);
+  if (Number.isNaN(d.getTime())) return false;
+  const giorno = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  const oggi = new Date();
+  return giorno >= Date.UTC(oggi.getFullYear(), oggi.getMonth(), oggi.getDate());
+}
+
 /** Blocco opportunità standard: titolo + dettagli + fonte ufficiale verificata. */
 function conOpportunita(o: Opportunita, testo: string): string {
   let t = testo;
@@ -61,7 +70,9 @@ function conOpportunita(o: Opportunita, testo: string): string {
   if (o.scuola) dettagli.push(`🏫 ${escapeHtml(o.scuola)}`);
   if (o.classe) dettagli.push(`📚 ${escapeHtml(o.classe)}`);
   if (o.provincia) dettagli.push(`📍 ${escapeHtml(o.provincia)}`);
-  if (o.scadenza) dettagli.push(`⏳ Scadenza: ${escapeHtml(o.scadenza)}`);
+  if (o.scadenza && scadenzaValida(o.scadenza)) {
+    dettagli.push(`⏳ Scadenza: ${escapeHtml(o.scadenza)}`);
+  }
   if (dettagli.length) t += `<br/>${dettagli.join(' · ')}`;
   if (o.link) t += `<br/><a href="${escapeHtml(o.link)}">🔗 ${escapeHtml(etichettaFonteLink(o.link))}</a>`;
   return t;
@@ -72,7 +83,9 @@ function conOpportunitaTg(o: Opportunita, testo: string): string {
   if (o.scuola) t += `\n🏫 ${escapeHtml(o.scuola)}`;
   if (o.classe) t += `\n📚 ${escapeHtml(o.classe)}`;
   if (o.provincia) t += `\n📍 ${escapeHtml(o.provincia)}`;
-  if (o.scadenza) t += `\n⏳ Scadenza: ${escapeHtml(o.scadenza)}`;
+  if (o.scadenza && scadenzaValida(o.scadenza)) {
+    t += `\n⏳ Scadenza: ${escapeHtml(o.scadenza)}`;
+  }
   if (o.link) t += `\n🔗 <a href="${escapeHtml(o.link)}">${escapeHtml(etichettaFonteLink(o.link))}</a>`;
   return t;
 }

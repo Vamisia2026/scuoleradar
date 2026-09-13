@@ -10,6 +10,7 @@ import {
   formatDataAvviso,
   formatDataAvvisoLunga,
   pulisciTitoloAvviso,
+  scegliClasseRilevante,
 } from '@/lib/alertInterpello';
 import { giorniRimanenti, stileScadenza } from '@/lib/scadenza';
 
@@ -20,17 +21,22 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
   const stile = stileScadenza(giorni);
   const inScadenza = stile.livello === 'imminente' || stile.livello === 'scaduto';
   // Etichetta leggibile: CODICE + nome ufficiale della materia/classe.
-  const etichettaClasse = etichettaClasseMateria(interpello.classeCodice, interpello.materia);
+  // Si sceglie la classe COERENTE con il titolo (evita "Primaria" + titolo della
+  // secondaria: Ordine di scuola e Classe/Materia restano allineati).
+  const classePerAvviso =
+    scegliClasseRilevante(interpello.classiCodes, interpello.titolo) || interpello.classeCodice;
+  const etichettaClasse = etichettaClasseMateria(classePerAvviso, interpello.materia);
   // Avviso STRUTTURATO: obbligatorie (Provincia, Ordine, Classe, Scadenza) +
   // opzionali (Scuola, Pubblicato) mostrate solo se presenti.
   const avviso = costruisciAvviso({
     provincia: interpello.provinciaNome || interpello.provinciaCodice,
     ordine: interpello.ordine,
-    classCode: interpello.classeCodice,
+    classCode: classePerAvviso,
     classCodes: interpello.classiCodes,
     materia: interpello.materia,
     scadenza: interpello.dataScadenza,
     schoolName: interpello.istituto,
+    titolo: interpello.titolo,
   });
   const provinciaTxt = interpello.provinciaNome || interpello.provinciaCodice;
   const ordineTxt = avviso.obbligatorie.find((r) => r.etichetta === 'Ordine di scuola')?.valore ?? '';
@@ -159,21 +165,21 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
                 <dd className="text-sm text-primary-800">{r.valore}</dd>
               </div>
             ))}
-            <div className="rounded-xl bg-slate-50 p-4">
-              <dt className="text-sm font-semibold text-primary-700">Email candidature</dt>
-              <dd className="text-sm text-primary-800">
-                {interpello.contactEmail ? (
+            {/* Email candidature: blocco presente SOLO se l'indirizzo è stato
+                estratto (mai uno stato negativo tipo "Non indicata"). */}
+            {interpello.contactEmail && (
+              <div className="rounded-xl bg-slate-50 p-4">
+                <dt className="text-sm font-semibold text-primary-700">Email candidature</dt>
+                <dd className="text-sm text-primary-800">
                   <a
                     href={`mailto:${interpello.contactEmail}`}
                     className="break-all text-primary-600 underline transition hover:text-primary-800"
                   >
                     {interpello.contactEmail}
                   </a>
-                ) : (
-                  <span className="text-primary-500">Non indicata dalla fonte</span>
-                )}
-              </dd>
-            </div>
+                </dd>
+              </div>
+            )}
           </dl>
 
           {interpello.descrizione && interpello.descrizione.trim() !== interpello.titolo.trim() && (

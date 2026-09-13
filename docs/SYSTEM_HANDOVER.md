@@ -610,8 +610,29 @@ consentito === true →
 `resend.ts`/`telegram.ts` contengono SUBJECT + CORPO per ogni `TipoMessaggio`.
 `TIPI_CON_OPPORTUNITA = { prova1, prova2, prova3, notifica_pro }` → includono il blocco
 dell'opportunità (titolo + dettagli + link fonte). `extra` e `recap` sono solo testuali.
-`classeRilevante()` interseca le classi; `categoriaOpportunita()` deduce
-PNRR/PON/POR/Bando Esperti/Interpello dal titolo.
+`classeRilevante()` interseca le classi con quelle del profilo e sceglie la **classe coerente
+con il titolo** (`scegliClasseRilevante`).
+
+**Regole di TEMPLATE (verificate da `npm run test:telegram:template`):**
+- **Copy**: header `notifica_pro` = *"Abbiamo trovato una nuova opportunità per te!"*;
+  nessuna frase ripetuta ("Continuiamo a cercare per te", "A presto!" rimossi) e
+  nessuna riga metadato `🏷️ …` (era vuota/ridondante).
+- **Gerarchia**: `Ordine di scuola` deriva SEMPRE dalla classe mostrata (o dal testo se la
+  classe manca) → mai contraddizioni tipo "Scuola Primaria" + titolo della secondaria;
+  `scegliClasseRilevante` preferisce la classe **citata nel titolo** tra quelle della tabella
+  sorgente (che può elencare codici di livelli diversi). Nel post canale il ruolo non viene
+  ripetuto quando coincide con la Classe/Materia.
+- **Email**: se il contatto della scuola non è estratto con certezza la riga
+  viene **omessa** — mai `"📧 Email non disponibile"` (vale anche per il blocco candidature
+  nella card).
+- **Scadenze** (`scadenzaUtilizzabile`): una data già passata o identica alla pubblicazione è
+  considerata **non valida** e non viene mostrata (nessuna scadenza nel passato negli alert).
+- **Link**: sempre etichettati e onesti (`etichettaFonteLink`): *"Apri l'avviso ufficiale"* /
+  *"Apri il bando ufficiale (PDF)"* / *"Apri l'avviso sull'Albo Pretorio"* — mai la parola
+  *"candidati"* né URL nudi (in Telegram il link etichettato evita il popup nativo "Apri link").
+- **Footer**: personale = `📌 Quando vuoi sapere cosa succede di importante, vieni qui:`
+  + link `scuoleradar.it/notizie`; canale = `⚡ Ricevi gli avvisi per la tua provincia e
+  classe in privato: 👉 scuoleradar.it`. Nessuna firma promozionale.
 
 ### 6.6 Ciclo di vita abbonamento — trial PRO 1 mese + promemoria 3–5 giorni
 **Policy trial (1 mese).** Un nuovo utente nasce con `piano='pro'`,

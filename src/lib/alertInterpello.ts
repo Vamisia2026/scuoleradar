@@ -77,6 +77,13 @@ export interface DatiAvviso {
   scadenza?: string | null;
   schoolName?: string | null;
   pubblicazione?: string | null;
+  /**
+   * Titolo/descrizione grezza dell'avviso: serve a scegliere la classe
+   * COERENTE con il livello dichiarato (evita contraddizioni tipo "Scuola
+   * Primaria" + titolo della secondaria) e a dedurre l'ordine quando manca
+   * la classe. Mai mostrato: è solo contesto.
+   */
+  titolo?: string | null;
 }
 
 export interface RigaAvviso {
@@ -107,6 +114,111 @@ function ordineDaClasse(classCode?: string | null): string {
 }
 
 /**
+ * Livello di scuola dichiarato NEL TESTO (titolo/descrizione), o null.
+ * Serve quando manca il codice classe: senza questo, un avviso di scuola
+ * primaria restava etichettato come "Secondaria di II grado" (default del feed).
+ */
+export function inferisciOrdineDaTesto(testo?: string | null): OrdineScuola | null {
+  const t = (testo ?? '').toLowerCase();
+  if (!t) return null;
+  if (
+    /\b(?:personale\s+ata|dsga|assistent\w*\s+(?:amministrativ|tecn|scolastic)\w*|collaborator\w*\s+scolastic\w*|guardarobier\w*)\b/.test(
+      t,
+    )
+  ) {
+    return 'ata';
+  }
+  if (/(?:scuola\s+dell['’]?\s*infanzia|dell['’]infanzia|\binfanzia\b|scuola\s+materna|\bmaterna\b)/.test(t)) {
+    return 'infanzia';
+  }
+  if (/(?:scuola\s+primaria|\bprimaria\b|scuole\s+elementari|\belementari\b)/.test(t)) {
+    return 'primaria';
+  }
+  if (
+    /(?:secondaria\s+di\s+(?:i|1|primo)\s*grado|scuola\s+media\b|\bmedie\b|\badmm\b|\bad21\b)/.test(t)
+  ) {
+    return 'secondaria1';
+  }
+  if (
+    /(?:secondaria\s+di\s+(?:ii|2|secondo)\s*grado|secondaria\s+superiore|\bliceo\b|licei\b|istituto\s+tecnico|istituto\s+professionale|\bipsia\b|\bitis\b|\bitc\b|\bitn\b)/.test(
+      t,
+    )
+  ) {
+    return 'secondaria2';
+  }
+  return null;
+}
+
+/** Ordine di una singola classe (codice ATA incluso), o null. */
+function ordineDiClasse(codice: string): OrdineScuola | null {
+  const c = (codice ?? '').trim().toUpperCase();
+  if (!c) return null;
+  if (ATA_ALIAS.has(c)) return 'ata';
+  return classeByCodice(c)?.ordine ?? null;
+}
+
+/**
+ * Sceglie il codice classe PIÙ COERENTE con l'avviso:
+ *   1. la classe CITATA nel titolo (fonte primaria, evita i dump di codici
+ *      ordinati arbitrariamente dalla tabella sorgente);
+ *   2. altrimenti la prima classe il cui livello coincide con quello dichiarato
+ *      nel titolo;
+ *   3. in mancanza, la prima classe disponibile.
+ * Evita la contraddizione "Ordine di scuola: Primaria" + titolo della
+ * secondaria causata dal prendere acriticamente `classCodes[0]`.
+ */
+export function scegliClasseRilevante(
+  codici?: string[] | null,
+  titolo?: string | null,
+): string {
+  const lista = (codici ?? []).map((c) => (c ?? '').trim()).filter(Boolean);
+  if (lista.length === 0) return '';
+  if (lista.length === 1) return lista[0];
+
+  const testo = (titolo ?? '').toLowerCase();
+  if (testo) {
+    const citata = lista.find((c) => {
+      const compatta = c.replace(/-/g, '').toLowerCase();
+      return compatta.length >= 3 && testo.includes(compatta);
+    });
+    if (citata) return citata;
+  }
+
+  const livelloTitolo = inferisciOrdineDaTesto(titolo);
+  if (livelloTitolo) {
+    const coerente = lista.find((c) => ordineDiClasse(c) === livelloTitolo);
+    if (coerente) return coerente;
+  }
+  return lista[0];
+}
+
+/**
+ * True se la scadenza è UTILIZZABILE in un avviso:
+ *  · è una data reale;
+ *  · NON è già passata (una scadenza nel passato è un errore di estrazione o un
+ *    avviso chiuso: mostrarla è peggio che ometterla);
+ *  · NON coincide con la data di pubblicazione (i bollettini/elenchi riportano
+ *    la data di pubblicazione che veniva scambiata per scadenza).
+ */
+export function scadenzaUtilizzabile(
+  scadenza?: string | null,
+  pubblicazione?: string | null,
+  oggi: Date = new Date(),
+): boolean {
+  if (!dataIsoValida(scadenza)) return false;
+  const d = new Date(scadenza as string);
+  const giorno = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const oggiUtc = Date.UTC(oggi.getUTCFullYear(), oggi.getUTCMonth(), oggi.getDate());
+  if (giorno < oggiUtc) return false;
+  if (dataIsoValida(pubblicazione)) {
+    const p = new Date(pubblicazione as string);
+    const giornoPub = Date.UTC(p.getUTCFullYear(), p.getUTCMonth(), p.getUTCDate());
+    if (giorno === giornoPub) return false;
+  }
+  return true;
+}
+
+/**
  * Costruisce l'avviso strutturato con la gerarchia STRETTA.
  * I campi opzionali assenti non compaiono; la mancanza di obbligatori è esposta
  * in `mancanti` (per saltare in modo sicuro o gestire con garbo).
@@ -121,11 +233,15 @@ export function costruisciAvviso(dati: DatiAvviso): AvvisoStrutturato {
   if (provincia) obbligatorie.push({ etichetta: 'Provincia', valore: provincia });
   else mancanti.push('Provincia');
 
-  // 2) Ordine di scuola (esplicito o dedotto dalla classe)
+  // 2) Ordine di scuola — SEMPRE coerente con la classe MOSTRATA; se la classe
+  //    manca si deduce dal TESTO (mai un livello inventato tipo "Secondaria di II
+  //    grado" per un avviso di scuola primaria).
   const classCode = (dati.classCode ?? dati.classCodes?.[0] ?? '').trim();
+  const livelloTitolo = inferisciOrdineDaTesto(dati.titolo);
   const ordine =
-    (dati.ordine ? ORDINE_ETICHETTA[dati.ordine as OrdineScuola] ?? String(dati.ordine) : '') ||
-    ordineDaClasse(classCode);
+    ordineDaClasse(classCode) ||
+    (livelloTitolo ? ORDINE_ETICHETTA[livelloTitolo] : '') ||
+    (dati.ordine ? ORDINE_ETICHETTA[dati.ordine as OrdineScuola] ?? String(dati.ordine) : '');
   if (ordine) obbligatorie.push({ etichetta: 'Ordine di scuola', valore: ordine });
   else mancanti.push('Ordine di scuola');
 
@@ -134,8 +250,8 @@ export function costruisciAvviso(dati: DatiAvviso): AvvisoStrutturato {
   if (classe) obbligatorie.push({ etichetta: 'Classe / Materia', valore: classe });
   else mancanti.push('Classe / Materia');
 
-  // 4) Scadenza (obbligatoria: valida solo se è una data reale)
-  const scadenzaValida = dataIsoValida(dati.scadenza);
+  // 4) Scadenza: valida SOLO se reale, non passata e diversa dalla pubblicazione.
+  const scadenzaValida = scadenzaUtilizzabile(dati.scadenza, dati.pubblicazione);
   if (scadenzaValida) {
     obbligatorie.push({ etichetta: 'Scadenza', valore: formatDataAvviso(dati.scadenza) });
   } else {
