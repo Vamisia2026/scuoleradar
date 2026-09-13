@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { Radar, SlidersHorizontal } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { InterpelloCard } from '@/components/InterpelloCard';
+import { costruisciAvviso } from '@/lib/alertInterpello';
 import { PreferenzeRadar } from '@/components/PreferenzeRadar';
 import { RadarStatusToggle } from '@/components/RadarStatusToggle';
 import { Accordion } from '@/components/Accordion';
@@ -117,7 +118,31 @@ export function DashboardPage() {
   const oraAttuale = Date.now();
   const opportunitaAttive = interpelliFiltrati
     .filter((i) => !i.dataScadenza || new Date(i.dataScadenza).getTime() > oraAttuale)
-    .sort((a, b) => new Date(a.dataScadenza).getTime() - new Date(b.dataScadenza).getTime());
+    // Gate di gerarchia: mostra SOLO gli avvisi con i campi IDENTITARI obbligatori
+    // (Provincia, Ordine di scuola, Classe/Materia). La Scadenza, se assente, è
+    // gestita garbatamente nella card (non è motivo di scarto).
+    .filter((i) => {
+      const mancanti = costruisciAvviso({
+        provincia: i.provinciaNome || i.provinciaCodice,
+        ordine: i.ordine,
+        classCode: i.classeCodice,
+        classCodes: i.classiCodes,
+        materia: i.materia,
+        scadenza: i.dataScadenza,
+        schoolName: i.istituto,
+      }).mancanti;
+      return (
+        !mancanti.includes('Provincia') &&
+        !mancanti.includes('Ordine di scuola') &&
+        !mancanti.includes('Classe / Materia')
+      );
+    })
+    // Scadenze reali in cima; gli avvisi senza scadenza in coda.
+    .sort((a, b) => {
+      const ta = a.dataScadenza ? new Date(a.dataScadenza).getTime() : Number.POSITIVE_INFINITY;
+      const tb = b.dataScadenza ? new Date(b.dataScadenza).getTime() : Number.POSITIVE_INFINITY;
+      return ta - tb;
+    });
 
   // Accordion "Opportunità mappate": chiuso di default (console design) + modal paywall PRO.
   const [opportunitaAperte, setOpportunitaAperte] = useState(false);

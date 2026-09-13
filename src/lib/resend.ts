@@ -13,7 +13,7 @@
  */
 
 import { Resend } from 'resend';
-import { etichettaClasseMateria } from '../data/classiConcorso';
+import { ICONA_RIGA, costruisciAvviso } from './alertInterpello';
 
 /** Interfaccia per l'ambiente (evita la dipendenza da @types/node nel frontend). */
 declare const process: { env: Record<string, string | undefined> };
@@ -318,21 +318,32 @@ export function renderEmailHtml(
     interpello && TIPI_CON_OPPORTUNITA.has(tipo)
       ? (() => {
           const classe = classeRilevante(interpello, destinatario);
+          // Gerarchia STRETTA: obbligatorie (Provincia, Ordine, Classe/Materia) +
+          // opzionali (Scuola) solo se presenti; la Scadenza ha una riga dedicata
+          // e viene OMESSA se la fonte non la dichiara (nessun placeholder grezzo).
+          const avviso = costruisciAvviso({
+            provincia: interpello.province,
+            classCode: classe,
+            materia: interpello.materia,
+            scadenza: interpello.scadenza,
+            schoolName: interpello.schoolName,
+          });
           const dettagli: string[] = [];
-          if (interpello.schoolName) dettagli.push(`🏫 ${escapeHtml(interpello.schoolName)}`);
-          // Codice classe + materia ufficiale (es. "A-12 · Italiano, Storia, …").
-          if (classe) {
-            dettagli.push(`📚 ${escapeHtml(etichettaClasseMateria(classe, interpello.materia))}`);
+          for (const r of avviso.obbligatorie) {
+            if (r.etichetta === 'Scadenza') continue; // riga dedicata sotto
+            dettagli.push(`${ICONA_RIGA[r.etichetta] ?? '•'} ${escapeHtml(r.valore)}`);
           }
-          dettagli.push(`📍 ${escapeHtml(interpello.province)}`);
           dettagli.push(`🏷️ ${escapeHtml(categoriaOpportunita(interpello.title))}`);
+          const scadenzaRiga = avviso.scadenzaValida
+            ? `<p style="margin:8px 0 0; font-size:13px; color:#64748b;">📅 Scadenza: ${escapeHtml(formatDataScadenza(interpello.scadenza))}</p>`
+            : '';
           return `
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px; border:1px solid #e2e8f0; border-radius:12px; background:#f8fafc;">
                   <tr>
                     <td style="padding:16px 20px;">
                       <h2 style="margin:0 0 8px; font-size:18px; font-weight:800; line-height:1.35; color:#14354e;"><b>${escapeHtml(interpello.title)}</b></h2>
                       <p style="margin:0; font-size:14px; line-height:1.6; color:#475569;">${dettagli.join(' · ')}</p>
-                      <p style="margin:8px 0 0; font-size:13px; color:#64748b;">⏳ Scadenza: ${formatDataScadenza(interpello.scadenza)}</p>
+                      ${scadenzaRiga}
                       <p style="margin:8px 0 0; font-size:13px; color:#64748b;">📧 Candidature: ${interpello.contactEmail ? `<a href="mailto:${escapeHtml(interpello.contactEmail)}" style="color:#2B6F9E;">${escapeHtml(interpello.contactEmail)}</a>` : 'Email non disponibile'}</p>
                       <p style="margin:12px 0 0;">${interpello.link ? `<a href="${escapeHtml(interpello.link)}" target="_blank" rel="noopener" style="font-size:14px; font-weight:700; color:#2B6F9E; text-decoration:underline;">🔗 Fonte ufficiale verificata (Albo Pretorio) — apri e candidati →</a>` : ''}</p>
                     </td>

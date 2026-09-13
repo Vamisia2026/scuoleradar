@@ -42,9 +42,6 @@ const MESSAGGIO_ISTRUZIONI =
   '2️⃣ Dalla sezione <b>Profilo</b>, clicca sul pulsante <b>Collega Telegram</b>.\n\n' +
   'In questo modo il bot saprà esattamente quali avvisi inviarti!';
 
-const MESSAGGIO_ERRORE =
-  '❌ Impossibile collegare l\'account. Riprova aprendo il link "Collega Telegram" dalla pagina Profilo.';
-
 /** Invia un messaggio su Telegram via Bot API. */
 async function inviaMessaggio(chatId: number, testo: string): Promise<void> {
   if (!TELEGRAM_TOKEN) return;
@@ -55,9 +52,19 @@ async function inviaMessaggio(chatId: number, testo: string): Promise<void> {
   }).catch((err) => console.error('Errore invio messaggio Telegram:', err.message));
 }
 
-/** Aggiorna profiles.telegram_chat_id per l'utente dato (via REST + service_role). */
-async function aggiornaChatId(userId: string, chatId: number): Promise<boolean> {
+/**
+ * Aggiorna profiles.telegram_chat_id (e, se fornito, telegram_username)
+ * per l'utente dato, via REST + service_role. Ritorna true se la PATCH è andata
+ * a buon fine E ha aggiornato almeno una riga.
+ */
+async function aggiornaChatId(
+  userId: string,
+  chatId: number,
+  username?: string,
+): Promise<boolean> {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE) return false;
+  const body: Record<string, unknown> = { telegram_chat_id: String(chatId) };
+  if (username) body.telegram_username = username;
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`,
     {
@@ -66,15 +73,48 @@ async function aggiornaChatId(userId: string, chatId: number): Promise<boolean> 
         apikey: SUPABASE_SERVICE_ROLE,
         Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
         'Content-Type': 'application/json',
-        Prefer: 'return=minimal',
+        Prefer: 'return=representation',
       },
-      body: JSON.stringify({ telegram_chat_id: String(chatId) }),
+      body: JSON.stringify(body),
     },
   ).catch((err) => {
     console.error('Errore aggiornamento profiles:', err.message);
     return null;
   });
-  return res !== null && res.ok;
+  if (!res || !res.ok) return false;
+  try {
+    const righe = (await res.json()) as unknown[];
+    return Array.isArray(righe) && righe.length > 0;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Risolve l'userId dal SOLO username Telegram (fallback quando il deeplink
+ * `?start=<user_id>` non è presente): cerca `profiles.telegram_username`.
+ */
+async function trovaUserIdPerUsername(username: string): Promise<string | null> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE || !username) return null;
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/profiles?telegram_username=ilike.${encodeURIComponent(username)}&select=id&limit=1`,
+    {
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
+      },
+    },
+  ).catch((err) => {
+    console.error('Errore lookup username:', err.message);
+    return null;
+  });
+  if (!res || !res.ok) return null;
+  try {
+    const righe = (await res.json()) as Array<{ id?: string }>;
+    return righe[0]?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 serve(async (req: Request) => {
@@ -97,10 +137,11 @@ serve(async (req: Request) => {
   }
 
   const message = update.message as
-    | { chat?: { id?: number }; text?: string }
+    | { chat?: { id?: number }; text?: string; from?: { username?: string } }
     | undefined;
   const chatId = message?.chat?.id;
   const testo = (message?.text ?? '').trim();
+  const username = (message?.from?.username ?? '').trim().replace(/^@/, '');
 
   // Ack immediato: non è un messaggio testuale
   if (!chatId || !testo) {
@@ -113,16 +154,28 @@ serve(async (req: Request) => {
     return new Response('ok', { status: 200 });
   }
 
-  const userId = match[1] ?? '';
+  let userId = match[1] ?? '';
 
-  if (!userId) {
-    // /start senza parametro: spieghiamo come collegare l'account
+  // FALLBACK per username: se manca il deeplink o l'id non aggiorna nulla,
+  // prova a collegare l'account tramite `profiles.telegram_username`.
+  let aggiornato = false;
+  if (userId) {
+    aggiornato = await aggiornaChatId(userId, chatId, username || undefined);
+  }
+  if (!aggiornato && username) {
+    const perUsername = await trovaUserIdPerUsername(username);
+    if (perUsername) {
+      userId = perUsername;
+      aggiornato = await aggiornaChatId(perUsername, chatId, username);
+    }
+  }
+
+  if (!aggiornato) {
+    // Nessun collegamento possibile: spieghiamo come collegare l'account.
     await inviaMessaggio(chatId, MESSAGGIO_ISTRUZIONI);
     return new Response('ok', { status: 200 });
   }
 
-  const aggiornato = await aggiornaChatId(userId, chatId);
-  await inviaMessaggio(chatId, aggiornato ? MESSAGGIO_CONFERMA : MESSAGGIO_ERRORE);
-
+  await inviaMessaggio(chatId, MESSAGGIO_CONFERMA);
   return new Response('ok', { status: 200 });
 });

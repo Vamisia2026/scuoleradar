@@ -123,6 +123,7 @@ function verificaStruttura(avviso: InterpelloCanale, testo: string): string[] {
   if (!testo.includes('👩🏫 Ruolo / Categoria: <b>')) {
     problemi.push('manca la riga "👩🏫 Ruolo / Categoria:"');
   }
+  if (!testo.includes('🎓 Ordine di scuola: <b>')) problemi.push('manca la riga "🎓 Ordine di scuola:"');
   if (!testo.includes('📅 Scadenza: <b>')) problemi.push('manca la riga "📅 Scadenza:"');
   if (!testo.includes('🔗 <a href="') || !testo.includes('Leggi l\'Avviso Originale')) {
     problemi.push('manca il blocco link "🔗 Leggi l\'Avviso Originale"');

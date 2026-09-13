@@ -20,7 +20,7 @@ import {
   type TipoMessaggio,
 } from './resend';
 import { province } from '../data/province';
-import { etichettaClasseMateria } from '../data/classiConcorso';
+import { ICONA_RIGA, costruisciAvviso } from './alertInterpello';
 
 /** Interfaccia per l'ambiente (evita la dipendenza da @types/node nel frontend). */
 declare const process: { env: Record<string, string | undefined> };
@@ -223,20 +223,25 @@ export function formattaMessaggioTelegram(
 
   const titolo = interpello ? `📌 <b>${escapeHtml(interpello.title)}</b>` : '';
 
-  // Dettagli compatti: scuola e classe si omettono se sono già dentro il titolo.
+  // Dettagli compatti con GERARCHIA STRETTA: obbligatorie (Provincia, Ordine,
+  // Classe/Materia, Scadenza) + opzionali (Scuola, Pubblicato) solo se presenti.
+  // La Scadenza assente viene OMESSA (nessun blocco "Scadenza: Non indicata").
   let dettagli = '';
   if (interpello && TIPI_CON_OPPORTUNITA.has(tipo)) {
-    const tLower = interpello.title.toLowerCase();
+    const avviso = costruisciAvviso({
+      provincia: nomeProvincia(interpello.province) ?? interpello.province,
+      classCode: classe,
+      materia: interpello.materia,
+      scadenza: interpello.scadenza,
+      schoolName: interpello.schoolName,
+    });
     const righe: string[] = [];
-    if (interpello.schoolName && !tLower.includes(interpello.schoolName.toLowerCase())) {
-      righe.push(`🏫 ${escapeHtml(interpello.schoolName)}`);
+    for (const r of avviso.obbligatorie) {
+      righe.push(`${ICONA_RIGA[r.etichetta] ?? '•'} ${escapeHtml(r.etichetta)}: <b>${escapeHtml(r.valore)}</b>`);
     }
-    if (classe && !tLower.includes(classe.toLowerCase())) {
-      // Materia ufficiale accanto al codice (es. "A-22 · Lingua inglese, …").
-      righe.push(`📚 ${escapeHtml(etichettaClasseMateria(classe, interpello.materia))}`);
+    for (const r of avviso.opzionali) {
+      righe.push(`${ICONA_RIGA[r.etichetta] ?? '•'} ${escapeHtml(r.valore)}`);
     }
-    righe.push(`📍 ${escapeHtml(interpello.province)}`);
-    righe.push(`⏳ Scadenza: ${formatDataScadenza(interpello.scadenza)}`);
     righe.push(`🏷️ ${escapeHtml(categoriaOpportunita(interpello.title))}`);
     dettagli = righe.join('\n');
   }
@@ -659,33 +664,40 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
   const categoria = classificaCategoriaPost(interpello);
   const ruolo = ruoloPerCategoria(categoria, interpello);
 
-  const dettagli: string[] = [
-    `📍 Provincia: <b>${escapeHtml(provincia ? `${provincia} (${codice})` : codice)}</b>${
-      comune ? ` — <b>${escapeHtml(comune)}</b>` : ''
-    }`,
-  ];
-  if (interpello.schoolName?.trim()) {
-    dettagli.push(`🏫 Scuola: <b>${escapeHtml(interpello.schoolName.trim())}</b>`);
-  }
-  dettagli.push(`👩🏫 Ruolo / Categoria: <b>${escapeHtml(ruolo)}</b>`);
-  // Materia ufficiale accanto al codice di classe (solo se un codice esiste, per
-  // non duplicare il ruolo quando è già la materia inferita).
+  // Codice classe (per etichetta leggibile + ordine di scuola) e avviso strutturato.
   const codiceClasse = (
     interpello.classCodes?.[0]?.trim() ||
     titolo.match(RE_CLASSE_CONCORSO)?.[0] ||
     ''
   ).toUpperCase();
-  // Etichetta leggibile: CODICE + nome ufficiale della materia/classe (es.
-  // "A-41 - Scienze e tecnologie informatiche"), mai il solo codice.
-  const materiaAvviso = codiceClasse
-    ? etichettaClasseMateria(codiceClasse, interpello.materia)
-    : null;
+  const avviso = costruisciAvviso({
+    provincia: provincia ? `${provincia} (${codice})` : codice,
+    classCode: codiceClasse,
+    materia: interpello.materia,
+    scadenza: interpello.expirationDate,
+    schoolName: interpello.schoolName?.trim() || null,
+  });
+  const ordineScuola = avviso.obbligatorie.find((r) => r.etichetta === 'Ordine di scuola')?.valore ?? '';
+  const materiaAvviso = avviso.obbligatorie.find((r) => r.etichetta === 'Classe / Materia')?.valore ?? '';
+
+  const dettagli: string[] = [
+    `📍 Provincia: <b>${escapeHtml(provincia ? `${provincia} (${codice})` : codice)}</b>${
+      comune ? ` — <b>${escapeHtml(comune)}</b>` : ''
+    }`,
+  ];
+  // Scuola: OPZIONALE — mostrata solo se estratta (nessun placeholder).
+  if (interpello.schoolName?.trim()) {
+    dettagli.push(`🏫 Scuola: <b>${escapeHtml(interpello.schoolName.trim())}</b>`);
+  }
+  // Ordine di scuola: OBBLIGATORIO (dedotto dalla classe).
+  if (ordineScuola) dettagli.push(`🎓 Ordine di scuola: <b>${escapeHtml(ordineScuola)}</b>`);
+  dettagli.push(`👩🏫 Ruolo / Categoria: <b>${escapeHtml(ruolo)}</b>`);
+  // Classe/Materia: OBBLIGATORIO — etichetta leggibile (codice + nome ufficiale).
   if (materiaAvviso) dettagli.push(`📚 Classe/Materia: <b>${escapeHtml(materiaAvviso)}</b>`);
-  dettagli.push(
-    `📅 Scadenza: <b>${
-      interpello.expirationDate ? escapeHtml(formatDataScadenza(interpello.expirationDate)) : 'Immediata'
-    }</b>`,
-  );
+  // Scadenza: OBBLIGATORIA — omessa garbatamente se la fonte non la dichiara.
+  if (avviso.scadenzaValida) {
+    dettagli.push(`📅 Scadenza: <b>${escapeHtml(formatDataScadenza(interpello.expirationDate ?? null))}</b>`);
+  }
 
   const tipologiaToken =
     categoria === 'avviso_ata'

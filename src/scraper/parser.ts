@@ -180,7 +180,7 @@ export function estraiEmail(link?: string | null, testo?: string | null): string
  * `pec.istruzione.it`). È il segnale più forte di una casella scolastica.
  */
 export const RE_EMAIL_SCUOLA =
-  /\b[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9.-]+\.edu\.it|pec\.istruzione\.it|istruzione\.it)\b/i;
+  /\b[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9.-]+\.edu\.it|[A-Za-z0-9.-]+\.gov\.it|[A-Za-z0-9.-]+\.edu|pec\.istruzione\.it|istruzione\.it)\b/i;
 
 /** Etichette tipiche di un dominio scolastico (es. `iclorenzini.edu.it`, `iisverdi.it`). */
 const RE_DOMINIO_SCUOLA =
@@ -188,7 +188,7 @@ const RE_DOMINIO_SCUOLA =
 
 /** Parole/etichette tipiche di una casella scolastica (segreteria, protocollo…). */
 const RE_LOCAL_SCUOLA =
-  /(^|[._-])(ic|ics|cd|sm|scuola|istituto|iis|ips|ipsia|itc|itg|itis|liceo|licei|convitto|cpia|segreteria|protocollo|direzione|dirigenza|presidenza|amministrazione|urp|personale)/i;
+  /(^|[._-])(ic|ics|cd|sm|scuola|istituto|iis|ips|ipsia|itc|itg|itis|liceo|licei|convitto|cpia|segreteria|protocollo|direzione|dirigenza|presidenza|amministrazione|urp|personale|didattica|docenti|studenti|alunni|info|segr)/i;
 
 /** Domini personali/generici: esistono nei testi ma NON sono la casella di candidatura. */
 const RE_DOMINIO_GENERICO =
@@ -228,10 +228,11 @@ export function punteggioEmailScuola(email: string, ctx: ContestoEmailScuola = {
   const dominio = e.slice(at + 1);
   let p = 0;
 
-  if (RE_EMAIL_SCUOLA.test(e)) p += 50; // .edu.it / istruzione.it / pec.istruzione.it
+  if (RE_EMAIL_SCUOLA.test(e)) p += 50; // .edu.it / .gov.it / .edu / istruzione.it / pec.istruzione.it
   if (RE_DOMINIO_SCUOLA.test(dominio)) p += 30; // dominio tipo ic/iis/liceo…
+  if (/\.gov\.it$/.test(dominio)) p += 30; // dominio pubblico affidabile
   if (RE_LOCAL_SCUOLA.test(local)) p += 15; // casella tipo segreteria/protocollo/ic…
-  if (/(segreteria|protocollo|direzione|dirigenza|presidenza|amministrazione|urp|personale)/.test(local)) p += 10;
+  if (/(segreteria|protocollo|direzione|dirigenza|presidenza|amministrazione|urp|personale|segr)/.test(local)) p += 10;
   if (/pec\./.test(dominio)) p += 5;
 
   // Correlazione diretta con l'istituto (codice meccanografico / nome).
@@ -617,7 +618,7 @@ export function raccogliDate(testo: string): DataRilevata[] {
  * così una data di pubblicazione in testa al post NON viene mai scambiata per scadenza.
  */
 const RE_CONTESTO_SCADENZA =
-  /scadenz|scade|scadut|\bentro\b|\btermine\b|presentazion|presentare|domand|istanz|non oltre|ultimo|ricezion|\binvio\b|fino al/i;
+  /scadenz|scade|scadut|\bentro\b|\btermine\b|presentazion|presentare|domand|candidatur|istanz|non oltre|ultimo|ricezion|riceviment|\binvio\b|trasmis|\boffert|compilazion|manifestazion|fino al|entro e non oltre|\bore\s(?:[01]?\d|2[0-3])(?::\d{2})?\b/i;
 
 /** Parole chiave che qualificano una data come PUBBLICAZIONE. */
 const RE_CONTESTO_PUBBLICAZIONE =
@@ -640,6 +641,21 @@ function estraiDataConContesto(testo: string, re: RegExp): string | null {
   for (const d of raccogliDate(testo)) {
     const prima = testo.slice(Math.max(0, d.index - 45), d.index);
     if (re.test(prima)) return d.iso;
+  }
+  return null;
+}
+
+/**
+ * SCADENZA dichiarata: la parola chiave può precedere la data ("scadenza 12/09/2026",
+ * "entro il 12/09/2026", "entro le ore 12:00 del 15/09") oppure seguirla
+ * ("12/09/2026 – termine di presentazione"). Guarda ~70 caratteri PRIMA e ~40 DOPO,
+ * così cattura anche i bandi con frasi lunghe o date in testa.
+ */
+function estraiDataScadenzaConContesto(testo: string): string | null {
+  for (const d of raccogliDate(testo)) {
+    const prima = testo.slice(Math.max(0, d.index - 70), d.index);
+    const dopo = testo.slice(d.index + d.length, d.index + d.length + 40);
+    if (RE_CONTESTO_SCADENZA.test(prima) || RE_CONTESTO_SCADENZA.test(dopo)) return d.iso;
   }
   return null;
 }
@@ -675,7 +691,7 @@ export function estraiDataScadenza(
   testo: string,
   pubblicazione: string | null = null,
 ): string | null {
-  const dichiarata = estraiDataConContesto(testo, RE_CONTESTO_SCADENZA);
+  const dichiarata = estraiDataScadenzaConContesto(testo);
   if (dichiarata) return dichiarata;
 
   const relativa = (testo ?? '').match(RE_SCADENZA_RELATIVA);

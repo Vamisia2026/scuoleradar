@@ -4,6 +4,7 @@ import type { Interpello } from '@/data/interpelli';
 import { Modal } from './Modal';
 import { useApp, LIMITE_NOTIFICHE_PROVA } from '@/contexts/AppContext';
 import { etichettaClasseMateria } from '@/data/classiConcorso';
+import { costruisciAvviso, formatDataAvviso, formatDataAvvisoLunga } from '@/lib/alertInterpello';
 import { giorniRimanenti, stileScadenza } from '@/lib/scadenza';
 
 export function InterpelloCard({ interpello }: { interpello: Interpello }) {
@@ -14,6 +15,20 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
   const inScadenza = stile.livello === 'imminente' || stile.livello === 'scaduto';
   // Etichetta leggibile: CODICE + nome ufficiale della materia/classe.
   const etichettaClasse = etichettaClasseMateria(interpello.classeCodice, interpello.materia);
+  // Avviso STRUTTURATO: obbligatorie (Provincia, Ordine, Classe, Scadenza) +
+  // opzionali (Scuola, Pubblicato) mostrate solo se presenti.
+  const avviso = costruisciAvviso({
+    provincia: interpello.provinciaNome || interpello.provinciaCodice,
+    ordine: interpello.ordine,
+    classCode: interpello.classeCodice,
+    classCodes: interpello.classiCodes,
+    materia: interpello.materia,
+    scadenza: interpello.dataScadenza,
+    schoolName: interpello.istituto,
+  });
+  const provinciaTxt = interpello.provinciaNome || interpello.provinciaCodice;
+  const ordineTxt = avviso.obbligatorie.find((r) => r.etichetta === 'Ordine di scuola')?.valore ?? '';
+  const scadenzaOk = avviso.scadenzaValida;
   const giaNotificato = interpelliNotificati.includes(interpello.id);
   const notificheRimanenti = Math.max(LIMITE_NOTIFICHE_PROVA - notificheUsate, 0);
   const isPreferita = preferenze.favoriteSchools.some((s) =>
@@ -50,24 +65,37 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
           )}
         </div>
 
+        {/* Gerarchia obbligatoria: Provincia · Ordine · Classe/Materia · Scadenza. */}
         <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
           <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 font-medium text-primary-700">
             <MapPin className="h-3.5 w-3.5" />
-            {interpello.provinciaNome}
+            {provinciaTxt}
           </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-600">
-            {etichettaClasse}
-          </span>
-          <span
-            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold ${stile.className}`}
-          >
-            <Clock className="h-3.5 w-3.5" />
-            Scadenza: {new Date(interpello.dataScadenza).toLocaleDateString('it-IT', {
-              day: '2-digit',
-              month: 'short',
-            })}
-            <span className="ml-1 inline-flex items-center gap-0.5 font-bold">{stile.label}</span>
-          </span>
+          {ordineTxt && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 font-medium text-primary-700">
+              <GraduationCap className="h-3.5 w-3.5" />
+              {ordineTxt}
+            </span>
+          )}
+          {etichettaClasse && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-600">
+              {etichettaClasse}
+            </span>
+          )}
+          {scadenzaOk ? (
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold ${stile.className}`}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              Scadenza: {formatDataAvviso(interpello.dataScadenza)}
+              <span className="ml-1 inline-flex items-center gap-0.5 font-bold">{stile.label}</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-500">
+              <Clock className="h-3.5 w-3.5" />
+              Scadenza non indicata
+            </span>
+          )}
         </div>
 
         <button
@@ -81,63 +109,68 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
 
       <Modal open={open} onClose={() => setOpen(false)} title={interpello.titolo} size="lg">
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-3 py-1 text-sm font-medium text-primary-700">
-              <MapPin className="h-4 w-4" />
-              {interpello.provinciaNome}
+          {interpello.compatibilita === 100 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-3 py-1 text-sm font-semibold text-accent-700">
+              <BadgeCheck className="h-4 w-4" />
+              100% Compatibile
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-600">
-              {etichettaClasse}
-            </span>
-            {interpello.compatibilita === 100 && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-3 py-1 text-sm font-semibold text-accent-700">
-                <BadgeCheck className="h-4 w-4" />
-                100% Compatibile
-              </span>
-            )}
-          </div>
+          )}
 
-          <div className="rounded-xl bg-slate-50 p-4">
-            <p className="text-sm font-semibold text-primary-700">Istituto</p>
-            <p className="text-sm text-primary-800">{interpello.istituto}</p>
-          </div>
+          {/* OBBLIGATORIE — sempre presenti: Provincia · Ordine · Classe/Materia · Scadenza. */}
+          <dl className="grid gap-3 sm:grid-cols-2">
+            {avviso.obbligatorie.map((r) => (
+              <div key={r.etichetta} className="rounded-xl bg-slate-50 p-4">
+                <dt className="text-sm font-semibold text-primary-700">{r.etichetta}</dt>
+                <dd className="text-sm text-primary-800">
+                  {r.etichetta === 'Scadenza' ? formatDataAvvisoLunga(interpello.dataScadenza) : r.valore}
+                  {r.etichetta === 'Scadenza' && inScadenza && (
+                    <span className="ml-2 inline-flex items-center gap-1 font-semibold text-error-600">
+                      <AlertTriangle className="h-4 w-4" /> In scadenza
+                    </span>
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
 
-          <div className="rounded-xl bg-slate-50 p-4">
-            <p className="text-sm font-semibold text-primary-700">Email candidature</p>
-            {interpello.contactEmail ? (
-              <a
-                href={`mailto:${interpello.contactEmail}`}
-                className="break-all text-sm text-primary-600 underline transition hover:text-primary-800"
-              >
-                {interpello.contactEmail}
-              </a>
-            ) : (
-              <p className="text-sm text-primary-800">Email non disponibile</p>
-            )}
-          </div>
-
-          <div className="rounded-xl bg-slate-50 p-4">
-            <p className="text-sm font-semibold text-primary-700">Scadenza</p>
-            <p className="text-sm text-primary-800">
-              {new Date(interpello.dataScadenza).toLocaleDateString('it-IT', {
-                weekday: 'long',
-                day: '2-digit',
-                month: 'long',
-                year: 'numeric',
-              })}
-              {inScadenza && (
-                <span className="ml-2 inline-flex items-center gap-1 font-semibold text-error-600">
-                  <AlertTriangle className="h-4 w-4" />
-                  In scadenza
-                </span>
-              )}
+          {/* Scadenza assente: gestita con garbo (niente blocchi grezzi "Non indicata"). */}
+          {!scadenzaOk && (
+            <p className="rounded-xl bg-primary-50 px-4 py-3 text-sm text-primary-600">
+              La scadenza non è indicata nella fonte: la trovi nell’avviso originale.
             </p>
-          </div>
+          )}
 
-          <div>
-            <p className="mb-1 text-sm font-semibold text-primary-700">Descrizione</p>
-            <p className="text-sm leading-relaxed text-primary-800">{interpello.descrizione}</p>
-          </div>
+          {/* OPZIONALI + EMAIL — mostrate SOLO se presenti (nessun placeholder). */}
+          <dl className="grid gap-3 sm:grid-cols-2">
+            {avviso.opzionali.map((r) => (
+              <div key={r.etichetta} className="rounded-xl bg-slate-50 p-4">
+                <dt className="text-sm font-semibold text-primary-700">{r.etichetta}</dt>
+                <dd className="text-sm text-primary-800">{r.valore}</dd>
+              </div>
+            ))}
+            <div className="rounded-xl bg-slate-50 p-4">
+              <dt className="text-sm font-semibold text-primary-700">Email candidature</dt>
+              <dd className="text-sm text-primary-800">
+                {interpello.contactEmail ? (
+                  <a
+                    href={`mailto:${interpello.contactEmail}`}
+                    className="break-all text-primary-600 underline transition hover:text-primary-800"
+                  >
+                    {interpello.contactEmail}
+                  </a>
+                ) : (
+                  <span className="text-primary-500">Non indicata dalla fonte</span>
+                )}
+              </dd>
+            </div>
+          </dl>
+
+          {interpello.descrizione && interpello.descrizione.trim() !== interpello.titolo.trim() && (
+            <div>
+              <p className="mb-1 text-sm font-semibold text-primary-700">Dettagli dall’avviso</p>
+              <p className="text-sm leading-relaxed text-primary-800">{interpello.descrizione}</p>
+            </div>
+          )}
 
           <a
             href={interpello.linkFonte}
