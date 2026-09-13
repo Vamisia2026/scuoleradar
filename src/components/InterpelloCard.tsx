@@ -6,6 +6,7 @@ import { useApp, LIMITE_NOTIFICHE_PROVA } from '@/contexts/AppContext';
 import { etichettaClasseMateria } from '@/data/classiConcorso';
 import {
   costruisciAvviso,
+  etichettaFonteLink,
   formatDataAvviso,
   formatDataAvvisoLunga,
   pulisciTitoloAvviso,
@@ -188,7 +189,7 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-600 transition hover:text-primary-800"
           >
-            Apri fonte originale
+            {etichettaFonteLink(interpello.linkFonte)}
             <ArrowRight className="h-4 w-4" />
           </a>
 

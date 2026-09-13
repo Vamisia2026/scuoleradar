@@ -20,7 +20,7 @@ import {
   type TipoMessaggio,
 } from './resend';
 import { province } from '../data/province';
-import { ICONA_RIGA, costruisciAvviso, pulisciTitoloAvviso } from './alertInterpello';
+import { ICONA_RIGA, costruisciAvviso, etichettaFonteLink, pulisciTitoloAvviso } from './alertInterpello';
 
 /** Interfaccia per l'ambiente (evita la dipendenza da @types/node nel frontend). */
 declare const process: { env: Record<string, string | undefined> };
@@ -117,9 +117,10 @@ interface TestoTelegram {
   paragrafi: string[];
   /**
    * Blocco CTA finale (facoltativo). Riceve i link GIÀ risolti:
-   * `linkPro` (pagina prezzi), `linkOpp` (opportunità) e `dashboardUrl` (piattaforma).
+   * `linkPro` (pagina prezzi), `linkOpp` (opportunità), `dashboardUrl` (piattaforma)
+   * ed `etichettaOpp` (etichetta ONESTA del link di fonte: mai "Candidati").
    */
-  cta?: (linkPro: string, linkOpp: string, dashboardUrl: string) => string;
+  cta?: (linkPro: string, linkOpp: string, dashboardUrl: string, etichettaOpp: string) => string;
 }
 
 const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
@@ -135,17 +136,20 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
   prova1: {
     testa: '🎯 Prima opportunità',
     paragrafi: ['Questa è la <b>prima opportunità</b> che abbiamo trovato per te. Te ne <b>restano 2</b>.'],
-    cta: (_linkPro, linkOpp) => `👉 <a href="${linkOpp}">Guarda l'opportunità e candidati</a>`,
+    cta: (_linkPro, linkOpp, _dashboardUrl, etichettaOpp) =>
+      `👉 <a href="${linkOpp}">${etichettaOpp}</a>`,
   },
   prova2: {
     testa: '🎯 Seconda opportunità',
     paragrafi: ['Questa è la <b>seconda opportunità</b> che abbiamo trovato per te. Te ne <b>resta 1</b>.'],
-    cta: (_linkPro, linkOpp) => `👉 <a href="${linkOpp}">Guarda l'opportunità e candidati</a>`,
+    cta: (_linkPro, linkOpp, _dashboardUrl, etichettaOpp) =>
+      `👉 <a href="${linkOpp}">${etichettaOpp}</a>`,
   },
   prova3: {
     testa: '🎯 Terza e ultima opportunità',
     paragrafi: ['Questa è la <b>terza e ultima opportunità</b> di prova che abbiamo trovato per te.'],
-    cta: (_linkPro, linkOpp) => `👉 <a href="${linkOpp}">Guarda l'opportunità e candidati</a>`,
+    cta: (_linkPro, linkOpp, _dashboardUrl, etichettaOpp) =>
+      `👉 <a href="${linkOpp}">${etichettaOpp}</a>`,
   },
   extra: {
     testa: '😮 Il tuo periodo di prova è terminato',
@@ -200,7 +204,8 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
       'Continuiamo a cercare per te.',
       'A presto!',
     ],
-    cta: (_linkPro, linkOpp) => `👉 <a href="${linkOpp}">Guarda l'opportunità e candidati</a>`,
+    cta: (_linkPro, linkOpp, _dashboardUrl, etichettaOpp) =>
+      `👉 <a href="${linkOpp}">${etichettaOpp}</a>`,
   },
 };
 
@@ -248,13 +253,11 @@ export function formattaMessaggioTelegram(
     dettagli = righe.join('\n');
   }
 
-  const linkFonte = urlAssolutaValida(interpello?.link);
-  const linkRiga =
-    linkFonte && TIPI_CON_OPPORTUNITA.has(tipo)
-      ? eLinkPdf(linkFonte)
-        ? barraPdf(linkFonte)
-        : `🔗 <a href="${escapeHtml(linkFonte)}">Fonte ufficiale verificata (Albo Pretorio) — apri e candidati</a>`
-      : '';
+  // UNA SOLA CTA cliccabile per l'opportunità: il link di fonte è il bottone in
+  // fondo, con etichetta ONESTA (mai "Candidati" se punta a un Albo Pretorio).
+  // La vecchia riga duplicata "Fonte ufficiale verificata … apri e candidati" è
+  // stata rimossa: puntava allo stesso URL del bottone.
+  const etichettaOpp = etichettaFonteLink(linkOpp);
 
   // Email di candidatura della scuola: mostrata per i tipi con opportunità.
   // Se assente nei dati → dicitura pulita (mai email inventate/ipotizzate).
@@ -268,10 +271,9 @@ export function formattaMessaggioTelegram(
   const parti: string[] = [copy.testa];
   if (titolo) parti.push(titolo);
   if (dettagli) parti.push(dettagli);
-  if (linkRiga) parti.push(linkRiga);
   if (emailRiga) parti.push(emailRiga);
   if (copy.paragrafi.length) parti.push(copy.paragrafi.join('\n'));
-  if (copy.cta) parti.push(copy.cta(linkPro, linkOpp, dashboardUrl));
+  if (copy.cta) parti.push(copy.cta(linkPro, linkOpp, dashboardUrl, etichettaOpp));
   parti.push('I tuoi colleghi di <b>Scuole Radar</b>');
   parti.push('📌 Quando vuoi sapere cosa succede di importante, vieni qui: https://www.scuoleradar.it/notizie');
 

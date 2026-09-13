@@ -13,7 +13,8 @@
  */
 
 import { Resend } from 'resend';
-import { ICONA_RIGA, costruisciAvviso, pulisciTitoloAvviso } from './alertInterpello';
+import { ICONA_RIGA, costruisciAvviso, etichettaFonteLink, pulisciTitoloAvviso } from './alertInterpello';
+import { urlSchedaInterpello } from './interpelloRouting';
 
 /** Interfaccia per l'ambiente (evita la dipendenza da @types/node nel frontend). */
 declare const process: { env: Record<string, string | undefined> };
@@ -167,7 +168,9 @@ export function linkOpportunita(interpello: DettagliNotifica | null, dashboardUr
       // link malformato → si prosegue con il fallback
     }
   }
-  if (interpello.id) return `${baseUrl(dashboardUrl)}interpello/${encodeURIComponent(interpello.id)}`;
+  // Fallback: scheda INTERNA dell'avviso (`/interpello/<hash_id>`), rotta che
+  // esiste davvero (prima il deep link finiva sul catch-all → HOME).
+  if (interpello.id) return urlSchedaInterpello(baseUrl(dashboardUrl), interpello.id);
   return dashboardUrl;
 }
 
@@ -225,15 +228,15 @@ const CORPO_MESSAGGI: Record<TipoMessaggio, ContenutoMessaggio> = {
   },
   prova1: {
     paragrafi: ['Questa è la <strong>prima opportunità</strong> che abbiamo trovato per te. Te ne <strong>restano 2</strong>.'],
-    cta: { label: 'Guarda l\'opportunità e candidati →', destinazione: 'opportunita' },
+    cta: { label: "Apri l'avviso ufficiale →", destinazione: 'opportunita' },
   },
   prova2: {
     paragrafi: ['Questa è la <strong>seconda opportunità</strong> che abbiamo trovato per te. Te ne <strong>resta 1</strong>.'],
-    cta: { label: 'Guarda l\'opportunità e candidati →', destinazione: 'opportunita' },
+    cta: { label: "Apri l'avviso ufficiale →", destinazione: 'opportunita' },
   },
   prova3: {
     paragrafi: ['Questa è la <strong>terza e ultima opportunità</strong> di prova che abbiamo trovato per te.'],
-    cta: { label: 'Guarda l\'opportunità e candidati →', destinazione: 'opportunita' },
+    cta: { label: "Apri l'avviso ufficiale →", destinazione: 'opportunita' },
   },
   extra: {
     paragrafi: [
@@ -284,7 +287,7 @@ const CORPO_MESSAGGI: Record<TipoMessaggio, ContenutoMessaggio> = {
       'Continuiamo a cercare per te.',
       'A presto!',
     ],
-    cta: { label: 'Guarda l\'opportunità e candidati →', destinazione: 'opportunita' },
+    cta: { label: "Apri l'avviso ufficiale →", destinazione: 'opportunita' },
   },
 };
 /* --------------------------- Template email HTML --------------------------- */
@@ -303,16 +306,24 @@ export function renderEmailHtml(
   let ctaHref = '';
   let ctaLabel = '';
   if (contenuto.cta) {
-    ctaLabel = contenuto.cta.label;
     ctaHref =
       contenuto.cta.destinazione === 'prezzi'
         ? proUrl(dashboardUrl)
         : contenuto.cta.destinazione === 'dashboard'
           ? dashboardUrl
           : urlOpportunita;
+    // Etichetta ONESTA: il bottone descrive DOVE porta il link. Mai "Candidati"
+    // quando la destinazione è un Albo Pretorio o una pagina di avviso.
+    ctaLabel =
+      contenuto.cta.destinazione === 'opportunita'
+        ? `${etichettaFonteLink(ctaHref)} →`
+        : contenuto.cta.label;
   }
 
-  // Blocco opportunità: titolo + dettagli compatti + link diretto all'avviso
+  // NOTA UX: il blocco opportunità contiene UN SOLO link di fonte (il bottone CTA
+  // in fondo, con etichetta onesta). La riga duplicata "Fonte ufficiale verificata
+  // (Albo Pretorio) — apri e candidati" è stata RIMOSSA: portava allo stesso URL
+  // del bottone e prometteva una candidatura che il link non garantisce.
   const bloccoOpportunita =
     interpello && TIPI_CON_OPPORTUNITA.has(tipo)
       ? (() => {
@@ -344,7 +355,6 @@ export function renderEmailHtml(
                       <p style="margin:0; font-size:14px; line-height:1.6; color:#475569;">${dettagli.join(' · ')}</p>
                       ${scadenzaRiga}
                       <p style="margin:8px 0 0; font-size:13px; color:#64748b;">📧 Candidature: ${interpello.contactEmail ? `<a href="mailto:${escapeHtml(interpello.contactEmail)}" style="color:#2B6F9E;">${escapeHtml(interpello.contactEmail)}</a>` : 'Email non disponibile'}</p>
-                      <p style="margin:12px 0 0;">${interpello.link ? `<a href="${escapeHtml(interpello.link)}" target="_blank" rel="noopener" style="font-size:14px; font-weight:700; color:#2B6F9E; text-decoration:underline;">🔗 Fonte ufficiale verificata (Albo Pretorio) — apri e candidati →</a>` : ''}</p>
                     </td>
                   </tr>
                 </table>`;

@@ -232,6 +232,8 @@ Supabase DB (pg_cron + trigger):
 | `supabase.ts` | 20 | Client Supabase frontend (anon); `supabase === null` in demo; `isSupabaseConfigurato` |
 | `matchingEngine.ts` | 183 | Matching Radar + utenti compatibili (§5.2); `searchInterpelli` esclude gli scaduti |
 | `scadenza.ts` | ~90 | Helper scadenza (puro): `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `stileScadenza` (semaforo 🟢 lungo / 🟡 vicino / 🔴 imminente) |
+| `alertInterpello.ts` | ~255 | Costruttore dell'**avviso strutturato** (gerarchia obbligatorie/opzionali), `pulisciTitoloAvviso` (via i dump di codici classe) ed **`etichettaFonteLink`/`classificaFonteLink`** (etichetta ONESTA del link: PDF / Albo Pretorio / avviso — mai "Candidati") |
+| `interpelloRouting.ts` | ~55 | Deep link `/interpello/:id` (puro): `eUuid`, `chiaveInterpelloDaParam` (uuid → `id`, hash → `hash_id`), `urlSchedaInterpello` |
 | `resend.ts` | 434 | **Node-only** — email Resend: 8 `TipoMessaggio` (`welcome, prova1, prova2, prova3, extra, recap, welcome_pro, notifica_pro`), SUBJECT, CORPO_MESSAGGI, `TIPI_CON_OPPORTUNITA`, `renderEmailHtml`, `inviaNotificaEmail`, `inviaNotificheInterpello` |
 | `telegram.ts` | ~250 | **Node-only** — messaggi Telegram (stessi tipi), `formattaMessaggioTelegram`, `inviaNotificaTelegram`, `getTelegramBotToken` |
 | `notifier.ts` | 206 | **Node-only** — orchestratore notifiche: per ogni interpello nuovo trova utenti compatibili, RPC `incrementa_notifiche_utente`, sceglie il tipo (`prova1/2/3`, `extra`, `recap` via cron), invia email+Telegram in parallelo, aggiorna flag `notifiche_blocco_inviato`/`step4_inviata_at` |
@@ -298,6 +300,7 @@ Supabase DB (pg_cron + trigger):
 | `ContattiPage.tsx` | Form contatti + info |
 | `NotiziePage.tsx` | Wrapper `NotizieHero`+`NotizieGrid` |
 | `NotizieDettaglioPage.tsx` | Wrapper `NotizieDettaglio` |
+| `InterpelloDettaglioPage.tsx` | Scheda PUBBLICA dell'avviso (`/interpello/:id`): risolve per `id`/`hash_id` (fallback `notices`), gerarchia strutturata, **un solo** bottone verso la fonte con etichetta onesta; stato "non più disponibile" con link al Radar (mai rimbalzo sulla Home) |
 | `AuthCallback.tsx` | Rotta ritorno Google OAuth (scambia code → sessione) |
 | `OnboardingPage.tsx` | Wizard onboarding preferenze + collegamento Telegram |
 | `DashboardPage.tsx` | `DashboardLayout` (tab + `Outlet`) + `DashboardPage` (Radar Scuole: notifiche restanti, abbonamento, crediti, feed, blacklist) |
@@ -1061,6 +1064,7 @@ dall'helper `inviaAlerta` della Edge `telegram-admin-webhook`. Indici su `create
 | `/prezzi`, `/chi-siamo`, `/faq` | PrezziPage🔒 / ChiSiamoPage🔒 / FAQPage | pubblico |
 | `/servizi`, `/servizi/:slug` | ServiziPage / ServizioPage | pubblico |
 | `/notizie`, `/notizie/:id` | NotiziePage / NotizieDettaglioPage | pubblico |
+| `/interpello/:id` | InterpelloDettaglioPage (scheda avviso, atterraggio deep link notifiche) | pubblico |
 | `/contatti` | ContattiPage | pubblico |
 | `/auth/callback` | AuthCallback | OAuth |
 | `/onboarding` | OnboardingPage | RequireAuth |

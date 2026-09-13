@@ -226,4 +226,40 @@ export function pulisciTitoloAvviso(titolo?: string | null, fallback?: string | 
   if (pulito.length < 8 || soloCodiciClasse(pulito)) pulito = fb;
   return pulito || 'Avviso ufficiale';
 }
+/* --------------------- Etichetta ONESTA del link di fonte --------------------- */
+
+/**
+ * Classifica la DESTINAZIONE del link di fonte, così l'etichetta del bottone non
+ * promette ciò che il link non è (mai "Candidati" se porta su un Albo Pretorio).
+ *   · 'pdf'    → documento ufficiale (bando/avviso in PDF)
+ *   · 'albo'   → Albo Pretorio / pubblicazione atti / determine / delibere
+ *   · 'avviso' → pagina di avviso/notizia ufficiale (default)
+ */
+export type DestinazioneFonte = 'pdf' | 'albo' | 'avviso';
+
+export function classificaFonteLink(url?: string | null): DestinazioneFonte {
+  const u = (url ?? '').toLowerCase();
+  if (!u) return 'avviso';
+  if (/\.pdf(?:$|[?#])/.test(u) || /[?&](?:format|ext)=pdf\b/.test(u)) return 'pdf';
+  if (/albo|pretorio|pubblicazion|atti\b|determin|deliber|ordinanz|decret/.test(u)) return 'albo';
+  return 'avviso';
+}
+
+/**
+ * Etichetta CHIARA e veritiera per il link alla fonte originale. Non usare MAI
+ * "Candidati": non sappiamo se la pagina è un modulo di invio domanda.
+ */
+export function etichettaFonteLink(url?: string | null): string {
+  const u = (url ?? '').toLowerCase();
+  if (/\/interpello\//.test(u)) return "Apri la scheda dell'avviso";
+  switch (classificaFonteLink(url)) {
+    case 'pdf':
+      return 'Apri il bando ufficiale (PDF)';
+    case 'albo':
+      return "Apri l'avviso sull'Albo Pretorio";
+    default:
+      return "Apri l'avviso ufficiale";
+  }
+}
+
 

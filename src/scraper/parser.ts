@@ -149,11 +149,70 @@ const RE_EMAIL = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/;
 /** Regex GLOBALE per raccogliere TUTTE le email di un testo. */
 const RE_EMAIL_G = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
 
+/** Entità HTML dei caratteri chiave di un'email (chiocciola, punto, trattino). */
+const ENTITA_EMAIL: [RegExp, string][] = [
+  [/&#0*64;|&#x0*40;|&commat;/gi, '@'],
+  [/&#0*46;|&#x0*2e;|&period;|&dot;/gi, '.'],
+  [/&#0*45;|&#x0*2d;/gi, '-'],
+  [/&#0*95;|&#x0*5f;/gi, '_'],
+];
+
+/**
+ * De-offusca gli indirizzi tipici delle TABELLE e delle pagine scolastiche:
+ *   "segreteria [at] scuola.edu.it", "protocollo (at) scuola (dot) it",
+ *   "info at scuola dot it", "nome &#64; scuola &#46; it", "&commat;".
+ * Le varianti con spazi sono applicate SOLO quando il contesto è già di tipo
+ * email (un token prima e un dominio/TLD dopo), per non toccare la prosa
+ * italiana ("punto di vista", "at" inglese…).
+ */
+export function deoffuscaEmail(testo?: string | null): string {
+  let t = testo ?? '';
+  for (const [re, chr] of ENTITA_EMAIL) t = t.replace(re, chr);
+  // Simboli tra parentesi/quadre, con eventuali SPAZI attorno (" [at] ", " (dot) ").
+  t = t.replace(/\s*[[({]\s*(?:at|chiocciola|at-sign)\s*[\])}]\s*/gi, '@');
+  t = t.replace(/\s*[[({]\s*(?:dot|punto)\s*[\])}]\s*/gi, '.');
+  // Varianti testuali: prima "dot/punto" (forma il dominio), poi "at/chiocciola".
+  // Servono un token prima e un TLD/dominio dopo → la prosa italiana resta intatta.
+  // Il ciclo copre le CATENE ("scuola dot edu dot it").
+  for (let i = 0; i < 4; i += 1) {
+    const prima = t;
+    t = t.replace(/\b([a-z0-9._%+-]+)\s+(?:dot|punto)\s+([a-z]{2,})\b/gi, '$1.$2');
+    if (t === prima) break;
+  }
+  t = t.replace(/\b([a-z0-9._%+-]+)\s+(?:at|chiocciola)\s+([a-z0-9-]+(?:\.[a-z]{2,})+)\b/gi, '$1@$2');
+  return t;
+}
+
+/**
+ * TLD "primari" usati dalle fonti scolastiche. Servono a riparare gli indirizzi
+ * in cui una parola successiva resta INCOLLATA al dominio perché nell'HTML il
+ * testo era spezzato (es. `emailusp.mc@istruzione.it` + "posta" →
+ * `…@istruzione.itposta`). Si tronca SOLO verso questi TLD: nel dubbio l'indirizzo
+ * resta invariato (non inventiamo domini).
+ */
+const TLD_PRIMARI = ['com', 'edu', 'gov', 'org', 'net', 'it', 'eu'];
+
+/** Ripara il TLD quando una parola è rimasta incollata al dominio. */
+export function normalizzaTldEmail(email: string): string {
+  const e = (email ?? '').trim().toLowerCase();
+  const at = e.lastIndexOf('@');
+  if (at < 1) return e;
+  const dominio = e.slice(at + 1);
+  const parti = dominio.split('.');
+  if (parti.length < 2) return e;
+  const ultimo = parti[parti.length - 1] ?? '';
+  if (TLD_PRIMARI.includes(ultimo)) return e;
+  const tld = TLD_PRIMARI.find((t) => ultimo.length > t.length && ultimo.startsWith(t));
+  if (!tld) return e; // TLD sconosciuto: nessuna modifica
+  parti[parti.length - 1] = tld;
+  return `${e.slice(0, at + 1)}${parti.join('.')}`;
+}
+
 /** Tutti gli indirizzi email di un testo (univoci, minuscoli, senza punteggiatura finale). */
 export function estraiEmails(testo?: string | null): string[] {
   const unici = new Set<string>();
-  for (const m of (testo ?? '').matchAll(RE_EMAIL_G)) {
-    const email = m[0].replace(/[.,;:]+$/, '').toLowerCase();
+  for (const m of deoffuscaEmail(testo).matchAll(RE_EMAIL_G)) {
+    const email = normalizzaTldEmail(m[0].replace(/[.,;:]+$/, ''));
     if (email.includes('@')) unici.add(email);
   }
   return [...unici];

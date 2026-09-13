@@ -30,6 +30,7 @@ import {
   estraiDataPubblicazione,
   estraiDataScadenza,
   estraiEmails,
+  deoffuscaEmail,
   estraiProvincia,
   punteggioEmailScuola,
   rilevaCategoriaAvviso,
@@ -394,7 +395,7 @@ async function arricchisciScadenze(avvisi: AvvisoRilevato[], max = 20): Promise<
   for (const a of senzaScadenza.slice(0, max)) {
     try {
       const html = await scaricaPagina(a.link as string);
-      const testo = cheerio.load(html).text().replace(/\s+/g, ' ');
+      const testo = testoLeggibile(html);
       const scad = estraiDataScadenza(testo);
       if (scad) {
         a.expirationDate = scad;
@@ -412,12 +413,27 @@ async function arricchisciScadenze(avvisi: AvvisoRilevato[], max = 20): Promise<
 
 /* ------------------------- Arricchimento contatti ------------------------- */
 
-/** Email estratte da un HTML: testo della pagina + link `mailto:`. */
+/**
+ * Testo della pagina con SEPARATORI tra i blocchi HTML. Senza separatori cheerio
+ * incolla le parole di tag adiacenti ("…@istruzione.it" + "posta" →
+ * "…@istruzione.itposta", oppure "15/09/2026Scadenza"). Serve per email e scadenze.
+ */
+function testoLeggibile(html: string): string {
+  const separato = html
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<\/(?:p|div|li|tr|td|th|h[1-6]|section|article|table|ul|ol|blockquote|span|a)>/gi, ' ');
+  return cheerio.load(separato).text().replace(/\s+/g, ' ');
+}
+
+/** Email estratte da un HTML: testo della pagina (anche tabelle) + link `mailto:`. */
 function emailDaHtml(html: string): string[] {
+  const emails = new Set<string>(estraiEmails(testoLeggibile(html)));
   const $ = cheerio.load(html);
-  const emails = new Set<string>(estraiEmails($.text()));
   $('a[href^="mailto:"]').each((_, a) => {
-    const href = (($(a).attr('href') ?? '').replace(/^mailto:/i, '').split(/[?;,]/)[0] ?? '')
+    // De-offusca anche l'href: alcune fonti scrivono `mailto:` con entità HTML.
+    const href = (
+      deoffuscaEmail($(a).attr('href') ?? '').replace(/^mailto:/i, '').split(/[?;,]/)[0] ?? ''
+    )
       .trim()
       .toLowerCase();
     if (href.includes('@')) emails.add(href);

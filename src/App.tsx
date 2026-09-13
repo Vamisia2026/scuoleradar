@@ -30,6 +30,7 @@ import { InvitaPage } from '@/pages/InvitaPage';
 import { PrezziPage } from '@/pages/PrezziPage';
 import { NotiziePage } from '@/pages/NotiziePage';
 import { NotizieDettaglioPage } from '@/pages/NotizieDettaglioPage';
+import { InterpelloDettaglioPage } from '@/pages/InterpelloDettaglioPage';
 import { ChiSiamoPage } from '@/pages/ChiSiamoPage';
 import { FAQPage } from '@/pages/FAQPage';
 import { ServiziPage } from '@/pages/ServiziPage';
@@ -175,6 +176,10 @@ export default function App() {
             <Route path="/servizi/:slug" element={<ServizioPage />} />
             <Route path="/notizie" element={<NotiziePage />} />
             <Route path="/notizie/:id" element={<NotizieDettaglioPage />} />
+            {/* Scheda pubblica di un avviso: atterraggio dei DEEP LINK delle
+                notifiche quando l'avviso non ha una fonte esterna. Prima di questa
+                rotta il catch-all "path=*" rimandava l'utente sulla HOME. */}
+            <Route path="/interpello/:id" element={<InterpelloDettaglioPage />} />
             <Route path="/contatti" element={<ContattiPage />} />
             {/* La Modulistica porta DIRETTAMENTE alla dashboard completa: la
                 vecchia landing di anteprima /moduli è stata rimossa (redirect). */}

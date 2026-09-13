@@ -16,7 +16,22 @@ const PREZZI_URL = 'https://scuoleradar.it/prezzi';
 const FIRMA = 'I tuoi colleghi di <b>Scuole Radar</b>';
 const BLOG_URL = 'https://scuoleradar.it/notizie';
 /** Disclaimer legale/UX per tutte le email automatiche: la casella non è monitorata. */
-const DISCLAIMER_EMAIL = `<p style="margin:16px 0 0; font-size:12px; color:#94a3b8; line-height:1.5;">⚠️ Questa è un'email automatica generata dal sistema. Ti preghiamo di non rispondere a questo messaggio perché la casella non viene letta. Se hai bisogno di aiuto o vuoi segnalarci qualcosa, usa il nostro <a href="https://scuoleradar.it/contatti" style="color:#94a3b8;">Form di Contatto</a> (https://scuoleradar.it/contatti).</p>`;
+const DISCLAIMER_EMAIL = `<p style="margin:16px 0 0; font-size:12px; color:#94a3b8; line-height:1.5;">⚠️ Ti preghiamo di non rispondere a questo messaggio perché questa casella serve solo per inviare le segnalazioni e non è monitorata.</p>`;
+
+/**
+ * Etichetta ONESTA del link di fonte: descrive DOVE porta il link, senza mai
+ * promettere "Candidati" quando la destinazione è un Albo Pretorio o un avviso.
+ */
+function etichettaFonteLink(url?: string): string {
+  const u = (url ?? '').toLowerCase();
+  if (!u) return 'Apri la fonte ufficiale';
+  if (/\/interpello\//.test(u)) return "Apri la scheda dell'avviso";
+  if (/\.pdf(?:$|[?#])/.test(u)) return 'Apri il bando ufficiale (PDF)';
+  if (/albo|pretorio|pubblicazion|atti\b|determin|deliber/.test(u)) {
+    return "Apri l'avviso sull'Albo Pretorio";
+  }
+  return "Apri l'avviso ufficiale";
+}
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -48,7 +63,7 @@ function conOpportunita(o: Opportunita, testo: string): string {
   if (o.provincia) dettagli.push(`📍 ${escapeHtml(o.provincia)}`);
   if (o.scadenza) dettagli.push(`⏳ Scadenza: ${escapeHtml(o.scadenza)}`);
   if (dettagli.length) t += `<br/>${dettagli.join(' · ')}`;
-  if (o.link) t += `<br/><a href="${escapeHtml(o.link)}">🔗 Fonte ufficiale verificata — apri e candidati</a>`;
+  if (o.link) t += `<br/><a href="${escapeHtml(o.link)}">🔗 ${escapeHtml(etichettaFonteLink(o.link))}</a>`;
   return t;
 }
 function conOpportunitaTg(o: Opportunita, testo: string): string {
@@ -58,7 +73,7 @@ function conOpportunitaTg(o: Opportunita, testo: string): string {
   if (o.classe) t += `\n📚 ${escapeHtml(o.classe)}`;
   if (o.provincia) t += `\n📍 ${escapeHtml(o.provincia)}`;
   if (o.scadenza) t += `\n⏳ Scadenza: ${escapeHtml(o.scadenza)}`;
-  if (o.link) t += `\n🔗 <a href="${escapeHtml(o.link)}">Fonte ufficiale verificata — apri e candidati</a>`;
+  if (o.link) t += `\n🔗 <a href="${escapeHtml(o.link)}">${escapeHtml(etichettaFonteLink(o.link))}</a>`;
   return t;
 }
 
