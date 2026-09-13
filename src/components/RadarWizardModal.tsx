@@ -13,6 +13,12 @@ import { ordiniScuola, materie, type OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import { pianoLimits, limitaSelezione } from '@/lib/planLimits';
+import {
+  STORAGE_KEY_RADAR_WIZARD_STEP,
+  impostaPassoRadar,
+  messaggioCampiMancanti,
+  validaConfigRadar,
+} from '@/lib/radarValidation';
 
 /** Alias codici di laurea (LM) → classi di concorso correlate, per la ricerca CDC. */
 const ALIAS_LAUREA_CLASSI: Record<string, string[]> = {
@@ -41,13 +47,7 @@ const TITOLI_STEP = [
   'Canali di Notifica',
 ];
 
-/**
- * Chiave localStorage del passo corrente del wizard Radar: permette di
- * riaprire il modal ESATTAMENTE dal passo in cui ci si era fermati
- * (persistito a ogni transizione "Avanti/Indietro").
- */
-const STORAGE_KEY_RADAR_WIZARD_STEP = 'sr_radar_wizard_step';
-
+// La chiave del passo wizard è condivisa in `lib/radarValidation.ts`.
 // Limiti dinamici per piano (Base 1 provincia / 2 classi · PRO 4/4): vedi lib/planLimits.ts.
 
 /**
@@ -75,6 +75,8 @@ export function RadarWizardModal() {
   const [telegramUsername, setTelegramUsername] = useState('');
   const [emailNotifica, setEmailNotifica] = useState('');
   const [classiWarning, setClassiWarning] = useState(false);
+  /** Messaggio di blocco: campi obbligatori mancanti all'attivazione. */
+  const [erroreAttivazione, setErroreAttivazione] = useState('');
 
   // Limiti del piano corrente (Base: 1 provincia / 2 classi · PRO: 4/4) —
   // fonte condivisa in lib/planLimits.ts (uso anche per i banner di upsell).
@@ -285,6 +287,7 @@ export function RadarWizardModal() {
    */
   const vaiAlPasso = (nuovoPasso: number) => {
     if (nuovoPasso < 1 || nuovoPasso > 4) return;
+    setErroreAttivazione('');
     persistiDraft(bozzaPreferenze());
     try {
       localStorage.setItem(STORAGE_KEY_RADAR_WIZARD_STEP, String(nuovoPasso));
@@ -296,6 +299,26 @@ export function RadarWizardModal() {
 
   /** Salva preferenze + canali notifica, attiva radar_attivo=true e mostra il completamento. */
   const handleFinish = async (): Promise<void> => {
+    // GUARDIA DI ATTIVAZIONE: il Radar NON si attiva con campi obbligatori
+    // mancanti. Si mostra un avviso puntuale e si riporta l'utente al primo
+    // passo incompleto (Ordini → Province → Classi/Materie).
+    const validazione = validaConfigRadar({
+      ordini,
+      provinceCodici,
+      classiCodici,
+      materieId,
+      materieCustom,
+    });
+    if (!validazione.valido) {
+      setErroreAttivazione(messaggioCampiMancanti(validazione.mancanti));
+      setClassiWarning(validazione.mancanti.includes('Classi di concorso o materie'));
+      setProvinceWarning(validazione.mancanti.includes('Province'));
+      impostaPassoRadar(validazione.primoPasso);
+      setStep(validazione.primoPasso);
+      return;
+    }
+    setErroreAttivazione('');
+
     const preferenzeFinali = {
       ordini,
       classiCodici: limitaSelezione(classiCodici, maxClassiConcorso),
@@ -853,6 +876,14 @@ export function RadarWizardModal() {
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Blocco attivazione: campi obbligatori mancanti (warning chiaro e puntuale). */}
+          {erroreAttivazione && (
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{erroreAttivazione}</span>
             </div>
           )}
 

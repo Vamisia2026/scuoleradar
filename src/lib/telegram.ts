@@ -20,7 +20,7 @@ import {
   type TipoMessaggio,
 } from './resend';
 import { province } from '../data/province';
-import { etichettaClasseMateria, materiaClasse } from '../data/classiConcorso';
+import { etichettaClasseMateria } from '../data/classiConcorso';
 
 /** Interfaccia per l'ambiente (evita la dipendenza da @types/node nel frontend). */
 declare const process: { env: Record<string, string | undefined> };
@@ -675,8 +675,12 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
     titolo.match(RE_CLASSE_CONCORSO)?.[0] ||
     ''
   ).toUpperCase();
-  const materiaAvviso = codiceClasse ? materiaClasse(codiceClasse, interpello.materia) : null;
-  if (materiaAvviso) dettagli.push(`📚 Materia: <b>${escapeHtml(materiaAvviso)}</b>`);
+  // Etichetta leggibile: CODICE + nome ufficiale della materia/classe (es.
+  // "A-41 - Scienze e tecnologie informatiche"), mai il solo codice.
+  const materiaAvviso = codiceClasse
+    ? etichettaClasseMateria(codiceClasse, interpello.materia)
+    : null;
+  if (materiaAvviso) dettagli.push(`📚 Classe/Materia: <b>${escapeHtml(materiaAvviso)}</b>`);
   dettagli.push(
     `📅 Scadenza: <b>${
       interpello.expirationDate ? escapeHtml(formatDataScadenza(interpello.expirationDate)) : 'Immediata'

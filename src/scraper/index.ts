@@ -269,6 +269,15 @@ export function parsePostInterpelli(
     });
     if (candidati.length === 0) return;
 
+    // Email CANDIDATURA nel blocco: i `mailto:` sono nell'attributo href (non nel
+    // testo visibile) → vanno estratti esplicitamente e passati al parser, così
+    // non si perde il contatto al momento della pubblicazione/notifica.
+    const emailBlocco: string[] = [];
+    $blocco.find('a[href^="mailto:"]').each((_, a) => {
+      const h = (($(a).attr('href') ?? '').replace(/^mailto:/i, '').split(/[?;,]/)[0] ?? '').trim();
+      if (h.includes('@')) emailBlocco.push(h);
+    });
+
     const href = candidati[0].href;
     const testoLink = candidati[0].testo;
 
@@ -294,7 +303,7 @@ export function parsePostInterpelli(
         linkCandidati: candidati.map((c) => c.href),
         provincia: codiceCitta ?? provincia,
         source,
-        corpo: `${cittaCorrente} ${testoBlocco}`,
+        corpo: `${cittaCorrente} ${testoBlocco} ${emailBlocco.join(' ')}`,
         dataPubblicazione,
       }),
     );
@@ -553,12 +562,20 @@ async function arricchisciContatti(
       }
     }
 
-    // Ultima ratio: convenzione MIM sul codice meccanografico.
-    if (usaCodice && !migliore && a.schoolCode) {
+    // Ultima ratio / RINFORZO: convenzione MIM sul codice meccanografico.
+    // Si usa l'email derivata sia quando manca un contatto, sia quando quello
+    // trovato è DEBOLE (es. dominio personale) e la derivata è più pertinente:
+    // così si evita "Email non disponibile" (o un contatto sbagliato) quando
+    // l'istituto ha una casella istituzionale desumibile dal codice.
+    if (usaCodice && a.schoolCode && (!migliore || migliorPunteggio < SOGLIA_EMAIL_AFFIDABILE)) {
       const derivata = emailIstituzionaleDaCodice(a.schoolCode);
       if (derivata) {
-        migliore = derivata;
-        daCodice += 1;
+        const p = punteggioEmailScuola(derivata, ctx);
+        if (!migliore || p > migliorPunteggio) {
+          migliore = derivata;
+          migliorPunteggio = p;
+          daCodice += 1;
+        }
       }
     }
 
@@ -858,7 +875,7 @@ async function main() {
   // allegati, altri link) + ultima ratio dal codice meccanografico (MIM).
   await arricchisciContatti(
     trovati,
-    Number(env.SCRAPER_CONTATTI_MAX ?? 20),
+    Number(env.SCRAPER_CONTATTI_MAX ?? 60),
     env.SCRAPER_EMAIL_DA_CODICE !== '0',
   );
 

@@ -15,33 +15,57 @@ import { useApp, type Preferenze } from '@/contexts/AppContext';
 import { useToast } from '@/components/Toast';
 import { pianoLimits } from '@/lib/planLimits';
 import {
+  impostaPassoRadar,
+  messaggioCampiMancanti,
+  validaConfigRadar,
+  type EsitoRadarConfig,
+} from '@/lib/radarValidation';
+import {
   dataScadenzaBreve,
   etichettaScadenzaAbbonamento,
   inFinestraPreavviso,
 } from '@/lib/abbonamento';
 import { track } from '@/lib/analytics';
 
-/** Criteri minimi: 1 provincia + 1 classe/materia (stato locale, poi DB). */
-async function haCriteriMinimi(preferenze: Preferenze, userId?: string | null): Promise<boolean> {
-  const provLocal = preferenze.provinceCodici.length;
-  const classiLocal =
-    preferenze.classiCodici.length + preferenze.materieId.length + preferenze.materieCustom.length;
-  if (provLocal > 0 && classiLocal > 0) return true;
-  if (!supabase || !userId) return provLocal > 0 && classiLocal > 0;
+/** Primo valore non vuoto tra quello del DB e quello locale. */
+function nonVuoto<T>(dbValore: T[] | null | undefined, locale: T[]): T[] {
+  return Array.isArray(dbValore) && dbValore.length > 0 ? dbValore : locale;
+}
+
+/**
+ * Valuta i campi OBBLIGATORI del Radar (Ordini + Province + Classi/Materie).
+ * Usa prima lo stato locale (wizard in corso) e, se incompleto, il profilo
+ * salvato su DB (evita falsi negativi prima dell'idratazione). Restituisce le
+ * sezioni mancanti per un avviso puntuale e il passo del wizard da completare.
+ */
+async function valutaConfigurazioneRadar(
+  preferenze: Preferenze,
+  userId?: string | null,
+): Promise<EsitoRadarConfig> {
+  const locale = validaConfigRadar({
+    ordini: preferenze.ordini,
+    provinceCodici: preferenze.provinceCodici,
+    classiCodici: preferenze.classiCodici,
+    materieId: preferenze.materieId,
+    materieCustom: preferenze.materieCustom,
+  });
+  if (locale.valido) return locale;
+  if (!supabase || !userId) return locale;
 
   const { data } = await supabase
     .from('profiles')
-    .select('province_interesse, province_attive, classi_concorso, materie_id')
+    .select('ordini_scuola, province_interesse, province_attive, classi_concorso, materie_id')
     .eq('id', userId)
     .maybeSingle();
-  if (!data) return false;
-  const prov =
-    (Array.isArray(data.province_interesse) ? data.province_interesse.length : 0) +
-    (Array.isArray(data.province_attive) ? data.province_attive.length : 0);
-  const classi =
-    (Array.isArray(data.classi_concorso) ? data.classi_concorso.length : 0) +
-    (Array.isArray(data.materie_id) ? data.materie_id.length : 0);
-  return prov > 0 && classi > 0;
+  if (!data) return locale;
+
+  return validaConfigRadar({
+    ordini: nonVuoto(data.ordini_scuola, preferenze.ordini),
+    provinceCodici: nonVuoto(data.province_interesse, nonVuoto(data.province_attive, preferenze.provinceCodici)),
+    classiCodici: nonVuoto(data.classi_concorso, preferenze.classiCodici),
+    materieId: nonVuoto(data.materie_id, preferenze.materieId),
+    materieCustom: preferenze.materieCustom,
+  });
 }
 
 interface RadarStatusToggleProps {
@@ -59,7 +83,7 @@ export function RadarStatusToggle({ titolo = 'Stato del Radar Scuole' }: RadarSt
     preferenze,
     supabaseUserId,
     radarWizardOpen,
-    openRadarSetup,
+    openRadarWizard,
     piano,
     hasProAccess,
     trialAttivo,
@@ -78,12 +102,13 @@ export function RadarStatusToggle({ titolo = 'Stato del Radar Scuole' }: RadarSt
     if (radarWizardOpen || !revertInSospeso.current) return;
     const timeout = setTimeout(() => {
       revertInSospeso.current = false;
-      void haCriteriMinimi(preferenze, supabaseUserId).then((ok) => {
-        if (ok) return; // criteri salvati dal wizard → Radar attivo
+      void valutaConfigurazioneRadar(preferenze, supabaseUserId).then((v) => {
+        if (v.valido) return; // criteri salvati dal wizard → Radar attivo
         if (radarAttivo) void aggiornaRadarAttivo(false);
         mostraToast(
           'errore',
-          'Non hai configurato il tuo Radar: il servizio rimane disattivato.',
+          messaggioCampiMancanti(v.mancanti) ||
+            'Non hai configurato il tuo Radar: il servizio rimane disattivato.',
         );
       });
     }, 600);
@@ -107,24 +132,37 @@ export function RadarStatusToggle({ titolo = 'Stato del Radar Scuole' }: RadarSt
         track('radar_status_toggled', { status: 'paused' });
         return;
       }
-      // SAFEGUARD: prima di attivare verifico i criteri minimi (DB come fonte).
-      const ok = await haCriteriMinimi(preferenze, supabaseUserId);
-      if (ok) {
+      // SAFEGUARD: il Radar si attiva SOLO con tutti i campi obbligatori
+      // (Ordini + Province + Classi/Materie), stato locale + DB come fonte.
+      const valutazione = await valutaConfigurazioneRadar(preferenze, supabaseUserId);
+      if (valutazione.valido) {
         await aggiornaRadarAttivo(true);
         track('radar_status_toggled', { status: 'active' });
         return;
       }
-      // Configurazione mancante → apre il setup Radar; se chiuso senza salvare,
-      // l'effect sopra riporta il toggle su OFF con il toast.
+      // Campi mancanti: BLOCCO + avviso puntuale + wizard sul primo passo da completare.
+      // Se il wizard viene chiuso senza salvare, l'effect sopra riporta il toggle su OFF.
+      mostraToast('errore', messaggioCampiMancanti(valutazione.mancanti));
+      impostaPassoRadar(valutazione.primoPasso);
       revertInSospeso.current = true;
-      openRadarSetup();
+      openRadarWizard();
     } finally {
       setInCorso(false);
     }
   };
 
   const provinceCount = preferenze.provinceCodici.length;
-  const classiCount = preferenze.classiCodici.length + preferenze.materieId.length;
+  const classiCount =
+    preferenze.classiCodici.length + preferenze.materieId.length + preferenze.materieCustom.length;
+  const ordiniCount = preferenze.ordini.length;
+  /** Sezioni obbligatorie ancora mancanti (messaggio puntuale in card). */
+  const mancantiRadar = validaConfigRadar({
+    ordini: preferenze.ordini,
+    provinceCodici: preferenze.provinceCodici,
+    classiCodici: preferenze.classiCodici,
+    materieId: preferenze.materieId,
+    materieCustom: preferenze.materieCustom,
+  }).mancanti;
 
   /** Livello account mostrato nella barra di stato (Base / PRO / Trial PRO / Free Forever). */
   const etichettaTier =
@@ -183,6 +221,11 @@ export function RadarStatusToggle({ titolo = 'Stato del Radar Scuole' }: RadarSt
               <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">
                 🕔 {notificaPiano.etichettaNotifiche}
               </span>
+              {ordiniCount > 0 && (
+                <span className="rounded-full bg-primary-50 px-2.5 py-1 text-[10px] font-semibold text-primary-600">
+                  {ordiniCount} {ordiniCount === 1 ? 'ordine di scuola' : 'ordini di scuola'}
+                </span>
+              )}
               {provinceCount > 0 && (
                 <span className="rounded-full bg-primary-50 px-2.5 py-1 text-[10px] font-semibold text-primary-600">
                   {provinceCount} {provinceCount === 1 ? 'provincia' : 'province'}
@@ -194,10 +237,8 @@ export function RadarStatusToggle({ titolo = 'Stato del Radar Scuole' }: RadarSt
                 </span>
               )}
             </div>
-            {(provinceCount === 0 || classiCount === 0) && (
-              <p className="mt-1 text-[11px] text-error-600">
-                Configura almeno 1 provincia e 1 classe di concorso per attivare il Radar.
-              </p>
+            {mancantiRadar.length > 0 && (
+              <p className="mt-1 text-[11px] text-error-600">{messaggioCampiMancanti(mancantiRadar)}</p>
             )}
             {/* Policy trial PRO 1 mese: promemoria di rinnovo nella finestra 3–5
                 giorni, con gli STESSI numeri del cron DB `rinnovo-preavvisi-3-5g`

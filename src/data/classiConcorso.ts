@@ -846,12 +846,41 @@ export function materiaClasse(
   return nomi.length > 0 ? nomi.join(', ') : classe.denominazione || null;
 }
 
-/** Etichetta compatta `codice · materia` (o solo il codice). */
+/**
+ * Etichette leggibili per i profili ATA: le fonti citano spesso solo
+ * l'abbreviazione, ma post/notifiche non devono MAI mostrare il solo codice.
+ */
+const ATA_ALIAS: Record<string, string> = {
+  AA: 'Assistente amministrativo',
+  AT: 'Assistente tecnico',
+  CS: 'Collaboratore scolastico',
+  DSGA: 'Direttore dei servizi generali e amministrativi',
+};
+
+
+/**
+ * Etichetta leggibile `CODICE - Nome materia/classe` da usare nei post pubblici,
+ * nelle notifiche (Telegram/email) e nelle schede. Esempio:
+ *   `A-41 - Scienze e tecnologie informatiche`
+ * Nome = denominazione UFFICIALE della classe di concorso (dizionario). Se
+ * l'avviso specifica una materia diversa (es. supplenza su singola disciplina),
+ * la si aggiunge tra parentesi. Se il codice è ignoto si ripiega sull'elenco
+ * materie (`materiaClasse`), così non si mostra MAI il solo codice.
+ */
 export function etichettaClasseMateria(
   codice?: string | null,
   materiaEsplicita?: string | null,
 ): string {
   const code = (codice ?? '').trim();
-  const materia = materiaClasse(code, materiaEsplicita);
-  return materia ? `${code} · ${materia}` : code;
+  const esplicita = (materiaEsplicita ?? '').trim();
+  const ufficiale =
+    classeByCodice(code)?.denominazione?.trim() || ATA_ALIAS[code.toUpperCase()] || '';
+  const fallback = ufficiale ? '' : (materiaClasse(code, '') ?? '');
+
+  let nome = ufficiale || fallback;
+  if (esplicita && esplicita.toLowerCase() !== nome.toLowerCase()) {
+    nome = nome ? `${nome} (${esplicita})` : esplicita;
+  }
+  if (!code) return nome;
+  return nome ? `${code} - ${nome}` : code;
 }

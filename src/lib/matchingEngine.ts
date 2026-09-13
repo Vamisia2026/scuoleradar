@@ -98,6 +98,24 @@ export function mapInterpelloDBToInterpello(r: InterpelloDB): Interpello {
 }
 
 /**
+ * Varianti di un codice classe per la query DB. Il catalogo usa `A-26`, ma le
+ * fonti ufficiali salvano spesso `A-026` (o `A26`): la query `.overlaps` deve
+ * intercettare TUTTI i formati, altrimenti il feed dell'utente risulta VUOTO.
+ */
+export function variantiClasseCodice(codice: string): string[] {
+  const c = (codice ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!c) return [];
+  const m = c.match(/^([A-Z]{1,2})-?0*(\d{1,3})$/);
+  if (!m) return [c];
+  const prefisso = m[1];
+  const numero = Number(m[2]);
+  if (Number.isNaN(numero)) return [c];
+  const d2 = String(numero).padStart(2, '0');
+  const d3 = String(numero).padStart(3, '0');
+  return [...new Set([`${prefisso}-${numero}`, `${prefisso}-${d2}`, `${prefisso}-${d3}`, `${prefisso}${d2}`, `${prefisso}${d3}`])];
+}
+
+/**
  * Query la tabella `interpelli` applicando i filtri del Matching Engine.
  * Restituisce `null` se Supabase non è configurato o in caso di errore
  * (il chiamante decide il fallback), altrimenti l'array di righe.
@@ -112,11 +130,16 @@ export async function searchInterpelli(
   let query = client.from('interpelli').select('*');
 
   if (provinceFiltro && provinceFiltro.length > 0) {
-    query = query.in('province', provinceFiltro);
+    // Supporto MULTI-provincia (fino a 4 con PRO): filtro `in` su tutti i codici,
+    // normalizzati in maiuscolo per non perdere match per differenze di formato.
+    const province = [...new Set(provinceFiltro.map((p) => (p ?? '').trim().toUpperCase()).filter(Boolean))];
+    if (province.length > 0) query = query.in('province', province);
   }
   if (classi && classi.length > 0) {
-    // overlaps = almeno una classe in comune tra class_codes (DB) e le classi del profilo
-    query = query.overlaps('class_codes', classi);
+    // overlaps = almeno una classe in comune tra class_codes (DB) e le classi del
+    // profilo, confrontando TUTTE le varianti di formato (A-26 ≡ A-026 ≡ A26).
+    const varianti = [...new Set(classi.flatMap(variantiClasseCodice))];
+    if (varianti.length > 0) query = query.overlaps('class_codes', varianti);
   }
 
   // Esclude gli interpelli SCADUTI dalle liste attive pubbliche

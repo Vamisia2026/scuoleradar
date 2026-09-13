@@ -3,7 +3,7 @@ import { Clock, MapPin, GraduationCap, ArrowRight, AlertTriangle, BadgeCheck, Be
 import type { Interpello } from '@/data/interpelli';
 import { Modal } from './Modal';
 import { useApp, LIMITE_NOTIFICHE_PROVA } from '@/contexts/AppContext';
-import { classeByCodice, etichettaClasseMateria, materiaClasse } from '@/data/classiConcorso';
+import { etichettaClasseMateria } from '@/data/classiConcorso';
 import { giorniRimanenti, stileScadenza } from '@/lib/scadenza';
 
 export function InterpelloCard({ interpello }: { interpello: Interpello }) {
@@ -12,9 +12,8 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
   const giorni = giorniRimanenti(interpello.dataScadenza);
   const stile = stileScadenza(giorni);
   const inScadenza = stile.livello === 'imminente' || stile.livello === 'scaduto';
-  const classe = classeByCodice(interpello.classeCodice);
-  // Materia ufficiale accanto al codice (es. "A-22 · Lingua inglese, …").
-  const materia = materiaClasse(interpello.classeCodice, interpello.materia);
+  // Etichetta leggibile: CODICE + nome ufficiale della materia/classe.
+  const etichettaClasse = etichettaClasseMateria(interpello.classeCodice, interpello.materia);
   const giaNotificato = interpelliNotificati.includes(interpello.id);
   const notificheRimanenti = Math.max(LIMITE_NOTIFICHE_PROVA - notificheUsate, 0);
   const isPreferita = preferenze.favoriteSchools.some((s) =>
@@ -57,7 +56,7 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
             {interpello.provinciaNome}
           </span>
           <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-600">
-            {etichettaClasseMateria(interpello.classeCodice, interpello.materia)}
+            {etichettaClasse}
           </span>
           <span
             className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold ${stile.className}`}
@@ -70,10 +69,6 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
             <span className="ml-1 inline-flex items-center gap-0.5 font-bold">{stile.label}</span>
           </span>
         </div>
-
-        {classe && classe.denominazione !== materia && (
-          <p className="mt-3 text-xs text-primary-500">{classe.denominazione}</p>
-        )}
 
         <button
           onClick={handleVediDettaglio}
@@ -92,7 +87,7 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
               {interpello.provinciaNome}
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-600">
-              {etichettaClasseMateria(interpello.classeCodice, interpello.materia)}
+              {etichettaClasse}
             </span>
             {interpello.compatibilita === 100 && (
               <span className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-3 py-1 text-sm font-semibold text-accent-700">

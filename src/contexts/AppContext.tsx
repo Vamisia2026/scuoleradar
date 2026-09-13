@@ -4,10 +4,10 @@ import { supabase } from '@/lib/supabase';
 import { traduciErroreAuthSupabase } from '@/lib/authErrors';
 import { interpelli, type Interpello } from '@/data/interpelli';
 import { getModuliScaricati } from '@/data/moduli';
-import { getFeedInterpelli } from '@/lib/matchingEngine';
+import { getFeedInterpelli, normalizzaClasse } from '@/lib/matchingEngine';
 import { eInterpelloAttivo } from '@/lib/scadenza';
 import type { OrdineScuola } from '@/data/ordiniMaterie';
-import { classiConcorso, classeByCodice } from '@/data/classiConcorso';
+import { classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import { STORAGE_KEY_INTENDED_PLAN, STORAGE_KEY_INTENDED_PLAN_DATA, type PianoId } from '@/lib/pricing';
 import { identify, track } from '@/lib/analytics';
@@ -1024,16 +1024,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const scadenza = new Date();
     scadenza.setDate(scadenza.getDate() + 30); // prova PRO 30 giorni esatti
     const iso = scadenza.toISOString();
+    // UPSERT (non `update`): garantisce la riga `profiles` anche quando il trigger
+    // su `auth.users` non l'ha ancora creata. Con `update` l'assenza della riga
+    // non produce errore ma NON attiva la prova → il trial "si blocca".
     const { error } = await supabase
       .from('profiles')
-      .update({
-        piano: 'pro',
-        abbonamento_scade_il: iso,
-        subscription_tier: 'pro_annuale',
-        subscription_status: 'trialing',
-        current_period_end: iso,
-      })
-      .eq('id', sess.user.id);
+      .upsert(
+        {
+          id: sess.user.id,
+          email: sess.user.email ?? undefined,
+          piano: 'pro',
+          abbonamento_scade_il: iso,
+          subscription_tier: 'pro_annuale',
+          subscription_status: 'trialing',
+          current_period_end: iso,
+        },
+        { onConflict: 'id' },
+      );
     if (error) {
       console.warn('[onboarding] attivazione prova PRO 30 giorni fallita:', error.message);
       return;
@@ -1395,8 +1402,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const interpelliFiltrati = useMemo<Interpello[]>(() => {
     if (!preferenze.onboarded) return [];
+    // Normalizzazione classi (A-026 ≡ A-26 ≡ A042): senza di essa il feed
+    // dell'utente può risultare VUOTO pur avendo interpelli compatibili.
+    const classiSelezionateNorm = new Set(preferenze.classiCodici.map(normalizzaClasse));
     const classiSelezionate = preferenze.classiCodici
-      .map((cod) => classiConcorso.find((c) => c.codice === cod))
+      .map((cod) => classeByCodice(cod))
       .filter(Boolean);
     const materieDelleClassi = new Set(classiSelezionate.flatMap((c) => c!.materie));
     const tutteLeMaterie = new Set([
@@ -1408,13 +1418,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         preferenze.provinceCodici.length === 0 || preferenze.provinceCodici.includes(i.provinciaCodice);
       const matchOrdine =
         preferenze.ordini.length === 0 || preferenze.ordini.includes(i.ordine);
-      const classe = classiConcorso.find((c) => c.codice === i.classeCodice);
-      // Match per tutte le classi rilevate (i dati reali di notices hanno class_codes[])
+      const classe = classeByCodice(i.classeCodice);
+      // Match per tutte le classi rilevate (i dati reali di notices hanno class_codes[]),
+      // con confronto NORMALIZZATO dei codici (A-026 ≡ A-26 ≡ A042).
       const matchClasse =
         preferenze.classiCodici.length === 0 ||
-        preferenze.classiCodici.some(
-          (c) => (i.classiCodes?.includes(c) ?? false) || i.classeCodice === c,
-        );
+        (i.classiCodes?.some((c) => classiSelezionateNorm.has(normalizzaClasse(c))) ?? false) ||
+        classiSelezionateNorm.has(normalizzaClasse(i.classeCodice));
       const matchMateria =
         tutteLeMaterie.size === 0 ||
         (classe ? classe.materie.some((m) => tutteLeMaterie.has(m)) : false);
