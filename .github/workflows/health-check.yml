@@ -1,0 +1,55 @@
+# ============================================================
+# Radar Health Check — monitor del dispatch notifiche (Admin bot)
+#
+# - Pianificazione: ogni giorno alle 08:00 UTC.
+# - Trigger manuale: workflow_dispatch.
+# - Esegue `npm run admin:health`: verifica che, a fronte di NUOVI interpelli
+#   scrapati, siano partite le notifiche (email/Telegram) entro la finestra
+#   (default 48h). In caso di anomalia invia un avviso al bot Telegram ADMIN
+#   (`ScuoleRadar Admin`) tramite l'helper `inviaAlertaAdmin`.
+# ============================================================
+name: Radar Health Check
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: radar-health-check
+  cancel-in-progress: false
+
+jobs:
+  health-check:
+    name: Monitor dispatch notifiche Radar
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Installazione dipendenze
+        run: npm ci
+
+      - name: Esecuzione health check (alert su anomalie)
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ADMIN_ALERT_SECRET: ${{ secrets.ADMIN_ALERT_SECRET }}
+          HEALTH_STALE_HOURS: '48'
+          HEALTH_NEWS_STALE_DAYS: '14'
+        run: |
+          if npm run admin:health; then
+            echo "::notice::Radar Health Check OK: dispatch notifiche regolare."
+          else
+            echo "::warning::Radar Health Check: anomalia rilevata (avviso inviato al bot admin)."
+          fi

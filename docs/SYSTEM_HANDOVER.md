@@ -371,6 +371,10 @@ Ordine: `20260822010000_add_school_filters` · `...22020000_create_interpelli` �
 |---|---|
 | `.github/workflows/scraper.yml` | Scraper Interpelli: cron Lun-Ven `0 7,12,15 * * 1-5` + dispatch; secrets SUPABASE_*/RESEND/TELEGRAM; `npm ci` → `scrape:check` → `npm run scrape` |
 | `.github/workflows/scrape-notizie.yml` | Scraper Notizie: cron giornaliero `0 6 * * *` + dispatch; `contents: write`; `npm ci` → `scrape:notizie:check` → `npm run scrape:notizie` → commit dati (`[skip ci]`) se cambiati |
+| `.github/workflows/health-check.yml` | **Radar Health Check** (Admin bot): cron giornaliero `0 8 * * *` + dispatch; `npm run admin:health` → rileva *dispatch Radar fermo* (nuovi interpelli senza notifiche), *scraper fermo/in errore* e *Notizie ferme*; invia alert a `ADMIN_TELEGRAM_ID` via `inviaAlertaAdmin` (`ADMIN_ALERT_SECRET`). Env: `HEALTH_STALE_HOURS` (48), `HEALTH_NEWS_STALE_DAYS` (14) |
+| `scripts/admin-health-check.ts` | CLI del monitor (`npm run admin:health [-- --dry] [-- --hours N]`): controlla `interpelli`, `notifications_log`, `scraper_runs`, `profiles.radar_attivo` e l'archivio `notizieIngestite.ts`; exit 1 se rileva anomalie |
+| `scripts/test-email-template.ts` | Regressione template (`npm run test:email`): logo reale, titolo pulito dai dump di codici classe, footer "modifica il radar qui" → `/dashboard/radar`, notice "non è monitorata" |
+
 | `docs/BLOG_EDITORIAL_GUIDELINES.md` | Regole d'oro del blog: max 3 articoli/settimana, zero rumore, acronimi spiegati |
 | `docs/PDF_DESIGN_SYSTEM.md` | Design system PDF (A4, tabelle clean, righe scrittura 24px) |
 | `docs/SYSTEM_HANDOVER.md` | QUESTO FILE |
@@ -1093,6 +1097,8 @@ dall'helper `inviaAlerta` della Edge `telegram-admin-webhook`. Indici su `create
 ### 17.2 Secrets GitHub Actions (`.github/workflows/scraper.yml`)
 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `TELEGRAM_BOT_TOKEN`,
 `ADMIN_ALERT_SECRET` (stesso valore del secret Supabase: invio alert admin dallo scraper).
+Gli stessi `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_ALERT_SECRET` sono usati dal
+workflow `health-check.yml` (env opzionali: `HEALTH_STALE_HOURS`, `HEALTH_NEWS_STALE_DAYS`).
 
 ### 17.3 Secrets Supabase Edge (via `supabase secrets set`)
 `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID_ANNUAL`, `STRIPE_PRICE_ID_MONTHLY`, `STRIPE_PRICE_ID_CONSUMO`,

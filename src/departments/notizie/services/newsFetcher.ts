@@ -187,34 +187,54 @@ export async function fetchNotizieMim(): Promise<{ voci: VoceFonte[]; raggiunta:
 }
 
 /**
- * Scraping della pagina https://www.mim.gov.it/web/guest/notizie.
+ * Pagine di elenco nazionali MIM (server-rendered, canonical + legacy Liferay).
+ * La prima che espone le card `/web/guest/-/<slug>` viene usata; le altre
+ * servono da fallback se il MIM cambia markup/URL (nessun silent-fail).
+ */
+const PAGINE_MIM_NOTIZIE = [
+  `${BASE_MIM}/web/guest/notizie`,
+  `${BASE_MIM}/notizie`,
+];
+
+/**
+ * Scraping della pagina notizie del MIM.
  * La pagina è server-rendered: le card degli articoli usano link Liferay
  * `/web/guest/-/<slug>` con la data di pubblicazione in `<span class="date">`.
  */
 export async function scrapeMimNotizie(): Promise<{ voci: VoceFonte[]; raggiunta: boolean }> {
-  const { testo, status } = await fetchTestoConStato(`${BASE_MIM}/web/guest/notizie`);
-  const raggiunta = status !== null && status >= 200 && status < 400;
-  if (!testo) return { voci: [], raggiunta };
-  const $ = cheerio.load(testo);
-  const voci: VoceFonte[] = [];
-  $('a[href*="/web/guest/-/"]').each((_, el) => {
-    const $el = $(el);
-    const title = $el.text().replace(/\s+/g, ' ').trim();
-    const href = $el.attr('href');
-    if (!title || !href || title.length < 12) return;
-    const link = urlAssoluto(href, BASE_MIM);
-    if (!link.includes('/web/guest/-/')) return;
-    // La data è nel contenitore della card (span.date).
-    const card = $el.closest('h3').parent();
-    const dataTesto = card.find('.date, time, [class*="date"]').first().text().trim();
-    const pubDate = dataTesto ? (estraiDeadline(dataTesto) ?? null) : null;
-    if (!voci.some((v) => v.link === link)) {
-      voci.push({ title, link, pubDate, description: '', fonte: 'MIM' });
+  let raggiunta = false;
+  let voci: VoceFonte[] = [];
+  let paginaUsata = PAGINE_MIM_NOTIZIE[0];
+  for (const pagina of PAGINE_MIM_NOTIZIE) {
+    const { testo, status } = await fetchTestoConStato(pagina);
+    if (status !== null && status >= 200 && status < 400) raggiunta = true;
+    if (!testo) continue;
+    const $ = cheerio.load(testo);
+    const trovate: VoceFonte[] = [];
+    $('a[href*="/web/guest/-/"]').each((_, el) => {
+      const $el = $(el);
+      const title = $el.text().replace(/\s+/g, ' ').trim();
+      const href = $el.attr('href');
+      if (!title || !href || title.length < 12) return;
+      const link = urlAssoluto(href, BASE_MIM);
+      if (!link.includes('/web/guest/-/')) return;
+      // La data è nel contenitore della card (span.date).
+      const card = $el.closest('h3').parent();
+      const dataTesto = card.find('.date, time, [class*="date"]').first().text().trim();
+      const pubDate = dataTesto ? (estraiDeadline(dataTesto) ?? null) : null;
+      if (!trovate.some((v) => v.link === link)) {
+        trovate.push({ title, link, pubDate, description: '', fonte: 'MIM' });
+      }
+    });
+    if (trovate.length > 0) {
+      voci = trovate;
+      paginaUsata = pagina;
+      break;
     }
-  });
+  }
   // Log esplicito (nessun silent-fail): senza questa riga un cambio di markup
   // del MIM che azzera le voci non sarebbe distinguibile da "0 notizie".
-  console.log(`• MIM scraping: ${voci.length} voci da ${BASE_MIM}/web/guest/notizie`);
+  console.log(`• MIM scraping: ${voci.length} voci da ${paginaUsata}`);
   return { voci: voci.slice(0, 40), raggiunta };
 }
 
@@ -274,29 +294,23 @@ export const FONTI_ISTITUZIONALI: FonteIstituzionale[] = [
     liste: ['https://www.aranagenzia.it/contrattazione/contratti.html'],
   },
   {
-    etichetta: 'USR Piemonte',
-    base: 'https://www.mim.gov.it',
-    rss: [],
-    liste: ['https://www.mim.gov.it/web/usr-piemonte'],
-  },
-  {
     etichetta: 'USR Lombardia',
     base: 'https://www.mim.gov.it',
     rss: [],
     liste: ['https://www.mim.gov.it/web/usr-lombardia'],
   },
   {
-    etichetta: 'USR Lazio',
+    etichetta: 'USR Sardegna',
     base: 'https://www.mim.gov.it',
     rss: [],
-    liste: ['https://www.mim.gov.it/web/usr-lazio'],
+    liste: ['https://www.mim.gov.it/web/usr-sardegna'],
   },
-  {
-    etichetta: 'USR Campania',
-    base: 'https://www.mim.gov.it',
-    rss: [],
-    liste: ['https://www.mim.gov.it/web/usr-campania'],
-  },
+  // NOTA (audit 2026-09): le pagine `/web/usr-piemonte`, `/web/usr-lazio` e
+  // `/web/usr-campania` rispondono HTTP 404 (MIM ha migrato al nuovo portale solo
+  // Lombardia e Sardegna con lo slug `/web/usr-<regione>`). Sono state sostituite
+  // con la fonte verificata `usr-sardegna`; le altre regioni vanno ri-collegate
+  // quando il MIM pubblica i nuovi slug (nessun silent-fail: il log HTTP le
+  // segnalerebbe immediatamente).
   {
     etichetta: 'INPS',
     base: 'https://www.inps.it',

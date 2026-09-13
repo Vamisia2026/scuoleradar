@@ -20,7 +20,7 @@ import {
   type TipoMessaggio,
 } from './resend';
 import { province } from '../data/province';
-import { ICONA_RIGA, costruisciAvviso } from './alertInterpello';
+import { ICONA_RIGA, costruisciAvviso, pulisciTitoloAvviso } from './alertInterpello';
 
 /** Interfaccia per l'ambiente (evita la dipendenza da @types/node nel frontend). */
 declare const process: { env: Record<string, string | undefined> };
@@ -197,7 +197,6 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
     testa: '🎯 Nuova opportunità trovata per te!',
     paragrafi: [
       'Abbiamo trovato una <b>nuova opportunità</b> per te.',
-      'Ci è sembrata interessante per il tuo profilo e abbiamo pensato che valesse la pena fartela vedere.',
       'Continuiamo a cercare per te.',
       'A presto!',
     ],
@@ -221,7 +220,10 @@ export function formattaMessaggioTelegram(
   const linkPro = proUrl(dashboardUrl);
   const linkOpp = linkOpportunita(interpello, dashboardUrl);
 
-  const titolo = interpello ? `📌 <b>${escapeHtml(interpello.title)}</b>` : '';
+  // Titolo pulito: niente "dump" di codici classe dalle tabelle delle fonti.
+  const titolo = interpello
+    ? `📌 <b>${escapeHtml(pulisciTitoloAvviso(interpello.title, `Interpello ${[classe, interpello.province].filter(Boolean).join(' — ')}`))}</b>`
+    : '';
 
   // Dettagli compatti con GERARCHIA STRETTA: obbligatorie (Provincia, Ordine,
   // Classe/Materia, Scadenza) + opzionali (Scuola, Pubblicato) solo se presenti.

@@ -180,3 +180,50 @@ export function righeTestoAvviso(dati: DatiAvviso): string[] {
   return righe;
 }
 
+
+/* --------------------- Pulizia dei titoli grezzi (tabelle) --------------------- */
+
+/** True se il token è SOLO un codice classe (A042, A-041, ADEE, EEEE, AA56, BI02…). */
+const RE_SOLO_CODICE = /^(?:[A-Z]{1,2}-?\d{2,3}|A[DS][A-Z]{2}|[A-Z]{4}|[A-Z]{2}\d{2})$/;
+
+function soloCodiciClasse(segmento: string): boolean {
+  const pulito = segmento
+    .replace(/[()[\]{},/·•|;–—-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!pulito) return true;
+  const token = pulito.split(' ');
+  return token.every((tk) => RE_SOLO_CODICE.test(tk.toUpperCase()) || /^\d{1,3}\s*(?:ore|h)$/i.test(tk));
+}
+
+/**
+ * Pulisce un titolo grezzo proveniente dalle TABELLE delle fonti: rimuove i
+ * "dump" di codici classe separati da `|`/`·`/`–` (es. "ADEE | A042 | AAAA |
+ * ADAA | EEEE | A042 | ADMM"), gli artefatti tipo "timbro_FIRMATO_" e gli spazi
+ * multipli. Se resta troppo poco (titolo fatto solo di codici) usa il `fallback`
+ * (es. "Interpello A-041 — Torino"), così l'alert resta leggibile e curato.
+ */
+export function pulisciTitoloAvviso(titolo?: string | null, fallback?: string | null): string {
+  const grezzo = (titolo ?? '').replace(/\s+/g, ' ').trim();
+  const fb = (fallback ?? '').replace(/\s+/g, ' ').trim();
+  if (!grezzo) return fb || 'Avviso ufficiale';
+
+  const segmenti = grezzo
+    .split(/\s*[|•·]\s*|\s+[–—]\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const tenuti = segmenti.filter((s) => !soloCodiciClasse(s));
+
+  let pulito = (tenuti.length > 0 ? tenuti.join(' — ') : '')
+    .replace(/timbro[_\s-]*firmato[_\s-]*/gi, '')
+    .replace(/\btimbro\b/gi, '')
+    .replace(/[_]{2,}/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^[\s–—-]+|[\s–—-]+$/g, '')
+    .trim();
+
+  // Se è rimasto troppo poco (o è ancora un dump di codici) → fallback curato.
+  if (pulito.length < 8 || soloCodiciClasse(pulito)) pulito = fb;
+  return pulito || 'Avviso ufficiale';
+}
+

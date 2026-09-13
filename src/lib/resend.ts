@@ -13,7 +13,7 @@
  */
 
 import { Resend } from 'resend';
-import { ICONA_RIGA, costruisciAvviso } from './alertInterpello';
+import { ICONA_RIGA, costruisciAvviso, pulisciTitoloAvviso } from './alertInterpello';
 
 /** Interfaccia per l'ambiente (evita la dipendenza da @types/node nel frontend). */
 declare const process: { env: Record<string, string | undefined> };
@@ -281,7 +281,6 @@ const CORPO_MESSAGGI: Record<TipoMessaggio, ContenutoMessaggio> = {
   notifica_pro: {
     paragrafi: [
       'Abbiamo trovato una <strong>nuova opportunità</strong> per te.',
-      'Ci è sembrata interessante per il tuo profilo e abbiamo pensato che valesse la pena fartela vedere.',
       'Continuiamo a cercare per te.',
       'A presto!',
     ],
@@ -341,7 +340,7 @@ export function renderEmailHtml(
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px; border:1px solid #e2e8f0; border-radius:12px; background:#f8fafc;">
                   <tr>
                     <td style="padding:16px 20px;">
-                      <h2 style="margin:0 0 8px; font-size:18px; font-weight:800; line-height:1.35; color:#14354e;"><b>${escapeHtml(interpello.title)}</b></h2>
+                      <h2 style="margin:0 0 8px; font-size:18px; font-weight:800; line-height:1.35; color:#14354e;"><b>${escapeHtml(pulisciTitoloAvviso(interpello.title, `Interpello ${[classe, interpello.province].filter(Boolean).join(' — ')}`))}</b></h2>
                       <p style="margin:0; font-size:14px; line-height:1.6; color:#475569;">${dettagli.join(' · ')}</p>
                       ${scadenzaRiga}
                       <p style="margin:8px 0 0; font-size:13px; color:#64748b;">📧 Candidature: ${interpello.contactEmail ? `<a href="mailto:${escapeHtml(interpello.contactEmail)}" style="color:#2B6F9E;">${escapeHtml(interpello.contactEmail)}</a>` : 'Email non disponibile'}</p>
@@ -393,8 +392,9 @@ export function renderEmailHtml(
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%;">
             <!-- Header brand -->
             <tr>
-              <td align="center" style="padding-bottom:16px;">
-                <span style="font-size:22px; font-weight:800; color:#14354e;">📡 ScuoleRadar</span>
+              <td align="center" style="padding-bottom:18px;">
+                <img src="https://www.scuoleradar.it/logo.png" alt="ScuoleRadar" width="200"
+                     style="display:block; width:200px; max-width:70%; height:auto; border:0; outline:none; text-decoration:none;" />
               </td>
             </tr>
             <!-- Card principale -->
@@ -410,14 +410,14 @@ export function renderEmailHtml(
                 <p style="margin:10px 0 0; font-size:13px; line-height:1.5; color:#64748b;">P.S. 📌 Quando vuoi sapere cosa succede di importante, vieni qui: <a href="https://scuoleradar.it/notizie" style="color:#2B6F9E;">scuoleradar.it/notizie</a></p>
 
                 <p style="margin:14px 0 0; font-size:12px; line-height:1.5; color:#94a3b8;">
-                  ⚠️ Questa è un'email automatica generata dal sistema. Ti preghiamo di non rispondere a questo
-                  messaggio perché la casella non viene letta. Se hai bisogno di aiuto o vuoi segnalarci qualcosa,
-                  usa il nostro Form di Contatto (<a href="https://scuoleradar.it/contatti" style="color:#94a3b8;">scuoleradar.it/contatti</a>).
+                  ⚠️ Ti preghiamo di non rispondere a questo messaggio perché questa casella serve solo per inviare
+                  le segnalazioni e non è monitorata.
                 </p>
 
                 <p style="margin:20px 0 0; font-size:12px; line-height:1.5; color:#94a3b8;">
                   ScuoleRadar.it — Interpelli, supplenze, incarichi, PNRR, PON, POR e opportunità per i docenti<br />
-                  Se non desideri ricevere queste email, modifica le preferenze nel tuo profilo.
+                  Se queste informazioni non corrispondono più a quello che ti serve,
+                  <a href="https://www.scuoleradar.it/dashboard/radar" style="color:#2B6F9E;">modifica il radar qui</a>.
                 </p>
               </td>
             </tr>

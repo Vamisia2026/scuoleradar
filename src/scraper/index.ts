@@ -41,7 +41,7 @@ import {
   type InterpelloParsato,
 } from './parser.ts';
 import { resolveSchoolByCode } from '../lib/school-lookup.ts';
-import { notificaNuoviInterpelli } from '../lib/notifier.ts';
+import { notificaNuoviInterpelli, type EsitoNotifiche } from '../lib/notifier.ts';
 import {
   CHIAVE_CANALE_ATA_NAZIONALE,
   getTelegramCanaliRegionali,
@@ -237,7 +237,9 @@ export function parsePostInterpelli(
   const risultato: AvvisoRilevato[] = [];
   let cittaCorrente = '';
 
-  contenuto.find('p, li, h2, h3, h4').each((_, el) => {
+  // Includiamo anche `tr` (e quindi le celle `td/th`): molte fonti provinciali
+  // pubblicano gli interpelli come TABELLE multi-riga → ogni riga è un avviso.
+  contenuto.find('p, li, h2, h3, h4, tr').each((_, el) => {
     const $blocco = $(el);
     const testoBlocco = $blocco.text().replace(/\s+/g, ' ').trim();
     if (!testoBlocco) return;
@@ -773,6 +775,30 @@ async function pubblicaNuoviSuCanali(nuovi: AvvisoRilevato[]): Promise<EsitoCana
 }
 
 /**
+ * Guard del DISPATCH: se sono stati importati NUOVI avvisi ma nessun canale ha
+ * ricevuto nulla (0 email e 0 Telegram), il ciclo di notifica è rotto → avvisa
+ * subito gli admin sul bot Telegram `ScuoleRadar Admin`.
+ */
+async function avvisaSeDispatchFermo(
+  esito: EsitoNotifiche,
+  nuovi: number,
+  province: string[],
+): Promise<void> {
+  if (nuovi <= 0) return;
+  if (esito.inviate > 0 || esito.telegramInviate > 0) return;
+  const errori = esito.fallite + esito.telegramFallite;
+  await inviaAlertaAdmin({
+    severity: 'critical',
+    category: 'notifiche',
+    title: 'Dispatch Radar fermo: nuovi interpelli senza alcuna notifica',
+    message:
+      `Importati ${nuovi} nuovi interpelli ma inviate 0 notifiche (email: 0, Telegram: 0; errori: ${errori}). ` +
+      'Possibile rottura del matching o dei canali utente (verificare radar attivi e chat/email collegate).',
+    meta: { nuovi, errori, province, esito },
+  });
+}
+
+/**
  * Chiude una run dello scraper: registra le statistiche in `scraper_runs`
  * (diagnostica remota `/status`) e invia un ALERT ad ADMIN_TELEGRAM_ID se
  * rileva un fallimento critico o un'anomalia di routing Telegram.
@@ -1042,7 +1068,8 @@ async function main() {
 
     // FASE 4 — notifiche email per i soli interpelli nuovi
     if (!noEmail) {
-      await notificaNuoviInterpelli(supabase, nuovi);
+      const esitoNot = await notificaNuoviInterpelli(supabase, nuovi);
+      await avvisaSeDispatchFermo(esitoNot, nuovi.length, province);
     }
     // FASE 5 — canali Telegram regionali + ATA nazionale (solo avvisi NUOVI e fonti reali).
     const tgFallback = await pubblicaNuoviSuCanali(nuovi);
@@ -1070,7 +1097,8 @@ async function main() {
 
   // FASE 4 — notifiche email per i soli interpelli nuovi
   if (!noEmail) {
-    await notificaNuoviInterpelli(supabase, nuovi);
+    const esitoNot = await notificaNuoviInterpelli(supabase, nuovi);
+    await avvisaSeDispatchFermo(esitoNot, nuovi.length, province);
   }
 
   // Diagnostica + alert: registra la run (`scraper_runs`) e avvisa l'admin se ci
@@ -1091,22 +1119,35 @@ async function main() {
   });
 }
 
-main().catch(async (err) => {
-  console.error('✗ Errore imprevisto nello scraper:', err);
-  process.exitCode = 1;
-  if (!process.argv.includes('--dry-run')) {
-    await concludiRun({
-      modalita: 'reali',
-      province: [],
-      trovati: 0,
-      nuovi: 0,
-      upsertOk: false,
-      telegramAttesi: 0,
-      telegramRiusciti: 0,
-      errori: 1,
-      esito: 'error',
-      messaggio: `Errore imprevisto: ${(err as Error).message}`,
-    });
-  }
-});
+/**
+ * Esegue la pipeline SOLO quando il file è invocato come CLI (`npm run scrape`),
+ * NON quando il modulo viene IMPORTATO (es. test del parser): un import non
+ * avvia mai una run reale con scritture su Supabase/email/Telegram.
+ * Si controllano TUTTI gli argomenti (tsx/node possono mettere il percorso in
+ * posizioni diverse) per non disattivare mai l'esecuzione in produzione.
+ */
+const eseguitoComeCli = process.argv
+  .slice(1)
+  .some((a) => /[\\/]scraper[\\/]index\.(?:ts|js|mjs|cjs)$/i.test(a));
+
+if (eseguitoComeCli) {
+  main().catch(async (err) => {
+    console.error('✗ Errore imprevisto nello scraper:', err);
+    process.exitCode = 1;
+    if (!process.argv.includes('--dry-run')) {
+      await concludiRun({
+        modalita: 'reali',
+        province: [],
+        trovati: 0,
+        nuovi: 0,
+        upsertOk: false,
+        telegramAttesi: 0,
+        telegramRiusciti: 0,
+        errori: 1,
+        esito: 'error',
+        messaggio: `Errore imprevisto: ${(err as Error).message}`,
+      });
+    }
+  });
+}
 

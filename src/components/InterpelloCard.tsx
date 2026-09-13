@@ -4,7 +4,12 @@ import type { Interpello } from '@/data/interpelli';
 import { Modal } from './Modal';
 import { useApp, LIMITE_NOTIFICHE_PROVA } from '@/contexts/AppContext';
 import { etichettaClasseMateria } from '@/data/classiConcorso';
-import { costruisciAvviso, formatDataAvviso, formatDataAvvisoLunga } from '@/lib/alertInterpello';
+import {
+  costruisciAvviso,
+  formatDataAvviso,
+  formatDataAvvisoLunga,
+  pulisciTitoloAvviso,
+} from '@/lib/alertInterpello';
 import { giorniRimanenti, stileScadenza } from '@/lib/scadenza';
 
 export function InterpelloCard({ interpello }: { interpello: Interpello }) {
@@ -29,6 +34,11 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
   const provinciaTxt = interpello.provinciaNome || interpello.provinciaCodice;
   const ordineTxt = avviso.obbligatorie.find((r) => r.etichetta === 'Ordine di scuola')?.valore ?? '';
   const scadenzaOk = avviso.scadenzaValida;
+  // Titolo pulito dai "dump" di codici classe delle tabelle sorgente.
+  const titoloPulito = pulisciTitoloAvviso(
+    interpello.titolo,
+    `Interpello ${etichettaClasse || interpello.provinciaNome || interpello.provinciaCodice}`,
+  );
   const giaNotificato = interpelliNotificati.includes(interpello.id);
   const notificheRimanenti = Math.max(LIMITE_NOTIFICHE_PROVA - notificheUsate, 0);
   const isPreferita = preferenze.favoriteSchools.some((s) =>
@@ -45,7 +55,7 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
       <article className="group rounded-2xl border border-primary-100 bg-white p-5 shadow-card transition hover:shadow-soft">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex-1">
-            <h3 className="text-base font-bold text-primary-800">{interpello.titolo}</h3>
+            <h3 className="text-base font-bold text-primary-800">{titoloPulito}</h3>
             <p className="mt-1 flex items-center gap-1.5 text-sm text-primary-600">
               <GraduationCap className="h-4 w-4" />
               {interpello.istituto}
@@ -107,7 +117,7 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
         </button>
       </article>
 
-      <Modal open={open} onClose={() => setOpen(false)} title={interpello.titolo} size="lg">
+      <Modal open={open} onClose={() => setOpen(false)} title={titoloPulito} size="lg">
         <div className="space-y-4">
           {interpello.compatibilita === 100 && (
             <span className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-3 py-1 text-sm font-semibold text-accent-700">
