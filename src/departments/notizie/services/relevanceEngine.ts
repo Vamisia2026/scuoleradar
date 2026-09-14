@@ -740,6 +740,141 @@ export function validaUrlDeepLink(url: string): string | null {
   return null;
 }
 
+/* -------------- LINK UFFICIALE PUNTO-A-PUNTO (no indici/contenitori) -------------- */
+
+/**
+ * Ultimi segmenti di percorso che indicano un CONTENITORE (indice, elenco,
+ * archivio, directory di servizio) e non un documento specifico: un link che
+ * termina così è VIETATO come fonte ufficiale di una notizia.
+ */
+const SEGMENTI_CONTENITORE = new Set([
+  'indice', 'indici', 'index', 'elenco', 'elenchi', 'lista', 'liste', 'archivio',
+  'archivi', 'atti', 'atto', 'albo', 'albo-pretorio', 'pubblicazioni', 'pubblicazione',
+  'notizie', 'notizia', 'news', 'comunicati', 'comunicato', 'comunicazioni',
+  'comunicazione', 'documenti', 'documento', 'normativa', 'urp', 'home', 'homepage',
+  'pagina', 'pagine', 'ricerca', 'search', 'risultati', 'categoria', 'categorie',
+  'tag', 'tags', 'servizi', 'servizio', 'contatti', 'contatto', 'sezione', 'sezioni',
+  'dashboard', 'portale', 'accesso', 'area-riservata', 'sportello', 'agenda',
+  'eventi', 'newsletter', 'tutti-gli-avvisi', 'istanzeonline',
+]);
+
+/**
+ * Parole "neutre" (istituzionali/generiche): uno slug composto SOLO da queste
+ * parole e senza numeri identifica un elenco/sezione (es.
+ * `/interpelli-ricerca-supplenti`), non un avviso specifico.
+ */
+const PAROLE_NEUTRE = new Set([
+  'a', 'ad', 'al', 'alla', 'alle', 'agli', 'allo', 'e', 'ed', 'di', 'del', 'della',
+  'delle', 'dei', 'degli', 'il', 'lo', 'la', 'le', 'gli', 'i', 'in', 'per', 'con',
+  'su', 'da', 'dal', 'dalla', 'dalle', 'dallo', 'dai', 'dagli', 'nel', 'nella',
+  'nelle', 'negli', 'tra', 'fra', 'non', 'piu', 'come', 'sul', 'sulla',
+  'scuola', 'scuole', 'scolastico', 'scolastica', 'istruzione', 'ministero',
+  'ministeriale', 'regionale', 'ufficio', 'uffici', 'amministrazione', 'trasparente',
+  'pubblica', 'pubblico', 'personale', 'docenti', 'ata',
+  'elenco', 'elenchi', 'indice', 'indici', 'lista', 'liste', 'archivio', 'archivi',
+  'atti', 'atto', 'albo', 'pubblicazioni', 'pubblicazione', 'notizie', 'notizia',
+  'news', 'comunicati', 'comunicato', 'comunicazioni', 'comunicazione', 'documenti',
+  'documento', 'normativa', 'urp', 'home', 'pagina', 'pagine', 'ricerca', 'search',
+  'risultati', 'categoria', 'categorie', 'tag', 'servizi', 'servizio', 'contatti',
+  'contatto', 'sezione', 'sezioni', 'interpelli', 'interpello', 'supplenze',
+  'supplenza', 'supplenti', 'graduatorie', 'graduatoria', 'concorsi', 'concorso',
+  'bandi', 'bando', 'avvisi', 'avviso', 'selezioni', 'selezione', 'mobilita',
+  'assegnazioni', 'nomine', 'informazioni', 'strumenti', 'modulistica', 'ultime',
+  'tutti', 'tutte', 'precedenti', 'successive',
+]);
+
+/** Finali di percorso SEMPRE considerati contenitori/indici/directory. */
+const FINALI_CONTENITORE = [
+  '/urp', '/amministrazione-trasparente', '/albo-pretorio', '/archivio', '/archivi',
+  '/normativa', '/notizie', '/news', '/comunicati', '/comunicazioni', '/documenti',
+  '/agenda', '/eventi', '/istanzeonline.htm', '/home', '/index',
+];
+
+export interface EsitoLinkDiretto {
+  ok: boolean;
+  motivo?: string;
+}
+
+/**
+ * LINK UFFICIALE PUNTO-A-PUNTO (regola editoriale §5): l'unico link ammesso per
+ * una notizia è l'URL DIRETTO del documento/avviso/comunicato specifico.
+ * Sono VIETATI — e quindi bloccano la pubblicazione — homepage (anche dei
+ * portali di servizio), indici ed elenchi, directory URP, pagine di ricerca o
+ * paginazione e archivi "master".
+ */
+export function linkDirettoUfficiale(url?: string | null): EsitoLinkDiretto {
+  const u = (url ?? '').trim();
+  if (!u) return { ok: false, motivo: 'link ufficiale mancante' };
+  const baseMotivo = validaUrlDeepLink(u);
+  if (baseMotivo) return { ok: false, motivo: baseMotivo };
+
+  let parsed: URL;
+  try {
+    parsed = new URL(u);
+  } catch {
+    return { ok: false, motivo: 'URL non valido' };
+  }
+  // Un PDF è sempre il documento specifico.
+  if (èLinkPdf(u)) return { ok: true };
+
+  const percorso = decodeURIComponent(parsed.pathname).toLowerCase();
+  const senzaSlash = percorso.replace(/\/+$/, '') || '/';
+  const segmenti = senzaSlash.split('/').filter(Boolean);
+
+  // 1) Homepage di qualunque dominio (portali di servizio compresi).
+  if (segmenti.length === 0) {
+    return { ok: false, motivo: 'homepage del sito: serve il link diretto al documento' };
+  }
+  // 2) Ricerca/filtri/paginazione: contenitori, non documenti.
+  const query = parsed.search.toLowerCase();
+  if (
+    /(?:^|[?&])(?:s|q|query|ricerca|search|page|pagina|p|offset|filtro|categoria|cat|tag|anno|mese)=/.test(
+      query,
+    )
+  ) {
+    return { ok: false, motivo: 'URL con parametri di ricerca/filtro (contenitore)' };
+  }
+  if (/\/(?:page|pagina)\/\d+$/.test(senzaSlash)) {
+    return { ok: false, motivo: 'URL di paginazione (contenitore)' };
+  }
+  // 3) Finali di percorso noti (indici, URP, archivi, liste notizie).
+  const finale = FINALI_CONTENITORE.find((f) => senzaSlash.endsWith(f));
+  if (finale) return { ok: false, motivo: `pagina-contenitore ("…${finale}")` };
+
+  // 4) Ultimo segmento che È un nome di contenitore (es. /…/elenco, /…/albo).
+  const ultimo = segmenti[segmenti.length - 1].replace(/\.(?:html?|php|aspx?|jsp)$/i, '');
+  if (SEGMENTI_CONTENITORE.has(ultimo)) {
+    return { ok: false, motivo: `pagina-contenitore ("${ultimo}")` };
+  }
+
+  // 5) Slug "istituzionale puro" (solo parole neutre/anno, senza alcun termine
+  //    identificativo): è un elenco/sezione (es. "elenco-interpelli-2026"), non
+  //    un documento specifico.
+  const parole = ultimo.split(/[-_]+/).filter((w) => w && !/^\d+$/.test(w));
+  if (parole.length > 0 && parole.every((w) => PAROLE_NEUTRE.has(w))) {
+    return { ok: false, motivo: `elenco/sezione senza riferimento specifico ("${ultimo}")` };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Link VIETATI presenti in un frammento HTML: garantisce che l'articolo
+ * pubblicato non contenga MAI collegamenti a contenitori/indici (solo al
+ * documento specifico o a pagine interne di ScuoleRadar).
+ */
+export function linkVietatiInHtml(html: string): string[] {
+  const fuori: string[] = [];
+  for (const m of (html ?? '').matchAll(/href="([^"]+)"/gi)) {
+    const href = (m[1] ?? '').trim();
+    if (!/^https?:/i.test(href)) continue;
+    if (/scuoleradar\.it/i.test(href)) continue; // link interni all'app
+    const esito = linkDirettoUfficiale(href);
+    if (!esito.ok) fuori.push(`${href} (${esito.motivo})`);
+  }
+  return fuori;
+}
+
 /**
  * Applica il tetto articoli: al massimo `max` articoli con data di
  * pubblicazione nella finestra di lookback (`FINESTRA_LOOKBACK_GIORNI`, 15 gg).
@@ -836,6 +971,22 @@ export function articoloValido(a: NewsArticle): boolean {
     );
     return false;
   }
+  // PUNTO-A-PUNTO: il link ufficiale deve puntare al documento specifico. Se un
+  // URL diretto non è estraibile in modo affidabile, l'articolo NON si pubblica
+  // (mai fallback a indici, elenchi, homepage di portale o directory URP).
+  const diretto = linkDirettoUfficiale(a.official_source_url);
+  if (!diretto.ok) {
+    console.warn(
+      `✗ Articolo scartato (${a.id}): link non puntuale — ${diretto.motivo}`,
+    );
+    return false;
+  }
+  // Nessun link-contenitore nel testo pubblicato (solo documento specifico).
+  const vietati = linkVietatiInHtml(a.content_html ?? '');
+  if (vietati.length > 0) {
+    console.warn(`✗ Articolo scartato (${a.id}): link a contenitori nel testo — ${vietati[0]}`);
+    return false;
+  }
   return true;
 }
 
@@ -853,65 +1004,66 @@ export interface DatiArticoloEditoriale {
 }
 
 interface ArticoloCopy {
-  /** Apertura già completa che termina con "…con l'avviso"; il titolo viene appeso in «…». */
+  /**
+   * Apertura in chiave AZIONE: parte da che cosa cambia per chi legge e termina
+   * con "…l'avviso / la circolare / il bando" (il titolo viene appeso in «…»).
+   * Vietate le aperture istituzionali ("Il Ministero … ha comunicato che…").
+   */
   fatto: string;
   chi: string;
   pratica: string;
-  /** Come agire: la menzione del portale ufficiale è segnata con %LINK% e diventa un <a> cliccabile. */
+  /**
+   * Che cosa fare: dice DOVE si presenta la domanda in testo semplice (nessun
+   * link: l'unico link pubblicato è quello diretto al documento ufficiale).
+   */
   come: string;
-  /** Etichetta del link al portale ufficiale usata in `come` (es. "Istanze Online"). */
-  linkLabel: string;
-  /** Nome del portale per la frase di fallback quando la scadenza non è ancora dichiarata. */
+  /** Nome del portale di servizio citato (menzione in testo, mai link). */
   portale: string;
 }
 
 const ARTICOLO_BASE: Record<string, ArticoloCopy> = {
   'GPS': {
     fatto:
-      'Il Ministero dell\u2019Istruzione e del Merito (MIM) ha aperto la procedura per l\u2019aggiornamento e l\u2019inserimento nelle Graduatorie Provinciali per le Supplenze (GPS, le liste da cui le scuole convocano i docenti per gli incarichi annuali), con la pubblicazione dell\u2019avviso',
+      'Puoi aggiornare punteggi, titoli e servizi delle GPS (Graduatorie Provinciali per le Supplenze, le liste da cui le scuole chiamano i docenti per gli incarichi annuali): è online',
     chi:
-      'docenti e aspiranti docenti che devono aggiornare punteggi e titoli o entrare in graduatoria',
+      'docenti e aspiranti docenti che aggiornano la propria posizione in graduatoria',
     pratica:
-      'La posizione in GPS decide l\u2019ordine delle convocazioni per gli incarichi dell\u2019anno: un punteggio sbagliato o un titolo non dichiarato si riflette su tutte le chiamate successive.',
+      'La posizione in GPS decide l\u2019ordine delle convocazioni: un punteggio sbagliato o un titolo non dichiarato pesa su tutte le chiamate dell\u2019anno. Controlla con calma la sezione dei punteggi prima di inviare, perché dopo la scadenza non si corregge più.',
     come:
-      'La domanda si presenta esclusivamente online, dal portale %LINK% con identità digitale SPID (Sistema Pubblico di Identità Digitale) o CIE (Carta d\u2019Identità Elettronica). Prima dell\u2019invio controlla con calma la sezione dei punteggi e conserva la ricevuta di presentazione.',
-    linkLabel: 'Istanze Online',
+      'La domanda si presenta soltanto online su Istanze Online (POLIS) con identità digitale SPID (Sistema Pubblico di Identità Digitale) o CIE (Carta d\u2019Identità Elettronica). Conserva la ricevuta di presentazione.',
     portale: 'Istanze Online',
   },
   'Mobilità': {
     fatto:
-      'Il Ministero dell\u2019Istruzione e del Merito (MIM) ha pubblicato date e modalità della mobilità annuale del personale scolastico, con l\u2019avviso',
+      'Se chiedi un trasferimento, un passaggio di cattedra o il rientro nella tua provincia, sono online date e regole della mobilità: le trovi nell\u2019avviso',
     chi:
-      'docenti di ruolo che chiedono un trasferimento, un passaggio di cattedra o un rientro nella provincia di origine',
+      'docenti di ruolo e dirigenti scolastici che chiedono un movimento per il prossimo anno',
     pratica:
-      'La domanda si compila sulla base delle preferenze e delle precedenze riconosciute: vincoli triennali e precedenze di legge possono cambiare l\u2019esito della richiesta.',
+      'La domanda si costruisce su preferenze e precedenze: vincoli triennali, precedenze di legge e punteggi cambiano l\u2019esito della richiesta. Una domanda incompleta o fuori termine resta senza effetto, quindi verifica i requisiti prima di compilare.',
     come:
-      'La procedura si svolge interamente online dal portale %LINK% con accesso SPID o CIE. Controlla la finestra temporale e allega la documentazione che certifica le precedenze.',
-    linkLabel: 'Istanze Online',
+      'La procedura è interamente online su Istanze Online con accesso SPID o CIE: rispetta la finestra temporale e allega i documenti che certificano le precedenze.',
     portale: 'Istanze Online',
   },
   'Concorsi': {
     fatto:
-      'È stato pubblicato un bando di concorso per l\u2019accesso o il passaggio di ruolo nella scuola, con l\u2019avviso',
+      'Si apre la strada per entrare in ruolo o cambiare classe di concorso: è online il bando',
     chi:
-      'candidati in possesso dei requisiti indicati nel bando per la classe di concorso di interesse',
+      'candidati in possesso dei requisiti richiesti per la classe di concorso o il profilo messo a bando',
     pratica:
-      'La selezione prevede una o più prove e la valutazione dei titoli: conviene leggere il bando per intero prima di compilare la domanda, perché requisiti e modalità cambiano di bando in bando.',
+      'La selezione prevede prove e valutazione dei titoli: requisiti, programmi e modalità cambiano da bando a bando, quindi leggi il testo prima di compilare. La domanda va presentata entro il termine indicato, con i titoli già autocertificati.',
     come:
-      'La domanda si presenta online dal portale %LINK% (Portale del Reclutamento della Pubblica Amministrazione) con accesso SPID o CIE, entro i termini indicati nel bando. Predisponi in anticipo i titoli e l\u2019autocertificazione.',
-    linkLabel: 'InPA',
+      'La domanda si presenta online sul Portale del Reclutamento (InPA) con SPID o CIE. Prepara in anticipo titoli, autocertificazione e ricevute.',
     portale: 'InPA',
   },
   'Pensioni': {
     fatto:
-      'Il Ministero dell\u2019Istruzione e del Merito (MIM) e l\u2019INPS (Istituto Nazionale della Previdenza Sociale) hanno aggiornato le procedure per la cessazione dal servizio e le domande di pensione del personale scolastico, con l\u2019avviso',
+      'Se stai valutando la cessazione dal servizio, sono aggiornate procedure e finestre per la pensione del personale scolastico: è online',
     chi:
-      'personale scolastico che intende cessare dal servizio o deve regolarizzare la propria posizione contributiva',
+      'personale scolastico che cessa dal servizio o regolarizza la propria posizione contributiva',
     pratica:
-      'La domanda di cessazione segue finestre e requisiti precisi: un errore nei tempi può far slittare l\u2019intera decorrenza della pensione.',
+      'Le finestre e i requisiti della cessazione sono rigidi: un errore nei tempi fa slittare la decorrenza della pensione di mesi. Verifica prima la posizione contributiva e valuta riscatto o ricongiunzione.',
     come:
-      'La domanda si presenta sul portale %LINK% con identità SPID o CIE. Controlla la posizione contributiva e, se serve, presenta la domanda di riscatto o ricongiunzione.',
-    linkLabel: 'dell\u2019INPS',
+      'La domanda si presenta online sul portale INPS con identità SPID o CIE. Controlla cedolino ed estratti contributivi prima di inviare.',
     portale: 'INPS',
   },
 };
@@ -940,61 +1092,53 @@ function formattaDataItaliana(iso: string): string {
 const ARTICOLO_ALTRE: Record<string, ArticoloCopy> = {
   'Sostegno': {
     fatto:
-      'Il Ministero dell\u2019Istruzione e del Merito (MIM) ha aggiornato le indicazioni sull\u2019assegnazione delle ore di sostegno e sulla documentazione di inclusione, con la circolare',
-    chi: 'consigli di classe, docenti di sostegno, GLO (Gruppo di Lavoro Operativo) e famiglie',
+      'Cambiano le indicazioni su ore di sostegno e documentazione di inclusione: è online la circolare',
+    chi: 'docenti di sostegno, consigli di classe, GLO (Gruppo di Lavoro Operativo) e famiglie',
     pratica:
-      'La documentazione di inclusione \u2014 il PEI (Piano Educativo Individualizzato), i verbali e le osservazioni \u2014 va predisposta e verificata nei tempi previsti: le verifiche del GLO scandiscono l\u2019intero anno scolastico.',
+      'PEI (Piano Educativo Individualizzato), verbali e osservazioni vanno predisposti e verificati nei tempi previsti: le scadenze del GLO scandiscono tutto l\u2019anno scolastico e un documento mancante blocca ore e misure di supporto.',
     come:
-      'Le indicazioni complete sono consultabili nella pagina %LINK%; le scadenze interne alla scuola vengono comunicate dalla segreteria. Raccogli in anticipo la documentazione di accoglienza.',
-    linkLabel: 'ufficiale del Ministero',
-    portale: 'la pagina del Ministero',
+      'Le indicazioni operative sono nel testo ufficiale; le scadenze interne le fissa la segreteria. Prepara in anticipo la documentazione di accoglienza.',
+    portale: 'Ministero',
   },
   'Graduatorie': {
     fatto:
-      'Il Ministero dell\u2019Istruzione e del Merito (MIM) ha aggiornato le graduatorie del personale scolastico, con l\u2019avviso',
-    chi:
-      'docenti iscritti o in attesa di iscrizione nelle graduatorie provinciali e di istituto',
+      'La tua posizione in graduatoria può cambiare: controlla i punteggi aggiornati nell\u2019avviso',
+    chi: 'docenti iscritti o in attesa di iscrizione nelle graduatorie provinciali e di istituto',
     pratica:
-      'La posizione pubblicata determina l\u2019ordine delle convocazioni: eventuali errori nei punteggi vanno segnalati nei termini previsti per rettifiche e ricorsi.',
+      'È la posizione pubblicata a decidere l\u2019ordine delle convocazioni: gli errori nei punteggi vanno segnalati entro i termini di rettifica, altrimenti restano e ti seguono per tutto l\u2019anno.',
     come:
-      'Le rettifiche e i ricorsi si presentano online dal portale %LINK% con identità SPID o CIE. Controlla la tua posizione appena pubblicata e prepara la documentazione.',
-    linkLabel: 'Istanze Online',
+      'Rettifiche e ricorsi si presentano online su Istanze Online con SPID o CIE. Verifica subito la tua posizione e prepara la documentazione.',
     portale: 'Istanze Online',
   },
   'Supplenze': {
     fatto:
-      'Il Ministero dell\u2019Istruzione e del Merito (MIM) ha aggiornato le regole per supplenze e incarichi del personale docente, con l\u2019avviso',
-    chi:
-      'docenti in graduatoria, aspiranti supplenti e personale che presenta la messa a disposizione',
+      'Cambiano le regole per supplenze e incarichi: è online l\u2019avviso',
+    chi: 'docenti in graduatoria, aspiranti supplenti e chi presenta la messa a disposizione',
     pratica:
-      'Le convocazioni seguono l\u2019ordine di graduatoria: chi non risponde nei tempi previsti può essere saltato, quindi conviene tenere monitorata la propria posizione.',
+      'Le convocazioni seguono l\u2019ordine di graduatoria e chi non risponde nei tempi viene saltato: tieni monitorata la posizione e aggiorna i recapiti, perché la chiamata può arrivare in poche ore.',
     come:
-      'Domande e accettazioni si gestiscono online dal portale %LINK% con identità SPID o CIE. Tieni a portata di mano la documentazione di servizio.',
-    linkLabel: 'Istanze Online',
+      'Domande e accettazioni si gestiscono online su Istanze Online con SPID o CIE. Tieni a portata di mano la documentazione di servizio.',
     portale: 'Istanze Online',
   },
   'Scuole': {
     fatto:
-      'Il Ministero dell\u2019Istruzione e del Merito (MIM) ha pubblicato un aggiornamento sull\u2019organizzazione dell\u2019anno scolastico, con la comunicazione',
+      'Ci sono novità sull\u2019organizzazione dell\u2019anno scolastico: le trovi nella comunicazione',
     chi: 'dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie',
     pratica:
-      'La comunicazione introduce novità o conferme su scadenze e adempimenti dell\u2019anno: i dettagli completi sono riportati nella pagina ufficiale.',
+      'Qui stanno scadenze e adempimenti che ricadono su orari, incarichi e attività della scuola: leggerli adesso evita di rincorrere le comunicazioni interne all\u2019ultimo momento.',
     come:
-      'Le informazioni complete sono consultabili sul sito del %LINK%. Se la notizia riguarda la tua scuola, la segreteria provvederà a comunicare le scadenze interne.',
-    linkLabel: 'Ministero',
-    portale: 'Notizie del Ministero',
+      'I dettagli completi sono nel testo ufficiale. Se la novità riguarda la tua scuola, la segreteria comunicherà le scadenze interne.',
+    portale: 'Ministero',
   },
   'PNRR': {
     fatto:
-      'Il Ministero dell\u2019Istruzione e del Merito (MIM) ha aggiornato le scadenze operative del PNRR (Piano Nazionale di Ripresa e Resilienza) per il settore istruzione, con l\u2019avviso',
-    chi:
-      'scuole, dirigenti scolastici, docenti e personale che partecipa ai bandi e alle iniziative finanziate dal PNRR',
+      'Ci sono fondi e scadenze da non perdere: è online l\u2019avviso PNRR (Piano Nazionale di Ripresa e Resilienza) per la scuola',
+    chi: 'scuole, dirigenti, docenti e personale coinvolto nei bandi PNRR',
     pratica:
-      'Le scadenze degli avvisi PNRR determinano l\u2019accesso ai finanziamenti per edilizia, digitalizzazione, nuove competenze e inclusione: un termine mancato può far perdere la quota assegnata.',
+      'Le scadenze PNRR sbloccano i finanziamenti per edilizia, digitalizzazione, nuove competenze e inclusione: un termine mancato fa perdere la quota assegnata, senza recuperi.',
     come:
-      'Le istanze e gli allegati si gestiscono online dalle piattaforme del %LINK% e da quelle dedicate al PNRR Istruzione. Controlla la scadenza del bando e conserva la ricevuta di invio.',
-    linkLabel: 'Ministero',
-    portale: 'Notizie del Ministero',
+      'Istanze e allegati si presentano sulle piattaforme dedicate al PNRR Istruzione. Rispetta la scadenza del bando e conserva la ricevuta di invio.',
+    portale: 'PNRR Istruzione',
   },
 };
 
@@ -1012,37 +1156,34 @@ const IMPATTO_COPY: Array<{ re: RegExp; copy: ArticoloCopy }> = [
   {
     re: /(?:welfare|polizza|sanitari|assistenza)/i,
     copy: {
-      fatto: 'Una novità concreta per il personale scolastico: è stata annunciata',
+      fatto: 'Una novità concreta per chi lavora a scuola: è stata annunciata',
       chi: 'tutto il personale della scuola — docenti e ATA — e le loro famiglie',
       pratica:
-        'Non è una circolare operativa ma un cambio di condizioni: conviene leggere i dettagli per capire coperture, decorrenza e come aderire, così non resti fuori da un beneficio previsto per te.',
-      come: 'I dettagli e le modalità di adesione sono nella pagina ufficiale del %LINK%: in caso di dubbi, chiedi alla segreteria della tua scuola.',
-      linkLabel: 'Ministero',
-      portale: 'Notizie del Ministero',
+        'Non è una circolare operativa ma un cambio di condizioni: leggi coperture, decorrenza e modalità di adesione, per non restare fuori da un beneficio previsto per te.',
+      come: 'Coperture, decorrenza e come aderire sono nel testo ufficiale. In caso di dubbi, chiedi alla segreteria della tua scuola.',
+      portale: 'Ministero',
     },
   },
   {
     re: /(?:formazione|aggiornamento professionale|MIMeraviglIA)/i,
     copy: {
-      fatto: "Un'opportunità di formazione per il personale scolastico: è online",
+      fatto: 'Aggiornarsi conviene: è online un\u2019opportunità di formazione per il personale scolastico',
       chi: 'docenti, personale ATA e dirigenti scolastici',
       pratica:
-        'Aggiornarsi conta su punteggi, incarichi e crescita professionale: verifica requisiti, tempi e modalità di iscrizione prima che la finestra chiuda.',
-      come: 'Iscrizioni e dettagli sono nella pagina ufficiale del %LINK%: leggi requisiti e tempi prima di iscriverti.',
-      linkLabel: 'Ministero',
-      portale: 'Notizie del Ministero',
+        'La formazione pesa su punteggi, incarichi e crescita professionale: verifica requisiti, tempi e modalità di iscrizione prima che la finestra chiuda.',
+      come: 'Requisiti, tempi e iscrizioni sono nel testo ufficiale: leggi tutto prima di iscriverti.',
+      portale: 'Ministero',
     },
   },
   {
     re: /(?:sicurezza|edilizia|digitalizzazione|organico|cattedre)/i,
     copy: {
-      fatto: "Un cambiamento che riguarda l'organizzazione delle scuole: è stato pubblicato",
-      chi: "il personale scolastico e l'organizzazione della scuola",
+      fatto: 'Cambia qualcosa nell\u2019organizzazione delle scuole: è stato pubblicato',
+      chi: 'il personale scolastico e l\u2019organizzazione della scuola',
       pratica:
-        'Sono le decisioni che poi ricadono su orari, incarichi e dotazioni: leggerle adesso aiuta a capire in anticipo che cosa cambia nella tua scuola.',
-      come: 'Il testo completo è nella pagina ufficiale del %LINK%: controlla che cosa cambia per la tua scuola.',
-      linkLabel: 'Ministero',
-      portale: 'Notizie del Ministero',
+        'Sono decisioni che ricadono su orari, incarichi e dotazioni: leggerle adesso serve a capire in anticipo che cosa cambia nella tua scuola.',
+      come: 'Il testo completo è quello ufficiale: controlla che cosa cambia per la tua scuola.',
+      portale: 'Ministero',
     },
   },
 ];
@@ -1053,26 +1194,17 @@ const IMPATTO_COPY: Array<{ re: RegExp; copy: ArticoloCopy }> = [
  * <h2>: si racconta il fatto, chi è coinvolto e come agire, con il link
  * contestuale alla procedura ufficiale.
  */
-/**
- * URL di ingresso REALE e DI APPROFONDIMENTO degli enti e portali
- * istituzionali citati negli articoli (STRICT URL INTEGRITY):
- *  - niente mockup, niente homepage di radice generiche (mai www.mim.gov.it/);
- *  - i link devono essere risorse di profondità, validati HTTP 200;
- *  - le uniche radici ammesse sono i portali di servizio (Istanze Online/POLIS,
- *    InPA, INPS) dove la radice È l'accesso operativo.
- * L'URL della fonte resta il fallback solo se il portale non è in mappa.
- */
-const URL_PORTALI: Record<string, string> = {
-  'Istanze Online': 'https://www.istruzione.it/polis/Istanzeonline.htm', // Istanze Online / POLIS (200 ✓)
-  'POLIS': 'https://www.istruzione.it/polis/Istanzeonline.htm',
-  'InPA': 'https://www.inpa.gov.it/', // Portale del Reclutamento (200 ✓)
-  'MIM': 'https://www.mim.gov.it/web/guest/notizie', // deep: pagina Notizie (200 ✓)
-  'Ministero': 'https://www.mim.gov.it/web/guest/notizie',
-  'la pagina del Ministero': 'https://www.mim.gov.it/web/guest/notizie',
-  'Notizie del Ministero': 'https://www.mim.gov.it/web/guest/notizie',
-  'INPS': 'https://www.inps.it/', // Portale INPS (200 ✓)
-};
+/** Etichetta ONESTA per il link diretto al documento (mai promesse di candidatura). */
+function etichettaLinkDiretto(url: string): string {
+  return èLinkPdf(url) ? 'apri il documento ufficiale (PDF)' : "apri l'avviso ufficiale";
+}
 
+/**
+ * Genera un articolo giornalistico naturale in 3 paragrafi fluidi, basato solo
+ * sui dati reali della fonte. Taglio da cronaca utile: 1) che cosa cambia, 2)
+ * perché conta per te, 3) che cosa fare — con UN SOLO link, quello diretto al
+ * documento ufficiale.
+ */
 export function generaArticoloEditoriale(
   d: DatiArticoloEditoriale,
 ): { content_html: string; summary_points: string[] } {
@@ -1080,32 +1212,48 @@ export function generaArticoloEditoriale(
   const override = IMPATTO_COPY.find((o) => o.re.test(d.title));
   const a = override?.copy ?? ARTICOLO[cat] ?? ARTICOLO['Scuole'];
   const scadenza = d.deadline ? formattaDataItaliana(d.deadline) : null;
-  const link = d.official_url ?? '';
 
-  // Ogni menzione del portale è SEMPRE un link cliccabile verso l'URL reale
-  // dell'ente (mappa), con fallback all'URL della fonte della notizia.
-  const hrefPortale = URL_PORTALI[a.portale] ?? link;
+  // UNICO link ammesso: l'URL DIRETTO del documento della notizia (mai home,
+  // indici, elenchi, URP o archivi — vedi `linkDirettoUfficiale`). Se il
+  // documento specifico non è disponibile, il testo non contiene link e
+  // l'articolo viene comunque bloccato dal gate di pubblicazione.
+  const link = (d.official_url ?? '').trim();
+  const hrefDiretto = linkDirettoUfficiale(link).ok ? link : '';
   const anchor = (testo: string): string =>
-    hrefPortale
-      ? `<a href="${escapeHtmlEditoriale(hrefPortale)}" target="_blank" rel="noopener noreferrer">${escapeHtmlEditoriale(testo)}</a>`
+    hrefDiretto
+      ? `<a href="${escapeHtmlEditoriale(hrefDiretto)}" target="_blank" rel="noopener noreferrer">${escapeHtmlEditoriale(testo)}</a>`
       : escapeHtmlEditoriale(testo);
 
+  // 1) Che cosa cambia, subito (nessuna apertura istituzionale). Una scadenza
+  // già passata non si presenta come invito all'azione: si invita a verificare.
+  const scadenzaMs = d.deadline ? new Date(d.deadline).getTime() : Number.NaN;
+  const scadenzaPassata = !Number.isNaN(scadenzaMs) && scadenzaMs < Date.now();
   const par1 = `${a.fatto} \u00ab${escapeHtmlEditoriale(d.title)}\u00bb. ${
-    scadenza
-      ? `Il termine per presentare la domanda è il ${scadenza}.`
-      : `La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su ${anchor(a.portale)} e ti avviseremo appena esce.`
+    scadenza && !scadenzaPassata
+      ? `Hai tempo fino al ${scadenza}: non rimandare all'ultimo giorno.`
+      : scadenzaPassata
+        ? `Il termine indicato era il ${scadenza}: controlla nel testo ufficiale se la procedura è ancora aperta.`
+        : `Scadenza ufficiale non ancora pubblicata: la trovi ${anchor("nell'avviso ufficiale")} — ti avvisiamo appena esce.`
   }`;
 
-  const par2 = `La notizia riguarda ${a.chi}. ${a.pratica}`;
+  // 2) Perché conta (a chi serve, che cosa rischia).
+  const par2 = `Riguarda ${a.chi}. ${a.pratica}`;
 
-  const par3 = a.come.split('%LINK%').join(anchor(a.linkLabel));
+  // 3) Che cosa fare, con il link diretto al documento ufficiale.
+  const par3 = `${a.come}${
+    hrefDiretto ? ` Testo ufficiale: ${anchor(etichettaLinkDiretto(hrefDiretto))}.` : ''
+  }`;
 
   const content_html = `<p>${par1}</p>\n    <p>${par2}</p>\n    <p>${par3}</p>`;
 
   const summary_points = [
     d.title,
     `Interessati: ${a.chi}.`,
-    scadenza ? `Scadenza: ${scadenza}.` : `Come: procedi su ${a.portale}.`,
+    scadenza
+      ? scadenzaPassata
+        ? `Scadenza indicata: ${scadenza} (verifica apertura nel testo ufficiale).`
+        : `Scadenza: ${scadenza}.`
+      : `Come: apri il documento ufficiale dell'avviso.`,
   ];
 
   return { content_html, summary_points };
@@ -1127,17 +1275,18 @@ Scrivi un articolo di 3 paragrafi fluidi e naturali, in italiano, basandoti SOLO
 - Descrizione della fonte: ${d.descrizione ?? ''}
 
 Struttura (3 paragrafi, senza titoli di sezione):
-1. Che cosa è successo: il fatto e il RIFERIMENTO UFFICIALE ESATTO (es. "l'Ordinanza Ministeriale n. X del ...", "il Decreto Ministeriale ...", "la Nota prot. ...", "l'articolo X della legge ...") con la scadenza ESATTA (es. "Il termine per presentare la domanda è il 30 settembre 2026"). MAI scrivere "le date saranno confermate" o altri testi vaghi.
-2. Chi è coinvolto e che cosa significa in pratica, spiegando la burocrazia in LINGUAGGIO SEMPLICE per docenti e personale ATA.
-3. Dove e come agire: portale ufficiale, modalità e link contestuale obbligatorio <a href="${d.official_url ?? ''}" target="_blank" rel="noopener noreferrer">Accedi al portale</a>.
+1. CHE COSA CAMBIA: apri con l'azione o la conseguenza pratica per chi legge (es. "Hai tempo fino al 30 settembre per…", "Cambiano le regole per le supplenze:…", "Arrivano i fondi per…") e cita il RIFERIMENTO UFFICIALE ESATTO (es. "l'Ordinanza Ministeriale n. X del ...", "il Decreto Ministeriale ...", "la Nota prot. ...") con la scadenza ESATTA. VIETATE le aperture istituzionali ("Il Ministero dell'Istruzione e del Merito ha comunicato che…", "Il MIM ha pubblicato…", "È stato pubblicato…") e i testi vaghi ("le date saranno confermate").
+2. PERCHÉ CONTA PER TE: a chi serve (docenti, ATA, dirigenti) e che cosa si rischia a non muoversi, spiegando la burocrazia in LINGUAGGIO SEMPLICE.
+3. CHE COSA FARE: come si procede (portale, modalità, documenti) e UN SOLO link, quello diretto al documento ufficiale.
 
 REGOLE VINCOLANTI:
 - VALIDITÀ GIURIDICA: cita SEMPRE il riferimento normativo preciso (Ordinanza Ministeriale, Decreto, Nota prot., articolo di legge) quando la fonte lo contiene; mai riferimenti generici.
-- LINGUAGGIO CHIARO: spiega la procedura come la spiegheresti a un docente o a un ATA, senza tecnicismi inutili, senza fluff e senza cliché da chatbot ("C'è una novità ufficiale", "La fonte ufficiale segnala", "Vale la pena di leggere subito", "non perdere tempo").
+- ZERO BUROCRAZIA: frasi brevi e voce diretta, seconda persona ("hai", "puoi", "devi"), niente premesse istituzionali, niente fluff, niente cliché da chatbot ("C'è una novità ufficiale", "La fonte ufficiale segnala", "Vale la pena di leggere subito").
 - ZERO RUMORE: nessun contenuto promozionale, nessun riferimento a discorsi, interviste o dichiarazioni non vincolanti.
-- STRICT URL INTEGRITY: ogni link deve puntare a una risorsa REALE di approfondimento, mai a homepage di radice (es. https://www.mim.gov.it/ è VIETATA come destinazione; usa https://www.mim.gov.it/web/guest/notizie). Portali di servizio consentiti SOLO come destinazione operativa: Istanze Online/POLIS → https://www.istruzione.it/polis/Istanzeonline.htm, InPA → https://www.inpa.gov.it/, INPS → https://www.inps.it/. Vietato inventare URL o usare segnaposto.
-- PDF UFFICIALE: se la fonte è un documento PDF ufficiale o ne fornisce uno allegato, nel paragrafo 3 includi un link dedicato che apra il PDF in una nuova scheda (target="_blank" rel="noopener noreferrer").
+- LINK PUNTO-A-PUNTO (OBBLIGATORIO): nel testo puoi usare SOLO l'URL diretto del documento specifico (${d.official_url ?? 'n/d'}) o un suo allegato PDF ufficiale. Sono VIETATI home page, indici, elenchi, pagina "notizie", directory URP, archivi e URL con parametri di ricerca o paginazione. I portali di servizio (Istanze Online/POLIS, InPA, INPS) si citano SOLO a parole, senza link. Vietato inventare URL o usare segnaposto; se il documento specifico non è disponibile, NON inserire alcun link.
+- PDF UFFICIALE: se la fonte è un PDF ufficiale o ne fornisce uno allegato, usa quell'URL diretto nel link (target="_blank" rel="noopener noreferrer").
 - Spiega SEMPRE gli acronimi alla prima menzione (es. "GPS (Graduatorie Provinciali per le Supplenze, le liste per gli incarichi annuali)", "SPID (Sistema Pubblico di Identità Digitale)").
-- Niente <h2>, niente riempitivi, niente dati inventati. Restituisci SOLO i 3 paragrafi in HTML.`;
+- Niente <h2>, niente riempitivi, niente dati inventati. Restituisci SOLO i 3 paragrafi in HTML.
+- NON aggiungere footer, firme, link al blog, inviti a iscriversi o CTA promozionali.`;
 }
 

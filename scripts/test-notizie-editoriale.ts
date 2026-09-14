@@ -12,6 +12,9 @@
 import { readFileSync } from 'node:fs';
 import {
   attoBurocraticoVuoto,
+  generaArticoloEditoriale,
+  linkDirettoUfficiale,
+  linkVietatiInHtml,
   riferimentiObsoleti,
   titoloAzione,
   titoloInformativo,
@@ -148,7 +151,135 @@ check('nessun titolo pigro/non informativo', [], pigri);
 const obsoleti = titoli.filter((t) => riferimentiObsoleti(t, null));
 check('nessun titolo d’archivio obsoleto', [], obsoleti);
 
-console.log(
+console.log('\n— LINK PUNTO-A-PUNTO: contenitori e indici VIETATI —');
+const urlVietati = [
+  'https://www.mim.gov.it/',
+  'https://www.mim.gov.it/web/guest/notizie',
+  'https://www.istruzione.it/polis/Istanzeonline.htm',
+  'https://www.inpa.gov.it/',
+  'https://www.inps.it/',
+  'https://usrlombardia.istruzione.it/urp',
+  'https://usrlombardia.istruzione.it/elenco-interpelli-2026/',
+  'https://www.aranagenzia.it/atti/',
+  'https://www.mim.gov.it/web/usr-lombardia/interpelli-ricerca-supplenti',
+  'https://www.mim.gov.it/ricerca?q=supplenze',
+  'https://www.mim.gov.it/web/guest/notizie/page/2',
+  'https://www.mim.gov.it/albo-pretorio',
+];
+const ammessiMale = urlVietati.filter((u) => linkDirettoUfficiale(u).ok);
+check('nessun contenitore/indice passa il gate', [], ammessiMale);
+
+console.log('\n— LINK PUNTO-A-PUNTO: documenti specifici AMMESSI —');
+const urlAmmessi = [
+  'https://www.mim.gov.it/web/guest/-/supplenze-e-ruoli-docenti-2026-al-via-la-scelta-delle-150-sedi',
+  'https://www.mim.gov.it/web/guest/-/welfare-per-il-personale-della-scuola-parte-la-polizza-sanitaria',
+  'https://www.aranagenzia.it/documento_pubblico/contratto-collettivo-nazionale-di-lavoro-relativo-al-personale-dellarea-istruzione-e-ricerca-triennio-2022-2024/',
+  'https://www.gazzettaufficiale.it/atto/serie_generale/caricaDettaglioAtto/originario?atto.codiceRedazionale=26A00001',
+  'https://usrlombardia.istruzione.it/albo/avviso-a022-manzoni.pdf',
+];
+const rifiutatiMale = urlAmmessi.filter((u) => !linkDirettoUfficiale(u).ok);
+check('nessun documento specifico viene respinto', [], rifiutatiMale);
+check(
+  'link HTML a contenitore individuato nel testo',
+  true,
+  linkVietatiInHtml('<p>vedi <a href="https://www.mim.gov.it/web/guest/notizie">notizie</a></p>').length > 0,
+);
+check(
+  'link HTML al documento specifico accettato',
+  [],
+  linkVietatiInHtml(
+    '<p><a href="https://www.mim.gov.it/web/guest/-/calendario-delle-festivita-e-degli-esami-anno-scolastico-2026-2027">apri</a></p>',
+  ),
+);
+
+console.log('\n— TONO: nessuna apertura burocratica, solo link diretti —');
+const marcatore = 'notizieIngestite: NewsArticle[] = [';
+const posArr = archivio.indexOf(marcatore);
+const articoli = JSON.parse(
+  archivio.slice(posArr + marcatore.length - 1, archivio.lastIndexOf(']') + 1),
+) as Array<{
+  id: string;
+  title: string;
+  content_html: string;
+  official_source_url: string;
+}>;
+check('archivio leggibile come JSON', true, articoli.length > 0);
+const aperturaVietata =
+  /^(?:il ministero|il mim|il ministero dell|è stato pubblicato|la notizia riguarda|si comunica|si rende noto)/i;
+const testoPar1 = (html: string) =>
+  (html.match(/<p>([\s\S]*?)<\/p>/)?.[1] ?? '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim();
+const apertureBurocratiche = articoli
+  .filter((a) => aperturaVietata.test(testoPar1(a.content_html)))
+  .map((a) => a.id);
+check('nessuna apertura istituzionale nel primo paragrafo', [], apertureBurocratiche);
+check(
+  'ogni articolo ha il link diretto al documento',
+  [],
+  articoli.filter((a) => !linkDirettoUfficiale(a.official_source_url).ok).map((a) => a.id),
+);
+check(
+  'nessun link a contenitori nel testo pubblicato',
+  [],
+  articoli.flatMap((a) => linkVietatiInHtml(a.content_html)),
+);
+check(
+  'ogni articolo contiene almeno il link ufficiale',
+  [],
+  articoli
+    .filter((a) => !a.content_html.includes(`href="${a.official_source_url}"`))
+    .map((a) => a.id),
+);
+
+console.log('\n— COPY AZIONE: generaArticoloEditoriale —');
+const generato = generaArticoloEditoriale({
+  title: 'Supplenze e ruoli docenti 2026: al via la scelta delle 150 sedi',
+  categoria: 'GPS',
+  deadline: '2099-12-31',
+  fonte: 'MIM',
+  official_url: 'https://www.mim.gov.it/web/guest/-/supplenze-e-ruoli-docenti-2026-al-via-la-scelta-delle-150-sedi',
+});
+check(
+  'apertura in chiave azione (nessun "Il Ministero")',
+  false,
+  /^\s*<p>\s*(?:Il Ministero|Il MIM)/i.test(generato.content_html),
+);
+check(
+  'un solo URL nel testo: quello diretto',
+  1,
+  new Set([...generato.content_html.matchAll(/href="([^"]+)"/g)].map((m) => m[1])).size,
+);
+check(
+  'scadenza futura presentata come invito all’azione',
+  true,
+  /Hai tempo fino al 31 dicembre 2099/.test(generato.content_html),
+);
+const generatoScaduto = generaArticoloEditoriale({
+  title: 'Mobilità Dirigenti Scolastici, conferimento e mutamento incarichi per il 2026/27',
+  categoria: 'Mobilità',
+  deadline: '2020-07-01',
+  fonte: 'MIM',
+  official_url: 'https://www.mim.gov.it/web/guest/-/mobilita-dirigenti-scolastici-2026-27-domanda-online',
+});
+check(
+  'scadenza passata: nessun invito all’azione fuorviante',
+  true,
+  /Il termine indicato era il 1 luglio 2020/.test(generatoScaduto.content_html),
+);
+const senzaLink = generaArticoloEditoriale({
+  title: 'Concorso ordinario 2026: prova scritta e requisiti',
+  categoria: 'Concorsi',
+  deadline: null,
+  fonte: 'MIM',
+  official_url: 'https://www.mim.gov.it/web/guest/notizie',
+});
+check('senza link diretto: nessun link nel testo', 0, senzaLink.content_html.includes('href="') ? 1 : 0);
+
+
+  console.log(
   errori === 0
     ? '\n✅ NOTIZIE EDITORIALE: nessun problema'
     : `\n❌ NOTIZIE EDITORIALE: ${errori} errore/i`,

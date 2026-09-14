@@ -13,6 +13,7 @@
     "scrape": "tsx src/scraper/index.ts",
     "scrape:check": "tsc --noEmit -p tsconfig.scraper.json",
     "scrape:notizie": "tsx src/departments/notizie/services/ingestNotizie.ts",
+    "notizie:ripara-archivio": "tsx scripts/ripara-archivio-notizie.ts",
     "scrape:notizie:check": "tsc --noEmit -p tsconfig.notizie.json",
     "test:telegram": "tsx scripts/test-telegram.ts",
     "test:telegram:template": "tsx scripts/test-telegram-template.ts",

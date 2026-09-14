@@ -257,8 +257,9 @@ Supabase DB (pg_cron + trigger):
 | `data/notizieSeed.ts` | — | Articoli editoriali seed |
 | `data/notizieIngestite.ts` | — | **File GENERATO** dall'ingestione (accumulo, dedupe per id, refresh delle voci esistenti, SOLO fonti nazionali) |
 | `services/newsFetcher.ts` | ~560 | **Node-only** — fetch fonti **NAZIONALI**: MIM (`/web/guest/notizie`, `/web/guest/avvisi`, home, `/notizie`) + Gazzetta Ufficiale (RSS + elenco atti `/home`) + ARAN/giurisdizione; **waterfall** `LIVELLI_NAZIONALI`/`raccogliLivello` |
-| `services/relevanceEngine.ts` | ~790 | **Node-only, puro** — regole editoriali (§9): `èFonteNazionale`/`èFonteMim`, **anti-burocrazia** (`attoBurocraticoVuoto`, `titoloInformativo`, `riferimentiObsoleti`), **impatto** (`categoriaDaImpatto`/`PAROLE_IMPATTO`), **`titoloAzione`** (titoli riscritti in chiave azione), finestra `FINESTRA_LOOKBACK_NAZIONALE_GIORNI`, **`limitaCadenzaSettimanale`** (max 3 articoli datati/7 giorni) |
-| `services/ingestNotizie.ts` | ~250 | **Node-only** — CLI pipeline: **waterfall** livelli 1→4 → filtra → tetto 6 (finestra 15 gg) → igiene nazionale → scrive `notizieIngestite.ts` |
+| `services/relevanceEngine.ts` | ~1300 | **Node-only, puro** — regole editoriali (§9): `èFonteNazionale`/`èFonteMim`, **anti-burocrazia** (`attoBurocraticoVuoto`, `titoloInformativo`, `riferimentiObsoleti`), **impatto** (`categoriaDaImpatto`/`PAROLE_IMPATTO`), **`titoloAzione`**, **`linkDirettoUfficiale`** + **`linkVietatiInHtml`** (link PUNTO-A-PUNTO: mai indici/home/URP), `articoloValido`, `generaArticoloEditoriale` (copy azione, un solo link diretto), **`limitaCadenzaSettimanale`** (max 3 articoli datati/7 giorni) |
+| `services/ingestNotizie.ts` | ~400 | **Node-only** — CLI pipeline: **waterfall** livelli 1→4 → filtra → **gate link punto-a-punto** → tetto 6 (finestra 15 gg) → igiene nazionale → scrive `notizieIngestite.ts` |
+| `services/archivioNotizie.ts` | ~85 | Lettura/scrittura del file archivio (`scriviArchivioNotizie`, `leggiArchivioNotizie`, `estraiArticoliDaTesto`): unico punto di serializzazione di `notizieIngestite.ts` |
 | `services/newsService.ts` | ~105 | Frontend: `unisciNotizie` (seed+ingested, dedupe), **`ordinaNotizie`** (data di pubblicazione DECRESCENTE; il punteggio è solo tie-break), `newsArticles` (feed già ordinato), `categorieNotizie`, `getNotiziaById`, `formatDataNotizia`, `newsFallback` |
 | `components/NotizieHero.tsx` | — | Hero editoriale pagina Notizie + `SeoMeta` |
 | `components/NotizieGrid.tsx` | — | Griglia articoli + filtro categoria + CTA radar |
@@ -801,15 +802,30 @@ Client tipizzato dell'Edge `genera-modulo` + motore locale cache-first:
   `limitaArticoliSettimanali(articoli, oggi, max)`: finestra di lookback di 15
   giorni (avvio anno scolastico, ≈3/settimana); se non ci sono provvedimenti
   vincolanti → **0 articoli**.
-- `generaArticoloEditoriale(dati)` (acronimi spiegati, link di approfondimento reali,
-  brand ScuoleRadar) + `promptScritturaArticolo`/`promptFiltroLLM`.
+- `generaArticoloEditoriale(dati)` (apertura in chiave AZIONE, acronimi spiegati,
+  **un solo link**: quello diretto al documento ufficiale) +
+  `promptScritturaArticolo`/`promptFiltroLLM`.
+- **Link punto-a-punto**: `linkDirettoUfficiale(url)` è il gate unico (rifiuta
+  homepage, indici/elenchi, archivi, URP, pagine "notizie", URL di
+  ricerca/paginazione; ammette PDF e pagine-documento con slug identificativo);
+  `linkVietatiInHtml(html)` applica la stessa regola ai link nel testo.
+  **Senza link diretto l'articolo non si pubblica.**
 - `validaUrlDeepLink`, `èLinkPdf`, `èFonteCanonica`, `articoloValido`.
+- `articoloValido` = gate finale: id/titolo/link presenti, URL non generico,
+  fonte canonica e NAZIONALE, link puntuale, nessun link-contenitore nel testo.
 
 ### 9.4 `ingestNotizie.ts` (CLI)
-Pipeline: raccogli voci (fetchTesto) → valuta rilevanza → verifica URL → genera articolo →
-tetto settimanale → **accoda a `notizieIngestite.ts`** (scrittura) o `--dry-run`.
+Pipeline: raccogli voci (fetchTesto) → valuta rilevanza → **gate link
+punto-a-punto** → verifica HTTP 200 → genera articolo → tetto settimanale →
+**accoda a `notizieIngestite.ts`** (scrittura via `archivioNotizie.ts`) o
+`--dry-run`.
 Esiti: `✓ HTTP 200 - 0 new posts criteria matched` (file invariato, nessun commit) oppure
 `✗ HTTP FAIL` (exit 1 → warning nel workflow).
+
+**Manutenzione**: `npm run notizie:ripara-archivio` (opzione `-- --dry`) rigenera
+il copy dell'archivio storico (git HEAD + corrente) con le regole editoriali
+correnti e rimuove le voci non conformi: serve quando cambiano le regole di copy
+o di link, perché l'ingestione non riscrive il copy già pubblicato.
 
 ### 9.5 Automazione (`.github/workflows/scrape-notizie.yml`)
 - Cron **ogni giorno 06:00 UTC** + `workflow_dispatch`; `permissions: contents: write`.

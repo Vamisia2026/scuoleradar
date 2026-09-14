@@ -109,18 +109,23 @@
    - Il blog è un **filtro sulle fonti ufficiali**, NON una vetrina di moduli o
      template interni.
 
-5. **STRICT URL INTEGRITY**
+5. **LINK PUNTO-A-PUNTO (Obbligatorio)**
    - **Niente mockup**, niente segnaposto, niente URL inventati.
-   - **Niente fallback a root-domain generici**: mai linkare homepage come
-     `https://www.mim.gov.it/` come "fonte".
-   - Tutti i link devono essere **link di approfondimento reali** e validati
-     **HTTP 200** in fase di ingestione (niente link rotti in pubblicazione).
-   - Uniche radici ammesse: i **portali di servizio** dove la radice È l'accesso
-     operativo (InPA, INPS). Istanze Online/POLIS ha una pagina canonica dedicata.
-   - Sono ammessi anche gli **articoli dei siti regionali USR** (pattern canonico
-     Liferay `/web/usr-*/-/<slug>`), oltre a quelli del MIM `/web/guest/-/<slug>`.
-   - Sono **rifiutate le pagine generiche di accesso** (login e area riservata:
-     `/login`, `/accedi`, `/area-riservata`…): non sono contenuti informativi.
+   - **Il link ufficiale deve puntare SOLO al documento specifico**: la pagina
+     dell'avviso/decreto/comunicato (o il suo PDF). È la regola
+     `linkDirettoUfficiale()`.
+   - **VIETATI come link**: homepage di qualunque sito (anche dei portali di
+     servizio), indici ed elenchi (`/elenco-interpelli-2026`, `/atti`,
+     `/archivio`, `/albo-pretorio`), pagine "notizie"/"comunicati", directory
+     **URP**, pagine di ricerca (`?q=`, `?s=`, filtri) e di paginazione
+     (`/page/2`).
+   - I portali di servizio (Istanze Online/POLIS, InPA, INPS) si **citano a
+     parole, senza link**: sono punti di accesso, non documenti.
+   - **Se il link diretto non è estraibile in modo affidabile, l'articolo NON si
+     pubblica** (nessun fallback a un contenitore "master").
+   - La regola vale due volte: sul campo `official_source_url` **e** sui link
+     dentro il testo (`linkVietatiInHtml`), validati **HTTP 200/3xx** in fase di
+     ingestione.
 
 6. **GESTIONE PDF UFFICIALI**
    - Se la fonte è un **documento PDF ufficiale** (o l'avviso fornisce un PDF
@@ -165,34 +170,48 @@
 
 ## 4. Stile e linguaggio
 
-- Tono: giornalistico, sobrio, orientato all'azione ("come agire").
-- Struttura fissa: **3 paragrafi** — 1) fatto + riferimento + scadenza,
-  2) chi è coinvolto e cosa significa in pratica, 3) dove e come agire con link
-  contestuale.
+- **Voce diretta, zero burocrazia**: si parte da **che cosa cambia** e da
+  **che cosa devi fare**. Vietate le aperture istituzionali del tipo
+  *"Il Ministero dell'Istruzione e del Merito ha comunicato che…"*,
+  *"Il MIM ha pubblicato…"*, *"È stato pubblicato…"*, *"La notizia riguarda…"*.
+- **Struttura fissa in 3 paragrafi**:
+  1. **CHE COSA CAMBIA** — azione o conseguenza pratica + riferimento ufficiale
+     esatto + scadenza ("Hai tempo fino al 30 settembre…"). Se la scadenza è già
+     passata non si invita all'azione: si dice di verificare nel testo ufficiale.
+  2. **PERCHÉ CONTA PER TE** — a chi serve (docenti, ATA, dirigenti) e che cosa
+     si rischia a non muoversi.
+  3. **CHE COSA FARE** — modalità, documenti e **un solo link**: quello diretto
+     al documento ufficiale (etichetta onesta: "apri l'avviso ufficiale" /
+     "apri il documento ufficiale (PDF)").
 - Acronimi spiegati alla prima menzione; niente sezioni `<h2>` nel corpo.
-- Link contestuali: ogni menzione di portale esterno è un `<a>` cliccabile
-  (`target="_blank" rel="noopener noreferrer"`) verso l'URL reale di
-  approfondimento.
+- Frase breve, seconda persona ("hai", "puoi", "devi"): il lettore deve capire
+  in 20 secondi se lo riguarda.
 
-## 5. Integrità degli URL (Strict URL Integrity)
+## 5. Integrità degli URL (link punto-a-punto)
 
-- `validaUrlDeepLink` (controllo puro, senza rete) rifiuta:
-  - URL non HTTP(S);
-  - root-domain generici (es. `https://www.mim.gov.it/`);
-  - URL con segnali da mockup/placeholder (`example.com`, `localhost`,
-    `mockup`, `:5173`…).
+- `linkDirettoUfficiale(url)` (controllo puro, senza rete) è il **gate unico**
+  dei link: rifiuta
+  - URL non HTTP(S) e con segnali da mockup/placeholder (`example.com`,
+    `localhost`, `mockup`, `:5173`…);
+  - **homepage** di qualunque dominio (anche portali di servizio);
+  - **indici, elenchi, archivi, directory URP, pagine "notizie/comunicati"**
+    (ultimo segmento del percorso o slug "istituzionale puro" tipo
+    `elenco-interpelli-2026`);
+  - URL con **parametri di ricerca/filtro** o di **paginazione**;
+  - pagine di login/area riservata (`/login`, `/accedi`…).
+  Ammette i **PDF** (documento specifico) e le pagine-documento con slug
+  identificativo (es. `/web/guest/-/supplenze-e-ruoli-docenti-2026-al-via-…`,
+  `/documento_pubblico/contratto-…-2022-2024/`, Gazzetta Ufficiale
+  `caricaDettaglioAtto`).
+- `linkVietatiInHtml(html)` applica la stessa regola ai link **dentro** il testo
+  dell'articolo (sono ammessi solo il documento specifico e i link interni
+  `scuoleradar.it`).
 - `verificaUrlUfficiale` (controllo di rete, in `newsFetcher.ts`) verifica che
   il link risponda **HTTP 200/3xx** prima di pubblicare.
-- Mappa dei portali (`URL_PORTALI`) — link verificati:
-  | Portale | URL | Note |
-  |---|---:|---|
-  | Istanze Online / POLIS | `https://www.istruzione.it/polis/Istanzeonline.htm` | Pagina ufficiale POLIS (200 ✓) |
-  | InPA | `https://www.inpa.gov.it/` | Portale del Reclutamento (200 ✓) |
-  | MIM — Notizie | `https://www.mim.gov.it/web/guest/notizie` | Link di profondità (200 ✓) |
-  | INPS | `https://www.inps.it/` | Portale di servizio (200 ✓) |
-  - **NOTA**: la radice `https://www.istanze.istruzione.it/` e il percorso
-    `/istanzeonline/` sono irraggiungibili/404: usare SEMPRE la pagina POLIS
-    canonica `https://www.istruzione.it/polis/Istanzeonline.htm` (200 ✓).
+- **Nessun fallback**: se il documento specifico non è disponibile l'articolo
+  non viene pubblicato (il blog non linka mai contenitori/indici).
+- Manutenzione: `npm run notizie:ripara-archivio` rigenera il copy dell'archivio
+  storico secondo le regole correnti e rimuove le voci non conformi.
 
 ## 6. PDF ufficiali
 
@@ -211,9 +230,11 @@
 
 | File | Ruolo |
 |---|---|
-| `src/departments/notizie/services/relevanceEngine.ts` | Motore puro: `valutaRilevanza` (avvio anno: `PAROLE_ACCETTA` + categoria ufficiale, oppure termine "forte" `PAROLE_FORTI_INIZIO_ANNO` → categoria inferita `CATEGORIE_INIZIO_ANNO`), `PAROLE_RIFIUTA`, `URL_PORTALI`, `validaUrlDeepLink`, `èLinkPdf`, `èFonteCanonica`, `limitaArticoliSettimanali` (`MAX_ARTICOLI_FINESTRA = 6`, `FINESTRA_LOOKBACK_GIORNI = 15`), `promptFiltroLLM`, `promptScritturaArticolo`, `generaArticoloEditoriale` |
+| `src/departments/notizie/services/relevanceEngine.ts` | Motore puro: `valutaRilevanza` (anti-burocrazia: `attoBurocraticoVuoto`, `titoloInformativo`, `riferimentiObsoleti`; impatto: `categoriaDaImpatto`; waterfall nazionale), **`linkDirettoUfficiale`** + **`linkVietatiInHtml`** (link punto-a-punto), `èFonteCanonica`, `èFonteNazionale`, `titoloAzione`, `articoloValido`, `limitaCadenzaSettimanale`, `promptFiltroLLM`, `promptScritturaArticolo`, **`generaArticoloEditoriale`** (copy azione a 3 paragrafi, un solo link diretto) |
 | `src/departments/notizie/services/newsFetcher.ts` | Raccolta fonti ufficiali (MIM, G.U.) + `verificaUrlUfficiale` (HTTP 200/3xx) |
-| `src/departments/notizie/services/ingestNotizie.ts` | Pipeline: lookback 15 gg → filtro → validazione URL → generazione → tetto articoli (6) → accumulo con dedupe |
+| `src/departments/notizie/services/ingestNotizie.ts` | Pipeline: lookback 15 gg → filtro → **gate link punto-a-punto** → generazione → tetto articoli (6) → accumulo con dedupe |
+| `src/departments/notizie/services/archivioNotizie.ts` | Lettura/scrittura dell'archivio generato (`scriviArchivioNotizie`, `leggiArchivioNotizie`, `estraiArticoliDaTesto`) |
+| `scripts/ripara-archivio-notizie.ts` | `npm run notizie:ripara-archivio`: rigenera il copy storico e rimuove le voci non conformi |
 | `src/departments/notizie/data/notizieSeed.ts` | Articoli seed curati a mano (conformi alle regole) |
 | `src/departments/notizie/data/notizieIngestite.ts` | Archivio generato dall'ingestione (accumulo) |
 | `src/departments/notizie/components/NotizieGrid.tsx` | Card con badge PDF ufficiale dedicato |
@@ -230,8 +251,12 @@
 - [ ] **Nessun** contenuto di marketing/press-release (discorsi, interviste,
       comunicati, eventi)
 - [ ] **3 paragrafi**, acronimi spiegati alla prima menzione, zero cliché
-- [ ] Link di **approfondimento reali** validati HTTP 200; **nessun**
-      root-domain generico né mockup
+- [ ] **Tono azione**: nessuna apertura istituzionale ("Il Ministero ha
+      comunicato…"), si parte da che cosa cambia e da che cosa fare
+- [ ] **Link punto-a-punto**: un solo link, quello diretto al documento
+      specifico (pagina o PDF) validato HTTP 200; **nessun** contenitore, indice,
+      elenco, homepage, URP, pagina "notizie" o URL di ricerca/paginazione
+- [ ] Se il link diretto non è disponibile → l'articolo **non si pubblica**
 - [ ] Se la fonte è un **PDF ufficiale** → bottone dedicato
       **"Visualizza PDF Ufficiale"** che apre il PDF in nuova scheda
 - [ ] Scadenza **esatta** (mai "date da confermare")

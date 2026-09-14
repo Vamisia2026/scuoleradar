@@ -30,9 +30,6 @@
  *   npm run scrape:notizie -- --dry-run   # solo estrazione + filtro, nessuna scrittura
  */
 import process from 'node:process';
-import { writeFileSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   LIVELLI_NAZIONALI,
   raccogliLivello,
@@ -41,11 +38,15 @@ import {
 } from './newsFetcher.ts';
 import { notizieIngestite } from '../data/notizieIngestite.ts';
 import {
+  FILE_ARCHIVIO_NOTIZIE,
+  scriviArchivioNotizie,
+} from './archivioNotizie.ts';
+import {
   valutaRilevanza,
   punteggioRilevanza,
   articoloValido,
   generaArticoloEditoriale,
-  validaUrlDeepLink,
+  linkDirettoUfficiale,
   èFonteCanonica,
   limitaArticoliSettimanali,
   limitaCadenzaSettimanale,
@@ -58,9 +59,6 @@ import {
   type ValutazioneNotizia,
 } from './relevanceEngine.ts';
 import type { NewsArticle } from '../types.ts';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const FILE_USCITA = join(__dirname, '..', 'data', 'notizieIngestite.ts');
 
 function slug(testo: string): string {
   return testo
@@ -139,10 +137,14 @@ async function costruisciArticolo(v: VoceFonte): Promise<NewsArticle | null> {
     return null;
   }
 
-  // STRICT URL INTEGRITY: niente mockup né root-domain generici.
-  const motivoUrl = validaUrlDeepLink(v.link);
-  if (motivoUrl) {
-    console.log(`  ✗ RIFIUTATA (URL): ${v.title.slice(0, 70)} — ${motivoUrl}`);
+  // PUNTO-A-PUNTO: la notizia si pubblica SOLO con l'URL diretto del documento
+  // specifico. Indici, elenchi, home page, directory URP e archivi "master"
+  // bloccano la pubblicazione: nessun fallback a contenitori generici.
+  const diretto = linkDirettoUfficiale(v.link);
+  if (!diretto.ok) {
+    console.log(
+      `  ✗ RIFIUTATA (link non puntuale): ${v.title.slice(0, 70)} — ${diretto.motivo}`,
+    );
     return null;
   }
 
@@ -210,32 +212,9 @@ async function costruisciArticolo(v: VoceFonte): Promise<NewsArticle | null> {
 
 /**
  * Scrive l'archivio notizie (accumulo) su `notizieIngestite.ts`.
- * Il file è GENERATO: non modificarlo a mano.
+ * Il file è GENERATO: non modificarlo a mano (serializzazione centralizzata in
+ * `archivioNotizie.ts`).
  */
-function scriviArchivio(articoli: NewsArticle[]): void {
-  const contenuto = `/**
- * ScuoleRadar.it — Notizie ingestite (dati reali).
- *
- * File GENERATO automaticamente dal servizio di ingestione:
- *   npm run scrape:notizie
- * Non modificarlo a mano: il contenuto viene rigenerato ad ogni ingestione
- * (accelerazione ACCUMULATIVA con dedupe per id, REFRESH delle voci esistenti,
- * validazione URL HTTP 200, tetto di 6 articoli nella finestra di 15 giorni).
- *
- * POLICY NAZIONALE: sono ammesse SOLO fonti nazionali accreditate (MIM,
- * Gazzetta Ufficiale, ARAN, giurisdizione contabile/amministrativa). Le pagine
- * REGIONALI (USR) sono escluse: le voci regionali eventualmente presenti
- * vengono rimosse dall'igiene dell'archivio.
- */
-import type { NewsArticle } from '../types';
-
-/** Notizie reali ingressate dalle fonti ufficiali NAZIONALI (MIM, Gazzetta Ufficiale, ARAN). */
-export const notizieIngestite: NewsArticle[] = ${JSON.stringify(articoli, null, 2)};
-`;
-
-  mkdirSync(dirname(FILE_USCITA), { recursive: true });
-  writeFileSync(FILE_USCITA, contenuto, 'utf8');
-}
 
 /**
  * WATERFALL NAZIONALE (requisito editoriale): interroga i livelli in ordine di
@@ -423,11 +402,11 @@ async function main(): Promise<void> {
     return;
   }
 
-  scriviArchivio(mantenuti);
+  scriviArchivioNotizie(mantenuti);
   console.log(
     `✓ HTTP 200 - ${aggiunti.length} new posts criteria matched${aggiornati > 0 ? ` (${aggiornati} aggiornati)` : ''}${potati > 0 ? ` (${potati} potati)` : ''}`,
   );
-  console.log(`✓ Scritti ${mantenuti.length} articoli in ${FILE_USCITA}`);
+  console.log(`✓ Scritti ${mantenuti.length} articoli in ${FILE_ARCHIVIO_NOTIZIE}`);
   reportCadenza(mantenuti);
 }
 
