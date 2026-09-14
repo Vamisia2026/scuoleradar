@@ -263,6 +263,7 @@ Supabase DB (pg_cron + trigger):
 | `services/relevanceEngine.ts` | ~1300 | **Node-only, puro** — regole editoriali (§9): `èFonteNazionale`/`èFonteMim`, **anti-burocrazia** (`attoBurocraticoVuoto`, `titoloInformativo`, `riferimentiObsoleti`), **impatto** (`categoriaDaImpatto`/`PAROLE_IMPATTO`), **`titoloAzione`**, **`linkDirettoUfficiale`** + **`linkVietatiInHtml`** (link PUNTO-A-PUNTO: mai indici/home/URP), `articoloValido`, `generaArticoloEditoriale` (copy azione, un solo link diretto), **`limitaCadenzaSettimanale`** (max 3 articoli datati/7 giorni) |
 | `services/ingestNotizie.ts` | ~400 | **Node-only** — CLI pipeline: **waterfall** livelli 1→4 → filtra → **gate link punto-a-punto** → tetto 6 (finestra 15 gg) → igiene nazionale → scrive `notizieIngestite.ts` |
 | `services/archivioNotizie.ts` | ~85 | Lettura/scrittura del file archivio (`scriviArchivioNotizie`, `leggiArchivioNotizie`, `estraiArticoliDaTesto`): unico punto di serializzazione di `notizieIngestite.ts` |
+| `services/tracciaFonte.ts` | ~250 | **Node-only** — tracciamento della fonte granulare: `tokenizza`, `valutaCandidato` (numeri dell'atto decisivi), `scegliLinkSpecifico`, `risolviFonteGranulare` (da pagina-contenitore alla sottopagina/circolare/PDF) |
 | `services/newsService.ts` | ~105 | Frontend: `unisciNotizie` (seed+ingested, dedupe), **`ordinaNotizie`** (data di pubblicazione DECRESCENTE; il punteggio è solo tie-break), `newsArticles` (feed già ordinato), `categorieNotizie`, `getNotiziaById`, `formatDataNotizia`, `newsFallback` |
 | `components/NotizieHero.tsx` | — | Hero editoriale pagina Notizie + `SeoMeta` |
 | `components/NotizieGrid.tsx` | — | Griglia articoli + filtro categoria + CTA radar |
@@ -822,14 +823,18 @@ Client tipizzato dell'Edge `genera-modulo` + motore locale cache-first:
 - `generaArticoloEditoriale(dati)` (apertura in chiave AZIONE, acronimi spiegati,
   **un solo link**: quello diretto al documento ufficiale) +
   `promptScritturaArticolo`/`promptFiltroLLM`.
-- **Link punto-a-punto**: `linkDirettoUfficiale(url)` è il gate unico (rifiuta
-  homepage, indici/elenchi, archivi, URP, pagine "notizie", URL di
-  ricerca/paginazione; ammette PDF e pagine-documento con slug identificativo);
-  `linkVietatiInHtml(html)` applica la stessa regola ai link nel testo.
-  **Senza link diretto l'articolo non si pubblica.**
+- **Link punto-a-punto**: `classificaLink(url)` divide i link in `diretto`,
+  `contenitore` e `non-valido`: **solo `non-valido` blocca**; i contenitori
+  (indici, elenchi, home) sono pubblicabili come traccia con etichetta onesta.
+  `risolviFonteGranulare` (in `tracciaFonte.ts`) **traccia** la voce specifica
+  quando la fonte è un elenco; senza match la notizia esce comunque con la
+  pagina disponibile. `linkNonValidiInHtml(html)` blocca i link non validi nel
+  testo; `linkVietatiInHtml(html)` resta come diagnostica.
 - `validaUrlDeepLink`, `èLinkPdf`, `èFonteCanonica`, `articoloValido`.
-- `articoloValido` = gate finale: id/titolo/link presenti, URL non generico,
-  fonte canonica e NAZIONALE, link puntuale, nessun link-contenitore nel testo.
+- `articoloValido` = gate finale: id/titolo/link presenti, fonte canonica e
+  NAZIONALE, link non valido assente (i contenitori producono solo un warning),
+  nessun link non valido nel testo. **Nessuna notizia vera viene scartata per un
+  link poco profondo.**
 
 ### 9.4 `ingestNotizie.ts` (CLI)
 Pipeline: raccogli voci (fetchTesto) → valuta rilevanza → **gate link

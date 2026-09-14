@@ -65,6 +65,15 @@ jobs:
       - name: Validazione TypeScript del pipeline Notizie
         run: npm run scrape:notizie:check
 
+      - name: Verifica tracciamento fonte granulare (elenchi → voce specifica)
+        continue-on-error: true
+        run: |
+          if npm run test:traccia; then
+            echo "::notice::Tracciamento fonte OK: dagli elenchi viene risolta la voce specifica dell'articolo."
+          else
+            echo "::warning::Tracciamento fonte non conforme: verificare tracciaFonte.ts."
+          fi
+
       - name: Esecuzione ingestione Notizie (MIM)
         run: |
           if npm run scrape:notizie; then

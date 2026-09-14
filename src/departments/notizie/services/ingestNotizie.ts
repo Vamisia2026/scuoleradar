@@ -41,12 +41,13 @@ import {
   FILE_ARCHIVIO_NOTIZIE,
   scriviArchivioNotizie,
 } from './archivioNotizie.ts';
+import { risolviFonteGranulare } from './tracciaFonte.ts';
 import {
   valutaRilevanza,
   punteggioRilevanza,
   articoloValido,
   generaArticoloEditoriale,
-  linkDirettoUfficiale,
+  classificaLink,
   èFonteCanonica,
   limitaArticoliSettimanali,
   limitaCadenzaSettimanale,
@@ -137,31 +138,49 @@ async function costruisciArticolo(v: VoceFonte): Promise<NewsArticle | null> {
     return null;
   }
 
-  // PUNTO-A-PUNTO: la notizia si pubblica SOLO con l'URL diretto del documento
-  // specifico. Indici, elenchi, home page, directory URP e archivi "master"
-  // bloccano la pubblicazione: nessun fallback a contenitori generici.
-  const diretto = linkDirettoUfficiale(v.link);
-  if (!diretto.ok) {
+  // TRACCIABILITÀ: la notizia NON si blocca mai per un link poco profondo. Se la
+  // voce punta a una pagina-contenitore (indice, elenco, archivio circolari,
+  // pagina "notizie") si RISALE alla voce specifica — sottopagina, circolare,
+  // documento/PDF — che è la base fattuale della notizia; se non si trova, si
+  // pubblica COMUNQUE con la pagina disponibile (traccia verificabile). Solo i
+  // link non validi (mockup/login/non http) impediscono la pubblicazione.
+  const tracciamento = await risolviFonteGranulare({
+    title: v.title,
+    link: v.link,
+    description: v.description,
+  });
+  const fonteUrl = tracciamento.url || v.link;
+  const classeFonte = classificaLink(fonteUrl);
+  if (classeFonte.classe === 'non-valido') {
     console.log(
-      `  ✗ RIFIUTATA (link non puntuale): ${v.title.slice(0, 70)} — ${diretto.motivo}`,
+      `  ✗ RIFIUTATA (link non valido): ${v.title.slice(0, 70)} — ${classeFonte.motivo}`,
     );
     return null;
   }
-
-  // La fonte ufficiale deve essere l'ARTICOLO CANONICO: "Leggi la fonte
-  // ufficiale" non deve mai puntare a homepage o liste (es. /web/guest/home).
-  if (!èFonteCanonica(v.link)) {
+  if (tracciamento.tracciato) {
     console.log(
-      `  ✗ RIFIUTATA (fonte non canonica): ${v.title.slice(0, 70)} — ${v.link}`,
+      `  ↳ fonte tracciata (${tracciamento.punteggio ?? '?'}%): ${fonteUrl.slice(0, 92)}`,
+    );
+  } else if (classeFonte.classe === 'contenitore') {
+    console.log(
+      `  ⚠ link di pagina/elenco (${classeFonte.motivo ?? 'n/d'}): pubblicato con la traccia disponibile`,
+    );
+  }
+
+  // La fonte ufficiale deve essere un ARTICOLO CANONICO: "Leggi la fonte
+  // ufficiale" non deve mai puntare a homepage o liste (es. /web/guest/home).
+  if (!èFonteCanonica(fonteUrl)) {
+    console.log(
+      `  ✗ RIFIUTATA (fonte non canonica): ${v.title.slice(0, 70)} — ${fonteUrl}`,
     );
     return null;
   }
 
   // Verifica reale del link della fonte: deve rispondere HTTP 200/3xx.
-  const linkFonte = await verificaUrlUfficiale(v.link);
+  const linkFonte = await verificaUrlUfficiale(fonteUrl);
   if (!linkFonte.ok) {
     console.log(
-      `  ✗ RIFIUTATA (link non risponde 2xx/3xx): ${v.title.slice(0, 70)} — ${v.link}`,
+      `  ✗ RIFIUTATA (link non risponde 2xx/3xx): ${v.title.slice(0, 70)} — ${fonteUrl}`,
     );
     return null;
   }
@@ -172,7 +191,7 @@ async function costruisciArticolo(v: VoceFonte): Promise<NewsArticle | null> {
     deadline: valutazione.deadline,
     fonte: v.fonte,
     descrizione: v.description,
-    official_url: v.link,
+    official_url: fonteUrl,
   });
   const articolo: NewsArticle = {
     id: `notizia-${slug(v.title)}-${slug(v.fonte)}`,
@@ -184,8 +203,8 @@ async function costruisciArticolo(v: VoceFonte): Promise<NewsArticle | null> {
     deadline_date: valutazione.deadline,
     summary_points,
     content_html,
-    official_source_url: v.link,
-    official_pdf_url: cercaPdf(v.description ?? '', v.link),
+    official_source_url: fonteUrl,
+    official_pdf_url: tracciamento.pdf ?? cercaPdf(v.description ?? '', fonteUrl),
     relevance_score: punteggioRilevanza(valutazione.categoria, Boolean(valutazione.deadline)),
     // Data della fonte se dichiarata, altrimenti data di rilevazione (fallback).
     published_at: dataPubblicazione(v.pubDate) || dataRilevazione(),

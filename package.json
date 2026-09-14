@@ -20,6 +20,7 @@
     "test:telegram:canali": "tsx scripts/test-canali-telegram.ts",
     "test:parser": "tsx scripts/test-parser-province.ts",
     "test:elenchi": "tsx scripts/test-elenchi.ts",
+    "test:traccia": "tsx scripts/test-traccia-fonte.ts",
     "test:board": "tsx scripts/test-live-board.ts",
     "dati:arricchisci": "tsx scripts/arricchisci-interpelli.ts",
     "test:parser:tabelle": "tsx scripts/test-parser-tabelle.ts",

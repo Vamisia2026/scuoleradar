@@ -99,6 +99,6 @@ export const notizieIngestite: NewsArticle[] = [
     "official_source_url": "https://www.mim.gov.it/web/guest/-/welfare-per-il-personale-della-scuola-parte-la-polizza-sanitaria-interessati-oltre-un-milione-e-duecentomila-dipendenti",
     "official_pdf_url": null,
     "relevance_score": 70,
-    "published_at": "2026-09-14T09:37:57.436Z"
+    "published_at": "2026-09-14T10:25:34.282Z"
   }
 ];

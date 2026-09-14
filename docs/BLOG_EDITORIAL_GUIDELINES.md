@@ -187,29 +187,26 @@
 - Frase breve, seconda persona ("hai", "puoi", "devi"): il lettore deve capire
   in 20 secondi se lo riguarda.
 
-## 5. Integrità degli URL (link punto-a-punto)
+## 5. Integrità degli URL (tracciabilità e link granulari)
 
-- `linkDirettoUfficiale(url)` (controllo puro, senza rete) è il **gate unico**
-  dei link: rifiuta
-  - URL non HTTP(S) e con segnali da mockup/placeholder (`example.com`,
-    `localhost`, `mockup`, `:5173`…);
-  - **homepage** di qualunque dominio (anche portali di servizio);
-  - **indici, elenchi, archivi, directory URP, pagine "notizie/comunicati"**
-    (ultimo segmento del percorso o slug "istituzionale puro" tipo
-    `elenco-interpelli-2026`);
-  - URL con **parametri di ricerca/filtro** o di **paginazione**;
-  - pagine di login/area riservata (`/login`, `/accedi`…).
-  Ammette i **PDF** (documento specifico) e le pagine-documento con slug
-  identificativo (es. `/web/guest/-/supplenze-e-ruoli-docenti-2026-al-via-…`,
-  `/documento_pubblico/contratto-…-2022-2024/`, Gazzetta Ufficiale
-  `caricaDettaglioAtto`).
-- `linkVietatiInHtml(html)` applica la stessa regola ai link **dentro** il testo
-  dell'articolo (sono ammessi solo il documento specifico e i link interni
-  `scuoleradar.it`).
-- `verificaUrlUfficiale` (controllo di rete, in `newsFetcher.ts`) verifica che
-  il link risponda **HTTP 200/3xx** prima di pubblicare.
-- **Nessun fallback**: se il documento specifico non è disponibile l'articolo
-  non viene pubblicato (il blog non linka mai contenitori/indici).
+- **Regola d'oro**: una notizia VERA non viene mai soppressa perché il link
+  diretto non è stato isolato automaticamente. L'URL non valido (mockup, login,
+  non http) è l'unico motivo di blocco.
+- `classificaLink(url)` distingue tre classi:
+  - `diretto` → documento/pagina specifica (fonte ideale);
+  - `contenitore` → pagina reale ma generica (indice, elenco, sezione, home):
+    **pubblicabile come traccia**, con etichetta onesta
+    ("apri la pagina ufficiale della fonte");
+  - `non-valido` → mockup/placeholder/login/URL malformato: **unico blocco**.
+- `risolviFonteGranulare(voce)` (in `tracciaFonte.ts`) **traccia** la fonte
+  quando la voce punta a una pagina di elenco: confronta il titolo con i link e i
+  testi della pagina (parole, numeri dell'atto, slug) e restituisce la
+  sottopagina/circolare/PDF che è la base fattuale della notizia. Se non trova un
+  match affidabile, pubblica comunque con la pagina disponibile.
+- `linkNonValidiInHtml(html)` blocca solo i link non validi nel testo;
+  `linkVietatiInHtml(html)` resta come diagnostica (contenitori presenti).
+- `verificaUrlUfficiale` (rete, `newsFetcher.ts`) verifica lo **status HTTP
+  200/3xx** dell'URL scelto prima della pubblicazione.
 - Manutenzione: `npm run notizie:ripara-archivio` rigenera il copy dell'archivio
   storico secondo le regole correnti e rimuove le voci non conformi.
 
@@ -230,7 +227,8 @@
 
 | File | Ruolo |
 |---|---|
-| `src/departments/notizie/services/relevanceEngine.ts` | Motore puro: `valutaRilevanza` (anti-burocrazia: `attoBurocraticoVuoto`, `titoloInformativo`, `riferimentiObsoleti`; impatto: `categoriaDaImpatto`; waterfall nazionale), **`linkDirettoUfficiale`** + **`linkVietatiInHtml`** (link punto-a-punto), `èFonteCanonica`, `èFonteNazionale`, `titoloAzione`, `articoloValido`, `limitaCadenzaSettimanale`, `promptFiltroLLM`, `promptScritturaArticolo`, **`generaArticoloEditoriale`** (copy azione a 3 paragrafi, un solo link diretto) |
+| `src/departments/notizie/services/relevanceEngine.ts` | Motore puro: `valutaRilevanza` (anti-burocrazia: `attoBurocraticoVuoto`, `titoloInformativo`, `riferimentiObsoleti`; impatto: `categoriaDaImpatto`; waterfall nazionale), **`classificaLink`** (`diretto`/`contenitore`/`non-valido`), `etichettaLinkFonte`, `linkNonValidiInHtml`, `èFonteCanonica`, `èFonteNazionale`, `titoloAzione`, `articoloValido`, `limitaCadenzaSettimanale`, `promptFiltroLLM`, `promptScritturaArticolo`, **`generaArticoloEditoriale`** (copy azione a 3 paragrafi, fonte sempre citata) |
+| `src/departments/notizie/services/tracciaFonte.ts` | **Tracciamento della fonte granulare**: `tokenizza`, `valutaCandidato`, `scegliLinkSpecifico`, `risolviFonteGranulare` (elenco → sottopagina/circolare/PDF) |
 | `src/departments/notizie/services/newsFetcher.ts` | Raccolta fonti ufficiali (MIM, G.U.) + `verificaUrlUfficiale` (HTTP 200/3xx) |
 | `src/departments/notizie/services/ingestNotizie.ts` | Pipeline: lookback 15 gg → filtro → **gate link punto-a-punto** → generazione → tetto articoli (6) → accumulo con dedupe |
 | `src/departments/notizie/services/archivioNotizie.ts` | Lettura/scrittura dell'archivio generato (`scriviArchivioNotizie`, `leggiArchivioNotizie`, `estraiArticoliDaTesto`) |
@@ -253,10 +251,12 @@
 - [ ] **3 paragrafi**, acronimi spiegati alla prima menzione, zero cliché
 - [ ] **Tono azione**: nessuna apertura istituzionale ("Il Ministero ha
       comunicato…"), si parte da che cosa cambia e da che cosa fare
-- [ ] **Link punto-a-punto**: un solo link, quello diretto al documento
-      specifico (pagina o PDF) validato HTTP 200; **nessun** contenitore, indice,
-      elenco, homepage, URP, pagina "notizie" o URL di ricerca/paginazione
-- [ ] Se il link diretto non è disponibile → l'articolo **non si pubblica**
+- [ ] **Fonte tracciabile**: il link pubblicato è il documento specifico quando
+      tracciato; se la fonte è una pagina di elenco viene tracciata la voce
+      specifica, altrimenti si pubblica con la pagina ufficiale (con etichetta
+      onesta). Bloccano solo i link NON validi (mockup/login/non http)
+- [ ] Se il link diretto non è disponibile → l'articolo **si pubblica comunque**
+      con la traccia disponibile (mai sopprimere una notizia vera)
 - [ ] Se la fonte è un **PDF ufficiale** → bottone dedicato
       **"Visualizza PDF Ufficiale"** che apre il PDF in nuova scheda
 - [ ] Scadenza **esatta** (mai "date da confermare")

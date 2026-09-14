@@ -12,8 +12,10 @@
 import { readFileSync } from 'node:fs';
 import {
   attoBurocraticoVuoto,
+  classificaLink,
   generaArticoloEditoriale,
   linkDirettoUfficiale,
+  linkNonValidiInHtml,
   linkVietatiInHtml,
   riferimentiObsoleti,
   titoloAzione,
@@ -167,7 +169,16 @@ const urlVietati = [
   'https://www.mim.gov.it/albo-pretorio',
 ];
 const ammessiMale = urlVietati.filter((u) => linkDirettoUfficiale(u).ok);
-check('nessun contenitore/indice passa il gate', [], ammessiMale);
+check('nessun contenitore/indice è "diretto"', [], ammessiMale);
+// NEW POLICY: i contenitori NON bloccano più la notizia: sono tracciabili.
+const classificati = urlVietati.filter((u) => classificaLink(u).classe !== 'contenitore');
+check('i contenitori restano pubblicabili (classe "contenitore")', [], classificati);
+check(
+  'link mockup → classe "non-valido" (unico blocco)',
+  'non-valido',
+  classificaLink('https://example.com/avviso-123').classe,
+);
+check('link mancante → classe "non-valido"', 'non-valido', classificaLink(null).classe);
 
 console.log('\n— LINK PUNTO-A-PUNTO: documenti specifici AMMESSI —');
 const urlAmmessi = [
@@ -217,14 +228,14 @@ const apertureBurocratiche = articoli
   .map((a) => a.id);
 check('nessuna apertura istituzionale nel primo paragrafo', [], apertureBurocratiche);
 check(
-  'ogni articolo ha il link diretto al documento',
+  'ogni articolo ha un link di fonte VALIDO (mail 0 senza fonte)',
   [],
-  articoli.filter((a) => !linkDirettoUfficiale(a.official_source_url).ok).map((a) => a.id),
+  articoli.filter((a) => classificaLink(a.official_source_url).classe === 'non-valido').map((a) => a.id),
 );
 check(
-  'nessun link a contenitori nel testo pubblicato',
+  'nessun link NON VALIDO nel testo pubblicato',
   [],
-  articoli.flatMap((a) => linkVietatiInHtml(a.content_html)),
+  articoli.flatMap((a) => linkNonValidiInHtml(a.content_html)),
 );
 check(
   'ogni articolo contiene almeno il link ufficiale',
@@ -276,10 +287,22 @@ const senzaLink = generaArticoloEditoriale({
   fonte: 'MIM',
   official_url: 'https://www.mim.gov.it/web/guest/notizie',
 });
-check('senza link diretto: nessun link nel testo', 0, senzaLink.content_html.includes('href="') ? 1 : 0);
+check(
+  'fonte = pagina/elenco → link presente con etichetta onesta',
+  true,
+  senzaLink.content_html.includes('href="https://www.mim.gov.it/web/guest/notizie"') &&
+    senzaLink.content_html.includes('apri la pagina ufficiale della fonte'),
+);
+const conMock = generaArticoloEditoriale({
+  title: 'Concorso ordinario 2026: prova scritta e requisiti',
+  categoria: 'Concorsi',
+  deadline: null,
+  fonte: 'MIM',
+  official_url: 'https://example.com/avviso-123',
+});
+check('link NON valido (mockup) → nessun link nel testo', false, conMock.content_html.includes('href="'));
 
-
-  console.log(
+console.log(
   errori === 0
     ? '\n✅ NOTIZIE EDITORIALE: nessun problema'
     : `\n❌ NOTIZIE EDITORIALE: ${errori} errore/i`,

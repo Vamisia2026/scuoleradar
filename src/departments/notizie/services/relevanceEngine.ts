@@ -790,6 +790,17 @@ const FINALI_CONTENITORE = [
   '/agenda', '/eventi', '/istanzeonline.htm', '/home', '/index',
 ];
 
+/**
+ * Parole che, in TESTA allo slug, indicano un ELENCO/INDICE anche quando lo slug
+ * contiene altre parole ("elenco-circolari-2026", "archivio-note", "lista-avvisi"):
+ * sono pagine da tracciare, non la fonte definitiva della notizia.
+ */
+const TESTE_CONTENITORE = new Set([
+  'elenco', 'elenchi', 'indice', 'indici', 'lista', 'liste', 'archivio', 'archivi',
+  'albo', 'pubblicazioni', 'documenti', 'atti', 'notizie', 'news', 'comunicazioni',
+  'sezione', 'sezioni', 'categoria', 'categorie', 'raccolta', 'repertorio',
+]);
+
 export interface EsitoLinkDiretto {
   ok: boolean;
   motivo?: string;
@@ -847,10 +858,18 @@ export function linkDirettoUfficiale(url?: string | null): EsitoLinkDiretto {
     return { ok: false, motivo: `pagina-contenitore ("${ultimo}")` };
   }
 
+  // 4-bis) Slug di ELENCO/INDICE anche con parole aggiuntive: inizia con una
+  //    parola da contenitore ("elenco-circolari-2026", "archivio-note-2026").
+  //    È una pagina da TRACCIARE, non la fonte definitiva della notizia.
+  const paroleSlug = ultimo.split(/[-_]+/).filter((w) => w && !/^\d+$/.test(w));
+  if (TESTE_CONTENITORE.has(paroleSlug[0] ?? '') && paroleSlug.length >= 2) {
+    return { ok: false, motivo: `elenco/indice ("${ultimo}")` };
+  }
+
   // 5) Slug "istituzionale puro" (solo parole neutre/anno, senza alcun termine
   //    identificativo): è un elenco/sezione (es. "elenco-interpelli-2026"), non
   //    un documento specifico.
-  const parole = ultimo.split(/[-_]+/).filter((w) => w && !/^\d+$/.test(w));
+  const parole = paroleSlug;
   if (parole.length > 0 && parole.every((w) => PAROLE_NEUTRE.has(w))) {
     return { ok: false, motivo: `elenco/sezione senza riferimento specifico ("${ultimo}")` };
   }
@@ -859,7 +878,7 @@ export function linkDirettoUfficiale(url?: string | null): EsitoLinkDiretto {
 }
 
 /**
- * Link VIETATI presenti in un frammento HTML: garantisce che l'articolo
+ * LINK VIETATI presenti in un frammento HTML: garantisce che l'articolo
  * pubblicato non contenga MAI collegamenti a contenitori/indici (solo al
  * documento specifico o a pagine interne di ScuoleRadar).
  */
@@ -871,6 +890,85 @@ export function linkVietatiInHtml(html: string): string[] {
     if (/scuoleradar\.it/i.test(href)) continue; // link interni all'app
     const esito = linkDirettoUfficiale(href);
     if (!esito.ok) fuori.push(`${href} (${esito.motivo})`);
+  }
+  return fuori;
+}
+
+/* ------------------- Classificazione del link della fonte ------------------- */
+
+export type ClasseLink = 'diretto' | 'contenitore' | 'non-valido';
+
+export interface ValutazioneLink {
+  classe: ClasseLink;
+  motivo?: string;
+}
+
+/**
+ * Classifica il link di una fonte in tre classi:
+ *   · `diretto`     → documento/pagina specifica (la fonte ideale);
+ *   · `contenitore` → pagina REALE ma generica (indice, elenco, sezione, home):
+ *                     pubblicabile come ultima traccia, mai ideale;
+ *   · `non-valido`  → mockup, login, URL malformato/non http: MAI pubblicabile.
+ *
+ * Regola editoriale: solo `non-valido` blocca la pubblicazione. Un contenitore
+ * NON blocca la notizia: si pubblica con il link disponibile e si segnala che
+ * la fonte è una pagina di elenco (vedi `etichettaLinkFonte`).
+ */
+export function classificaLink(url?: string | null): ValutazioneLink {
+  const u = (url ?? '').trim();
+  if (!u) return { classe: 'non-valido', motivo: 'link mancante' };
+
+  // Blocco HARD: URL malformato/non http, segnaposto/mockup, pagine di accesso.
+  // Tutto il resto è una pagina REALE: se non è un documento specifico è un
+  // contenitore, quindi una traccia pubblicabile (mai un motivo per scartare).
+  let parsed: URL;
+  try {
+    parsed = new URL(u);
+  } catch {
+    return { classe: 'non-valido', motivo: 'URL non valido' };
+  }
+  if (!/^https?:$/i.test(parsed.protocol)) {
+    return { classe: 'non-valido', motivo: 'Solo URL HTTP(S)' };
+  }
+  const indizi = `${parsed.hostname}${parsed.pathname}${parsed.search}`.toLowerCase();
+  if (SEGNALI_MOCKUP.some((m) => indizi.includes(m))) {
+    return { classe: 'non-valido', motivo: 'URL segnaposto/mockup non consentito' };
+  }
+  if (SEGNALI_LOGIN.some((s) => parsed.pathname.toLowerCase().includes(s))) {
+    return { classe: 'non-valido', motivo: 'Pagina di login/area riservata' };
+  }
+
+  const esito = linkDirettoUfficiale(u);
+  if (esito.ok) return { classe: 'diretto' };
+  return { classe: 'contenitore', motivo: esito.motivo };
+}
+
+/**
+ * Etichetta ONESTA del link pubblicato: descrive ciò che l'utente troverà
+ * (documento specifico oppure pagina/elenco ufficiale), senza mai promettere
+ * una candidatura diretta.
+ */
+export function etichettaLinkFonte(url?: string | null): string {
+  const u = (url ?? '').trim();
+  if (èLinkPdf(u)) return 'apri il documento ufficiale (PDF)';
+  return classificaLink(u).classe === 'contenitore'
+    ? 'apri la pagina ufficiale della fonte'
+    : "apri l'avviso ufficiale";
+}
+
+/**
+ * Link NON VALIDI (mockup, login, non http) presenti in un frammento HTML:
+ * solo questi bloccano la pubblicazione. I link a pagine-contenitore reali sono
+ * ammessi (con warning) perché restano una traccia verificabile della fonte.
+ */
+export function linkNonValidiInHtml(html: string): string[] {
+  const fuori: string[] = [];
+  for (const m of (html ?? '').matchAll(/href="([^"]+)"/gi)) {
+    const href = (m[1] ?? '').trim();
+    if (!/^https?:/i.test(href)) continue;
+    if (/scuoleradar\.it/i.test(href)) continue;
+    const valutazione = classificaLink(href);
+    if (valutazione.classe === 'non-valido') fuori.push(`${href} (${valutazione.motivo})`);
   }
   return fuori;
 }
@@ -971,20 +1069,25 @@ export function articoloValido(a: NewsArticle): boolean {
     );
     return false;
   }
-  // PUNTO-A-PUNTO: il link ufficiale deve puntare al documento specifico. Se un
-  // URL diretto non è estraibile in modo affidabile, l'articolo NON si pubblica
-  // (mai fallback a indici, elenchi, homepage di portale o directory URP).
-  const diretto = linkDirettoUfficiale(a.official_source_url);
-  if (!diretto.ok) {
+  // LINK: la notizia NON si blocca mai per un link "generico". Si pubblica con
+  // la traccia disponibile (pagina ufficiale/elenco) e si segnala la classe del
+  // link: solo gli URL NON VALIDI (mockup, login, non http) bloccano l'uscita.
+  const classeLink = classificaLink(a.official_source_url);
+  if (classeLink.classe === 'non-valido') {
     console.warn(
-      `✗ Articolo scartato (${a.id}): link non puntuale — ${diretto.motivo}`,
+      `✗ Articolo scartato (${a.id}): URL fonte non valido — ${classeLink.motivo}`,
     );
     return false;
   }
-  // Nessun link-contenitore nel testo pubblicato (solo documento specifico).
-  const vietati = linkVietatiInHtml(a.content_html ?? '');
-  if (vietati.length > 0) {
-    console.warn(`✗ Articolo scartato (${a.id}): link a contenitori nel testo — ${vietati[0]}`);
+  if (classeLink.classe === 'contenitore') {
+    console.warn(
+      `⚠ Articolo pubblicato con link di PAGINA/ELENCO (traccia) — ${a.id}: ${classeLink.motivo}`,
+    );
+  }
+  // Link non validi nel testo pubblicato: quelli sì, bloccano (mockup/login).
+  const nonValidi = linkNonValidiInHtml(a.content_html ?? '');
+  if (nonValidi.length > 0) {
+    console.warn(`✗ Articolo scartato (${a.id}): link non validi nel testo — ${nonValidi[0]}`);
     return false;
   }
   return true;
@@ -1194,9 +1297,9 @@ const IMPATTO_COPY: Array<{ re: RegExp; copy: ArticoloCopy }> = [
  * <h2>: si racconta il fatto, chi è coinvolto e come agire, con il link
  * contestuale alla procedura ufficiale.
  */
-/** Etichetta ONESTA per il link diretto al documento (mai promesse di candidatura). */
+/** Etichetta ONESTA per il link della fonte (vedi `etichettaLinkFonte`). */
 function etichettaLinkDiretto(url: string): string {
-  return èLinkPdf(url) ? 'apri il documento ufficiale (PDF)' : "apri l'avviso ufficiale";
+  return etichettaLinkFonte(url);
 }
 
 /**
@@ -1213,12 +1316,13 @@ export function generaArticoloEditoriale(
   const a = override?.copy ?? ARTICOLO[cat] ?? ARTICOLO['Scuole'];
   const scadenza = d.deadline ? formattaDataItaliana(d.deadline) : null;
 
-  // UNICO link ammesso: l'URL DIRETTO del documento della notizia (mai home,
-  // indici, elenchi, URP o archivi — vedi `linkDirettoUfficiale`). Se il
-  // documento specifico non è disponibile, il testo non contiene link e
-  // l'articolo viene comunque bloccato dal gate di pubblicazione.
+  // LINK DELLA FONTE: si usa SEMPRE la traccia disponibile (documento specifico
+  // quando tracciato, altrimenti la pagina ufficiale/elenco). Non si pubblica
+  // mai un link non valido (mockup/login), ma non si lascia MAI la notizia senza
+  // fonte: una notizia vera non viene soppressa per un link poco profondo.
   const link = (d.official_url ?? '').trim();
-  const hrefDiretto = linkDirettoUfficiale(link).ok ? link : '';
+  const classeLink = classificaLink(link);
+  const hrefDiretto = classeLink.classe === 'non-valido' ? '' : link;
   const anchor = (testo: string): string =>
     hrefDiretto
       ? `<a href="${escapeHtmlEditoriale(hrefDiretto)}" target="_blank" rel="noopener noreferrer">${escapeHtmlEditoriale(testo)}</a>`
@@ -1283,7 +1387,7 @@ REGOLE VINCOLANTI:
 - VALIDITÀ GIURIDICA: cita SEMPRE il riferimento normativo preciso (Ordinanza Ministeriale, Decreto, Nota prot., articolo di legge) quando la fonte lo contiene; mai riferimenti generici.
 - ZERO BUROCRAZIA: frasi brevi e voce diretta, seconda persona ("hai", "puoi", "devi"), niente premesse istituzionali, niente fluff, niente cliché da chatbot ("C'è una novità ufficiale", "La fonte ufficiale segnala", "Vale la pena di leggere subito").
 - ZERO RUMORE: nessun contenuto promozionale, nessun riferimento a discorsi, interviste o dichiarazioni non vincolanti.
-- LINK PUNTO-A-PUNTO (OBBLIGATORIO): nel testo puoi usare SOLO l'URL diretto del documento specifico (${d.official_url ?? 'n/d'}) o un suo allegato PDF ufficiale. Sono VIETATI home page, indici, elenchi, pagina "notizie", directory URP, archivi e URL con parametri di ricerca o paginazione. I portali di servizio (Istanze Online/POLIS, InPA, INPS) si citano SOLO a parole, senza link. Vietato inventare URL o usare segnaposto; se il documento specifico non è disponibile, NON inserire alcun link.
+- FONTE TRACCIABILE (OBBLIGATORIA): nel terzo paragrafo cita SEMPRE la fonte con l'URL fornito (${d.official_url ?? 'n/d'}). Quando la fonte è il documento specifico (pagina dell'avviso o PDF) dillo chiaramente; quando è la pagina ufficiale su cui si basa la notizia (elenco/circolare), cita quella dicendo "nella pagina ufficiale della fonte". Vietato inventare link, usare segnaposto o linkare mockup/login; NON lasciare mai l'articolo senza fonte.
 - PDF UFFICIALE: se la fonte è un PDF ufficiale o ne fornisce uno allegato, usa quell'URL diretto nel link (target="_blank" rel="noopener noreferrer").
 - Spiega SEMPRE gli acronimi alla prima menzione (es. "GPS (Graduatorie Provinciali per le Supplenze, le liste per gli incarichi annuali)", "SPID (Sistema Pubblico di Identità Digitale)").
 - Niente <h2>, niente riempitivi, niente dati inventati. Restituisci SOLO i 3 paragrafi in HTML.
