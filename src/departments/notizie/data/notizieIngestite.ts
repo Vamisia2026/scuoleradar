@@ -86,6 +86,22 @@ export const notizieIngestite: NewsArticle[] = [
     "published_at": "2026-06-15T00:00:00.000Z"
   },
   {
+    "id": "notizia-lettera-del-ministro-dell-istruzione-e-del-merito-giuseppe-v-mim",
+    "title": "Lettera del Ministro dell’Istruzione e del Merito Giuseppe Valditara in occasione dell’inizio dell’Anno Scolastico 2026/2027",
+    "category": "Scuole",
+    "deadline_date": null,
+    "summary_points": [
+      "Lettera del Ministro dell’Istruzione e del Merito Giuseppe Valditara in occasione dell’inizio dell’Anno Scolastico 2026/2027",
+      "Interessati: dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie.",
+      "Come: apri il documento ufficiale dell'avviso."
+    ],
+    "content_html": "<p>Ci sono novità sull’organizzazione dell’anno scolastico: le trovi nella comunicazione «Lettera del Ministro dell’Istruzione e del Merito Giuseppe Valditara in occasione dell’inizio dell’Anno Scolastico 2026/2027». Scadenza ufficiale non ancora pubblicata: la trovi <a href=\"https://www.mim.gov.it/web/guest/-/lettera-del-ministro-dell-istruzione-e-del-merito-giuseppe-valditara-in-occasione-dell-inizio-dell-anno-scolastico-2026-2027\" target=\"_blank\" rel=\"noopener noreferrer\">nell'avviso ufficiale</a> — ti avvisiamo appena esce.</p>\n    <p>Riguarda dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie. Qui stanno scadenze e adempimenti che ricadono su orari, incarichi e attività della scuola: leggerli adesso evita di rincorrere le comunicazioni interne all’ultimo momento.</p>\n    <p>I dettagli completi sono nel testo ufficiale. Se la novità riguarda la tua scuola, la segreteria comunicherà le scadenze interne. Testo ufficiale: <a href=\"https://www.mim.gov.it/web/guest/-/lettera-del-ministro-dell-istruzione-e-del-merito-giuseppe-valditara-in-occasione-dell-inizio-dell-anno-scolastico-2026-2027\" target=\"_blank\" rel=\"noopener noreferrer\">apri l'avviso ufficiale</a>.</p>",
+    "official_source_url": "https://www.mim.gov.it/web/guest/-/lettera-del-ministro-dell-istruzione-e-del-merito-giuseppe-valditara-in-occasione-dell-inizio-dell-anno-scolastico-2026-2027",
+    "official_pdf_url": null,
+    "relevance_score": 70,
+    "published_at": "2026-09-14T12:10:16.399Z"
+  },
+  {
     "id": "notizia-welfare-per-il-personale-della-scuola-parte-la-polizza-sanit-mim",
     "title": "Welfare per il personale della scuola. Parte la polizza sanitaria: interessati oltre un milione e duecentomila dipendenti",
     "category": "Scuole",
@@ -99,6 +115,6 @@ export const notizieIngestite: NewsArticle[] = [
     "official_source_url": "https://www.mim.gov.it/web/guest/-/welfare-per-il-personale-della-scuola-parte-la-polizza-sanitaria-interessati-oltre-un-milione-e-duecentomila-dipendenti",
     "official_pdf_url": null,
     "relevance_score": 70,
-    "published_at": "2026-09-14T10:25:34.282Z"
+    "published_at": "2026-09-14T12:10:16.151Z"
   }
 ];
