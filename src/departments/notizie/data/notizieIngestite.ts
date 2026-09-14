@@ -81,51 +81,19 @@ export const notizieIngestite: NewsArticle[] = [
     "published_at": "2026-06-15T00:00:00.000Z"
   },
   {
-    "id": "notizia-ordinanza-ministeriale-n-163-del-7-agosto-2026-mim",
-    "title": "Ordinanza Ministeriale n. 163 del 7 agosto 2026",
+    "id": "notizia-welfare-per-il-personale-della-scuola-parte-la-polizza-sanit-mim",
+    "title": "Welfare per il personale della scuola. Parte la polizza sanitaria: interessati oltre un milione e duecentomila dipendenti",
     "category": "Scuole",
     "deadline_date": null,
     "summary_points": [
-      "Ordinanza Ministeriale n. 163 del 7 agosto 2026",
-      "Interessati: dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie.",
+      "Welfare per il personale della scuola. Parte la polizza sanitaria: interessati oltre un milione e duecentomila dipendenti",
+      "Interessati: tutto il personale della scuola — docenti e ATA — e le loro famiglie.",
       "Come: procedi su Notizie del Ministero."
     ],
-    "content_html": "<p>Il Ministero dell’Istruzione e del Merito (MIM) ha pubblicato un aggiornamento sull’organizzazione dell’anno scolastico, con la comunicazione «Ordinanza Ministeriale n. 163 del 7 agosto 2026». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Notizie del Ministero</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie. La comunicazione introduce novità o conferme su scadenze e adempimenti dell’anno: i dettagli completi sono riportati nella pagina ufficiale.</p>\n    <p>Le informazioni complete sono consultabili sul sito del <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Ministero</a>. Se la notizia riguarda la tua scuola, la segreteria provvederà a comunicare le scadenze interne.</p>",
-    "official_source_url": "https://www.mim.gov.it/web/guest/-/ordinanza-ministeriale-n-163-del-7-agosto-2026",
+    "content_html": "<p>Una novità concreta per il personale scolastico: è stata annunciata «Welfare per il personale della scuola. Parte la polizza sanitaria: interessati oltre un milione e duecentomila dipendenti». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Notizie del Ministero</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda tutto il personale della scuola — docenti e ATA — e le loro famiglie. Non è una circolare operativa ma un cambio di condizioni: conviene leggere i dettagli per capire coperture, decorrenza e come aderire, così non resti fuori da un beneficio previsto per te.</p>\n    <p>I dettagli e le modalità di adesione sono nella pagina ufficiale del <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Ministero</a>: in caso di dubbi, chiedi alla segreteria della tua scuola.</p>",
+    "official_source_url": "https://www.mim.gov.it/web/guest/-/welfare-per-il-personale-della-scuola-parte-la-polizza-sanitaria-interessati-oltre-un-milione-e-duecentomila-dipendenti",
     "official_pdf_url": null,
     "relevance_score": 70,
-    "published_at": "2026-09-11T00:00:00.000Z"
-  },
-  {
-    "id": "notizia-decreto-direttoriale-n-1095-del-10-settembre-2026-mim",
-    "title": "Decreto Direttoriale n. 1095 del 10 settembre 2026",
-    "category": "Scuole",
-    "deadline_date": null,
-    "summary_points": [
-      "Decreto Direttoriale n. 1095 del 10 settembre 2026",
-      "Interessati: dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie.",
-      "Come: procedi su Notizie del Ministero."
-    ],
-    "content_html": "<p>Il Ministero dell’Istruzione e del Merito (MIM) ha pubblicato un aggiornamento sull’organizzazione dell’anno scolastico, con la comunicazione «Decreto Direttoriale n. 1095 del 10 settembre 2026». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Notizie del Ministero</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie. La comunicazione introduce novità o conferme su scadenze e adempimenti dell’anno: i dettagli completi sono riportati nella pagina ufficiale.</p>\n    <p>Le informazioni complete sono consultabili sul sito del <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Ministero</a>. Se la notizia riguarda la tua scuola, la segreteria provvederà a comunicare le scadenze interne.</p>",
-    "official_source_url": "https://www.mim.gov.it/web/guest/-/decreto-direttoriale-n-1095-del-10-settembre-2026",
-    "official_pdf_url": null,
-    "relevance_score": 70,
-    "published_at": "2026-09-11T00:00:00.000Z"
-  },
-  {
-    "id": "notizia-decreto-direttoriale-n-1988-dell-8-settembre-2026-mim",
-    "title": "Decreto Direttoriale n. 1988 dell'8 settembre 2026",
-    "category": "Scuole",
-    "deadline_date": null,
-    "summary_points": [
-      "Decreto Direttoriale n. 1988 dell'8 settembre 2026",
-      "Interessati: dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie.",
-      "Come: procedi su Notizie del Ministero."
-    ],
-    "content_html": "<p>Il Ministero dell’Istruzione e del Merito (MIM) ha pubblicato un aggiornamento sull’organizzazione dell’anno scolastico, con la comunicazione «Decreto Direttoriale n. 1988 dell'8 settembre 2026». La scadenza non è ancora indicata nell'avviso: la finestra ufficiale comparirà su <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Notizie del Ministero</a> e ti avviseremo appena esce.</p>\n    <p>La notizia riguarda dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie. La comunicazione introduce novità o conferme su scadenze e adempimenti dell’anno: i dettagli completi sono riportati nella pagina ufficiale.</p>\n    <p>Le informazioni complete sono consultabili sul sito del <a href=\"https://www.mim.gov.it/web/guest/notizie\" target=\"_blank\" rel=\"noopener noreferrer\">Ministero</a>. Se la notizia riguarda la tua scuola, la segreteria provvederà a comunicare le scadenze interne.</p>",
-    "official_source_url": "https://www.mim.gov.it/web/guest/-/decreto-direttoriale-n-1988-dell-8-settembre-2026",
-    "official_pdf_url": null,
-    "relevance_score": 70,
-    "published_at": "2026-09-09T00:00:00.000Z"
+    "published_at": "2026-09-14T08:52:04.397Z"
   }
 ];

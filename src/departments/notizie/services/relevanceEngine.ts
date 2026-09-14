@@ -125,6 +125,10 @@ const PAROLE_RIFIUTA: string[] = [
   'bandiera', 'festa', 'evento sportivo', 'manifestazione', 'sondaggio',
   'ipotesi', 'ipotesi di', 'bozza', 'bozze', 'preliminare', 'preliminari',
   'in preparazione', 'proposta preliminare', 'draft', 'avvio dei lavori preparatori',
+  // Protocolli d'intesa, memorandum e visite: diplomazia istituzionale, non
+  // notizie operative per docenti e ATA.
+  'memorandum', 'incontro bilaterale', 'vertice bilaterale', 'visita ufficiale',
+  'dichiarazione congiunta', 'missione istituzionale',
 ];
 
 /* ============ PERIMETRO NAZIONALE (ScuoleRadar è una piattaforma nazionale) ============ */
@@ -186,6 +190,182 @@ export const FINESTRA_ATTI_NAZIONALI_GIORNI = 45;
 /** Parole del COMPARTO SCUOLA (docenti, ATA, dirigenti scolastici…). */
 const PAROLE_SCUOLA =
   /(?:istruzione e ricerca|comparto istruzione|scuol|docenti|personale ata|\bata\b|dirigenti scolastici|supplent|graduator|interpell|organico|sostegno|scrutini|valutazion|iscrizion|studenti|alunni|educazione|reclutament|mobilit[aà])/;
+
+/* ============ GIORNALISMO UTILE: burocrazia vuota fuori, impatto dentro ============ */
+
+/**
+ * Designazione FORMALE di un atto/avviso amministrativo (l'inizio tipico dei
+ * titoli "burocratici" copiati dalle fonti): decreto, ordinanza, nota,
+ * circolare, DPR, DPCM, D.L., comunicato, delibera, determina.
+ */
+const RE_DESIGNAZIONE_ATTO =
+  /^\s*(?:d\.?\s*p\.?\s*r\.?|d\.?\s*p\.?\s*c\.?\s*m\.?|d\.?\s*l\.?|decreto(?:\s+(?:ministeriale|direttoriale|dirigenziale|legislativo|del\s+presidente))?|ordinanza(?:\s+ministeriale)?|nota(?:\s+prot(?:ocollo)?\.?)?|circolare|comunicato|delibera|determina|avviso)\b/i;
+
+/** Riferimento formale (numero e/o data) tipico dei titoli svuotati. */
+const RE_RIFERIMENTO_ATTO =
+  /\bn\.?\s*\d+|(?:\bdel(?:l['’])?\s*\d{1,2}\s+[a-zà-ù]+)|(?:\b\d{1,2}\/\d{1,2}\/\d{2,4}\b)|(?:\b(?:19|20)\d{2}\b)/i;
+
+/**
+ * Parole di IMPATTO PRATICO per chi lavora a scuola: se compaiono nel titolo,
+ * la notizia merita di essere raccontata anche senza una parola-categoria
+ * ufficiale (welfare e polizza sanitaria del personale, formazione ATA,
+ * sicurezza, organico, stipendi…).
+ */
+const PAROLE_IMPATTO =
+  /(?:stipend|paga|retribuzion|indennit|contratt|ccnl|welfare|polizza|sanitari|previdenz|contributiv|formazione|aggiornamento professionale|abilitazione|specializzazione|sicurezza|edilizia|digitalizzazione|organico|cattedre|classi|iscrizion|scrutini|esam[ei]|valutazion|orientamento|inclusione|bullismo|tutor|supplent|interpell|graduator|mobilit[aà]|trasferiment|assegnazion|nomine|assunzion|reclutament|pension|riscatto|ricostruzione|concors|reggenz|comandi|utilizzazion|permessi|aspettativa|telelavoro)/i;
+
+/**
+ * TITOLO DI BUROCRAZIA VUOTA: è SOLO il riferimento formale di un atto
+ * ("Decreto Direttoriale n. 1095 del 10 settembre 2026", "Ordinanza
+ * Ministeriale n. 163 del 7 agosto 2026") e non contiene NIENTE di ciò che
+ * cambia la giornata di un docente o di un ATA. Questi contenuti NON si
+ * pubblicano: il blog non fa da Gazzetta Ufficiale.
+ */
+export function attoBurocraticoVuoto(titolo?: string | null): boolean {
+  const t = (titolo ?? '').replace(/\s+/g, ' ').trim();
+  if (!t) return false;
+  if (!RE_DESIGNAZIONE_ATTO.test(t)) return false;
+  if (PAROLE_IMPATTO.test(t)) return false;
+  return RE_RIFERIMENTO_ATTO.test(t);
+}
+
+/**
+ * TITOLO INFORMATIVO: dice CHI/CHE COSA. Titoli-lista come "Concorso",
+ * "Avviso", "Comunicazione" non diventano notizie: non dicono nulla al lettore.
+ */
+export function titoloInformativo(titolo?: string | null): boolean {
+  const t = (titolo ?? '').replace(/\s+/g, ' ').trim();
+  if (t.length < 25) return false;
+  const significative = t.split(/\s+/).filter((w) => w.replace(/[^\p{L}\p{N}]/gu, '').length >= 4);
+  return significative.length >= 4;
+}
+
+/** Categorie "di impatto" per argomento (la prima che corrisponde vince). */
+const CATEGORIE_IMPATTO: Array<{ categoria: string; parole: string[] }> = [
+  {
+    categoria: 'CCNL',
+    parole: ['contratto', 'ccnl', 'stipend', 'retribuzion', 'indennit'],
+  },
+  {
+    categoria: 'Pensioni',
+    parole: ['previdenz', 'contributiv', 'pension', 'riscatto'],
+  },
+  {
+    categoria: 'PNRR',
+    parole: ['pnrr', 'pon ', 'fondi', 'finanziament', 'edilizia', 'digitalizzazione'],
+  },
+  {
+    categoria: 'Scuole',
+    parole: [
+      'welfare', 'polizza', 'sanitari', 'formazione', 'aggiornamento professionale',
+      'sicurezza', 'organico', 'cattedre', 'iscrizion', 'orientamento',
+      'inclusione', 'bullismo',
+    ],
+  },
+];
+
+/**
+ * RIFERIMENTI OBSOLETI: il testo cita solo anni vecchi (es. "Avviso n. 33 del
+ * 06/07/2020") e la FONTE non dichiara una data recente → è materiale
+ * d'archivio rispolverato dagli elenchi: non si pubblica come novità.
+ */
+export function riferimentiObsoleti(
+  testo: string,
+  dataFonte?: string | null,
+  oggi: Date = new Date(),
+): boolean {
+  const t = (testo ?? '').toLowerCase();
+  const anni = [...t.matchAll(/\b(?:19|20)\d{2}\b/g)].map((m) => Number(m[0]));
+  const annoTesto = anni.length > 0 ? Math.max(...anni) : null;
+  const annoCorrente = oggi.getUTCFullYear();
+
+  const data = dataFonte ? new Date(dataFonte) : null;
+  const annoFonte = data && !Number.isNaN(data.getTime()) ? data.getUTCFullYear() : null;
+
+  // Vecchio se il riferimento più recente nel testo è di oltre un anno fa…
+  if (annoTesto !== null && annoTesto < annoCorrente - 1) {
+    // …e la fonte NON attesta una pubblicazione recente.
+    return !(annoFonte !== null && annoFonte >= annoCorrente - 1);
+  }
+  return false;
+}
+
+/** Categoria dedotta dall'IMPATTO del titolo (o null se non riconosciuto). */
+export function categoriaDaImpatto(testo: string): string | null {
+  const t = (testo ?? '').toLowerCase();
+  if (!t || t.length < 20) return null;
+  for (const { categoria, parole } of CATEGORIE_IMPATTO) {
+    if (parole.some((p) => t.includes(p))) return categoria;
+  }
+  return null;
+}
+
+/** Data breve italiana (UTC) per l'urgenza nel titolo: "16 lug". */
+function dataBreveIt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const mesi = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+  return `${d.getUTCDate()} ${mesi[d.getUTCMonth()]}`;
+}
+
+/**
+ * Riscrive il titolo in chiave AZIONE ("che cosa cambia per me"): elimina le
+ * intestazioni e le code burocratiche, tiene il SOGGETTO della notizia e,
+ * quando esiste, aggiunge l'urgenza con la scadenza. Non inventa nulla: se la
+ * pulizia svuota il titolo, torna l'originale.
+ */
+export function titoloAzione(
+  titolo: string,
+  categoria?: string | null,
+  deadline?: string | null,
+): string {
+  const originale = (titolo ?? '').replace(/\s+/g, ' ').trim();
+  let t = originale;
+
+  // 1) Via l'intestazione burocratica: designazione + numero + data.
+  t = t.replace(
+    /^\s*(?:d\.?\s*p\.?\s*r\.?|d\.?\s*p\.?\s*c\.?\s*m\.?|d\.?\s*l\.?|decreto(?:\s+(?:ministeriale|direttoriale|dirigenziale|legislativo|del\s+presidente))?|ordinanza(?:\s+ministeriale)?|nota(?:\s+prot(?:ocollo)?\.?)?|circolare|comunicato|delibera|determina)\s*(?:n\.?\s*\d+)?(?:\s*del(?:l['’])?\s*\d{1,2}\s+[a-zà-ù]+\s+\d{4})?\s*[-–—:]\s*/i,
+    '',
+  );
+
+  // 2) Via le code burocratiche ("— Pubblicazione dell'Ordinanza Ministeriale").
+  t = t.replace(
+    /\s*[-–—:]\s*(?:pubblicazione|pubblicato|trasmissione|comunicazione|decreto|ordinanza|nota|avviso)\b[^.]*$/i,
+    '',
+  );
+
+  // 3) Pulizia e salvagente: mai svuotare o stravolgere il titolo.
+  t = t
+    .replace(/^[\s\-–—:.,;]+|[\s\-–—:.,;]+$/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (t.length < Math.min(20, originale.length)) t = originale;
+  t = t.charAt(0).toUpperCase() + t.slice(1);
+
+  // 4) Categoria in testa solo se aiuta (titolo che inizia in modo generico).
+  const cat = (categoria ?? '').trim();
+  const categorieChiare = [
+    'GPS', 'Supplenze', 'Concorsi', 'Mobilità', 'Graduatorie', 'Pensioni', 'CCNL', 'PNRR', 'Sostegno',
+  ];
+  if (
+    cat &&
+    categorieChiare.includes(cat) &&
+    !t.toLowerCase().includes(cat.toLowerCase()) &&
+    /^(?:aggiornamento|avviso|nota|comunicazione|nuove|nuovo|disposizioni|indicazioni|modalità)\b/i.test(t)
+  ) {
+    t = `${cat}: ${t}`;
+  }
+
+  // 5) Urgenza: la scadenza va in fondo, solo se la fonte la dichiara davvero.
+  const conScadenza = /(?:entro|scadenz|termine|domand|istanz|candidatur)/i.test(
+    `${originale} ${t}`,
+  );
+  if (deadline && conScadenza && !t.toLowerCase().includes('entro il')) {
+    t = `${t.replace(/[.\s]+$/, '')} — domande entro il ${dataBreveIt(deadline)}`;
+  }
+
+  return t.length >= 12 ? t : originale;
+}
 
 const MESI_ITALIANI: Record<string, number> = {
   gennaio: 1, febbraio: 2, marzo: 3, aprile: 4, maggio: 5, giugno: 6,
@@ -297,78 +477,43 @@ export function valutaRilevanza(voce: VoceInValutazione): ValutazioneNotizia {
     }
   }
 
-  // 0) ATTO UFFICIALE NAZIONALE: decreti/ordinanze/DM numerati e datati sono
-  //    PROVVEDIMENTI VINCOLANTI (es. "Decreto Direttoriale n. 1095 del 10
-  //    settembre 2026", "Ordinanza Ministeriale n. 163 del 7 agosto 2026").
-  //    Sono ammessi se pubblicati dal MIM (comparto implicito) o se citano
-  //    esplicitamente il comparto scuola (il resto della Gazzetta Ufficiale no).
-  if (RE_ATTO_UFFICIALE.test(testo) && RE_RIF_ATTO.test(testo)) {
-    if (èFonteMim(voce.url) || PAROLE_SCUOLA.test(testo)) {
-      // GUARDIA DI FRESCHEZZA: la data dell'atto si legge dal TITOLO (es.
-      // "Decreto Direttoriale n. 1095 del 10 settembre 2026"); se il titolo non
-      // la contiene (es. contratti "triennio 2022-2024"), vale la data della
-      // FONTE. Un atto formalmente corretto ma datato mesi fa resta materiale
-      // d'archivio: non deve entrare come "novità" (niente cronaca, niente vecchi
-      // avvisi rispolverati dagli elenchi di homepage).
-      const daTitolo = estraiDeadline(voce.title);
-      const rifMs = daTitolo
-        ? new Date(daTitolo).getTime()
-        : voce.data
-          ? new Date(voce.data).getTime()
-          : Number.NaN;
-      const soglia = Date.now() - FINESTRA_ATTI_NAZIONALI_GIORNI * 24 * 60 * 60 * 1000;
-      if (!Number.isNaN(rifMs) && rifMs < soglia) {
-        return {
-          rilevante: false,
-          categoria: null,
-          deadline: null,
-          motivo: `Atto non recente (oltre ${FINESTRA_ATTI_NAZIONALI_GIORNI} giorni)`,
-        };
-      }
-      // Nessuna data risolvibile: si scartano gli atti che citano solo anni vecchi.
-      if (Number.isNaN(rifMs)) {
-        const annoCorrente = new Date().getUTCFullYear();
-        const anni = [...testo.matchAll(/\b(?:19|20)\d{2}\b/g)].map((m) => Number(m[0]));
-        if (anni.length > 0 && Math.max(...anni) < annoCorrente - 1) {
-          return {
-            rilevante: false,
-            categoria: null,
-            deadline: null,
-            motivo: "Atto d'archivio (riferimenti non recenti)",
-          };
-        }
-      }
-      // La DATA dell'atto non è una SCADENZA: si registra come deadline solo se
-      // il testo la presenta esplicitamente come termine di presentazione.
-      const keywordScadenza =
-        /(entro il|entro e non oltre|scadenza|scade il|termine ultimo|termine di presentazione|termine per la presentazione)/.test(
-          testo,
-        );
-      return {
-        rilevante: true,
-        categoria: classificaCategoria(testo) ?? 'Scuole',
-        deadline: keywordScadenza ? estraiDeadline(testo) : null,
-      };
-    }
+  // 0) BUROCRAZIA VUOTA: un titolo che è SOLO il riferimento formale di un atto
+  //    ("Decreto Direttoriale n. 1095 del 10 settembre 2026", "Ordinanza
+  //    Ministeriale n. 163 del 7 agosto 2026") non dice al lettore che cosa
+  //    cambia: fuori dal blog, che non fa da Gazzetta Ufficiale.
+  if (attoBurocraticoVuoto(voce.title)) {
     return {
       rilevante: false,
       categoria: null,
       deadline: null,
-      motivo: 'Atto nazionale non pertinente al comparto scuola',
+      motivo: 'Atto burocratico senza contenuto: nessun impatto pratico per docenti e ATA',
     };
   }
 
-  const operativa = PAROLE_ACCETTA.some((p) => testo.includes(p));
-  if (!operativa) {
+  // 0-bis) MATERIALE D'ARCHIVIO: riferimenti solo a vecchi anni (avvisi 2019/
+  //    2020 rispolverati dagli elenchi) senza una fonte recente → fuori.
+  if (riferimentiObsoleti(`${voce.title} ${voce.description ?? ''}`, voce.data)) {
     return {
       rilevante: false,
       categoria: null,
       deadline: null,
-      motivo: 'Annuncio generico o non inerente a scadenze per il personale scolastico',
+      motivo: 'Contenuto d\'archivio (riferimenti obsoleti, nessuna attualità)',
     };
   }
 
-  // 1) Categoria UFFICIALE mappata: specifica per il personale scolastico → basta.
+  // 0-ter) TITOLO INFORMATIVO: un titolo che non dice NULLA (es. "Concorso",
+  //    "Avviso", "Comunicazione") non può diventare una notizia: si scarta
+  //    (nessun titolo pigro copiato dalle liste delle fonti).
+  if (!titoloInformativo(voce.title)) {
+    return {
+      rilevante: false,
+      categoria: null,
+      deadline: null,
+      motivo: 'Titolo senza contenuto informativo: non dice che cosa cambia',
+    };
+  }
+
+  // 1) Categoria UFFICIALE mappata: specifica per il personale scolastico.
   const categoriaMappata = classificaCategoria(testo);
   if (categoriaMappata) {
     // I contratti collettivi valgono SOLO per il comparto SCUOLA: i CCNL di
@@ -385,9 +530,18 @@ export function valutaRilevanza(voce: VoceInValutazione): ValutazioneNotizia {
     return { rilevante: true, categoria: categoriaMappata, deadline: estraiDeadline(testo) };
   }
 
-  // 2) Nessuna categoria mappata: serve un termine "FORTE" di avvio anno per
-  //    assegnare la categoria inferita (altrimenti è un avviso generico).
-  if (PAROLE_FORTI_INIZIO_ANNO.some((p) => testo.includes(p))) {
+  // 2) IMPATTO PRATICO: la notizia cambia qualcosa per chi lavora a scuola
+  //    (welfare e polizza sanitaria del personale, formazione ATA, sicurezza,
+  //    organico, iscrizioni…): si racconta anche senza una parola-categoria
+  //    ufficiale e senza una parola "operativa" da burocrazia.
+  const categoriaImpatto = categoriaDaImpatto(voce.title);
+  if (categoriaImpatto && PAROLE_IMPATTO.test(voce.title)) {
+    return { rilevante: true, categoria: categoriaImpatto, deadline: estraiDeadline(testo) };
+  }
+
+  // 3) Rete di sicurezza: avviso OPERATIVO con un termine "FORTE" di avvio anno.
+  const operativa = PAROLE_ACCETTA.some((p) => testo.includes(p));
+  if (operativa && PAROLE_FORTI_INIZIO_ANNO.some((p) => testo.includes(p))) {
     return {
       rilevante: true,
       categoria: categoriaInizioAnno(testo) ?? 'Scuole',
@@ -858,6 +1012,50 @@ const ARTICOLO: Record<string, ArticoloCopy> = {
 };
 
 /**
+ * COPY DEDICATO alle notizie di IMPATTO PRATICO: quando il titolo parla di
+ * welfare/polizza, formazione o organizzazione, l'apertura dice subito che cosa
+ * cambia (e per chi) invece del generico template di categoria.
+ */
+const IMPATTO_COPY: Array<{ re: RegExp; copy: ArticoloCopy }> = [
+  {
+    re: /(?:welfare|polizza|sanitari|assistenza)/i,
+    copy: {
+      fatto: 'Una novità concreta per il personale scolastico: è stata annunciata',
+      chi: 'tutto il personale della scuola — docenti e ATA — e le loro famiglie',
+      pratica:
+        'Non è una circolare operativa ma un cambio di condizioni: conviene leggere i dettagli per capire coperture, decorrenza e come aderire, così non resti fuori da un beneficio previsto per te.',
+      come: 'I dettagli e le modalità di adesione sono nella pagina ufficiale del %LINK%: in caso di dubbi, chiedi alla segreteria della tua scuola.',
+      linkLabel: 'Ministero',
+      portale: 'Notizie del Ministero',
+    },
+  },
+  {
+    re: /(?:formazione|aggiornamento professionale|MIMeraviglIA)/i,
+    copy: {
+      fatto: "Un'opportunità di formazione per il personale scolastico: è online",
+      chi: 'docenti, personale ATA e dirigenti scolastici',
+      pratica:
+        'Aggiornarsi conta su punteggi, incarichi e crescita professionale: verifica requisiti, tempi e modalità di iscrizione prima che la finestra chiuda.',
+      come: 'Iscrizioni e dettagli sono nella pagina ufficiale del %LINK%: leggi requisiti e tempi prima di iscriverti.',
+      linkLabel: 'Ministero',
+      portale: 'Notizie del Ministero',
+    },
+  },
+  {
+    re: /(?:sicurezza|edilizia|digitalizzazione|organico|cattedre)/i,
+    copy: {
+      fatto: "Un cambiamento che riguarda l'organizzazione delle scuole: è stato pubblicato",
+      chi: "il personale scolastico e l'organizzazione della scuola",
+      pratica:
+        'Sono le decisioni che poi ricadono su orari, incarichi e dotazioni: leggerle adesso aiuta a capire in anticipo che cosa cambia nella tua scuola.',
+      come: 'Il testo completo è nella pagina ufficiale del %LINK%: controlla che cosa cambia per la tua scuola.',
+      linkLabel: 'Ministero',
+      portale: 'Notizie del Ministero',
+    },
+  },
+];
+
+/**
  * Genera un articolo giornalistico naturale in 3 paragrafi fluidi, basato solo
  * sui dati reali della fonte. Nessun cliché da chatbot e nessuna sezione in
  * <h2>: si racconta il fatto, chi è coinvolto e come agire, con il link
@@ -887,7 +1085,8 @@ export function generaArticoloEditoriale(
   d: DatiArticoloEditoriale,
 ): { content_html: string; summary_points: string[] } {
   const cat = d.categoria ?? 'Scuole';
-  const a = ARTICOLO[cat] ?? ARTICOLO['Scuole'];
+  const override = IMPATTO_COPY.find((o) => o.re.test(d.title));
+  const a = override?.copy ?? ARTICOLO[cat] ?? ARTICOLO['Scuole'];
   const scadenza = d.deadline ? formattaDataItaliana(d.deadline) : null;
   const link = d.official_url ?? '';
 

@@ -91,6 +91,15 @@ jobs:
             echo "::warning::Ordine o cadenza del feed Notizie non conformi: verificare newsService/limitaCadenzaSettimanale."
           fi
 
+      - name: Verifica qualità editoriale (anti-burocrazia, titoli azione)
+        continue-on-error: true
+        run: |
+          if npm run test:notizie-editoriale; then
+            echo "::notice::Qualità editoriale rispettata (niente burocrazia vuota, titoli azione, archivio pulito)."
+          else
+            echo "::warning::Qualità editoriale non conforme: verificare relevanceEngine/archivio Notizie."
+          fi
+
       - name: Verifica invariante NAZIONALE (nessuna fonte regionale)
         continue-on-error: true
         run: |

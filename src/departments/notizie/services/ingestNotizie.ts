@@ -54,6 +54,7 @@ import {
   MAX_ARTICOLI_FINESTRA,
   MAX_ARTICOLI_SETTIMANA,
   èFonteNazionale,
+  titoloAzione,
   type ValutazioneNotizia,
 } from './relevanceEngine.ts';
 import type { NewsArticle } from '../types.ts';
@@ -173,7 +174,10 @@ async function costruisciArticolo(v: VoceFonte): Promise<NewsArticle | null> {
   });
   const articolo: NewsArticle = {
     id: `notizia-${slug(v.title)}-${slug(v.fonte)}`,
-    title: v.title,
+    // TITOLO AZIONE: niente copia-incolla istituzionale — si dice che cosa
+    // cambia per il lettore (e l'eventuale scadenza). L'id resta ancorato al
+    // titolo ORIGINALE della fonte (identità stabile nel tempo).
+    title: titoloAzione(v.title, valutazione.categoria, valutazione.deadline),
     category: valutazione.categoria ?? 'Scuole',
     deadline_date: valutazione.deadline,
     summary_points,

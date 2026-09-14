@@ -52,7 +52,33 @@
      sinistra è l'aggiornamento nazionale più recente. Il punteggio di rilevanza
      NON decide la posizione (solo tie-break a parità di data).
 
-2. **ZERO RUMORE MARKETING / PRESS-RELEASE**
+2-bis. **GIORNALISMO UTILE — NO ALLA BUROCRAZIA VUOTA**
+   - **NON si pubblicano** avvisi/atti che sono SOLO il loro riferimento formale:
+     *"Decreto Direttoriale n. 1095 del 10 settembre 2026"*, *"Ordinanza
+     Ministeriale n. 163 del 7 agosto 2026"*, *"Nota prot. n. X"*. Il blog non fa
+     da Gazzetta Ufficiale (`attoBurocraticoVuoto`).
+   - **NON si pubblicano titoli pigri** copiati dalle liste delle fonti
+     (*"Concorso"*, *"Avviso"*, *"Comunicazione"*): un titolo deve dire chi/che
+     cosa (`titoloInformativo`).
+   - **NON si pubblica materiale d'archivio** rispolverato dagli elenchi
+     (avvisi 2019/2020, riferimenti solo a vecchi anni) quando la fonte non
+     attesta una pubblicazione recente (`riferimentiObsoleti`).
+   - **SI pubblicano invece** le notizie di **impatto pratico** per docenti, ATA
+     e organizzazione scolastica anche senza una parola-categoria ufficiale:
+     welfare e polizza sanitaria del personale, formazione e aggiornamento
+     professionale, sicurezza, organico e cattedre, iscrizioni, orientamento,
+     inclusione (`categoriaDaImpatto` + `PAROLE_IMPATTO`). La diplomazia
+     istituzionale (memorandum, protocolli d'intesa, visite) resta fuori.
+3. **TITOLI AZIONE (mai copia-incolla istituzionale)**
+   - Il titolo pubblicato non è quello della fonte: `titoloAzione` elimina le
+     intestazioni/le code burocratiche, tiene il SOGGETTO della notizia, mette la
+     categoria in testa quando aiuta e aggiunge l'urgenza con la scadenza
+     (*"… — domande entro il 16 lug"*).
+   - Deve essere chiaro **che cosa cambia** e **perché conta** per il lettore: il
+     primo paragrafo dell'articolo apre con il fatto e l'impatto (copy dedicato
+     per welfare/formazione/sicurezza), il secondo spiega a chi serve, il terzo
+     dice dove agire con il link ufficiale.
+4. **ZERO RUMORE MARKETING / PRESS-RELEASE**
    - **RIFIUTA SEMPRE**: discorsi, interviste, dichiarazioni non vincolanti,
      comunicati stampa, campagne di comunicazione, eventi promozionali, festival,
      premi, mostre, webinar, podcast.

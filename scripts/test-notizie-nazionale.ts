@@ -36,7 +36,15 @@ const attoRecente = valutaRilevanza({
   url: 'https://www.mim.gov.it/web/guest/-/decreto-direttoriale-n-1095-del-10-settembre-2026',
   data: '2026-09-11',
 });
-check('atto MIM recente AMESSO', true, attoRecente.rilevante);
+check('atto burocratico VUOTO (Decreto n. 1095) RESPINTO', false, attoRecente.rilevante);
+
+const welfare = valutaRilevanza({
+  title:
+    'Welfare per il personale della scuola. Parte la polizza sanitaria: interessati oltre un milione e duecentomila dipendenti',
+  url: 'https://www.mim.gov.it/web/guest/-/welfare-per-il-personale-della-scuola-parte-la-polizza-sanitaria',
+  data: '2026-09-10',
+});
+check('notizia di IMPATTO (welfare/polizza) AMMESSA', true, welfare.rilevante);
 
 const cronaca = valutaRilevanza({
   title: "04/08/2026 - Valditara: pronta la circolare per mettere un tetto agli stranieri in classe",
@@ -51,6 +59,14 @@ const attoVecchio = valutaRilevanza({
   data: '2026-09-10',
 });
 check('atto non recente RESPINTO', false, attoVecchio.rilevante);
+
+const memorandum = valutaRilevanza({
+  title:
+    "Scuola, Italia-Argentina: Valditara e Pettovello firmano Memorandum d'Intesa. Il Ministro: «Più opportunità»",
+  url: 'https://www.mim.gov.it/web/guest/-/scuola-italia-argentina-memorandum',
+  data: '2026-09-10',
+});
+check('protocollo/memorandum (diplomazia) RESPINTO', false, memorandum.rilevante);
 
 const ccnlAltro = valutaRilevanza({
   title: 'CONTRATTO COLLETTIVO NAZIONALE DI LAVORO DELL’AREA SANITÀ TRIENNIO 2022 – 2024',

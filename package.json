@@ -44,6 +44,7 @@
     "test:notizie-rate": "tsx scripts/test-notizie-rate.ts",
     "test:notizie-nazionale": "tsx scripts/test-notizie-nazionale.ts",
     "test:notizie-feed": "tsx scripts/test-notizie-feed.ts",
+    "test:notizie-editoriale": "tsx scripts/test-notizie-editoriale.ts",
     "test:alert": "tsx scripts/test-alert-avviso.ts",
     "test:email": "tsx scripts/test-email-template.ts",
     "test:link": "tsx scripts/test-link-fonte.ts",
