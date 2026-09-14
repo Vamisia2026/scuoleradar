@@ -174,18 +174,10 @@ export function èFonteMim(url?: string | null): boolean {
   }
 }
 
-/** Designazione formale di un ATTO ufficiale (provvedimento vincolante). */
-const RE_ATTO_UFFICIALE =
-  /\b(?:ordinanza\s+ministeriale|decreto\s+(?:ministeriale|direttoriale|dirigenziale|legislativo|del\s+presidente)|d\.?\s*m\.?|d\.?\s*d\.?|d\.?\s*p\.?\s*r\.?|d\.?\s*p\.?\s*c\.?\s*m\.?|legge|nota\s+prot(?:ocollo)?|circolare)\b/;
-
-/** Riferimento NUMERICO dell'atto (n. 1095, 2939/2025, L. 157): rende l'atto
- *  identificabile e verificabile. Senza numero si tratta di cronaca, non di atto.
- *  NB: `(?<![\\d/])` evita di scambiare una DATA `gg/mm/aaaa` per un riferimento
- *  d'atto (es. "04/08/2026" non deve produrre "08/2026"). */
-const RE_RIF_ATTO = /(?:\bn\.?\s?\d{1,6}\b)|(?:(?<![\d/])\d{1,4}\/\d{4}\b)/;
-
-/** Finestra (giorni) entro cui un ATTO nazionale è considerato corrente. */
-export const FINESTRA_ATTI_NAZIONALI_GIORNI = 45;
+/** NB: la vecchia euristica "atto ufficiale + numero" (RE_ATTO_UFFICIALE /
+ *  RE_RIF_ATTO / FINESTRA_ATTI_NAZIONALI_GIORNI) è stata RIMOSSA: accettava gli
+ *  atti di sola burocrazia. Ora un atto si valuta dal CONTENUTO (vedi
+ *  `attoBurocraticoVuoto`, `categoriaDaImpatto`). */
 
 /** Parole del COMPARTO SCUOLA (docenti, ATA, dirigenti scolastici…). */
 const PAROLE_SCUOLA =
