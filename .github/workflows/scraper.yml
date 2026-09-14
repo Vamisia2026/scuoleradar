@@ -30,6 +30,9 @@ jobs:
     name: Scraping interpelli → Supabase (interpelli, fallback notices)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Necessari per committare il LEDGER anti-duplicato (.scuoleradar/).
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout del codice
@@ -66,6 +69,15 @@ jobs:
             echo "::warning::Espansione elenchi non conforme: verificare src/scraper/elenchi.ts."
           fi
 
+      - name: Verifica anti-duplicato (ledger + canali) e copy notifiche
+        continue-on-error: true
+        run: |
+          if npm run test:dedup && npm run test:copy; then
+            echo "::notice::Dedup OK: nessun duplicato possibile e nessuna copy di quota nei messaggi."
+          else
+            echo "::warning::Dedup/copy non conformi: verificare notifier.ts, channelLog.ts, telegram.ts."
+          fi
+
       - name: Esecuzione scraper e inserimento in Supabase
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -77,4 +89,21 @@ jobs:
           SCRAPER_SCADENZA_MAX: '20'
           SCRAPER_ELENCHI_MAX: '25'
         run: npm run scrape
+
+      - name: Commit del LEDGER anti-duplicato (se aggiornato)
+        if: always()
+        run: |
+          if [ ! -f .scuoleradar/notifiche-ledger.json ]; then
+            echo "Nessun ledger da committare."
+            exit 0
+          fi
+          git config user.name "scuoleradar-bot"
+          git config user.email "bot@scuoleradar.it"
+          git add .scuoleradar/notifiche-ledger.json
+          if git diff --cached --quiet; then
+            echo "Ledger invariato: nessun commit."
+          else
+            git commit -m "chore(scraper): aggiorna il ledger anti-duplicato [skip ci]"
+            git push
+          fi
 

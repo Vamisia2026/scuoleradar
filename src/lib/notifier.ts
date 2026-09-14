@@ -15,6 +15,7 @@ import {
   type TipoMessaggio,
 } from './resend.ts';
 import { inviaNotificaTelegram } from './telegram.ts';
+import { chiaveLedger, ledgerLocaleGia, ledgerLocaleRegistra } from './ledgerLocale.ts';
 import { findUtentiCompatibili, normalizzaClasse, searchInterpelli } from './matchingEngine.ts';
 
 export interface NotificheOptions {
@@ -43,6 +44,29 @@ function pianoIllimitato(piano?: string): boolean {
  * (migrazione `20260914010000_notifications_log.sql`). Se la tabella non esiste
  * ancora le letture/scritture sono best-effort (nessun blocco dell'invio).
  */
+/** Avviso una-tantum quando il ledger non è disponibile (tabella non creata). */
+let ledgerNotificheAvvisato = false;
+
+/**
+ * Deduplica UNIFICATA: ledger locale su file (funziona SEMPRE, anche senza
+ * migrazioni) + ledger DB `notifications_log` (fonte primaria quando presente).
+ * Una coppia (utente, interpello) non viene MAI notificata due volte.
+ */
+async function giaNotificatoL(
+  client: SupabaseClient | null,
+  userId: string,
+  hash: string,
+): Promise<boolean> {
+  if (ledgerLocaleGia(chiaveLedger('utente', `${userId}:${hash}`, 'notifica'))) return true;
+  if (client && (await giaNotificato(client, userId, hash))) return true;
+  return false;
+}
+
+/** Registra la notifica su entrambi i ledger (locale immediato + DB per canale). */
+function registraNotificaLocale(userId: string, hash: string): void {
+  ledgerLocaleRegistra(chiaveLedger('utente', `${userId}:${hash}`, 'notifica'));
+}
+
 async function giaNotificato(
   client: SupabaseClient,
   userId: string,
@@ -55,7 +79,17 @@ async function giaNotificato(
       .eq('user_id', userId)
       .eq('interpello_hash', hash)
       .limit(1);
-    if (error) return false;
+    if (error) {
+      // Diagnostica esplicita: senza tabella il ledger non protegge → spam possibile.
+      if (!ledgerNotificheAvvisato) {
+        ledgerNotificheAvvisato = true;
+        console.warn(
+          `⚠ Ledger notifiche NON disponibile (${error.message}): applicare la migrazione ` +
+            '`20260914010000_notifications_log.sql` per garantire zero duplicati.',
+        );
+      }
+      return false;
+    }
     return (data?.length ?? 0) > 0;
   } catch {
     return false;
@@ -131,6 +165,15 @@ export async function notificaNuoviInterpelli(
         // Utente già saturato in questo run (BASE oltre il limite): nessun
         // ulteriore processamento, il cron `step5-notifiche` gestirà il recap.
         if (utentiEsauriti.has(utente.id)) return [];
+
+        // ANTI-SPAM / IDEMPOTENZA (bug "notifiche ripetute"): se la coppia
+        // (utente, interpello) è già nel ledger, la notifica NON si rimanda —
+        // per QUALUNQUE piano. Senza questo controllo un avviso ri-rilevato come
+        // "nuovo" (upsert ignorato, hash variato, run ripetuti) veniva rispedito
+        // ogni volta, generando loop di messaggi identici.
+        if (await giaNotificatoL(client, utente.id, interpello.hashId)) {
+          return [];
+        }
 
         // FASE 6 — guardia server-side: RPC atomica del contatore notifiche.
         // base → max 3 per ANNO SCOLASTICO (reset automatico a settembre);
@@ -253,7 +296,11 @@ export async function notificaNuoviInterpelli(
             console.warn(`  ⚠ flag sequenza post-prova non aggiornato per ${utente.id.slice(0, 8)}… (${errFlag.message})`);
           }
         }
-        // Ledger anti-duplicato: registra i canali andati a buon fine (best-effort).
+        // Ledger anti-duplicato: registra i canali andati a buon fine (best-effort)
+        // e la coppia (utente, interpello) sul ledger locale (sempre disponibile).
+        if (completati.some((c) => c.valore.ok)) {
+          registraNotificaLocale(utente.id, interpello.hashId);
+        }
         if (client) {
           for (const c of completati) {
             if (c.valore.ok) await registraNotifica(client, utente.id, interpello.hashId, c.tipo);
@@ -369,7 +416,7 @@ export async function notificaInterpelliPerUtente(
     if (!matchClasse) continue;
     esito.interpelli += 1;
 
-    if (await giaNotificato(client, String(prof.id), r.hash_id)) {
+    if (await giaNotificatoL(client, String(prof.id), r.hash_id)) {
       esito.saltati += 1;
       continue;
     }
@@ -433,6 +480,7 @@ export async function notificaInterpelliPerUtente(
     }
 
     if (!okAny) console.warn(`  ⚠ Nessun canale disponibile per "${r.title.slice(0, 60)}".`);
+    else registraNotificaLocale(String(prof.id), r.hash_id);
   }
 
   console.log(

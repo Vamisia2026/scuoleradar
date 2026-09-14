@@ -60,15 +60,18 @@ export interface EsitoInvio {
 }
 
 /**
- * Le 8 tipologie di messaggio del sistema (sequenza BASE + PRO):
- *  Email 1. welcome      — intake / conferma iscrizione account Base
- *  Email 2. prova1       — prima opportunità di prova
- *  Email 3. prova2       — seconda opportunità di prova
- *  Email 4. prova3       — terza e ultima opportunità di prova
- *  Email 5. extra        — avviso: periodo di prova terminato (upgrade PRO)
- *  Email 6. recap        — avviso finale (servizio di notifica sospeso)
+ * Le 8 tipologie di messaggio del sistema (mese PRO gratuito + PRO):
+ *  Email 1. welcome      — intake / conferma iscrizione (mese PRO gratuito attivo)
+ *  Email 2. prova1       — notifica di opportunità (tipologia storica, copy neutra)
+ *  Email 3. prova2       — notifica di opportunità (tipologia storica, copy neutra)
+ *  Email 4. prova3       — notifica di opportunità (tipologia storica, copy neutra)
+ *  Email 5. extra        — avviso: notifiche del piano gratuito in pausa
+ *  Email 6. recap        — ultimo avviso automatico del piano gratuito
  *  PRO     welcome_pro   — conferma attivazione abbonamento PRO
  *  PRO     notifica_pro  — notifica standard per abbonati PRO
+ *
+ * NOTA: il servizio NON decrementa contatori di messaggi nel mese PRO gratuito.
+ * I nomi `prova1/2/3` restano solo per compatibilità dei cron/DB.
  */
 export type TipoMessaggio =
   | 'welcome'

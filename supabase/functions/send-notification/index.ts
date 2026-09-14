@@ -64,6 +64,8 @@ interface Opportunita {
   classe?: string;
   scadenza?: string;
   link?: string;
+  /** Email/PEC di candidatura della scuola (resa CLICCABILE negli avvisi). */
+  email?: string;
   piano?: string;
 }
 
@@ -91,6 +93,7 @@ function conOpportunita(o: Opportunita, testo: string): string {
   if (o.scadenza && scadenzaValida(o.scadenza)) {
     dettagli.push(`⏳ Scadenza: ${escapeHtml(o.scadenza)}`);
   }
+  if (o.email) dettagli.push(`📧 Candidature: <a href="mailto:${escapeHtml(o.email)}">${escapeHtml(o.email)}</a>`);
   if (dettagli.length) t += `<br/>${dettagli.join(' · ')}`;
   if (o.link) t += `<br/><a href="${escapeHtml(o.link)}">🔗 ${escapeHtml(etichettaFonteLink(o.link))}</a>`;
   return t;
@@ -104,6 +107,7 @@ function conOpportunitaTg(o: Opportunita, testo: string): string {
   if (o.scadenza && scadenzaValida(o.scadenza)) {
     t += `\n⏳ Scadenza: ${escapeHtml(o.scadenza)}`;
   }
+  if (o.email) t += `\n📧 Candidature: <a href="mailto:${escapeHtml(o.email)}">${escapeHtml(o.email)}</a>`;
   if (o.link) t += `\n🔗 <a href="${escapeHtml(o.link)}">${escapeHtml(etichettaFonteLink(o.link))}</a>`;
   return t;
 }
@@ -320,6 +324,37 @@ async function caricaProfilo(userId: string) {
   return rows[0] ?? null;
 }
 
+/**
+ * Email/PEC di CANDIDATURA dell'avviso: dal payload se presente, altrimenti
+ * ricercata in `interpelli` (per `hash_id` o `source_url`). Serve a garantire
+ * che OGNI notifica di opportunità contenga il recapito della scuola: un avviso
+ * senza email è un servizio incompleto.
+ */
+async function caricaEmailAvviso(body: Record<string, unknown>): Promise<string> {
+  const dalPayload = String(body.email ?? body.contactEmail ?? '').trim();
+  if (dalPayload) return dalPayload;
+  if (!SUPABASE_URL || !SERVICE_ROLE) return '';
+  const hash = String(body.hash ?? body.hash_id ?? '').trim();
+  const link = String(body.link ?? body.source_url ?? '').trim();
+  const filtro = hash
+    ? `hash_id=eq.${encodeURIComponent(hash)}`
+    : link
+      ? `source_url=eq.${encodeURIComponent(link)}`
+      : '';
+  if (!filtro) return '';
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/interpelli?${filtro}&select=contact_email&limit=1`,
+      { headers: { apikey: SERVICE_ROLE, Authorization: `Bearer ${SERVICE_ROLE}` } },
+    );
+    if (!res.ok) return '';
+    const rows = (await res.json()) as Array<{ contact_email?: string | null }>;
+    return String(rows?.[0]?.contact_email ?? '').trim();
+  } catch {
+    return '';
+  }
+}
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   if (req.method !== 'POST') {
@@ -406,6 +441,7 @@ serve(async (req: Request) => {
     classe: body.classe ? String(body.classe) : undefined,
     scadenza: body.scadenza ? String(body.scadenza) : undefined,
     link: body.link ? String(body.link) : undefined,
+    email: (await caricaEmailAvviso(body)) || undefined,
     piano: body.piano ? String(body.piano) : undefined,
   };
 

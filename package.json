@@ -22,6 +22,8 @@
     "test:elenchi": "tsx scripts/test-elenchi.ts",
     "test:traccia": "tsx scripts/test-traccia-fonte.ts",
     "test:board": "tsx scripts/test-live-board.ts",
+    "test:copy": "tsx scripts/test-copy-notifiche.ts",
+    "test:dedup": "tsx scripts/test-dedup.ts",
     "dati:arricchisci": "tsx scripts/arricchisci-interpelli.ts",
     "test:parser:tabelle": "tsx scripts/test-parser-tabelle.ts",
     "test:parser:date": "tsx scripts/test-parser-date.ts",

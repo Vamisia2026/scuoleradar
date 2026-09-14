@@ -64,6 +64,8 @@ import {
   pubblicaInterpelloSuCanali,
 } from '../lib/telegram.ts';
 import { inviaAlertaAdmin, registraRunScraper, type RunScraperLog } from './adminAlerts.ts';
+import { canaliGiaPubblicati, registraPubblicazioneCanale } from './channelLog.ts';
+import { ledgerLocaleSalva } from '../lib/ledgerLocale.ts';
 
 /* ------------------------------- Tipi ------------------------------- */
 
@@ -870,19 +872,39 @@ async function pubblicaNuoviSuCanali(nuovi: AvvisoRilevato[]): Promise<EsitoCana
   let inviiAttesi = 0;
   let falliti = 0;
   let senzaCanale = 0;
+  let saltatiGia = 0;
+  // Dedup in-run: una coppia (hash, canale) non viene mai processata due volte
+  // nemmeno se lo stesso avviso comparisse più volte nell'elenco.
+  const processati = new Set<string>();
   for (const n of nuovi) {
-    const esito = await pubblicaInterpelloSuCanali({
-      title: n.title,
-      schoolName: n.schoolName,
-      province: n.province,
-      classCodes: n.classCodes,
-      materia: n.materia,
-      contactEmail: n.contactEmail,
-      expirationDate: n.expirationDate,
-      link: n.link,
+    // ANTI-SPAM (ledger): i canali su cui questo avviso è già stato pubblicato
+    // vengono esclusi — il run ripetuto NON ripubblica lo stesso messaggio.
+    const giaPubblicati = await canaliGiaPubblicati(n.hashId);
+    const esito = await pubblicaInterpelloSuCanali(
+      {
+        title: n.title,
+        schoolName: n.schoolName,
+        province: n.province,
+        classCodes: n.classCodes,
+        materia: n.materia,
+        contactEmail: n.contactEmail,
+        expirationDate: n.expirationDate,
+        link: n.link,
+      },
+      { escludi: [...giaPubblicati] },
+    );
+    const daPubblicare = esito.destinazioni.filter((c) => {
+      const chiave = `${n.hashId}|${c}`;
+      if (processati.has(chiave)) return false;
+      processati.add(chiave);
+      return true;
     });
-    inviiAttesi += esito.destinazioni.length;
+    inviiAttesi += daPubblicare.length;
     if (esito.destinazioni.length === 0) {
+      if (giaPubblicati.size > 0) {
+        saltatiGia += 1;
+        continue; // già pubblicato ovunque: nessuna azione
+      }
       senzaCanale += 1;
       console.warn(
         `  – [${n.province}] nessun canale attivo per la regione (${n.title.slice(0, 60)})`,
@@ -892,6 +914,8 @@ async function pubblicaNuoviSuCanali(nuovi: AvvisoRilevato[]): Promise<EsitoCana
     inviiRiusciti += esito.pubblicati;
     falliti += esito.errori.length;
     if (esito.errori.length === 0) {
+      // Registra i canali serviti: da qui in avanti l'avviso non si ripubblica.
+      for (const canale of daPubblicare) await registraPubblicazioneCanale(n.hashId, canale);
       console.log(
         `  ✓ [${n.province}] → ${esito.destinazioni.join(', ')}: ${n.title.slice(0, 50)}`,
       );
@@ -900,6 +924,9 @@ async function pubblicaNuoviSuCanali(nuovi: AvvisoRilevato[]): Promise<EsitoCana
         console.warn(`  ✗ [${n.province}] → ${e.canale}: ${e.errore} (${n.title.slice(0, 50)})`);
       }
     }
+  }
+  if (saltatiGia > 0) {
+    console.log(`  • Canali Telegram: ${saltatiGia} avvisi già pubblicati (ledger) → saltati`);
   }
   console.log(
     `  ✓ Canali Telegram: ${inviiRiusciti}/${inviiAttesi} invii riusciti (${nuovi.length} avvisi)`,
@@ -937,6 +964,11 @@ async function avvisaSeDispatchFermo(
  * rileva un fallimento critico o un'anomalia di routing Telegram.
  */
 async function concludiRun(run: RunScraperLog): Promise<void> {
+  // LEDGER LOCALE: salva su disco notifiche e pubblicazioni di questo run.
+  // È la rete di sicurezza che blocca i duplicati anche quando le tabelle
+  // `notifications_log` / `channel_posts_log` non sono ancora state create.
+  ledgerLocaleSalva();
+
   const registrata = await registraRunScraper(run);
   if (!registrata && run.esito !== 'ok') {
     console.warn('⚠ Registrazione run non riuscita (tabella scraper_runs non disponibile?).');

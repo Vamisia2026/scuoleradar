@@ -239,7 +239,8 @@ Supabase DB (pg_cron + trigger):
 | `emailScuola.ts` | ~110 | **Puro** — email UFFICIALE della scuola: `normalizzaCodiceMeccanografico`, `estraiCodiceMeccanograficoDaTesto`, `emailDaCodiceMeccanografico` (PEO `@istruzione.it` / PEC `@pec.istruzione.it`), `risolviEmailUfficialeScuola` (email di fonte → convenzione MIM; mai email inventate) |
 | `liveBoard.ts` | ~110 | **Puro** — vetrina "Radar Live": `scuolaDaTitolo`, `nomeScuolaRiga` (campo → registro per codice → titolo → ente), `preparaRigheBoard` (arricchisce e **scarta** le righe senza scuola o senza scadenza: mai "Scuola non indicata"/"Scadenza n/d") |
 | `school-lookup.ts` | ~50 | Registro scuole per codice meccanografico: `resolveSchoolByCode` (PEO/PEC) e **`nomeScuolaDaCodice`** (solo nomi REALI, mai "Istituto &lt;codice&gt;") |
-| `notifier.ts` | 206 | **Node-only** — orchestratore notifiche: per ogni interpello nuovo trova utenti compatibili, RPC `incrementa_notifiche_utente`, sceglie il tipo (`prova1/2/3`, `extra`, `recap` via cron), invia email+Telegram in parallelo, aggiorna flag `notifiche_blocco_inviato`/`step4_inviata_at` |
+| `notifier.ts` | ~250 | **Node-only** — orchestratore notifiche: per ogni interpello nuovo trova utenti compatibili, RPC `incrementa_notifiche_utente`, sceglie il tipo, invia email+Telegram in parallelo, aggiorna flag `notifiche_blocco_inviato`/`step4_inviata_at`. **Dedup doppio: `notifications_log` (DB) + `ledgerLocale` (file)** — una coppia (utente, interpello) non viene MAI notificata due volte |
+| `ledgerLocale.ts` | ~85 | **Node-only** — ledger anti-duplicato su file (`.scuoleradar/notifiche-ledger.json`): `chiaveLedger`, `ledgerLocaleGia`, `ledgerLocaleRegistra`, `ledgerLocaleSalva`. Rete di sicurezza quando le tabelle DB non sono ancora create; committato dal workflow |
 | `pricing.ts` | 18 | Piani: `PianoId = 'pro_annuale'|'pro_mensile'|'a_consumo'`; localStorage `STORAGE_KEY_INTENDED_PLAN` |
 | `promo.ts` | 34 | `validaPromo(codice, userId)` via RPC `valida_codice_promo`; `SCONTO_PROMO_EUR = 10` |
 
@@ -589,9 +590,20 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
 - **Copy**: nessun riferimento alla vecchia "prova a 3 notifiche" ("Te ne restano 2",
   "Terza e ultima opportunità"): il mese PRO è presentato come accesso pieno. Le
   tipologie `prova1/2/3`, `extra` e `recap` restano per compatibilità dei cron.
+- **Anti-duplicato (mai due volte lo stesso avviso)**: due ledger + fallback.
+  · `notifications_log` (utente × interpello × canale) — migrazione
+    `20260914010000_notifications_log.sql`;
+  · `channel_posts_log` (interpello × canale Telegram) — migrazione
+    `20260914020000_channel_posts_log.sql`;
+  · `.scuoleradar/notifiche-ledger.json` (**ledger locale su file**, committato
+    dal workflow `scraper.yml`): blocca i duplicati anche se le tabelle non sono
+    state create. Se una tabella manca, il run logga un warning esplicito con il
+    nome della migrazione da applicare.
 - **Email scolastica**: se la fonte non pubblica un recapito, il parser ricostruisce
   la **PEO ufficiale** (`codice@istruzione.it`) dal codice meccanografico
   (`emailScuola.ts`); `npm run dati:arricchisci` completa le righe già in DB.
+  L'email è resa **cliccabile** (`mailto:`) in Telegram, nelle email e nella Edge
+  `send-notification` (che la recupera anche da `interpelli.contact_email`).
 - **Orchestrazione** → `src/lib/notifier.ts`: `notificaNuoviInterpelli(client, nuovi, opts)`
   — non lancia MAI eccezioni; esito `{ inviate, fallite, telegramInviate, telegramFallite }`.
 

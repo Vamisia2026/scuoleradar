@@ -302,7 +302,7 @@ export function formattaMessaggioTelegram(
   const emailContatto = interpello?.contactEmail?.trim() ?? '';
   const emailRiga =
     TIPI_CON_OPPORTUNITA.has(tipo) && emailContatto
-      ? `📧 Candidature: ${escapeHtml(emailContatto)}`
+      ? `📧 Candidature: <a href="mailto:${escapeHtml(emailContatto)}">${escapeHtml(emailContatto)}</a>`
       : '';
 
   const parti: string[] = [copy.testa];
@@ -788,7 +788,7 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
   // nessuno stato negativo, nessuna email inventata).
   const email = interpello.contactEmail?.trim() ?? '';
   const emailRiga = email
-    ? `📧 Candidature: ${escapeHtml(email)}`
+    ? `📧 Candidature: <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`
     : '';
 
   // FOOTER CANALE (broadcast regionale/generale): invito DIRETTO al setup del
@@ -841,8 +841,13 @@ export interface EsitoPubblicazioneCanali {
  */
 export async function pubblicaInterpelloSuCanali(
   interpello: InterpelloCanale,
+  opts: {
+    /** Canali da NON toccare in questa chiamata (es. già pubblicati: ledger). */
+    escludi?: string[];
+  } = {},
 ): Promise<EsitoPubblicazioneCanali> {
-  const destinazioni = destinazioniPubblicazione(interpello);
+  const esclusi = new Set((opts.escludi ?? []).map((c) => c.trim()).filter(Boolean));
+  const destinazioni = destinazioniPubblicazione(interpello).filter((c) => !esclusi.has(c));
   const testo = formattaPostCanaleTelegram(interpello);
   const errori: { canale: string; errore: string }[] = [];
   let pubblicati = 0;

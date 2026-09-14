@@ -128,9 +128,9 @@ const conEmail: DettagliNotifica = {
 };
 const msgEmail = formattaMessaggioTelegram(conEmail, 'AA24', DASH, 'notifica_pro');
 check(
-  'email presente → testo semplice (nessun mailto)',
+  'email presente → link mailto cliccabile',
   true,
-  msgEmail.includes('📧 Candidature: segreteria@liceoaugustomonti.edu.it'),
+  msgEmail.includes('📧 Candidature: <a href="mailto:segreteria@liceoaugustomonti.edu.it">'),
 );
 check('email senza link nascosto', [], linkNascosti(msgEmail));
 
@@ -200,9 +200,9 @@ const postEmail = formattaPostCanaleTelegram({
   contactEmail: 'protocollo@itisartom.edu.it',
 });
 check(
-  'post canale: email presente → testo semplice',
+  'post canale: email presente → link mailto cliccabile',
   true,
-  postEmail.includes('📧 Candidature: protocollo@itisartom.edu.it'),
+  postEmail.includes('📧 Candidature: <a href="mailto:protocollo@itisartom.edu.it">'),
 );
 
 console.log(

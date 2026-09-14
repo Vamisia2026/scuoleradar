@@ -169,7 +169,7 @@ export function RadarStatusToggle({ titolo = 'Stato del Radar Scuole' }: RadarSt
     piano === 'free_forever'
       ? 'PRO (Free Forever)'
       : piano === 'pro' && trialAttivo
-        ? 'PRO (Periodo di Prova)'
+        ? 'PRO (mese gratuito)'
         : piano === 'pro'
           ? 'PRO'
           : 'BASE';
