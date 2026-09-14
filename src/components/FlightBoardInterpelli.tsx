@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase';
 import { useApp } from '@/contexts/AppContext';
 import { province } from '@/data/province';
 import { eInterpelloAttivo, giorniRimanenti, stileScadenza } from '@/lib/scadenza';
+import { preparaRigheBoard } from '@/lib/liveBoard';
 import { enteEmittenteDaTitolo } from '@/lib/matchingEngine';
 import { materiaClasse } from '@/data/classiConcorso';
 
@@ -28,6 +29,8 @@ interface InterpelloLive {
   id: string;
   title: string;
   school_name: string | null;
+  /** Codice meccanografico: serve a risolvere il nome reale della scuola. */
+  school_code?: string | null;
   province: string;
   class_codes: string[] | null;
   /** Materia/settore inferito dallo scraper quando manca una classe esplicita. */
@@ -131,7 +134,9 @@ export function FlightBoardInterpelli() {
     const carica = async (): Promise<void> => {
       const { data, error } = await client
         .from('interpelli')
-        .select('id, title, school_name, province, class_codes, materia, expiration_date, created_at, source_url')
+        .select(
+          'id, title, school_name, school_code, province, class_codes, materia, expiration_date, created_at, source_url',
+        )
         .order('created_at', { ascending: false })
         .limit(500);
       if (!attivo) return;
@@ -139,10 +144,19 @@ export function FlightBoardInterpelli() {
         console.warn('[flight-board] lettura interpelli:', error.message);
         return; // mantiene lo stato precedente; nuovo tentativo al prossimo tick
       }
-      // Lista ATTIVA: solo interpelli con FONTE APRIBILE (http/https valido) e NON scaduti.
-      const attivi = ((data ?? []) as InterpelloLive[]).filter(
-        (r) => Boolean(urlValido(r.source_url)) && eInterpelloAttivo(r.expiration_date),
+      // VETRINA PROFESSIONALE: entra nel tabellone solo una riga COMPLETA (fonte
+      // apribile + scadenza valida + scuola risolta). Le righe con "Scuola non
+      // indicata"/"Scadenza n/d" vengono prima arricchite (nome dal registro per
+      // codice meccanografico o dal titolo, scadenza valida) e, se resta un
+      // buco, SCARTATE: mai placeholder in una vista pubblica.
+      const conFonte = ((data ?? []) as InterpelloLive[]).filter((r) =>
+        Boolean(urlValido(r.source_url)),
       );
+      const attivi: InterpelloLive[] = preparaRigheBoard(conFonte).map((p) => ({
+        ...p.riga,
+        school_name: p.scuola,
+        expiration_date: p.scadenza,
+      }));
       // Aggiorna SOLO se il contenuto è cambiato (evita re-render/slide inutili).
       setRighe((prev) => {
         const stessoInizio = prev[0]?.id === attivi[0]?.id;
@@ -233,11 +247,9 @@ export function FlightBoardInterpelli() {
                       hostDi(urlFonte) ? ` (${hostDi(urlFonte)})` : ''
                     }`
                   : "Apri l'avviso ufficiale";
-                const nomeScuola =
-                  r.school_name?.trim() ||
-                  estraiScuolaDaTitolo(r) ||
-                  enteEmittenteDaTitolo(r.title, r.province) ||
-                  'Scuola non indicata';
+                // La scuola è GARANTITA dal filtro (`preparaRigheBoard`): il
+                // fallback qui è solo di sicurezza, mai un placeholder.
+                const nomeScuola = r.school_name?.trim() || r.title;
                 const citta = estraiCitta(r);
                 const etichettaScuola =
                   citta && !nomeScuola.toUpperCase().includes(citta.toUpperCase())

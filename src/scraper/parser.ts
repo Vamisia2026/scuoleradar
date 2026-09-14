@@ -20,6 +20,7 @@
 
 import { createHash } from 'node:crypto';
 import { province } from '../data/province.ts';
+import { risolviEmailUfficialeScuola } from '../lib/emailScuola.ts';
 
 /* ------------------------------- Tipi ------------------------------- */
 
@@ -1068,12 +1069,21 @@ export function parseInterpello(input: InterpelloInput): InterpelloParsato {
 
   // Email di candidatura della scuola: `mailto:` nel link oppure TUTTE le email
   // del testo (non solo la prima), scelte per pertinenza scolastica e per
-  // correlazione con l'istituto (codice meccanografico/nome). Nessuna email è
-  // mai inventata: se assente resta `null` → "Email non disponibile".
-  const contactEmail = estraiEmailScuola(link, testoCompleto, {
-    schoolCode: codiceScuola,
-    schoolName: scuola || null,
-  });
+  // correlazione con l'istituto (codice meccanografico/nome). Se nessuna fonte
+  // la pubblica, si ricostruisce la casella ISTITUZIONALE UFFICIALE (PEO) dalla
+  // convenzione MIM sul codice meccanografico: un avviso senza recapito è un
+  // servizio incompleto. Nessuna email inventata fuori da questa convenzione.
+  const contactEmail =
+    estraiEmailScuola(link, testoCompleto, {
+      schoolCode: codiceScuola,
+      schoolName: scuola || null,
+    }) ??
+    risolviEmailUfficialeScuola({
+      emailsTrovate: estraiEmails(`${link ?? ''} ${testoCompleto}`),
+      schoolCode: codiceScuola,
+      testo: testoCompleto,
+    })?.email ??
+    null;
 
   return {
     title: input.title.trim(),

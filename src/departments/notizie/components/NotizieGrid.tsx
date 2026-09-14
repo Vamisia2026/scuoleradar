@@ -101,17 +101,19 @@ function NotizieCard({ articolo }: { articolo: NewsArticle }) {
  *  - Piano PRO   → invito alla configurazione del Radar
  */
 function NotizieCtaChiusura() {
-  const { user, abbonato, openAuthModal } = useApp();
+  const { user, abbonato } = useApp();
   const navigate = useNavigate();
 
   const config = !user
     ? {
         etichetta: 'ScuoleRadar',
         titolo: 'La scuola senza perdere tempo.',
-        testoBottone: 'Registrati gratis',
+        testoBottone: 'Configura il Radar gratis',
         iconaTestata: <Sparkles className="h-5 w-5 text-secondary-300" />,
         iconaBottone: <UserPlus className="h-4 w-4" />,
-        onClick: () => openAuthModal('registrazione'),
+        // CTA SENZA friction: si naviga DIRETTAMENTE alla destinazione, senza
+        // aprire modali di autenticazione dalla pagina Notizie.
+        onClick: () => navigate('/dashboard/radar'),
       }
     : abbonato
       ? {

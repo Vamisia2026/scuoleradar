@@ -193,12 +193,12 @@ export function linkOpportunita(interpello: DettagliNotifica | null, dashboardUr
 
 const SUBJECT: Record<TipoMessaggio, string> = {
   welcome: 'Benvenuto in ScuoleRadar: il tuo mese di PRO è attivo',
-  prova1: 'Questa è la prima opportunità che abbiamo trovato per te. Te ne restano 2',
-  prova2: 'Questa è la seconda opportunità che abbiamo trovato per te. Te ne resta 1',
-  prova3: 'Questa è la terza e ultima opportunità di prova che abbiamo trovato per te',
+  prova1: 'Abbiamo trovato una nuova opportunità per te',
+  prova2: "Un'altra opportunità per te",
+  prova3: 'Nuova opportunità per te',
 
-  extra: 'Il tuo periodo di prova è terminato: passa a PRO per continuare a ricevere le opportunità',
-  recap: 'Avviso finale: le notifiche di prova sono terminate',
+  extra: 'Notifiche del piano gratuito in pausa: attiva PRO',
+  recap: 'Ultimo avviso automatico del piano gratuito',
   welcome_pro: 'Benvenuto in ScuoleRadar PRO!',
   notifica_pro: 'Nuova opportunità trovata per te!',
   conferma_attivazione: '🎯 Scuole Radar: il tuo Radar è attivo e operativo!',
@@ -242,32 +242,26 @@ const CORPO_MESSAGGI: Record<TipoMessaggio, ContenutoMessaggio> = {
     cta: { label: 'Vai a ScuoleRadar →', destinazione: 'dashboard' },
   },
   prova1: {
-    paragrafi: ['Questa è la <strong>prima opportunità</strong> che abbiamo trovato per te. Te ne <strong>restano 2</strong>.'],
-    cta: { label: "Apri l'avviso ufficiale →", destinazione: 'opportunita' },
-  },
+    paragrafi: ['Abbiamo trovato una <strong>nuova opportunità</strong> per te.'],
+    cta: { label: "Apri l'avviso ufficiale →", destinazione: 'opportunita' },  },
   prova2: {
-    paragrafi: ['Questa è la <strong>seconda opportunità</strong> che abbiamo trovato per te. Te ne <strong>resta 1</strong>.'],
-    cta: { label: "Apri l'avviso ufficiale →", destinazione: 'opportunita' },
-  },
+    paragrafi: ['Abbiamo trovato una <strong>nuova opportunità</strong> per te.'],
+    cta: { label: "Apri l'avviso ufficiale →", destinazione: 'opportunita' },  },
   prova3: {
-    paragrafi: ['Questa è la <strong>terza e ultima opportunità</strong> di prova che abbiamo trovato per te.'],
-    cta: { label: "Apri l'avviso ufficiale →", destinazione: 'opportunita' },
-  },
+    paragrafi: ['Abbiamo trovato una <strong>nuova opportunità</strong> per te.'],
+    cta: { label: "Apri l'avviso ufficiale →", destinazione: 'opportunita' },  },
   extra: {
     paragrafi: [
-      'Le tue <strong>3 notifiche di prova sono terminate</strong>.',
-      'Per continuare a ricevere le opportunità su misura per te in tempo reale, passa al piano PRO.',
+      'Con il piano gratuito ricevi un numero limitato di segnalazioni.',
+      'Con <strong>PRO</strong> ricevi ogni opportunità in tempo reale, senza limiti.',
     ],
-    cta: { label: 'Attiva PRO →', destinazione: 'prezzi' },
-  },
+    cta: { label: 'Attiva PRO →', destinazione: 'prezzi' },  },
   recap: {
     paragrafi: [
-      'Questo è l\'ultimo avviso del periodo di prova.',
-      'Il mese di prova PRO è terminato: il tuo account torna al piano gratuito con Modulistica, Crea CV e Calcolatore CFU.',
-      'Se vuoi riattivarlo, passa al piano PRO: notifiche illimitate e tutti gli strumenti ScuoleRadar.',
+      'Da adesso non riceverai più notifiche automatiche.',
+      'I tuoi dati e la Modulistica restano attivi: riattiva gli avvisi quando vuoi con <strong>PRO</strong>.',
     ],
-    cta: { label: 'Passa a PRO →', destinazione: 'prezzi' },
-  },
+    cta: { label: 'Attiva PRO →', destinazione: 'prezzi' },  },
   welcome_pro: {
     paragrafi: [
       'Benvenuto in ScuoleRadar <strong>PRO</strong>.',

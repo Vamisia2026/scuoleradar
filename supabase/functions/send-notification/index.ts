@@ -156,34 +156,31 @@ ${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua
       `${benvenuto(genere)} in Scuole Radar! 🎉\nCerchiamo per te opportunità di lavoro nelle scuole, spesso nascoste nei siti istituzionali. Hai 1 mese di PRO gratuito con notifiche illimitate: attiva le notifiche su Telegram. Quando vuoi, tutto su https://www.scuoleradar.it/notizie`,
   },
   step2: {
-    soggetto: 'Questa è la prima opportunità che abbiamo trovato per te. Te ne restano 2',
+    soggetto: 'Abbiamo trovato una nuova opportunità per te',
     email: (o) =>
-      conOpportunita(o, 'Questa è la <b>prima opportunità</b> che abbiamo trovato per te. Te ne <b>restano 2</b>.'),
+      conOpportunita(o, 'Abbiamo trovato una <b>nuova opportunità</b> per te.'),
     telegram: (o) =>
-      conOpportunitaTg(o, 'Questa è la <b>prima opportunità</b> che abbiamo trovato per te. Te ne <b>restano 2</b>.'),
-  },
+      conOpportunitaTg(o, 'Abbiamo trovato una <b>nuova opportunità</b> per te.'),  },
   step3: {
-    soggetto: 'Questa è la seconda opportunità che abbiamo trovato per te. Te ne resta 1',
+    soggetto: 'Un\'altra opportunità per te',
     email: (o) =>
-      conOpportunita(o, 'Questa è la <b>seconda opportunità</b> che abbiamo trovato per te. Te ne <b>resta 1</b>.'),
+      conOpportunita(o, 'Abbiamo trovato una <b>nuova opportunità</b> per te.'),
     telegram: (o) =>
-      conOpportunitaTg(o, 'Questa è la <b>seconda opportunità</b> che abbiamo trovato per te. Te ne <b>resta 1</b>.'),
-  },
+      conOpportunitaTg(o, 'Abbiamo trovato una <b>nuova opportunità</b> per te.'),  },
   step4: {
-    soggetto: 'Il tuo periodo di prova è terminato: passa a PRO per continuare a ricevere le opportunità',
+    soggetto: 'Notifiche del piano gratuito in pausa: attiva PRO',
     email: (o) =>
-      conOpportunita(o, 'Le tue <b>3 notifiche di prova sono terminate</b>.<br/>Per continuare a ricevere le opportunità su misura per te in tempo reale, passa al piano PRO.'),
+      conOpportunita(o, 'Con il piano gratuito ricevi un numero limitato di segnalazioni.<br/>Con <b>PRO</b> ricevi ogni opportunità in tempo reale, senza limiti.'),
     telegram: (o) =>
-      conOpportunitaTg(o, 'Le tue <b>3 notifiche di prova sono terminate</b>.\nPer continuare a ricevere le opportunità su misura per te, passa al piano PRO.'),
-  },
+      conOpportunitaTg(o, 'Con il piano gratuito ricevi un numero limitato di segnalazioni.\nCon <b>PRO</b> ricevi ogni opportunità in tempo reale, senza limiti.'),  },
   step5: {
-    soggetto: 'Le tue notifiche di prova sono finite',
+    soggetto: 'Ultimo avviso automatico del piano gratuito',
     email: () =>
-      'Le tue notifiche di prova sono finite. <b>Passa al piano PRO</b> per continuare a ricevere notifiche illimitate in tempo reale.<br/><a href="' +
+      'Da adesso non riceverai più notifiche automatiche. I tuoi dati e la Modulistica restano attivi.<br/><b>PRO</b> riattiva gli avvisi illimitati in tempo reale:<br/><a href="' +
       PREZZI_URL +
-      '">Passa a PRO</a>',
+      '">Attiva PRO</a>',
     telegram: () =>
-      'Le tue notifiche di prova sono finite. <b>Passa al piano PRO</b> per continuare a ricevere notifiche illimitate in tempo reale.\n👉 ' +
+      'Da adesso non riceverai più notifiche automatiche. I tuoi dati e la Modulistica restano attivi.\n👉 ' +
       PREZZI_URL,
   },
   notifica_pro: {

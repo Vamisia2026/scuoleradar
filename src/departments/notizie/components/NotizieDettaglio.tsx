@@ -34,7 +34,6 @@ function IconaWhatsApp({ className = 'h-4 w-4' }: { className?: string }) {
 export function NotizieDettaglio() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, openAuthModal } = useApp();
 
   const notizia = useMemo(() => (id ? getNotiziaById(id) : null), [id]);
 
@@ -77,13 +76,9 @@ export function NotizieDettaglio() {
     );
   };
 
-  const apriRegistrazione = () => {
-    if (user) {
-      navigate('/dashboard/radar');
-      return;
-    }
-    openAuthModal('registrazione');
-  };
+  // CTA di chiusura articolo SENZA friction: si va DIRETTAMENTE alla
+  // destinazione (setup Radar), senza aprire modali di autenticazione qui.
+  const apriRegistrazione = () => navigate('/dashboard/radar');
 
   return (
     <>

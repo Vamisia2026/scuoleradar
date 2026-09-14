@@ -49,6 +49,29 @@ function daNotices(r: {
 }
 
 /**
+ * Reindirizza IMMEDIATAMENTE alla fonte ufficiale dell'avviso, quando esiste un
+ * URL http(s) assoluto e valido. È il comportamento richiesto dai deep link
+ * delle notifiche: nessuna scheda interna intermedia, nessun
+ * "Avviso non più disponibile" quando la pagina istituzionale è nota.
+ * Ritorna `true` se il redirect è stato avviato.
+ */
+function reindirizzaAllaFonte(interpello: Interpello): boolean {
+  const link = (interpello.linkFonte ?? '').trim();
+  if (!/^https?:\/\//i.test(link)) return false;
+  try {
+    new URL(link);
+  } catch {
+    return false;
+  }
+  try {
+    window.location.replace(link);
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Scheda pubblica di un avviso (`/interpello/:id`).
  *
  * È l'atterraggio dei DEEP LINK delle notifiche quando l'avviso non ha una fonte
@@ -62,7 +85,9 @@ function daNotices(r: {
  */
 export function InterpelloDettaglioPage() {
   const { id } = useParams<{ id: string }>();
-  const [stato, setStato] = useState<'caricamento' | 'trovato' | 'assente'>('caricamento');
+  const [stato, setStato] = useState<'caricamento' | 'trovato' | 'assente' | 'reindirizzamento'>(
+    'caricamento',
+  );
   const [interpello, setInterpello] = useState<Interpello | null>(null);
 
   useEffect(() => {
@@ -81,7 +106,16 @@ export function InterpelloDettaglioPage() {
         .maybeSingle();
       if (annullato) return;
       if (data) {
-        setInterpello(mapInterpelloDBToInterpello(data as InterpelloDB));
+        const trovato = mapInterpelloDBToInterpello(data as InterpelloDB);
+        // LINK DIRETTO: chi arriva dal deep link di una notifica deve atterrare
+        // IMMEDIATAMENTE sulla pagina istituzionale originale, mai su una scheda
+        // interna con "Avviso non più disponibile".
+        if (reindirizzaAllaFonte(trovato)) {
+          setInterpello(trovato);
+          setStato('reindirizzamento');
+          return;
+        }
+        setInterpello(trovato);
         setStato('trovato');
         return;
       }
@@ -93,7 +127,13 @@ export function InterpelloDettaglioPage() {
         .maybeSingle();
       if (annullato) return;
       if (legacy) {
-        setInterpello(daNotices(legacy));
+        const trovato = daNotices(legacy);
+        if (reindirizzaAllaFonte(trovato)) {
+          setInterpello(trovato);
+          setStato('reindirizzamento');
+          return;
+        }
+        setInterpello(trovato);
         setStato('trovato');
         return;
       }
@@ -114,12 +154,36 @@ export function InterpelloDettaglioPage() {
             {stato === 'caricamento' && (
               <p className="text-sm text-primary-600">Caricamento dell&apos;avviso…</p>
             )}
+            {stato === 'reindirizzamento' && interpello && (
+              <ReindirizzamentoAllaFonte interpello={interpello} />
+            )}
             {stato === 'assente' && <AvvisoAssente />}
             {stato === 'trovato' && interpello && <SchedaAvviso interpello={interpello} />}
           </div>
         </section>
       </main>
       <Footer />
+    </div>
+  );
+}
+
+/** Stato "reindirizzamento": fallback del redirect verso la fonte ufficiale. */
+function ReindirizzamentoAllaFonte({ interpello }: { interpello: Interpello }) {
+  return (
+    <div className="rounded-2xl border border-primary-100 bg-white p-8 text-center shadow-card">
+      <h1 className="text-xl font-bold text-primary-800">Apertura della pagina ufficiale…</h1>
+      <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-primary-600">
+        Ti stiamo portando direttamente sull&apos;avviso ufficiale della scuola o dell&apos;ente.
+      </p>
+      <a
+        href={interpello.linkFonte}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-6 inline-flex items-center gap-1.5 rounded-xl bg-primary-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary-700"
+      >
+        {etichettaFonteLink(interpello.linkFonte)}
+        <ArrowRight className="h-4 w-4" />
+      </a>
     </div>
   );
 }

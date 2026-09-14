@@ -4,7 +4,9 @@
  *  · nessuna riga metadato "🏷️ …" né "Email non disponibile";
  *  · Ordine di scuola coerente con Classe/Materia (nessuna contraddizione);
  *  · scadenze passate/errate soppresse;
- *  · link sempre etichettati (mai URL nudi) e mai la parola "candidati";
+ *  · ZERO link nascosti: URL sempre VISIBILI (nessun `text_link`), così Telegram
+ *    non mostra il popup di conferma "Vuoi aprire questo link?";
+ *  · nessun residuo della vecchia prova a 3 notifiche ("Te ne restano 2");
  *  · footer personale/canale esattamente come da specifica.
  *
  * Uso: npm run test:telegram:template
@@ -25,9 +27,9 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
   console.log(`${ok ? '✓' : '✗'} ${nome}: atteso=${JSON.stringify(atteso)} ottenuto=${JSON.stringify(ottenuto)}`);
 }
 
-/** URL nudi: http(s) NON preceduto da `href="`. */
-function urlNudi(testo: string): string[] {
-  return [...testo.matchAll(/(?<!href=")(https?:\/\/[^\s<")]+)/g)].map((m) => m[1]);
+/** Link NASCOSTI dietro un'etichetta (`<a href="http…">`): causano il popup. */
+function linkNascosti(testo: string): string[] {
+  return [...testo.matchAll(/<a\s+href="(https?:[^"]+)"/g)].map((m) => m[1]);
 }
 
 const DASH = 'https://www.scuoleradar.it/dashboard/radar';
@@ -115,9 +117,10 @@ check('nessuna riga 📅 per scadenza passata', false, msgScaduta.includes('📅
 const msgFutura = formattaMessaggioTelegram(secondaria, 'AA24', DASH, 'notifica_pro');
 check('riga 📅 presente per scadenza valida', true, msgFutura.includes('📅'));
 
-console.log('\n— Link: etichettati, onesti, nessun URL nudo —');
-check('nessun URL nudo nel messaggio', [], urlNudi(msg));
-check('etichetta PDF onesta', true, msg.includes('Apri il bando ufficiale (PDF)'));
+console.log('\n— Link: URL VISIBILI (nessun popup "Apri link"), etichetta onesta —');
+check('nessun link nascosto nel messaggio', [], linkNascosti(msg));
+check('URL della fonte visibile nel testo', true, msg.includes(secondaria.link as string));
+check('etichetta onesta in testo', true, msg.includes('Apri il bando ufficiale (PDF)'));
 check('mai la parola "candidati"', false, /candidat/i.test(msg.replace(/Candidature:/g, '')));
 const conEmail: DettagliNotifica = {
   ...secondaria,
@@ -125,15 +128,25 @@ const conEmail: DettagliNotifica = {
 };
 const msgEmail = formattaMessaggioTelegram(conEmail, 'AA24', DASH, 'notifica_pro');
 check(
-  'email presente → riga 📧 con mailto',
+  'email presente → testo semplice (nessun mailto)',
   true,
-  msgEmail.includes('mailto:segreteria@liceoaugustomonti.edu.it'),
+  msgEmail.includes('📧 Candidature: segreteria@liceoaugustomonti.edu.it'),
 );
+check('email senza link nascosto', [], linkNascosti(msgEmail));
+
+console.log('\n— Copy: nessun residuo della prova a 3 notifiche —');
+for (const tipo of ['prova1', 'prova2', 'prova3', 'extra', 'recap'] as const) {
+  const t = formattaMessaggioTelegram(secondaria, 'AA24', DASH, tipo);
+  check(`[${tipo}] niente "Te ne restano"`, false, /Te ne restano|Te ne resta 1/i.test(t));
+  check(`[${tipo}] niente "di prova"`, false, /di prova|prova sono finite/i.test(t));
+  check(`[${tipo}] niente "Terza e ultima"`, false, /Terza e ultima/i.test(t));
+}
 
 console.log('\n— Footer personale (una sola riga, esattamente come da specifica) —');
 const footerAtteso =
-  '📌 Quando vuoi sapere cosa succede di importante, vieni qui: <a href="https://www.scuoleradar.it/notizie">scuoleradar.it/notizie</a>';
-check('footer presente', true, msg.includes(footerAtteso));
+  '📌 Quando vuoi sapere cosa succede di importante, vieni qui: https://www.scuoleradar.it/notizie';
+check('footer presente (URL visibile)', true, msg.includes(footerAtteso));
+check('footer senza link nascosto', false, /<a\s+href="[^"]*notizie"/.test(msg));
 check('niente firma "I tuoi colleghi"', false, msg.includes('I tuoi colleghi'));
 
 console.log('\n— Post CANALE (broadcast): footer regionale —');
@@ -147,11 +160,10 @@ const canale: InterpelloCanale = {
   link: 'https://www.mim.gov.it/albo-pretorio/avviso-a041.pdf',
 };
 const post = formattaPostCanaleTelegram(canale);
-// CTA di conversione del canale: punta al SETUP del Radar (/dashboard/radar) con
-// un'etichetta d'azione, mai alla home generica.
+// CTA di conversione del canale: URL VISIBILE (nessun popup) al setup del Radar.
 const footerCanaleAtteso =
-  `⚡ Ricevi solo gli avvisi della tua provincia e per le tue classi: 👉 <a href="${RADAR_SETUP_URL}">Configura il tuo Radar gratis</a>`;
-check('footer canale presente (setup Radar)', true, post.includes(footerCanaleAtteso));
+  `⚡ Ricevi solo gli avvisi della tua provincia e per le tue classi: 👉 ${RADAR_SETUP_URL}`;
+check('footer canale presente (URL visibile)', true, post.includes(footerCanaleAtteso));
 check(
   'footer canale punta a /dashboard/radar',
   true,
@@ -160,14 +172,10 @@ check(
 check(
   'nessuna CTA alla home generica',
   false,
-  /href="https:\/\/(?:www\.)?scuoleradar\.it\/?"/.test(post),
+  /https:\/\/(?:www\.)?scuoleradar\.it\/?(?:\s|$)/.test(post),
 );
-check('nessun URL nudo nel post canale', [], urlNudi(post));
-check(
-  'link fonte etichettato (nessun URL nudo come etichetta)',
-  true,
-  /<a href="[^"]+">(?!https?:)[^<]{4,}<\/a>/.test(post),
-);
+check('nessun link nascosto nel post canale', [], linkNascosti(post));
+check('URL della fonte visibile nel post', true, post.includes(canale.link as string));
 check('link fonte senza la parola "candidati"', false, /candidat/i.test(post));
 const postScaduto = formattaPostCanaleTelegram({ ...canale, expirationDate: '2026-09-11' });
 check('post canale: scadenza passata soppressa', false, postScaduto.includes('📅'));
@@ -192,9 +200,9 @@ const postEmail = formattaPostCanaleTelegram({
   contactEmail: 'protocollo@itisartom.edu.it',
 });
 check(
-  'post canale: email presente → mailto',
+  'post canale: email presente → testo semplice',
   true,
-  postEmail.includes('mailto:protocollo@itisartom.edu.it'),
+  postEmail.includes('📧 Candidature: protocollo@itisartom.edu.it'),
 );
 
 console.log(

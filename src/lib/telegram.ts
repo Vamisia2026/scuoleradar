@@ -114,13 +114,26 @@ export function urlAssolutaValida(url?: string | null): string | null {
 }
 
 /**
- * Barra/CTA blu cliccabile per il PDF ufficiale: da usare al posto del generico
- * link di fonte quando l'avviso è un PDF, così l'utente vede subito un invito
- * chiaro ad aprirlo/scaricarlo (invece della sola icona PDF del link preview).
+ * URL PULITO per Telegram: niente spazi, punteggiatura di troppo o caratteri
+ * che spezzano l'auto-link. Un URL pulito viene riconosciuto come link NATIVO
+ * (entità "url"), quindi Telegram NON chiede conferma con il popup
+ * "Vuoi aprire questo link?" come accade per i link nascosti dietro un'etichetta.
+ */
+export function pulisciUrlTelegram(url?: string | null): string {
+  return (url ?? '')
+    .trim()
+    .replace(/^<|>$/g, '')
+    .replace(/\s+/g, '')
+    .replace(/[.,;:'")\]]+$/g, '');
+}
+
+/**
+ * Barra/CTA per il PDF ufficiale: URL nativo e visibile (nessun popup di
+ * conferma) invece di un'etichetta che nasconde la destinazione.
  */
 function barraPdf(url: string): string {
-  const href = escapeHtml(url.trim());
-  return `📄 <b>PDF Ufficiale</b>\n📥 <a href="${href}">APRI / SCARICA IL PDF</a>`;
+  const href = pulisciUrlTelegram(url);
+  return `📄 <b>PDF ufficiale</b>\n${href}`;
 }
 
 /** Restituisce il token del bot o `null` se non configurato (o placeholder). */
@@ -156,42 +169,41 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
       'Hai accesso a Modulistica, Crea CV, Calcolatore CFU e Radar Scuole con notifiche illimitate.',
       'Quando vuoi sapere cosa succede di importante nella scuola, passa dal nostro Notiziario.',
     ],
-    cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
+    cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 ${pulisciUrlTelegram(dashboardUrl)}`,
   },
   prova1: {
-    testa: '🎯 Prima opportunità',
-    paragrafi: ['Te ne restano <b>2</b>.'],
+    testa: '🎯 Nuova opportunità per te',
+    paragrafi: [],
     cta: (_linkPro, linkOpp, _dashboardUrl, etichettaOpp) =>
-      `👉 <a href="${linkOpp}">${etichettaOpp}</a>`,
+      `👉 <b>${escapeHtml(etichettaOpp)}</b>\n${pulisciUrlTelegram(linkOpp)}`,
   },
   prova2: {
-    testa: '🎯 Seconda opportunità',
-    paragrafi: ['Te ne resta <b>1</b>.'],
+    testa: '🎯 Nuova opportunità per te',
+    paragrafi: [],
     cta: (_linkPro, linkOpp, _dashboardUrl, etichettaOpp) =>
-      `👉 <a href="${linkOpp}">${etichettaOpp}</a>`,
+      `👉 <b>${escapeHtml(etichettaOpp)}</b>\n${pulisciUrlTelegram(linkOpp)}`,
   },
   prova3: {
-    testa: '🎯 Terza e ultima opportunità',
-    paragrafi: ["Questa è l'ultima del periodo di prova."],
+    testa: '🎯 Nuova opportunità per te',
+    paragrafi: [],
     cta: (_linkPro, linkOpp, _dashboardUrl, etichettaOpp) =>
-      `👉 <a href="${linkOpp}">${etichettaOpp}</a>`,
+      `👉 <b>${escapeHtml(etichettaOpp)}</b>\n${pulisciUrlTelegram(linkOpp)}`,
   },
   extra: {
-    testa: '😮 Il tuo periodo di prova è terminato',
+    testa: '🛎️ Notifiche del piano gratuito in pausa',
     paragrafi: [
-      'Le tue <b>3 notifiche di prova sono terminate</b>.',
-      'Per continuare a ricevere le opportunità su misura per te, passa al piano PRO.',
+      'Con il piano gratuito ricevi un numero limitato di segnalazioni.',
+      'Con <b>PRO</b> ricevi ogni opportunità in tempo reale, senza limiti.',
     ],
-    cta: (linkPro) => `👉 <a href="${linkPro}">Attiva PRO</a>`,
+    cta: (linkPro) => `👉 ${pulisciUrlTelegram(linkPro)}`,
   },
   recap: {
-    testa: '📋 Avviso finale: servizio di notifica sospeso',
+    testa: '🔔 Ultimo avviso automatico del piano gratuito',
     paragrafi: [
-      "Questo è l'ultimo avviso del periodo di prova.",
-      'Il mese di prova PRO è terminato: non riceverai più nuove notifiche.',
-      'Passa a PRO per riattivarlo.',
+      'Da adesso non riceverai più notifiche automatiche.',
+      'I tuoi dati e la Modulistica restano attivi: riattiva gli avvisi quando vuoi con <b>PRO</b>.',
     ],
-    cta: (linkPro) => `👉 <a href="${linkPro}">Passa a PRO</a>`,
+    cta: (linkPro) => `👉 ${pulisciUrlTelegram(linkPro)}`,
   },
   welcome_pro: {
     testa: '🎉 Benvenuto in ScuoleRadar PRO!',
@@ -203,7 +215,7 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
       'Noi continuiamo a cercare per te!',
       'A presto!',
     ],
-    cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
+    cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 ${pulisciUrlTelegram(dashboardUrl)}`,
   },
   conferma_attivazione: {
     testa: '🎯 Radar attivato con successo!',
@@ -211,7 +223,7 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
       'Ora puoi rilassarti: il tuo Radar è attivo e sta già lavorando per te.',
       "Non ti invieremo comunicazioni inutili e spam. Quando vedi un nostro messaggio qui su Telegram, aprilo subito: abbiamo intercettato un'opportunità per te!",
     ],
-    cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
+    cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 ${pulisciUrlTelegram(dashboardUrl)}`,
   },
   free_forever_preavviso: {
     testa: '🎁 PRO Free Forever: il rinnovo gratuito è automatico',
@@ -220,13 +232,13 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
       'Nessun pagamento e nessuna azione richiesta: alla scadenza il rinnovo parte automaticamente a 0€, per sempre.',
       'Non riceverai mai solleciti di pagamento né avvisi di mancato rinnovo.',
     ],
-    cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 <a href="${dashboardUrl}">Vai a ScuoleRadar</a>`,
+    cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 ${pulisciUrlTelegram(dashboardUrl)}`,
   },
   notifica_pro: {
     testa: 'Abbiamo trovato una nuova opportunità per te!',
     paragrafi: [],
     cta: (_linkPro, linkOpp, _dashboardUrl, etichettaOpp) =>
-      `👉 <a href="${linkOpp}">${etichettaOpp}</a>`,
+      `👉 <b>${escapeHtml(etichettaOpp)}</b>\n${pulisciUrlTelegram(linkOpp)}`,
   },
 };
 
@@ -290,7 +302,7 @@ export function formattaMessaggioTelegram(
   const emailContatto = interpello?.contactEmail?.trim() ?? '';
   const emailRiga =
     TIPI_CON_OPPORTUNITA.has(tipo) && emailContatto
-      ? `📧 Candidature: <a href="mailto:${escapeHtml(emailContatto)}">${escapeHtml(emailContatto)}</a>`
+      ? `📧 Candidature: ${escapeHtml(emailContatto)}`
       : '';
 
   const parti: string[] = [copy.testa];
@@ -302,7 +314,7 @@ export function formattaMessaggioTelegram(
   // FOOTER PERSONALE (radar): UNA sola riga, nessuna firma promozionale.
   // URL sempre come link ETICHETTATO (mai URL nudo: evita il popup "Apri link").
   parti.push(
-    '📌 Quando vuoi sapere cosa succede di importante, vieni qui: <a href="https://www.scuoleradar.it/notizie">scuoleradar.it/notizie</a>',
+    '📌 Quando vuoi sapere cosa succede di importante, vieni qui: https://www.scuoleradar.it/notizie',
   );
 
   return parti.join('\n\n');
@@ -769,14 +781,14 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
   const linkRiga = linkFonte
     ? eLinkPdf(linkFonte)
       ? barraPdf(linkFonte)
-      : `🔗 <a href="${escapeHtml(linkFonte)}">${escapeHtml(etichettaFonteLink(linkFonte))}</a>`
+      : `🔗 <b>Fonte ufficiale</b>\n${pulisciUrlTelegram(linkFonte)}`
     : '';
 
   // Email di candidatura: OMESSA se non estratta (mai "Email non disponibile":
   // nessuno stato negativo, nessuna email inventata).
   const email = interpello.contactEmail?.trim() ?? '';
   const emailRiga = email
-    ? `📧 Candidature: <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`
+    ? `📧 Candidature: ${escapeHtml(email)}`
     : '';
 
   // FOOTER CANALE (broadcast regionale/generale): invito DIRETTO al setup del
@@ -784,7 +796,7 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
   // nudo (evita il popup nativo "Apri link" di Telegram).
   const cta =
     '⚡ Ricevi solo gli avvisi della tua provincia e per le tue classi: 👉 ' +
-    `<a href="${RADAR_SETUP_URL}">Configura il tuo Radar gratis</a>`;
+    `${pulisciUrlTelegram(RADAR_SETUP_URL)}`;
 
   // Blocco CONTATTO = link ufficiale (se valido) + email raggruppati in UNA sola
   // sezione: la struttura pubblicata resta FISSA a 5 blocchi

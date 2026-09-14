@@ -3,6 +3,8 @@ import { Search, ChevronDown, Radar, BellRing, ArrowRight, Loader2, ExternalLink
 import { classiConcorso } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import { enteEmittenteDaTitolo } from '@/lib/matchingEngine';
+import { nomeScuolaDaCodice } from '@/lib/school-lookup';
+import { scuolaDaTitolo } from '@/lib/liveBoard';
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/contexts/AppContext';
 
@@ -11,6 +13,8 @@ interface OpportunitaReale {
   id: string;
   title: string;
   school_name: string | null;
+  /** Codice meccanografico (per risolvere il nome reale della scuola). */
+  school_code?: string | null;
   province: string;
   source_url: string | null;
   expiration_date: string | null;
@@ -45,7 +49,7 @@ export function SimulatorRadar() {
     if (!supabase) return [];
     const { data, error } = await supabase
       .from('interpelli')
-      .select('id, title, school_name, province, source_url, expiration_date')
+      .select('id, title, school_name, school_code, province, source_url, expiration_date')
       .eq('province', provincia)
       .contains('class_codes', [classe])
       .order('expiration_date', { ascending: true })
@@ -186,8 +190,10 @@ export function SimulatorRadar() {
                               </span>
                               <span className="block text-xs text-primary-500">
                                 {o.school_name?.trim() ||
+                                  nomeScuolaDaCodice(o.school_code) ||
+                                  scuolaDaTitolo(o.title) ||
                                   enteEmittenteDaTitolo(o.title, o.province) ||
-                                  'Scuola non indicata'}{' '}
+                                  o.title}{' '}
                                 · {o.province}
                               </span>
                             </span>

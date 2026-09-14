@@ -30,6 +30,17 @@ const KNOWN_SCHOOLS: Record<string, SchoolInfo> = {
 };
 
 /**
+ * Nome REALE della scuola per codice meccanografico, SOLO se conosciuto dal
+ * registro (mai nomi sintetici tipo "Istituto <codice>"): usato dalle viste
+ * pubbliche che non possono mostrare placeholder.
+ */
+export function nomeScuolaDaCodice(code?: string | null): string | null {
+  const clean = (code ?? '').toUpperCase().trim();
+  if (!clean) return null;
+  return KNOWN_SCHOOLS[clean]?.name?.trim() || null;
+}
+
+/**
  * Resolves full school information using the mechanical code (Codice Meccanografico).
  * If unknown, generates standard institutional email fallback (code@istruzione.it).
  */

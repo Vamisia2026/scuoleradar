@@ -13,8 +13,14 @@ import {
   estraiEmailScuola,
   estraiEmails,
   normalizzaTldEmail,
+  parseInterpello,
   punteggioEmailScuola,
 } from '../src/scraper/parser.ts';
+import {
+  estraiCodiceMeccanograficoDaTesto,
+  normalizzaCodiceMeccanografico,
+  risolviEmailUfficialeScuola,
+} from '../src/lib/emailScuola.ts';
 
 let errori = 0;
 function check(nome: string, atteso: unknown, ottenuto: unknown): void {
@@ -68,7 +74,56 @@ check(
   'segreteria@liceoaugustomonti.edu.it',
   estraiEmailScuola(null, 'Candidature: segreteria [at] liceoaugustomonti (dot) edu (dot) it', ctx),
 );
-check('nessuna email nella fonte → null', null, estraiEmailScuola(null, 'Nessun contatto indicato.', ctx));
+check(
+  'nessuna email nella fonte → null',
+  null,
+  estraiEmailScuola(null, 'Nessun contatto indicato.', ctx),
+);
+
+console.log('\n— Email UFFICIALE dalla convenzione MIM (PEO/PEC) —');
+check('codice meccanografico riconosciuto', 'ASTF01000X', normalizzaCodiceMeccanografico('as tf 01000 x'));
+check('codice non valido → null', null, normalizzaCodiceMeccanografico('ASTF010'));
+check(
+  'codice estratto dal testo',
+  'BSIS02900X',
+  estraiCodiceMeccanograficoDaTesto('Istituto "L. Gigli" — Cod. Mecc. BSIS02900X (Rovato)'),
+);
+check('PEO ufficiale dal codice', 'bsis02900x@istruzione.it', risolviEmailUfficialeScuola({ schoolCode: 'BSIS02900X' })?.email ?? null);
+check('tipo PEO dichiarato', 'peo', risolviEmailUfficialeScuola({ schoolCode: 'BSIS02900X' })?.tipo ?? null);
+check('PEC su richiesta (atti formali)', 'bsis02900x@pec.istruzione.it', risolviEmailUfficialeScuola({ schoolCode: 'BSIS02900X', preferisciPec: true })?.email ?? null);
+check(
+  'email della fonte vince sulla convenzione',
+  'segreteria@liceoaugustomonti.edu.it',
+  risolviEmailUfficialeScuola({ emailsTrovate: ['segreteria@liceoaugustomonti.edu.it'], schoolCode: 'ASTF01000X' })?.email ?? null,
+);
+check(
+  'domini non istituzionali scartati (si usa la PEO)',
+  'astf01000x@istruzione.it',
+  risolviEmailUfficialeScuola({ emailsTrovate: ['docente@gmail.com'], schoolCode: 'ASTF01000X' })?.email ?? null,
+);
+check(
+  'nessun appiglio reale → null (mai email inventate)',
+  null,
+  risolviEmailUfficialeScuola({ emailsTrovate: [], schoolCode: null, testo: 'Avviso senza codice.' }),
+);
+
+console.log("\n— Pipeline: il parser completa l'email mancante —");
+const conCodice = parseInterpello({
+  title: 'Interpello supplenza A-041 — Liceo Augusto Monti (cod. mecc. ASTF01000X)',
+  link: 'https://www.istruzione.piemonte.it/avvisi/interpello-a041-monti.pdf',
+  provincia: 'AT',
+  source: 'test',
+});
+check('email risolta dal codice nel titolo', 'astf01000x@istruzione.it', conCodice.contactEmail);
+check('codice meccanografico persistito', 'ASTF01000X', conCodice.schoolCode);
+const senzaCodice = parseInterpello({
+  title: 'Interpello supplenza posto comune — scuola senza recapito',
+  link: 'https://www.istruzione.piemonte.it/avvisi/interpello-generico.pdf',
+  provincia: 'AT',
+  source: 'test',
+});
+check('senza codice → email resta null (nessuna invenzione)', null, senzaCodice.contactEmail);
+
 
 console.log(errori === 0 ? '\n✅ EMAIL SCUOLA: nessun problema' : `\n❌ EMAIL SCUOLA: ${errori} errore/i`);
 process.exitCode = errori === 0 ? 0 : 1;

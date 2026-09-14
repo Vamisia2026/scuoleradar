@@ -50,6 +50,12 @@ import {
   sembraTitoloElenco,
 } from './elenchi.ts';
 import { resolveSchoolByCode } from '../lib/school-lookup.ts';
+import {
+  emailDaCodiceMeccanografico,
+  estraiCodiceMeccanograficoDaTesto,
+  normalizzaCodiceMeccanografico,
+  risolviEmailUfficialeScuola,
+} from '../lib/emailScuola.ts';
 import { notificaNuoviInterpelli, type EsitoNotifiche } from '../lib/notifier.ts';
 import {
   CHIAVE_CANALE_ATA_NAZIONALE,
@@ -576,12 +582,15 @@ function eDocumentoBinario(url: string): boolean {
  *   2. i sottolink documentali (allegati/circolari) della pagina di dettaglio.
  * Sceglie l'indirizzo più pertinente all'istituto. Non inventa nulla.
  */
-async function cercaEmailNelleFonti(a: AvvisoRilevato): Promise<string | null> {
+async function cercaEmailNelleFonti(
+  a: AvvisoRilevato,
+): Promise<{ email: string | null; codice: string | null }> {
   const ctx = { schoolCode: a.schoolCode, schoolName: a.schoolName };
+  let codice = normalizzaCodiceMeccanografico(a.schoolCode);
   const radici = [...new Set([a.link, ...(a.linkCandidati ?? [])].filter((u): u is string => Boolean(u)))]
     .filter((u) => /^https?:\/\//i.test(u) && !eDocumentoBinario(u))
     .slice(0, 2);
-  if (radici.length === 0) return null;
+  if (radici.length === 0) return { email: null, codice };
 
   const visitate = new Set<string>();
   const emailTrovate = new Set<string>();
@@ -594,6 +603,7 @@ async function cercaEmailNelleFonti(a: AvvisoRilevato): Promise<string | null> {
     try {
       const html = await scaricaPagina(url);
       pagine.push({ html, url });
+      codice = codice ?? estraiCodiceMeccanograficoDaTesto(testoLeggibile(html));
       for (const e of emailDaHtml(html)) emailTrovate.add(e);
     } catch {
       // pagina non raggiungibile: si prosegue
@@ -607,7 +617,9 @@ async function cercaEmailNelleFonti(a: AvvisoRilevato): Promise<string | null> {
         if (visitate.has(sub) || eDocumentoBinario(sub)) continue;
         visitate.add(sub);
         try {
-          for (const e of emailDaHtml(await scaricaPagina(sub))) emailTrovate.add(e);
+          const htmlAllegato = await scaricaPagina(sub);
+          codice = codice ?? estraiCodiceMeccanograficoDaTesto(testoLeggibile(htmlAllegato));
+          for (const e of emailDaHtml(htmlAllegato)) emailTrovate.add(e);
         } catch {
           // allegato non raggiungibile
         }
@@ -624,13 +636,16 @@ async function cercaEmailNelleFonti(a: AvvisoRilevato): Promise<string | null> {
       migliore = e;
     }
   }
-  return migliore;
+  return { email: risolviEmailUfficialeScuola({ emailsTrovate: migliore ? [migliore] : [], schoolCode: a.schoolCode })?.email ?? null, codice };
 }
 
 /** Email istituzionale derivata dal codice meccanografico (convenzione MIM). */
 function emailIstituzionaleDaCodice(schoolCode?: string | null): string | null {
-  const info = resolveSchoolByCode(schoolCode ?? null);
-  return info?.peoEmail ?? null;
+  return (
+    emailDaCodiceMeccanografico(schoolCode ?? '')?.peo ??
+    resolveSchoolByCode(schoolCode ?? null)?.peoEmail ??
+    null
+  );
 }
 
 /** Sotto questa soglia l'email è considerata debole → vale la pena approfondire. */
@@ -667,7 +682,11 @@ async function arricchisciContatti(
 
     // Approfondisce su più fonti solo se manca l'email o è debole.
     if (migliorPunteggio < SOGLIA_EMAIL_AFFIDABILE) {
-      const trovata = await cercaEmailNelleFonti(a);
+      const esito = await cercaEmailNelleFonti(a);
+      // Il codice meccanografico può emergere anche dalla pagina ufficiale:
+      // salvarlo permette la risoluzione PEO/PEC e il nome reale della scuola.
+      if (esito.codice && !a.schoolCode) a.schoolCode = esito.codice;
+      const trovata = esito.email;
       if (trovata) {
         const p = punteggioEmailScuola(trovata, ctx);
         if (p > migliorPunteggio) {

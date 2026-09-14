@@ -235,7 +235,10 @@ Supabase DB (pg_cron + trigger):
 | `alertInterpello.ts` | ~255 | Costruttore dell'**avviso strutturato** (gerarchia obbligatorie/opzionali), `pulisciTitoloAvviso` (via i dump di codici classe) ed **`etichettaFonteLink`/`classificaFonteLink`** (etichetta ONESTA del link: PDF / Albo Pretorio / avviso — mai "Candidati") |
 | `interpelloRouting.ts` | ~55 | Deep link `/interpello/:id` (puro): `eUuid`, `chiaveInterpelloDaParam` (uuid → `id`, hash → `hash_id`), `urlSchedaInterpello` |
 | `resend.ts` | 434 | **Node-only** — email Resend: 8 `TipoMessaggio` (`welcome, prova1, prova2, prova3, extra, recap, welcome_pro, notifica_pro`), SUBJECT, CORPO_MESSAGGI, `TIPI_CON_OPPORTUNITA`, `renderEmailHtml`, `inviaNotificaEmail`, `inviaNotificheInterpello` |
-| `telegram.ts` | ~250 | **Node-only** — messaggi Telegram (stessi tipi), `formattaMessaggioTelegram`, `inviaNotificaTelegram`, `getTelegramBotToken` |
+| `telegram.ts` | ~300 | **Node-only** — messaggi Telegram (stessi tipi), `formattaMessaggioTelegram`, `formattaPostCanaleTelegram`, `inviaNotificaTelegram`, `getTelegramBotToken`, **`pulisciUrlTelegram`**: ogni URL è VISIBILE (nessun `text_link` nascosto) così Telegram non mostra il popup di conferma; CTA sempre al `RADAR_SETUP_URL` |
+| `emailScuola.ts` | ~110 | **Puro** — email UFFICIALE della scuola: `normalizzaCodiceMeccanografico`, `estraiCodiceMeccanograficoDaTesto`, `emailDaCodiceMeccanografico` (PEO `@istruzione.it` / PEC `@pec.istruzione.it`), `risolviEmailUfficialeScuola` (email di fonte → convenzione MIM; mai email inventate) |
+| `liveBoard.ts` | ~110 | **Puro** — vetrina "Radar Live": `scuolaDaTitolo`, `nomeScuolaRiga` (campo → registro per codice → titolo → ente), `preparaRigheBoard` (arricchisce e **scarta** le righe senza scuola o senza scadenza: mai "Scuola non indicata"/"Scadenza n/d") |
+| `school-lookup.ts` | ~50 | Registro scuole per codice meccanografico: `resolveSchoolByCode` (PEO/PEC) e **`nomeScuolaDaCodice`** (solo nomi REALI, mai "Istituto &lt;codice&gt;") |
 | `notifier.ts` | 206 | **Node-only** — orchestratore notifiche: per ogni interpello nuovo trova utenti compatibili, RPC `incrementa_notifiche_utente`, sceglie il tipo (`prova1/2/3`, `extra`, `recap` via cron), invia email+Telegram in parallelo, aggiorna flag `notifiche_blocco_inviato`/`step4_inviata_at` |
 | `pricing.ts` | 18 | Piani: `PianoId = 'pro_annuale'|'pro_mensile'|'a_consumo'`; localStorage `STORAGE_KEY_INTENDED_PLAN` |
 | `promo.ts` | 34 | `validaPromo(codice, userId)` via RPC `valida_codice_promo`; `SCONTO_PROMO_EUR = 10` |
@@ -378,6 +381,9 @@ Ordine: `20260822010000_add_school_filters` · `...22020000_create_interpelli` �
 | `.github/workflows/scrape-notizie.yml` | Scraper Notizie: cron giornaliero `0 6 * * *` + dispatch; `contents: write`; `npm ci` → `scrape:notizie:check` → `npm run scrape:notizie` → commit dati (`[skip ci]`) se cambiati |
 | `.github/workflows/health-check.yml` | **Radar Health Check** (Admin bot): cron giornaliero `0 8 * * *` + dispatch; `npm run admin:health` → rileva *dispatch Radar fermo* (nuovi interpelli senza notifiche), *scraper fermo/in errore* e *Notizie ferme*; invia alert a `ADMIN_TELEGRAM_ID` via `inviaAlertaAdmin` (`ADMIN_ALERT_SECRET`). Env: `HEALTH_STALE_HOURS` (48), `HEALTH_NEWS_STALE_DAYS` (14) |
 | `scripts/admin-health-check.ts` | CLI del monitor (`npm run admin:health [-- --dry] [-- --hours N]`): controlla `interpelli`, `notifications_log`, `scraper_runs`, `profiles.radar_attivo` e l'archivio `notizieIngestite.ts`; exit 1 se rileva anomalie |
+| `scripts/arricchisci-interpelli.ts` | Manutenzione dati (`npm run dati:arricchisci [-- --apply]`): completa `school_code`, `contact_email` (PEO dalla convenzione MIM) e `school_name` (registro) sugli interpelli esistenti, senza mai sovrascrivere dati presenti |
+| `scripts/test-live-board.ts` | Regressione vetrina Radar Live (`npm run test:board`): righe incomplete arricchite o scartate, mai placeholder |
+| `scripts/test-email-scuola.ts` | Regressione email (`npm run test:email-scuola`): de-offuscamento, correlazione con l'istituto, **PEO/PEC dalla convenzione MIM** e completamento automatico nel parser |
 | `scripts/test-email-template.ts` | Regressione template (`npm run test:email`): logo reale, titolo pulito dai dump di codici classe, footer "modifica il radar qui" → `/dashboard/radar`, notice "non è monitorata" |
 
 | `docs/BLOG_EDITORIAL_GUIDELINES.md` | Regole d'oro del blog: max 3 articoli/settimana, zero rumore, acronimi spiegati |
@@ -574,6 +580,17 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
   **`RADAR_SETUP_URL`** = `…/dashboard/radar` (setup province + classi), mai alla home
   generica: `telegram-webhook/index.ts` e `send-notification/index.ts` usano lo stesso
   percorso (`RADAR_URL`/`radarSetupUrl()`). Verificato da `npm run test:telegram:canali`.
+  **Nessun `text_link` nascosto**: gli URL sono visibili (auto-link nativo) così non
+  compare il popup di conferma; le email di candidatura sono testo semplice.
+- **Deep link scheda** (`/interpello/:id`): se l'avviso ha una fonte ufficiale esterna
+  la pagina **reindirizza subito** (`window.location.replace`) alla pagina
+  istituzionale originale; la scheda interna resta solo per gli avvisi senza fonte.
+- **Copy**: nessun riferimento alla vecchia "prova a 3 notifiche" ("Te ne restano 2",
+  "Terza e ultima opportunità"): il mese PRO è presentato come accesso pieno. Le
+  tipologie `prova1/2/3`, `extra` e `recap` restano per compatibilità dei cron.
+- **Email scolastica**: se la fonte non pubblica un recapito, il parser ricostruisce
+  la **PEO ufficiale** (`codice@istruzione.it`) dal codice meccanografico
+  (`emailScuola.ts`); `npm run dati:arricchisci` completa le righe già in DB.
 - **Orchestrazione** → `src/lib/notifier.ts`: `notificaNuoviInterpelli(client, nuovi, opts)`
   — non lancia MAI eccezioni; esito `{ inviate, fallite, telegramInviate, telegramFallite }`.
 
