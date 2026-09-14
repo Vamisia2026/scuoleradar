@@ -57,6 +57,15 @@ jobs:
             echo "::warning::Template notifiche non conformi: verificare telegram.ts / alertInterpello.ts."
           fi
 
+      - name: Verifica espansione ELENCHI (pagine indice → avvisi individuali)
+        continue-on-error: true
+        run: |
+          if npm run test:elenchi; then
+            echo "::notice::Elenchi OK: ogni voce di una pagina indice diventa un avviso con il proprio link."
+          else
+            echo "::warning::Espansione elenchi non conforme: verificare src/scraper/elenchi.ts."
+          fi
+
       - name: Esecuzione scraper e inserimento in Supabase
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -66,5 +75,6 @@ jobs:
           TELEGRAM_CHANNELS: ${{ secrets.TELEGRAM_CHANNELS }}
           ADMIN_ALERT_SECRET: ${{ secrets.ADMIN_ALERT_SECRET }}
           SCRAPER_SCADENZA_MAX: '20'
+          SCRAPER_ELENCHI_MAX: '25'
         run: npm run scrape
 

@@ -33,6 +33,26 @@ declare const process: { env: Record<string, string | undefined> };
 const DASHBOARD_URL =
   process.env.RESEND_DASHBOARD_URL ?? 'https://scuoleradar.it/dashboard/radar';
 
+/**
+ * URL della pagina di SETUP DEL RADAR (onboarding): è la destinazione di ogni
+ * CTA di conversione (canali regionali, benvenuto del bot, notifiche). Portare
+ * l'utente QUI — e non alla home generica — significa che appena arriva sceglie
+ * province e classi di concorso e il Radar inizia subito a lavorare per lui.
+ */
+export const RADAR_SETUP_PATH = 'dashboard/radar';
+
+/** Risolve l'URL assoluto del setup Radar (accetta override d'ambiente). */
+export function radarSetupUrl(dashboardUrl: string = DASHBOARD_URL): string {
+  try {
+    return new URL(RADAR_SETUP_PATH, baseUrl(dashboardUrl)).toString();
+  } catch {
+    return 'https://scuoleradar.it/dashboard/radar';
+  }
+}
+
+/** URL canonico del setup Radar (destinazione unica delle CTA). */
+export const RADAR_SETUP_URL = radarSetupUrl();
+
 /* ------------------------------- Helpers ------------------------------- */
 
 function escapeHtml(value: string): string {
@@ -759,10 +779,12 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
     ? `📧 Candidature: <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`
     : '';
 
-  // FOOTER CANALE (broadcast regionale/generale): invito al radar privato.
-  // URL etichettato, mai nudo (evita il popup nativo "Apri link" di Telegram).
+  // FOOTER CANALE (broadcast regionale/generale): invito DIRETTO al setup del
+  // Radar (province + classi), non alla home generica. URL etichettato, mai
+  // nudo (evita il popup nativo "Apri link" di Telegram).
   const cta =
-    '⚡ Ricevi gli avvisi per la tua provincia e classe in privato: 👉 <a href="https://scuoleradar.it">scuoleradar.it</a>';
+    '⚡ Ricevi solo gli avvisi della tua provincia e per le tue classi: 👉 ' +
+    `<a href="${RADAR_SETUP_URL}">Configura il tuo Radar gratis</a>`;
 
   // Blocco CONTATTO = link ufficiale (se valido) + email raggruppati in UNA sola
   // sezione: la struttura pubblicata resta FISSA a 5 blocchi

@@ -12,6 +12,7 @@
 import {
   formattaMessaggioTelegram,
   formattaPostCanaleTelegram,
+  RADAR_SETUP_URL,
   type InterpelloCanale,
 } from '../src/lib/telegram.ts';
 import type { DettagliNotifica } from '../src/lib/resend.ts';
@@ -146,9 +147,21 @@ const canale: InterpelloCanale = {
   link: 'https://www.mim.gov.it/albo-pretorio/avviso-a041.pdf',
 };
 const post = formattaPostCanaleTelegram(canale);
+// CTA di conversione del canale: punta al SETUP del Radar (/dashboard/radar) con
+// un'etichetta d'azione, mai alla home generica.
 const footerCanaleAtteso =
-  '⚡ Ricevi gli avvisi per la tua provincia e classe in privato: 👉 <a href="https://scuoleradar.it">scuoleradar.it</a>';
-check('footer canale presente', true, post.includes(footerCanaleAtteso));
+  `⚡ Ricevi solo gli avvisi della tua provincia e per le tue classi: 👉 <a href="${RADAR_SETUP_URL}">Configura il tuo Radar gratis</a>`;
+check('footer canale presente (setup Radar)', true, post.includes(footerCanaleAtteso));
+check(
+  'footer canale punta a /dashboard/radar',
+  true,
+  footerCanaleAtteso.includes('/dashboard/radar'),
+);
+check(
+  'nessuna CTA alla home generica',
+  false,
+  /href="https:\/\/(?:www\.)?scuoleradar\.it\/?"/.test(post),
+);
 check('nessun URL nudo nel post canale', [], urlNudi(post));
 check(
   'link fonte etichettato (nessun URL nudo come etichetta)',

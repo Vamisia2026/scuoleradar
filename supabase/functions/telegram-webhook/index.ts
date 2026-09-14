@@ -38,8 +38,8 @@ const MESSAGGIO_ISTRUZIONI =
   '👋 <b>Benvenuto su ScuoleRadar!</b>\n\n' +
   'Per ricevere le notifiche personalizzate sugli interpelli scolastici devi prima configurare ' +
   'il tuo profilo (classi di concorso e province desiderate).\n\n' +
-  '1️⃣ Vai su <a href="https://scuoleradar.it">ScuoleRadar.it</a> e crea o accedi al tuo account.\n' +
-  '2️⃣ Dalla sezione <b>Profilo</b>, clicca sul pulsante <b>Collega Telegram</b>.\n\n' +
+  '1️⃣ Vai su <a href="https://scuoleradar.it/dashboard/radar">Configura il tuo Radar</a>: scegli province e classi di concorso.\n' +
+  '2️⃣ Nella sezione <b>Profilo</b>, clicca sul pulsante <b>Collega Telegram</b>.\n\n' +
   'In questo modo il bot saprà esattamente quali avvisi inviarti!';
 
 /** Invia un messaggio su Telegram via Bot API. */

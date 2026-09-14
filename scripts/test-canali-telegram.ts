@@ -31,6 +31,7 @@ import {
   destinazioniPubblicazione,
   formattaPostCanaleTelegram,
   inviaMessaggioTelegram,
+  RADAR_SETUP_URL,
   type CategoriaPost,
   type InterpelloCanale,
 } from '../src/lib/telegram.ts';
@@ -85,7 +86,7 @@ const campioni: Campione[] = [
       province: 'MI',
       comune: 'Milano',
       classCodes: ['AA'],
-      expirationDate: '2026-09-12',
+      expirationDate: '2026-12-12',
       link: 'https://www.istruzione.lombardia.it/avviso-ata-aa-giacosa-milano',
     },
   },
@@ -120,23 +121,42 @@ function verificaStruttura(avviso: InterpelloCanale, testo: string): string[] {
   }
   if (!testo.includes('📍 Provincia: <b>')) problemi.push('manca la riga "📍 Provincia:"');
   if (!testo.includes('🏫 Scuola: <b>')) problemi.push('manca la riga "🏫 Scuola:"');
-  if (!testo.includes('👩🏫 Ruolo / Categoria: <b>')) {
-    problemi.push('manca la riga "👩🏫 Ruolo / Categoria:"');
-  }
+  // Ruolo/Categoria è OPZIONALE: viene omesso quando ripete la Classe/Materia
+  // (nessuna riga ridondante). Resta però obbligatoria la Classe/Materia.
+  if (!testo.includes('📚 Classe/Materia: <b>')) problemi.push('manca la riga "📚 Classe/Materia:"');
   if (!testo.includes('🎓 Ordine di scuola: <b>')) problemi.push('manca la riga "🎓 Ordine di scuola:"');
-  if (!testo.includes('📅 Scadenza: <b>')) problemi.push('manca la riga "📅 Scadenza:"');
-  if (!testo.includes('🔗 <a href="') || !testo.includes('Leggi l\'Avviso Originale')) {
-    problemi.push('manca il blocco link "🔗 Leggi l\'Avviso Originale"');
+  // La scadenza compare SOLO quando la fonte la dichiara (mai date inventate).
+  if (avviso.expirationDate && !testo.includes('📅 Scadenza: <b>')) {
+    problemi.push('manca la riga "📅 Scadenza:"');
   }
-  // La riga email deve essere SEMPRE presente nel blocco contatti: se l'email è
-  // disponibile si mostra, altrimenti la dicitura "Email non disponibile".
-  if (!/📧 (Candidature:|Email non disponibile)/.test(testo)) {
-    problemi.push('manca la riga email candidature (📧 Candidature: … oppure 📧 Email non disponibile)');
+  // Link alla fonte con etichetta ONESTA (mai "Candidati", mai URL nudo).
+  if (!/🔗 <a href="https?:\/\/[^"]+">Apri [^<]+<\/a>/.test(testo)) {
+    problemi.push('manca il blocco link "🔗 <a …>Apri …</a>" (etichetta onesta)');
   }
-  if (!testo.includes('⚡ Ricevi solo gli avvisi per la tua provincia e classe in privato:')) {
+  // Email candidature: mostrata SOLO se estratta; mai "Email non disponibile".
+  if (testo.includes('Email non disponibile')) {
+    problemi.push('trovata la dicitura vietata "Email non disponibile"');
+  }
+  if (avviso.contactEmail && !testo.includes('📧 Candidature:')) {
+    problemi.push('email contatto presente ma riga "📧 Candidature:" assente');
+  }
+  if (!avviso.contactEmail && testo.includes('📧 Candidature:')) {
+    problemi.push('riga "📧 Candidature:" presente senza email estratta');
+  }
+  if (!testo.includes('⚡ Ricevi solo gli avvisi della tua provincia e per le tue classi:')) {
     problemi.push('manca la CTA "⚡ Ricevi solo gli avvisi…"');
   }
-  if (!testo.includes('👉 https://scuoleradar.it')) problemi.push('manca il link CTA https://scuoleradar.it');
+  // CTA di conversione: deve puntare al SETUP del Radar (/dashboard/radar), mai
+  // alla home generica (chi arriva deve scegliere subito province e classi).
+  if (!testo.includes(`<a href="${RADAR_SETUP_URL}">Configura il tuo Radar gratis</a>`)) {
+    problemi.push(`la CTA deve puntare a ${RADAR_SETUP_URL} con etichetta "Configura il tuo Radar gratis"`);
+  }
+  if (!/\/dashboard\/radar\b/.test(RADAR_SETUP_URL)) {
+    problemi.push('RADAR_SETUP_URL non punta a /dashboard/radar');
+  }
+  if (/href="https:\/\/(?:www\.)?scuoleradar\.it\/?"/.test(testo)) {
+    problemi.push('CTA ancora puntata alla home generica (https://scuoleradar.it)');
+  }
   if (!testo.includes('#ScuoleRadar')) problemi.push('manca l\'hashtag #ScuoleRadar');
   if (testo.includes('📌')) problemi.push('trovata riga 📌 extra: il post deve avere solo 5 sezioni');
   if (avviso.link && !testo.includes(avviso.link)) problemi.push('il link ufficiale non compare nel post');

@@ -5,7 +5,9 @@
  *   1. Carica le variabili d'ambiente da `.env` (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY).
  *   2. Legge le province di interesse attive (da `profiles.province_attive`; fallback env).
  *   3. Scarica le fonti reali per provincia (pagina regione → post del giorno → interpelli
- *      ufficiali). Nessun seed di test: la pipeline usa SOLO fonti live ufficiali.
+ *      ufficiali) e, per le PAGINE INDICE ("elenchi" degli USR/USP), espande OGNI voce
+ *      dell'elenco in un avviso indipendente con il proprio link (src/scraper/elenchi.ts).
+ *      Nessun seed di test: la pipeline usa SOLO fonti live ufficiali.
  *   4. Passa ogni avviso al parser (src/scraper/parser.ts) che estrae:
  *      classi di concorso/sostegno (via Regex), data di scadenza e hash_id SHA-256 univoco.
  *   5. VALIDA ogni avviso (`verificaAvviso`): scarta titoli vuoti/da test e fonti non
@@ -41,6 +43,12 @@ import {
   verificaAvviso,
   type InterpelloParsato,
 } from './parser.ts';
+import {
+  ePaginaElenco,
+  eUrlElenco,
+  espandiElencoInAvvisi,
+  sembraTitoloElenco,
+} from './elenchi.ts';
 import { resolveSchoolByCode } from '../lib/school-lookup.ts';
 import { notificaNuoviInterpelli, type EsitoNotifiche } from '../lib/notifier.ts';
 import {
@@ -375,12 +383,102 @@ async function raccogliAvvisiReali(
       continue;
     }
 
-    const estratti = parsePostInterpelli(postHtml, fonte.provincia, primoPost);
+    let estratti = parsePostInterpelli(postHtml, fonte.provincia, primoPost);
     console.log(`• [${fonte.provincia}] interpelli estratti dal post: ${estratti.length}`);
+    // ELENCHI: se la pagina è un INDICE (o il post non ha prodotto voci), ogni
+    // riga dell'elenco diventa un avviso a sé, con il proprio link ufficiale.
+    if (estratti.length === 0) {
+      const daElenco = espandiElencoInAvvisi(postHtml, {
+        baseUrl: primoPost,
+        provincia: fonte.provincia,
+        source: primoPost,
+      });
+      if (daElenco.length > 0) {
+        console.log(
+          `• [${fonte.provincia}] pagina elenco espansa: ${daElenco.length} avvisi individuali`,
+        );
+        estratti = daElenco;
+      }
+    }
     avvisi.push(...estratti);
   }
 
   return { avvisi, fonti: descrizioneFonti.join(' · ') };
+}
+
+/**
+ * ESPANSIONE DEGLI ELENCHI (indice → tanti avvisi).
+ *
+ * Quando un avviso raccolto punta a una PAGINA INDICE (es. gli elenchi degli
+ * Uffici Scolastici Regionali: USR Lombardia, USP…), la pagina viene scaricata
+ * UNA volta e ogni voce dell'elenco diventa un avviso INDIPENDENTE, con:
+ *   · il proprio URL (documento/pagina dell'avviso, mai la lista master);
+ *   · la propria provincia, le proprie classi e la propria scadenza.
+ * Un indice che non produce voci viene SCARTATO (non si pubblica mai il link
+ * alla lista master come se fosse un avviso). Best-effort e limitato da
+ * `SCRAPER_ELENCHI_MAX` (default 25 pagine per run).
+ */
+async function espandiElenchi(
+  avvisi: AvvisoRilevato[],
+  max = 25,
+): Promise<{
+  avvisi: AvvisoRilevato[];
+  indiciEspansi: number;
+  vociCreate: number;
+  indiciScartati: string[];
+}> {
+  const out: AvvisoRilevato[] = [];
+  const indiciScartati: string[] = [];
+  let indiciEspansi = 0;
+  let vociCreate = 0;
+  let fetchEffettuati = 0;
+
+  for (const a of avvisi) {
+    const link = (a.link ?? '').trim();
+    // Solo pagine che "sembrano" un indice (percorso da elenco + titolo/dati
+    // coerenti): così i post giornalieri già strutturati non vengono ri-espansi.
+    const probabileIndice =
+      Boolean(link) &&
+      eUrlElenco(link) &&
+      (sembraTitoloElenco(a.title) || a.classCodes.length === 0);
+    if (!probabileIndice || fetchEffettuati >= max) {
+      out.push(a);
+      continue;
+    }
+
+    fetchEffettuati += 1;
+    let html: string;
+    try {
+      html = await scaricaPagina(link);
+    } catch {
+      out.push(a); // pagina non raggiungibile: si tiene l'avviso com'è
+      continue;
+    }
+    if (!ePaginaElenco(html, link, link)) {
+      out.push(a); // non è un indice: è l'avviso vero
+      continue;
+    }
+
+    const figli = espandiElencoInAvvisi(html, {
+      baseUrl: link,
+      provincia: a.province,
+      source: link,
+      dataPubblicazione: a.publishedAt ?? null,
+    }).filter((f) => (f.link ?? '') !== link);
+
+    if (figli.length === 0) {
+      // Indice senza voci estraibili: si scarta (mai il link alla lista master).
+      indiciScartati.push(link);
+      console.warn(`  ✗ indice senza voci estraibili, scartato: ${link}`);
+      continue;
+    }
+
+    indiciEspansi += 1;
+    vociCreate += figli.length;
+    out.push(...figli);
+  }
+
+  return { avvisi: out, indiciEspansi, vociCreate, indiciScartati };
 }
 
 /**
@@ -886,6 +984,20 @@ async function main() {
   const { avvisi, fonti } = await raccogliAvvisiReali(env, province);
   let trovati: AvvisoRilevato[] = avvisi;
   console.log(`• Fonti reali: ${fonti}`);
+
+  // ELENCHI: ogni voce di una pagina indice (es. elenchi USR) diventa un avviso
+  // indipendente con il proprio link (mai il link alla lista master).
+  const elenchi = await espandiElenchi(trovati, Number(env.SCRAPER_ELENCHI_MAX ?? 25));
+  if (elenchi.indiciEspansi > 0 || elenchi.indiciScartati.length > 0) {
+    console.log(
+      `• Elenchi: ${elenchi.indiciEspansi} indice/i espanso/i in ${elenchi.vociCreate} avvisi individuali` +
+        (elenchi.indiciScartati.length > 0
+          ? ` · ${elenchi.indiciScartati.length} indice/i senza voci (scartati)`
+          : ''),
+    );
+  }
+  trovati = elenchi.avvisi;
+
   console.log('• Verifica raggiungibilità dei link…');
   const raggiungibiliList: AvvisoRilevato[] = [];
   let raggiungibili = 0;

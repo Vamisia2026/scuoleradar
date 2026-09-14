@@ -316,7 +316,8 @@ Supabase DB (pg_cron + trigger):
 
 | File | Righe | Responsabilità |
 |---|---|---|
-| `index.ts` | 522 | Pipeline scraper interpelli (§5.3): env, province attive da `profiles`, fonti per provincia, dedupe hash_id, upsert `interpelli`/`notices`, notifiche ai nuovi |
+| `index.ts` | 522 | Pipeline scraper interpelli (§5.3): env, province attive da `profiles`, fonti per provincia, **espansione ELENCHI** (`espandiElenchi`), dedupe hash_id, upsert `interpelli`/`notices`, notifiche ai nuovi |
+| `elenchi.ts` | ~215 | **Node-only, puro** — espansione delle PAGINE INDICE ("elenchi" USR/USP): `eUrlElenco`/`sembraTitoloElenco`/`ePaginaElenco` riconoscono l'elenco, `estraiVociElenco` estrae **una voce per avviso** (riga più specifica vince, mai la lista master), `espandiElencoInAvvisi` le trasforma in avvisi strutturati con link proprio |
 | `parser.ts` | ~560 | Parser: `rilevaClassi` (A-XX/ADEE + compatti A042/AB25), `rilevaCategoriaAvviso`, `sembraOpportunita`, `estraiProvincia`/`estraiScuola` (dai dati reali), `estraiDataPubblicazione`/`estraiDataScadenza` (pubblicazione ≠ scadenza), `inferisciMateria`, `estraiEmail`, `verificaAvviso`/`eSorgenteVerificata` (anti-mock/dummy), `generaHashId`, `parseInterpello` |
 
 ### 2.13 `src/services/` + `src/types/`
@@ -520,6 +521,10 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
 3. Per ogni provincia: scarica la fonte REALE (pagina regione → post del giorno →
    interpelli ufficiali); NESSUN seed/fixture di test nel codice. Dalla pagina del post
    si estraggono le voci per-voce (città → provincia reale, classi, link ufficiale).
+3-bis. **ELENCHI** (`elenchi.ts`): se la pagina è un INDICE (es. elenchi USR Lombardia)
+   o l'avviso raccolto punta a un indice, ogni voce diventa un avviso INDIPENDENTE con
+   il proprio link; l'indice non viene mai pubblicato come singolo avviso (tetto:
+   `SCRAPER_ELENCHI_MAX`, default 25 pagine/run). Verificato da `npm run test:elenchi`.
 4. **Parser** (`parser.ts`): `rilevaClassi` (formato classico `A-12`, sostegno `ADEE`,
    e COMPATTO `A042`→`A-042`, `AB25`), `rilevaCategoriaAvviso`, `estraiProvincia`/`estraiScuola`
    (dai dati reali), `estraiDataPubblicazione`/`estraiDataScadenza` (mai la pubblicazione
@@ -563,7 +568,11 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
   `inviaNotificaEmail(...)` (soggetto+HTML, tag `project: scuoleradar`),
   `inviaNotificheInterpello(...)` (batch multi-utente).
 - **Telegram** → `src/lib/telegram.ts` (Node-only): `formattaMessaggioTelegram(...)`,
-  `inviaNotificaTelegram(...)` con parse_mode HTML.
+  `inviaNotificaTelegram(...)` con parse_mode HTML. Ogni CTA di conversione (post
+  canale/broadcast regionale, benvenuto del bot `/start`, notifiche) punta a
+  **`RADAR_SETUP_URL`** = `…/dashboard/radar` (setup province + classi), mai alla home
+  generica: `telegram-webhook/index.ts` e `send-notification/index.ts` usano lo stesso
+  percorso (`RADAR_URL`/`radarSetupUrl()`). Verificato da `npm run test:telegram:canali`.
 - **Orchestrazione** → `src/lib/notifier.ts`: `notificaNuoviInterpelli(client, nuovi, opts)`
   — non lancia MAI eccezioni; esito `{ inviate, fallite, telegramInviate, telegramFallite }`.
 

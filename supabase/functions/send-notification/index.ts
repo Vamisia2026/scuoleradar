@@ -15,6 +15,24 @@ const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const PREZZI_URL = 'https://scuoleradar.it/prezzi';
 const FIRMA = 'I tuoi colleghi di <b>Scuole Radar</b>';
 const BLOG_URL = 'https://scuoleradar.it/notizie';
+
+/**
+ * URL della pagina di SETUP DEL RADAR (onboarding province + classi): è la
+ * destinazione di ogni CTA di conversione. Normalizza l'eventuale override
+ * d'ambiente per garantire SEMPRE il percorso `/dashboard/radar`.
+ */
+function radarSetupUrl(): string {
+  const base =
+    Deno.env.get('SCUOLERADAR_BASE_URL') ??
+    Deno.env.get('RESEND_DASHBOARD_URL') ??
+    'https://scuoleradar.it';
+  try {
+    return new URL('dashboard/radar', new URL('/', base).toString()).toString();
+  } catch {
+    return 'https://scuoleradar.it/dashboard/radar';
+  }
+}
+const RADAR_URL = radarSetupUrl();
 /** Disclaimer legale/UX per tutte le email automatiche: la casella non è monitorata. */
 const DISCLAIMER_EMAIL = `<p style="margin:16px 0 0; font-size:12px; color:#94a3b8; line-height:1.5;">⚠️ Ti preghiamo di non rispondere a questo messaggio perché questa casella serve solo per inviare le segnalazioni e non è monitorata.</p>`;
 
@@ -176,9 +194,9 @@ ${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua
   welcome_pro: {
     soggetto: 'Benvenuto nel piano PRO di ScuoleRadar',
     email: (o, genere) =>
-      `${caro(genere)}, benvenuto ${stato(genere)} nel piano <b>PRO</b> di ScuoleRadar!<br/>Da ora hai notifiche illimitate, strumenti docenti completi e moduli sempre aggiornati a norma di legge.<br/><br/>Inizia subito su <a href="https://www.scuoleradar.it/">www.scuoleradar.it</a> e resta aggiornato con <a href="https://www.scuoleradar.it/notizie">www.scuoleradar.it/notizie</a>.`,
+      `${caro(genere)}, benvenuto ${stato(genere)} nel piano <b>PRO</b> di ScuoleRadar!<br/>Da ora hai notifiche illimitate, strumenti docenti completi e moduli sempre aggiornati a norma di legge.<br/><br/>Inizia subito da <a href="${RADAR_URL}">il tuo Radar</a> e resta aggiornato con <a href="${BLOG_URL}">ScuoleRadar.it → Notizie</a>.`,
     telegram: (o, genere) =>
-      `${caro(genere)}, benvenuto ${stato(genere)} nel piano PRO di ScuoleRadar! 👑\nhttps://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
+      `${caro(genere)}, benvenuto ${stato(genere)} nel piano PRO di ScuoleRadar! 👑\nConfigura il tuo Radar: ${RADAR_URL} · Novità: ${BLOG_URL}`,
   },
   conferma_base: {
     soggetto: 'Conferma attivazione: il tuo mese di PRO è attivo',
@@ -193,7 +211,7 @@ ${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua
     // (riga `corpoEmail = saluto + testo.email`): qui NON va ripetuto un
     // secondo "Ciao/Caro", altrimenti si crea un saluto duplicato.
     email: () =>
-      'Ti confermiamo che abbiamo attivato il tuo Radar con le impostazioni che hai scelto. Puoi cambiarle quando vuoi, andando sul tuo profilo su scuoleradar.it.<br/><br/>' +
+      'Ti confermiamo che abbiamo attivato il tuo Radar con le impostazioni che hai scelto. Puoi cambiarle quando vuoi, andando sul tuo profilo su scuoleradar.it → <a href="' + RADAR_URL + '">Modifica il tuo Radar</a>.<br/><br/>' +
       'Ora controlleremo noi per te sui canali ufficiali, quando ci saranno delle opportunità interessanti per te.<br/>' +
       'Non inviamo spam, solo segnalazioni rilevanti, perciò, quando ricevi una nostra segnalazione, è importante aprirla ed eventualmente applicare al più presto.',
     telegram: () =>
@@ -202,9 +220,9 @@ ${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua
   free_forever_preavviso: {
     soggetto: 'Piano PRO Free Forever: il rinnovo gratuito è automatico',
     email: (o, genere) =>
-      `${caro(genere)}, il tuo piano <b>PRO Free Forever</b> scade il <b>${o.scadenza ?? 'prossimo rinnovo annuale'}</b>.<br/><br/>Tranquillo: nessun pagamento e nessuna azione richiesta. Alla scadenza il rinnovo parte automaticamente a <b>0€</b>, per sempre.<br/>Non riceverai mai solleciti di pagamento né avvisi di mancato rinnovo.<br/><br/>Ti aspettiamo su <a href="https://www.scuoleradar.it/">www.scuoleradar.it</a> e sulle novità del nostro <a href="${BLOG_URL}">notiziario</a>.`,
+      `${caro(genere)}, il tuo piano <b>PRO Free Forever</b> scade il <b>${o.scadenza ?? 'prossimo rinnovo annuale'}</b>.<br/><br/>Tranquillo: nessun pagamento e nessuna azione richiesta. Alla scadenza il rinnovo parte automaticamente a <b>0€</b>, per sempre.<br/>Non riceverai mai solleciti di pagamento né avvisi di mancato rinnovo.<br/><br/>Ti aspettiamo su <a href="${RADAR_URL}">il tuo Radar</a> e sulle novità del nostro <a href="${BLOG_URL}">notiziario</a>.`,
     telegram: (o, genere) =>
-      `${caro(genere)}, il tuo piano PRO Free Forever scade il ${o.scadenza ?? 'prossimo rinnovo annuale'}. 🎁 Rinnovo automatico a 0€, per sempre: nessun pagamento, nessuna azione. https://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
+      `${caro(genere)}, il tuo piano PRO Free Forever scade il ${o.scadenza ?? 'prossimo rinnovo annuale'}. 🎁 Rinnovo automatico a 0€, per sempre: nessun pagamento, nessuna azione.\nRadar: ${RADAR_URL} · Novità: ${BLOG_URL}`,
   },
   free_forever_scadenza: {
     soggetto: 'Scadenza abbonamento Scuole Radar',
@@ -213,21 +231,21 @@ ${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua
     email: () =>
       `Il tuo abbonamento annuale a Scuole Radar sta per scadere.<br/><br/>Ma tu sei stato tra i primi a darci fiducia.<br/>Per questo, tu <b>non pagherai mai</b>.<br/>Il tuo abbonamento sarà rinnovato automaticamente e resterà <b>PRO per sempre</b>, gratis.<br/><br/>Speriamo che Scuole Radar stia contribuendo a cambiarti la vita in meglio.`,
     telegram: (o, genere) =>
-      `${caro(genere)}, il tuo abbonamento annuale sta per scadere, ma tu non pagherai mai: verrà rinnovato automaticamente e resterai PRO per sempre, gratis! 🎁\nhttps://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
+      `${caro(genere)}, il tuo abbonamento annuale sta per scadere, ma tu non pagherai mai: verrà rinnovato automaticamente e resterai PRO per sempre, gratis! 🎁\nRadar: ${RADAR_URL} · Novità: ${BLOG_URL}`,
   },
   beta_rinnovo_preavviso: {
     soggetto: 'Sei tra i primi a sostenerci: il tuo account PRO verrà rinnovato GRATIS A VITA 🎁',
     email: (o, genere) =>
-      `${caro(genere)}, sei tra i primi a sostenerci, e per noi questo conta molto.<br/>Come ringraziamento, il tuo account <b>PRO</b> verrà rinnovato <b>GRATIS A VITA</b>.<br/><br/>Alla scadenza il rinnovo avverrà automaticamente: non dovrai fare nulla. Ti aspettiamo su <a href="https://www.scuoleradar.it/">www.scuoleradar.it</a> e sulle novità del nostro <a href="https://www.scuoleradar.it/notizie">notiziario</a>.`,
+      `${caro(genere)}, sei tra i primi a sostenerci, e per noi questo conta molto.<br/>Come ringraziamento, il tuo account <b>PRO</b> verrà rinnovato <b>GRATIS A VITA</b>.<br/><br/>Alla scadenza il rinnovo avverrà automaticamente: non dovrai fare nulla. Ti aspettiamo su <a href="${RADAR_URL}">il tuo Radar</a> e sulle novità del nostro <a href="${BLOG_URL}">notiziario</a>.`,
     telegram: (o, genere) =>
-      `${caro(genere)}, sei tra i primi a sostenerci: il tuo account PRO verrà rinnovato GRATIS A VITA. 🎁\nhttps://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
+      `${caro(genere)}, sei tra i primi a sostenerci: il tuo account PRO verrà rinnovato GRATIS A VITA. 🎁\nRadar: ${RADAR_URL} · Novità: ${BLOG_URL}`,
   },
   beta_rinnovo_conferma: {
     soggetto: 'Congratulazioni, il tuo account PRO è stato rinnovato con successo! 🎉',
     email: (o, genere) =>
-      `Congratulazioni! 🎉<br/>${caro(genere)}, il tuo account <b>PRO</b> è ${stato(genere)} rinnovato con successo: da oggi non ha più una data di scadenza — accesso <b>PRO a vita</b>, in omaggio.<br/><br/>Continua a usare ScuoleRadar su <a href="https://www.scuoleradar.it/">www.scuoleradar.it</a> e resta aggiornato con <a href="https://www.scuoleradar.it/notizie">www.scuoleradar.it/notizie</a>.`,
+      `Congratulazioni! 🎉<br/>${caro(genere)}, il tuo account <b>PRO</b> è ${stato(genere)} rinnovato con successo: da oggi non ha più una data di scadenza — accesso <b>PRO a vita</b>, in omaggio.<br/><br/>Continua a usare ScuoleRadar su <a href="${RADAR_URL}">il tuo Radar</a> e resta aggiornato con <a href="${BLOG_URL}">ScuoleRadar.it → Notizie</a>.`,
     telegram: (o, genere) =>
-      `Congratulazioni! 🎉 ${caro(genere)}, il tuo account PRO è ${stato(genere)} rinnovato con successo: ora sei PRO per sempre, senza scadenza.\nhttps://www.scuoleradar.it/ · https://www.scuoleradar.it/notizie`,
+      `Congratulazioni! 🎉 ${caro(genere)}, il tuo account PRO è ${stato(genere)} rinnovato con successo: ora sei PRO per sempre, senza scadenza.\nRadar: ${RADAR_URL} · Novità: ${BLOG_URL}`,
   },
 };
 
