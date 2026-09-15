@@ -117,11 +117,20 @@ check('nessuna riga 📅 per scadenza passata', false, msgScaduta.includes('📅
 const msgFutura = formattaMessaggioTelegram(secondaria, 'AA24', DASH, 'notifica_pro');
 check('riga 📅 presente per scadenza valida', true, msgFutura.includes('📅'));
 
-console.log('\n— Link: URL VISIBILI (nessun popup "Apri link"), etichetta onesta —');
+console.log('\n— Link: URL VISIBILI (nessun popup "Apri link"), etichetta condivisa —');
 check('nessun link nascosto nel messaggio', [], linkNascosti(msg));
 check('URL della fonte visibile nel testo', true, msg.includes(secondaria.link as string));
-check('etichetta onesta in testo', true, msg.includes('Apri il bando ufficiale (PDF)'));
+// Il link è la RIGA "🔗 Apri l'avviso ufficiale: <url>": etichetta unica e
+// richiesta dal prodotto, con URL VISIBILE (nessun text_link nascosto).
+check(
+  "riga '🔗 Apri l'avviso ufficiale' con URL visibile",
+  true,
+  msg.includes(`🔗 <b>Apri l'avviso ufficiale</b>: ${secondaria.link}`),
+);
 check('mai la parola "candidati"', false, /candidat/i.test(msg.replace(/Candidature:/g, '')));
+// NIENTE disclaimer operativo: era la frase che confondeva gli utenti.
+check('nessun disclaimer "ℹ️"', false, msg.includes('ℹ️'));
+check('nessuna frase sulla pagina ufficiale mancante', false, /non indica la pagina ufficiale/i.test(msg));
 const conEmail: DettagliNotifica = {
   ...secondaria,
   contactEmail: 'segreteria@liceoaugustomonti.edu.it',
@@ -142,12 +151,29 @@ for (const tipo of ['prova1', 'prova2', 'prova3', 'extra', 'recap'] as const) {
   check(`[${tipo}] niente "Terza e ultima"`, false, /Terza e ultima/i.test(t));
 }
 
-console.log('\n— Footer personale (una sola riga, esattamente come da specifica) —');
-const footerAtteso =
-  '📌 Quando vuoi sapere cosa succede di importante, vieni qui: https://www.scuoleradar.it/notizie';
-check('footer presente (URL visibile)', true, msg.includes(footerAtteso));
-check('footer senza link nascosto', false, /<a\s+href="[^"]*notizie"/.test(msg));
+console.log('\n— Footer degli ALERT: CTA unica di ricalibrazione del Radar —');
+// Il vecchio footer promozionale (Notiziario) e il marchio ridondante sono stati
+// rimossi dagli ALERT: resta UNA sola chiamata all'azione, esattamente come da
+// specifica di prodotto.
+const footerAlertAtteso =
+  '👉 Se questi risultati non corrispondono più ai tuoi interessi, modifica il tuo radar su https://www.scuoleradar.it/dashboard/radar';
+check('footer alert presente (URL visibile)', true, msg.includes(footerAlertAtteso));
+check('footer alert senza link nascosto', false, /<a\s+href="[^"]*dashboard\/radar"/.test(msg));
+check(
+  'alert senza footer Notiziario',
+  false,
+  msg.includes('📌 Quando vuoi sapere cosa succede di importante'),
+);
 check('niente firma "I tuoi colleghi"', false, msg.includes('I tuoi colleghi'));
+
+console.log('\n— Messaggi di ciclo di vita: brand e footer INVARIATI —');
+const benvenuto = formattaMessaggioTelegram(null, '', DASH, 'welcome');
+check(
+  'welcome mantiene il footer Notiziario',
+  true,
+  benvenuto.includes('📌 Quando vuoi sapere cosa succede di importante'),
+);
+check('welcome senza CTA radar (nessun alert)', false, benvenuto.includes('modifica il tuo radar'));
 
 console.log('\n— Post CANALE (broadcast): footer regionale —');
 const canale: InterpelloCanale = {

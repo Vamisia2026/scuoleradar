@@ -52,17 +52,48 @@ for (const file of FILE_NOTIFICHE) {
 }
 
 console.log('\n— Email di candidatura: presente e cliccabile negli avvisi —');
+/**
+ * Recapito di candidatura reso CLICCABILE con etichetta CONDIVISA
+ * (`EMAIL_ICONA` + `EMAIL_ETICHETTA`, definite in `src/lib/alertInterpello.ts`):
+ * un'unica fonte di verità per email, Telegram e post canale.
+ */
+const RE_RECAPITO_MAILTO = /EMAIL_ICONA\} \$\{EMAIL_ETICHETTA\}: <a href="mailto:/;
 const telegram = readFileSync('src/lib/telegram.ts', 'utf8');
-check(
-  'Telegram: email con link mailto',
-  true,
-  /📧 Candidature: <a href="mailto:/.test(telegram),
-);
+check('Telegram: email con link mailto (etichetta condivisa)', true, RE_RECAPITO_MAILTO.test(telegram));
 const resend = readFileSync('src/lib/resend.ts', 'utf8');
-check('Email: email con link mailto', true, /Candidature: <a href="mailto:/.test(resend));
+check('Email: email con link mailto (etichetta condivisa)', true, RE_RECAPITO_MAILTO.test(resend));
 const edge = readFileSync('supabase/functions/send-notification/index.ts', 'utf8');
 check('Edge send-notification: email con link mailto', true, /Candidature: <a href="mailto:/.test(edge));
 check('Edge send-notification: email recuperata anche dal DB', true, /caricaEmailAvviso/.test(edge));
+
+console.log('\n— Telegram: alert di SOLO TESTO (nessuna foto/logo, nessun marchio ridondante) —');
+/**
+ * Gli alert personali non devono MAI allegare immagini: la foto con il logo
+ * generava l'anteprima gigante che nascondeva il contenuto. Controllo STATICO sul
+ * sorgente (commenti rimossi): blocca il ritorno di `sendPhoto`, del logo e della
+ * riga di marchio ridondante.
+ */
+const telegramCodice = senzaCommenti(telegram);
+check('nessun invio di foto (sendPhoto)', false, /sendPhoto/.test(telegramCodice));
+check('nessun logo negli alert', false, /urlLogoTelegram|SCUOLERADAR_LOGO_URL/.test(telegramCodice));
+check('nessun marchio ridondante (MARCHIO_TELEGRAM)', false, /MARCHIO_TELEGRAM/.test(telegramCodice));
+check(
+  'nessun disclaimer "non indica la pagina ufficiale" nei messaggi Telegram',
+  false,
+  /non indica la pagina ufficiale/i.test(telegramCodice),
+);
+check(
+  'CTA di ricalibrazione del Radar presente',
+  true,
+  /Se questi risultati non corrispondono più ai tuoi interessi, modifica il tuo radar su/.test(
+    telegramCodice,
+  ),
+);
+check(
+  "riga link condivisa 'Apri l'avviso ufficiale'",
+  true,
+  /Apri l'avviso ufficiale/.test(telegramCodice),
+);
 
 console.log(errori === 0 ? '\n✅ COPY NOTIFICHE: nessun problema' : `\n❌ COPY NOTIFICHE: ${errori} errore/i`);
 process.exitCode = errori === 0 ? 0 : 1;

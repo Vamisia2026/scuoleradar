@@ -92,18 +92,7 @@ jobs:
 
       - name: Commit del LEDGER anti-duplicato (se aggiornato)
         if: always()
+        shell: bash
         run: |
-          if [ ! -f .scuoleradar/notifiche-ledger.json ]; then
-            echo "Nessun ledger da committare."
-            exit 0
-          fi
-          git config user.name "scuoleradar-bot"
-          git config user.email "bot@scuoleradar.it"
-          git add .scuoleradar/notifiche-ledger.json
-          if git diff --cached --quiet; then
-            echo "Ledger invariato: nessun commit."
-          else
-            git commit -m "chore(scraper): aggiorna il ledger anti-duplicato [skip ci]"
-            git push
-          fi
+          bash scripts/commit-ledger.sh
 

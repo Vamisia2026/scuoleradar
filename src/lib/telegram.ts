@@ -20,11 +20,16 @@ import {
 } from './resend';
 import { province } from '../data/province';
 import {
+  EMAIL_ETICHETTA,
+  EMAIL_ICONA,
   ICONA_RIGA,
   costruisciAvviso,
+  emailAvviso,
   etichettaFonteLink,
   pulisciTitoloAvviso,
   scegliClasseRilevante,
+  suggerimentoRicercaAvviso,
+  urlEsterna,
 } from './alertInterpello';
 
 /** Interfaccia per l'ambiente (evita la dipendenza da @types/node nel frontend). */
@@ -162,6 +167,14 @@ interface TestoTelegram {
 }
 
 const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
+  // Voce di DIGEST: serve alla completezza della mappa, ma l'invio reale del
+  // riepilogo usa il renderer dedicato `formattaDigestTelegram` (una voce per
+  // opportunità in UN solo messaggio).
+  digest_giornaliero: {
+    testa: 'Riepilogo giornaliero',
+    paragrafi: [],
+    cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 ${pulisciUrlTelegram(dashboardUrl)}`,
+  },
   welcome: {
     testa: '🎉 Mese di PRO attivo — benvenuto in ScuoleRadar!',
     paragrafi: [
@@ -256,28 +269,38 @@ export function formattaMessaggioTelegram(
 ): string {
   const copy = TESTO_TELEGRAM[tipo];
   const linkPro = proUrl(dashboardUrl);
-  const linkOpp = linkOpportunita(interpello, dashboardUrl);
+  const linkOpp = linkOpportunita(interpello);
 
   // Titolo pulito: niente "dump" di codici classe dalle tabelle delle fonti.
   const titolo = interpello
     ? `📌 <b>${escapeHtml(pulisciTitoloAvviso(interpello.title, `Interpello ${[classe, interpello.province].filter(Boolean).join(' — ')}`))}</b>`
     : '';
 
+  // Alert di opportunità (copy "nuova opportunità"): layout dedicato, testo puro.
+  const conOpportunita = Boolean(interpello) && TIPI_CON_OPPORTUNITA.has(tipo);
+
   // Dettagli compatti con GERARCHIA STRETTA: obbligatorie (Provincia, Ordine,
   // Classe/Materia, Scadenza) + opzionali (Scuola, Pubblicato) solo se presenti.
   // La Scadenza assente viene OMESSA (nessun blocco "Scadenza: Non indicata").
   let dettagli = '';
-  if (interpello && TIPI_CON_OPPORTUNITA.has(tipo)) {
+  // Recapito di candidatura: letto dall'avviso STRUTTURATO (stessa fonte di
+  // verità delle email) così etichetta/posizione restano identiche ovunque.
+  let emailStrutturata: string | null = null;
+  if (conOpportunita && interpello) {
     const avviso = costruisciAvviso({
       provincia: nomeProvincia(interpello.province) ?? interpello.province,
       classCode: classe,
       materia: interpello.materia,
       scadenza: interpello.scadenza,
       schoolName: interpello.schoolName,
+      // Email di candidatura: asset del piano PRO, presente anche quando il link
+      // è solo una pagina di riepilogo/"Stampa" senza descrizione estesa.
+      email: interpello.contactEmail,
       // Il titolo serve solo a rendere il LIVELLO coerente con la classe e a
       // dedurlo quando la classe manca (nessuna contraddizione nei campi).
       titolo: interpello.title,
     });
+    emailStrutturata = avviso.email;
     const righe: string[] = [];
     for (const r of avviso.obbligatorie) {
       righe.push(`${ICONA_RIGA[r.etichetta] ?? '•'} ${escapeHtml(r.etichetta)}: <b>${escapeHtml(r.valore)}</b>`);
@@ -299,23 +322,36 @@ export function formattaMessaggioTelegram(
   // Email di candidatura della scuola: mostrata SOLO se estratta con certezza.
   // Se manca si OMETTE la riga (mai "Email non disponibile": nessuno stato
   // negativo nel messaggio).
-  const emailContatto = interpello?.contactEmail?.trim() ?? '';
+  const emailContatto = emailStrutturata ?? emailAvviso(interpello?.contactEmail) ?? '';
   const emailRiga =
-    TIPI_CON_OPPORTUNITA.has(tipo) && emailContatto
-      ? `📧 Candidature: <a href="mailto:${escapeHtml(emailContatto)}">${escapeHtml(emailContatto)}</a>`
+    conOpportunita && emailContatto
+      ? `${EMAIL_ICONA} ${EMAIL_ETICHETTA}: <a href="mailto:${escapeHtml(emailContatto)}">${escapeHtml(emailContatto)}</a>`
       : '';
 
-  const parti: string[] = [copy.testa];
+  // LAYOUT degli ALERT (testo pulito, niente immagini e niente marchio ripetuto):
+  //   testata · titolo · dettagli · 📧 candidature · 🔗 avviso ufficiale · CTA radar
+  // I messaggi di CICLO DI VITA mantengono il loro copy + il footer Notiziario.
+  const parti: string[] = [];
+  parti.push(copy.testa);
   if (titolo) parti.push(titolo);
   if (dettagli) parti.push(dettagli);
   if (emailRiga) parti.push(emailRiga);
-  if (copy.paragrafi.length) parti.push(copy.paragrafi.join('\n'));
-  if (copy.cta) parti.push(copy.cta(linkPro, linkOpp, dashboardUrl, etichettaOpp));
-  // FOOTER PERSONALE (radar): UNA sola riga, nessuna firma promozionale.
-  // URL sempre come link ETICHETTATO (mai URL nudo: evita il popup "Apri link").
-  parti.push(
-    '📌 Quando vuoi sapere cosa succede di importante, vieni qui: https://www.scuoleradar.it/notizie',
-  );
+
+  if (conOpportunita) {
+    // LINK alla pubblicazione ufficiale: SEMPRE presente (URL visibile, nessun
+    // link nascosto). Se la fonte non è disponibile la riga è omessa — mai un
+    // fallback a una pagina interna spacciata per "fonte".
+    const rigaLink = rigaAvvisoUfficiale(linkOpp);
+    if (rigaLink) parti.push(rigaLink);
+    // CTA UNICA: ricalibrare il Radar. Sostituisce il vecchio footer promozionale
+    // e la guida operativa ("Questo avviso non indica la pagina ufficiale…"),
+    // rimossa perché confondeva più di quanto aiutasse.
+    parti.push(ctaRadarInteressi(dashboardUrl));
+  } else {
+    if (copy.paragrafi.length) parti.push(copy.paragrafi.join('\n'));
+    if (copy.cta) parti.push(copy.cta(linkPro, linkOpp, dashboardUrl, etichettaOpp));
+    parti.push(FOOTER_NOTIZIE);
+  }
 
   return parti.join('\n\n');
 }
@@ -332,30 +368,53 @@ const TELEGRAM_TIMEOUT_MS = 10_000;
 /** Tentativi massimi per errori transitori (429 / 5xx / timeout). */
 const TELEGRAM_MAX_TENTATIVI = 3;
 
+/* ------------------------- Copy e costanti condivise ------------------------- */
+
+/**
+ * CTA finale degli ALERT personali: invita a ricalibrare il Radar quando i
+ * risultati non corrispondono più agli interessi dell'utente. Sostituisce il
+ * vecchio footer promozionale (rumore) mantenendo UNA sola chiamata all'azione.
+ */
+export const CTA_RADAR_INTERESSI =
+  '👉 Se questi risultati non corrispondono più ai tuoi interessi, modifica il tuo radar su';
+
+/** Etichetta condivisa della riga con il link alla fonte ufficiale dell'avviso. */
+export const ETICHETTA_AVVISO_UFFICIALE = "Apri l'avviso ufficiale";
+
+/** Footer informativo (Notiziario): solo per i messaggi di ciclo di vita. */
+export const FOOTER_NOTIZIE =
+  '📌 Quando vuoi sapere cosa succede di importante, vieni qui: https://www.scuoleradar.it/notizie';
+
+/** Riga "🔗 Apri l'avviso ufficiale: <url>" (URL VISIBILE: nessun popup). */
+export function rigaAvvisoUfficiale(link?: string | null): string {
+  const url = urlAssolutaValida(link);
+  if (!url) return '';
+  return `🔗 <b>${escapeHtml(ETICHETTA_AVVISO_UFFICIALE)}</b>: ${pulisciUrlTelegram(url)}`;
+}
+
+/** Riga finale dell'alert con il link al setup del Radar dell'utente. */
+export function ctaRadarInteressi(dashboardUrl: string = DASHBOARD_URL): string {
+  return `${CTA_RADAR_INTERESSI} ${pulisciUrlTelegram(radarSetupUrl(dashboardUrl))}`;
+}
+
 /** Attesa non bloccante (retry/backoff). */
 function attendi(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
- * Invia un messaggio di testo al chat_id indicato tramite le Bot API.
- * `parse_mode: 'HTML'` per la formattazione (bold, link).
- *
- * ROBUSTEZZA: timeout per tentativo + RETRY con backoff sui soli errori
- * transitori (HTTP 429 rispettando `retry_after`, 5xx, errori di rete/timeout).
- * Non lancia MAI eccezioni: restituisce sempre `{ ok, error }`, così l'errore
- * è SEMPRE visibile al chiamante (nessun fallimento silenzioso).
+ * Chiamata ROBUSTA alla Bot API: timeout per tentativo + RETRY con backoff sui
+ * soli errori transitori (HTTP 429 rispettando `retry_after`, 5xx, rete/timeout).
+ * Un'unica implementazione della resilienza, condivisa da testo e foto.
+ * Non lancia MAI eccezioni: restituisce sempre `{ ok, error }`.
  */
-export async function inviaMessaggioTelegram(
-  chatId: string,
-  testo: string,
-): Promise<EsitoTelegram> {
+async function chiamaBotApi(metodo: string, payload: Record<string, unknown>): Promise<EsitoTelegram> {
   const token = getTelegramBotToken()?.trim();
   if (!token) return { ok: false, error: 'Token non configurato' };
-  const destinatario = chatId.trim();
+  const destinatario = String(payload.chat_id ?? '').trim();
   if (!destinatario) return { ok: false, error: 'Chat ID mancante' };
 
-  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  const url = `https://api.telegram.org/bot${token}/${metodo}`;
   let ultimoErrore = 'errore sconosciuto';
 
   for (let tentativo = 1; tentativo <= TELEGRAM_MAX_TENTATIVI; tentativo += 1) {
@@ -365,12 +424,7 @@ export async function inviaMessaggioTelegram(
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: destinatario,
-          text: testo,
-          parse_mode: 'HTML',
-          disable_web_page_preview: false,
-        }),
+        body: JSON.stringify(payload),
         signal: controller.signal,
       });
       clearTimeout(timer);
@@ -406,7 +460,29 @@ export async function inviaMessaggioTelegram(
   return { ok: false, error: ultimoErrore };
 }
 
-/** Invia la notifica Telegram per una delle 8 tipologie, usando la classe in comune. */
+/**
+ * Invia un messaggio di TESTO al chat_id indicato (`parse_mode: 'HTML'` per la
+ * formattazione: bold, link).
+ */
+export async function inviaMessaggioTelegram(chatId: string, testo: string): Promise<EsitoTelegram> {
+  const destinatario = chatId.trim();
+  if (!destinatario) return { ok: false, error: 'Chat ID mancante' };
+  return chiamaBotApi('sendMessage', {
+    chat_id: destinatario,
+    text: testo,
+    parse_mode: 'HTML',
+    disable_web_page_preview: false,
+  });
+}
+
+/**
+ * Invia la notifica Telegram per una delle tipologie, usando la classe in comune.
+ *
+ * LAYOUT: SEMPRE messaggio di TESTO (`sendMessage`). Gli alert NON allegano più
+ * il logo: la foto generava l'anteprima gigante (thumbnail) che occupava lo
+ * schermo e nascondeva il contenuto. Un alert è informazione, non un poster:
+ * testo pulito, link visibili, zero immagini.
+ */
 export async function inviaNotificaTelegram(
   chatId: string,
   interpello: DettagliNotifica | null,
@@ -419,7 +495,8 @@ export async function inviaNotificaTelegram(
         classi: opts.classiUtente ?? [],
       })
     : '';
-  const testo = formattaMessaggioTelegram(interpello, classe, opts.dashboardUrl, opts.tipo ?? 'welcome');
+  const tipo = opts.tipo ?? 'welcome';
+  const testo = formattaMessaggioTelegram(interpello, classe, opts.dashboardUrl, tipo);
   return inviaMessaggioTelegram(chatId, testo);
 }
 
@@ -775,9 +852,9 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
     .filter(Boolean)
     .join(' ');
 
-  // Link alla fonte: SOLO se è un http(s) assoluto valido (mai link relativi/
-  // malformati). Se è un PDF, barra blu dedicata "APRI / SCARICA IL PDF".
-  const linkFonte = urlAssolutaValida(interpello.link);
+  // Link alla fonte: SOLO un URL ESTERNO valido (mai link interni della
+  // piattaforma, mai relativi/malformati). Se è un PDF, barra dedicata.
+  const linkFonte = urlEsterna(interpello.link);
   const linkRiga = linkFonte
     ? eLinkPdf(linkFonte)
       ? barraPdf(linkFonte)
@@ -785,10 +862,12 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
     : '';
 
   // Email di candidatura: OMESSA se non estratta (mai "Email non disponibile":
-  // nessuno stato negativo, nessuna email inventata).
-  const email = interpello.contactEmail?.trim() ?? '';
+  // nessuno stato negativo, nessuna email inventata). Il recapito è normalizzato
+  // (`emailAvviso`) e reso cliccabile: è l'azione utile quando la pagina di fonte
+  // è solo un riepilogo/"Stampa" senza descrizione.
+  const email = emailAvviso(interpello.contactEmail);
   const emailRiga = email
-    ? `📧 Candidature: <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`
+    ? `${EMAIL_ICONA} ${EMAIL_ETICHETTA}: <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`
     : '';
 
   // FOOTER CANALE (broadcast regionale/generale): invito DIRETTO al setup del
@@ -798,9 +877,9 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
     '⚡ Ricevi solo gli avvisi della tua provincia e per le tue classi: 👉 ' +
     `${pulisciUrlTelegram(RADAR_SETUP_URL)}`;
 
-  // Blocco CONTATTO = link ufficiale (se valido) + email raggruppati in UNA sola
-  // sezione: la struttura pubblicata resta FISSA a 5 blocchi
-  // (header · dettagli · contatto · CTA · hashtag).
+  // NIENTE guida operativa nel post pubblico: il testo che spiegava "questo
+  // avviso non indica la pagina ufficiale…" confondeva più di quanto aiutasse e
+  // duplicava il link qui sotto. Restano i contenuti utili: link ufficiale + email.
   const bloccoContatto = [linkRiga, emailRiga].filter(Boolean).join('\n');
   const parti: string[] = [HEADER_POST[categoria], dettagli.join('\n'), bloccoContatto, cta, hashtag];
   return parti.join('\n\n');
@@ -860,4 +939,155 @@ export async function pubblicaInterpelloSuCanali(
     }
   }
   return { destinazioni, pubblicati, errori };
+}
+
+/* ============================= DIGEST GIORNALIERO ============================== */
+/**
+ * UN SOLO messaggio Telegram con il riepilogo della giornata: sostituisce N
+ * messaggi (fatica da notifica). Ogni voce mantiene titolo, dettagli, la fonte
+ * ESTERNA originale, il recapito della scuola e la guida operativa quando la
+ * pagina di destinazione è un elenco/"Stampa".
+ */
+
+/** Massimo di opportunità elencate (poi si taglia per stare nei 4096 caratteri). */
+export const MAX_VOCI_TELEGRAM_DIGEST = 8;
+
+/** Limite della Bot API di Telegram. */
+const LIMITE_TELEGRAM = 4096;
+/** Margine di sicurezza per testata/intro/coda/footer e per gli escape. */
+const MARGINE_TELEGRAM = 400;
+
+/**
+ * Testata del digest — stessa formula dell'oggetto email:
+ * "ScuoleRadar — Oggi abbiamo trovato {N} opportunità per te".
+ */
+export function testataDigest(numero: number): string {
+  const n = Math.max(0, Math.trunc(numero));
+  return `📡 <b>ScuoleRadar — Oggi abbiamo trovato ${n} opportunità per te</b>`;
+}
+
+/** Valore di una riga dell'avviso strutturato (etichetta → valore). */
+function valoreRiga(righe: Array<{ etichetta: string; valore: string }>, etichetta: string): string {
+  return righe.find((r) => r.etichetta === etichetta)?.valore ?? '';
+}
+
+/** Blocco testuale di UNA voce del digest (numerato). */
+function bloccoVoceTelegram(
+  v: DettagliNotifica,
+  numero: number,
+  classiUtente: string[],
+): string {
+  const cl = classeRilevante(v, { email: '', province: [], classi: classiUtente.length > 0 ? classiUtente : (v.classi ?? []) });
+  const provincia = nomeProvincia(v.province) ?? v.province;
+  const avviso = costruisciAvviso({
+    provincia,
+    classCode: cl,
+    classCodes: v.classi,
+    materia: v.materia,
+    scadenza: v.scadenza,
+    schoolName: v.schoolName,
+    email: v.contactEmail,
+    titolo: v.title,
+  });
+  const righe: string[] = [
+    `<b>${numero}. ${escapeHtml(pulisciTitoloAvviso(v.title, `Interpello ${[cl, v.province].filter(Boolean).join(' — ')}`))}</b>`,
+  ];
+
+  // Riga CONTESTO (compatta): scuola se nota + provincia.
+  const scuola = valoreRiga(avviso.opzionali, 'Scuola');
+  righe.push(
+    [scuola ? `🏫 ${escapeHtml(scuola)}` : '', `📍 ${escapeHtml(provincia)}`].filter(Boolean).join(' · '),
+  );
+
+  // Riga COSA/QUANDO: classe-materia + scadenza — le informazioni per agire.
+  // (L'ordine di scuola è derivabile dalla classe e resta nella scheda.)
+  const classeMateria = valoreRiga(avviso.obbligatorie, 'Classe / Materia');
+  const cosa = [
+    classeMateria ? `📚 ${escapeHtml(classeMateria)}` : '',
+    avviso.scadenzaValida ? `📅 ${escapeHtml(formatDataScadenza(v.scadenza))}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  if (cosa) righe.push(cosa);
+
+  const fonte = urlEsterna(v.link);
+  if (fonte) {
+    righe.push(`🔗 <b>${escapeHtml(etichettaFonteLink(fonte))}</b>`);
+    righe.push(pulisciUrlTelegram(fonte));
+  }
+  const email = avviso.email ?? emailAvviso(v.contactEmail);
+  if (email) {
+    righe.push(`${EMAIL_ICONA} ${EMAIL_ETICHETTA}: <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`);
+  }
+  const guida = suggerimentoRicercaAvviso({
+    url: v.link,
+    classe: cl,
+    provincia,
+    schoolName: v.schoolName,
+    email,
+    // Versione BREVE: nel digest il recapito è già nella riga precedente.
+    compatto: true,
+  });
+  if (guida) righe.push(`ℹ️ ${escapeHtml(guida)}`);
+  return righe.join('\n');
+}
+
+/**
+ * Formatta il DIGEST per Telegram: una testata, i blocchi numerati e una sola
+ * CTA. Il numero di voci si riduce automaticamente per rispettare il limite di
+ * caratteri della Bot API.
+ */
+export function formattaDigestTelegram(
+  voci: DettagliNotifica[],
+  opts: { dashboardUrl?: string; data?: string; classiUtente?: string[] } = {},
+): string {
+  if (voci.length === 0) return '';
+  const classiUtente = opts.classiUtente ?? [];
+
+  const testata = testataDigest(voci.length);
+  const intro = opts.data ? `Riepilogo del <b>${escapeHtml(opts.data)}</b>.` : 'Riepilogo della giornata.';
+  const introCompleta = `${intro} Una sola segnalazione al giorno, nel pomeriggio.`;
+  const footer =
+    '📌 Quando vuoi sapere cosa succede di importante, vieni qui: https://www.scuoleradar.it/notizie';
+
+  // NIENTE prompt "Filtra per provincia e classi" nei messaggi PERSONALI: era una
+  // riga di conversione ripetuta in ogni notifica (rumore). Restano i contenuti
+  // utili (voci + footer informativo). Il budget si calcola sulle parti rimaste.
+  // `opts.dashboardUrl` è ancora accettato per compatibilità dei chiamanti.
+  const fissi = [testata, introCompleta, footer].join('\n\n').length + MARGINE_TELEGRAM;
+  const budget = Math.max(500, LIMITE_TELEGRAM - fissi);
+
+  const blocchi: string[] = [];
+  let usati = 0;
+  for (const v of voci.slice(0, MAX_VOCI_TELEGRAM_DIGEST)) {
+    const blocco = bloccoVoceTelegram(v, blocchi.length + 1, classiUtente);
+    if (usati + blocco.length > budget && blocchi.length > 0) break;
+    blocchi.push(blocco);
+    usati += blocco.length + 2;
+  }
+  const restanti = Math.max(voci.length - blocchi.length, 0);
+
+  const parti: string[] = [
+    testata,
+    introCompleta,
+    ...blocchi,
+    restanti > 0 ? `…e altre <b>${restanti}</b> opportunità sono nel tuo Radar.` : '',
+    footer,
+  ];
+  const testo = parti.filter(Boolean).join('\n\n');
+  // Rete di sicurezza: un blocco eccezionale non deve mai far fallire l'invio.
+  return testo.length > LIMITE_TELEGRAM
+    ? `${testo.slice(0, LIMITE_TELEGRAM - 30)}\n\n[riepilogo troncato]`
+    : testo;
+}
+
+/** Invia il digest Telegram: UN solo messaggio per tutte le opportunità. */
+export async function inviaDigestTelegram(
+  chatId: string,
+  voci: DettagliNotifica[],
+  opts: { dashboardUrl?: string; data?: string; classiUtente?: string[] } = {},
+): Promise<EsitoTelegram> {
+  const testo = formattaDigestTelegram(voci, opts);
+  if (!testo) return { ok: false, error: 'nessuna opportunità da inviare' };
+  return inviaMessaggioTelegram(chatId, testo);
 }

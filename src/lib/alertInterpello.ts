@@ -62,6 +62,32 @@ export function formatDataAvvisoLunga(iso?: string | null): string {
   return `${GIORNI[d.getUTCDay()]} ${d.getUTCDate()} ${MESI_LUNGHI[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
+/* --------------------- Email di candidatura (asset PRO) --------------------- */
+
+/**
+ * Etichetta/icona UNICA del recapito di candidatura: le stesse stringhe in ogni
+ * superficie (email, Telegram, post canale, Edge `send-notification`, viste web),
+ * così il contatto è sempre riconoscibile a colpo d'occhio.
+ */
+export const EMAIL_ICONA = '📧';
+/** Etichetta dei MESSAGGI (`📧 Candidature: …`). */
+export const EMAIL_ETICHETTA = 'Candidature';
+/** Etichetta delle VISTE WEB (`📧 Email candidature`). */
+export const EMAIL_ETICHETTA_WEB = 'Email candidature';
+
+/**
+ * Normalizza il recapito di candidatura della scuola: trim + minuscolo e
+ * validazione minima. Ritorna `null` per valori vuoti/plausibilmente non-email
+ * (nessun placeholder, nessuno stato negativo).
+ */
+export function emailAvviso(email?: string | null): string | null {
+  const e = (email ?? '').trim().toLowerCase();
+  if (!e) return null;
+  // Un solo `@`, almeno un punto nel dominio: evita di rendere cliccabile testo
+  // che non è un indirizzo (es. "@" citato in prosa o URL spezzati).
+  return /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/.test(e) ? e : null;
+}
+
 /** Dati grezzi accettati dal costruttore (frontend e scraper). */
 export interface DatiAvviso {
   /** Nome leggibile della provincia (preferito) o, in mancanza, il codice. */
@@ -77,6 +103,13 @@ export interface DatiAvviso {
   scadenza?: string | null;
   schoolName?: string | null;
   pubblicazione?: string | null;
+  /**
+   * Email/PEC di candidatura della scuola: è un ASSET a valore aggiunto per il
+   * piano PRO, quindi viaggia dentro l'avviso strutturato (non accanto) ed è
+   * resa in ogni superficie quando disponibile — anche se il link è solo un
+   * riepilogo.
+   */
+  email?: string | null;
   /**
    * Titolo/descrizione grezza dell'avviso: serve a scegliere la classe
    * COERENTE con il livello dichiarato (evita contraddizioni tipo "Scuola
@@ -96,6 +129,12 @@ export interface AvvisoStrutturato {
   obbligatorie: RigaAvviso[];
   /** Righe opzionali presenti (Scuola, Pubblicato) — solo se estratte. */
   opzionali: RigaAvviso[];
+  /**
+   * Email/PEC di candidatura normalizzata, se estratta (`null` se assente).
+   * Campo a sé (non una riga di testo) perché ogni superficie la rende in modo
+   * cliccabile (`mailto:`), mantenendo etichetta e posizione coerenti.
+   */
+  email: string | null;
   /** Etichette dei campi obbligatori RISULTATI MANCANTI. */
   mancanti: string[];
   /** true = tutti i campi obbligatori presenti. */
@@ -265,7 +304,16 @@ export function costruisciAvviso(dati: DatiAvviso): AvvisoStrutturato {
     opzionali.push({ etichetta: 'Pubblicato', valore: formatDataAvviso(dati.pubblicazione) });
   }
 
-  return { obbligatorie, opzionali, mancanti, completo: mancanti.length === 0, scadenzaValida };
+  return {
+    obbligatorie,
+    opzionali,
+    // Email di candidatura: sempre presente nel modello quando la pipeline la
+    // estrae, anche per i link di riepilogo/"Stampa" senza descrizione.
+    email: emailAvviso(dati.email),
+    mancanti,
+    completo: mancanti.length === 0,
+    scadenzaValida,
+  };
 }
 
 /** True se l'avviso ha TUTTI i campi obbligatori (pronto per la notifica). */
@@ -349,14 +397,70 @@ export function pulisciTitoloAvviso(titolo?: string | null, fallback?: string | 
  * promette ciò che il link non è (mai "Candidati" se porta su un Albo Pretorio).
  *   · 'pdf'    → documento ufficiale (bando/avviso in PDF)
  *   · 'albo'   → Albo Pretorio / pubblicazione atti / determine / delibere
+ *   · 'stampa' → pagina di RIEPILOGO/STAMPA o elenco tabellare (spesso senza la
+ *                descrizione estesa dell'avviso)
  *   · 'avviso' → pagina di avviso/notizia ufficiale (default)
  */
-export type DestinazioneFonte = 'pdf' | 'albo' | 'avviso';
+export type DestinazioneFonte = 'pdf' | 'albo' | 'stampa' | 'avviso';
+
+/** Host che NON sono fonti esterne: la piattaforma stessa e gli ambienti di prova. */
+const RE_HOST_INTERNO =
+  /(^|\.)scuoleradar\.(it|com)$|(^|\.)purefocus\.one$|localhost|127\.0\.0\.1|0\.0\.0\.0/i;
+
+/** Segnali di URL di prova/segnaposto (mai una fonte pubblicabile). */
+const RE_URL_SEGNAPOSTO =
+  /(example\.(com|org|net|it)|localhost|127\.0\.0\.1|0\.0\.0\.0|:5173|:3000|:8080|mockup|\bmock\b|\bsample\b|\bdummy\b|placeholder|\bfixture\b|esempio)/i;
+
+/**
+ * True se l'URL è una FONTE ESTERNA valida: http(s) assoluto, mai un indirizzo
+ * della piattaforma (ScuoleRadar/PureFocus) né un URL di prova.
+ *
+ * È il guard della POLITICA DI ROUTING delle notifiche: i link degli avvisi
+ * devono puntare SOLO alla fonte originale dell'istituzione. Ogni fallback
+ * interno (scheda ScuoleRadar, deep link `/interpello/…`) è vietato.
+ */
+export function eLinkEsterno(url?: string | null): boolean {
+  const u = (url ?? '').trim();
+  if (!/^https?:\/\//i.test(u)) return false;
+  if (RE_URL_SEGNAPOSTO.test(u)) return false;
+  try {
+    const host = new URL(u).host.toLowerCase();
+    if (!host) return false;
+    return !RE_HOST_INTERNO.test(host);
+  } catch {
+    return false;
+  }
+}
+
+/** URL della fonte esterna se valido, altrimenti `null` (nessun fallback interno). */
+export function urlEsterna(url?: string | null): string | null {
+  return eLinkEsterno(url) ? (url ?? '').trim() : null;
+}
+
+/**
+ * True se l'URL è una pagina di RIEPILOGO/STAMPA o un elenco tabellare: sono le
+ * pagine in cui spesso si arriva senza la descrizione estesa dell'avviso. In
+ * questo caso il recapito della scuola diventa l'informazione più preziosa.
+ */
+export function ePaginaRiepilogo(url?: string | null): boolean {
+  const u = (url ?? '').toLowerCase();
+  if (!u) return false;
+  return (
+    /(?:[?&](?:stampa|print|sintesi|riepilogo|showall)\b|\/(?:stampa|print|riepilogo)(?:\/|$|[?#])|\bstampa\b|riepilogo|tabell(?:a|are|one)|elenco|indice)/.test(
+      u,
+    )
+  );
+}
 
 export function classificaFonteLink(url?: string | null): DestinazioneFonte {
   const u = (url ?? '').toLowerCase();
   if (!u) return 'avviso';
   if (/\.pdf(?:$|[?#])/.test(u) || /[?&](?:format|ext)=pdf\b/.test(u)) return 'pdf';
+  // RIEPILOGO prima di tutto: un marcatore esplicito di stampa/elenco ("Stampa",
+  // `?stampa=1`, `/print`, tabella, elenco, indice) descrive la DESTINAZIONE reale
+  // meglio del nome del contenitore (es. "albo"): l'etichetta resta onesta e la
+  // guida operativa viene mostrata.
+  if (ePaginaRiepilogo(u)) return 'stampa';
   if (/albo|pretorio|pubblicazion|atti\b|determin|deliber|ordinanz|decret/.test(u)) return 'albo';
   return 'avviso';
 }
@@ -367,15 +471,103 @@ export function classificaFonteLink(url?: string | null): DestinazioneFonte {
  */
 export function etichettaFonteLink(url?: string | null): string {
   const u = (url ?? '').toLowerCase();
-  if (/\/interpello\//.test(u)) return "Apri la scheda dell'avviso";
+  // "Scheda dell'avviso" SOLO per le pagine di interpello ESTERNE (istituzionali):
+  // i link interni della piattaforma non sono mai una fonte.
+  if (eLinkEsterno(url) && /\/interpello\//.test(u)) return "Apri la scheda dell'avviso";
   switch (classificaFonteLink(url)) {
     case 'pdf':
       return 'Apri il bando ufficiale (PDF)';
     case 'albo':
       return "Apri l'avviso sull'Albo Pretorio";
+    case 'stampa':
+      // Onestà: è una pagina di riepilogo/elenco, non il testo integrale.
+      return 'Apri la pagina di riepilogo';
     default:
       return "Apri l'avviso ufficiale";
   }
+}
+
+/* ------------- Guida operativa per pagine tabellari / senza fonte ------------- */
+
+export interface DatiSuggerimento {
+  /** URL della fonte (destinazione del bottone). */
+  url?: string | null;
+  /** Classe di concorso mostrata (es. `A-022`). */
+  classe?: string | null;
+  /** Provincia mostrata (es. `Asti (AT)`). */
+  provincia?: string | null;
+  /** Nome della scuola, se noto. */
+  schoolName?: string | null;
+  /** Email/PEC di candidatura della scuola, se nota. */
+  email?: string | null;
+  /**
+   * Versione BREVE per il DIGEST giornaliero: un solo periodo, senza la frase
+   * sull'email (nel digest il recapito è già mostrato sulla riga precedente).
+   * Serve a tenere il riepilogo leggibile senza ripetizioni.
+   */
+  compatto?: boolean;
+}
+
+/**
+ * ISTRUZIONE STANDARD per le pagine tabellari/di riepilogo: è la frase richiesta
+ * dal prodotto e deve essere IDENTICA in ogni superficie (digest, email, scheda).
+ * Costante esportata: unica fonte di verità (e verificabile dai test).
+ */
+export const ISTRUZIONE_AVVISO_UFFICIALE =
+  "Apri l'avviso ufficiale (clicca STAMPA dove possibile, per candidarti)";
+
+/**
+ * GUIDA OPERATIVA mostrata sotto l'avviso quando la destinazione è una pagina
+ * tabellare/di riepilogo ("Stampa", elenco) oppure quando la fonte ufficiale non
+ * è disponibile. Serve a non lasciare l'utente davanti a un elenco senza sapere
+ * cosa fare: spiega come trovare la riga giusta e come candidarsi.
+ *
+ * Ritorna `null` quando la destinazione è una pagina di dettaglio: nessun testo
+ * inutile. Non promette mai ciò che la pagina non garantisce.
+ *
+ * Con `compatto: true` restituisce una sola frase (per il digest giornaliero).
+ */
+export function suggerimentoRicercaAvviso(dati: DatiSuggerimento = {}): string | null {
+  const email = emailAvviso(dati.email);
+  const classe = (dati.classe ?? '').trim();
+  const provincia = (dati.provincia ?? '').trim();
+  const url = (dati.url ?? '').trim();
+  const esterna = eLinkEsterno(url);
+
+  if (esterna && !ePaginaRiepilogo(url)) return null; // pagina di dettaglio: nessuna guida
+
+  const dove = [classe ? `«${classe}»` : 'la tua classe di concorso', provincia || null]
+    .filter(Boolean)
+    .join(' per ');
+
+  // RIEPILOGO/ELENCO con link disponibile: si apre la pagina e si cerca la riga.
+  // La direttiva STAMPA è quella standard, sempre identica.
+  if (esterna) {
+    const cerca = `Cerca la riga con ${dove} e leggi lì date e classi.`;
+    if (dati.compatto) return `${ISTRUZIONE_AVVISO_UFFICIALE}; ${cerca.replace(/^Cerca/, 'cerca')}`;
+    const testo = [
+      'Nel link la scuola pubblica un elenco, non la scheda del singolo avviso.',
+      `${ISTRUZIONE_AVVISO_UFFICIALE}.`,
+      cerca,
+    ];
+    if (email) {
+      testo.push(
+        `Per candidarti puoi scrivere direttamente a ${email}: è il recapito ufficiale della scuola. Indica ${dove} e chiedi conferma dei termini.`,
+      );
+    }
+    return testo.join(' ');
+  }
+
+  // NESSUNA fonte ufficiale: non c'è nulla da "aprire", si chiede alla segreteria.
+  const chiedi = `Chiedi alla segreteria la riga con ${dove} oppure il testo dell'avviso.`;
+  if (dati.compatto) return chiedi;
+  const testo = ['Questo avviso non indica la pagina ufficiale su cui è pubblicato.', chiedi];
+  if (email) {
+    testo.push(
+      `Per candidarti puoi scrivere direttamente a ${email}: è il recapito ufficiale della scuola. Indica ${dove} e chiedi conferma dei termini.`,
+    );
+  }
+  return testo.join(' ');
 }
 
 

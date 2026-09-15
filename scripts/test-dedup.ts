@@ -4,9 +4,15 @@
  *  · registrazione idempotente e persistenza su file (fallback senza DB);
  *  · esclusione dei canali già serviti nella pubblicazione Telegram.
  *
+ * ISOLAMENTO: il test lavora su un ledger TEMPORANEO
+ * (`SCUOLERADAR_LEDGER_PATH`), così NON tocca mai il ledger reale del workspace
+ * (che è il registro di deduplica di produzione).
+ *
  * Uso: npm run test:dedup
  */
 import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   chiaveLedger,
   ledgerLocaleGia,
@@ -15,6 +21,12 @@ import {
   percorsoLedgerLocale,
 } from '../src/lib/ledgerLocale.ts';
 import { destinazioniPubblicazione, pubblicaInterpelloSuCanali } from '../src/lib/telegram.ts';
+import { GIORNI_IMPRONTA, improntaAvviso } from '../src/lib/dedupAvvisi.ts';
+
+// Va impostato PRIMA della prima chiamata al ledger (il percorso è risolto a runtime).
+const percorsoTest = join(tmpdir(), `scuoleradar-dedup-test-${process.pid}.json`);
+process.env.SCUOLERADAR_LEDGER_PATH = percorsoTest;
+rmSync(percorsoTest, { force: true });
 
 let errori = 0;
 function check(nome: string, atteso: unknown, ottenuto: unknown): void {
@@ -24,7 +36,7 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
 }
 
 const percorso = percorsoLedgerLocale();
-const esisteva = existsSync(percorso);
+check('il test usa un ledger temporaneo (mai quello reale)', percorsoTest, percorso);
 
 console.log('— Chiavi e registrazione (ledger locale) —');
 check(
@@ -67,8 +79,59 @@ check('tutte le destinazioni già servite → nessun invio', 0, esito.destinazio
 check('nessun invio effettuato', 0, esito.pubblicati);
 check('nessun errore', 0, esito.errori.length);
 
-// Pulizia: il ledger di test non deve restare nel workspace.
-if (!esisteva) rmSync(percorso, { force: true });
+console.log('\n— Impronta dell\'opportunità: la STESSA notizia non torna ogni giorno —');
+/**
+ * L'`hash_id` include titolo + data: la stessa opportunità ripubblicata con
+ * titolo/date diversi generava un hash nuovo → nuovo record → nuovo alert, giorno
+ * dopo giorno (bug "notifiche ripetute", es. gli avvisi del Liceo Monti). Qui si
+ * verifica che l'IMPRONTA (scuola + provincia + classi + titolo normalizzato senza
+ * date/numeri) resti IDENTICA al variare di date e rumore nel titolo.
+ */
+const avvisoBase = {
+  titolo: 'Interpello supplenza A-022 Matematica — Liceo Augusto Monti',
+  scuola: 'Liceo Augusto Monti',
+  provincia: 'AT',
+  classi: ['A-022'],
+};
+const improntaBase = improntaAvviso(avvisoBase);
+check('impronta calcolata', true, typeof improntaBase === 'string' && improntaBase.length > 10);
+check(
+  'data nel titolo → STESSA impronta',
+  improntaBase,
+  improntaAvviso({ ...avvisoBase, titolo: 'Interpello supplenza A-022 Matematica del 12/09/2026 — Liceo Augusto Monti' }),
+);
+check(
+  'protocollo e punteggiatura → STESSA impronta',
+  improntaBase,
+  improntaAvviso({
+    ...avvisoBase,
+    titolo: 'INTERPELLO N. 1234/2026 — SUPPLENZA A-022 MATEMATICA - Liceo Augusto Monti',
+  }),
+);
+check(
+  'ordine delle classi irrilevante',
+  improntaAvviso({ ...avvisoBase, classi: ['A-022', 'ADEE'] }),
+  improntaAvviso({ ...avvisoBase, classi: ['ADEE', 'A-022'] }),
+);
+check(
+  'SCUOLA diversa → impronta diversa',
+  true,
+  improntaAvviso({ ...avvisoBase, scuola: 'ITIS Artom' }) !== improntaBase,
+);
+check(
+  'CLASSE diversa → impronta diversa',
+  true,
+  improntaAvviso({ ...avvisoBase, classi: ['A-041'] }) !== improntaBase,
+);
+check(
+  'titolo generico troppo corto → nessuna impronta (non si sopprime nulla)',
+  null,
+  improntaAvviso({ titolo: 'Interpello', scuola: 'Liceo Monti', provincia: 'AT', classi: [] }),
+);
+check('finestra di confronto = 60 giorni', true, GIORNI_IMPRONTA === 60);
+
+// Pulizia: il ledger di test è TEMPORANEO (mai il file reale del workspace).
+rmSync(percorso, { force: true });
 
 console.log(errori === 0 ? '\n✅ DEDUPLICA: nessun problema' : `\n❌ DEDUPLICA: ${errori} errore/i`);
 process.exitCode = errori === 0 ? 0 : 1;

@@ -1,22 +1,22 @@
 /**
- * ScuoleRadar.it — Dispatch IMMEDIATO delle notifiche per un singolo utente.
+ * ScuoleRadar.it — DIGEST immediato per un singolo utente (strumento ADMIN).
  *
- * Notifica OGNI interpello ATTIVO compatibile con il profilo (province + classi),
- * anche se già presente in bacheca ma mai notificato. Ogni notifica (email +
- * Telegram) include l'EMAIL DI CANDIDATURA dell'avviso.
+ * Invia UN SOLO messaggio (email + Telegram) con TUTTE le opportunità ATTIVE
+ * compatibili con il profilo (province + classi) non ancora notificate. Ogni voce
+ * include la FONTE ESTERNA e l'EMAIL DI CANDIDATURA della scuola.
  *
- * Dedupe tramite `notifications_log` (migrazione 20260914010000): una seconda
- * esecuzione non rispedisce le stesse segnalazioni.
+ * Dedupe tramite ledger locale + `notifications_log`: una seconda esecuzione non
+ * rispedisce le stesse opportunità.
  *
  * Uso:
- *   npx tsx scripts/admin-dispatch-user.ts bartoloansaldi@gmail.com           # DRY-RUN (nessun invio)
+ *   npx tsx scripts/admin-dispatch-user.ts bartoloansaldi@gmail.com           # DRY-RUN
  *   npx tsx scripts/admin-dispatch-user.ts bartoloansaldi@gmail.com --apply   # invia davvero
  *
  * In alternativa all'email si può passare un UUID utente.
  */
 import process from 'node:process';
 import { createClient } from '@supabase/supabase-js';
-import { notificaInterpelliPerUtente } from '../src/lib/notifier.ts';
+import { inviaDigestGiornaliero } from '../src/lib/notifier.ts';
 
 try {
   process.loadEnvFile();
@@ -43,15 +43,18 @@ const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const sb = createClient(URL_, KEY, { auth: { persistSession: false } });
 
 console.log(
-  `=== Dispatch notifiche per ${target} — ${APPLY ? 'APPLY (invio reale)' : 'DRY-RUN (nessun invio)'} ===`,
+  `=== Digest per ${target} — ${APPLY ? 'APPLY (invio reale)' : 'DRY-RUN (nessun invio)'} ===`,
 );
 
-const esito = await notificaInterpelliPerUtente(
-  sb as never,
-  isUuid ? { userId: target } : { email: target },
-  { dryRun: !APPLY, dashboardUrl: process.env.RESEND_DASHBOARD_URL },
-);
+// `forzato: true`: è un'azione manuale dell'admin, non deve rispettare le 18:00.
+const esito = await inviaDigestGiornaliero(sb as never, {
+  dryRun: !APPLY,
+  forzato: true,
+  dashboardUrl: process.env.RESEND_DASHBOARD_URL,
+  soloUtente: isUuid ? { userId: target } : { email: target },
+});
 
 console.log('\n=== RIEPILOGO ===');
 console.log(JSON.stringify(esito, null, 2));
 if (!APPLY) console.log('(DRY-RUN: nessun invio. Ripeti con --apply per spedire davvero.)');
+

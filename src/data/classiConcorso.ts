@@ -826,6 +826,63 @@ export const classeByCodice = (codice: string): ClasseConcorso | undefined => {
 export const classiByMateria = (materiaId: string): ClasseConcorso[] =>
   classiConcorso.filter((c) => c.materie.includes(materiaId));
 
+/* --------------------------------- SOSTEGNO --------------------------------- */
+/**
+ * L'area SOSTEGNO (special education) è un MONDO DI ABILITAZIONI SEPARATO dalle
+ * classi disciplinari: un docente di tedesco (A-22/A-25) NON è automaticamente
+ * abilitato al sostegno (ADEE/ADMM/ADSS) e non deve riceverne gli avvisi. Questi
+ * helper sono la fonte unica della distinzione, usata da matching, digest e UI.
+ */
+
+/**
+ * Codici di sostegno del CATALOGO dell'app: ADAA (infanzia), ADEE (primaria),
+ * ADMM (secondaria di I grado), ADSS (secondaria di II grado).
+ */
+export const codiciSostegno: string[] = classiConcorso
+  .filter((c) => c.materie.includes('sostegno'))
+  .map((c) => c.codice);
+
+/**
+ * Forma di TUTTI i codici sostegno pubblicati dagli uffici scolastici: la sigla
+ * canonica del catalogo + le varianti numeriche usate dalle fonti (`AD24`, …).
+ * In Italia ogni classe di sostegno inizia per `AD`, quindi il pattern è chiuso.
+ */
+const RE_CODICE_SOSTEGNO = /^AD(?:[A-Z]{2,3}|\d{2})$/;
+
+/**
+ * True se il codice è una classe di concorso di SOSTEGNO (ADAA, ADEE, ADMM, ADSS,
+ * AD24, …). Falso per le classi disciplinari (A-22, A-25, B-02, AAAA, EEEE…).
+ */
+export function isCodiceSostegno(codice?: string | null): boolean {
+  const c = (codice ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!c) return false;
+  return RE_CODICE_SOSTEGNO.test(c) || codiciSostegno.includes(c);
+}
+
+/**
+ * Parole chiave che dichiarano il SOSTEGNO nel titolo/oggetto o nella materia
+ * inferita dallo scraper. NB: "inclusione" è volutamente ESCLUSA perché troppo
+ * generica (compare in bandi PNRR/progetti didattici non di sostegno e
+ * taglierebbe opportunità legittime a chi non ha aderito).
+ */
+const RE_TESTO_SOSTEGNO = /\bsostegn|\b(?:adaa|adee|admm|adss)\b|\bad24\b/i;
+
+/**
+ * True se l'avviso è un avviso di SOSTEGNO: basta un codice sostegno rilevato nel
+ * testo (`classi`) oppure un riferimento esplicito nel titolo ("Interpello
+ * sostegno") / nella materia inferita ("Sostegno"). Serve a NON confondere un
+ * interpello di sostegno con un interpello disciplinare che cita le stesse classi
+ * di concorso (falso positivo storico: docente di tedesco → interpelli ADEE).
+ */
+export function eAvvisoSostegno(
+  classi?: readonly string[] | null,
+  titolo?: string | null,
+  materia?: string | null,
+): boolean {
+  if ((classi ?? []).some((c) => isCodiceSostegno(c))) return true;
+  return RE_TESTO_SOSTEGNO.test(`${titolo ?? ''} ${materia ?? ''}`);
+}
+
 /**
  * Materia ufficiale da mostrare ACCANTO al codice di classe di concorso
  * (es. `A-12 · Italiano, Storia, Geografia, Latino`). Priorità:

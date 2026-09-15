@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Interpello } from '../data/interpelli';
-import { classeByCodice } from '../data/classiConcorso';
+import { classeByCodice, eAvvisoSostegno, isCodiceSostegno } from '../data/classiConcorso';
 import { province } from '../data/province';
 
 /**
@@ -185,6 +185,46 @@ export interface UtenteCompatibile {
   notificheBloccoInviato?: boolean;
   /** True se la email riepilogativa del blocco definitivo è già stata inviata (una tantum). */
   notificheRecapInviato?: boolean;
+  /**
+   * Preferenza SOSTEGNO (`profiles.sostegno`): true = l'utente vuole ricevere
+   * anche le opportunità di sostegno (ADAA/ADEE/ADMM/ADSS).
+   */
+  sostegno?: boolean;
+}
+
+/**
+ * True se l'utente ha aderito all'area SOSTEGNO. L'adesione è ESPLICITA
+ * (`profiles.sostegno`, preferenza chiesta nel wizard e nel profilo) oppure
+ * IMPLICITA: chi ha selezionato una classe di sostegno (ADEE, ADMM…) tra le
+ * proprie preferenze la vuole evidentemente ricevere — così la nuova preferenza
+ * non toglie copertura a nessuno (nessun opt-out retroattivo).
+ */
+export function utenteAderisceSostegno(utente: {
+  sostegno?: boolean | null;
+  classi?: readonly string[] | null;
+}): boolean {
+  if (utente.sostegno === true) return true;
+  return (utente.classi ?? []).some((c) => isCodiceSostegno(c));
+}
+
+/**
+ * GUARDIA SOSTEGNO del matching (fonte unica per matching real-time e digest).
+ *
+ * Regola: gli avvisi di SOSTEGNO (`classi` con AD… oppure titolo/materia che lo
+ * dichiarano) vengono consegnati SOLO a chi ha aderito alla preferenza. Gli
+ * avvisi disciplinari passano invece inalterati.
+ *
+ * Perché: il sostegno è un'abilitazione separata, ma le fonti lo pubblicano
+ * spesso citando anche le classi disciplinari (o i titoli di studio richiesti).
+ * Un docente di tedesco (A-22/A-25) riceveva così interpelli di sostegno: con
+ * questa guardia il falso positivo non è più possibile per chi non aderisce.
+ */
+export function sostegnoAmmesso(
+  utente: { sostegno?: boolean | null; classi?: readonly string[] | null },
+  avviso: { classi?: readonly string[] | null; titolo?: string | null; materia?: string | null },
+): boolean {
+  if (!eAvvisoSostegno(avviso.classi, avviso.titolo, avviso.materia)) return true;
+  return utenteAderisceSostegno(utente);
 }
 
 /**
@@ -209,18 +249,42 @@ export function normalizzaClasse(codice?: string | null): string {
 
 /**
  * FASE 4 — Trova nella tabella `profiles` gli utenti compatibili con un interpello:
- * email di notifica valida, provincia in comune e almeno una classe in comune.
+ * email di notifica valida, provincia in comune e almeno una classe in comune
+ * (più la GUARDIA SOSTEGNO: gli avvisi di sostegno solo a chi ha aderito).
  */
 export async function findUtentiCompatibili(
   client: SupabaseClient | null,
-  interpello: { province: string; classi: string[] },
+  interpello: {
+    province: string | null;
+    classi: string[];
+    /** Titolo dell'avviso: serve alla guardia sostegno (parole chiave). */
+    titolo?: string | null;
+    /** Materia inferita dallo scraper (es. "Sostegno"): guardia sostegno. */
+    materia?: string | null;
+  },
+  opts: { ignoraFiltri?: boolean } = {},
 ): Promise<UtenteCompatibile[]> {
   if (!client) return [];
 
+  /** Colonne storiche del profilo (quelle che esistono da sempre). */
+  const COLONNE_PROFILO =
+    'id, email, email_notifica, nome, province_interesse, province_attive, classi_concorso, telegram_chat_id, piano, radar_attivo, is_free_forever, notifiche_blocco_inviato, notifiche_recap_inviato';
+
   try {
-    const { data, error } = await client
+    // `sostegno` è la preferenza dell'area sostegno (migrazione
+    // `20260914040000_add_profiles_sostegno.sql`). Se il DB non è ancora migrato la
+    // SELECT fallirebbe (42703/PGRST204) e NESSUN utente riceverebbe notifiche:
+    // si rilegge quindi senza la colonna, trattandola come non valorizzata (vale
+    // comunque l'adesione implicita via classe di sostegno).
+    let { data, error } = await client
       .from('profiles')
-      .select('id, email, email_notifica, nome, province_interesse, province_attive, classi_concorso, telegram_chat_id, piano, radar_attivo, is_free_forever, notifiche_blocco_inviato, notifiche_recap_inviato');
+      .select(`${COLONNE_PROFILO}, sostegno`);
+    if (error && /sostegno/i.test(error.message)) {
+      console.warn(
+        'MatchingEngine — colonna `profiles.sostegno` assente: applicare la migrazione 20260914040000_add_profiles_sostegno.sql.',
+      );
+      ({ data, error } = await client.from('profiles').select(COLONNE_PROFILO));
+    }
 
     if (error) {
       console.warn('MatchingEngine — lettura profiles (utenti compatibili):', error.message);
@@ -249,9 +313,30 @@ export async function findUtentiCompatibili(
       // estratte dalle fonti (A-022) e l'utente non riceverebbe notifiche reali.
       const classiProfiloNormalizzate = new Set(classiProfilo.map(normalizzaClasse));
 
+      // GUARDIA SOSTEGNO: un avviso di sostegno (ADEE/ADMM/ADSS… anche quando cita
+      // classi disciplinari) viene consegnato SOLO a chi ha aderito alla preferenza.
+      // Prima di questa regola un docente di tedesco (A-22/A-25) riceveva gli
+      // interpelli di sostegno: era il falso positivo principale del Radar.
+      if (
+        !sostegnoAmmesso(
+          { sostegno: riga.sostegno === true, classi: classiProfilo },
+          { classi: interpello.classi, titolo: interpello.titolo, materia: interpello.materia },
+        )
+      ) {
+        continue;
+      }
+
+      // `ignoraFiltri` = "tutti i profili notificabili" (base del riepilogo
+      // giornaliero): NON si applica alcun filtro di provincia/classe. Senza
+      // questo flag una lista di classi VUOTA significherebbe "nessuna classe in
+      // comune" e gli utenti con preferenze configurate verrebbero ESCLUSI.
       const matchProvincia =
-        provinceProfilo.length === 0 || provinceProfilo.includes(interpello.province);
+        opts.ignoraFiltri === true ||
+        interpello.province === null ||
+        provinceProfilo.length === 0 ||
+        provinceProfilo.includes(interpello.province);
       const matchClasse =
+        opts.ignoraFiltri === true ||
         classiProfilo.length === 0 ||
         interpello.classi.some((c) => classiProfiloNormalizzate.has(normalizzaClasse(c)));
       if (!matchProvincia || !matchClasse) continue;
@@ -266,6 +351,7 @@ export async function findUtentiCompatibili(
         piano: riga.is_free_forever === true ? 'free_forever' : riga.piano ? String(riga.piano) : 'base',
         notificheBloccoInviato: Boolean(riga.notifiche_blocco_inviato),
         notificheRecapInviato: Boolean(riga.notifiche_recap_inviato),
+        sostegno: riga.sostegno === true,
       });
     }
     return compatibili;
@@ -273,4 +359,22 @@ export async function findUtentiCompatibili(
     console.warn('MatchingEngine — ricerca utenti compatibili fallita:', (err as Error).message);
     return [];
   }
+}
+
+/**
+ * TUTTI i profili NOTIFICABILI (canale valido + Radar attivo), senza filtro di
+ * provincia/classe: è l'insieme su cui gira il DIGEST GIORNALIERO, che poi decide
+ * quali opportunità includere per ciascun utente.
+ *
+ * Riutilizza la stessa validazione di `findUtentiCompatibili` (province `null` =
+ * nessun filtro geografico, classi vuote = nessun filtro classe): una sola
+ * implementazione delle regole di eleggibilità, niente logica duplicata.
+ */
+export async function elencaUtentiNotificabili(
+  client: SupabaseClient | null,
+): Promise<UtenteCompatibile[]> {
+  // `ignoraFiltri: true` → TUTTI i profili con un canale valido e Radar attivo,
+  // anche quelli con province/classi configurate (il filtro per opportunità lo fa
+  // poi `raccogliVociCanale`, che confronta classe per classe).
+  return findUtentiCompatibili(client, { province: null, classi: [] }, { ignoraFiltri: true });
 }

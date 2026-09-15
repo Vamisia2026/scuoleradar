@@ -13,14 +13,18 @@
  */
 
 import { Resend } from 'resend';
+import { SOGLIA_IMMINENTE, SOGLIA_VICINA, giorniRimanenti } from './scadenza';
 import {
+  EMAIL_ETICHETTA,
+  EMAIL_ICONA,
   ICONA_RIGA,
   costruisciAvviso,
   etichettaFonteLink,
   pulisciTitoloAvviso,
   scegliClasseRilevante,
+  suggerimentoRicercaAvviso,
+  urlEsterna,
 } from './alertInterpello';
-import { urlSchedaInterpello } from './interpelloRouting';
 
 /** Interfaccia per l'ambiente (evita la dipendenza da @types/node nel frontend). */
 declare const process: { env: Record<string, string | undefined> };
@@ -83,7 +87,9 @@ export type TipoMessaggio =
   | 'welcome_pro'
   | 'notifica_pro'
   | 'conferma_attivazione'
-  | 'free_forever_preavviso';
+  | 'free_forever_preavviso'
+  /** Riepilogo giornaliero consolidato (una sola email con TUTTE le opportunità). */
+  | 'digest_giornaliero';
 
 /* ----------------------------- Configurazione ----------------------------- */
 
@@ -152,15 +158,6 @@ export function categoriaOpportunita(title: string): string {
   return 'Opportunità';
 }
 
-/** Base assoluta dell'app (origin) derivata dall'URL della dashboard. */
-function baseUrl(dashboardUrl: string): string {
-  try {
-    return new URL('/', dashboardUrl).toString();
-  } catch {
-    return 'https://scuoleradar.it/';
-  }
-}
-
 /** URL assoluto della pagina prezzi per la CTA PRO. */
 function proUrl(dashboardUrl: string): string {
   try {
@@ -171,25 +168,16 @@ function proUrl(dashboardUrl: string): string {
 }
 
 /**
- * Link dell'opportunità: usa SEMPRE il link diretto alla risorsa più specifica
- * (allegato/PDF o pagina ufficiale dell'interpello). Se assente o malformato →
- * pagina di dettaglio, quindi la dashboard. Mai link relativi/rotti.
+ * Link dell'opportunità: SOLO la fonte ESTERNA originale dell'istituzione
+ * (allegato/PDF o pagina ufficiale dell'avviso).
+ *
+ * POLICY DI ROUTING: nessun fallback interno. Se l'avviso non ha una fonte
+ * esterna valida, la funzione ritorna `''` e il template mostra il recapito
+ * della scuola + la guida operativa, invece di rimandare a ScuoleRadar.
  */
-export function linkOpportunita(interpello: DettagliNotifica | null, dashboardUrl: string): string {
-  if (!interpello) return dashboardUrl;
-  const link = (interpello.link ?? '').trim();
-  if (/^https?:\/\//i.test(link)) {
-    try {
-      new URL(link);
-      return link;
-    } catch {
-      // link malformato → si prosegue con il fallback
-    }
-  }
-  // Fallback: scheda INTERNA dell'avviso (`/interpello/<hash_id>`), rotta che
-  // esiste davvero (prima il deep link finiva sul catch-all → HOME).
-  if (interpello.id) return urlSchedaInterpello(baseUrl(dashboardUrl), interpello.id);
-  return dashboardUrl;
+export function linkOpportunita(interpello: DettagliNotifica | null): string {
+  if (!interpello) return '';
+  return urlEsterna(interpello.link) ?? '';
 }
 
 /* --------------------------- Soggetti e copy --------------------------- */
@@ -206,6 +194,9 @@ const SUBJECT: Record<TipoMessaggio, string> = {
   notifica_pro: 'Nuova opportunità trovata per te!',
   conferma_attivazione: '🎯 Scuole Radar: il tuo Radar è attivo e operativo!',
   free_forever_preavviso: 'Piano PRO Free Forever: il rinnovo gratuito è automatico',
+  // Il DIGEST usa un oggetto dinamico con il numero di opportunità
+  // (`subjectDigest`): questa voce è il fallback statico della mappa.
+  digest_giornaliero: 'ScuoleRadar — Oggi abbiamo trovato nuove opportunità per te',
 };
 
 export function subjectNotifica(tipo: TipoMessaggio): string {
@@ -297,6 +288,12 @@ const CORPO_MESSAGGI: Record<TipoMessaggio, ContenutoMessaggio> = {
     paragrafi: ['Abbiamo trovato una <strong>nuova opportunità</strong> per te.'],
     cta: { label: "Apri l'avviso ufficiale →", destinazione: 'opportunita' },
   },
+  // Usato solo dal renderer di fallback: il digest reale viene composto da
+  // `renderDigestEmailHtml` (una card per opportunità).
+  digest_giornaliero: {
+    paragrafi: ['Ecco il <strong>riepilogo delle opportunità</strong> di oggi per il tuo profilo.'],
+    cta: { label: 'Apri il tuo Radar Scuole →', destinazione: 'dashboard' },
+  },
 };
 /* --------------------------- Template email HTML --------------------------- */
 
@@ -309,23 +306,28 @@ export function renderEmailHtml(
   const contenuto = CORPO_MESSAGGI[tipo];
   const saluto = destinatario.nome ? `Ciao ${escapeHtml(destinatario.nome)},` : 'Ciao,';
 
-  // Link del bottone CTA
-  const urlOpportunita = linkOpportunita(interpello, dashboardUrl);
+  // Link del bottone CTA.
+  // POLICY DI ROUTING: il bottone di fonte punta SOLO all'URL esterno originale.
+  // Se la fonte manca NON si ripiega su una pagina interna: il bottone porta al
+  // proprio Radar (etichetta esplicita) e il blocco avviso espone email + guida.
+  const urlOpportunita = linkOpportunita(interpello);
   let ctaHref = '';
   let ctaLabel = '';
   if (contenuto.cta) {
+    const versoOpportunita = contenuto.cta.destinazione === 'opportunita';
     ctaHref =
       contenuto.cta.destinazione === 'prezzi'
         ? proUrl(dashboardUrl)
         : contenuto.cta.destinazione === 'dashboard'
           ? dashboardUrl
-          : urlOpportunita;
+          : urlOpportunita || dashboardUrl;
     // Etichetta ONESTA: il bottone descrive DOVE porta il link. Mai "Candidati"
     // quando la destinazione è un Albo Pretorio o una pagina di avviso.
-    ctaLabel =
-      contenuto.cta.destinazione === 'opportunita'
+    ctaLabel = versoOpportunita
+      ? urlOpportunita
         ? `${etichettaFonteLink(ctaHref)} →`
-        : contenuto.cta.label;
+        : 'Apri il tuo Radar Scuole →'
+      : contenuto.cta.label;
   }
 
   // NOTA UX: il blocco opportunità contiene UN SOLO link di fonte (il bottone CTA
@@ -346,6 +348,10 @@ export function renderEmailHtml(
             materia: interpello.materia,
             scadenza: interpello.scadenza,
             schoolName: interpello.schoolName,
+            // L'email di candidatura è un ASSET del piano PRO: entra nell'avviso
+            // strutturato e viene resa in OGNI email di opportunità (anche quando
+            // il link è solo una pagina di riepilogo/"Stampa").
+            email: interpello.contactEmail,
             // Il titolo rende il LIVELLO coerente con la classe mostrata e lo
             // deduce quando la classe manca (nessun campo contraddittorio).
             titolo: interpello.title,
@@ -359,6 +365,25 @@ export function renderEmailHtml(
           const scadenzaRiga = avviso.scadenzaValida
             ? `<p style="margin:8px 0 0; font-size:13px; color:#64748b;">📅 Scadenza: ${escapeHtml(formatDataScadenza(interpello.scadenza))}</p>`
             : '';
+          // Recapito della scuola: riga dedicata, cliccabile e POSIZIONATA prima
+          // del bottone CTA, così l'azione utile è immediata. Presente OGNI volta
+          // che la pipeline ha estratto l'indirizzo.
+          const emailRiga = avviso.email
+            ? `<p style="margin:8px 0 0; font-size:13px; color:#64748b;">${EMAIL_ICONA} ${EMAIL_ETICHETTA}: <a href="mailto:${escapeHtml(avviso.email)}" style="color:#2B6F9E;font-weight:600;">${escapeHtml(avviso.email)}</a></p>`
+            : '';
+          // GUIDA OPERATIVA: se la destinazione è un elenco/tabella ("Stampa") o la
+          // fonte ufficiale manca, spieghiamo come trovare la riga giusta e come
+          // candidarsi. Mai un elenco lasciato senza istruzioni.
+          const guida = suggerimentoRicercaAvviso({
+            url: interpello.link,
+            classe,
+            provincia: interpello.province,
+            schoolName: interpello.schoolName,
+            email: avviso.email,
+          });
+          const guidaRiga = guida
+            ? `<p style="margin:12px 0 0; padding:10px 12px; border-left:3px solid #f59e0b; background:#fffbeb; border-radius:6px; font-size:13px; line-height:1.55; color:#78350f;">ℹ️ ${escapeHtml(guida)}</p>`
+            : '';
           return `
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px; border:1px solid #e2e8f0; border-radius:12px; background:#f8fafc;">
                   <tr>
@@ -366,7 +391,8 @@ export function renderEmailHtml(
                       <h2 style="margin:0 0 8px; font-size:18px; font-weight:800; line-height:1.35; color:#14354e;"><b>${escapeHtml(pulisciTitoloAvviso(interpello.title, `Interpello ${[classe, interpello.province].filter(Boolean).join(' — ')}`))}</b></h2>
                       <p style="margin:0; font-size:14px; line-height:1.6; color:#475569;">${dettagli.join(' · ')}</p>
                       ${scadenzaRiga}
-                      ${interpello.contactEmail ? `<p style="margin:8px 0 0; font-size:13px; color:#64748b;">📧 Candidature: <a href="mailto:${escapeHtml(interpello.contactEmail)}" style="color:#2B6F9E;">${escapeHtml(interpello.contactEmail)}</a></p>` : ''}
+                      ${emailRiga}
+                      ${guidaRiga}
                     </td>
                   </tr>
                 </table>`;
@@ -519,3 +545,289 @@ export async function inviaNotificheInterpello(
   }
   return { inviate, fallite };
 }
+
+/* ============================= DIGEST GIORNALIERO ============================== */
+/**
+ * RIEPILOGO GIORNALIERO consolidato: UNA sola email con TUTTE le opportunità del
+ * giorno per l'utente. Sostituisce l'invio di un'email per ogni singolo avviso.
+ *
+ * Perché: un avviso per email significa fino a N messaggi al giorno — fatica da
+ * notifica e rischio di disiscrizione. Il digest arriva una volta sola, alla
+ * chiusura delle scuole (18:00), e riunisce tutto in un unico messaggio ordinato
+ * per scadenza. Ogni voce mantiene la fonte ESTERNA originale, il recapito della
+ * scuola e la guida operativa (pagine tabellari/"Stampa").
+ */
+
+/** Massimo di opportunità elencate nell'email: le altre restano nel Radar. */
+export const MAX_VOCI_EMAIL_DIGEST = 12;
+
+/**
+ * Oggetto del digest — formula di prodotto:
+ *   "ScuoleRadar — Oggi abbiamo trovato {N} opportunità per te"
+ * Vale anche per N = 1 (`opportunità` è invariabile in italiano) e per N = 0.
+ */
+export function subjectDigest(numero: number): string {
+  const n = Math.max(0, Math.trunc(numero));
+  return `ScuoleRadar — Oggi abbiamo trovato ${n} opportunità per te`;
+}
+
+/** Valore di una riga dell'avviso strutturato (etichetta → valore). */
+function valoreRigaDigest(righe: Array<{ etichetta: string; valore: string }>, etichetta: string): string {
+  return righe.find((r) => r.etichetta === etichetta)?.valore ?? '';
+}
+
+/**
+ * Blocco HTML di UNA voce del digest (numerata): titolo, dettagli essenziali,
+ * scadenza, fonte ESTERNA (mai link interni), email della scuola e guida operativa
+ * COMPATTA quando la pagina di destinazione è un elenco/"Stampa".
+ *
+ * Layout "crisp": card BIANCA con bordo tenue e accento laterale, titolo numerato.
+ * Niente sfondi pieni ripetuti per ogni voce → il riepilogo resta leggibile e non
+ * sembra una lista di riquadri.
+ */
+function bloccoVoceDigest(
+  v: DettagliNotifica,
+  destinatario: DestinatarioNotifica,
+  numero: number,
+): string {
+  const classe = classeRilevante(v, destinatario);
+  const avviso = costruisciAvviso({
+    provincia: v.province,
+    classCode: classe,
+    classCodes: v.classi,
+    materia: v.materia,
+    scadenza: v.scadenza,
+    schoolName: v.schoolName,
+    email: v.contactEmail,
+    titolo: v.title,
+  });
+  const titolo = escapeHtml(
+    pulisciTitoloAvviso(v.title, `Interpello ${[classe, v.province].filter(Boolean).join(' — ')}`),
+  );
+  const classeMateria = valoreRigaDigest(avviso.obbligatorie, 'Classe / Materia');
+  // Riga DETTAGLI compatta e senza ripetizioni: l'Ordine di scuola è già contenuto
+  // nel nome ufficiale della classe ("… nell'istruzione secondaria di I e di II grado"),
+  // quindi si mostra SOLO quando la classe manca (stessa regola dei post canale).
+  const dettagli = avviso.obbligatorie
+    .filter(
+      (r) =>
+        r.etichetta !== 'Scadenza' &&
+        (r.etichetta !== 'Ordine di scuola' || !classeMateria),
+    )
+    .map((r) => `${ICONA_RIGA[r.etichetta] ?? '•'} ${escapeHtml(r.valore)}`)
+    .join(' · ');
+
+  const scadenzaRiga = avviso.scadenzaValida
+    ? `<p style="margin:6px 0 0; font-size:13px; color:#475569;"><b>Scadenza:</b> ${escapeHtml(formatDataScadenza(v.scadenza))}</p>`
+    : '';
+
+  const fonte = urlEsterna(v.link);
+  const fonteRiga = fonte
+    ? `<p style="margin:6px 0 0; font-size:13px;"><a href="${escapeHtml(fonte)}" target="_blank" rel="noopener" style="color:#2B6F9E; font-weight:600; text-decoration:underline;">${escapeHtml(etichettaFonteLink(fonte))}</a></p>`
+    : '';
+
+  const emailRiga = avviso.email
+    ? `<p style="margin:6px 0 0; font-size:13px; color:#475569;">${EMAIL_ICONA} ${EMAIL_ETICHETTA}: <a href="mailto:${escapeHtml(avviso.email)}" style="color:#2B6F9E; font-weight:600;">${escapeHtml(avviso.email)}</a></p>`
+    : '';
+
+  const guida = suggerimentoRicercaAvviso({
+    url: v.link,
+    classe,
+    provincia: v.province,
+    schoolName: v.schoolName,
+    email: avviso.email,
+    // Versione BREVE: nel digest il recapito è già sulla riga precedente.
+    compatto: true,
+  });
+  const guidaRiga = guida
+    ? `<p style="margin:10px 0 0; padding:8px 10px; border-left:3px solid #f59e0b; background:#fffbeb; border-radius:6px; font-size:12.5px; line-height:1.5; color:#78350f;">ℹ️ ${escapeHtml(guida)}</p>`
+    : '';
+
+  return `
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px; border:1px solid #eef2f7; border-left:3px solid #cfe3f2; border-radius:10px; background:#ffffff;">
+                  <tr>
+                    <td style="padding:13px 15px;">
+                      <h3 style="margin:0 0 6px; font-size:15.5px; font-weight:800; line-height:1.35; color:#14354e;"><span style="color:#94a3b8; font-weight:700;">${numero}.</span> ${titolo}</h3>
+                      <p style="margin:0; font-size:13px; line-height:1.55; color:#475569;">${dettagli}</p>
+                      ${scadenzaRiga}
+                      ${fonteRiga}
+                      ${emailRiga}
+                      ${guidaRiga}
+                    </td>
+                  </tr>
+                </table>`;
+}
+
+
+/** Involucro HTML dell'email di digest (brand + card + firma + note legali). */
+function involucroDigest(titolo: string, introHtml: string, elencoHtml: string, codaHtml: string): string {
+  return `<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${escapeHtml(titolo)}</title>
+    <style>
+      @media only screen and (max-width: 620px) {
+        .container { padding: 0 16px !important; }
+        .cta { display: block !important; width: 100% !important; box-sizing: border-box; }
+      }
+    </style>
+  </head>
+  <body style="margin:0; padding:0; background-color:#f1f5f9; font-family:Inter, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9; padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%;">
+            <tr>
+              <td align="center" style="padding-bottom:18px;">
+                <img src="https://www.scuoleradar.it/logo.png" alt="ScuoleRadar" width="200"
+                     style="display:block; width:200px; max-width:70%; height:auto; border:0;" />
+              </td>
+            </tr>
+            <tr>
+              <td style="background-color:#ffffff; border-radius:16px; border:1px solid #d6eaf4; padding:32px 24px;" class="container">
+                ${introHtml}
+                ${elencoHtml}
+                ${codaHtml}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+/**
+ * Gruppi di URGENZA del digest: stesse soglie del semaforo dell'app
+ * (`scadenza.ts`). L'ordine è crescente per urgenza e MONOTONO rispetto
+ * all'ordinamento per scadenza, quindi non "sparpaglia" le voci.
+ */
+const GRUPPI_DIGEST: Array<{ chiave: string; titolo: string }> = [
+  { chiave: 'urgente', titolo: '🔴 Scadono entro 2 giorni' },
+  { chiave: 'vicino', titolo: '🟡 Scadono entro una settimana' },
+  { chiave: 'lungo', titolo: '🟢 Oltre una settimana' },
+  { chiave: 'nd', titolo: '⚪ Scadenza non indicata' },
+];
+
+/** Gruppo di urgenza di una scadenza (`scaduto`/`oggi`/≤2 gg finiscono in cima). */
+function chiaveGruppoDigest(scadenza?: string | null): string {
+  const giorni = giorniRimanenti(scadenza);
+  if (giorni === null) return 'nd';
+  if (giorni <= SOGLIA_IMMINENTE) return 'urgente';
+  if (giorni <= SOGLIA_VICINA) return 'vicino';
+  return 'lungo';
+}
+
+/**
+ * HTML dell'email di DIGEST: intro + voci NUMERATE, raggruppate per urgenza
+ * quando i gruppi sono più di uno, + CTA verso il Radar. Nessun link interno.
+ */
+export function renderDigestEmailHtml(
+  voci: DettagliNotifica[],
+  destinatario: DestinatarioNotifica,
+  dashboardUrl: string = DASHBOARD_URL,
+  opts: { data?: string } = {},
+): string {
+  const elenco = voci.slice(0, MAX_VOCI_EMAIL_DIGEST);
+  const restanti = Math.max(voci.length - elenco.length, 0);
+  const saluto = destinatario.nome ? `Ciao ${escapeHtml(destinatario.nome)},` : 'Ciao,';
+  const quando = opts.data ? ` del ${escapeHtml(opts.data)}` : '';
+  const conteggio = voci.length === 1 ? 'una opportunità' : `${voci.length} opportunità`;
+
+  // Raggruppamento per urgenza: le intestazioni compaiono SOLO se i gruppi sono
+  // più di uno (con un solo gruppo sarebbero rumore).
+  const gruppi = GRUPPI_DIGEST.map((g) => ({
+    ...g,
+    voci: elenco.filter((v) => chiaveGruppoDigest(v.scadenza) === g.chiave),
+  })).filter((g) => g.voci.length > 0);
+  const raggruppato = gruppi.length > 1;
+
+  const introHtml =
+    `<p style="margin:0 0 14px; font-size:15px; line-height:1.6; color:#14354e;">${saluto}</p>` +
+    `<p style="margin:0 0 18px; font-size:15px; line-height:1.6; color:#14354e;">Ecco il <strong>riepilogo${quando}</strong>: ${conteggio} ${
+      raggruppato ? 'raggruppate per urgenza di scadenza' : 'in ordine di scadenza'
+    }. Una sola email, come promesso.</p>`;
+
+  const blocchi: string[] = [];
+  let numero = 0;
+  for (const gruppo of gruppi) {
+    if (raggruppato) {
+      blocchi.push(
+        `<p style="margin:${numero === 0 ? '0' : '20px'} 0 8px; font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; font-weight:700; color:#64748b;">${gruppo.titolo} · ${gruppo.voci.length}</p>`,
+      );
+    }
+    for (const v of gruppo.voci) {
+      numero += 1;
+      blocchi.push(bloccoVoceDigest(v, destinatario, numero));
+    }
+  }
+  const elencoHtml = blocchi.join('\n');
+  const ctaHtml = `
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0;">
+                  <tr>
+                    <td align="center">
+                      <a href="${escapeHtml(dashboardUrl)}" class="cta" target="_blank" rel="noopener"
+                         style="display:inline-block; padding:14px 32px; border-radius:12px; background-color:#2B6F9E; color:#ffffff; font-size:15px; font-weight:700; text-decoration:none;">
+                        Apri il tuo Radar Scuole →
+                      </a>
+                    </td>
+                  </tr>
+                </table>`;
+  const codaHtml =
+    (restanti > 0
+      ? `<p style="margin:16px 0 0; font-size:13px; line-height:1.5; color:#475569;">Nel tuo Radar ci sono altre <strong>${restanti}</strong> opportunità oltre a quelle elencate qui.</p>`
+      : '') +
+    ctaHtml +
+    `<p style="margin:20px 0 0; font-size:15px; line-height:1.6; color:#14354e;"><b>I tuoi colleghi di Scuole Radar</b></p>` +
+    `<p style="margin:10px 0 0; font-size:13px; line-height:1.5; color:#64748b;">P.S. Le opportunità arrivano <b>una volta al giorno</b>, dopo la chiusura delle scuole: un unico riepilogo, mai un flusso di messaggi.</p>` +
+    `<p style="margin:14px 0 0; font-size:12px; line-height:1.5; color:#94a3b8;">⚠️ Ti preghiamo di non rispondere a questo messaggio perché questa casella serve solo per inviare le segnalazioni e non è monitorata.</p>` +
+    `<p style="margin:20px 0 0; font-size:12px; line-height:1.5; color:#94a3b8;">ScuoleRadar.it — Interpelli, supplenze, incarichi, PNRR, PON, POR e opportunità per i docenti<br />Se queste informazioni non corrispondono più a quello che ti serve, <a href="https://www.scuoleradar.it/dashboard/radar" style="color:#2B6F9E;">modifica il radar qui</a>.</p>`;
+  return involucroDigest(subjectDigest(voci.length), introHtml, elencoHtml, codaHtml);
+}
+
+/**
+ * Invia UN'email di digest a un destinatario. `voci` vuoto → nessun invio.
+ * Stesso contratto di `inviaNotificaEmail` (esito + errore, mai eccezioni).
+ */
+export async function inviaDigestEmail(
+  client: Resend | null,
+  voci: DettagliNotifica[],
+  destinatario: DestinatarioNotifica,
+  opts: { dryRun?: boolean; dashboardUrl?: string; data?: string } = {},
+): Promise<{ inviata: boolean; error?: string }> {
+  if (!client) return { inviata: false, error: 'Client Resend non configurato' };
+  if (voci.length === 0) return { inviata: false, error: 'nessuna opportunità da inviare' };
+
+  const { dryRun = false, dashboardUrl = DASHBOARD_URL, data } = opts;
+  const subject = subjectDigest(voci.length);
+  const html = renderDigestEmailHtml(voci, destinatario, dashboardUrl, { data });
+
+  if (dryRun) {
+    console.log(`  ✉ [DRY-RUN] DIGEST → ${destinatario.email} | ${subject} (${voci.length} voci)`);
+    return { inviata: true };
+  }
+
+  try {
+    const { error } = await client.emails.send({
+      from: RESEND_FROM_EMAIL,
+      to: [destinatario.email],
+      subject,
+      html,
+      tags: RESEND_TAGS,
+    });
+    if (error) {
+      console.warn(`  ✗ Digest a ${destinatario.email} fallito: ${error.message}`);
+      return { inviata: false, error: error.message };
+    }
+    console.log(`  ✓ Digest inviato a ${destinatario.email} (${voci.length} opportunità)`);
+    return { inviata: true };
+  } catch (err) {
+    const messaggio = (err as Error).message ?? 'Errore sconosciuto';
+    console.warn(`  ✗ Digest a ${destinatario.email} fallito (eccezione): ${messaggio}`);
+    return { inviata: false, error: messaggio };
+  }
+}
+

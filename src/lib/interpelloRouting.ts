@@ -1,16 +1,14 @@
 /**
- * ScuoleRadar.it — Risoluzione dei DEEP LINK agli avvisi (`/interpello/:param`).
+ * ScuoleRadar.it — Risoluzione dei DEEP LINK legacy agli avvisi (`/interpello/:param`).
  *
- * Le notifiche email/Telegram puntano a:
- *   1. la FONTE UFFICIALE (quando l'avviso ha un `source_url` valido);
- *   2. altrimenti alla scheda interna `/interpello/<chiave>`.
+ * NOTA DI POLICY (routing notifiche): le notifiche NON puntano più a una pagina
+ * interna della piattaforma. Ogni link di avviso deve puntare SOLO alla fonte
+ * originale dell'istituzione (`eLinkEsterno` / `urlEsterna` in
+ * `alertInterpello.ts`). Questo modulo resta per risolvere i deep link STORICI
+ * già inviati (`/interpello/<hash_id>`): la scheda interna reindirizza subito
+ * alla fonte ufficiale, se presente.
  *
- * La chiave usata dall'id di notifica è lo `hash_id` dell'avviso (vedi
- * `notifier.ts`), ma i link generati da altre parti possono usare l'`id` uuid:
- * questo modulo decide con ONESTÀ su quale colonna cercare, così un deep link
- * non finisce MAI sulla Home per errore di instradamento.
- *
- * Modulo PURO (nessuna dipendenza da rete/DOM): testabile con `test:route`.
+ * Modulo PURO (nessuna dipendenza da rete/DOM): testabile con `test:link`.
  */
 
 /** True se il parametro è un UUID (riga della tabella `interpelli`). */
@@ -38,10 +36,4 @@ export function chiaveInterpelloDaParam(param?: string | null): ChiaveInterpello
   // Gli hash_id sono esadecimali (SHA-256); accettiamo anche id legacy alfanumerici.
   if (/^[a-z0-9_-]+$/i.test(valore)) return { colonna: 'hash_id', valore: valore.toLowerCase() };
   return null;
-}
-
-/** URL assoluto della scheda interna di un avviso (nessuno slash duplicato). */
-export function urlSchedaInterpello(baseOrigin: string, chiave: string): string {
-  const base = baseOrigin.replace(/\/+$/, '');
-  return `${base}/interpello/${encodeURIComponent(chiave)}`;
 }

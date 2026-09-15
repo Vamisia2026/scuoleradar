@@ -324,15 +324,46 @@ async function caricaProfilo(userId: string) {
   return rows[0] ?? null;
 }
 
+/** Codice meccanografico (es. ASTF01000X) e PEO ufficiale (convenzione MIM). */
+const RE_CODICE_MECCANOGRAFICO = /\b([A-Z]{2}[A-Z]{2}\d{5}[A-Z0-9])\b/i;
+
+/** Codice meccanografico valido (maiuscolo) da un testo, altrimenti `null`. */
+function codiceDaTesto(testo?: string | null): string | null {
+  const m = (testo ?? '').toUpperCase().match(RE_CODICE_MECCANOGRAFICO);
+  return m ? m[1] : null;
+}
+
+/**
+ * PEO ufficiale dal codice meccanografico — STESSA convenzione del modulo
+ * `src/lib/emailScuola.ts`: codice@istruzione.it. Nessuna email inventata fuori
+ * da questa regola; `null` quando il codice non è disponibile.
+ */
+function emailDaCodice(codice?: string | null): string | null {
+  const c = (codice ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!/^[A-Z]{2}[A-Z]{2}\d{5}[A-Z0-9]$/.test(c)) return null;
+  return `${c.toLowerCase()}@istruzione.it`;
+}
+
 /**
  * Email/PEC di CANDIDATURA dell'avviso: dal payload se presente, altrimenti
- * ricercata in `interpelli` (per `hash_id` o `source_url`). Serve a garantire
- * che OGNI notifica di opportunità contenga il recapito della scuola: un avviso
+ * ricercata in `interpelli` (per `hash_id` o `source_url`) e, come ultima ratio,
+ * ricostruita dal codice meccanografico (convenzione MIM). Serve a garantire che
+ * OGNI notifica di opportunità contenga il recapito della scuola — anche quando
+ * l'unico link è una pagina di riepilogo/"Stampa" senza descrizione: un avviso
  * senza email è un servizio incompleto.
  */
 async function caricaEmailAvviso(body: Record<string, unknown>): Promise<string> {
   const dalPayload = String(body.email ?? body.contactEmail ?? '').trim();
   if (dalPayload) return dalPayload;
+
+  // Fallback IMMEDIATO sul payload: codice meccanografico dichiarato o ricavato
+  // dal titolo → PEO ufficiale. Evita una query quando la scuola è già nota.
+  const codicePayload =
+    codiceDaTesto(String(body.schoolCode ?? body.school_code ?? '')) ??
+    codiceDaTesto(String(body.title ?? body.titolo ?? ''));
+  const daCodicePayload = emailDaCodice(codicePayload);
+  if (daCodicePayload) return daCodicePayload;
+
   if (!SUPABASE_URL || !SERVICE_ROLE) return '';
   const hash = String(body.hash ?? body.hash_id ?? '').trim();
   const link = String(body.link ?? body.source_url ?? '').trim();
@@ -344,12 +375,20 @@ async function caricaEmailAvviso(body: Record<string, unknown>): Promise<string>
   if (!filtro) return '';
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/interpelli?${filtro}&select=contact_email&limit=1`,
+      `${SUPABASE_URL}/rest/v1/interpelli?${filtro}&select=contact_email,school_code,title&limit=1`,
       { headers: { apikey: SERVICE_ROLE, Authorization: `Bearer ${SERVICE_ROLE}` } },
     );
     if (!res.ok) return '';
-    const rows = (await res.json()) as Array<{ contact_email?: string | null }>;
-    return String(rows?.[0]?.contact_email ?? '').trim();
+    const rows = (await res.json()) as Array<{
+      contact_email?: string | null;
+      school_code?: string | null;
+      title?: string | null;
+    }>;
+    const riga = rows?.[0] ?? null;
+    const diretta = String(riga?.contact_email ?? '').trim();
+    if (diretta) return diretta;
+    // Riga (anche storica) senza email: PEO ufficiale dal codice meccanografico.
+    return emailDaCodice(riga?.school_code ?? codiceDaTesto(riga?.title)) ?? '';
   } catch {
     return '';
   }

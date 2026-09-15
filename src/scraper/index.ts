@@ -14,13 +14,16 @@
  *      ufficiali/non verificabili (niente mock/dummy).
  *   6. Effettua l'UPSERT nella tabella `interpelli` di Supabase usando `hash_id`
  *      (onConflict) per ignorare i duplicati; fallback sulla tabella legacy `notices`.
- *   7. Invia le notifiche per i soli interpelli NUOVI (email/Telegram) e pubblica sui
- *      canali regionali — vedi src/lib/notifier.ts e src/lib/telegram.ts.
+ *   7. Pubblica gli avvisi NUOVI sui canali Telegram (regionali + ATA nazionale) e
+ *      invia gli ALERT INDIVIDUALI in TEMPO REALE ai soli utenti PRO (Telegram).
+ *      I BASE non ricevono nulla in tempo reale: un solo BATCH alle 17:00
+ *      (`npm run notifiche:digest`), per evitare la fatica da notifica.
  *
  * Uso:
  *   npm run scrape                       # pipeline completa (serve .env valido)
  *   npm run scrape -- --dry-run          # solo estrazione + validazione, nessun inserimento
- *   npm run scrape -- --no-email         # disattiva le notifiche email
+ *   npm run scrape -- --no-email         # salta il log di accodamento per il riepilogo
+ *   SCRAPER_TELEGRAM_REALTIME=0 npm run scrape   # disattiva gli alert PRO in tempo reale
  */
 
 import process from 'node:process';
@@ -50,13 +53,13 @@ import {
   sembraTitoloElenco,
 } from './elenchi.ts';
 import { resolveSchoolByCode } from '../lib/school-lookup.ts';
+import { inviaAlertTelegramTempoReale } from '../lib/notifier.ts';
 import {
   emailDaCodiceMeccanografico,
   estraiCodiceMeccanograficoDaTesto,
   normalizzaCodiceMeccanografico,
   risolviEmailUfficialeScuola,
 } from '../lib/emailScuola.ts';
-import { notificaNuoviInterpelli, type EsitoNotifiche } from '../lib/notifier.ts';
 import {
   CHIAVE_CANALE_ATA_NAZIONALE,
   getTelegramCanaliRegionali,
@@ -66,6 +69,7 @@ import {
 import { inviaAlertaAdmin, registraRunScraper, type RunScraperLog } from './adminAlerts.ts';
 import { canaliGiaPubblicati, registraPubblicazioneCanale } from './channelLog.ts';
 import { ledgerLocaleSalva } from '../lib/ledgerLocale.ts';
+import { GIORNI_IMPRONTA, improntaAvviso } from '../lib/dedupAvvisi.ts';
 
 /* ------------------------------- Tipi ------------------------------- */
 
@@ -587,9 +591,17 @@ function eDocumentoBinario(url: string): boolean {
 async function cercaEmailNelleFonti(
   a: AvvisoRilevato,
 ): Promise<{ email: string | null; codice: string | null }> {
-  const ctx = { schoolCode: a.schoolCode, schoolName: a.schoolName };
-  let codice = normalizzaCodiceMeccanografico(a.schoolCode);
-  const radici = [...new Set([a.link, ...(a.linkCandidati ?? [])].filter((u): u is string => Boolean(u)))]
+  const tuttiLink = [
+    ...new Set([a.link, ...(a.linkCandidati ?? [])].filter((u): u is string => Boolean(u))),
+  ];
+  // Il codice meccanografico può stare ANCHE nell'URL di un documento binario
+  // (PDF) o di una pagina di riepilogo/"Stampa" — es. `…/ASTF01000X-interpello.pdf`.
+  // Va letto PRIMA di scartare i link non leggibili come testo, altrimenti si
+  // perde la casella ufficiale (PEO) proprio sugli avvisi più "poveri".
+  let codice =
+    normalizzaCodiceMeccanografico(a.schoolCode) ??
+    estraiCodiceMeccanograficoDaTesto(tuttiLink.join(' '));
+  const radici = tuttiLink
     .filter((u) => /^https?:\/\//i.test(u) && !eDocumentoBinario(u))
     .slice(0, 2);
   if (radici.length === 0) return { email: null, codice };
@@ -631,14 +643,24 @@ async function cercaEmailNelleFonti(
 
   let migliore: string | null = null;
   let migliorPunteggio = -Infinity;
+  // Il codice (anche quello appena ricavato da URL/pagina) aiuta a preferire la
+  // casella effettivamente legata all'istituto.
+  const ctxFinale = { schoolCode: codice ?? a.schoolCode, schoolName: a.schoolName };
   for (const e of emailTrovate) {
-    const p = punteggioEmailScuola(e, ctx);
+    const p = punteggioEmailScuola(e, ctxFinale);
     if (p > migliorPunteggio) {
       migliorPunteggio = p;
       migliore = e;
     }
   }
-  return { email: risolviEmailUfficialeScuola({ emailsTrovate: migliore ? [migliore] : [], schoolCode: a.schoolCode })?.email ?? null, codice };
+  return {
+    email:
+      risolviEmailUfficialeScuola({
+        emailsTrovate: migliore ? [migliore] : [],
+        schoolCode: codice ?? a.schoolCode,
+      })?.email ?? null,
+    codice,
+  };
 }
 
 /** Email istituzionale derivata dal codice meccanografico (convenzione MIM). */
@@ -825,11 +847,12 @@ async function upsertInterpelliResiliente(
   };
 }
 
-/* ------------------------------ Notifiche email (FASE 4) ------------------------------ */
+/* --------------------------- Notifiche personali (digest) --------------------------- */
 
-// L'invio delle notifiche email è gestito dal modulo condiviso src/lib/notifier.ts:
-// riceve i nuovi interpelli, interroga il Matching Engine (findUtentiCompatibili)
-// per trovare gli utenti con preferenze compatibili e invia le mail via Resend.
+// Le notifiche personali NON partono più da qui: il modulo condiviso
+// `src/lib/notifier.ts` (`inviaDigestGiornaliero`) raccoglie le opportunità e le
+// consegna in UN SOLO digest giornaliero alle 18:00 (`npm run notifiche:digest`).
+// Questo scraper si limita a inserire gli avvisi e a pubblicarli sui canali.
 
 /* -------------------- Canali Telegram regionali (FASE 5) -------------------- */
 
@@ -934,27 +957,100 @@ async function pubblicaNuoviSuCanali(nuovi: AvvisoRilevato[]): Promise<EsitoCana
   return { attesi: inviiAttesi, riusciti: inviiRiusciti, falliti, senzaCanale };
 }
 
+/* --------------------- Deduplica: hash + impronta dell'opportunità --------------------- */
+
+/** Riga di `interpelli` letta per la deduplica. */
+interface RigaEsistente {
+  hash_id: string;
+  source_url?: string | null;
+  title?: string | null;
+  school_name?: string | null;
+  province?: string | null;
+  class_codes?: string[] | null;
+}
+
 /**
- * Guard del DISPATCH: se sono stati importati NUOVI avvisi ma nessun canale ha
- * ricevuto nulla (0 email e 0 Telegram), il ciclo di notifica è rotto → avvisa
- * subito gli admin sul bot Telegram `ScuoleRadar Admin`.
+ * Dimensione dei lotti per le query `.in()`: PostgREST passa i filtri nella query
+ * string, quindi centinaia di hash SHA-256 (o di URL lunghi) fanno superare i
+ * limiti di lunghezza della richiesta e la lettura FALLISCE. Spezzando in lotti
+ * la deduplica resta affidabile.
+ */
+const LOTTO_IN = 40;
+
+/**
+ * Legge da `interpelli` le righe che hanno `campo IN (valori)`, in LOTTI.
+ *
+ * IMPORTANTE: l'errore viene SEMPRE loggato e contato. Prima di questa fix un
+ * errore passava inosservato (`data` null) e il chiamante considerava NUOVI tutti
+ * gli avvisi → l'intero feed veniva rinotificato (bug "notifiche ripetute").
+ */
+async function leggiEsistentiInLotti(
+  supabase: SupabaseClient,
+  campo: 'hash_id' | 'source_url',
+  valori: string[],
+): Promise<{ righe: RigaEsistente[]; errori: number }> {
+  const righe: RigaEsistente[] = [];
+  let errori = 0;
+  const uniciValori = [...new Set(valori.filter(Boolean))];
+  for (let i = 0; i < uniciValori.length; i += LOTTO_IN) {
+    const lotto = uniciValori.slice(i, i + LOTTO_IN);
+    const { data, error } = await supabase
+      .from('interpelli')
+      .select('hash_id, source_url')
+      .in(campo, lotto);
+    if (error) {
+      errori += 1;
+      console.warn(`⚠ Deduplica (${campo}): lettura in lotti fallita — ${error.message}`);
+      continue;
+    }
+    for (const r of (data ?? []) as RigaEsistente[]) righe.push(r);
+  }
+  return { righe, errori };
+}
+
+/**
+ * Avvisi degli ULTIMI `GIORNI_IMPRONTA` giorni: base del confronto per IMPRONTA
+ * (stessa opportunità ripubblicata con titolo/data diversi → hash nuovo).
+ */
+async function leggiRecentiPerImpronta(supabase: SupabaseClient): Promise<RigaEsistente[]> {
+  const dal = new Date(Date.now() - GIORNI_IMPRONTA * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('interpelli')
+    .select('hash_id, source_url, title, school_name, province, class_codes')
+    .gte('created_at', dal)
+    .limit(2000);
+  if (error) {
+    console.warn(`⚠ Deduplica per impronta: lettura degli avvisi recenti fallita — ${error.message}`);
+    return [];
+  }
+  return (data ?? []) as RigaEsistente[];
+}
+
+/**
+ * Guard del DISPATCH: se sono stati importati NUOVI avvisi ma NESSUN canale li ha
+ * pubblicati (0 invii riusciti sulle attese), il ciclo di distribuzione è rotto →
+ * avvisa subito gli admin sul bot Telegram `ScuoleRadar Admin`.
+ *
+ * NOTA: le notifiche PERSONALI non sono più in tempo reale (arrivano con il digest
+ * delle 18:00), quindi il guard non può basarsi su di esse: controlla la
+ * pubblicazione sui canali, che dà un feedback immediato e affidabile.
  */
 async function avvisaSeDispatchFermo(
-  esito: EsitoNotifiche,
+  esito: EsitoCanaliTelegram,
   nuovi: number,
   province: string[],
 ): Promise<void> {
   if (nuovi <= 0) return;
-  if (esito.inviate > 0 || esito.telegramInviate > 0) return;
-  const errori = esito.fallite + esito.telegramFallite;
+  if (esito.attesi === 0) return; // nessun canale attivo: non è una rottura
+  if (esito.riusciti > 0) return;
   await inviaAlertaAdmin({
     severity: 'critical',
     category: 'notifiche',
-    title: 'Dispatch Radar fermo: nuovi interpelli senza alcuna notifica',
+    title: 'Dispatch Radar fermo: nuovi interpelli non pubblicati su alcun canale',
     message:
-      `Importati ${nuovi} nuovi interpelli ma inviate 0 notifiche (email: 0, Telegram: 0; errori: ${errori}). ` +
-      'Possibile rottura del matching o dei canali utente (verificare radar attivi e chat/email collegate).',
-    meta: { nuovi, errori, province, esito },
+      `Importati ${nuovi} nuovi interpelli ma 0 pubblicazioni riuscite su ${esito.attesi} attese ` +
+      `(errori: ${esito.falliti}). Possibile rottura dei canali Telegram o del ledger anti-duplicato.`,
+    meta: { nuovi, province, esito },
   });
 }
 
@@ -1019,6 +1115,9 @@ async function main() {
   const env = caricaEnv();
   const isDryRun = process.argv.includes('--dry-run');
   const noEmail = process.argv.includes('--no-email');
+  // Alert PRO in TEMPO REALE su Telegram (disattivabili con
+  // SCRAPER_TELEGRAM_REALTIME=0, es. durante i test della pipeline).
+  const alertTempoReale = (env.SCRAPER_TELEGRAM_REALTIME ?? '1') !== '0';
   const inizio = Date.now();
 
   const url = env.SUPABASE_URL;
@@ -1170,35 +1269,72 @@ async function main() {
   }
 
   // FASE 4 — determina quali interpelli sono realmente NUOVI (per le notifiche).
-  // L'identità primaria resta l'hash_id, ma l'hash include titolo/data che sulla
-  // pagina sorgente possono variare tra un run e l'altro: per NON ri-notificare
-  // lo STESSO avviso (loop sul record) si escludono anche le voci il cui URL di
-  // fonte è già presente in DB. La deduplica per URL vale solo per gli URL
-  // SPECIFICI: i fallback alla radice dell'ente (condivisi da più avvisi) no.
+  // TRE livelli di identità, dal più preciso al più tollerante:
+  //   1. `hash_id` (provincia|titolo|data) → stesso avviso, stessi metadati;
+  //   2. URL di fonte SPECIFICO → stesso documento pubblicato (l'hash può variare
+  //      se la pagina sorgente riscrive titolo/data);
+  //   3. IMPRONTA dell'opportunità (scuola + provincia + classi + titolo
+  //      normalizzato SENZA date/numeri) → la stessa opportunità ripubblicata con
+  //      titolo/date diversi, che con i soli hash tornava a essere notificata ogni
+  //      giorno (bug "notifiche ripetute", es. gli avvisi del Liceo Monti).
+  // La deduplica per URL vale solo per gli URL SPECIFICI: i fallback alla radice
+  // dell'ente (condivisi da più avvisi) no.
   const hashCandidati = unici.map((u) => u.hashId);
   const linkSpecifici = unici.map((u) => u.link).filter(eUrlSpecifico);
-  const esistentiPerHash = hashCandidati.length
-    ? ((await supabase
-        .from('interpelli')
-        .select('hash_id, source_url')
-        .in('hash_id', hashCandidati)) as { data: { hash_id: string; source_url: string }[] | null })
-        .data
-    : [];
-  const esistentiPerUrl = linkSpecifici.length
-    ? ((await supabase
-        .from('interpelli')
-        .select('hash_id, source_url')
-        .in('source_url', linkSpecifici)) as { data: { hash_id: string; source_url: string }[] | null })
-        .data
-    : [];
-  const hashEsistenti = new Set((esistentiPerHash ?? []).map((r) => r.hash_id));
-  const urlEsistenti = new Set((esistentiPerUrl ?? []).map((r) => r.source_url));
-  const nuovi = unici.filter(
-    (u) => !hashEsistenti.has(u.hashId) && !(eUrlSpecifico(u.link) && urlEsistenti.has(u.link)),
+  const { righe: righePerHash, errori: erroriHash } = await leggiEsistentiInLotti(
+    supabase,
+    'hash_id',
+    hashCandidati,
   );
+  const { righe: righePerUrl, errori: erroriUrl } = await leggiEsistentiInLotti(
+    supabase,
+    'source_url',
+    linkSpecifici,
+  );
+  const hashEsistenti = new Set(righePerHash.map((r) => r.hash_id));
+  const urlEsistenti = new Set(righePerUrl.map((r) => r.source_url ?? '').filter(Boolean));
+
+  const recenti = await leggiRecentiPerImpronta(supabase);
+  const impronteEsistenti = new Set(
+    recenti
+      .map((r) =>
+        improntaAvviso({
+          titolo: r.title,
+          scuola: r.school_name,
+          provincia: r.province,
+          classi: r.class_codes,
+        }),
+      )
+      .filter((i): i is string => Boolean(i)),
+  );
+  // Impronte accettate in QUESTO run: due voci con la stessa impronta sono la
+  // stessa opportunità (evita il doppio alert nello stesso giro).
+  const impronteDelRun = new Set<string>();
+
+  const nuovi = unici.filter((u) => {
+    if (hashEsistenti.has(u.hashId)) return false;
+    if (eUrlSpecifico(u.link) && urlEsistenti.has(u.link)) return false;
+    const impronta = improntaAvviso({
+      titolo: u.title,
+      scuola: u.schoolName,
+      provincia: u.province,
+      classi: u.classCodes,
+    });
+    if (!impronta) return true;
+    if (impronteEsistenti.has(impronta) || impronteDelRun.has(impronta)) return false;
+    impronteDelRun.add(impronta);
+    return true;
+  });
+  if (erroriHash + erroriUrl > 0) {
+    console.warn(
+      `⚠ Deduplica parziale: ${erroriHash + erroriUrl} letture in errore su interpelli — ` +
+        'il ledger per utente/canale resta la protezione finale (nessun doppio invio).',
+    );
+  }
   console.log(
     `• Interpelli NUOVI nel DB: ${nuovi.length} (candidati alle notifiche; ` +
-      `${unici.length - nuovi.length} già presenti per hash/fonte)`,
+      `${unici.length - nuovi.length} già presenti per hash/fonte/impronta)` +
+      `${impronteEsistenti.size > 0 ? ` · impronte di riferimento: ${impronteEsistenti.size}` : ''}`,
   );
 
   // Upsert nella tabella `interpelli` (nuovo schema FASE 2, con school_name/school_code).
@@ -1245,13 +1381,16 @@ async function main() {
     }
     console.log(`✓ Upsert completato su notices (fallback · righe inviate: ${righeNotices.length}).`);
 
-    // FASE 4 — notifiche email per i soli interpelli nuovi
-    if (!noEmail) {
-      const esitoNot = await notificaNuoviInterpelli(supabase, nuovi);
-      await avvisaSeDispatchFermo(esitoNot, nuovi.length, province);
+    // FASE 4 — alert in TEMPO REALE per il piano PRO (Telegram); i BASE ricevono
+    // il solo batch delle 17:00.
+    if (alertTempoReale) {
+      await inviaAlertTelegramTempoReale(supabase, nuovi);
     }
+
     // FASE 5 — canali Telegram regionali + ATA nazionale (solo avvisi NUOVI e fonti reali).
     const tgFallback = await pubblicaNuoviSuCanali(nuovi);
+    // Guard immediato: se NESSUN canale ha pubblicato, il dispatch è rotto.
+    await avvisaSeDispatchFermo(tgFallback, nuovi.length, province);
 
     await concludiRun({
       modalita: 'reali',
@@ -1271,13 +1410,23 @@ async function main() {
 
   console.log(`✓ Upsert completato su interpelli (righe inviate: ${righeInterpelli.length}).`);
 
+  // FASE 4 — ALERT IN TEMPO REALE (solo piano PRO) su TELEGRAM: l'avviso parte
+  // appena viene scrapato. I BASE non ricevono nulla adesso: un solo batch alle
+  // 17:00 (`npm run notifiche:digest`).
+  if (alertTempoReale) {
+    await inviaAlertTelegramTempoReale(supabase, nuovi);
+  }
+
   // FASE 5 — canali Telegram regionali + ATA nazionale (solo avvisi NUOVI e fonti reali).
   const tg = await pubblicaNuoviSuCanali(nuovi);
+  // Guard immediato: se NESSUN canale ha pubblicato, il dispatch è rotto.
+  await avvisaSeDispatchFermo(tg, nuovi.length, province);
 
-  // FASE 4 — notifiche email per i soli interpelli nuovi
   if (!noEmail) {
-    const esitoNot = await notificaNuoviInterpelli(supabase, nuovi);
-    await avvisaSeDispatchFermo(esitoNot, nuovi.length, province);
+    console.log(
+      `• Notifiche: ${nuovi.length} opportunità — alert PRO in tempo reale (se abilitati); ` +
+        'per il piano BASE un solo riepilogo alle 17:00.',
+    );
   }
 
   // Diagnostica + alert: registra la run (`scraper_runs`) e avvisa l'admin se ci
@@ -1310,6 +1459,13 @@ const eseguitoComeCli = process.argv
   .some((a) => /[\\/]scraper[\\/]index\.(?:ts|js|mjs|cjs)$/i.test(a));
 
 if (eseguitoComeCli) {
+  // RETE DI SICUREZZA: qualunque uscita (crash, timeout del runner, kill del
+  // processo, eccezione non gestita) deve PRIMA salvare il ledger anti-duplicato.
+  // `ledgerLocaleSalva()` è sincrona e best-effort: senza questo hook le marcature
+  // di deduplica del run andavano perse e gli stessi avvisi ripartivano il giorno
+  // successivo (bug "notifiche ripetute").
+  process.on('exit', () => ledgerLocaleSalva());
+
   main().catch(async (err) => {
     console.error('✗ Errore imprevisto nello scraper:', err);
     process.exitCode = 1;

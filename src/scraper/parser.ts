@@ -368,9 +368,14 @@ const RE_SEGNALE_URL =
 const RE_SEGNALE_TITOLO =
   /(example\.(com|org|net)|\bmock\b|\bsample\b|\bdummy\b|placeholder|\bfixture\b|esempio)/i;
 
-/** Piattaforme NON istituzionali: social, hosting/blog generici, URL shortener. */
+/**
+ * Piattaforme NON istituzionali: social, hosting/blog generici, URL shortener e
+ * la PIATTAFORMA STESSA (scuoleradar/purefocus). Nessuno di questi può essere la
+ * "fonte ufficiale" di un avviso: il routing delle notifiche deve puntare solo a
+ * pagine istituzionali esterne (mai a un rimbalzo interno).
+ */
 const RE_HOST_NON_ISTITUZIONALE =
-  /(facebook|instagram|twitter|(^|\.)x\.com|linkedin|t\.me|telegram|pinterest|whatsapp|youtube|(^|\.)google\.|altervista|blogspot|wordpress\.com|wixsite|iubenda|freepik|bit\.ly|tinyurl)/i;
+  /(facebook|instagram|twitter|(^|\.)x\.com|linkedin|t\.me|telegram|pinterest|whatsapp|youtube|(^|\.)google\.|altervista|blogspot|wordpress\.com|wixsite|iubenda|freepik|bit\.ly|tinyurl|scuoleradar|purefocus)/i;
 
 /* ------------- Fallback istituzionale dell'ente (USP/USR/Scuola) ------------- */
 
@@ -1009,6 +1014,15 @@ export function estraiEnteEmittente(
 export function parseInterpello(input: InterpelloInput): InterpelloParsato {
   const testoCompleto = `${input.title} ${input.corpo ?? ''}`;
 
+  // Contesto dei LINK candidati (pagina di dettaglio, allegati, "Stampa", elenchi
+  // tabellari…): il codice meccanografico o l'email della scuola compaiono spesso
+  // SOLO qui, non nella riga di elenco. Serve a non perdere il recapito quando la
+  // destinazione è una pagina di riepilogo senza descrizione.
+  const testoLinkCandidati = [...(input.linkCandidati ?? []), input.link]
+    .map((c) => (c ?? '').trim())
+    .filter(Boolean)
+    .join(' ');
+
   // Data di PUBBLICAZIONE: prima un valore esplicito (intestazione/<time>), poi il
   // contesto ("pubblicato il …"). La pubblicazione non è MAI usata come scadenza.
   const publishedAt =
@@ -1022,9 +1036,14 @@ export function parseInterpello(input: InterpelloInput): InterpelloParsato {
     estraiDataScadenza(testoCompleto, publishedAt);
 
   // Codice meccanografico della scuola: dal campo esplicito, altrimenti estratto
-  // dal testo. Serve a RICONOSCERE le pagine istituzionali legate alla scuola.
+  // dal testo o dai LINK candidati (le pagine di riepilogo/"Stampa" lo riportano
+  // spesso nell'URL). Serve a RICONOSCERE le pagine istituzionali legate alla
+  // scuola e a ricostruire la casella ufficiale (convenzione MIM).
   const codiceScuola =
-    input.schoolCode?.trim() || estraiCodiceMeccanografico(testoCompleto) || null;
+    input.schoolCode?.trim() ||
+    estraiCodiceMeccanografico(testoCompleto) ||
+    estraiCodiceMeccanografico(testoLinkCandidati) ||
+    null;
 
   // Provincia REALE dell'istituto: prima dal titolo, poi dal contesto, poi dal
   // codice meccanografico; solo come ultima spiaggia la provincia della fonte
@@ -1068,18 +1087,22 @@ export function parseInterpello(input: InterpelloInput): InterpelloParsato {
   ];
 
   // Email di candidatura della scuola: `mailto:` nel link oppure TUTTE le email
-  // del testo (non solo la prima), scelte per pertinenza scolastica e per
-  // correlazione con l'istituto (codice meccanografico/nome). Se nessuna fonte
-  // la pubblica, si ricostruisce la casella ISTITUZIONALE UFFICIALE (PEO) dalla
-  // convenzione MIM sul codice meccanografico: un avviso senza recapito è un
-  // servizio incompleto. Nessuna email inventata fuori da questa convenzione.
+  // del testo E dei link candidati (non solo la prima), scelte per pertinenza
+  // scolastica e per correlazione con l'istituto (codice meccanografico/nome).
+  // Vale anche quando la destinazione è una pagina di riepilogo/"Stampa" senza
+  // descrizione: il recapito resta l'informazione più utile per candidarsi.
+  // Se nessuna fonte la pubblica, si ricostruisce la casella ISTITUZIONALE
+  // UFFICIALE (PEO) dalla convenzione MIM sul codice meccanografico: un avviso
+  // senza recapito è un servizio incompleto. Nessuna email inventata fuori da
+  // questa convenzione.
+  const testoContatti = `${link ?? ''} ${testoCompleto} ${testoLinkCandidati}`;
   const contactEmail =
-    estraiEmailScuola(link, testoCompleto, {
+    estraiEmailScuola(link, testoContatti, {
       schoolCode: codiceScuola,
       schoolName: scuola || null,
     }) ??
     risolviEmailUfficialeScuola({
-      emailsTrovate: estraiEmails(`${link ?? ''} ${testoCompleto}`),
+      emailsTrovate: estraiEmails(testoContatti),
       schoolCode: codiceScuola,
       testo: testoCompleto,
     })?.email ??

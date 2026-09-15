@@ -1,0 +1,96 @@
+# ============================================================
+# Riepilogo giornaliero (BATCH) — UNA sola notifica al giorno per il piano BASE
+#
+# - Pianificazione: Lunedì-Venerdì alle 15:00 e 16:00 UTC. Una delle due
+#   esecuzioni cade alle 17:00 italiane (CEST = UTC+2 in estate, CET = UTC+1 in
+#   inverno): lo script invia SOLO quando in Italia sono le 17:00, quindi l'altra
+#   esecuzione esce subito senza inviare nulla.
+# - Split per tier:
+#     · PRO  → alert INDIVIDUALI in TEMPO REALE su Telegram (dallo scraper);
+#     · BASE → NESSUN alert immediato: questo BATCH serale con tutte le
+#       opportunità del giorno (Telegram + riepilogo email).
+# - Trigger manuale: workflow_dispatch (force = true per ignorare la finestra).
+#
+# Secrets richiesti: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY,
+#   TELEGRAM_BOT_TOKEN.
+# ============================================================
+name: Digest giornaliero
+
+on:
+  schedule:
+    - cron: '0 15,16 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Ignora la finestra oraria (invia subito)'
+        type: boolean
+        default: true
+
+concurrency:
+  group: digest-notifiche
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    name: Digest opportunità (email + Telegram)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Necessari per committare il LEDGER anti-duplicato (.scuoleradar/).
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Installazione dipendenze
+        run: npm ci
+
+      - name: Validazione TypeScript (scraper + notifier)
+        run: npm run scrape:check
+
+      - name: Verifica template del digest (link esterni, guida, email)
+        continue-on-error: true
+        run: |
+          if npm run test:digest && npm run test:migrazioni; then
+            echo "::notice::Digest conforme: link esterni, email scuola, guida operativa, migrazioni coerenti."
+          else
+            echo "::warning::Digest/migrazioni non conformi: verificare src/lib/digest.ts, resend.ts e supabase/migrations."
+          fi
+
+      - name: Verifica schema notifiche (ledger DB + RPC quota)
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if npm run db:verifica; then
+            echo "::notice::Schema notifiche completo: ledger DB attivo e quota server-side affidabile."
+          else
+            echo "::warning::Schema notifiche INCOMPLETO: applicare supabase/migrations/20260914030000_repair_notifications_log_e_rpc_quota.sql. Il ledger su file copre comunque la deduplica, ma il conteggio quota resta degradato."
+          fi
+
+      - name: Invio del digest giornaliero
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          ADMIN_ALERT_SECRET: ${{ secrets.ADMIN_ALERT_SECRET }}
+        run: |
+          ARGS=""
+          if [ "${{ inputs.force }}" = "true" ]; then ARGS="--force"; fi
+          npm run notifiche:digest -- $ARGS
+
+      - name: Commit del LEDGER anti-duplicato (se aggiornato)
+        if: always()
+        shell: bash
+        run: |
+          bash scripts/commit-ledger.sh
