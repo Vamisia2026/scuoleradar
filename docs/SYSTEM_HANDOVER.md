@@ -110,7 +110,8 @@ Browser (SPA) ──► src/App.tsx ──► BrowserRouter ──► Routes (20
      └──► lib/resend|telegram|notifier ──► SOLO Node (scraper)
 
 GitHub Actions (cron):
-  scraper.yml        → src/scraper/index.ts → Supabase interpelli → notifier → Resend/Telegram
+  scraper.yml        → src/scraper/index.ts → Supabase interpelli → canali Telegram (nessun invio personale)
+  digest.yml         → notifier: BATCH 17:00 (Telegram) per BASE + riepilogo email per tutti
   scrape-notizie.yml → ingestNotizie.ts → data/notizieIngestite.ts → commit → Vercel
 
 Supabase DB (pg_cron + trigger):
@@ -186,7 +187,8 @@ Supabase DB (pg_cron + trigger):
 | `CreditiModal.tsx` | 238 | Acquisto crediti a consumo (quantità), promo referral |
 | `ContattiModal.tsx` | 18 | Wrapper `ContactForm` in modal |
 | `ContactForm.tsx` | 286 | Form contatti (dipartimento, oggetto, messaggio, allegato base64, honeypot) → Edge `contatto` |
-| `RadarWizardModal.tsx` | — | Wizard radar 4 passi (ordini/classi/materie/province), `STORAGE_KEY_RADAR_WIZARD_PENDING`, per anonimi e loggati |
+| `RadarWizardModal.tsx` | — | Wizard radar 4 passi (ordini/classi/materie/province), `STORAGE_KEY_RADAR_WIZARD_PENDING`, per anonimi e loggati; Passo 3 include `SostegnoToggle` |
+| `SostegnoToggle.tsx` | 96 | Domanda condivisa «Vuoi che includiamo anche le opportunità per il sostegno?» (switch `role="switch"` + nota sull'adesione implicita via classe `AD*`) — usata da wizard e Preferenze Radar |
 | `SimulatorRadar.tsx` | — | Anteprima feed radar (legge `interpelli` da Supabase, fallback mock) |
 | `InterpelloCard.tsx` | 188 | Card singolo interpello: scadenza, provincia, classi, badge "Scuola Preferita", notifica, detail modal |
 | `CfuTool.tsx` | 500 | Calcolatore CFU (§8.1) |
@@ -230,17 +232,19 @@ Supabase DB (pg_cron + trigger):
 | File | Righe | Responsabilità |
 |---|---|---|
 | `supabase.ts` | 20 | Client Supabase frontend (anon); `supabase === null` in demo; `isSupabaseConfigurato` |
-| `matchingEngine.ts` | 183 | Matching Radar + utenti compatibili (§5.2); `searchInterpelli` esclude gli scaduti |
+| `matchingEngine.ts` | ~195 | Matching Radar + utenti compatibili (§5.2); `searchInterpelli` esclude gli scaduti; **`elencaUtentiNotificabili`** → TUTTI i profili con canale valido e Radar attivo (`findUtentiCompatibili(..., { ignoraFiltri: true })`, così anche chi ha province/classi configurate riceve il riepilogo) |
 | `scadenza.ts` | ~90 | Helper scadenza (puro): `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `stileScadenza` (semaforo 🟢 lungo / 🟡 vicino / 🔴 imminente) |
-| `alertInterpello.ts` | ~255 | Costruttore dell'**avviso strutturato** (gerarchia obbligatorie/opzionali), `pulisciTitoloAvviso` (via i dump di codici classe) ed **`etichettaFonteLink`/`classificaFonteLink`** (etichetta ONESTA del link: PDF / Albo Pretorio / avviso — mai "Candidati") |
-| `interpelloRouting.ts` | ~55 | Deep link `/interpello/:id` (puro): `eUuid`, `chiaveInterpelloDaParam` (uuid → `id`, hash → `hash_id`), `urlSchedaInterpello` |
+| `alertInterpello.ts` | ~390 | Costruttore dell'**avviso strutturato** (gerarchia obbligatorie/opzionali + campo `email` dell'avviso), `pulisciTitoloAvviso` (via i dump di codici classe), **`emailAvviso`** + costanti condivise `EMAIL_ICONA`/`EMAIL_ETICHETTA`/`EMAIL_ETICHETTA_WEB`, **`ISTRUZIONE_AVVISO_UFFICIALE`** (direttiva standard "clicca STAMPA") e **`suggerimentoRicercaAvviso({ compatto })`** (guida operativa per elenchi/"Stampa" o fonte mancante), **`emailAvviso`** ed **`etichettaFonteLink`/`classificaFonteLink`/`ePaginaRiepilogo`** (etichetta ONESTA del link: PDF / Albo Pretorio / **pagina di riepilogo "Stampa"** / avviso — mai "Candidati") |
+| `interpelloRouting.ts` | ~40 | Deep link LEGACY `/interpello/:id` (puro): `eUuid`, `chiaveInterpelloDaParam` (uuid → `id`, hash → `hash_id`). **Policy**: le notifiche non generano più link interni; la rotta resta solo per i deep link storici (che reindirizzano subito alla fonte esterna) |
+| `digest.ts` | ~130 | **Puro, senza import** — finestra del BATCH giornaliero: `oraLocaleItalia`/`dataLocaleItalia`/`etichettaDataItalia` (fuso `Europe/Rome`), `ORA_DIGEST` (**17:00**), `eOraDelDigest(istante, forzato)`, `descrizioneFinestraDigest`, `ordinaVociDigest` (scadenza più vicina in cima), `raggruppaPerProvincia` |
 | `resend.ts` | 434 | **Node-only** — email Resend: 8 `TipoMessaggio` (`welcome, prova1, prova2, prova3, extra, recap, welcome_pro, notifica_pro`), SUBJECT, CORPO_MESSAGGI, `TIPI_CON_OPPORTUNITA`, `renderEmailHtml`, `inviaNotificaEmail`, `inviaNotificheInterpello` |
-| `telegram.ts` | ~300 | **Node-only** — messaggi Telegram (stessi tipi), `formattaMessaggioTelegram`, `formattaPostCanaleTelegram`, `inviaNotificaTelegram`, `getTelegramBotToken`, **`pulisciUrlTelegram`**: ogni URL è VISIBILE (nessun `text_link` nascosto) così Telegram non mostra il popup di conferma; CTA sempre al `RADAR_SETUP_URL` |
+| `telegram.ts` | ~600 | **Node-only** — messaggi Telegram. `formattaMessaggioTelegram`: ALERT di **solo testo** (nessuna foto/logo → niente anteprima gigante, nessun marchio ridondante, nessun disclaimer operativo) con riga `🔗 Apri l'avviso ufficiale: <url>`, riga `📧 Candidature` e CTA finale `CTA_RADAR_INTERESSI` (ricalibra il Radar su `/dashboard/radar`); i messaggi di ciclo di vita mantengono copy + `FOOTER_NOTIZIE`. Poi `formattaDigestTelegram` (BATCH BASE), `formattaPostCanaleTelegram`, `inviaNotificaTelegram` (`sendMessage`, mai `sendPhoto`), `inviaMessaggioTelegram`, `getTelegramBotToken`, **`pulisciUrlTelegram`**: ogni URL è VISIBILE (nessun `text_link` nascosto). **Nessun prompt "Filtra per provincia e classi" nei messaggi personali** |
+| `dedupAvvisi.ts` | ~85 | **Puro** — `improntaAvviso` / `normalizzaPerImpronta` / `GIORNI_IMPRONTA`: identità STABILE dell'opportunità (provincia + scuola + classi + titolo normalizzato senza date/numeri/riempitivi). Intercetta la stessa notizia ripubblicata con titolo/data diversi (hash nuovo) → nessuna notifica ripetuta a distanza di giorni |
 | `emailScuola.ts` | ~110 | **Puro** — email UFFICIALE della scuola: `normalizzaCodiceMeccanografico`, `estraiCodiceMeccanograficoDaTesto`, `emailDaCodiceMeccanografico` (PEO `@istruzione.it` / PEC `@pec.istruzione.it`), `risolviEmailUfficialeScuola` (email di fonte → convenzione MIM; mai email inventate) |
 | `liveBoard.ts` | ~110 | **Puro** — vetrina "Radar Live": `scuolaDaTitolo`, `nomeScuolaRiga` (campo → registro per codice → titolo → ente), `preparaRigheBoard` (arricchisce e **scarta** le righe senza scuola o senza scadenza: mai "Scuola non indicata"/"Scadenza n/d") |
 | `school-lookup.ts` | ~50 | Registro scuole per codice meccanografico: `resolveSchoolByCode` (PEO/PEC) e **`nomeScuolaDaCodice`** (solo nomi REALI, mai "Istituto &lt;codice&gt;") |
-| `notifier.ts` | ~250 | **Node-only** — orchestratore notifiche: per ogni interpello nuovo trova utenti compatibili, RPC `incrementa_notifiche_utente`, sceglie il tipo, invia email+Telegram in parallelo, aggiorna flag `notifiche_blocco_inviato`/`step4_inviata_at`. **Dedup doppio: `notifications_log` (DB) + `ledgerLocale` (file)** — una coppia (utente, interpello) non viene MAI notificata due volte |
-| `ledgerLocale.ts` | ~85 | **Node-only** — ledger anti-duplicato su file (`.scuoleradar/notifiche-ledger.json`): `chiaveLedger`, `ledgerLocaleGia`, `ledgerLocaleRegistra`, `ledgerLocaleSalva`. Rete di sicurezza quando le tabelle DB non sono ancora create; committato dal workflow |
+| `notifier.ts` | ~1090 | **Node-only** — orchestratore notifiche: **`inviaAlertTelegramTempoReale(client, nuovi, opts)`** (alert INDIVIDUALI su Telegram per i soli **PRO**, invocata dallo scraper; non consuma quota) e **`inviaDigestGiornaliero(client, opts)`** (BATCH: email per tutti + Telegram solo per **BASE**; opzioni `forzato`, `soloUtente`, `soloRegistrare`/`finoA` per il recupero). **Deduplica PER CANALE** (`giaNotificatoCanale`: chiavi locali `…&#124;<canale>` + `notifications_log`, con compatibilità per la chiave LEGACY `…&#124;notifica`), persistenza incrementale del ledger, `recapitoNotifica` (PEO dal codice MIM) |
+| `ledgerLocale.ts` | ~110 | **Node-only** — ledger anti-duplicato su file (`.scuoleradar/notifiche-ledger.json`): `chiaveLedger`, `ledgerLocaleGia`, `ledgerLocaleRegistra`, `ledgerLocaleSalva`, `percorsoLedgerLocale`. Rete di sicurezza quando le tabelle DB non sono ancora create; committato dai workflow. **Percorso sovrascrivibile con `SCUOLERADAR_LEDGER_PATH`** (usato dai test per NON sporcare il ledger reale). **Tolleranza BOM** in lettura e scrittura senza BOM; un file ILLEGGIBILE produce un warning esplicito (mai deduplica silenziosamente disattivata). Verificato da `npm run test:ledger` |
 | `pricing.ts` | 18 | Piani: `PianoId = 'pro_annuale'|'pro_mensile'|'a_consumo'`; localStorage `STORAGE_KEY_INTENDED_PLAN` |
 | `promo.ts` | 34 | `validaPromo(codice, userId)` via RPC `valida_codice_promo`; `SCONTO_PROMO_EUR = 10` |
 
@@ -306,7 +310,7 @@ Supabase DB (pg_cron + trigger):
 | `ContattiPage.tsx` | Form contatti + info |
 | `NotiziePage.tsx` | Wrapper `NotizieHero`+`NotizieGrid` |
 | `NotizieDettaglioPage.tsx` | Wrapper `NotizieDettaglio` |
-| `InterpelloDettaglioPage.tsx` | Scheda PUBBLICA dell'avviso (`/interpello/:id`): risolve per `id`/`hash_id` (fallback `notices`), gerarchia strutturata, **un solo** bottone verso la fonte con etichetta onesta; stato "non più disponibile" con link al Radar (mai rimbalzo sulla Home) |
+| `InterpelloDettaglioPage.tsx` | Scheda PUBBLICA dell'avviso (`/interpello/:id` — LEGACY, deep link storici): risolve per `id`/`hash_id` (fallback `notices`), gerarchia strutturata, **guida operativa** quando la pagina è un elenco/"Stampa" o la fonte manca, **un solo** bottone verso la fonte ESTERNA con etichetta onesta; stato "non più disponibile" con link al Radar (mai rimbalzo sulla Home) |
 | `AuthCallback.tsx` | Rotta ritorno Google OAuth (scambia code → sessione) |
 | `OnboardingPage.tsx` | Wizard onboarding preferenze + collegamento Telegram |
 | `DashboardPage.tsx` | `DashboardLayout` (tab + `Outlet`) + `DashboardPage` (Radar Scuole: notifiche restanti, abbonamento, crediti, feed, blacklist) |
@@ -348,7 +352,7 @@ Supabase DB (pg_cron + trigger):
 | `telegram-webhook` | 128 | `X-Telegram-Bot-Api-Secret-Token` | `/start <user_id>` → aggiorna `profiles.telegram_chat_id` + conferma |
 | `telegram-admin-webhook` | ~430 | secret header + `ADMIN_TELEGRAM_ID` | Bot Telegram ADMIN **separato** dal bot pubblico: comandi solo da `ADMIN_TELEGRAM_ID` (`/status`, `/ultimi`, `/log`, `/forward`, …), **alert helper** (`ADMIN_ALERT_SECRET` → notifica proattiva su fallimenti/anomalie), log in `admin_telegram_log`, inoltro opz. |
 
-### 2.15 `supabase/migrations/` — 46 migration (§13 e §14 per dettagli)
+### 2.15 `supabase/migrations/` — 51 migration (§13 e §14 per dettagli)
 
 Ordine: `20260822010000_add_school_filters` · `...22020000_create_interpelli` ·
 `...22030000_create_profiles` · `...22040000_extend_profiles` · `...22050000_add_telegram_chat_id` ·
@@ -373,13 +377,40 @@ Ordine: `20260822010000_add_school_filters` · `...22020000_create_interpelli` �
 `...20260903070000_admin_telegram_log` · `...20260903080000_scraper_runs_and_alerts` ·
 `...20260903090000_add_interpelli_materia_contact` ·
 `...20260903100000_preavvisi_rinnovo_trial_pro` ·
-`...20260903110000_profiles_auth_upsert_guard`
+`...20260903110000_profiles_auth_upsert_guard` ·
+`...20260914000000_fix_pampararo_cognome` · `...20260914010000_notifications_log` ·
+`...20260914020000_channel_posts_log` ·
+`...20260914030000_repair_notifications_log_e_rpc_quota` ·
+`...20260914040000_add_profiles_sostegno`
+
+**REPAIR notifiche** (`...20260914030000_repair_notifications_log_e_rpc_quota.sql`): DDL
+idempotente che (1) ri-asserisce la tabella `notifications_log` (mai applicata) e
+(2) corregge l'errore `42702` della RPC `incrementa_notifiche_utente`. Causa della
+regressione: `20260831100000_add_rpc_notifiche_annuali_reset_extra.sql` aveva ridefinito
+la funzione con un `select piano, notifiche_usate, notifiche_anno into …` NON qualificato,
+mentre `RETURNS TABLE(…, notifiche_usate integer)` crea un OUTPUT PARAMETER omonimo: il
+fix corretto (`20260831150000`) non era mai stato applicato. La riparazione qualifica le
+colonne (`p.`) e aggiunge `#variable_conflict use_column` come blindatura definitiva.
+Verifica: **`npm run db:verifica`** (sonda senza effetti collaterali: tabella + RPC con un
+UUID inesistente) e **`npm run test:migrazioni`** (regression guard statico sui file SQL).
+
+**PREFERENZA SOSTEGNO** (`...20260914040000_add_profiles_sostegno.sql`): aggiunge la colonna
+idempotente `profiles.sostegno boolean not null default false` e fa il BACKFILL dell'adesione
+implicita (chi ha già una classe `AD*` in `classi_concorso` → `true`), così la nuova guardia
+del matching non toglie copertura a chi riceveva legittimamente gli avvisi di sostegno.
+`npm run db:verifica` sonda anche `profiles.sostegno` (3ª riga di esito).
 
 ### 2.16 `.github/workflows/`, `docs/`, `scripts/`, `public/`
 
 | Percorso | Contenuto |
 |---|---|
-| `.github/workflows/scraper.yml` | Scraper Interpelli: cron Lun-Ven `0 7,12,15 * * 1-5` + dispatch; secrets SUPABASE_*/RESEND/TELEGRAM; `npm ci` → `scrape:check` → `npm run scrape` |
+| `.github/workflows/scraper.yml` | Scraper Interpelli: cron Lun-Ven `0 7,12,15 * * 1-5` + dispatch; secrets SUPABASE_*/RESEND/TELEGRAM; `npm ci` → `scrape:check` → `npm run scrape` (inserimento + canali Telegram + **alert PRO in tempo reale**) → commit del ledger via `bash scripts/commit-ledger.sh` (unione chiavi + retry) |
+| `.github/workflows/digest.yml` | **Riepilogo/BATCH giornaliero**: cron Lun-Ven `0 15,16 * * 1-5` (una delle due esecuzioni cade alle 17:00 italiane: lo script invia solo se `eOraDelDigest` lo conferma) + dispatch (`force: true`); `npm ci` → `scrape:check` → `test:digest` + `test:migrazioni` → **`db:verifica`** (sonda schema, warning non bloccante) → `npm run notifiche:digest` → commit del ledger via `bash scripts/commit-ledger.sh`. **PRO**: già avvisati in tempo reale dallo scraper; **BASE**: batch Telegram + email |
+| `scripts/verifica-schema-notifiche.ts` | **`npm run db:verifica`** — sonda SENZA effetti collaterali dello schema notifiche: esistenza di `notifications_log`, risposta della RPC quota con un UUID inesistente (atteso `(false, 0)`) e presenza di `profiles.sostegno`. Exit 1 + remediation se manca una migrazione |
+| `scripts/test-migrazioni.ts` | **`npm run test:migrazioni`** — regression guard statico su `supabase/migrations`: ledger idempotente con PK/RLS/grants, ULTIMA definizione della RPC non ambigua (blocca il ritorno dell'errore 42702) e colonna+backfill della preferenza sostegno |
+| `scripts/test-sostegno-preferenza.ts` | **`npm run test:sostegno`** — guardia SOSTEGNO: riconoscimento codici `AD*`/titolo (`isCodiceSostegno`, `eAvvisoSostegno`), matrice `sostegnoAmmesso`, matching e digest in DRY-RUN con client stub (falso positivo A-22 tedesco → ADEE, DB non migrato) |
+| `scripts/unione-ledger.ts` (`npm run ledger:unisci`) | Unisce il ledger del run con quello del branch remoto e scrive l'unione: è il passo che impedisce a scraper e digest (stessi minuti) di **cancellarsi le chiavi a vicenda** |
+| `scripts/commit-ledger.sh` | Commit del ledger usato da `scraper.yml`/`digest.yml`: fetch del remoto → unione chiavi → commit → push con **3 tentativi** (mai "vince l'ultimo") |
 | `.github/workflows/scrape-notizie.yml` | Scraper Notizie: cron giornaliero `0 6 * * *` + dispatch; `contents: write`; `npm ci` → `scrape:notizie:check` → `npm run scrape:notizie` → commit dati (`[skip ci]`) se cambiati |
 | `.github/workflows/health-check.yml` | **Radar Health Check** (Admin bot): cron giornaliero `0 8 * * *` + dispatch; `npm run admin:health` → rileva *dispatch Radar fermo* (nuovi interpelli senza notifiche), *scraper fermo/in errore* e *Notizie ferme*; invia alert a `ADMIN_TELEGRAM_ID` via `inviaAlertaAdmin` (`ADMIN_ALERT_SECRET`). Env: `HEALTH_STALE_HOURS` (48), `HEALTH_NEWS_STALE_DAYS` (14) |
 | `scripts/admin-health-check.ts` | CLI del monitor (`npm run admin:health [-- --dry] [-- --hours N]`): controlla `interpelli`, `notifications_log`, `scraper_runs`, `profiles.radar_attivo` e l'archivio `notizieIngestite.ts`; exit 1 se rileva anomalie |
@@ -391,7 +422,7 @@ Ordine: `20260822010000_add_school_filters` · `...22020000_create_interpelli` �
 | `docs/BLOG_EDITORIAL_GUIDELINES.md` | Regole d'oro del blog: max 3 articoli/settimana, zero rumore, acronimi spiegati |
 | `docs/PDF_DESIGN_SYSTEM.md` | Design system PDF (A4, tabelle clean, righe scrittura 24px) |
 | `docs/SYSTEM_HANDOVER.md` | QUESTO FILE |
-| `scripts/` | Test/utility: `test-pdf-*.ts`, `_validate-modulistica.ts`, `test-telegram.ts`, `test-notifiche.ts`, ecc. |
+| `scripts/` | Test/utility: `invia-digest.ts` (`npm run notifiche:digest`), `verifica-schema-notifiche.ts` (`db:verifica`), `test-digest.ts`, **`test-telegram-tier.ts`** (split PRO/BASE + dedup per canale), **`test-ledger-robustezza.ts`** (`test:ledger`), `test-migrazioni.ts`, `admin-dispatch-user.ts`, `test-pdf-*.ts`, `_validate-modulistica.ts`, ecc. |
 | `public/` | `logo.png`, `ScuoleRadar Favicon Square.png`, `ScuoleRadar Logo Transparent Full Final.png`, `favicon_old.svg`, `logo_old.png` |
 
 
@@ -517,10 +548,22 @@ Modulo puro (client passato come parametro → testabile frontend+Node):
   `.in('province', prov)` + `.overlaps('class_codes', classi)` (almeno una classe comune),
   `.order('expiration_date')`, `.limit(100)`.
 - `getFeedInterpelli(...)`: mappa righe DB → `Interpello[]` (`mapInterpelloDBToInterpello`).
-- `findUtentiCompatibili(client, { province, classi })`: legge **tutti** i `profiles`
+- `findUtentiCompatibili(client, { province, classi, titolo?, materia? })`: legge **tutti** i `profiles`
   (select dei campi notifica), filtra: email valida **o** Telegram, `province_interesse`
   (o `province_attive`) contiene la provincia, `classi_concorso` interseca le classi.
   Restituisce `UtenteCompatibile[]` con flag `notificheBloccoInviato`/`notificheRecapInviato`.
+- **GUARDIA SOSTEGNO** (`sostegnoAmmesso` / `utenteAderisceSostegno`): il sostegno è
+  un'abilitazione SEPARATA dalle classi disciplinari. Un avviso è "di sostegno" quando ha
+  un codice `AD*` (`isCodiceSostegno` in `data/classiConcorso.ts`: ADAA/ADEE/ADMM/ADSS/AD24…)
+  oppure titolo/materia lo dichiarano (`eAvvisoSostegno`; "inclusione" è volutamente escluso
+  perché troppo generico). Tali avvisi vengono consegnati **solo** a chi ha aderito:
+  preferenza esplicita `profiles.sostegno = true` **oppure** una classe di sostegno tra le
+  preferenze (adesione implicita → nessun opt-out retroattivo). Risolve i falsi positivi
+  storici (docente di tedesco A-22/A-25 che riceveva interpelli ADEE). La stessa guardia è
+  applicata al digest (`notifier.ts` → `raccogliVociCanale`): una sola fonte di verità.
+  Test: `npm run test:sostegno`.
+- `findUtentiCompatibili` legge `sostegno` in modo **tollerante** (DB non migrato → rilegge
+  senza la colonna: il matching degrada, non si svuota).
 
 ### 5.3 Scraper interpelli (`src/scraper/index.ts` + `parser.ts`)
 Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
@@ -553,6 +596,11 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
   `interpelliFiltrati`, CTA wizard/abbonamento, blacklist scuole.
 - `SimulatorRadar.tsx`: anteprima feed (Supabase → mock).
 - `RadarWizardModal.tsx`: onboarding 4 passi con `Pill`; persiste `sr_wizard_pending`.
+  Passo 3 (Classi/Materie) include la domanda **«Vuoi che includiamo anche le opportunità per
+  il sostegno?»** (`SostegnoToggle`, salvata subito nella bozza → `profiles.sostegno`); la
+  stessa domanda è nelle **Preferenze Radar** (`PreferenzeRadar.tsx`, accordion Classi di
+  concorso, autosalvataggio). Default OFF; chi ha una classe `AD*` selezionata vede segnalata
+  l'adesione implicita.
 - `InterpelloCard.tsx`: card con scadenza (countdown), classe, provincia, badge
   "Scuola Preferita" (`favoriteSchools`), notifica, detail.
 - **Filtri avanzati**: `ignoredSchools` (blacklist) nasconde gli avvisi
@@ -584,9 +632,11 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
   percorso (`RADAR_URL`/`radarSetupUrl()`). Verificato da `npm run test:telegram:canali`.
   **Nessun `text_link` nascosto**: gli URL sono visibili (auto-link nativo) così non
   compare il popup di conferma; le email di candidatura sono testo semplice.
-- **Deep link scheda** (`/interpello/:id`): se l'avviso ha una fonte ufficiale esterna
-  la pagina **reindirizza subito** (`window.location.replace`) alla pagina
-  istituzionale originale; la scheda interna resta solo per gli avvisi senza fonte.
+- **Deep link scheda** (`/interpello/:id`) — **LEGACY**: le notifiche **non** generano
+  più link interni. La rotta resta solo per i deep link STORICI già inviati: se
+  l'avviso ha una fonte esterna la pagina **reindirizza subito**
+  (`window.location.replace`) a quella; senza fonte mostra l'avviso e la guida
+  operativa, senza rimbalzare sulla Home.
 - **Copy**: nessun riferimento alla vecchia "prova a 3 notifiche" ("Te ne restano 2",
   "Terza e ultima opportunità"): il mese PRO è presentato come accesso pieno. Le
   tipologie `prova1/2/3`, `extra` e `recap` restano per compatibilità dei cron.
@@ -596,16 +646,114 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
   · `channel_posts_log` (interpello × canale Telegram) — migrazione
     `20260914020000_channel_posts_log.sql`;
   · `.scuoleradar/notifiche-ledger.json` (**ledger locale su file**, committato
-    dal workflow `scraper.yml`): blocca i duplicati anche se le tabelle non sono
-    state create. Se una tabella manca, il run logga un warning esplicito con il
-    nome della migrazione da applicare.
-- **Email scolastica**: se la fonte non pubblica un recapito, il parser ricostruisce
-  la **PEO ufficiale** (`codice@istruzione.it`) dal codice meccanografico
-  (`emailScuola.ts`); `npm run dati:arricchisci` completa le righe già in DB.
-  L'email è resa **cliccabile** (`mailto:`) in Telegram, nelle email e nella Edge
-  `send-notification` (che la recupera anche da `interpelli.contact_email`).
-- **Orchestrazione** → `src/lib/notifier.ts`: `notificaNuoviInterpelli(client, nuovi, opts)`
-  — non lancia MAI eccezioni; esito `{ inviate, fallite, telegramInviate, telegramFallite }`.
+    dai workflow `scraper.yml`/`digest.yml`): blocca i duplicati anche se le tabelle
+    non sono state create. Se una tabella manca, il run logga un warning esplicito
+    con il nome della migrazione da applicare.
+  · **Concorrenza fra run (bug "notifiche ripetute a distanza di giorni")**:
+    scraper e digest girano negli stessi minuti e scrivono lo STESSO file. Due
+    protezioni: (1) `ledgerLocaleSalva()` fa il **MERGE con il file su disco**
+    prima di scrivere (mai la sola cache in memoria, che cancellerebbe le chiavi
+    dell'altro processo); (2) il commit in CI usa `scripts/commit-ledger.sh` →
+    `npm run ledger:unisci` (unione di chiavi) + push con retry, invece di
+    `git add`/`commit`/`push` diretti.
+  · **Persistenza IMMEDIATA**: gli alert PRO in tempo reale salvano il ledger dopo
+    OGNI invio (non solo a fine run) e lo script dello scraper ha la rete di
+    sicurezza `process.on('exit')`; il digest già salvava dopo ogni utente. Se un
+    run muore a metà (timeout del workflow, crash), quanto già consegnato resta
+    registrato e NON viene rimandato il giorno dopo.
+  · **Identità dell'opportunità (impronta)**: `hash_id` = provincia|titolo|data e
+    la stessa notizia ripubblicata con titolo/date diversi generava un hash nuovo
+    (→ nuovo record → nuovo alert, giorno dopo giorno, es. Liceo Monti). In
+    `src/scraper/index.ts` la deduplica `nuovi` ora usa TRE livelli — `hash_id`,
+    URL di fonte specifico e **impronta** (`src/lib/dedupAvvisi.ts`, confronto con
+    gli avvisi degli ultimi `GIORNI_IMPRONTA` = 60 giorni, più dedup intra-run).
+    Le letture di appoggio sono in **lotti** (`LOTTO_IN`) con errore SEMPRE
+    loggato: prima un errore non visto faceva considerare NUOVI tutti gli avvisi.
+  · **Stato DB verificabile**: `npm run db:verifica` (sonda senza effetti collaterali:
+    tabella + RPC con un UUID inesistente) e `npm run test:migrazioni` (regression
+    guard statico sui file SQL). Se le migrazioni non sono applicate, la deduplica
+    resta comunque garantita dal ledger su file.
+  · **Recupero di invii non registrati**: `npm run notifiche:digest -- --registra-consegnate
+    [--fino-a <ISO>]` marca come consegnate le opportunità già inviate SENZA rispedire
+    nulla e senza consumare quota (il tetto temporale evita di marcare novità recenti
+    mai inviate).
+- **POLICY DI ROUTING (mai link interni)**: il link di un avviso punta **SOLO alla fonte
+  esterna originale** dell'istituzione (`eLinkEsterno`/`urlEsterna` in `alertInterpello.ts`).
+  `linkOpportunita` **non ha più fallback** verso pagine della piattaforma: senza fonte
+  valida la CTA porta al **Radar** con etichetta esplicita ("Apri il tuo Radar Scuole"),
+  mentre il blocco avviso espone recapito + guida. Anche lo scraper **rifiuta** gli URL
+  della piattaforma come fonte (`RE_HOST_NON_ISTITUZIONALE`). Verificato da
+  `npm run test:link` e `npm run test:link-esterno`.
+- **Guida operativa (pagine tabellari/"Stampa")**: `suggerimentoRicercaAvviso()` distingue
+  le pagine di **dettaglio** (nessun testo aggiuntivo) da quelle di **riepilogo/elenco**
+  (`ePaginaRiepilogo`, anche `?stampa=1`, `/print`, tabelle) e dagli avvisi **senza
+  fonte**: in questi casi il template (email, Telegram, card, scheda) aggiunge una nota
+  che spiega come **trovare la riga** («classe» per provincia) e come **candidarsi**
+  scrivendo all'email della scuola. L'etichetta del link diventa "Apri la pagina di
+  riepilogo": onesta su ciò che l'utente troverà.
+- **Email scolastica (asset del piano PRO)**: il recapito di candidatura è un campo
+  dell'**avviso strutturato** (`costruisciAvviso.email`) e viene reso **cliccabile**
+  (`mailto:`) con etichetta/icona CONDIVISE (`📧 Candidature:` nei messaggi,
+  `📧 Email candidature` nelle viste web) in **email, Telegram, post canale, viste web
+  (`InterpelloCard`, `/interpello/:id`) e Edge `send-notification`**.
+  Se la fonte non pubblica un recapito, si ricostruisce la **PEO ufficiale**
+  (`codice@istruzione.it`) dal codice meccanografico (`emailScuola.ts`); il codice
+  viene cercato anche nei **link candidati** (URL/allegati/PDF) e nelle pagine di
+  **riepilogo/"Stampa"** o negli elenchi tabellari, così il contatto c'è anche quando
+  la descrizione estesa manca. Ultima ratio anche lato dispatch (`notifier.ts`,
+  Edge `send-notification`, che legge `contact_email`/`school_code`/`title`).
+  Se il recapito manca davvero, la riga è **omessa** (mai "Email non disponibile"):
+  verificato da `npm run test:email-alert`. `npm run dati:arricchisci` completa le
+  righe già in DB.
+- **NOTIFICHE PER TIER — PRO in tempo reale · BASE in un batch alle 17:00** →
+  `inviaAlertTelegramTempoReale()` + `inviaDigestGiornaliero()` in `src/lib/notifier.ts`,
+  `src/lib/digest.ts` (puro) e, per il rendering, `renderDigestEmailHtml`/`inviaDigestEmail`
+  (email) + `formattaDigestTelegram`/`inviaDigestTelegram` (Telegram).
+  · **PRO** → alert **INDIVIDUALI in TEMPO REALE su Telegram** appena l'avviso è
+    scrapato (`inviaAlertTelegramTempoReale`, invocata dallo scraper in FASE 4):
+    non consuma quota (PRO è illimitato) e non manda email immediate.
+  · **BASE** → **nessun** alert immediato: UN SOLO BATCH al giorno alle 17:00 con tutte
+    le opportunità (`inviaDigestGiornaliero`), su Telegram + riepilogo email.
+  · **Email** → per ENTRAMBI i tier resta UN SOLO riepilogo quotidiano (mai N email).
+  · **Deduplica PER CANALE** (`giaNotificatoCanale`, chiavi `…|<canale>` nel ledger +
+    `notifications_log`): un avviso consegnato in tempo reale su Telegram NON torna nel
+    batch Telegram serale, ma **può** comparire nel riepilogo EMAIL (canale diverso).
+    La chiave LEGACY agnostica `…|notifica` vale per TUTTI i canali (nessun doppio invio
+    storico). Verificato da `npm run test:telegram:tier`.
+  · **Finestra di invio: 17:00 italiane** (`ORA_DIGEST`, fuso `Europe/Rome`, fine
+    giornata scolastica). Il cron GitHub gira in UTC → si schedula `0 15,16 * * 1-5` e
+    lo script invia SOLO quando in Italia sono le 17:00 (`eOraDelDigest`); con `--force`
+    (o l'admin `npm run admin:dispatch`) si ignora la finestra.
+  · Contenuto = TUTTE le opportunità attive compatibili **non ancora consegnate SU QUEL
+    CANALE** (ledger per canale), ordinate per scadenza più vicina. Ogni voce porta fonte
+    ESTERNA, email della scuola e guida operativa COMPATTA. Max 12 voci nell'email (con
+    nota delle restanti) e budget di caratteri per Telegram (limite 4096 sempre rispettato).
+  · **Oggetto email** (formula di prodotto): *"ScuoleRadar — Oggi abbiamo trovato
+    {N} opportunità per te"* (`subjectDigest`); la testata del messaggio Telegram usa
+    la stessa formula (`testataDigest`).
+  · **Layout a bassa fatica visiva**: voci **numerate**, card bianche con bordo tenue
+    e accento laterale (niente riquadri grigi ripetuti) e **raggruppamento per urgenza**
+    di scadenza (`🔴 entro 2 giorni` · `🟡 entro una settimana` · `🟢 oltre` ·
+    `⚪ n/d`, stesse soglie di `scadenza.ts`). Le intestazioni di gruppo compaiono
+    **solo** se i gruppi sono più di uno: con un solo gruppo resta una lista lineare.
+    In Telegram ogni voce è compressa in poche righe (contesto · classe/scadenza ·
+    fonte · email · guida).
+  · **Guida standardizzata**: `ISTRUZIONE_AVVISO_UFFICIALE` =
+    *"Apri l'avviso ufficiale (clicca STAMPA dove possibile, per candidarti)"*, usata
+    identicamente in digest, email e schede; nel digest si usa la variante
+    `suggerimentoRicercaAvviso({ compatto: true })`, che non ripete l'email già
+    mostrata sulla riga precedente.
+  · **Quota**: UN credito al giorno e **solo per BASE** (PRO è illimitato, nessuna RPC)
+    con la sequenza `prova1 → prova2 → prova3 → extra`; dopo `extra` il cron DB
+    `step5-notifiche` invia il recap finale. Il ledger viene marcato per canale con le
+    voci consegnate, così né il batch di domani né il tempo reale le ripetono.
+  · Comando: `npm run notifiche:digest [-- --dry-run] [-- --force] [-- <email|uuid>]`
+    (workflow `.github/workflows/digest.yml`). Verificato da `npm run test:digest` e
+    `npm run test:telegram:tier`.
+- **Orchestrazione LEGACY** → `notificaNuoviInterpelli(client, nuovi, opts)` e
+  `notificaInterpelliPerUtente(client, target, opts)` restano esportate per test,
+  dry-run e backfill manuali, ma **non sono più usate dalla pipeline**; nessuna lancia
+  eccezioni (esito `{ inviate, fallite, telegramInviate, telegramFallite }`).
 
 ### 6.2 Sequenza drip account BASE (6 email)
 | # | Tipo | Quando | Canale d'invio |
@@ -999,6 +1147,7 @@ test ID). Per passare in produzione basta aggiornare i secrets Supabase (nessun 
 | `genere` | text | `'M'|'F'|NULL` (check `profiles_genere_check`) — declina email (Cara/Caro, stata/stato) |
 | `ordini` / `ordini_scuola` | text[] default '{}' | ordini di interesse (legacy / nuovo) |
 | `classi_concorso` | text[] | classi di concorso |
+| `sostegno` | boolean not null default false | preferenza SOSTEGNO: includi anche le opportunità ADAA/ADEE/ADMM/ADSS (migrazione `20260914040000_add_profiles_sostegno.sql`, con backfill dell'adesione implicita di chi ha una classe `AD*` tra le preferenze) |
 | `materie_id` / `materie_custom` | text[] | materie |
 | `province_attive` / `province_interesse` | text[] | province (legacy / nuovo) |
 | `favorite_schools` / `ignored_schools` | text[] | whitelist / blacklist scuole |
@@ -1205,7 +1354,8 @@ workflow `health-check.yml` (env opzionali: `HEALTH_STALE_HOURS`, `HEALTH_NEWS_S
 `test:pdf*` (mad/breve/brevi/universita/completo).
 
 ### 18.2 CI / cron (GitHub Actions)
-- `scraper.yml`: Lun–Ven 07/12/15 UTC → interpelli + notifiche.
+- `scraper.yml`: Lun–Ven 07/12/15 UTC → interpelli + canali Telegram (nessun invio personale).
+- `digest.yml`: Lun–Ven 15/16 UTC → BATCH alle 17:00 italiane (Telegram per BASE + email per tutti).
 - `scrape-notizie.yml`: giornaliero 06:00 UTC → notizie + commit + deploy.
 - Commit con `[skip ci]` → nessun loop.
 
