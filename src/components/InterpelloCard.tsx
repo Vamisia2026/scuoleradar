@@ -5,12 +5,16 @@ import { Modal } from './Modal';
 import { useApp, LIMITE_NOTIFICHE_PROVA } from '@/contexts/AppContext';
 import { etichettaClasseMateria } from '@/data/classiConcorso';
 import {
+  EMAIL_ETICHETTA_WEB,
+  EMAIL_ICONA,
   costruisciAvviso,
   etichettaFonteLink,
   formatDataAvviso,
   formatDataAvvisoLunga,
   pulisciTitoloAvviso,
   scegliClasseRilevante,
+  suggerimentoRicercaAvviso,
+  urlEsterna,
 } from '@/lib/alertInterpello';
 import { giorniRimanenti, stileScadenza } from '@/lib/scadenza';
 
@@ -36,6 +40,9 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
     materia: interpello.materia,
     scadenza: interpello.dataScadenza,
     schoolName: interpello.istituto,
+    // Email di candidatura: nell'avviso strutturato (asset PRO), così è resa
+    // ogni volta che la pipeline la estrae — anche su link di riepilogo/"Stampa".
+    email: interpello.contactEmail,
     titolo: interpello.titolo,
   });
   const provinciaTxt = interpello.provinciaNome || interpello.provinciaCodice;
@@ -51,6 +58,17 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
   const isPreferita = preferenze.favoriteSchools.some((s) =>
     s && `${interpello.istituto} ${interpello.titolo}`.toLowerCase().includes(s.toLowerCase()),
   );
+  // ROUTING: la scheda espone SOLO la fonte ESTERNA originale (mai un link
+  // interno della piattaforma spacciato per "fonte").
+  const linkEsterno = urlEsterna(interpello.linkFonte);
+  // GUIDA OPERATIVA: pagina tabellare/"Stampa" o fonte ufficiale mancante.
+  const guida = suggerimentoRicercaAvviso({
+    url: linkEsterno,
+    classe: classePerAvviso,
+    provincia: interpello.provinciaNome || interpello.provinciaCodice,
+    schoolName: interpello.istituto,
+    email: avviso.email,
+  });
 
   const handleVediDettaglio = () => {
     setOpen(true);
@@ -166,16 +184,19 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
               </div>
             ))}
             {/* Email candidature: blocco presente SOLO se l'indirizzo è stato
-                estratto (mai uno stato negativo tipo "Non indicata"). */}
-            {interpello.contactEmail && (
+                estratto (mai uno stato negativo tipo "Non indicata"). Etichetta
+                e icona sono le stesse di email e Telegram. */}
+            {avviso.email && (
               <div className="rounded-xl bg-slate-50 p-4">
-                <dt className="text-sm font-semibold text-primary-700">Email candidature</dt>
+                <dt className="text-sm font-semibold text-primary-700">
+                  {EMAIL_ICONA} {EMAIL_ETICHETTA_WEB}
+                </dt>
                 <dd className="text-sm text-primary-800">
                   <a
-                    href={`mailto:${interpello.contactEmail}`}
+                    href={`mailto:${avviso.email}`}
                     className="break-all text-primary-600 underline transition hover:text-primary-800"
                   >
-                    {interpello.contactEmail}
+                    {avviso.email}
                   </a>
                 </dd>
               </div>
@@ -189,15 +210,30 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
             </div>
           )}
 
-          <a
-            href={interpello.linkFonte}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-600 transition hover:text-primary-800"
-          >
-            {etichettaFonteLink(interpello.linkFonte)}
-            <ArrowRight className="h-4 w-4" />
-          </a>
+          {/* GUIDA OPERATIVA: come trovare la riga e candidarsi quando la fonte è
+              un elenco/"Stampa" o non è disponibile. */}
+          {guida && (
+            <p className="rounded-xl border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-900">
+              ℹ️ {guida}
+            </p>
+          )}
+
+          {/* UN SOLO link verso la FONTE ESTERNA (se disponibile). */}
+          {linkEsterno ? (
+            <a
+              href={linkEsterno}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-600 transition hover:text-primary-800"
+            >
+              {etichettaFonteLink(linkEsterno)}
+              <ArrowRight className="h-4 w-4" />
+            </a>
+          ) : (
+            <span className="text-sm text-primary-500">
+              La fonte ufficiale non è indicata: usa i recapiti qui sopra.
+            </span>
+          )}
 
           {giaNotificato && (
             <div className="flex items-center gap-2 rounded-xl bg-accent-50 px-4 py-3 text-sm text-accent-700">

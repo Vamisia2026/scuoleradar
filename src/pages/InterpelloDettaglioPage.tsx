@@ -1,18 +1,22 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, BadgeCheck, Clock, GraduationCap, Mail, MapPin } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BadgeCheck, Clock, GraduationCap, MapPin } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { Footer } from './LandingPage';
 import { supabase } from '@/lib/supabase';
 import { mapInterpelloDBToInterpello, type InterpelloDB } from '@/lib/matchingEngine';
 import type { Interpello } from '@/data/interpelli';
 import {
+  EMAIL_ETICHETTA_WEB,
+  EMAIL_ICONA,
   ICONA_RIGA,
   costruisciAvviso,
   etichettaFonteLink,
   formatDataAvviso,
   formatDataAvvisoLunga,
   pulisciTitoloAvviso,
+  suggerimentoRicercaAvviso,
+  urlEsterna,
 } from '@/lib/alertInterpello';
 import { chiaveInterpelloDaParam } from '@/lib/interpelloRouting';
 import { etichettaClasseMateria } from '@/data/classiConcorso';
@@ -49,20 +53,16 @@ function daNotices(r: {
 }
 
 /**
- * Reindirizza IMMEDIATAMENTE alla fonte ufficiale dell'avviso, quando esiste un
- * URL http(s) assoluto e valido. È il comportamento richiesto dai deep link
- * delle notifiche: nessuna scheda interna intermedia, nessun
- * "Avviso non più disponibile" quando la pagina istituzionale è nota.
+ * Reindirizza IMMEDIATAMENTE alla fonte ufficiale ESTERNA dell'avviso, quando
+ * esiste un URL http(s) valido e NON interno alla piattaforma. È il comportamento
+ * richiesto dai deep link delle notifiche: nessuna scheda interna intermedia,
+ * nessun "Avviso non più disponibile" quando la pagina istituzionale è nota, e
+ * nessun rimbalzo su ScuoleRadar (la scheda interna non è mai una "fonte").
  * Ritorna `true` se il redirect è stato avviato.
  */
 function reindirizzaAllaFonte(interpello: Interpello): boolean {
-  const link = (interpello.linkFonte ?? '').trim();
-  if (!/^https?:\/\//i.test(link)) return false;
-  try {
-    new URL(link);
-  } catch {
-    return false;
-  }
+  const link = urlEsterna(interpello.linkFonte);
+  if (!link) return false;
   try {
     window.location.replace(link);
   } catch {
@@ -230,14 +230,26 @@ function SchedaAvviso({ interpello }: { interpello: Interpello }) {
     materia: interpello.materia,
     scadenza: interpello.dataScadenza,
     schoolName: interpello.istituto,
+    // Email di candidatura: dentro l'avviso strutturato, così è resa OGNI volta
+    // che la pipeline la estrae (anche per link di riepilogo/"Stampa").
+    email: interpello.contactEmail,
   });
   const titolo = pulisciTitoloAvviso(
     interpello.titolo,
     `Interpello ${etichettaClasse || interpello.provinciaNome || interpello.provinciaCodice}`,
   );
   const stile = stileScadenza(giorniRimanenti(interpello.dataScadenza));
-  const linkFonte = (interpello.linkFonte ?? '').trim();
-  const linkValido = /^https?:\/\//i.test(linkFonte);
+  // ROUTING: si espone SOLO la fonte ESTERNA originale (mai un link interno).
+  const linkFonte = urlEsterna(interpello.linkFonte);
+  const linkValido = Boolean(linkFonte);
+  // GUIDA OPERATIVA: pagina tabellare/"Stampa" o fonte ufficiale mancante.
+  const guida = suggerimentoRicercaAvviso({
+    url: linkFonte,
+    classe: interpello.classeCodice,
+    provincia: interpello.provinciaNome || interpello.provinciaCodice,
+    schoolName: interpello.istituto,
+    email: avviso.email,
+  });
 
   return (
     <article className="rounded-2xl border border-primary-100 bg-white p-6 shadow-card sm:p-8">
@@ -293,12 +305,14 @@ function SchedaAvviso({ interpello }: { interpello: Interpello }) {
             <dd className="text-sm text-primary-800">{r.valore}</dd>
           </div>
         ))}
-        {interpello.contactEmail && (
+        {avviso.email && (
           <div className="rounded-xl bg-slate-50 p-4">
-            <dt className="text-sm font-semibold text-primary-700">{'\u2709\ufe0f'} Email candidature</dt>
+            <dt className="text-sm font-semibold text-primary-700">
+              {EMAIL_ICONA} {EMAIL_ETICHETTA_WEB}
+            </dt>
             <dd className="text-sm text-primary-800">
-              <a href={`mailto:${interpello.contactEmail}`} className="break-all text-primary-600 underline">
-                {interpello.contactEmail}
+              <a href={`mailto:${avviso.email}`} className="break-all text-primary-600 underline">
+                {avviso.email}
               </a>
             </dd>
           </div>
@@ -311,11 +325,19 @@ function SchedaAvviso({ interpello }: { interpello: Interpello }) {
         </p>
       )}
 
-      {/* UN SOLO bottone verso la fonte, con etichetta ONESTA sulla destinazione. */}
+      {/* GUIDA OPERATIVA: come trovare la riga e candidarsi quando la fonte è un
+          elenco/"Stampa" o non è disponibile. */}
+      {guida && (
+        <p className="mt-4 rounded-xl border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-900">
+          ℹ️ {guida}
+        </p>
+      )}
+
+      {/* UN SOLO bottone verso la fonte ESTERNA, con etichetta ONESTA. */}
       <div className="mt-6 flex flex-wrap items-center gap-3">
         {linkValido ? (
           <a
-            href={linkFonte}
+            href={linkFonte ?? '#'}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 rounded-xl bg-primary-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary-700"

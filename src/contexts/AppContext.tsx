@@ -49,6 +49,15 @@ export interface Preferenze {
   favoriteSchools: string[];
   /** Blacklist scuole: nascondi gli avvisi */
   ignoredSchools: string[];
+  /**
+   * SOSTEGNO (special education): true = includi anche le opportunità di sostegno
+   * (ADAA/ADEE/ADMM/ADSS) nel Radar. Default FALSE: senza adesione gli avvisi di
+   * sostegno non vengono notificati, così non arrivano più a chi non è abilitato
+   * (falso positivo storico: docente di tedesco → interpelli ADEE).
+   * Persiste su `profiles.sostegno`. Una classe di sostegno già selezionata tra le
+   * preferenze vale come adesione implicita (nessuno perde copertura).
+   */
+  sostegno?: boolean;
 }
 
 export interface Esame {
@@ -187,6 +196,8 @@ const defaultPreferenze: Preferenze = {
   onboarded: false,
   favoriteSchools: [],
   ignoredSchools: [],
+  // Sostegno: OFF di default → nessun avviso di sostegno senza adesione esplicita.
+  sostegno: false,
 };
 
 /** Converte una riga della tabella `notices` nel tipo `Interpello` usato dalla dashboard. */
@@ -777,25 +788,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const dati = p ?? preferenze;
       const genereFinale = (p?.genere ?? preferenze.genere ?? user?.genere) ?? null;
       const etaFinale = (p?.eta ?? preferenze.eta ?? user?.eta) ?? null;
-      const { error } = await supabase
-        .from('profiles')
-        .upsert(
-          {
-            id: authUser.id,
-            email: authUser.email ?? dati.emailNotifica,
-            genere: genereFinale,
-            eta: etaFinale,
-            province_attive: dati.provinceCodici,
-            province_interesse: dati.provinceCodici,
-            classi_concorso: dati.classiCodici,
-            ordini_scuola: dati.ordini,
-            moduli_scaricati: getModuliScaricati().map((m) => m.id),
-            telegram_chat_id: dati.telegramChatId || null,
-            favorite_schools: dati.favoriteSchools,
-            ignored_schools: dati.ignoredSchools,
-          },
-          { onConflict: 'id' },
+      const payload = {
+        id: authUser.id,
+        email: authUser.email ?? dati.emailNotifica,
+        genere: genereFinale,
+        eta: etaFinale,
+        province_attive: dati.provinceCodici,
+        province_interesse: dati.provinceCodici,
+        classi_concorso: dati.classiCodici,
+        ordini_scuola: dati.ordini,
+        moduli_scaricati: getModuliScaricati().map((m) => m.id),
+        telegram_chat_id: dati.telegramChatId || null,
+        favorite_schools: dati.favoriteSchools,
+        ignored_schools: dati.ignoredSchools,
+        // Preferenza SOSTEGNO (colonna dedicata, migrazione 20260914040000):
+        // `=== true` normalizza anche le preferenze legacy senza il campo.
+        sostegno: dati.sostegno === true,
+      };
+      let { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
+      // DB non ancora migrato (colonna `sostegno` assente → 42703/PGRST204): si
+      // risalva TUTTO il resto senza il campo, altrimenti il profilo non si salva.
+      if (error && /sostegno/i.test(error.message)) {
+        const payloadSenzaSostegno: Record<string, unknown> = { ...payload };
+        delete payloadSenzaSostegno.sostegno;
+        console.warn(
+          'Colonna profiles.sostegno assente: applicare la migrazione 20260914040000_add_profiles_sostegno.sql (preferenza salvata solo in locale).',
         );
+        ({ error } = await supabase
+          .from('profiles')
+          .upsert(payloadSenzaSostegno, { onConflict: 'id' }));
+      }
       if (error) {
         console.error('Errore salvataggio profilo su Supabase:', error.message);
       } else {
@@ -1068,13 +1090,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // NB: NIENTE colonna `is_free_forever` qui (assente nel DB remoto →
         // errore 42703 che bloccava il piano su 'base'). Il piano si ricava da
         // piano/subscription_tier tramite pianoDaProfilo.
-        const { data, error } = await supabase
+        const COLONNE_PROFILO =
+          'province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, subscription_tier, abbonamento_scade_il, subscription_status, crediti, notifiche_usate, radar_attivo, favorite_schools, ignored_schools';
+        let risposta = await supabase
           .from('profiles')
-          .select(
-            'province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, subscription_tier, abbonamento_scade_il, subscription_status, crediti, notifiche_usate, radar_attivo, favorite_schools, ignored_schools',
-          )
+          .select(`${COLONNE_PROFILO}, sostegno`)
           .eq('id', au.id)
           .maybeSingle();
+        if (risposta.error && /sostegno/i.test(risposta.error.message)) {
+          // DB non ancora migrato (colonna `sostegno` assente): si rilegge senza la
+          // preferenza, così il caricamento del profilo non si rompe.
+          console.warn(
+            '[profilo] colonna profiles.sostegno assente: applicare la migrazione 20260914040000_add_profiles_sostegno.sql',
+          );
+          risposta = await supabase
+            .from('profiles')
+            .select(COLONNE_PROFILO)
+            .eq('id', au.id)
+            .maybeSingle();
+        }
+        const { data, error } = risposta;
         // Diagnostica caricamento profilo: id/email sessione + riga grezza restituita dal DB.
         console.log('[profilo] auth →', { id: au.id, email: au.email ?? '' });
         if (error) console.warn('[profilo] query profiles (per id) fallita:', error.message);
@@ -1125,6 +1160,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
               data.ignored_schools && data.ignored_schools.length > 0
                 ? data.ignored_schools
                 : prev.ignoredSchools,
+            // Preferenza SOSTEGNO: si applica solo se la colonna esiste davvero
+            // (boolean); senza migrazione resta il valore locale.
+            sostegno: typeof data.sostegno === 'boolean' ? data.sostegno : prev.sostegno,
           }));
           // FASE 6 — piano e scadenza letti dalle colonne REALI di profiles.
           // Fonte canonica: is_free_forever (se presente) oppure gli alias

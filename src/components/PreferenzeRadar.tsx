@@ -11,11 +11,12 @@ import {
 } from 'lucide-react';
 import { useApp, type Preferenze } from '@/contexts/AppContext';
 import { supabase } from '@/lib/supabase';
-import { classiConcorso } from '@/data/classiConcorso';
+import { classiConcorso, codiciSostegno, isCodiceSostegno } from '@/data/classiConcorso';
 import { materie, ordiniScuola, type OrdineScuola } from '@/data/ordiniMaterie';
 import { province } from '@/data/province';
 import { Pill } from '@/components/Pill';
 import { Accordion } from '@/components/Accordion';
+import { SostegnoToggle } from '@/components/SostegnoToggle';
 import { pianoLimits, limitaSelezione } from '@/lib/planLimits';
 
 const ordineIcons: Record<OrdineScuola, React.ReactNode> = {
@@ -42,6 +43,8 @@ export function PreferenzeRadar() {
   const [classiCodici, setClassiCodici] = useState<string[]>(preferenze.classiCodici);
   const [materieId, setMaterieId] = useState<string[]>(preferenze.materieId);
   const [materieCustom, setMaterieCustom] = useState<string[]>(preferenze.materieCustom);
+  /** Preferenza SOSTEGNO (profiles.sostegno): avvisi ADAA/ADEE/ADMM/ADSS. */
+  const [sostegno, setSostegno] = useState(preferenze.sostegno === true);
   const [provinceCodici, setProvinceCodici] = useState<string[]>(preferenze.provinceCodici);
   const [telegramUsername, setTelegramUsername] = useState(preferenze.telegramUsername);
   const [telegramChatIdInput, setTelegramChatIdInput] = useState(preferenze.telegramChatId ?? '');
@@ -194,6 +197,8 @@ export function PreferenzeRadar() {
       onboarded: preferenze.onboarded,
       favoriteSchools,
       ignoredSchools,
+      // Preferenza SOSTEGNO: autosalvata come tutte le altre (profiles.sostegno).
+      sostegno,
     };
     setStatoSalvataggio('salvataggio');
     const timeout = setTimeout(() => {
@@ -216,6 +221,7 @@ export function PreferenzeRadar() {
     emailNotifica,
     favoriteSchools,
     ignoredSchools,
+    sostegno,
   ]);
 
   return (
@@ -375,6 +381,18 @@ export function PreferenzeRadar() {
             );
           })}
         </div>
+
+        {/* Preferenza SOSTEGNO — domanda esplicita: il sostegno è un'abilitazione
+            separata, senza adesione gli avvisi ADEE/ADMM/ADSS non si ricevono. */}
+        <SostegnoToggle
+          attivo={sostegno}
+          onCambia={setSostegno}
+          classiSostegno={classiCodici.filter((c) => isCodiceSostegno(c))}
+          idPrefisso="preferenze-sostegno"
+        />
+        <p className="mt-1.5 text-[11px] leading-relaxed text-primary-400">
+          Classi di sostegno del catalogo: {codiciSostegno.join(', ')}.
+        </p>
       </Accordion>
 
       {/* Materie e Competenze — accordion */}

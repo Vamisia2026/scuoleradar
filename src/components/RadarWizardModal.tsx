@@ -6,11 +6,12 @@ import {
 } from 'lucide-react';
 import { Modal } from '@/components/Modal';
 import { Pill } from '@/components/Pill';
+import { SostegnoToggle } from '@/components/SostegnoToggle';
 import { useApp, STORAGE_KEY_RADAR_WIZARD_PENDING, type Preferenze } from '@/contexts/AppContext';
 import { track } from '@/lib/analytics';
 import { supabase } from '@/lib/supabase';
 import { ordiniScuola, materie, type OrdineScuola } from '@/data/ordiniMaterie';
-import { classiConcorso } from '@/data/classiConcorso';
+import { classiConcorso, codiciSostegno, isCodiceSostegno } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import { pianoLimits, limitaSelezione } from '@/lib/planLimits';
 import {
@@ -71,6 +72,8 @@ export function RadarWizardModal() {
   const [classiCodici, setClassiCodici] = useState<string[]>([]);
   const [materieId, setMaterieId] = useState<string[]>([]);
   const [materieCustom, setMaterieCustom] = useState<string[]>([]);
+  /** Preferenza SOSTEGNO: "includi anche le opportunità per il sostegno". */
+  const [sostegno, setSostegno] = useState(false);
   const [provinceCodici, setProvinceCodici] = useState<string[]>([]);
   const [telegramUsername, setTelegramUsername] = useState('');
   const [emailNotifica, setEmailNotifica] = useState('');
@@ -106,6 +109,7 @@ export function RadarWizardModal() {
     setClassiCodici(limitaSelezione(preferenze.classiCodici, maxClassiConcorso));
     setMaterieId(preferenze.materieId ?? []);
     setMaterieCustom(preferenze.materieCustom ?? []);
+    setSostegno(preferenze.sostegno === true);
     setProvinceCodici(limitaSelezione(preferenze.provinceCodici, maxProvince));
     setTelegramUsername(preferenze.telegramUsername ?? '');
     setEmailNotifica(preferenze.emailNotifica || user?.email || '');
@@ -210,6 +214,15 @@ export function RadarWizardModal() {
     persistiDraft({ ...bozzaPreferenze(), materieId: prossime });
   };
 
+  /**
+   * Preferenza SOSTEGNO (Passo 3): persistita SUBITO nella bozza, così la scelta
+   * non si perde cambiando passo o chiudendo/riaprendo il wizard.
+   */
+  const toggleSostegno = (prossimo: boolean) => {
+    setSostegno(prossimo);
+    persistiDraft({ ...bozzaPreferenze(), sostegno: prossimo });
+  };
+
   const addCustomMateria = () => {
     const val = customMateriaInput.trim();
     if (!val) return;
@@ -272,6 +285,8 @@ export function RadarWizardModal() {
     onboarded: false,
     favoriteSchools: preferenze.favoriteSchools ?? [],
     ignoredSchools: preferenze.ignoredSchools ?? [],
+    // Preferenza SOSTEGNO (Passo 3 → profiles.sostegno).
+    sostegno,
   });
 
   /** Persiste subito una bozza (context/localStorage + profilo Supabase). */
@@ -331,6 +346,8 @@ export function RadarWizardModal() {
       onboarded: true,
       favoriteSchools: preferenze.favoriteSchools ?? [],
       ignoredSchools: preferenze.ignoredSchools ?? [],
+      // Preferenza SOSTEGNO scelta al Passo 3 (senza, la fine del wizard la perderebbe).
+      sostegno,
     };
     // Salva le preferenze (localStorage) anche per gli anonimi: la configurazione
     // non va mai persa.
@@ -682,6 +699,19 @@ export function RadarWizardModal() {
                       })
                     )}
                   </div>
+
+                  {/* Preferenza SOSTEGNO: domanda esplicita, subito dopo le classi
+                      (il sostegno è un'abilitazione separata: senza adesione gli
+                      avvisi ADEE/ADMM/ADSS non vengono notificati). */}
+                  <SostegnoToggle
+                    attivo={sostegno}
+                    onCambia={toggleSostegno}
+                    classiSostegno={classiCodici.filter((c) => isCodiceSostegno(c))}
+                    idPrefisso="wizard-sostegno"
+                  />
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-primary-400">
+                    Le classi di sostegno del catalogo sono {codiciSostegno.join(', ')}.
+                  </p>
                 </div>
 
                 {/* Materie */}
