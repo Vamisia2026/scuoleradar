@@ -99,23 +99,7 @@ export const notizieIngestite: NewsArticle[] = [
     "official_source_url": "https://www.mim.gov.it/web/guest/-/lettera-del-ministro-dell-istruzione-e-del-merito-giuseppe-valditara-in-occasione-dell-inizio-dell-anno-scolastico-2026-2027",
     "official_pdf_url": null,
     "relevance_score": 70,
-    "published_at": "2026-09-16T11:04:04.071Z"
-  },
-  {
-    "id": "notizia-ventesima-edizione-del-concorso-juvenes-translatores-2026-20-mim",
-    "title": "Ventesima edizione del concorso Juvenes Translatores 2026-2027",
-    "category": "Concorsi",
-    "deadline_date": null,
-    "summary_points": [
-      "Ventesima edizione del concorso Juvenes Translatores 2026-2027",
-      "Interessati: candidati in possesso dei requisiti richiesti per la classe di concorso o il profilo messo a bando.",
-      "Come: apri il documento ufficiale dell'avviso."
-    ],
-    "content_html": "<p>Si apre la strada per entrare in ruolo o cambiare classe di concorso: è online il bando «Ventesima edizione del concorso Juvenes Translatores 2026-2027». Scadenza ufficiale non ancora pubblicata: la trovi <a href=\"https://www.mim.gov.it/web/guest/-/ventesima-edizione-del-concorso-juvenes-translatores-2026-2027-1\" target=\"_blank\" rel=\"noopener noreferrer\">nell'avviso ufficiale</a> — ti avvisiamo appena esce.</p>\n    <p>Riguarda candidati in possesso dei requisiti richiesti per la classe di concorso o il profilo messo a bando. La selezione prevede prove e valutazione dei titoli: requisiti, programmi e modalità cambiano da bando a bando, quindi leggi il testo prima di compilare. La domanda va presentata entro il termine indicato, con i titoli già autocertificati.</p>\n    <p>La domanda si presenta online sul Portale del Reclutamento (InPA) con SPID o CIE. Prepara in anticipo titoli, autocertificazione e ricevute. Testo ufficiale: <a href=\"https://www.mim.gov.it/web/guest/-/ventesima-edizione-del-concorso-juvenes-translatores-2026-2027-1\" target=\"_blank\" rel=\"noopener noreferrer\">apri l'avviso ufficiale</a>.</p>",
-    "official_source_url": "https://www.mim.gov.it/web/guest/-/ventesima-edizione-del-concorso-juvenes-translatores-2026-2027-1",
-    "official_pdf_url": null,
-    "relevance_score": 90,
-    "published_at": "2026-09-16T11:04:04.067Z"
+    "published_at": "2026-09-17T11:14:13.880Z"
   },
   {
     "id": "notizia-welfare-per-il-personale-della-scuola-parte-la-polizza-sanit-mim",
@@ -131,6 +115,22 @@ export const notizieIngestite: NewsArticle[] = [
     "official_source_url": "https://www.mim.gov.it/web/guest/-/welfare-per-il-personale-della-scuola-parte-la-polizza-sanitaria-interessati-oltre-un-milione-e-duecentomila-dipendenti",
     "official_pdf_url": null,
     "relevance_score": 70,
-    "published_at": "2026-09-16T11:04:03.830Z"
+    "published_at": "2026-09-17T11:14:13.705Z"
+  },
+  {
+    "id": "notizia-ventesima-edizione-del-concorso-juvenes-translatores-2026-20-mim",
+    "title": "Ventesima edizione del concorso Juvenes Translatores 2026-2027",
+    "category": "Concorsi",
+    "deadline_date": null,
+    "summary_points": [
+      "Ventesima edizione del concorso Juvenes Translatores 2026-2027",
+      "Interessati: candidati in possesso dei requisiti richiesti per la classe di concorso o il profilo messo a bando.",
+      "Come: apri il documento ufficiale dell'avviso."
+    ],
+    "content_html": "<p>Si apre la strada per entrare in ruolo o cambiare classe di concorso: è online il bando «Ventesima edizione del concorso Juvenes Translatores 2026-2027». Scadenza ufficiale non ancora pubblicata: la trovi <a href=\"https://www.mim.gov.it/web/guest/-/ventesima-edizione-del-concorso-juvenes-translatores-2026-2027-1\" target=\"_blank\" rel=\"noopener noreferrer\">nell'avviso ufficiale</a> — ti avvisiamo appena esce.</p>\n    <p>Riguarda candidati in possesso dei requisiti richiesti per la classe di concorso o il profilo messo a bando. La selezione prevede prove e valutazione dei titoli: requisiti, programmi e modalità cambiano da bando a bando, quindi leggi il testo prima di compilare. La domanda va presentata entro il termine indicato, con i titoli già autocertificati.</p>\n    <p>La domanda si presenta online sul Portale del Reclutamento (InPA) con SPID o CIE. Prepara in anticipo titoli, autocertificazione e ricevute. Testo ufficiale: <a href=\"https://www.mim.gov.it/web/guest/-/ventesima-edizione-del-concorso-juvenes-translatores-2026-2027-1\" target=\"_blank\" rel=\"noopener noreferrer\">apri l'avviso ufficiale</a>.</p>",
+    "official_source_url": "https://www.mim.gov.it/web/guest/-/ventesima-edizione-del-concorso-juvenes-translatores-2026-2027-1",
+    "official_pdf_url": null,
+    "relevance_score": 90,
+    "published_at": "2026-09-15T00:00:00.000Z"
   }
 ];
