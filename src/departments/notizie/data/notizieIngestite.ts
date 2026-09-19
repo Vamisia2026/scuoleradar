@@ -99,7 +99,7 @@ export const notizieIngestite: NewsArticle[] = [
     "official_source_url": "https://www.mim.gov.it/web/guest/-/lettera-del-ministro-dell-istruzione-e-del-merito-giuseppe-valditara-in-occasione-dell-inizio-dell-anno-scolastico-2026-2027",
     "official_pdf_url": null,
     "relevance_score": 70,
-    "published_at": "2026-09-18T10:47:09.685Z"
+    "published_at": "2026-09-19T10:31:14.535Z"
   },
   {
     "id": "notizia-welfare-per-il-personale-della-scuola-parte-la-polizza-sanit-mim",
@@ -115,7 +115,7 @@ export const notizieIngestite: NewsArticle[] = [
     "official_source_url": "https://www.mim.gov.it/web/guest/-/welfare-per-il-personale-della-scuola-parte-la-polizza-sanitaria-interessati-oltre-un-milione-e-duecentomila-dipendenti",
     "official_pdf_url": null,
     "relevance_score": 70,
-    "published_at": "2026-09-18T10:47:09.468Z"
+    "published_at": "2026-09-19T10:31:14.215Z"
   },
   {
     "id": "notizia-ventesima-edizione-del-concorso-juvenes-translatores-2026-20-mim",
