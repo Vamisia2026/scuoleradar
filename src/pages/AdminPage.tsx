@@ -12,10 +12,20 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, BadgeInfo, Loader2, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/contexts/AppContext';
-import { DEV, tokenAdmin } from './admin/adminService';
-import { ADMIN_EMAILS, type TabAdmin } from './admin/types';
-import { btnAdmin, btnGhost, btnPrim } from './admin/adminUi';
-import { TabAccount, TabRadar, TabUtenti } from './admin/AdminTabs';
+import {
+  ADMIN_EMAILS,
+  DEV,
+  TabAccount,
+  TabDipartimenti,
+  TabEmailAutomazioni,
+  TabRadar,
+  TabUtenti,
+  btnAdmin,
+  btnGhost,
+  btnPrim,
+  tokenAdmin,
+  type TabAdmin,
+} from '@/departments/admin';
 
 export function AdminPage() {
   const { user } = useApp();
@@ -92,7 +102,9 @@ export function AdminPage() {
   const tabAdmin: { id: TabAdmin; label: string }[] = [
     { id: 'utenti', label: '👥 Gestione Utenti' },
     { id: 'radar', label: '🛰️ Opportunità & Radar' },
+    { id: 'email', label: '✉️ Email & Automazioni' },
     { id: 'account', label: '💳 Account & Abbonamento' },
+    { id: 'dipartimenti', label: '🧩 Dipartimenti' },
   ];
 
   return (
@@ -141,7 +153,17 @@ export function AdminPage() {
         </nav>
 
         <main className="mt-6">
-          {tab === 'utenti' ? <TabUtenti /> : tab === 'radar' ? <TabRadar /> : <TabAccount />}
+          {tab === 'utenti' ? (
+            <TabUtenti />
+          ) : tab === 'radar' ? (
+            <TabRadar />
+          ) : tab === 'email' ? (
+            <TabEmailAutomazioni />
+          ) : tab === 'dipartimenti' ? (
+            <TabDipartimenti />
+          ) : (
+            <TabAccount />
+          )}
         </main>
       </div>
     </div>

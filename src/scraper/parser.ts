@@ -20,6 +20,7 @@
 
 import { createHash } from 'node:crypto';
 import { province } from '../data/province.ts';
+import { eUrlAvvisoDiretto } from '../lib/alertInterpello.ts';
 import { risolviEmailUfficialeScuola } from '../lib/emailScuola.ts';
 
 /* ------------------------------- Tipi ------------------------------- */
@@ -460,8 +461,13 @@ export function eUrlDocumento(url?: string | null): boolean {
  *   1. documento specifico (PDF/circolare/allegato) verificato;
  *   2. pagina istituzionale specifica (preferendo quella legata alla scuola);
  *   3. qualsiasi pagina specifica verificata;
- *   4. fallback: pagina istituzionale generica dell'ente (USP/USR), se mappata;
- *   5. `null` (nessun link inventato: l'avviso viene scartato a monte).
+ *   4. `null` (nessun link inventato: l'avviso viene scartato dal gate di invio).
+ *
+ * ⛔ Vietato il fallback alla HOME dell'ente (es. la radice dell'USR): era la
+ * causa degli alert con "👉 Apri l'avviso ufficiale" puntato a una pagina
+ * generica — e, se la provincia del record era quella della FONTE (pagina
+ * regionale), poteva portare l'utente su un'altra regione (es. Torino →
+ * Emilia-Romagna). Il link deve essere SEMPRE quello dell'avviso specifico.
  */
 export function scegliUrlFonte(
   candidati: Array<string | null | undefined>,
@@ -470,22 +476,26 @@ export function scegliUrlFonte(
   const validi = [...new Set(candidati.map((c) => (c ?? '').trim()).filter(Boolean))].filter((c) =>
     eSorgenteVerificata(c),
   );
+  // Solo URL di AVVISI SPECIFICI: home dell'ente, pagine di elenco/ricerca e
+  // archivi regionali non sono mai la "fonte ufficiale" di un avviso.
+  const diretti = validi.filter((c) => eUrlAvvisoDiretto(c));
 
-  const documento = validi.find((c) => eUrlDocumento(c));
+  const documento = diretti.find((c) => eUrlDocumento(c));
   if (documento) return documento;
 
   const codice = (ctx.schoolCode ?? '').trim().toUpperCase();
   const dellaScuola = codice
-    ? validi.find((c) => eHostIstituzionale(c) && c.toUpperCase().includes(codice))
+    ? diretti.find((c) => eHostIstituzionale(c) && c.toUpperCase().includes(codice))
     : undefined;
   if (dellaScuola) return dellaScuola;
 
-  const istituzionale = validi.find((c) => eHostIstituzionale(c));
+  const istituzionale = diretti.find((c) => eHostIstituzionale(c));
   if (istituzionale) return istituzionale;
 
-  if (validi.length > 0) return validi[0];
+  if (diretti.length > 0) return diretti[0];
 
-  return urlIstituzionaleEnte(ctx.provincia);
+  // Nessuna fonte specifica: nessun link (mai una home o un elenco regionale).
+  return null;
 }
 
 /**
@@ -713,14 +723,26 @@ function estraiDataConContesto(testo: string, re: RegExp): string | null {
 /**
  * SCADENZA dichiarata: la parola chiave può precedere la data ("scadenza 12/09/2026",
  * "entro il 12/09/2026", "entro le ore 12:00 del 15/09") oppure seguirla
- * ("12/09/2026 – termine di presentazione"). Guarda ~70 caratteri PRIMA e ~40 DOPO,
- * così cattura anche i bandi con frasi lunghe o date in testa.
+ * ("12/09/2026 – termine di presentazione").
+ *
+ * DUE PASSATE, in ordine di forza del segnale:
+ *   1. parola chiave PRIMA della data (~70 caratteri): è il segnale forte
+ *      ("Pubblicato il 12/09/2026. Scadenza: 15/09/2026" → 15/09, non 12/09);
+ *   2. altrimenti parola chiave DOPO la data (~40 caratteri), per i bandi che
+ *      scrivono "… 15/09/2026 – termine di presentazione delle domande".
+ * Senza questo ordine, la parola chiave che precede la SECONDA data veniva
+ * attribuita alla PRIMA data (scadenza anticipata di giorni → avviso scartato
+ * come "scaduto" prima del tempo).
  */
 function estraiDataScadenzaConContesto(testo: string): string | null {
-  for (const d of raccogliDate(testo)) {
+  const date = raccogliDate(testo);
+  for (const d of date) {
     const prima = testo.slice(Math.max(0, d.index - 70), d.index);
+    if (RE_CONTESTO_SCADENZA.test(prima)) return d.iso;
+  }
+  for (const d of date) {
     const dopo = testo.slice(d.index + d.length, d.index + d.length + 40);
-    if (RE_CONTESTO_SCADENZA.test(prima) || RE_CONTESTO_SCADENZA.test(dopo)) return d.iso;
+    if (RE_CONTESTO_SCADENZA.test(dopo)) return d.iso;
   }
   return null;
 }
@@ -791,15 +813,27 @@ const NOMI_PROVINCIA = province
  * Alias città → codice per i territori il cui capoluogo non coincide col nome
  * della provincia nel dataset (es. "Forlì-Cesena" → la città è Forlì;
  * "Verbano-Cusio-Ossola" → la città è Verbania).
+ *
+ * BUG STORICO corretto: "Forlì" mancava dalla tabella, quindi un avviso della
+ * provincia di Forlì-Cesena (FC) non veniva riconosciuto e ricadeva sulla
+ * provincia della FONTE (es. TO per la pagina Piemonte) → alert di Torino con
+ * contenuti di Forlì-Cesena. Stesso rischio per gli altri capoluoghi "composti".
  */
 const ALIAS_CITTA: { chiave: string; codice: string }[] = [
   { chiave: 'aosta', codice: 'AO' },
+  { chiave: 'forli', codice: 'FC' },
   { chiave: 'cesena', codice: 'FC' },
   { chiave: 'carrara', codice: 'MS' },
+  { chiave: 'barletta', codice: 'BT' },
   { chiave: 'andria', codice: 'BT' },
   { chiave: 'trani', codice: 'BT' },
+  { chiave: 'pesaro', codice: 'PU' },
   { chiave: 'urbino', codice: 'PU' },
   { chiave: 'verbania', codice: 'VB' },
+  { chiave: 'monza', codice: 'MB' },
+  { chiave: 'carbonia', codice: 'SU' },
+  { chiave: 'spezia', codice: 'SP' },
+  { chiave: 'bozen', codice: 'BZ' },
 ];
 
 /** Nomi che da soli sono anche parole comuni: ammessi solo in contesto locativo. */

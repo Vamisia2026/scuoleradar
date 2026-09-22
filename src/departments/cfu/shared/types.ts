@@ -79,25 +79,6 @@ export interface Esame {
   affidabilita?: AffidabilitaRiconoscimento | null;
 }
 
-/** File universitario caricato dall'utente (libretto, statino, transcript). */
-export interface AllegatoCfu {
-  id: string;
-  nomeFile: string;
-  tipo: 'immagine' | 'pdf';
-  dimensioneByte: number;
-  /** Suggerimento estratto dal nome file (es. "libretto", "statino", anno). */
-  suggerimento?: string | null;
-}
-
-/** Motivo della visita (Step A del percorso guidato). */
-export type ObiettivoUtenteCfu = 'obiettivo' | 'analisi' | 'concorso' | 'chiarezza';
-
-export interface ObiettivoUtente {
-  chiave: ObiettivoUtenteCfu;
-  etichetta: string;
-  testo: string;
-}
-
 /** Copertura CFU rilevata per un singolo ambito disciplinare. */
 export interface CoperturaAmbito {
   ambito: AmbitoDisciplinare;
@@ -124,21 +105,5 @@ export interface DiagnosiCFU {
   classiAccessibili: EsitoClasse[];
   classiSecondarie: EsitoClasse[];
   dataAnalisi: string;
-  notaMetodologica: string;
-}
-
-/**
- * Dossier Requisiti ScuoleRadar: documento di sintesi "da consegnare in
- * segreteria" generato a partire dalla diagnosi (Step E).
- */
-export interface DossierCFU {
-  id: string;
-  generatoIl: string;
-  esami: Esame[];
-  cfuTotali: number;
-  cfuPerAmbito: CoperturaAmbito[];
-  puntiDiForza: string[];
-  classiAccessibili: EsitoClasse[];
-  classiSecondarie: EsitoClasse[];
   notaMetodologica: string;
 }

@@ -162,6 +162,49 @@ async function notificaAttivazione(userId: string, piano: string): Promise<void>
   }).catch(() => null);
 }
 
+/** Codici promo che danno accesso PRO gratuito (coupon Stripe a sconto totale). */
+const CODICI_BETA = ['BETA1ANNO', 'BETALIFETIME'];
+
+/**
+ * Attivazione canonica di un codice beta dopo il checkout a 0,00 €.
+ *
+ * La RPC `attiva_codice_promo` (security definer) è l'unica fonte autorevole
+ * perché, in modo ATOMICO (FOR UPDATE):
+ *   · porta `piano = 'pro'` e `abbonamento_scade_il = now() + 1 anno`
+ *     (durata '1anno') oppure NULL per 'lifetime';
+ *   · marca `is_beta_tester = true` → fa scattare il "Rinnovo Omaggio a Vita";
+ *   · CONSUMA il codice monouso (`usato_da`/`usato_il`), impedendone il riuso.
+ *
+ * Senza questa chiamata il codice restava riutilizzabile e il beta tester non era
+ * riconosciuto come tale: l'anno PRO dipendeva dal solo abbonamento Stripe. Errori
+ * e codici già consumati (es. retry del webhook) NON interrompono l'elaborazione:
+ * l'abbonamento è già attivo dal ramo `subscription` dell'evento.
+ */
+async function attivaCodiceBeta(userId: string, codice: string): Promise<void> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/attiva_codice_promo`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_codice: codice, p_user_id: userId }),
+  });
+  if (!res.ok) {
+    console.error(`attiva_codice_promo (${codice}) HTTP ${res.status}:`, await res.text());
+    return;
+  }
+  const righe = (await res.json()) as Array<{ ok?: boolean; errore?: string | null }>;
+  const esito = righe[0];
+  if (esito?.ok) {
+    console.log(`  → codice beta ${codice}: PRO + 1 anno, is_beta_tester=true, codice consumato`);
+    return;
+  }
+  console.warn(
+    `  → codice beta ${codice} non attivato: ${esito?.errore ?? 'esito non riconosciuto'}`,
+  );
+}
+
 /** Registra l'uso del coupon RADAR50 dopo un pagamento riuscito (monouso, anti-abuso). */
 async function registraUsoRadar50(userId: string, checkoutSessionId: string | null): Promise<boolean> {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/registra_uso_coupon_radar50`, {
@@ -272,6 +315,19 @@ serve(async (req: Request) => {
           const usato = await registraUsoRadar50(userId, obj.id ?? null);
           console.log(`  → coupon RADAR50 registrato come usato: ${usato}`);
         }
+      }
+
+      // Codici beta a sconto TOTALE (BETA1ANNO / BETALIFETIME): l'attivazione
+      // canonica è la RPC del DB (PRO + 1 anno + is_beta_tester + consumo del
+      // monouso). Vale anche per `no_payment_required`: con un coupon al 100%
+      // Stripe non incassa nulla, ma il checkout è completato dal cliente.
+      const promoBeta = (obj.metadata?.promo ?? '').toUpperCase();
+      if (
+        promoBeta &&
+        CODICI_BETA.includes(promoBeta) &&
+        (obj.payment_status === 'paid' || obj.payment_status === 'no_payment_required')
+      ) {
+        await attivaCodiceBeta(userId, promoBeta);
       }
 
       // Referral: se il checkout usava un codice promo, registra la ricompensa del referrer

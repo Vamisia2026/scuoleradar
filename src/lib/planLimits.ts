@@ -45,9 +45,19 @@ export const BANNER_PIANO: Record<'base' | 'pro', string> = {
 /**
  * Limiti del piano corrente. Il piano PRO è concesso anche a 'free_forever'
  * (e a chiunque abbia hasProAccess già risolto altrove, es. contesto autenticato).
+ *
+ * `pianoConfermato = false` (piano ancora in lettura dal DB) applica i tetti PRO:
+ * mentre il piano non è confermato NON si tronca e NON si nega nulla — un PRO
+ * "regalato" dal backend non deve perdere province/classi per una lettura in
+ * corso. I tetti Base tornano ad applicarsi appena il piano è confermato.
  */
-export function pianoLimits(piano?: PianoAccesso | string | null, hasProAccess?: boolean): PianoLimits {
-  const pro = Boolean(hasProAccess) || piano === 'pro' || piano === 'free_forever';
+export function pianoLimits(
+  piano?: PianoAccesso | string | null,
+  hasProAccess?: boolean,
+  pianoConfermato = true,
+): PianoLimits {
+  const pro =
+    !pianoConfermato || Boolean(hasProAccess) || piano === 'pro' || piano === 'free_forever';
   const livello: 'base' | 'pro' = pro ? 'pro' : 'base';
   return {
     piano: livello,

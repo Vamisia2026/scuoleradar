@@ -13,15 +13,23 @@ import { readFileSync } from 'node:fs';
 import {
   attoBurocraticoVuoto,
   classificaLink,
+  classificaTemaPersonale,
+  contieneFraseFluff,
+  espandiAcronimi,
   generaArticoloEditoriale,
   linkDirettoUfficiale,
+  linkDomandaUfficiale,
   linkNonValidiInHtml,
   linkVietatiInHtml,
+  richiedePresentazioneDomanda,
   riferimentiObsoleti,
   titoloAzione,
+  titoloDaUfficioStampa,
   titoloInformativo,
   valutaRilevanza,
+  verificaCadenzaSettimanale,
 } from '../src/departments/notizie/services/relevanceEngine.ts';
+import type { NewsArticle } from '../src/departments/notizie/types.ts';
 
 let errori = 0;
 function check(nome: string, atteso: unknown, ottenuto: unknown): void {
@@ -112,7 +120,7 @@ console.log('\n— Titoli AZIONE (niente copia-incolla istituzionale) —');
 const casiTitolo: Array<{ input: string; cat?: string; deadline?: string | null; atteso: string }> = [
   {
     input: 'Decreto Direttoriale n. 1095 del 10 settembre 2026 – Assegnazione comandi personale ATA',
-    atteso: 'Assegnazione comandi personale ATA',
+    atteso: 'Assegnazione comandi personale ATA (personale Amministrativo, Tecnico e Ausiliario)',
   },
   {
     input: "Aggiornamento Graduatorie Provinciali per le Supplenze (GPS) 2026/28: Pubblicazione dell'Ordinanza Ministeriale",
@@ -278,7 +286,9 @@ const generatoScaduto = generaArticoloEditoriale({
 check(
   'scadenza passata: nessun invito all’azione fuorviante',
   true,
-  /Il termine indicato era il 1 luglio 2020/.test(generatoScaduto.content_html),
+  /Il termine indicato nell['’]avviso era il 1 luglio 2020|Il termine dell['’]avviso era il 1 luglio 2020/.test(
+    generatoScaduto.content_html,
+  ),
 );
 const senzaLink = generaArticoloEditoriale({
   title: 'Concorso ordinario 2026: prova scritta e requisiti',
@@ -301,6 +311,200 @@ const conMock = generaArticoloEditoriale({
   official_url: 'https://example.com/avviso-123',
 });
 check('link NON valido (mockup) → nessun link nel testo', false, conMock.content_html.includes('href="'));
+
+console.log('\n— STANDARD STRETTO: niente fluff (comunicati, lettere, annunci politici) —');
+const rifiutati = [
+  'Lettera del Ministro dell’Istruzione e del Merito in occasione dell’avvio dell’anno scolastico',
+  'Valditara: «Più fondi per fronteggiare l’emergenza caldo»',
+  'Intervento del Ministro al seminario nazionale sulla didattica',
+  'Ventesima edizione del concorso Juvenes Translatores 2026-2027 per le scuole',
+  'Benessere a scuola: attivo "ascoltaMI", lo sportello di supporto psicologico',
+];
+for (const titolo of rifiutati) {
+  check(
+    `respinto: "${titolo.slice(0, 44)}…"`,
+    false,
+    valutaRilevanza({ title: titolo, data: '2026-09-18' }).rilevante,
+  );
+}
+check(
+  'lettera del Ministro classificata come ufficio stampa',
+  true,
+  titoloDaUfficioStampa('Lettera del Ministro dell’Istruzione e del Merito'),
+);
+const ammessi: Array<{ titolo: string; tema: string }> = [
+  { titolo: 'Rinnovo CCNL scuola 2025-2027: firmata l’ipotesi di accordo sugli aumenti', tema: 'CCNL' },
+  { titolo: 'Welfare per il personale della scuola: parte la polizza sanitaria', tema: 'Welfare' },
+  { titolo: 'Mobilità docenti 2026/27: domande online entro il 20 settembre', tema: 'Mobilità' },
+  { titolo: 'Interpelli e supplenze: nuove regole per la scelta delle sedi', tema: 'GPS' },
+  { titolo: 'Pensioni docenti: riscatto della laurea, nuove modalità di domanda', tema: 'Pensioni' },
+  { titolo: 'Organico di diritto 2026/27: cattedre e posti per la secondaria', tema: 'Organico' },
+];
+for (const caso of ammessi) {
+  check(
+    `ammesso (${caso.tema}): "${caso.titolo.slice(0, 40)}…"`,
+    true,
+    valutaRilevanza({ title: caso.titolo, data: '2026-09-18' }).rilevante,
+  );
+}
+check('tema CCNL riconosciuto', 'CCNL', classificaTemaPersonale('Rinnovo del contratto collettivo: aumenti in busta paga'));
+check('tema GPS riconosciuto', 'GPS', classificaTemaPersonale('Interpelli e supplenze: scelta delle sedi'));
+check(
+  'tema nullo sui contenuti di contorno',
+  null,
+  classificaTemaPersonale('Giornata nazionale dello sport a scuola: le foto della cerimonia'),
+);
+
+console.log('\n— TITOLI AZIONE: etichette da ufficio stampa eliminate —');
+check(
+  'via il "Comunicato stampa:"',
+  'Interpelli: nuove regole per le supplenze',
+  titoloAzione('Comunicato stampa: Interpelli: nuove regole per le supplenze', 'GPS', null),
+);
+check(
+  'via il prefisso data + firma (rassegne)',
+  false,
+  /^\d{2}\/\d{2}\/\d{4}/.test(titoloAzione('05/09/2026 - Valditara: «Più fondi per la scuola»', 'Scuole', null)),
+);
+check(
+  'acronimo spiegato nel titolo',
+  true,
+  /ATA \(personale Amministrativo, Tecnico e Ausiliario\)/.test(
+    titoloAzione('Assegnazione comandi personale ATA per il 2026/27', 'Organico', null),
+  ),
+);
+
+console.log('\n— ACRONIMI: spiegati alla prima occorrenza —');
+const esame = espandiAcronimi(
+  'Il MIM pubblica le GPS e il PNRR per il personale ATA. Il MIM conferma.',
+);
+check('MIM spiegato', true, esame.testo.includes('MIM (Ministero dell’Istruzione e del Merito)'));
+check('GPS spiegato', true, esame.testo.includes('GPS (Graduatorie Provinciali per le Supplenze)'));
+check('PNRR spiegato', true, esame.testo.includes('PNRR (Piano Nazionale di Ripresa e Resilienza)'));
+check('ATA spiegato', true, esame.testo.includes('ATA (personale Amministrativo, Tecnico e Ausiliario)'));
+check('MIM spiegato una sola volta', 1, (esame.testo.match(/MIM \(/g) ?? []).length);
+check('sigle spiegate: 4', 4, esame.spiegati.length);
+
+console.log('\n— SINTESI "IN SINTESI": solo fatti pratici —');
+const conSintesi = generaArticoloEditoriale({
+  title: 'Interpelli e supplenze: nuove regole per la scelta delle sedi',
+  categoria: 'GPS',
+  deadline: '2099-12-31',
+  fonte: 'MIM',
+  official_url: 'https://www.mim.gov.it/web/guest/-/interpelli-nuove-regole',
+});
+check('bullet "Cosa cambia"', true, conSintesi.summary_points[0].startsWith('Cosa cambia:'));
+check('bullet "Chi riguarda"', true, conSintesi.summary_points[1].startsWith('Chi riguarda:'));
+check('bullet "Scadenza"', true, conSintesi.summary_points[2].startsWith('Scadenza:'));
+check('bullet "Cosa devi fare"', true, conSintesi.summary_points[3].startsWith('Cosa devi fare:'));
+check(
+  'nessun preambolo retorico nella sintesi',
+  [],
+  conSintesi.summary_points.filter((p) =>
+    /^(?:il ministero|il mim|la notizia|si comunica|c’è una novità|vale la pena)/i.test(p),
+  ),
+);
+check(
+  'senza scadenza la sintesi resta di 3 bullet',
+  3,
+  generaArticoloEditoriale({
+    title: 'Organico di diritto 2026/27: cattedre e posti per la secondaria',
+    categoria: 'Organico',
+    deadline: null,
+    fonte: 'MIM',
+    official_url: 'https://www.mim.gov.it/web/guest/-/organico-di-diritto-2026-27',
+  }).summary_points.length,
+);
+
+console.log('\n— CADENZA SETTIMANALE: minimo 1, massimo 3 —');
+const newsArticle = (id: string, data: string): NewsArticle => ({
+  id,
+  title: 'Organico di diritto 2026/27: cattedre e posti per la secondaria',
+  category: 'Organico',
+  deadline_date: null,
+  summary_points: ['Cosa cambia: prova.'],
+  content_html: '<p>prova</p>',
+  official_source_url: 'https://www.mim.gov.it/web/guest/-/prova',
+  official_pdf_url: null,
+  relevance_score: 80,
+  published_at: data,
+});
+const oggiCadenza = new Date('2026-09-21T12:00:00.000Z');
+check('limite massimo esposto = 3', 3, verificaCadenzaSettimanale([], oggiCadenza).max);
+check('1 articolo negli ultimi 7 giorni → ok', true, verificaCadenzaSettimanale([newsArticle('x1', '2026-09-20T00:00:00.000Z')], oggiCadenza).ok);
+check('0 articoli → NON ok', false, verificaCadenzaSettimanale([], oggiCadenza).ok);
+check(
+  '4 articoli negli ultimi 7 giorni → NON ok',
+  false,
+  verificaCadenzaSettimanale(
+    ['a', 'b', 'c', 'd'].map((id, i) => newsArticle(id, `2026-09-1${9 - i}T00:00:00.000Z`)),
+    oggiCadenza,
+  ).ok,
+);
+
+console.log('\n— ZERO FLUFF: nessuna promessa, nessun rinvio vago —');
+const frasiVietate = [
+  'La scadenza non è ancora pubblicata: ti avvisiamo appena esce.',
+  "Scadenza ufficiale non ancora pubblicata: la trovi nell'avviso ufficiale — ti avvisiamo appena esce.",
+  'Verifica apertura nel testo ufficiale.',
+  'Il prossimo aggiornamento è in arrivo.',
+];
+for (const frase of frasiVietate) {
+  check(`fluff rilevato: "${frase.slice(0, 42)}…"`, true, contieneFraseFluff(frase));
+}
+check(
+  'testo operativo pulito',
+  false,
+  contieneFraseFluff('Hai tempo fino al 30 settembre: presenta la domanda da Istanze Online.'),
+);
+
+console.log('\n— DOMANDA + FONTE: doppio link diretto, sintesi azionabile —');
+const conDomanda = generaArticoloEditoriale({
+  title: 'Interpelli e supplenze: nuove regole per la scelta delle sedi',
+  categoria: 'GPS',
+  deadline: null,
+  fonte: 'MIM',
+  official_url: 'https://www.mim.gov.it/web/guest/-/interpelli-nuove-regole',
+  application_url: 'https://www.istruzione.it/polis/Istanzeonline.htm',
+  application_label: 'Istanze Online (POLIS)',
+});
+check('nessuna promessa nel testo generato', false, contieneFraseFluff(conDomanda.content_html));
+check(
+  'due link diretti: fonte + canale di presentazione',
+  2,
+  new Set([...conDomanda.content_html.matchAll(/href="([^"]+)"/g)].map((m) => m[1])).size,
+);
+check(
+  'il canale di presentazione è linkato',
+  true,
+  conDomanda.content_html.includes('https://www.istruzione.it/polis/Istanzeonline.htm'),
+);
+check(
+  'bullet "Presenta la domanda" nella sintesi',
+  true,
+  conDomanda.summary_points.some((p) => p.startsWith('Presenta la domanda:')),
+);
+check(
+  'canale riconosciuto dal testo',
+  'https://www.istruzione.it/polis/Istanzeonline.htm',
+  linkDomandaUfficiale('La domanda si presenta su Istanze Online con SPID.')?.url ?? null,
+);
+check('nessun canale in un testo generico', null, linkDomandaUfficiale('Sicurezza sui luoghi di lavoro: obblighi del datore.'));
+check(
+  'procedura da presentare riconosciuta',
+  true,
+  richiedePresentazioneDomanda('Presentazione delle domande entro il 30 settembre'),
+);
+check(
+  'documento informativo senza procedura',
+  false,
+  richiedePresentazioneDomanda('Pubblicata la polizza sanitaria per il personale della scuola'),
+);
+check(
+  'archivio senza frasi di fluff',
+  [],
+  articoli.filter((a) => contieneFraseFluff(`${a.title} ${a.content_html} ${a.summary_points.join(' ')}`)).map((a) => a.id),
+);
 
 console.log(
   errori === 0

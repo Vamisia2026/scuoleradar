@@ -1,13 +1,13 @@
-import { Camera, CheckCircle2, GraduationCap, ShieldCheck } from 'lucide-react';
-import { APERTURA_TUTOR_CFU, DOCUMENTI_RICHIESTI_CFU, NOTA_OCR_FOTO_CFU } from './tutorIntro';
+import { CheckCircle2, GraduationCap, ShieldCheck, Tag } from 'lucide-react';
+import { APERTURA_TUTOR_CFU, DOCUMENTI_RICHIESTI_CFU, NOTA_SSD_CFU } from './tutorIntro';
 import { PRIVACY_PROMESSA_CFU } from './privacy';
 
 /**
- * Presentazione del Tutor del Dipartimento CFU (Welcome / Step 0).
+ * Presentazione del Tutor del Dipartimento CFU (Welcome / landing).
  *
- * Usata in cima al percorso del calcolatore e nella landing pubblica:
- * cosa fa il Tutor, quali documenti servono, come funziona la lettura
- * automatica e la nota privacy integrata (nessun box legalese separato).
+ * Usata in cima al percorso del calcolatore e nella landing pubblica: cosa fa
+ * il Tutor, quali dati servono e la promessa privacy della V1 (nessun documento
+ * caricato o analizzato).
  */
 export function CfuTutorIntro() {
   return (
@@ -30,21 +30,21 @@ export function CfuTutorIntro() {
       <div className="mt-4">
         <p className="text-sm font-bold text-primary-700">Cosa ti serve per partire:</p>
         <ul className="mt-2 grid gap-2 lg:grid-cols-2">
-          {DOCUMENTI_RICHIESTI_CFU.map((doc) => (
+          {DOCUMENTI_RICHIESTI_CFU.map((voce) => (
             <li
-              key={doc}
+              key={voce}
               className="flex items-start gap-2.5 rounded-xl bg-white/80 px-3.5 py-2.5 text-sm leading-relaxed text-primary-700 ring-1 ring-primary-100 sm:text-base"
             >
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-accent-500" />
-              {doc}
+              {voce}
             </li>
           ))}
         </ul>
       </div>
 
       <p className="mt-3 flex items-start gap-2.5 rounded-xl bg-white/80 px-4 py-2.5 text-sm leading-relaxed text-primary-600 ring-1 ring-primary-100 sm:text-base">
-        <Camera className="mt-0.5 h-5 w-5 shrink-0 text-secondary-500" />
-        {NOTA_OCR_FOTO_CFU}
+        <Tag className="mt-0.5 h-5 w-5 shrink-0 text-secondary-500" />
+        {NOTA_SSD_CFU}
       </p>
     </div>
   );

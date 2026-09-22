@@ -8,3 +8,12 @@ project_id = "gwdmsgsshvdnfrplbjiv"
 # quindi nessuna verifica JWT. Separato dal bot pubblico degli interpelli.
 [functions.telegram-admin-webhook]
 verify_jwt = false
+
+# Checkout Stripe: JWT verificato dal runtime (default, qui ESPLICITO per non
+# dipendere dal flag di deploy). Serve perché la sessione viene creata a nome
+# dell'utente del JWT (`client_reference_id`/`metadata[user_id]`): un `--no-verify-jwt`
+# renderebbe possibile attribuire un pagamento all'account di un altro.
+# Conseguenza voluta: il ping di diagnostica del System Health Check risponde 401
+# in modalità Guest (nessuna sessione) — è un comportamento atteso, non un guasto.
+[functions.checkout]
+verify_jwt = true

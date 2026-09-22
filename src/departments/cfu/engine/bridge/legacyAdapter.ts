@@ -28,6 +28,7 @@ import type {
   EsitoClasse,
 } from '../../shared/types';
 import type {
+  DateRilevanza,
   EsameCanonico,
   EsitoValutazione,
   NormativaApplicata,
@@ -36,14 +37,16 @@ import type {
   VincoloCfu,
   VoceAudit,
 } from '../types';
-import { valutaRequisitoClasse } from '../requirementSolver';
+import { eseguiPipelineUniversale } from '../pipeline/pipeline';
+import type { MetadatiPipeline } from '../pipeline/requirementTypes';
+import type { RisultatoPipeline } from '../types';
 import type { Rule, Source } from '../traceability/traceabilityChain';
 import type { SourceRegistry } from '../traceability/sourceRegistry';
 
 /* ------------------------------ Shape di output (legacy + metadati) ------------------------------ */
 
 /** Esito compatibile con `EsitoClasse` legacy, arricchito dai metadati engine. */
-export interface EsitoClasseAdapter extends EsitoClasse {
+export interface EsitoClasseAdapter extends EsitoClasse, MetadatiPipeline {
   /** Sempre true: il risultato è stato prodotto dal motore data-driven. */
   readonly isEngineDriven: true;
   /** Stato multi-valore del motore (ELIGIBLE / CONDITIONALLY_ELIGIBLE / …). */
@@ -54,6 +57,8 @@ export interface EsitoClasseAdapter extends EsitoClasse {
   readonly regoleApplicate: readonly string[];
   readonly audit: readonly VoceAudit[];
   readonly motivazione: string;
+  /** Risultato completo della pipeline universale (fonte strutturata). */
+  readonly pipeline?: RisultatoPipeline;
   /** Presente SOLO nel fallback (nessuna regola attiva / contesto assente). */
   readonly motivoFallback?: string;
 }
@@ -73,6 +78,11 @@ export interface ParametriValutazioneBridge {
   readonly normativa: NormativaApplicata;
   /** Classe di laurea del titolo (es. "LM-14") per il check classi ammesse. */
   readonly classeLaureaTitolo?: string;
+  /**
+   * Date dichiarate dal candidato (opzionale): la data della procedura serve
+   * all'identificazione e all'audit. Assente = comportamento invariato.
+   */
+  readonly dateRilevanza?: DateRilevanza;
   readonly ora?: string;
 }
 
@@ -253,6 +263,8 @@ export function mappaEsitoLegacy(
     audit: readonly VoceAudit[];
     motivazione: string;
     motivoFallback?: string;
+    /** Risultato completo della pipeline universale (fonte strutturata). */
+    pipeline?: RisultatoPipeline;
   },
 ): EsitoClasseAdapter {
   const accessibile = parametri.statoMotore === 'ELIGIBLE';
@@ -272,6 +284,12 @@ export function mappaEsitoLegacy(
     audit: parametri.audit,
     motivazione: parametri.motivazione,
     motivoFallback: parametri.motivoFallback,
+    fonti: parametri.pipeline?.fonti.fonti,
+    conflitti: parametri.pipeline?.conflitti,
+    valutazioniRequisito: parametri.pipeline?.valutazioniRequisito,
+    deficit: parametri.pipeline?.deficit,
+    payloadAssistantCreativo: parametri.pipeline?.payloadAssistantCreativo,
+    pipeline: parametri.pipeline,
   };
 }
 
@@ -349,18 +367,30 @@ export function valutaClasseViaEngineBridge(
       titoloEstero: false,
     };
 
-    // DELEGA al RequirementSolver: somma crediti + validazione vincoli + audit.
-    const valutazione = valutaRequisitoClasse(
-      parametri.classeCodice,
-      esamiLegacyInCanonici(parametri.esami),
-      {
-        regole: regoleEngine,
-        mappature: [],
-        titolo,
-        normativa: parametri.normativa,
-        ora: parametri.ora,
-      },
-    );
+    // DELEGA alla PIPELINE UNIVERSALE: identificazione → fonti (Source Gate v2)
+    // → normalizzazione → requisiti strutturati → valutazione → deficit → stato.
+    // Il contesto normativo è QUELLO DICHIARATO dal chiamante (nessuna vigenza
+    // inventata) e l'aggregazione resta `valutaRequisitoClasse` (invocata dalla
+    // pipeline): nessun cambio di significato normativo per il chiamante.
+    const pipeline = eseguiPipelineUniversale({
+      classeCodice: parametri.classeCodice,
+      denominazioneClasse: denominazione,
+      esami: esamiLegacyInCanonici(parametri.esami),
+      titolo,
+      regole: regoleEngine,
+      normativaRisolta: parametri.normativa,
+      dateRilevanza: parametri.dateRilevanza,
+      ora: parametri.ora,
+    });
+    const valutazione = pipeline.valutazioneClasse;
+    if (!valutazione) {
+      return rispostaFallbackBridge({
+        classeCodice: parametri.classeCodice,
+        denominazioneClasse: denominazione,
+        tabella,
+        motivo: `La pipeline non ha prodotto una valutazione per ${parametri.classeCodice}: verifica manuale richiesta.`,
+      });
+    }
 
     return mappaEsitoLegacy({
       classeCodice: parametri.classeCodice,
@@ -369,10 +399,11 @@ export function valutaClasseViaEngineBridge(
       statoMotore: valutazione.stato,
       cfuMancanti: valutazione.cfuMancantiTotali,
       regoleApplicate: valutazione.regoleApplicate ?? [],
-      audit: valutazione.audit,
+      audit: pipeline.auditTrail,
       motivazione:
         valutazione.motivazione ??
         `Valutazione motore per la classe ${parametri.classeCodice}.`,
+      pipeline,
     });
   } catch (errore) {
     // Mai propagare errori non gestiti: il bridge degrada a MANUAL.

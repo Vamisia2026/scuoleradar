@@ -1,21 +1,21 @@
 /**
  * ScuoleRadar.it — Dipartimento CFU · Presentazione "tutor universitario".
  *
- * Testi condivisi tra l'entry page del calcolatore (Step A) e la landing
- * pubblica: cosa fa lo strumento, quali documenti servono e come comportarsi
- * con le foto a bassa risoluzione.
+ * Testi condivisi tra l'entry page del calcolatore e la landing pubblica:
+ * cosa fa lo strumento e quali informazioni servono (nessun documento da
+ * caricare: gli esami si inseriscono o si incollano).
  */
 
 /** Apertura del Tutor del Dipartimento CFU (solo prima persona, testo esatto). */
 export const APERTURA_TUTOR_CFU =
-  "Sono il Tutor del Dipartimento CFU: guardo il tuo percorso di studi e ti dico quali classi di concorso puoi insegnare oggi (o quanti CFU o settori SSD ti mancano per quelle che vuoi raggiungere). Ti aiuto a capire cosa puoi fare subito con i titoli che hai già, suggerendoti percorsi alternativi oppure opportunità (anche fuori dalla scuola pubblica) che potresti non aver considerato. Ti darò anche indicazioni utili se hai titoli di studio conseguiti all'estero.";
+  "Sono il Tutor del Dipartimento CFU: prendo la tua carriera universitaria e verifico, requisito per requisito, se puoi accedere alla classe di concorso che ti interessa. Ti dico quali requisiti risultano soddisfatti, quali no, cosa resta da verificare e su quale norma si basa il calcolo: nessun numero inventato e nessun CFU stimato a occhio. Se un punto non è decidibile con i dati che hai, te lo dico invece di indovinare.";
 
-/** Documenti necessari per il calcolo. */
+/** Informazioni necessarie per il calcolo (dati, non documenti). */
 export const DOCUMENTI_RICHIESTI_CFU = [
-  'Certificato di laurea con l\u2019elenco degli esami sostenuti (denominazione, CFU/ECTS e voto)',
-  'Piano di studi oppure libretto universitario (se il certificato non è ancora pronto)',
+  'Classe di laurea del tuo titolo (es. LM-14), se la conosci',
+  'Elenco degli esami sostenuti con CFU/ECTS e settore SSD (es. L-FIL-LET/04)',
 ];
 
-/** Nota realistica sulla lettura automatica dei documenti. */
-export const NOTA_OCR_FOTO_CFU =
-  'Elaboriamo i PDF digitali in automatico. Facciamo il possibile per risparmiarti la fatica di copiare tutto a mano, ma se carichi foto col telefonino preparati a inserire i dati a mano.';
+/** Nota realistica sul settore degli esami: mai dedotto. */
+export const NOTA_SSD_CFU =
+  'Se un esame non ha un settore SSD, scegli «Non lo so»: non lo inventiamo noi. In quel caso, se serve una soglia precisa, il calcolo ti chiederà una verifica invece di stimare.';

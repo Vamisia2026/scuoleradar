@@ -83,12 +83,17 @@ jobs:
           fi
 
       - name: Verifica cadenza settimanale (≥ 1 notizia negli ultimi 7 giorni)
-        continue-on-error: true
+        # NON è più un warning silenzioso: una sezione Notizie FERMA fa fallire il
+        # cron, così uno stallo (filtro troppo aggressivo, parser rotto, fonte
+        # cambiata) non resta invisibile per giorni. La pipeline ha una rete di
+        # sicurezza (`applicaGaranziaSettimanale` + `èRiservaSettimanale`): se
+        # questo passo fallisce, nemmeno la riserva settimanale era pubblicabile.
         run: |
           if npm run test:notizie-rate; then
             echo "::notice::Cadenza settimanale rispettata (≥ 1 notizia negli ultimi 7 giorni)."
           else
-            echo "::warning::Nessun articolo negli ultimi 7 giorni: la sezione Notizie è FERMA. Verificare fonti/parser/URL canonici."
+            echo "::error::Nessun articolo negli ultimi 7 giorni: la sezione Notizie è FERMA. Verificare fonti/parser/motore di rilevanza (èRiservaSettimanale) e URL canonici."
+            exit 1
           fi
 
       - name: Verifica ordinamento e cadenza del feed (data decrescente, 1–3/settimana)

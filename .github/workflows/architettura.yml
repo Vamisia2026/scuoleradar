@@ -1,0 +1,54 @@
+# ============================================================
+# Gate Architettura — governance di docs/MODULAR_ARCHITECTURE.md
+#
+# - Trigger: ogni push, ogni pull request, manuale.
+# - Esegue `npm run test:architettura`: blocca le violazioni NUOVE
+#   (file > 300 righe, file nella radice di un dominio, dipendenze circolari,
+#   accoppiamenti fra domini che scavalcano l'entry point index.ts, strati
+#   condivisi che importano verso l'alto).
+# - Il debito storico è congelato in `scripts/architettura-baseline.json`:
+#   il gate segnala anche le eccezioni non più necessarie, così il debito
+#   può solo diminuire.
+# - `npm run arch:report` (step non bloccante) stampa l'inventario completo
+#   nei log del run.
+# ============================================================
+name: Gate Architettura
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: architettura-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  architettura:
+    name: Governance strutturale (SRP · domini · isolamento)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Installazione dipendenze
+        run: npm ci
+
+      - name: Inventario strutturale (informativo)
+        continue-on-error: true
+        run: npm run arch:report
+
+      - name: Gate strutturale (fallisce solo sulle violazioni nuove)
+        run: npm run test:architettura

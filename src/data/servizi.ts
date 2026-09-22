@@ -1,3 +1,13 @@
+/**
+ * ScuoleRadar.it — catalogo dei servizi mostrati sul sito pubblico.
+ *
+ * Ogni servizio associato a un DIPARTIMENTO dichiara il proprio `modulo`: la
+ * visibilità sul sito (footer, griglia servizi, landing, pagina servizio) segue
+ * così le feature flags (`src/config/features.ts`). Un modulo in `off` non deve
+ * comparire «in chiaro» nel sito: `serviziVisibili()` applica il filtro.
+ */
+import type { DipartimentoId } from '@/config/features';
+
 export interface Servizio {
   slug: string;
   emoji: string;
@@ -8,6 +18,8 @@ export interface Servizio {
   destinatari: string;
   dashboard: string;
   sperimentazione: boolean;
+  /** Dipartimento che governa la disponibilità (feature flags). Assente = sempre disponibile. */
+  modulo?: DipartimentoId;
 }
 
 export const servizi: Servizio[] = [
@@ -27,6 +39,7 @@ export const servizi: Servizio[] = [
     destinatari: 'Docenti di ogni ordine e grado, supplenti, aspiranti docenti e personale ATA.',
     dashboard: '/dashboard/radar',
     sperimentazione: false,
+    modulo: 'radar',
   },
   {
     slug: 'il-mio-cv',
@@ -43,22 +56,24 @@ export const servizi: Servizio[] = [
     destinatari: 'Docenti e supplenti che vogliono presentarsi al meglio in candidature e graduatorie.',
     dashboard: '/dashboard/cv',
     sperimentazione: false,
+    modulo: 'cv_builder',
   },
   {
     slug: 'calcolo-cfu',
     emoji: '🎓',
     titolo: 'Calcolatore CFU',
-    sottotitolo: 'Scopri quali classi di concorso puoi ottenere',
+    sottotitolo: 'Verifica i requisiti delle classi di concorso',
     descrizione:
-      'Inserisci i tuoi esami universitari (materia, CFU e settore scientifico-disciplinare) e verifica in modo indicativo le classi di concorso a cui risulti ammissibile, con il dettaglio dei CFU mancanti.',
+      'Scegli la classe di concorso, indica classe di laurea ed esami (CFU e settore SSD) e leggi il verdetto requisito per requisito: cosa risulta soddisfatto, cosa manca e cosa va verificato, con le fonti normative applicate.',
     caratteristiche: [
-      'Inserimento rapido di materia, CFU e settore',
-      "Valutazione indicativa dell'ammissibilità",
-      'Dettaglio dei CFU mancanti per ogni ambito',
+      'Inserimento rapido di materia, CFU e settore (o "non lo so")',
+      "Esito per requisito: soddisfatto, non soddisfatto o da verificare",
+      'Carenze e fonti normative dichiarate, Dossier .txt da portare in segreteria',
     ],
     destinatari: 'Laureati e laureandi che vogliono capire le proprie classi di concorso.',
-    dashboard: '/dashboard/cfu',
-    sperimentazione: true,
+    dashboard: '/dashboard/calcolatore-cfu',
+    sperimentazione: false,
+    modulo: 'cfu',
   },
   {
     slug: 'assistente-ai',
@@ -91,9 +106,20 @@ export const servizi: Servizio[] = [
     destinatari: 'Docenti e supplenti che vogliono risparmiare tempo sulla burocrazia.',
     dashboard: '/dashboard/moduli',
     sperimentazione: false,
+    modulo: 'modulistica',
   },
 ];
 
 export function servizioDaSlug(slug: string | undefined): Servizio | undefined {
   return servizi.find((s) => s.slug === slug);
+}
+
+/**
+ * Servizi effettivamente disponibili per l'utente corrente: un servizio con
+ * `modulo` compare solo se il dipartimento è visibile (`visibile(modulo)`, quindi
+ * `on` per tutti, `test` per l'admin, `off` per nessuno). I servizi senza modulo
+ * sono sempre disponibili.
+ */
+export function serviziVisibili(visibile: (id: DipartimentoId) => boolean): Servizio[] {
+  return servizi.filter((s) => !s.modulo || visibile(s.modulo));
 }

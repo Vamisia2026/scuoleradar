@@ -163,11 +163,14 @@ export function parseRss(xml: string, fonte: string, baseUrl: string): VoceFonte
 /* ------------------------------ Fonti MIM ------------------------------ */
 
 const BASE_MIM = 'https://www.mim.gov.it';
-const FONTI_MIM_RSS = [
-  'https://www.mim.gov.it/rss.xml',
-  'https://www.mim.gov.it/feeds/notizie',
-  'https://www.mim.gov.it/feed',
-];
+/**
+ * Feed RSS del MIM: DISMESSI. Verificato il 21/09/2026 — `rss.xml`,
+ * `feeds/notizie` e `feed` rispondono tutti HTTP 404 (log `✗ HTTP 404` nel
+ * cron). L'elenco resta VUOTO per non sprecare tre richieste a ogni run:
+ * la raccolta prosegue direttamente con lo scraping delle pagine notizie,
+ * che è la fonte effettiva delle voci MIM.
+ */
+const FONTI_MIM_RSS: string[] = [];
 
 /** Prova i feed RSS del MIM; se nessuno risponde, fa fallback sullo scraping HTML. */
 export async function fetchNotizieMim(): Promise<{ voci: VoceFonte[]; raggiunta: boolean }> {

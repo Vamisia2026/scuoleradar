@@ -106,5 +106,17 @@ check(
 );
 console.log(`   articoli negli ultimi 7 giorni: ${recentiNelFeed.length}`);
 
+console.log('\n— GARANZIA SETTIMANALE (≥ 1 articolo datato negli ultimi 7 giorni) —');
+check('almeno 1 articolo datato negli ultimi 7 giorni', true, recentiNelFeed.length >= 1);
+if (recentiNelFeed.length === 0) {
+  console.log(
+    '   ⚠ sezione Notizie FERMA: verificare fonti/parser/motore di rilevanza (vedi èRiservaSettimanale in relevanceEngine).',
+  );
+}
+const piuRecenteDated = newsArticles.find((a) => a.published_at);
+console.log(
+  `   articolo più recente: [${piuRecenteDated?.published_at ?? 'n/d'}] ${(piuRecenteDated?.title ?? 'n/d').slice(0, 60)}`,
+);
+
 console.log(errori === 0 ? '\n✅ NOTIZIE FEED: nessun problema' : `\n❌ NOTIZIE FEED: ${errori} errore/i`);
 process.exitCode = errori === 0 ? 0 : 1;

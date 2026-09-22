@@ -4,32 +4,18 @@ import { LogIn, AlertCircle, Eye, EyeOff, Loader2, Radar } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { Modal } from '@/components/Modal';
 import { TelegramLoginButton } from '@/components/TelegramLoginButton';
+import { CampoProvincia } from '@/components/auth/CampoProvincia';
+import { IconaGoogle } from '@/components/auth/IconaGoogle';
+import { NotaAccessoScolastico } from '@/components/auth/NotaAccessoScolastico';
 import { useToast } from '@/components/Toast';
 import { isSupabaseConfigurato } from '@/lib/supabase';
 import { getPostLoginRedirect } from '@/lib/showroomRedirect';
-
-function GoogleIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        fill="#4285F4"
-        d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47a5.53 5.53 0 0 1-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82Z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09A11.99 11.99 0 0 0 12 24Z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.27 14.29a7.19 7.19 0 0 1 0-4.58V6.62H1.29a12 12 0 0 0 0 10.76l3.98-3.09Z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75Z"
-      />
-    </svg>
-  );
-}
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
+import {
+  bozzaHaDati,
+  leggiBozzaRegistrazione,
+  type BozzaRegistrazione,
+} from '@/lib/bozzaRegistrazione';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -56,16 +42,22 @@ export function AuthModal() {
   } = useApp();
 
   const isRegister = authModalMode === 'registrazione';
+  // Feature flags: destinazione post-login = primo dipartimento disponibile.
+  const { primaRottaVisibile } = useFeatureFlags();
 
   const [nome, setNome] = useState('');
   const [cognome, setCognome] = useState('');
   const [genere, setGenere] = useState<'M' | 'F' | null>(null);
   const [etaInput, setEtaInput] = useState('');
+  /** Provincia di RESIDENZA (codice, es. 'RM'): dato demografico di base, facoltativo. */
+  const [provincia, setProvincia] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errore, setErrore] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
+  /** Bozza anagrafica del wizard: precompila il form (nessun dato richiesto 2 volte). */
+  const [bozzaWizard, setBozzaWizard] = useState<BozzaRegistrazione | null>(null);
   /** Attesa risposta Supabase al submit email (login). */
   const [loginLoading, setLoginLoading] = useState(false);
   // Ripulisce il form quando la modale si chiude
@@ -75,6 +67,7 @@ export function AuthModal() {
       setCognome('');
       setGenere(null);
       setEtaInput('');
+      setProvincia('');
       setEmail('');
       setPassword('');
       setShowPassword(false);
@@ -83,6 +76,33 @@ export function AuthModal() {
       setLoginLoading(false);
     }
   }, [authModalOpen]);
+
+  /**
+   * Prefill dei dati demografici già raccolti altrove (wizard Radar → questo form
+   * è l'ultimo passo per i Guest): sesso ed età arrivano dalle preferenze, la
+   * provincia dalla scelta fatta nel Radar quando è UNA SOLA (indizio forte,
+   * resta comunque modificabile). Non sovrascrive mai un valore già digitato.
+   */
+  useEffect(() => {
+    if (!authModalOpen || authModalMode !== 'registrazione') return;
+    // BOZZA del wizard: ha la precedenza su tutto (sono i dati che l'utente ha
+    // appena inserito) e vale anche per l'EMAIL, così non viene richiesta due volte.
+    const bozza = leggiBozzaRegistrazione();
+    setBozzaWizard(bozza);
+    const etaBozza = bozza?.eta ?? preferenze.eta ?? null;
+    setNome((prev) => prev || bozza?.nome || '');
+    setCognome((prev) => prev || bozza?.cognome || '');
+    setEmail((prev) => prev || bozza?.email || '');
+    setGenere((prev) => prev ?? bozza?.genere ?? preferenze.genere ?? null);
+    setEtaInput((prev) => prev || (etaBozza != null ? String(etaBozza) : ''));
+    setProvincia(
+      (prev) =>
+        prev ||
+        bozza?.provincia ||
+        preferenze.provincia ||
+        (preferenze.provinceCodici.length === 1 ? preferenze.provinceCodici[0] : ''),
+    );
+  }, [authModalOpen, authModalMode, preferenze.genere, preferenze.eta, preferenze.provincia, preferenze.provinceCodici]);
 
   const cambiaModo = (modo: 'login' | 'registrazione') => {
     setErrore('');
@@ -98,7 +118,8 @@ export function AuthModal() {
       navigate(redirect, { replace: true });
       return;
     }
-    navigate(preferenze.onboarded ? '/dashboard/radar' : '/onboarding');
+    // Destinazione = prima sezione DISPONIBILE (feature flags): mai un modulo spento.
+    navigate(preferenze.onboarded ? primaRottaVisibile() : '/onboarding');
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -123,17 +144,36 @@ export function AuthModal() {
         }
         eta = n;
       }
-      register({
-        nome: nome.trim(),
-        cognome: cognome.trim(),
-        email: email.trim(),
-        password,
-        genere,
-        eta,
-      });
-      closeAuthModal();
-      const redirect = getPostLoginRedirect();
-      navigate(redirect ?? '/onboarding');
+      // Registrazione REALE su Supabase Auth: gli errori (email già registrata,
+      // password debole, rate limit) NON restano silenziosi — il form li mostra
+      // inline senza navigare, così l'utente può correggere o passare al login.
+      setLoginLoading(true);
+      try {
+        const esito = await register({
+          nome: nome.trim(),
+          cognome: cognome.trim(),
+          email: email.trim(),
+          password,
+          genere,
+          eta,
+          provincia: provincia || null,
+        });
+        if (!esito.ok) {
+          const msg = esito.errore ?? 'Registrazione non riuscita. Riprova.';
+          setErrore(msg);
+          mostraToast('errore', msg);
+          return;
+        }
+        closeAuthModal();
+        const redirect = getPostLoginRedirect();
+        navigate(redirect ?? '/onboarding');
+      } catch (err) {
+        const msg = (err as { message?: string }).message ?? 'Registrazione non riuscita. Riprova.';
+        setErrore(msg);
+        mostraToast('errore', msg);
+      } finally {
+        setLoginLoading(false);
+      }
     } else {
       if (!email.trim() || !password) {
         const msg = 'Inserisci email e password per accedere.';
@@ -192,6 +232,18 @@ export function AuthModal() {
       size="lg"
     >
       <div className="space-y-3">
+        {/* Dati già raccolti nel wizard Radar: si conferma soltanto, non si riscrive. */}
+        {isRegister && bozzaHaDati(bozzaWizard) && (
+          <div className="flex items-start gap-2 rounded-xl border border-primary-100 bg-primary-50 px-4 py-3 text-xs leading-relaxed text-primary-700">
+            <Radar className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary-500" />
+            <p>
+              <strong>Abbiamo già i dati del tuo Radar.</strong> Nome, genere, età e provincia sono
+              precompilati da quello che hai inserito: controllali e scegli solo la password. Se hai
+              collegato Telegram, gli avvisi istantanei partiranno da subito.
+            </p>
+          </div>
+        )}
+
         {/* Buone notizie: banner PRO trial (visibile solo in registrazione) */}
         {isRegister && (
           <div className="rounded-xl border border-accent-200 bg-accent-50 px-4 py-3 text-sm leading-relaxed text-accent-800">
@@ -203,12 +255,14 @@ export function AuthModal() {
           </div>
         )}
 
-        {/* Google OAuth reale: il redirect avviene via URL diretto, nessun preventDefault */}
+        {/* Google OAuth reale: il redirect avviene via URL diretto, nessun preventDefault.
+            È il percorso PIÙ RAPIDO (1 click, nessun campo da compilare): per questo è
+            il primo pulsante del modal, in evidenza. */}
         <button
           type="button"
           onClick={handleGoogle}
           disabled={googleLoading}
-          className="inline-flex w-full items-center justify-center gap-2.5 rounded-xl border border-primary-200 bg-white px-4 py-2.5 text-sm font-semibold text-primary-800 shadow-soft transition hover:bg-primary-50 disabled:cursor-wait disabled:opacity-70"
+          className="inline-flex w-full items-center justify-center gap-2.5 rounded-xl border-2 border-primary-500 bg-primary-50 px-4 py-3 text-sm font-bold text-primary-800 shadow-soft transition hover:bg-primary-100 disabled:cursor-wait disabled:opacity-70"
         >
           {googleLoading ? (
             <>
@@ -217,11 +271,16 @@ export function AuthModal() {
             </>
           ) : (
             <>
-              <GoogleIcon className="h-4 w-4" />
+              <IconaGoogle className="h-4 w-4" />
               Accedi con Google
             </>
           )}
         </button>
+
+        {/* Supporto account ISTITUZIONALI: il problema va spiegato PRIMA del rifiuto
+            di Google (l'utente capisce subito cosa fare se il dominio della scuola
+            blocca le app esterne). */}
+        <NotaAccessoScolastico onNavigate={closeAuthModal} />
 
         <TelegramLoginButton onSuccess={dopoLogin} onError={(msg) => setErrore(msg)} />
 
@@ -305,6 +364,9 @@ export function AuthModal() {
                 placeholder="Es. 34"
               />
             </Field>
+            <Field label="Provincia di residenza (facoltativa)">
+              <CampoProvincia value={provincia} onChange={setProvincia} />
+            </Field>
             </>
           )}
           <Field label="Email">
@@ -346,7 +408,7 @@ export function AuthModal() {
             {loginLoading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Accesso in corso…
+                {isRegister ? 'Creazione account…' : 'Accesso in corso…'}
               </>
             ) : isRegister ? (
               <>

@@ -4,6 +4,16 @@ import {
   getEmailScheda,
   primoNome,
 } from '../_shared/emailTemplates.ts';
+import {
+  applicaOverrideScheda,
+  automazioneDaTipo,
+  introParagrafoHtml,
+  introTesto,
+  leggiStatiAutomazioni,
+  oggettoFinale,
+  type AutomazioneEdge,
+  type StatoAutomazione,
+} from '../_shared/automazioniEmail.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
 const RESEND_FROM = Deno.env.get('RESEND_FROM_EMAIL') ?? 'ScuoleRadar (Notifiche Automatiche) <notifiche@scuoleradar.it>';
@@ -12,9 +22,161 @@ const SEND_SECRET = Deno.env.get('SEND_NOTIFICATION_SECRET') ?? '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
+// ============================================================
+// FEATURE FLAGS DIPARTIMENTI — stessa semantica di `src/config/features.ts`
+// (Deno non può importare da `src/`: la logica di gate è qui, minimale).
+//   FEATURE_RADAR=on|test|off   stato del dipartimento che invia le notifiche
+//   FEATURE_TEST_REDIRECT=0     disattiva il dirottamento verso l'account admin
+//   FEATURE_ADMIN_EMAIL         recapito email dell'account di test
+//   ADMIN_TELEGRAM_ID           chat_id Telegram dell'account di test
+// In `test` le notifiche automatiche partono SOLO verso l'account admin (mai a
+// utenti o beta tester); in `off` non partono affatto.
+// ============================================================
+const STATO_RADAR = (Deno.env.get('FEATURE_RADAR') ?? 'on').trim().toLowerCase();
+const EMAIL_ADMIN_TEST = (
+  Deno.env.get('FEATURE_ADMIN_EMAIL') ?? 'bartoloansaldi@gmail.com'
+).trim().toLowerCase();
+const ADMIN_TELEGRAM_ID = (Deno.env.get('ADMIN_TELEGRAM_ID') ?? '').trim();
+const DIROTTA_IN_TEST = (Deno.env.get('FEATURE_TEST_REDIRECT') ?? '1').trim() !== '0';
+
+/**
+ * Recapito AMMESSO dal gate delle feature flags, oppure `null` se il canale è
+ * bloccato (modulo `off`, o `test` senza recapito admin configurato).
+ */
+function recapitoAmmesso(canale: 'email' | 'telegram', recapito: string): string | null {
+  if (STATO_RADAR === 'on') return recapito;
+  if (STATO_RADAR === 'off') return null;
+  const admin = canale === 'email' ? EMAIL_ADMIN_TEST : ADMIN_TELEGRAM_ID;
+  const eAdmin = canale === 'email' ? recapito.toLowerCase() === EMAIL_ADMIN_TEST : recapito === ADMIN_TELEGRAM_ID;
+  if (eAdmin) return recapito;
+  return DIROTTA_IN_TEST ? admin || null : null;
+}
+
 const PREZZI_URL = 'https://scuoleradar.it/prezzi';
 const FIRMA = 'I tuoi colleghi di <b>Scuole Radar</b>';
-const BLOG_URL = 'https://scuoleradar.it/notizie';
+const BLOG_URL = 'https://www.scuoleradar.it/notizie';
+
+/**
+ * BRAND COMPATTO (icona piccola + nome ufficiale CLIICCABILE, stessa riga): apre
+ * OGNI messaggio Telegram. Sostituisce i vecchi loghi/immagini "giganti" che
+ * generavano l'anteprima e nascondevano il contenuto.
+ */
+const BRAND_TELEGRAM = '📡 <a href="https://www.scuoleradar.it">Scuole Radar.it</a>';
+
+/** Testo della testata di opportunità (copy di brand completo). */
+const TESTO_OPPORTUNITA = '🎯 <b>Abbiamo trovato una nuova opportunità per te</b>';
+
+/** Intestazione brand COMPATTA delle email (logo 32 px + nome ufficiale). */
+const BRAND_EMAIL =
+  '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 18px;">' +
+  '<tr><td style="vertical-align:middle;padding-right:8px;">' +
+  '<img src="https://www.scuoleradar.it/logo.png" alt="Scuole Radar" width="32" height="32" ' +
+  'style="display:block;width:32px;height:32px;border:0;" /></td>' +
+  '<td style="vertical-align:middle;font-size:15px;font-weight:700;color:#14354e;">Scuole Radar.it</td>' +
+  '</tr></table>';
+
+/** Etichetta UNICA del link alla fonte ufficiale dell'avviso. */
+const ETICHETTA_AVVISO = "👉 Apri l'avviso ufficiale";
+
+/**
+ * Tipi il cui messaggio È un'opportunità: soggetti al GATE DI QUALITÀ STRICT
+ * (link diretto all'avviso + recapito di candidatura obbligatori). Gli altri
+ * tipi sono comunicazioni di ciclo di vita e non citano l'avviso.
+ */
+const TIPI_CON_OPPORTUNITA = new Set([
+  'step2',
+  'step3',
+  'step4',
+  'notifica_pro',
+  'prova1',
+  'prova2',
+  'prova3',
+  'extra',
+]);
+
+/** Percorsi di RICERCA/ELENCO/ARCHIVIO: mai un avviso specifico. */
+const RE_URL_ARCHIVIO =
+  /(?:^|\/)(?:tag|tags|category|categorie|search|ricerca|cerca|elenco|elenchi|lista|liste|indice|archivio|archive|pagin(?:a|e)|page|feed)(?:\/|$)/i;
+
+/** True se l'email è un recapito plausibile (un solo `@`, dominio con punto). */
+function emailValida(email?: string | null): boolean {
+  return /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/.test((email ?? '').trim().toLowerCase());
+}
+
+/**
+ * True se l'URL è un avviso SPECIFICO e DIRETTO: mai la home dell'ente, mai una
+ * pagina di ricerca/elenco/archivio regionale (es. `/interpelli-lombardia/`,
+ * `/tag/interpelli-scuola-piemonte/`). Il link "👉 Apri l'avviso ufficiale" deve
+ * portare all'URL esatto dell'avviso, non a un archivio di ricerca.
+ */
+function eUrlAvvisoDiretto(link?: string | null): boolean {
+  const u = (link ?? '').trim();
+  if (!/^https?:\/\//i.test(u)) return false;
+  let percorso = '';
+  let query = '';
+  try {
+    const p = new URL(u);
+    const host = p.host.toLowerCase();
+    // La piattaforma stessa non è mai una fonte ufficiale.
+    if (/(^|\.)scuoleradar\.(it|com)$|(^|\.)purefocus\.one$|localhost|127\.0\.0\.1/i.test(host)) {
+      return false;
+    }
+    percorso = p.pathname.replace(/\/+$/, '').toLowerCase();
+    query = p.search;
+  } catch {
+    return false;
+  }
+  if (!percorso) return false; // home dell'ente
+  if (RE_URL_ARCHIVIO.test(percorso)) return false;
+  const segmenti = percorso.split('/').filter(Boolean);
+  if (
+    segmenti.length === 1 &&
+    /^(?:interpelli|avvisi|bandi|supplenze|opportunita)/.test(segmenti[0])
+  ) {
+    return false;
+  }
+  if (/[?&](?:s|q|search|query|ricerca|filtro)=/i.test(query)) return false;
+  return true;
+}
+
+/** Motivo per cui un'opportunità NON è inviabile (`null` = pronta all'invio). */
+function motivoAvvisoNonInviabile(
+  link?: string | null,
+  email?: string | null,
+): string | null {
+  if (!eUrlAvvisoDiretto(link)) return 'fonte ufficiale non diretta';
+  if (!emailValida(email)) return 'recapito di candidatura mancante';
+  return null;
+}
+
+/**
+ * OGGETTO delle email di opportunità: TESTO UNICO E STANDARD
+ * (`Nuove opportunità per te!`), identico a `subjectOpportunita`/`subjectDigest`
+ * del notifier. Il contesto (classe/provincia) resta nel corpo del messaggio.
+ */
+function oggettoOpportunita(o?: Opportunita): string {
+  // Il contesto (classe/provincia) resta nel corpo del messaggio: oggetto unico.
+  void o;
+  return 'Nuove opportunità per te!';
+}
+
+/** CTA Notizie in TESTO PIANO (Telegram): due righe con URL visibile. */
+const CTA_NOTIZIE_TESTO =
+  `📌 ${BLOG_URL}\nQuando vuoi sapere cosa succede di importante nella scuola, vieni qui`;
+
+/** URL breve mostrato nella CTA Notizie delle EMAIL. */
+const NOTIZIE_VISIBILE = 'scuoleradar.it/notizie';
+
+/**
+ * CTA Notizie in HTML (EMAIL) — ESATTAMENTE due righe, tipografia crisp:
+ *   scuoleradar.it/notizie
+ *   Quando vuoi sapere cosa succede di importante nella scuola vieni qui!
+ */
+const CTA_NOTIZIE_HTML =
+  `<p style="margin:6px 0 0;font-size:14px;line-height:1.5;font-weight:600;">` +
+  `<a href="${BLOG_URL}" style="color:#2B6F9E;text-decoration:underline;">${NOTIZIE_VISIBILE}</a></p>` +
+  `<p style="margin:2px 0 0;font-size:14px;line-height:1.5;color:#14354e;">` +
+  `Quando vuoi sapere cosa succede di importante nella scuola vieni qui!</p>`;
 
 /**
  * URL della pagina di SETUP DEL RADAR (onboarding province + classi): è la
@@ -33,23 +195,23 @@ function radarSetupUrl(): string {
   }
 }
 const RADAR_URL = radarSetupUrl();
-/** Disclaimer legale/UX per tutte le email automatiche: la casella non è monitorata. */
-const DISCLAIMER_EMAIL = `<p style="margin:16px 0 0; font-size:12px; color:#94a3b8; line-height:1.5;">⚠️ Ti preghiamo di non rispondere a questo messaggio perché questa casella serve solo per inviare le segnalazioni e non è monitorata.</p>`;
 
 /**
- * Etichetta ONESTA del link di fonte: descrive DOVE porta il link, senza mai
- * promettere "Candidati" quando la destinazione è un Albo Pretorio o un avviso.
+ * Riga "modifica il Radar": VISIBILE e cliccabile (URL in chiaro), non nascosta
+ * in una nota grigia. Presente nel footer di ogni email.
  */
-function etichettaFonteLink(url?: string): string {
-  const u = (url ?? '').toLowerCase();
-  if (!u) return 'Apri la fonte ufficiale';
-  if (/\/interpello\//.test(u)) return "Apri la scheda dell'avviso";
-  if (/\.pdf(?:$|[?#])/.test(u)) return 'Apri il bando ufficiale (PDF)';
-  if (/albo|pretorio|pubblicazion|atti\b|determin|deliber/.test(u)) {
-    return "Apri l'avviso sull'Albo Pretorio";
-  }
-  return "Apri l'avviso ufficiale";
-}
+const RADAR_LINE_EMAIL =
+  `<p style="margin:16px 0 0;font-size:14px;line-height:1.6;color:#14354e;">` +
+  `Se questi risultati non corrispondono più ai tuoi interessi, modifica il tuo radar su ` +
+  `<a href="${RADAR_URL}" style="color:#2B6F9E;font-weight:700;text-decoration:underline;">${RADAR_URL}</a></p>`;
+
+/**
+ * Avviso di casella non monitorata: SEMPRE l'ULTIMA riga dell'email, con
+ * tipografia leggibile (mai testo sbiadito che sembri una trappola).
+ */
+const DISCLAIMER_EMAIL =
+  `<p style="margin:16px 0 0;padding-top:12px;border-top:1px solid #d6eaf4;font-size:13px;color:#475569;line-height:1.6;">` +
+  `Ti preghiamo di non rispondere a questo messaggio perché questa casella serve solo per inviare le segnalazioni e non è monitorata.</p>`;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -82,7 +244,11 @@ function scadenzaValida(valore: string): boolean {
   return giorno >= Date.UTC(oggi.getFullYear(), oggi.getMonth(), oggi.getDate());
 }
 
-/** Blocco opportunità standard: titolo + dettagli + fonte ufficiale verificata. */
+/**
+ * Blocco opportunità standard: titolo + dettagli + fonte ufficiale verificata.
+ * Il link di fonte usa l'etichetta UNICA ("👉 Apri l'avviso ufficiale") e punta
+ * SEMPRE all'URL ricevuto (nessuna pagina di ricerca di un'altra provincia).
+ */
 function conOpportunita(o: Opportunita, testo: string): string {
   let t = testo;
   if (o.titolo) t += `<br/><b>${escapeHtml(o.titolo)}</b>`;
@@ -95,7 +261,7 @@ function conOpportunita(o: Opportunita, testo: string): string {
   }
   if (o.email) dettagli.push(`📧 Candidature: <a href="mailto:${escapeHtml(o.email)}">${escapeHtml(o.email)}</a>`);
   if (dettagli.length) t += `<br/>${dettagli.join(' · ')}`;
-  if (o.link) t += `<br/><a href="${escapeHtml(o.link)}">🔗 ${escapeHtml(etichettaFonteLink(o.link))}</a>`;
+  if (o.link) t += `<br/><a href="${escapeHtml(o.link)}">${escapeHtml(ETICHETTA_AVVISO)}</a>`;
   return t;
 }
 function conOpportunitaTg(o: Opportunita, testo: string): string {
@@ -108,7 +274,9 @@ function conOpportunitaTg(o: Opportunita, testo: string): string {
     t += `\n⏳ Scadenza: ${escapeHtml(o.scadenza)}`;
   }
   if (o.email) t += `\n📧 Candidature: <a href="mailto:${escapeHtml(o.email)}">${escapeHtml(o.email)}</a>`;
-  if (o.link) t += `\n🔗 <a href="${escapeHtml(o.link)}">${escapeHtml(etichettaFonteLink(o.link))}</a>`;
+  if (o.link) {
+    t += `\n<a href="${escapeHtml(o.link)}"><b>${escapeHtml(ETICHETTA_AVVISO)}</b></a>`;
+  }
   return t;
 }
 
@@ -154,23 +322,21 @@ Per i primi 30 giorni hai il <b>piano PRO gratuito</b>: nessun limite di segnala
 Non ti mandiamo comunicazioni inutili. Se ti scriviamo, apri il messaggio.<br/><br/>
 Hai appena cominciato a conoscere Scuole Radar. Gli strumenti PRO sono molti di più, ma lasciamo che sia tu a scoprirli, un po' alla volta.<br/><br/>
 E niente newsletter quotidiane.<br/><br/>
-Quando vuoi sapere cosa succede di importante nella scuola, vai su <a href="${BLOG_URL}">ScuoleRadar.it → Notizie</a>.<br/><br/>
 ${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua vita professionale, facendoti risparmiare tempo.`,
     telegram: (_o, genere) =>
-      `${benvenuto(genere)} in Scuole Radar! 🎉\nCerchiamo per te opportunità di lavoro nelle scuole, spesso nascoste nei siti istituzionali. Hai 1 mese di PRO gratuito con notifiche illimitate: attiva le notifiche su Telegram. Quando vuoi, tutto su https://www.scuoleradar.it/notizie`,
+      `${benvenuto(genere)} in Scuole Radar! 🎉\nCerchiamo per te opportunità di lavoro nelle scuole, spesso nascoste nei siti istituzionali. Hai 1 mese di PRO gratuito con notifiche illimitate: attiva le notifiche su Telegram.`,
   },
   step2: {
-    soggetto: 'Abbiamo trovato una nuova opportunità per te',
-    email: (o) =>
-      conOpportunita(o, 'Abbiamo trovato una <b>nuova opportunità</b> per te.'),
-    telegram: (o) =>
-      conOpportunitaTg(o, 'Abbiamo trovato una <b>nuova opportunità</b> per te.'),  },
+    soggetto: (_genere, o) => oggettoOpportunita(o),
+    // Il copy di brand COMPLETO apre il messaggio Telegram.
+    email: (o) => conOpportunita(o, ''),
+    telegram: (o) => conOpportunitaTg(o, TESTO_OPPORTUNITA),
+  },
   step3: {
-    soggetto: 'Un\'altra opportunità per te',
-    email: (o) =>
-      conOpportunita(o, 'Abbiamo trovato una <b>nuova opportunità</b> per te.'),
-    telegram: (o) =>
-      conOpportunitaTg(o, 'Abbiamo trovato una <b>nuova opportunità</b> per te.'),  },
+    soggetto: (_genere, o) => oggettoOpportunita(o),
+    email: (o) => conOpportunita(o, ''),
+    telegram: (o) => conOpportunitaTg(o, TESTO_OPPORTUNITA),
+  },
   step4: {
     soggetto: 'Notifiche del piano gratuito in pausa: attiva PRO',
     email: (o) =>
@@ -188,23 +354,35 @@ ${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua
       PREZZI_URL,
   },
   notifica_pro: {
-    soggetto: 'Nuova opportunità trovata per te!',
-    email: (o) => conOpportunita(o, 'Abbiamo trovato una <b>nuova opportunità</b> per te.'),
-    telegram: (o) => conOpportunitaTg(o, 'Abbiamo trovato una <b>nuova opportunità</b> per te.'),
+    soggetto: (_genere, o) => oggettoOpportunita(o),
+    email: (o) => conOpportunita(o, ''),
+    telegram: (o) => conOpportunitaTg(o, TESTO_OPPORTUNITA),
   },
   welcome_pro: {
     soggetto: 'Benvenuto nel piano PRO di ScuoleRadar',
     email: (o, genere) =>
-      `${caro(genere)}, benvenuto ${stato(genere)} nel piano <b>PRO</b> di ScuoleRadar!<br/>Da ora hai notifiche illimitate, strumenti docenti completi e moduli sempre aggiornati a norma di legge.<br/><br/>Inizia subito da <a href="${RADAR_URL}">il tuo Radar</a> e resta aggiornato con <a href="${BLOG_URL}">ScuoleRadar.it → Notizie</a>.`,
+      `${caro(genere)}, benvenuto ${stato(genere)} nel piano <b>PRO</b> di ScuoleRadar!<br/>Da ora hai notifiche illimitate, strumenti docenti completi e moduli sempre aggiornati a norma di legge.<br/><br/>Inizia subito da <a href="${RADAR_URL}">il tuo Radar</a>.`,
     telegram: (o, genere) =>
-      `${caro(genere)}, benvenuto ${stato(genere)} nel piano PRO di ScuoleRadar! 👑\nConfigura il tuo Radar: ${RADAR_URL} · Novità: ${BLOG_URL}`,
+      `${caro(genere)}, benvenuto ${stato(genere)} nel piano PRO di ScuoleRadar! 👑\nConfigura il tuo Radar: ${RADAR_URL}`,
   },
+  // BENVENUTO POST-REGISTRAZIONE (tipo `step1` dal trigger DB · `conferma_base`):
+  // conferma l'attivazione IMMEDIATA del mese di PRO in omaggio ed elenca i
+  // vantaggi già attivi. NESSUN riferimento al vecchio modello (account Base,
+  // quota di 3 segnalazioni, ritorno al piano gratuito) e nessun contatore.
   conferma_base: {
-    soggetto: 'Conferma attivazione: il tuo mese di PRO è attivo',
+    soggetto: 'Benvenuto in ScuoleRadar: il tuo mese di PRO è già attivo',
     email: (_o, genere) =>
-      `${benvenuto(genere)} in ScuoleRadar!<br/><br/>Per i primi 30 giorni hai il <b>piano PRO gratuito</b>: Radar Scuole con notifiche illimitate, Modulistica, Crea CV e Calcolatore CFU a portata di mano.<br/><br/>Quando vuoi sapere cosa succede di importante nella scuola, vai su <a href="${BLOG_URL}">ScuoleRadar.it → Notizie</a>.<br/><br/>Non ti mandiamo comunicazioni inutili: quando ti scriviamo, apri il messaggio.`,
+      `${benvenuto(genere)} in ScuoleRadar!<br/><br/>` +
+      'Il tuo <b>mese di PRO in omaggio</b> è già attivo: da questo momento hai tutto disponibile, senza restrizioni.<br/><br/>' +
+      'Ecco cosa puoi usare subito:<br/>' +
+      '• <b>Radar Scuole</b>: cerca per te gli interpelli pubblicati dalle scuole, con notifiche illimitate<br/>' +
+      "• <b>Modulistica scolastica</b>: i modelli pronti all'uso per ogni adempimento<br/>" +
+      '• <b>Crea CV</b>: il tuo curriculum in un formato chiaro e completo<br/>' +
+      '• <b>Calcolatore CFU</b>: verifica i requisiti delle classi di concorso<br/><br/>' +
+      'Il modo migliore per iniziare? Indica provincia e classi di concorso nel tuo Radar: da lì in poi cerchiamo noi per te, ogni giorno.<br/><br/>' +
+      "Non ti mandiamo comunicazioni inutili: se ti scriviamo, apri il messaggio — significa che c'è qualcosa che fa per te.",
     telegram: (_o, genere) =>
-      `${benvenuto(genere)} in ScuoleRadar! 🎉 Il tuo account è attivo: per i primi 30 giorni hai il piano PRO gratuito con notifiche illimitate, Modulistica, Crea CV e Calcolatore CFU. Novità su https://www.scuoleradar.it/notizie`,
+      `${benvenuto(genere)} in ScuoleRadar! 🎉 Il tuo <b>mese di PRO in omaggio</b> è già attivo: Radar Scuole con notifiche illimitate, Modulistica, Crea CV e Calcolatore CFU, senza restrizioni.\nIndica provincia e classi di concorso: da lì cerchiamo noi le opportunità per te.`,
   },
   conferma_attivazione: {
     soggetto: '🎯 Scuole Radar: il tuo Radar è attivo e operativo!',
@@ -216,14 +394,14 @@ ${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua
       'Ora controlleremo noi per te sui canali ufficiali, quando ci saranno delle opportunità interessanti per te.<br/>' +
       'Non inviamo spam, solo segnalazioni rilevanti, perciò, quando ricevi una nostra segnalazione, è importante aprirla ed eventualmente applicare al più presto.',
     telegram: () =>
-      '🎯 Radar attivato con successo!\n\nOra puoi rilassarti: il tuo Radar è attivo e sta già lavorando per te.\n\nNon ti invieremo comunicazioni inutili e spam. Quando vedi un nostro messaggio qui su Telegram, aprilo subito: abbiamo intercettato un\'opportunità per te!',
+      "🎯 Radar attivato con successo!\n\nOra puoi rilassarti: il tuo Radar è attivo e sta già lavorando per te.\n\nNon ti invieremo comunicazioni inutili e spam: quando arriva un messaggio qui su Telegram, aprilo subito — significa che c'è un'opportunità compatibile con il tuo profilo.",
   },
   free_forever_preavviso: {
     soggetto: 'Piano PRO Free Forever: il rinnovo gratuito è automatico',
     email: (o, genere) =>
-      `${caro(genere)}, il tuo piano <b>PRO Free Forever</b> scade il <b>${o.scadenza ?? 'prossimo rinnovo annuale'}</b>.<br/><br/>Tranquillo: nessun pagamento e nessuna azione richiesta. Alla scadenza il rinnovo parte automaticamente a <b>0€</b>, per sempre.<br/>Non riceverai mai solleciti di pagamento né avvisi di mancato rinnovo.<br/><br/>Ti aspettiamo su <a href="${RADAR_URL}">il tuo Radar</a> e sulle novità del nostro <a href="${BLOG_URL}">notiziario</a>.`,
+      `${caro(genere)}, il tuo piano <b>PRO Free Forever</b> scade il <b>${o.scadenza ?? 'prossimo rinnovo annuale'}</b>.<br/><br/>Tranquillo: nessun pagamento e nessuna azione richiesta. Alla scadenza il rinnovo parte automaticamente a <b>0€</b>, per sempre.<br/>Non riceverai mai solleciti di pagamento né avvisi di mancato rinnovo.<br/><br/>Ti aspettiamo su <a href="${RADAR_URL}">il tuo Radar</a>.`,
     telegram: (o, genere) =>
-      `${caro(genere)}, il tuo piano PRO Free Forever scade il ${o.scadenza ?? 'prossimo rinnovo annuale'}. 🎁 Rinnovo automatico a 0€, per sempre: nessun pagamento, nessuna azione.\nRadar: ${RADAR_URL} · Novità: ${BLOG_URL}`,
+      `${caro(genere)}, il tuo piano PRO Free Forever scade il ${o.scadenza ?? 'prossimo rinnovo annuale'}. 🎁 Rinnovo automatico a 0€, per sempre: nessun pagamento, nessuna azione.\nRadar: ${RADAR_URL}`,
   },
   free_forever_scadenza: {
     soggetto: 'Scadenza abbonamento Scuole Radar',
@@ -232,28 +410,28 @@ ${benvenuto(genere)}. Speriamo che Scuole Radar contribuisca a migliorare la tua
     email: () =>
       `Il tuo abbonamento annuale a Scuole Radar sta per scadere.<br/><br/>Ma tu sei stato tra i primi a darci fiducia.<br/>Per questo, tu <b>non pagherai mai</b>.<br/>Il tuo abbonamento sarà rinnovato automaticamente e resterà <b>PRO per sempre</b>, gratis.<br/><br/>Speriamo che Scuole Radar stia contribuendo a cambiarti la vita in meglio.`,
     telegram: (o, genere) =>
-      `${caro(genere)}, il tuo abbonamento annuale sta per scadere, ma tu non pagherai mai: verrà rinnovato automaticamente e resterai PRO per sempre, gratis! 🎁\nRadar: ${RADAR_URL} · Novità: ${BLOG_URL}`,
+      `${caro(genere)}, il tuo abbonamento annuale sta per scadere, ma tu non pagherai mai: verrà rinnovato automaticamente e resterai PRO per sempre, gratis! 🎁\nRadar: ${RADAR_URL}`,
   },
   beta_rinnovo_preavviso: {
     soggetto: 'Sei tra i primi a sostenerci: il tuo account PRO verrà rinnovato GRATIS A VITA 🎁',
     email: (o, genere) =>
-      `${caro(genere)}, sei tra i primi a sostenerci, e per noi questo conta molto.<br/>Come ringraziamento, il tuo account <b>PRO</b> verrà rinnovato <b>GRATIS A VITA</b>.<br/><br/>Alla scadenza il rinnovo avverrà automaticamente: non dovrai fare nulla. Ti aspettiamo su <a href="${RADAR_URL}">il tuo Radar</a> e sulle novità del nostro <a href="${BLOG_URL}">notiziario</a>.`,
+      `${caro(genere)}, sei tra i primi a sostenerci, e per noi questo conta molto.<br/>Come ringraziamento, il tuo account <b>PRO</b> verrà rinnovato <b>GRATIS A VITA</b>.<br/><br/>Alla scadenza il rinnovo avverrà automaticamente: non dovrai fare nulla. Ti aspettiamo su <a href="${RADAR_URL}">il tuo Radar</a>.`,
     telegram: (o, genere) =>
-      `${caro(genere)}, sei tra i primi a sostenerci: il tuo account PRO verrà rinnovato GRATIS A VITA. 🎁\nRadar: ${RADAR_URL} · Novità: ${BLOG_URL}`,
+      `${caro(genere)}, sei tra i primi a sostenerci: il tuo account PRO verrà rinnovato GRATIS A VITA. 🎁\nRadar: ${RADAR_URL}`,
   },
   beta_rinnovo_conferma: {
     soggetto: 'Congratulazioni, il tuo account PRO è stato rinnovato con successo! 🎉',
     email: (o, genere) =>
-      `Congratulazioni! 🎉<br/>${caro(genere)}, il tuo account <b>PRO</b> è ${stato(genere)} rinnovato con successo: da oggi non ha più una data di scadenza — accesso <b>PRO a vita</b>, in omaggio.<br/><br/>Continua a usare ScuoleRadar su <a href="${RADAR_URL}">il tuo Radar</a> e resta aggiornato con <a href="${BLOG_URL}">ScuoleRadar.it → Notizie</a>.`,
+      `Congratulazioni! 🎉<br/>${caro(genere)}, il tuo account <b>PRO</b> è ${stato(genere)} rinnovato con successo: da oggi non ha più una data di scadenza — accesso <b>PRO a vita</b>, in omaggio.<br/><br/>Continua a usare ScuoleRadar su <a href="${RADAR_URL}">il tuo Radar</a>.`,
     telegram: (o, genere) =>
-      `Congratulazioni! 🎉 ${caro(genere)}, il tuo account PRO è ${stato(genere)} rinnovato con successo: ora sei PRO per sempre, senza scadenza.\nRadar: ${RADAR_URL} · Novità: ${BLOG_URL}`,
+      `Congratulazioni! 🎉 ${caro(genere)}, il tuo account PRO è ${stato(genere)} rinnovato con successo: ora sei PRO per sempre, senza scadenza.\nRadar: ${RADAR_URL}`,
   },
 };
 
-// EMAIL 3 — "Conferma attivazione Base" per i nuovi account Base (inclusi
-// Google One Tap): il trigger DB legacy `trg_auth_users_step1_welcome` invia
-// ancora tipo 'step1' → consegniamo il testo di conferma aggiornato anche su
-// quel tipo, finché il trigger non viene migrato a 'conferma_base'.
+// EMAIL 1 — BENVENUTO POST-REGISTRAZIONE (mese di PRO in omaggio): il trigger DB
+// `trg_auth_users_step1_welcome` (migrazione 20260922130000) invia tipo 'step1'
+// anche per Google One Tap → il copy di `conferma_base` viene consegnato su
+// entrambi i tipi, senza duplicare i testi in due punti.
 TESTI.step1 = { ...TESTI.conferma_base };
 
 // Alias retro-compatibili → template centralizzati (EMAIL_TEMPLATES).
@@ -271,12 +449,25 @@ const TIPO_ALIAS: Record<string, keyof typeof EMAIL_TEMPLATES> = {
 
 async function inviaTelegram(chatId: string, testo: string): Promise<string | null> {
   if (!TELEGRAM_TOKEN) return 'TELEGRAM_BOT_TOKEN non configurato';
+  // GATE FEATURE FLAGS: in `test` solo account admin, in `off` nessun invio.
+  const destinatario = recapitoAmmesso('telegram', chatId.trim());
+  if (!destinatario) return 'gate dipartimenti: invio Telegram non consentito (modulo in test/off)';
+  // Ogni messaggio Telegram parte dal BRAND COMPATTO (una riga) e chiude con la
+  // CTA Notizie a due righe: struttura uniforme con lo scraper/notifier.
+  const corpo = `${BRAND_TELEGRAM}\n\n${testo}\n\n${CTA_NOTIZIE_TESTO}`;
   let res: Response;
   try {
     res = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: testo, parse_mode: 'HTML' }),
+      body: JSON.stringify({
+        chat_id: destinatario,
+        text: corpo,
+        parse_mode: 'HTML',
+        // Niente riquadri di anteprima "giganti" che coprono l'avviso.
+        link_preview_options: { is_disabled: true },
+        disable_web_page_preview: true,
+      }),
     });
   } catch (err) {
     return `eccezione: ${(err as Error).message}`;
@@ -290,12 +481,15 @@ async function inviaTelegram(chatId: string, testo: string): Promise<string | nu
 
 async function inviaEmail(email: string, soggetto: string, html: string): Promise<string | null> {
   if (!RESEND_API_KEY) return 'RESEND_API_KEY non configurato';
+  // GATE FEATURE FLAGS: in `test` solo account admin, in `off` nessun invio.
+  const destinatario = recapitoAmmesso('email', email.trim().toLowerCase());
+  if (!destinatario) return 'gate dipartimenti: invio email non consentito (modulo in test/off)';
   let res: Response;
   try {
     res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
-      body: JSON.stringify({ from: RESEND_FROM, to: [email], subject: soggetto, html }),
+      body: JSON.stringify({ from: RESEND_FROM, to: [destinatario], subject: soggetto, html }),
     });
   } catch (err) {
     return `eccezione: ${(err as Error).message}`;
@@ -437,6 +631,40 @@ serve(async (req: Request) => {
   }
 
   // ------------------------------------------------------------
+  // AUTOMAZIONI EMAIL (pannello Admin → KV `public.app_settings`):
+  //   chiave `email_automazione_<id>` → { abilitata, oggetto, intro, corpo }.
+  //   · `abilitata: false` → invio SALTATO (nessuna email, nessun Telegram);
+  //   · `oggetto` → sostituisce l'oggetto (mai per gli oggetti vincolati dalla
+  //     checklist: «Nuove opportunità per te!»);
+  //   · `intro`   → paragrafo introduttivo in testa al messaggio;
+  //   · `corpo`   → sostituisce il corpo (solo automazioni con template).
+  // Errori di lettura o KV non configurata → automazione ATTIVA: la KV non deve
+  // mai fermare le comunicazioni di servizio.
+  // ------------------------------------------------------------
+  const varsAutomazione = {
+    nome,
+    giorni: body.giorni ? String(body.giorni) : '',
+    scadenza: body.scadenza ? String(body.scadenza) : '',
+  };
+  const automazioneEdge: AutomazioneEdge | undefined = automazioneDaTipo(tipo);
+  const statoAutomazione: StatoAutomazione | null = automazioneEdge
+    ? ((await leggiStatiAutomazioni(SUPABASE_URL, SERVICE_ROLE)).get(automazioneEdge.id) ?? {
+        abilitata: true,
+      })
+    : null;
+  if (automazioneEdge && statoAutomazione && statoAutomazione.abilitata === false) {
+    console.log(
+      `[send-notification] ${tipo} saltato: automazione "${automazioneEdge.id}" disattivata dal pannello Admin.`,
+    );
+    return new Response(
+      JSON.stringify({ ok: false, skipped: `automazione disattivata: ${automazioneEdge.id}`, tipo }),
+      { status: 200, headers: CORS },
+    );
+  }
+  /** Intro personalizzata (testo semplice) dai template del pannello. */
+  const introAut = introTesto(statoAutomazione, varsAutomazione);
+
+  // ------------------------------------------------------------
   // TEMPLATE CENTRALIZZATI (email lifecycle — file _shared/emailTemplates.ts):
   // FLUSSO 1 onboarding, FLUSSO 2 radar spento, FLUSSO 3 drip scadenza PRO.
   // Oggetto/corpo/CTA provengono da un unico file con interpolazione {{nome}}
@@ -452,14 +680,23 @@ serve(async (req: Request) => {
       })
     : null;
   if (scheda) {
+    // Personalizzazioni del pannello Admin (oggetto/intro/corpo) applicate QUI:
+    // il template del codice resta la base, il pannello vince quando compilato.
+    const schedaFinale = applicaOverrideScheda(scheda, statoAutomazione, varsAutomazione);
+    // Email: intestazione brand COMPATTA (logo piccolo + nome) e CTA Notizie a
+    // due righe, come in ogni altra email transazionale.
     const corpoHtml =
+      BRAND_EMAIL +
       `<div style="max-width:600px;margin:0 auto;padding:24px;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;">` +
-      scheda.html +
+      schedaFinale.html +
+      CTA_NOTIZIE_HTML +
+      RADAR_LINE_EMAIL +
+      DISCLAIMER_EMAIL +
       `</div>`;
     const errEmail = email
-      ? await inviaEmail(email, scheda.soggetto, corpoHtml)
+      ? await inviaEmail(email, schedaFinale.soggetto, corpoHtml)
       : 'nessun indirizzo email';
-    const errTelegram = chatId ? await inviaTelegram(chatId, scheda.testo) : null;
+    const errTelegram = chatId ? await inviaTelegram(chatId, schedaFinale.testo) : null;
     if (errEmail) console.error(`[send-notification] ${tipo} → email ${email}: ${errEmail}`);
     if (errTelegram) console.error(`[send-notification] ${tipo} → telegram ${chatId}: ${errTelegram}`);
     return new Response(
@@ -484,10 +721,46 @@ serve(async (req: Request) => {
     piano: body.piano ? String(body.piano) : undefined,
   };
 
+  // GATE DI QUALITÀ STRICT: le comunicazioni di opportunità partono SOLO se
+  // contengono un link DIRETTO all'avviso ufficiale e un recapito di
+  // candidatura valido. Meglio saltare l'invio che spedire un alert incompleto.
+  const motivoGate = TIPI_CON_OPPORTUNITA.has(tipo)
+    ? motivoAvvisoNonInviabile(opp.link, opp.email)
+    : null;
+  if (motivoGate) {
+    console.warn(`[send-notification] ${tipo} escluso (${motivoGate}).`);
+    return new Response(
+      JSON.stringify({ ok: false, skipped: motivoGate, tipo }),
+      { status: 200, headers: CORS },
+    );
+  }
+
   const saluto = nome ? `${caro(genere)} ${escapeHtml(nome)},<br/>` : '';
-  const corpoEmail = saluto + testo.email(opp, genere) + '<br/><br/>' + FIRMA + '<br/>📌 Quando vuoi sapere cosa succede di importante, vieni qui: <a href="' + BLOG_URL + '">scuoleradar.it/notizie</a>' + DISCLAIMER_EMAIL;
-  const corpoTelegram = testo.telegram(opp, genere) + '\n\n' + FIRMA + '\n📌 Quando vuoi sapere cosa succede di importante, vieni qui: https://www.scuoleradar.it/notizie';
-  const soggetto = typeof testo.soggetto === 'function' ? testo.soggetto(genere, opp) : testo.soggetto;
+  // STRUTTURA UNIFORME: brand compatto in testa, contenuto, firma, CTA Notizie a
+  // due righe (identica a Telegram), disclaimer legale.
+  const corpoEmail =
+    BRAND_EMAIL +
+    `<div style="max-width:600px;margin:0 auto;padding:24px;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;">` +
+    saluto +
+    introParagrafoHtml(introAut) +
+    testo.email(opp, genere) +
+    '<br/><br/>' +
+    FIRMA +
+    CTA_NOTIZIE_HTML +
+    RADAR_LINE_EMAIL +
+    DISCLAIMER_EMAIL +
+    `</div>`;
+  // Il brand e la CTA Notizie vengono aggiunti centralmente da `inviaTelegram`.
+  // L'intro del pannello precede il copy di ciclo di vita anche su Telegram.
+  const corpoTelegram = (introAut ? introAut + '\n\n' : '') + testo.telegram(opp, genere) + '\n\n' + FIRMA;
+  // Oggetto del pannello Admin solo se il tipo non ha un oggetto VINCOLATO
+  // (le opportunità usano sempre «Nuove opportunità per te!»).
+  const soggetto = oggettoFinale(
+    typeof testo.soggetto === 'function' ? testo.soggetto(genere, opp) : testo.soggetto,
+    statoAutomazione,
+    automazioneEdge,
+    varsAutomazione,
+  );
   const errEmail = email ? await inviaEmail(email, soggetto, corpoEmail) : 'nessun indirizzo email';
   const errTelegram = chatId ? await inviaTelegram(chatId, corpoTelegram) : null;
 

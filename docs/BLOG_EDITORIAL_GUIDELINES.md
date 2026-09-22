@@ -47,6 +47,13 @@
      recenti); lo storico più vecchio di 7 giorni non è toccato e non consuma la
      cadenza. La potatura viene applicata ad **ogni** ingestione, anche quando
      non arriva nulla di nuovo.
+   - **GARANZIA MINIMA (≥ 1 articolo ogni 7 giorni)**: se il filtro editoriale
+     non produce nulla di datato negli ultimi 7 giorni, `ingestNotizie` promuove
+     la **riserva** più fresca (`èRiservaSettimanale`) con gli stessi gate
+     strutturali (link diretto, fonte canonica, HTTP 200/3xx). La promozione è
+     tracciata nel log come "✓ GARANZIA SETTIMANALE" e il cron **fallisce**
+     (`npm run test:notizie-rate`) se nemmeno la riserva è pubblicabile: uno
+     stallo non può più restare invisibile per giorni.
    - **ORDINE DI VISUALIZZAZIONE**: il feed è sempre ordinato per **data di
      pubblicazione DECRESCENTE** (`ordinaNotizie`): la prima card in alto a
      sinistra è l'aggiornamento nazionale più recente. Il punteggio di rilevanza
@@ -69,6 +76,18 @@
      professionale, sicurezza, organico e cattedre, iscrizioni, orientamento,
      inclusione (`categoriaDaImpatto` + `PAROLE_IMPATTO`). La diplomazia
      istituzionale (memorandum, protocolli d'intesa, visite) resta fuori.
+     **ALLOW-LIST DEI TEMI (standard stretto, nessun fluff)**: fuori i comunicati
+     stampa, le lettere del Ministro, le dichiarazioni politiche, i protocolli
+     d'intesa, gli eventi e in generale gli avvisi senza impatto pratico. Si
+     pubblica solo ciò che ricade in un TEMA operativo per il personale,
+     riconosciuto da `classificaTemaPersonale` (`TEMI_PERSONALE`): **CCNL e
+     stipendi, pensioni, welfare e polizza sanitaria, mobilità e assegnazioni,
+     GPS/graduatorie/supplenze/interpelli, organico e cattedre, formazione,
+     PNRR, sicurezza** — più i temi **normativa/scadenze/concorsi**, che valgono
+     però SOLO con un riferimento esplicito al personale (un concorso per
+     studenti non passa). `titoloDaUfficioStampa` marca la comunicazione
+     istituzionale; `articoloValido` applica le stesse regole anche all'igiene
+     dell'archivio, quindi le voci di fluff già pubblicate vengono rimosse.
 3. **TITOLI AZIONE (mai copia-incolla istituzionale)**
    - Il titolo pubblicato non è quello della fonte: `titoloAzione` elimina le
      intestazioni/le code burocratiche, tiene il SOGGETTO della notizia, mette la
@@ -119,8 +138,11 @@
      `/archivio`, `/albo-pretorio`), pagine "notizie"/"comunicati", directory
      **URP**, pagine di ricerca (`?q=`, `?s=`, filtri) e di paginazione
      (`/page/2`).
-   - I portali di servizio (Istanze Online/POLIS, InPA, INPS) si **citano a
-     parole, senza link**: sono punti di accesso, non documenti.
+   - I portali di servizio (Istanze Online/POLIS, Unica, InPA, INPS, PNRR
+     Istruzione) si **citano SEMPRE con il link diretto** (`CANALI_DOMANDA` +
+     `linkDomandaUfficiale`): se la notizia riguarda una domanda, il link per
+     presentarla accompagna quello della fonte. Vietati i rinvii vaghi
+     ("verifica nel testo ufficiale", "ti avvisiamo appena esce"): `FRASI_FLUFF`.
    - **Se il link diretto non è estraibile in modo affidabile, l'articolo NON si
      pubblica** (nessun fallback a un contenitore "master").
    - La regola vale due volte: sul campo `official_source_url` **e** sui link
@@ -183,7 +205,21 @@
   3. **CHE COSA FARE** — modalità, documenti e **un solo link**: quello diretto
      al documento ufficiale (etichetta onesta: "apri l'avviso ufficiale" /
      "apri il documento ufficiale (PDF)").
-- Acronimi spiegati alla prima menzione; niente sezioni `<h2>` nel corpo.
+- Acronimi spiegati alla prima menzione (`espandiAcronimi` + `GLOSSARIO_ACRONIMI`:
+  MIM, GPS, PNRR, ATA, CCNL, SPID, CIE, SIDI…), anche nel titolo; niente sezioni
+  `<h2>` nel corpo.
+- **TITOLI AZIONE**: via le etichette d'ufficio stampa ("Comunicato stampa:",
+  "Lettera del Ministro…", "Valditara: …", i prefissi data delle rassegne) e le
+  code da comunicato; resta il fatto pratico (`titoloAzione`).
+- **SEZIONE "IN SINTESI"**: solo fatti diretti, in bullet etichettati —
+  `Cosa cambia:`, `Chi riguarda:`, `Scadenza:` (quando la fonte la dichiara),
+  `Cosa devi fare:`. Nessun preambolo retorico e nessun titolo ripetuto.
+  `summary_points[0]` resta una frase autosufficiente: è usata come descrizione
+  della card e come meta description (SEO).
+- **CADENZA**: minimo 1 e massimo 3 articoli datati negli ultimi 7 giorni
+  (`verificaCadenzaSettimanale`, `MAX_ARTICOLI_SETTIMANA = 3`). La garanzia
+  minima può promuovere una **riserva** solo se rispetta i temi ammessi, non è
+  comunicazione d'ufficio stampa e supera i gate strutturali del link.
 - Frase breve, seconda persona ("hai", "puoi", "devi"): il lettore deve capire
   in 20 secondi se lo riguarda.
 

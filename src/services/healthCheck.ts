@@ -162,18 +162,35 @@ async function testCheckout(): Promise<{ status: HealthCheckResult['status']; me
   try {
     const token = await tokenSessione();
     const { status, data } = await pingFunzione('checkout', { ping: true }, token);
+    // 401 in modalità GUEST = esito SANO, non un guasto: `checkout` è protetta da
+    // JWT per progetto (supabase/config.toml → [functions.checkout] verify_jwt=true)
+    // e il ping espone Price/Coupon ID, quindi senza sessione NON deve rispondere.
+    // Diventa un errore solo se il 401 arriva CON una sessione attiva: lì il token
+    // non viene accettato (deploy/secrets da verificare).
     if (status === 401) {
-      return {
-        status: 'warning',
-        message:
-          'HTTP 401 ATTESO in modalità Guest: il checkout è protetto da JWT (comportamento di sicurezza). Autenticati per il ping completo dei segreti Stripe.',
-      };
+      return token
+        ? {
+            status: 'error',
+            message:
+              'HTTP 401 con sessione attiva: il JWT non è accettato da `checkout` (verifica deploy e secrets della funzione).',
+          }
+        : {
+            status: 'ok',
+            message:
+              'Checkout attivo e protetto da JWT: in modalità Guest la configurazione Stripe non viene esposta (scelta di sicurezza). Accedi per il ping completo.',
+          };
     }
     if (status === 404) return { status: 'error', message: 'Funzione non deployata (HTTP 404).' };
     if (status >= 500) return { status: 'error', message: `HTTP ${status}: ${data?.error ?? 'errore server'}` };
     if (status >= 400) return { status: 'warning', message: `HTTP ${status}: ${data?.error ?? 'risposta inattesa'}` };
     if (data?.configurato === true) {
-      return { status: 'ok', message: 'Checkout configurato (STRIPE_SECRET_KEY e Price IDs presenti).' };
+      const modo = data.mode === 'live' ? 'LIVE' : 'TEST';
+      const coupon = data.couponBeta1Anno ? 'BETA1ANNO mappato' : 'BETA1ANNO NON mappato';
+      const webhook = data.webhookEndpoint ? 'webhook configurato' : 'webhook non configurato';
+      return {
+        status: 'ok',
+        message: `Checkout configurato (Stripe ${modo} · ${coupon} · ${webhook}).`,
+      };
     }
     const mancanti = (data?.priceMancanti as string[] | undefined) ?? [];
     return {

@@ -1,7 +1,7 @@
 import { Radar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
-import { Footer } from './LandingPage';
+import { Footer } from '@/components/Footer';
 
 export function ChiSiamoPage() {
   const navigate = useNavigate();

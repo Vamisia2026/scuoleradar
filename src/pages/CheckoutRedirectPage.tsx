@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Loader2, ShieldCheck } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import type { PianoId } from '@/lib/pricing';
 import { PROMO_CODES_ATTIVI } from '@/lib/promo';
 
@@ -28,6 +29,8 @@ const SLUG_TO_PIANO: Record<string, PianoId> = {
 export function CheckoutRedirectPage() {
   const { plan } = useParams<{ plan: string }>();
   const [searchParams] = useSearchParams();
+  // Feature flags: il ritorno va alla prima sezione disponibile, mai a un modulo spento.
+  const { primaRottaVisibile } = useFeatureFlags();
   const { avviaCheckout } = useApp();
 
   const [stato, setStato] = useState<'inizio' | 'inCorso' | 'fatto' | 'errore'>('inizio');
@@ -96,7 +99,7 @@ export function CheckoutRedirectPage() {
             tua dashboard.
           </p>
           <Link
-            to="/dashboard/radar"
+            to={primaRottaVisibile()}
             className="inline-flex items-center gap-1.5 rounded-xl border border-primary-200 bg-white px-4 py-2.5 text-sm font-semibold text-primary-700 transition hover:bg-primary-50"
           >
             <ArrowLeft className="h-4 w-4" /> Torna alla dashboard

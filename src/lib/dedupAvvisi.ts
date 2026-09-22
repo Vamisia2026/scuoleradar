@@ -12,7 +12,7 @@
  *   · titolo normalizzato (minuscolo, senza accenti/punteggiatura e senza numeri
  *     — date, protocolli, numeri d'ordine cambiano a ogni ripubblicazione);
  *   · scuola/ente emittente + provincia;
- *   · classi di concorso rilevate (ordinate).
+ *   · classi di concorso rilevate (ORDINATE e NORMALIZZATE: `A-022` ≡ `A-22`).
  * Due avvisi con la stessa impronta sono la stessa opportunità.
  *
  * Il modulo è PURO (nessuna rete, nessun DB): la finestra temporale entro cui
@@ -20,6 +20,7 @@
  * una ripubblicazione legittima a distanza di mesi non resta soppressa per
  * sempre.
  */
+import { normalizzaClasse } from './matchingEngine';
 
 /** Finestra di default per il confronto delle impronte (giorni). */
 export const GIORNI_IMPRONTA = 60;
@@ -76,7 +77,18 @@ export function improntaAvviso(dati: DatiImpronta): string | null {
   if (titolo.length < MIN_TITOLO_IMPRONTA) return null;
   const scuola = normalizzaPerImpronta(dati.scuola);
   const provincia = (dati.provincia ?? '').trim().toUpperCase();
-  const classi = [...new Set((dati.classi ?? []).map((c) => (c ?? '').trim().toUpperCase()).filter(Boolean))]
+  // CLASSI NORMALIZZATE (`A-022` ≡ `A-22` ≡ `A042`): le fonti scrivono il codice
+  // in formati diversi e il parser può migliorare nel tempo. Senza questa
+  // canonicalizzazione la STESSA opportunità produceva un'impronta diversa solo
+  // perché il codice era scritto `A22` invece di `A-022` → di nuovo "nuova" →
+  // nuovo alert (bug "notifiche ripetute", es. avvisi del Liceo Monti).
+  const classi = [
+    ...new Set(
+      (dati.classi ?? [])
+        .map((c) => normalizzaClasse(c))
+        .filter(Boolean),
+    ),
+  ]
     .sort()
     .join(',');
   // La scuola può mancare (avvisi degli uffici scolastici): l'impronta resta

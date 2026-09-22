@@ -44,12 +44,18 @@ export function ModuloPreview({ open, onClose, modulo, cache, onSalva }: ModuloP
 
   const salva = async () => {
     if (!onSalva || !modulo || salvato) return;
-    const res = await onSalva(modulo);
-    if (res.ok) {
-      setSalvato(true);
-      mostraToast('successo', 'Documento salvato nei tuoi "Modelli Scaricati".');
-    } else {
-      mostraToast('errore', res.errore ?? 'Salvataggio non riuscito.');
+    try {
+      const res = await onSalva(modulo);
+      if (res.ok) {
+        setSalvato(true);
+        mostraToast('successo', 'Documento salvato nei tuoi "Modelli Scaricati".');
+      } else {
+        mostraToast('errore', res.errore ?? 'Salvataggio non riuscito.');
+      }
+    } catch (err) {
+      // Rete/archivio non raggiungibili: l'anteprima resta aperta e utilizzabile.
+      console.warn('ModuloPreview — salvataggio:', err);
+      mostraToast('errore', 'Salvataggio non riuscito: riprova tra un istante.');
     }
   };
 

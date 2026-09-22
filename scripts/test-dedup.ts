@@ -114,6 +114,17 @@ check(
   improntaAvviso({ ...avvisoBase, classi: ['ADEE', 'A-022'] }),
 );
 check(
+  'FORMATO del codice classe irrilevante (A-022 ≡ A-22 ≡ A042)',
+  [
+    improntaAvviso({ ...avvisoBase, classi: ['A-022'] }),
+    improntaAvviso({ ...avvisoBase, classi: ['A-022'] }),
+  ],
+  [
+    improntaAvviso({ ...avvisoBase, classi: ['A-22'] }),
+    improntaAvviso({ ...avvisoBase, classi: ['A22'] }),
+  ],
+);
+check(
   'SCUOLA diversa → impronta diversa',
   true,
   improntaAvviso({ ...avvisoBase, scuola: 'ITIS Artom' }) !== improntaBase,

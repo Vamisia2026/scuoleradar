@@ -862,6 +862,8 @@ interface EsitoCanaliTelegram {
   riusciti: number;
   falliti: number;
   senzaCanale: number;
+  /** Avvisi NON pubblicati perché privi di un link diretto all'avviso. */
+  senzaFonte: number;
 }
 
 /**
@@ -869,12 +871,24 @@ interface EsitoCanaliTelegram {
  *   - il canale REGIONALE attivo della provincia (9 canali regionali attivi
  *     configurati in src/lib/telegram.ts → CANALI_TELEGRAM_REGIONALI);
  *   - il canale ATA nazionale @scuoleradar_ata in AGGIUNTA per ogni
- *     🔵 [AVVISO ATA], da qualunque regione d'Italia.
+ *     avvisi ATA (🗂️), da qualunque regione d'Italia.
+ *
+ * GATE DI LINK SAFETY: gli avvisi privi di un link DIRETTO all'avviso specifico
+ * (home regionali, archivi, elenchi, pagine di ricerca) NON vengono pubblicati:
+ * sono contati in `senzaFonte` e non entrano in `attesi` (nessun falso allarme
+ * di "dispatch fermo").
+ *
  * Gli errori vengono loggati singolarmente: nessun fallimento silenzioso.
  * Ritorna le statistiche di invio (per diagnostica/alert).
  */
 async function pubblicaNuoviSuCanali(nuovi: AvvisoRilevato[]): Promise<EsitoCanaliTelegram> {
-  const nessuno: EsitoCanaliTelegram = { attesi: 0, riusciti: 0, falliti: 0, senzaCanale: 0 };
+  const nessuno: EsitoCanaliTelegram = {
+    attesi: 0,
+    riusciti: 0,
+    falliti: 0,
+    senzaCanale: 0,
+    senzaFonte: 0,
+  };
   if (nuovi.length === 0) return nessuno;
 
   const canaliAttivi = getTelegramCanaliRegionali();
@@ -895,6 +909,7 @@ async function pubblicaNuoviSuCanali(nuovi: AvvisoRilevato[]): Promise<EsitoCana
   let inviiAttesi = 0;
   let falliti = 0;
   let senzaCanale = 0;
+  let senzaFonte = 0;
   let saltatiGia = 0;
   // Dedup in-run: una coppia (hash, canale) non viene mai processata due volte
   // nemmeno se lo stesso avviso comparisse più volte nell'elenco.
@@ -923,6 +938,12 @@ async function pubblicaNuoviSuCanali(nuovi: AvvisoRilevato[]): Promise<EsitoCana
       return true;
     });
     inviiAttesi += daPubblicare.length;
+    // GATE DI LINK SAFETY: senza un link DIRETTO all'avviso la pubblicazione è
+    // annullata a monte (mai home regionali/archivi/ricerche sui canali).
+    if (esito.saltato) {
+      senzaFonte += 1;
+      continue; // il motivo è già loggato da `pubblicaInterpelloSuCanali`
+    }
     if (esito.destinazioni.length === 0) {
       if (giaPubblicati.size > 0) {
         saltatiGia += 1;
@@ -951,10 +972,15 @@ async function pubblicaNuoviSuCanali(nuovi: AvvisoRilevato[]): Promise<EsitoCana
   if (saltatiGia > 0) {
     console.log(`  • Canali Telegram: ${saltatiGia} avvisi già pubblicati (ledger) → saltati`);
   }
+  if (senzaFonte > 0) {
+    console.log(
+      `  • Canali Telegram: ${senzaFonte} avvisi senza link diretto all'avviso → NON pubblicati`,
+    );
+  }
   console.log(
     `  ✓ Canali Telegram: ${inviiRiusciti}/${inviiAttesi} invii riusciti (${nuovi.length} avvisi)`,
   );
-  return { attesi: inviiAttesi, riusciti: inviiRiusciti, falliti, senzaCanale };
+  return { attesi: inviiAttesi, riusciti: inviiRiusciti, falliti, senzaCanale, senzaFonte };
 }
 
 /* --------------------- Deduplica: hash + impronta dell'opportunità --------------------- */
@@ -1157,16 +1183,11 @@ async function main() {
       raggiungibiliList.push(a);
       continue;
     }
-    // Link specifico non raggiungibile → fallback all'ente (USP/USR), se mappato
-    // e raggiungibile. Nessun link rotto viene mai persistito.
-    const ente = urlIstituzionaleEnte(a.province);
-    if (ente && (await verificaLink(ente))) {
-      console.warn(`  ↩ [${a.province}] link non raggiungibile → fallback ente: ${ente}`);
-      a.link = ente;
-      raggiungibili++;
-      raggiungibiliList.push(a);
-      continue;
-    }
+    // Link specifico non raggiungibile → l'avviso viene SCARTATO.
+    // ⛔ Nessun fallback alla home dell'ente (USR/USP): sarebbe una pagina
+    // generica (spesso di un'altra provincia, quando la provincia del record è
+    // quella della fonte regionale) e violerebbe la regola "👉 Apri l'avviso
+    // ufficiale = URL esatto dell'avviso". Meglio non pubblicare nulla.
     console.warn(`  ✗ scartato (link non raggiungibile): ${a.link}`);
   }
   console.log(`• Link raggiungibili: ${raggiungibili}/${trovati.length}`);
@@ -1430,7 +1451,8 @@ async function main() {
   }
 
   // Diagnostica + alert: registra la run (`scraper_runs`) e avvisa l'admin se ci
-  // sono stati invii Telegram falliti o avvisi senza canale (anomalie di routing).
+  // sono stati invii Telegram falliti, avvisi senza canale (anomalie di routing)
+  // o avvisi scartati dal gate di link safety (senza link diretto).
   await concludiRun({
     modalita: 'reali',
     province,
@@ -1440,9 +1462,14 @@ async function main() {
     telegramAttesi: tg.attesi,
     telegramRiusciti: tg.riusciti,
     errori: tg.falliti,
-    esito: tg.falliti > 0 || tg.senzaCanale > 0 ? 'warn' : 'ok',
+    esito: tg.falliti > 0 || tg.senzaCanale > 0 || tg.senzaFonte > 0 ? 'warn' : 'ok',
     messaggio:
-      tg.senzaCanale > 0 ? `${tg.senzaCanale} avvisi senza canale regionale attivo` : undefined,
+      tg.senzaCanale > 0
+        ? `${tg.senzaCanale} avvisi senza canale regionale attivo` +
+          (tg.senzaFonte > 0 ? ` · ${tg.senzaFonte} senza link diretto (non pubblicati)` : '')
+        : tg.senzaFonte > 0
+          ? `${tg.senzaFonte} avvisi senza link diretto all'avviso: non pubblicati sui canali`
+          : undefined,
     durataMs: Date.now() - inizio,
   });
 }

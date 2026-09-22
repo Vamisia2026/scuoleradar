@@ -75,6 +75,51 @@ export const EMAIL_ETICHETTA = 'Candidature';
 /** Etichetta delle VISTE WEB (`📧 Email candidature`). */
 export const EMAIL_ETICHETTA_WEB = 'Email candidature';
 
+/* ------------------ Brand e CTA informative (notifiche) ------------------ */
+
+/**
+ * BRAND COMPATTO — piccola icona pulita + nome ufficiale come LINK, sulla stessa riga.
+ *
+ * Regole di prodotto (identiche in Telegram e in email):
+ *  - nessun logo gigante/deformato: il marchio è una RIGA compatta in testa al
+ *    messaggio, mai un'immagine grande che spinge il contenuto fuori schermo;
+ *  - il nome ufficiale è `Scuole Radar.it` (con lo spazio: è la firma pubblica) ed
+ *    è INTERAMENTE cliccabile verso la home del sito (`URL_HOME`);
+ *  - `BRAND_RIGA_TELEGRAM` è la PRIMA riga di OGNI messaggio Telegram.
+ */
+export const BRAND_ICONA = '📡';
+/** Nome ufficiale del brand nelle notifiche. */
+export const BRAND_NOME = 'Scuole Radar.it';
+/** Home ufficiale del sito: destinazione del brand cliccabile. */
+export const URL_HOME = 'https://www.scuoleradar.it';
+/** Testata brand per Telegram: icona + nome ufficiale CLIICCABILE (parse_mode HTML). */
+export const BRAND_RIGA_TELEGRAM = `${BRAND_ICONA} <a href="${URL_HOME}">${BRAND_NOME}</a>`;
+
+/** URL canonico della sezione Notizie (CTA informativa, mai promozionale). */
+export const URL_NOTIZIE = 'https://www.scuoleradar.it/notizie';
+
+/**
+ * CTA "Notizie" — formato ESATTO a due righe, unico per Telegram ed email
+ * (verificato dai test `test:telegram:template` e `test:email`):
+ *
+ *   📌 https://www.scuoleradar.it/notizie
+ *   Quando vuoi sapere cosa succede di importante nella scuola, vieni qui
+ *
+ * La riga del link NON ha etichette: l'URL è visibile e verificabile.
+ */
+export const CTA_NOTIZIE_RIGA = `📌 ${URL_NOTIZIE}`;
+/** Seconda riga della CTA Notizie (testo informativo, non promozionale). */
+export const CTA_NOTIZIE_TESTO =
+  'Quando vuoi sapere cosa succede di importante nella scuola, vieni qui';
+/** CTA Notizie COMPLETA (due righe, per Telegram e per il testo piano). */
+export const CTA_NOTIZIE_TELEGRAM = `${CTA_NOTIZIE_RIGA}\n${CTA_NOTIZIE_TESTO}`;
+
+/**
+ * Etichetta UNICA e onesta del link alla fonte ufficiale dell'avviso: descrive
+ * l'azione senza promettere una candidatura che il link non garantisce.
+ */
+export const ETICHETTA_AVVISO_UFFICIALE = "👉 Apri l'avviso ufficiale";
+
 /**
  * Normalizza il recapito di candidatura della scuola: trim + minuscolo e
  * validazione minima. Ritorna `null` per valori vuoti/plausibilmente non-email
@@ -452,6 +497,86 @@ export function ePaginaRiepilogo(url?: string | null): boolean {
   );
 }
 
+/* ------------------ GATE DI QUALITÀ dell'invio (link + recapito) ------------------ */
+
+/**
+ * Percorsi che NON sono mai un avviso specifico: pagine di RICERCA, ELENCO,
+ * ARCHIVIO o TAG di un sito istituzionale/aggregatore. Un link così NON può
+ * essere mostrato come "👉 Apri l'avviso ufficiale": porterebbe l'utente su un
+ * elenco, non sull'avviso.
+ */
+const RE_URL_ARCHIVIO =
+  /(?:^|\/)(?:tag|tags|category|categorie|search|ricerca|cerca|elenco|elenchi|lista|liste|indice|archivio|archive|pagin(?:a|e)|page|feed)(?:\/|$)/i;
+
+/**
+ * True se l'URL è un AVVISO SPECIFICO e DIRETTO: pagina o documento puntuale
+ * pubblicato dall'ente (scuola/USP/USR) — incluso il PDF e la **pagina
+ * tabellare/“Stampa” del singolo avviso** (destinazioni ammesse dal prodotto).
+ *
+ * NON è mai un avviso: la HOME dell'ente, un elenco/archivio/tag, una pagina di
+ * ricerca (`?s=`, `?q=`), la landing regionale di un aggregatore
+ * (`/interpelli-lombardia/`) o un URL della piattaforma.
+ *
+ * È il guard della REGOLA di prodotto: "👉 Apri l'avviso ufficiale" deve puntare
+ * all'URL esatto dell'avviso (o alla sua tabella/PDF), mai a un archivio di
+ * ricerca o alla home.
+ */
+export function eUrlAvvisoDiretto(url?: string | null): boolean {
+  if (!eLinkEsterno(url)) return false;
+  const u = (url ?? '').trim();
+  let percorso = '';
+  let query = '';
+  try {
+    const p = new URL(u);
+    percorso = p.pathname.replace(/\/+$/, '').toLowerCase();
+    query = p.search;
+  } catch {
+    return false;
+  }
+  // Home dell'ente (es. la radice dell'USR): non è un avviso.
+  if (!percorso) return false;
+  // Elenchi, archivi, tag, pagine di ricerca.
+  if (RE_URL_ARCHIVIO.test(percorso)) return false;
+  const segmenti = percorso.split('/').filter(Boolean);
+  // Landing/elenco di primo livello (es. `interpelli-lombardia`,
+  // `interpelli-scuola-2026-09-17`): un solo segmento "contenitore".
+  if (segmenti.length === 1 && /^(?:interpelli|avvisi|bandi|supplenze|opportunita)/.test(segmenti[0])) {
+    return false;
+  }
+  // Ricerca interna (`?s=`, `?q=`, `?ricerca=`).
+  if (/[?&](?:s|q|search|query|ricerca|filtro)=/i.test(query)) return false;
+  return true;
+}
+
+/** Dati minimi per il gate di qualità dell'invio. */
+export interface DatiQualitaAvviso {
+  /** URL della fonte ufficiale dell'avviso. */
+  link?: string | null;
+  /** Email/PEC di candidatura della scuola. */
+  email?: string | null;
+}
+
+/**
+ * Motivo per cui un avviso NON è inviabile (`null` = pronto all'invio).
+ * Serve a loggare in modo comprensibile perché un record è stato scartato.
+ */
+export function motivoAvvisoNonInviabile(dati: DatiQualitaAvviso = {}): string | null {
+  if (!eUrlAvvisoDiretto(dati.link)) return 'fonte ufficiale non diretta';
+  if (!emailAvviso(dati.email)) return 'recapito di candidatura mancante';
+  return null;
+}
+
+/**
+ * GATE DI QUALITÀ STRICT — un avviso si invia SOLO se ha:
+ *   1. un link DIRETTO all'avviso ufficiale (non home, non elenco/ricerca);
+ *   2. un recapito di candidatura valido (email/PEC della scuola).
+ * Un avviso incompleto danneggia l'affidabilità del servizio: meglio non
+ * inviarlo affatto. Usato da tutti i canali (Telegram, email, digest).
+ */
+export function avvisoInviabile(dati: DatiQualitaAvviso = {}): boolean {
+  return motivoAvvisoNonInviabile(dati) === null;
+}
+
 export function classificaFonteLink(url?: string | null): DestinazioneFonte {
   const u = (url ?? '').toLowerCase();
   if (!u) return 'avviso';
@@ -468,6 +593,12 @@ export function classificaFonteLink(url?: string | null): DestinazioneFonte {
 /**
  * Etichetta CHIARA e veritiera per il link alla fonte originale. Non usare MAI
  * "Candidati": non sappiamo se la pagina è un modulo di invio domanda.
+ *
+ * NOTA: le NOTIFICHE (Telegram, email, canali, Edge) usano l'etichetta UNICA e
+ * standard `ETICHETTA_AVVISO_UFFICIALE` ("👉 Apri l'avviso ufficiale") — una sola
+ * stringa in tutte le superfici. Questa funzione resta per le VISTE WEB
+ * (`InterpelloCard`, `InterpelloDettaglioPage`), dove la distinzione
+ * PDF/Albo/riepilogo aiuta a capire cosa si sta aprendo.
  */
 export function etichettaFonteLink(url?: string | null): string {
   const u = (url ?? '').toLowerCase();

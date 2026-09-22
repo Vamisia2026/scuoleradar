@@ -74,6 +74,8 @@ export const materie: Materia[] = [
   { id: 'educazione_linguistica', nome: 'Educazione linguistica' },
   { id: 'clil', nome: 'CLIL' },
   { id: 'coding_robotica', nome: 'Coding e Robotica' },
+  { id: 'digital_storytelling', nome: 'Digital storytelling (narrazione digitale)' },
+  { id: 'creativita_digitale', nome: 'Creatività digitale e making' },
   { id: 'beni_culturali', nome: 'Beni culturali e turismo' },
   { id: 'agricoltura', nome: 'Sistemi agricoli e agroalimentari' },
   { id: 'sociale', nome: 'Sociologia e servizio sociale' },
@@ -82,3 +84,69 @@ export const materie: Materia[] = [
   { id: 'assistente_amministrativo', nome: 'Assistente amministrativo (ATA)' },
   { id: 'coordinatore', nome: 'Coordinatore servizi generali (DSGA)' },
 ];
+
+/**
+ * MATERIE DI BASE (le discipline curricolari “da cattedra”).
+ *
+ * Non compaiono nella sezione delle COMPETENZE EXTRA del Radar: lì l'utente
+ * cerca ciò che può proporre OLTRE la propria classe di concorso (bandi PNRR,
+ * laboratori, progetti). Mostrare “Storia” o “Geografia” in quella lista era
+ * fuorviante: la cattedra si intercetta già con le classi di concorso.
+ */
+export const MATERIE_GENERICHE: ReadonlySet<string> = new Set([
+  'italiano',
+  'matematica',
+  'storia',
+  'geografia',
+  'scienze',
+  'inglese',
+  'francese',
+  'spagnolo',
+  'tedesco',
+  'filosofia',
+  'fisica',
+  'chimica',
+  'biologia',
+  'scienze_terra',
+  'arte',
+  'musica',
+  'ed_fisica',
+  'tecnologia',
+  'diritto',
+  'latino',
+  'greco',
+  'religione',
+  'informatica',
+  'educazione_civica',
+  'scienze_umane',
+  'psicologia',
+  'pedagogia',
+]);
+
+/** Materie/competenze proposte nella sezione “competenze extra” del Radar. */
+export function materieCompetenzeExtra(): Materia[] {
+  return materie.filter((m) => !MATERIE_GENERICHE.has(m.id));
+}
+
+/**
+ * COMPETENZE E LABORATORI ad ALTA RICHIESTA (PNRR/PON, esperti esterni).
+ *
+ * Sono i profili che le scuole cercano più spesso nei bandi per esperti e tutor:
+ * vengono PROPOSTI come chip a un click nella sezione “Le tue competenze e
+ * laboratori extra da proporre”. Il testo scritto a mano resta sempre possibile.
+ */
+export interface CompetenzaSuggerita {
+  /** Etichetta mostrata nel chip (linguaggio dei bandi scolastici). */
+  nome: string;
+  /** Id della materia di catalogo corrispondente (per il matching e il salvataggio). */
+  materiaId: string;
+}
+
+export const competenzeSuggerite: CompetenzaSuggerita[] = [
+  { nome: 'Intelligenza artificiale nella didattica', materiaId: 'intelligenza_artificiale' },
+  { nome: 'Robotica educativa', materiaId: 'robotica' },
+  { nome: 'Digital storytelling', materiaId: 'digital_storytelling' },
+  { nome: 'Metodologia CLIL', materiaId: 'clil' },
+  { nome: 'Creatività digitale', materiaId: 'creativita_digitale' },
+];
+

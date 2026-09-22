@@ -165,22 +165,24 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   // ---------- FLUSSO 1 — Onboarding (Email 1.1) ----------
   email_1_1_onboarding: {
     chiave: 'email_1_1_onboarding',
-    soggetto: 'Benvenuto su Scuole Radar + Il tuo mese PRO in regalo',
+    soggetto: 'Benvenuto in Scuole Radar: il tuo mese di PRO è già attivo',
     corpo: `Caro {{nome}},
 
 Benvenuto in Scuole Radar.
 
-Per festeggiare il tuo arrivo, ti regaliamo 1 mese di account PRO, offerto dal nostro partner PureFocus, un ambiente per usare YouTube per il tuo studio e lavoro senza distrazioni (puoi scoprirlo su {{link_purefocus}}).
+Il tuo mese di PRO in omaggio è già attivo: da questo momento hai tutto disponibile, senza restrizioni. Il regalo arriva dal nostro partner PureFocus ({{link_purefocus}}), un ambiente per usare YouTube per lo studio e il lavoro senza distrazioni.
 
-Il servizio di cui siamo più orgogliosi è il nostro Radar, attraverso cui cerchiamo opportunità di lavoro pubblicate dalle scuole e spesso molto difficili da trovare sui siti istituzionali.
+Ecco cosa puoi usare subito:
+· Radar Scuole: cerca per te gli interpelli pubblicati dalle scuole, con notifiche illimitate
+· Modulistica scolastica: i modelli pronti all'uso per ogni adempimento
+· Crea CV: il tuo curriculum in un formato chiaro e completo
+· Calcolatore CFU: verifica i requisiti delle classi di concorso
 
-Quando troviamo qualcosa che sembra fatta apposta per te, te lo segnaliamo.
-
-Per attivare il tuo Radar, indica la tua Provincia e Classe di concorso. Puoi anche scegliere più province o classi di concorso.
+Il modo migliore per iniziare? Indica la tua Provincia e Classe di concorso: da lì cerchiamo noi per te, ogni giorno. Puoi scegliere anche più province o classi di concorso.
 
 [ ATTIVA IL TUO RADAR ] -> {{link_radar}}
 
-Il tuo mese PRO inizia ora.
+Non ti mandiamo comunicazioni inutili: se ti scriviamo, apri il messaggio.
 
 Un saluto,
 I tuoi colleghi di Scuole Radar`,

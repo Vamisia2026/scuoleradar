@@ -39,12 +39,89 @@ export const newsFallback: NewsArticle = {
   published_at: '',
 };
 
+/* ------------------- Normalizzazione a prova di guasto ------------------- */
+
+/** Fonte istituzionale di riserva quando l'articolo non ne dichiara una. */
+const FONTE_UFFICIALE_RISERVA = 'https://www.mim.gov.it/web/guest/notizie';
+
+/** Coercizione difensiva a stringa pulita (mai `undefined`/`null` in pagina). */
+function testo(valore: unknown): string {
+  return typeof valore === 'string' ? valore.trim() : '';
+}
+
+/** Converte l'HTML in una riga di testo piano (per i riepiloghi di riserva). */
+function riepilogoDaHtml(html: string, max = 200): string {
+  const piano = html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return piano.length > max ? `${piano.slice(0, max - 1).trimEnd()}…` : piano;
+}
+
+/** Esegue l'escape del testo prima di inserirlo in un frammento HTML. */
+function testoInHtml(valore: string): string {
+  return valore
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * NORMALIZZATORE DI SICUREZZA del feed.
+ *
+ * Il file `data/notizieIngestite.ts` è generato dalla pipeline automatica
+ * (`ingestNotizie.ts` / `newsFetcher.ts`): se una fonte esterna cambia formato
+ * o una run di ingestione scrive una riga incompleta, un articolo malformato
+ * NON deve far crollare la pagina Notizie.
+ *
+ * Qui ogni record viene validato e completato con valori di riserva sensati;
+ * i record irrecuperabili (senza id o titolo) vengono scartati silenziosamente.
+ * Ritorna `null` se l'articolo non è pubblicabile.
+ */
+export function normalizzaArticolo(riga: unknown): NewsArticle | null {
+  if (!riga || typeof riga !== 'object') return null;
+  const r = riga as Record<string, unknown>;
+
+  const id = testo(r.id);
+  const title = testo(r.title);
+  if (!id || !title) return null;
+
+  const contentHtml =
+    testo(r.content_html) || `<p>${testoInHtml(title)}</p>`;
+
+  const punti = Array.isArray(r.summary_points)
+    ? r.summary_points.map(testo).filter(Boolean)
+    : [];
+  const summary_points =
+    punti.length > 0
+      ? punti.slice(0, 3)
+      : [riepilogoDaHtml(contentHtml) || title];
+
+  const punteggio = Number(r.relevance_score);
+
+  return {
+    id,
+    title,
+    category: testo(r.category) || 'Scuole',
+    deadline_date: testo(r.deadline_date) || null,
+    summary_points,
+    content_html: contentHtml,
+    official_source_url: testo(r.official_source_url) || FONTE_UFFICIALE_RISERVA,
+    official_pdf_url: testo(r.official_pdf_url) || null,
+    relevance_score: Number.isFinite(punteggio) ? punteggio : 0,
+    published_at: testo(r.published_at),
+  };
+}
+
 /** Notizie pubblicate: seed editoriali + dati reali ingestiti (dedup per id);
  *  se entrambi vuoti resta il fallback singolo realistico. */
 function unisciNotizie(): NewsArticle[] {
-  const tutte = [...notizieSeed, ...notizieIngestite];
-  const uniche = [...new Map(tutte.map((n) => [n.id, n])).values()];
-  return uniche.length > 0 ? uniche : [newsFallback];
+  const valide = [...notizieSeed, ...notizieIngestite]
+    .map(normalizzaArticolo)
+    .filter((n): n is NewsArticle => n !== null);
+  const uniche = [...new Map(valide.map((n) => [n.id, n])).values()];
+  return uniche.length > 0 ? uniche : [normalizzaArticolo(newsFallback) ?? newsFallback];
 }
 
 /**

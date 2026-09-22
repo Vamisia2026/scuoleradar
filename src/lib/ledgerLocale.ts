@@ -95,6 +95,19 @@ export function ledgerLocaleGia(chiave: string): boolean {
   return ledgerLocale().has(chiave);
 }
 
+/**
+ * Chiavi del ledger che iniziano con un prefisso (diagnostica e conteggio
+ * frequenza: si leggono tutti gli invii di una identità).
+ */
+export function ledgerLocaleChiaviConPrefisso(prefisso: string): string[] {
+  if (!prefisso) return [];
+  const out: string[] = [];
+  for (const chiave of ledgerLocale()) {
+    if (chiave.startsWith(prefisso)) out.push(chiave);
+  }
+  return out;
+}
+
 /** Registra una chiave (scrittura su disco differita, best-effort). */
 export function ledgerLocaleRegistra(chiave: string): void {
   if (!chiave) return;

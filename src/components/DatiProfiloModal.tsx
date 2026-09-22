@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Loader2, UserRound, X } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
+import { CampoProvincia } from '@/components/auth/CampoProvincia';
 import { useToast } from './Toast';
 
 const campoInput =
@@ -23,6 +24,8 @@ export function DatiProfiloModal() {
   const [cognome, setCognome] = useState('');
   const [genere, setGenere] = useState<'M' | 'F' | null>(null);
   const [eta, setEta] = useState('');
+  /** Provincia di residenza (codice, es. 'RM'): dato demografico facoltativo. */
+  const [provincia, setProvincia] = useState('');
   const [caricamento, setCaricamento] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
 
@@ -38,9 +41,10 @@ export function DatiProfiloModal() {
     setCognome(user?.cognome?.trim() ?? '');
     setGenere(preferenze.genere ?? user?.genere ?? null);
     setEta(preferenze.eta ?? user?.eta ?? null ? String(preferenze.eta ?? user?.eta ?? '') : '');
+    setProvincia(preferenze.provincia ?? user?.provincia ?? '');
     setErrore(null);
     setAperto(true);
-  }, [inDashboard, profiloIncompleto, user, preferenze.genere, preferenze.eta]);
+  }, [inDashboard, profiloIncompleto, user, preferenze.genere, preferenze.eta, preferenze.provincia]);
 
   const salva = async (): Promise<void> => {
     const n = nome.trim();
@@ -61,7 +65,7 @@ export function DatiProfiloModal() {
     setCaricamento(true);
     setErrore(null);
     try {
-      await aggiornaAnagrafica({ nome: n, cognome: c, genere, eta: etaNum });
+      await aggiornaAnagrafica({ nome: n, cognome: c, genere, eta: etaNum, provincia });
       mostraToast('successo', 'Dati anagrafici salvati. Buon lavoro!');
       setAperto(false);
     } catch (err) {
@@ -142,6 +146,12 @@ export function DatiProfiloModal() {
               placeholder="(opzionale)"
               className={campoInput}
             />
+          </label>
+          <label className="col-span-2 block">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-primary-500">
+              Provincia di residenza
+            </span>
+            <CampoProvincia value={provincia} onChange={setProvincia} />
           </label>
         </div>
 

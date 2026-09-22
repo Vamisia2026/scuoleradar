@@ -91,7 +91,9 @@ const postScad = formattaPostCanaleTelegram({
 });
 check('il post mostra la scadenza (20 settembre 2026)', true, postScad.includes('20 settembre 2026'));
 check('il post NON mostra la pubblicazione come scadenza', false, postScad.includes('01 settembre 2026'));
-check('ruolo = classe A-026 (non "Docente")', true, postScad.includes('Ruolo / Categoria: <b>A-026</b>'));
+// Il ruolo è mostrato nel blocco Classe/Materia (il "Docente" generico è soppresso).
+check('classe A-026 in Classe/Materia (non "Docente")', true, postScad.includes('Classe/Materia: <b>A-026 - Matematica</b>'));
+check('nessun ruolo generico "Docente"', false, postScad.includes('Ruolo / Categoria: <b>Docente</b>'));
 
 console.log('\n— Barra PDF e materia nel post canale —');
 const postPdf = formattaPostCanaleTelegram({
@@ -102,9 +104,13 @@ const postPdf = formattaPostCanaleTelegram({
   expirationDate: '2026-09-30',
   link: 'https://www.istruzione.piemonte.it/avviso/matematica.pdf',
 });
-check('barra PDF cliccabile', true, postPdf.includes('📥 <a href=') && postPdf.includes('APRI / SCARICA IL PDF'));
-check('ruolo mostra la materia (non "Docente")', true, postPdf.includes('Ruolo / Categoria: <b>Matematica</b>'));
 check('email candidature presente', true, postPdf.includes('📧 Candidature:'));
+// Sorgente ufficiale = UN solo link, con l'etichetta standard (niente barra "📥 PDF").
+check(
+  "link ufficiale cliccabile con etichetta standard",
+  true,
+  postPdf.includes('<a href="https://www.istruzione.piemonte.it/avviso/matematica.pdf"><b>👉 Apri l\'avviso ufficiale</b></a>'),
+);
 check('scadenza reale 30 settembre 2026', true, postPdf.includes('30 settembre 2026'));
 
 console.log('\n──────────────────────────────────────────────────────────');

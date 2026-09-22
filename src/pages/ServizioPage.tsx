@@ -2,16 +2,21 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { Header } from '@/components/Header';
-import { Footer } from './LandingPage';
+import { Footer } from '@/components/Footer';
 import { ExperimentalBanner } from '@/components/ExperimentalBanner';
 import { servizioDaSlug } from '@/data/servizi';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 
 export function ServizioPage() {
   const { slug } = useParams<{ slug: string }>();
   const servizio = servizioDaSlug(slug);
   const { user, openAuthModal } = useApp();
+  // Feature flags: la pagina di un servizio legato a un dipartimento in `off` non
+  // è raggiungibile (nemmeno via URL diretto o link vecchio) → si torna all'elenco.
+  const { visibile } = useFeatureFlags();
 
   if (!servizio) return <Navigate to="/servizi" replace />;
+  if (servizio.modulo && !visibile(servizio.modulo)) return <Navigate to="/servizi" replace />;
 
   const cta = user ? (
     <Link

@@ -1,7 +1,11 @@
 import { useState } from 'react';
-import { Zap, X, User as UserIcon, Crown, UserX, RotateCcw, Monitor, Activity } from 'lucide-react';
+import { Zap, X, User as UserIcon, Crown, UserX, RotateCcw, Monitor, Activity, Layers } from 'lucide-react';
 import { useApp, type RuoloSimulato } from '@/contexts/AppContext';
 import { HealthCheckModal } from '@/components/HealthCheckModal';
+import { FlagDipartimentiPanel } from '@/components/FlagDipartimentiPanel';
+import { FlagDipartimentiProva } from '@/components/FlagDipartimentiProva';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
+import { DIPARTIMENTI } from '@/config/features';
 
 const ruoli: { id: RuoloSimulato; label: string; desc: string; icon: React.ReactNode }[] = [
   {
@@ -26,6 +30,7 @@ const ruoli: { id: RuoloSimulato; label: string; desc: string; icon: React.React
 
 export function DevToolbar() {
   const { user, abbonato, simulaStato, resettaTutto } = useApp();
+  const flags = useFeatureFlags();
   const [open, setOpen] = useState(false);
   const [checkupOpen, setCheckupOpen] = useState(false);
 
@@ -141,6 +146,56 @@ export function DevToolbar() {
                 <p className="mt-2 text-xs text-primary-400">
                   Cambia stato all&apos;istante, senza ricaricare la pagina.
                 </p>
+              </section>
+
+              {/* Dipartimenti — feature flags a 3 stati (OFF | TEST | ON) */}
+              <section>
+                <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary-400">
+                  <Layers className="h-4 w-4" />
+                  Dipartimenti (feature flags)
+                </h3>
+                <p className="mt-1 text-[11px] leading-relaxed text-primary-500">
+                  <b className="text-error-600">OFF</b> = spento · <b className="text-warning-600">TEST</b> = solo
+                  admin · <b className="text-accent-600">ON</b> = pubblico. Il cambio è immediato, senza reload.
+                </p>
+                <label className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-primary-100 bg-slate-50 px-3 py-2 text-xs text-primary-600">
+                  <span>
+                    Mostra comunque tutti i dipartimenti
+                    <span className="block text-[10px] text-primary-400">(anche OFF/TEST, come l’admin)</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={flags.forzaDev}
+                    onChange={(e) => flags.setForzaDev(e.target.checked)}
+                    className="h-4 w-4 accent-primary-500"
+                  />
+                </label>
+                {/* Toggle OFF | TEST | ON sempre a schermo (una riga per dipartimento). */}
+                <div className="mt-2">
+                  <FlagDipartimentiPanel
+                    variante="lista"
+                    stati={flags.stati}
+                    dipartimenti={DIPARTIMENTI}
+                    onCambia={flags.impostaStato}
+                    origine={flags.origine}
+                  />
+                </div>
+
+                {/* Prova live: navbar aggiornata + valore salvato in sr_flag_dipartimenti. */}
+                <FlagDipartimentiProva />
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <p className="text-xs text-primary-400">
+                    Notifiche server-side:
+                    <code className="mx-1 rounded bg-slate-50 px-1 py-0.5 text-[10px]">FEATURE_*</code> nei workflow.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={flags.azzera}
+                    className="shrink-0 rounded-lg border border-primary-200 px-2.5 py-1.5 text-[11px] font-semibold text-primary-700 transition hover:bg-primary-50"
+                  >
+                    Default
+                  </button>
+                </div>
               </section>
 
               {/* Reset dati */}

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { PenLine, Sparkles } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
+import { DepartmentErrorBoundary } from '@/components/DepartmentErrorBoundary';
 
 /**
  * PureFocus — sponsor esterno (purefocus.one) incluso nel piano PRO.
@@ -13,6 +14,13 @@ export function PureFocusPage() {
   const { hasProAccess } = useApp();
 
   return (
+    <DepartmentErrorBoundary
+      dipartimento="PureFocus"
+      titolo="La pagina PureFocus non è disponibile"
+      messaggio="Il contenuto sponsor non può essere mostrato in questo momento. Il resto della dashboard e gli altri servizi di ScuoleRadar funzionano regolarmente."
+      etichettaRiprova="Riapri PureFocus"
+      className="mt-0"
+    >
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <PenLine className="h-5 w-5 text-primary-600" />
@@ -89,5 +97,6 @@ export function PureFocusPage() {
         )}
       </div>
     </div>
+    </DepartmentErrorBoundary>
   );
 }

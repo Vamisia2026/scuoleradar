@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 import { MessageSquare, Calculator, FileText, FolderOpen, PenLine, Radar, ShieldCheck, Sparkles, UserPlus } from 'lucide-react';
+import type { DipartimentoId } from '@/config/features';
 import { Modal } from '@/components/Modal';
 import { useApp } from '@/contexts/AppContext';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { STORAGE_KEY_INTENDED_PLAN } from '@/lib/pricing';
 import { track } from '@/lib/analytics';
 
@@ -9,6 +11,8 @@ interface DettaglioVetrina {
   icona: ReactNode;
   titolo: string;
   testo: string;
+  /** Dipartimento che governa la disponibilità della sezione (feature flags). */
+  modulo?: DipartimentoId;
 }
 
 /** Descrizioni per sezione: valore del servizio mostrato nel modal di conversione. */
@@ -18,24 +22,28 @@ const dettagli: Record<string, DettaglioVetrina> = {
     titolo: 'Radar Scuole',
     testo:
       'Interpelli, supplenze e bandi mappati per te: i primi 3 sono gratuiti. Attiva le notifiche e continua a monitorare le opportunità su misura per te.',
+    modulo: 'radar',
   },
   cv: {
     icona: <FileText className="h-6 w-6" />,
     titolo: 'Crea CV',
     testo:
       'Trasforma il tuo CV in un layout ordinato. Registrandoti gratuitamente scarichi il PDF (con logo), con il PRO senza logo.',
+    modulo: 'cv_builder',
   },
   cfu: {
     icona: <Calculator className="h-6 w-6" />,
     titolo: 'Calcolatore CFU',
     testo:
-            'Verifica le classi di concorso accessibili dal tuo percorso di studi: in arrivo a Ottobre, riservato ai membri PRO.',
+      'Scegli la classe di concorso e verifica i requisiti con i tuoi esami: vedi cosa risulta soddisfatto, cosa manca e cosa verificare, con le fonti normative. Il Calcolatore CFU è gratuito e il Dossier è incluso.',
+    modulo: 'cfu',
   },
   moduli: {
     icona: <FolderOpen className="h-6 w-6" />,
     titolo: 'Modulistica',
     testo:
       'Modelli e documenti pronti all\u2019uso (domande, autocertificazioni, lettere di presentazione). I download sono disponibili con un account gratuito.',
+    modulo: 'modulistica',
   },
   assistente: {
     icona: <MessageSquare className="h-6 w-6" />,
@@ -48,6 +56,7 @@ const dettagli: Record<string, DettaglioVetrina> = {
     titolo: 'PureFocus',
     testo:
       'La piattaforma che trasforma YouTube in un ambiente di studio e lavoro: elimina distrazioni, suggerimenti e contenuti irrilevanti, lasciandoti solo ciò che ti serve per ottimizzare il tuo tempo.',
+    modulo: 'purefocus',
   },
 };
 
@@ -55,7 +64,11 @@ const dettagli: Record<string, DettaglioVetrina> = {
 export function VetrinaModal() {
   const { user, vetrinaAperta, vetrinaSezione, closeVetrina, openAuthModal, avviaCheckout } =
     useApp();
-  const dettaglio = (vetrinaSezione && dettagli[vetrinaSezione]) || null;
+  // Feature flags: la scheda del servizio compare solo se il suo dipartimento è
+  // visibile (un modulo in `off` non deve mai essere pubblicizzato).
+  const { visibile } = useFeatureFlags();
+  const selezionato = (vetrinaSezione && dettagli[vetrinaSezione]) || null;
+  const dettaglio = selezionato && (!selezionato.modulo || visibile(selezionato.modulo)) ? selezionato : null;
 
   const scegliPiano = (piano: 'free' | 'pro_mensile' | 'pro_annuale') => {
     closeVetrina();

@@ -1,5 +1,10 @@
 ﻿import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  AUTOMAZIONI_EDGE,
+  PREFISSO_CHIAVE_AUTOMAZIONE,
+  normalizzaStatoAutomazione,
+} from '../_shared/automazioniEmail.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -501,6 +506,47 @@ serve(async (req: Request) => {
       });
       if (error) return risposta({ error: error.message }, 500);
       return risposta({ ok: true });
+    }
+
+    // ============================================================
+    // AUTOMAZIONI EMAIL — pannello Admin «Email & Automazioni»
+    // Stato nella KV `public.app_settings` (chiave `email_automazione_<id>`):
+    // da qui il pannello legge gli override e li salva/ripristina.
+    // ============================================================
+    if (action === 'list_email_automations') {
+      const { data, error } = await sb.from('app_settings').select('key,value');
+      if (error) return risposta({ error: error.message }, 500);
+      const automazioni = (data ?? [])
+        .filter((r: { key?: string }) => String(r?.key ?? '').startsWith(PREFISSO_CHIAVE_AUTOMAZIONE))
+        .map((r: { key?: string; value?: string }) => ({
+          id: String(r.key).slice(PREFISSO_CHIAVE_AUTOMAZIONE.length),
+          valore: String(r.value ?? ''),
+        }));
+      return risposta({ ok: true, automazioni });
+    }
+
+    if (action === 'set_email_automation') {
+      const id = String(payload.id ?? '').trim();
+      if (!AUTOMAZIONI_EDGE.some((a) => a.id === id)) {
+        return risposta({ error: `automazione sconosciuta: ${id}` }, 400);
+      }
+      const stato = normalizzaStatoAutomazione(payload.stato ?? {});
+      const chiave = `${PREFISSO_CHIAVE_AUTOMAZIONE}${id}`;
+      // Stato identico al default → nessun override da conservare: la riga
+      // viene rimossa (la KV resta pulita e leggibile).
+      if (stato.abilitata === true && !stato.oggetto && !stato.intro && !stato.corpo) {
+        const { error } = await sb.from('app_settings').delete().eq('key', chiave);
+        if (error) return risposta({ error: error.message }, 500);
+        return risposta({ ok: true, id, ripristinata: true });
+      }
+      const valore = JSON.stringify({
+        ...stato,
+        aggiornatoIl: new Date().toISOString(),
+        aggiornatoDa: 'pannello-admin',
+      });
+      const { error } = await sb.from('app_settings').upsert({ key: chiave, value: valore }, { onConflict: 'key' });
+      if (error) return risposta({ error: error.message }, 500);
+      return risposta({ ok: true, id, valore });
     }
 
     return risposta({ error: `azione sconosciuta: ${action}` }, 400);

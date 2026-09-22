@@ -1,7 +1,8 @@
 /**
  * Verifica LINK & ROUTING degli avvisi:
  *  · etichette ONESTE (mai "Candidati" se il link è un Albo Pretorio/avviso);
- *  · UN SOLO link alla fonte in email e Telegram (nessun duplicato);
+ *  · email: link ufficiale IN EVIDENZA nella card + CTA primaria sullo stesso
+ *    annuncio (dato dello scraper); un solo link nei messaggi Telegram;
  *  · deep link `/interpello/:id` risolto davvero (rotta presente in App.tsx) e
  *    chiave corretta (uuid → `id`, hash → `hash_id`).
  *
@@ -86,21 +87,35 @@ const interpello: DettagliNotifica = {
   contactEmail: 'segreteria@liceoaugustomonti.edu.it',
 };
 
-console.log('\n— Email: UN SOLO link alla fonte + etichetta onesta —');
+console.log('\n— Email: link in evidenza + CTA primaria + etichetta standard —');
 const html = renderEmailHtml(interpello, destinatario, 'https://www.scuoleradar.it/dashboard', 'notifica_pro');
-check('un solo anchor verso la fonte', 1, occorrenze(html, ALBO));
+// DUE anchor verso lo stesso annuncio, entrambi voluti: la riga IN EVIDENZA dentro
+// la card (azione immediata) e il bottone CTA primario in fondo (checklist §5).
+check('due anchor verso la fonte (link in evidenza + CTA)', 2, occorrenze(html, ALBO));
 // "Candidature:" è l'etichetta dell'email della scuola (legittima): il divieto
 // riguarda i BOTTONI/link, non l'etichetta del contatto.
 check('nessun bottone "candidati"', false, /candidat/i.test(html.replace(/Candidature:/g, '')));
-check('CTA onesta (PDF)', true, html.includes('Apri il bando ufficiale (PDF)'));
+// Etichetta del link di fonte nelle EMAIL: descrittiva per tipo di destinazione
+// (`etichettaFonteLink`), distinta da quella dei messaggi Telegram che è canonica.
+check("CTA email '👉 Apri l'avviso ufficiale'", true, html.includes("👉 Apri l'avviso ufficiale"));
+check('niente etichette di fonte alternative', false, /Apri il bando ufficiale|Apri la scheda dell'avviso|Apri l'avviso sull'Albo Pretorio/.test(html));
 check('niente vecchia dicitura Albo+candidati', false, html.includes('Fonte ufficiale verificata (Albo Pretorio)'));
 check('email candidature presente (mailto)', true, html.includes('mailto:segreteria@liceoaugustomonti.edu.it'));
 
-console.log('\n— Telegram: UN SOLO link alla fonte + etichetta onesta —');
+console.log('\n— Telegram: UN SOLO link alla fonte + etichetta canonica —');
 const tg = formattaMessaggioTelegram(interpello, 'A-041', 'https://www.scuoleradar.it/dashboard', 'notifica_pro');
 check('un solo link alla fonte', 1, occorrenze(tg, ALBO));
 check('nessun link "candidati"', false, /candidat/i.test(tg.replace(/Candidature:/g, '')));
-check('etichetta onesta nel bottone', true, tg.includes('Apri il bando ufficiale (PDF)'));
+check(
+  "etichetta canonica nel link: '🔗 Fonte Ufficiale'",
+  true,
+  tg.includes('<b>🔗 Fonte Ufficiale</b></a>'),
+);
+check(
+  'Telegram: URL della fonte mai in chiaro',
+  false,
+  tg.replace(/<a\s+href="[^"]*"/g, '<a').includes(ALBO),
+);
 
 console.log('\n— POLICY DI ROUTING: mai un link interno della piattaforma —');
 check('fonte esterna accettata', ALBO, linkOpportunita(interpello));
@@ -116,9 +131,52 @@ const emailSenzaFonte = renderEmailHtml({ ...interpello, link: null }, destinata
 check('email senza fonte: nessun link a /interpello/', false, emailSenzaFonte.includes('/interpello/'));
 check('email senza fonte: CTA esplicita verso il Radar', true, emailSenzaFonte.includes('Apri il tuo Radar Scuole'));
 check('email senza fonte: email della scuola presente', true, emailSenzaFonte.includes('mailto:segreteria@liceoaugustomonti.edu.it'));
-const tgSenzaFonte = formattaMessaggioTelegram({ ...interpello, link: null }, 'A-041', DASH_URL, 'notifica_pro');
+check('email senza fonte: nessun riquadro giallo', false, emailSenzaFonte.includes('#fffbeb'));
+
+// Pagina di «Stampa» del SINGOLO avviso: destinazione AMMESSA dal prodotto → il
+// link è in evidenza e il vecchio box giallo di istruzioni non esiste più.
+const emailStampa = renderEmailHtml(
+  { ...interpello, link: 'https://www.liceo.edu.it/albo/stampa.php?id=12' },
+  destinatario,
+  DASH_URL,
+  'notifica_pro',
+);
+check(
+  'pagina STAMPA del singolo avviso: link in evidenza',
+  true,
+  emailStampa.includes('background:#f2f9fd') && emailStampa.includes('👉 Apri l&#39;avviso ufficiale'),
+);
+check('pagina STAMPA: nessun box giallo di istruzioni', false, emailStampa.includes('#fffbeb'));
+
+// Elenco/archivio: NON è una fonte diretta (checklist §5: mai un link generico).
+const emailElenco = renderEmailHtml(
+  { ...interpello, link: 'https://www.usp.it/interpelli/elenco' },
+  destinatario,
+  DASH_URL,
+  'notifica_pro',
+);
+check('elenco: nessun link generico in evidenza', false, emailElenco.includes('background:#f2f9fd'));
+check('elenco: nessun riquadro giallo', false, emailElenco.includes('#fffbeb'));
+// Con la fonte assente la CTA di ricalibrazione del Radar è l'unica indicazione
+// utile: qui viene FORZATA (di norma compare nel ~20% dei messaggi).
+const tgSenzaFonte = formattaMessaggioTelegram(
+  { ...interpello, link: null },
+  'A-041',
+  DASH_URL,
+  'notifica_pro',
+  { mostraCtaRadar: true },
+);
 check('Telegram senza fonte: nessun link a /interpello/', false, tgSenzaFonte.includes('/interpello/'));
-check('Telegram senza fonte: CTA esplicita verso il Radar', true, tgSenzaFonte.includes('Apri il tuo Radar Scuole'));
+check(
+  'Telegram senza fonte: CTA esplicita verso il Radar',
+  true,
+  tgSenzaFonte.includes('modifica il tuo radar su'),
+);
+check(
+  'Telegram senza fonte: nessun link etichettato alla fonte (solo il brand)',
+  false,
+  /<a\s+href="https?:(?!\/\/www\.scuoleradar\.it")/.test(tgSenzaFonte),
+);
 
 console.log('\n— Deep link LEGACY `/interpello/:id` (rotta storica + risoluzione chiave) —');
 check(

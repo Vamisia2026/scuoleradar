@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { Mail, MessageSquareText, CheckCircle2 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { ContactForm } from '@/components/ContactForm';
-import { Footer } from './LandingPage';
+import { Footer } from '@/components/Footer';
 
 /**
  * Pagina /contatti — form di contatto a pagina intera (stesso ContactForm della

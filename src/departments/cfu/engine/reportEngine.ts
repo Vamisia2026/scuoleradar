@@ -29,7 +29,7 @@ import type {
   VoceAudit,
 } from './types';
 import { risolviNormativa } from './normativeResolver';
-import { valutaRequisitoClasse } from './requirementSolver';
+import { eseguiPipelineUniversale } from './pipeline/pipeline';
 
 export interface InputReportCarriera {
   esami: EsameCanonico[];
@@ -270,26 +270,51 @@ export function generaReportCarriera(input: InputReportCarriera): ReportCarriera
     ? input.classiObiettivo.filter((codice) => codiciRegole.includes(codice))
     : codiciRegole;
 
-  const esiti: EsitoClasseReport[] = codiciDaValutare.map((codiceClasse) => {
-    const valutazione = valutaRequisitoClasse(codiceClasse, input.esami, {
+  // PIPELINE UNIVERSALE COME SORGENTE STRUTTURATA: per ogni classe la catena
+  // fonti (Source Gate v2) → normalizzazione → requisiti strutturati →
+  // valutazione per requisito → deficit → stato semantico. Il contesto
+  // normativo è quello già risolto sopra; l'aggregazione resta quella del
+  // motore esistente (invariata) per garantire parità del contratto di report.
+  const esitiValutati = codiciDaValutare.map((codiceClasse) => {
+    const regola = regolaDiClasse(codiceClasse, input.regole, normativa);
+    const pipeline = eseguiPipelineUniversale({
+      classeCodice: codiceClasse,
+      denominazioneClasse: regola?.denominazioneClasse ?? codiceClasse,
+      esami: input.esami,
+      titolo: input.titolo ?? null,
       regole: input.regole,
       mappature: input.mappature,
-      titolo: input.titolo,
-      normativa,
+      normativaRisolta: normativa,
       ora,
     });
-    const regola = regolaDiClasse(codiceClasse, input.regole, normativa);
+    const valutazione = pipeline.valutazioneClasse;
+    if (!valutazione) return null;
     const percorso =
       valutazione.stato === 'CONDITIONALLY_ELIGIBLE' && regola
         ? calcolaPercorsoWhatIf(valutazione, regola, [codiceClasse])
         : undefined;
 
-    return {
+    const esito: EsitoClasseReport = {
       ...valutazione,
+      // Audit complessivo della pipeline (contiene le voci del decisore):
+      // informazione strutturata su fonti, requisiti e conflitti.
+      audit: [...pipeline.auditTrail],
       denominazioneClasse: regola?.denominazioneClasse ?? codiceClasse,
       percorsoWhatIf: percorso,
+      // Metadati strutturati (fase 3): disponibili ai consumatori senza cambiare
+      // il verdetto autorevole, che resta `stato` (= valutazioneClasse.stato).
+      pipeline,
+      fonti: pipeline.fonti.fonti,
+      conflitti: pipeline.conflitti,
+      valutazioniRequisito: pipeline.valutazioniRequisito,
+      deficit: pipeline.deficit,
+      payloadAssistantCreativo: pipeline.payloadAssistantCreativo,
     };
+    return esito;
   });
+  const esiti: EsitoClasseReport[] = esitiValutati.filter(
+    (esito): esito is EsitoClasseReport => esito !== null,
+  );
 
   const classiEligibili = esiti
     .filter((esito) => esito.stato === 'ELIGIBLE')

@@ -1,7 +1,7 @@
 import { HelpCircle, MessageCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
-import { Footer } from './LandingPage';
+import { Footer } from '@/components/Footer';
 
 /** Domande frequenti del servizio (pagina pubblica /faq) — copy sales-oriented. */
 const FAQ_ITEMS: Array<{ id?: string; q: string; a: string }> = [

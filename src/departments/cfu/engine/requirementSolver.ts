@@ -238,7 +238,12 @@ function conteggioUnione(
   return { cfu, contributi, bloccato };
 }
 
-interface ContestoValutazione {
+/**
+ * Contesto di valutazione di UN vincolo. Esportato per consentire alla
+ * pipeline universale (`engine/pipeline/`) di riusare ESATTAMENTE questa
+ * funzione: nessuna duplicazione della semantica di conteggio.
+ */
+export interface ContestoValutazione {
   esami: EsameCanonico[];
   mappature: SsdMappingRuleEntry[];
   /** Provisioni (regole) alle quali le mappature devono essere dichiarate applicabili. */
@@ -246,12 +251,30 @@ interface ContestoValutazione {
   now: string;
 }
 
-interface RisultatoVincolo {
+export interface RisultatoVincolo {
   esito: EsitoVincolo;
   bloccatoDaMappatura: boolean;
+  /**
+   * Esiti per RAMO di una disgiunzione esplicita: misurati QUI, una volta sola,
+   * con la stessa semantica di conteggio (crediti non sommati fra opzioni).
+   * Assente per gli altri tipi di vincolo.
+   */
+  rami?: readonly EsitoRamoVincolo[];
 }
 
-function valutaVincolo(vincolo: VincoloCfu, contesto: ContestoValutazione): RisultatoVincolo {
+/** Esito di UN ramo (opzione) di una disgiunzione esplicita. */
+export interface EsitoRamoVincolo {
+  readonly id: string;
+  readonly soddisfatto: boolean;
+  readonly cfuPosseduti: number;
+  readonly min: number;
+}
+
+/**
+ * Valuta un singolo vincolo CFU/titolo sui dati canonici. Unica fonte di verità
+ * per conteggio crediti, prefix wildcard SSD, disgiunzioni e blocco mappature.
+ */
+export function valutaVincolo(vincolo: VincoloCfu, contesto: ContestoValutazione): RisultatoVincolo {
   let bloccatoDaMappatura = false;
 
   if (vincolo.tipo === 'titoloAbilitante') {
@@ -333,6 +356,13 @@ function valutaVincolo(vincolo: VincoloCfu, contesto: ContestoValutazione): Risu
         contributi: migliore.unioneOpzione.contributi,
       },
       bloccatoDaMappatura,
+      // Esiti per ramo (A3): misurati una volta sola, mai ricostruiti a valle.
+      rami: risultati.map((ris) => ({
+        id: ris.opzione.id,
+        soddisfatto: ris.unioneOpzione.cfu >= ris.opzione.min,
+        cfuPosseduti: ris.unioneOpzione.cfu,
+        min: ris.opzione.min,
+      })),
     };
   }
 
@@ -384,8 +414,26 @@ function valutaVincolo(vincolo: VincoloCfu, contesto: ContestoValutazione): Risu
   };
 }
 
+/**
+ * Regole autorevoli APPLICABILI al contesto risolto (classe + decreto +
+ * tabella). Unica implementazione: la usano il solver e la pipeline universale
+ * (nessuna duplicazione del filtro normativo).
+ */
+export function regoleApplicabili(
+  codiceClasse: string,
+  regole: readonly NormativeRuleEntry[],
+  normativa: NormativaApplicata,
+): NormativeRuleEntry[] {
+  return regole.filter(
+    (regola) =>
+      regola.classeCodice === codiceClasse &&
+      regola.decreto === normativa.decreto &&
+      regola.tabella === normativa.tabella,
+  );
+}
+
 /** Classi di laurea ammesse dichiarate dalle regole applicabili (senza deduzione). */
-function classiAmmesseDalleRegole(regole: NormativeRuleEntry[]): string[] {
+export function classiAmmesseDalleRegole(regole: readonly NormativeRuleEntry[]): string[] {
   const insiemi = regole
     .map((regola) => regola.classiLaureaAmmesse)
     .filter((voci): voci is string[] => Boolean(voci));
@@ -393,7 +441,12 @@ function classiAmmesseDalleRegole(regole: NormativeRuleEntry[]): string[] {
   return [...unione];
 }
 
-function verificaClasseLaurea(
+/**
+ * Verifica delle classi di laurea ammesse dichiarate dalle regole (tristate:
+ * ok / not-eligible / non-verificabile). Esportata: la strategia
+ * `titolo.accesso.classe` della pipeline universale usa QUESTA funzione.
+ */
+export function verificaClasseLaurea(
   regole: NormativeRuleEntry[],
   titolo?: TitoloAccademicoCanonico | null,
 ): { esito: 'ok' | 'not-eligible' | 'non-verificabile'; motivazione?: string } {
@@ -457,12 +510,7 @@ export function valutaRequisitoClasse(
     };
   }
 
-  const regole = opzioni.regole.filter(
-    (regola) =>
-      regola.classeCodice === codiceClasse &&
-      regola.decreto === normativa.decreto &&
-      regola.tabella === normativa.tabella,
-  );
+  const regole = regoleApplicabili(codiceClasse, opzioni.regole, normativa);
 
 
   if (regole.length === 0) {

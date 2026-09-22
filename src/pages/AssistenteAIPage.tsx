@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Send, MapPin, GraduationCap, Sparkles } from 'lucide-react';
 import { province } from '@/data/province';
 import { useToast } from '@/components/Toast';
+import { DepartmentErrorBoundary } from '@/components/DepartmentErrorBoundary';
 
 /** Province ordinate per nome per il select "Provincia". */
 const provinceOrdinate = [...province].sort((a, b) => a.nome.localeCompare(b.nome));
@@ -49,6 +50,13 @@ export function AssistenteAIPage() {
   };
 
   return (
+    <DepartmentErrorBoundary
+      dipartimento="Assistente Sindacalista Virtuale"
+      titolo="L'Assistente Sindacalista Virtuale non è disponibile"
+      messaggio="Il modulo di richiesta accesso non può essere mostrato in questo momento. Il resto della dashboard e gli altri servizi di ScuoleRadar funzionano regolarmente."
+      etichettaRiprova="Riapri l'Assistente"
+      className="mt-0"
+    >
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <div className="flex items-center gap-2">
@@ -150,5 +158,6 @@ export function AssistenteAIPage() {
         </button>
       </form>
     </div>
+    </DepartmentErrorBoundary>
   );
 }

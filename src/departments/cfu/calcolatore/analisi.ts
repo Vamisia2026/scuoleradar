@@ -32,7 +32,8 @@ import {
   assicuraCatalogoEngineDiDefault,
   registroEngineDiDefault,
 } from '../engine/seeds/progressiveRegistry';
-import type { NormativaApplicata } from '../engine/types';
+import type { MetadatiPipeline } from '../engine/pipeline/requirementTypes';
+import type { EsitoValutazione, NormativaApplicata, RisultatoPipeline, VoceAudit } from '../engine/types';
 import type { SourceRegistry } from '../engine/traceability/sourceRegistry';
 
 /** Classi target della fondazione (matrice dimostrativa di 3 classi). */
@@ -71,10 +72,29 @@ export const CLASSI_DI_CONCORSO_MATRICE: ClasseDiConcorso[] = [
 /** Motore che ha effettivamente prodotto l'esito. */
 export type EngineSource = 'NEW_ENGINE' | 'LEGACY_FALLBACK';
 
-/** Esito legacy-compatibile con metadati espliciti di routing. */
-export interface EsitoClasseConRouting extends EsitoClasse {
+/**
+ * Esito legacy-compatibile con metadati espliciti di routing.
+ *
+ * Fase 3: la superficie di routing dichiara TUTTI i metadati prodotti dal bridge
+ * quando la valutazione passa dal motore (`NEW_ENGINE`). Sul percorso legacy
+ * (`LEGACY_FALLBACK`) questi campi sono assenti: sono quindi opzionali.
+ * Il verdetto legacy (`EsitoClasse`) resta invariato e autorevole.
+ */
+export interface EsitoClasseConRouting extends EsitoClasse, MetadatiPipeline {
   readonly engineSource: EngineSource;
   readonly isEngineDriven: boolean;
+  /** Stato multi-valore del motore (solo NEW_ENGINE). */
+  readonly esitoMotore?: EsitoValutazione;
+  /** True quando serve verifica manuale prima di un giudizio automatico. */
+  readonly verificaManualeRichiesta?: boolean;
+  /** Id delle regole registrate che hanno sostenuto la valutazione. */
+  readonly regoleApplicate?: readonly string[];
+  readonly motivazione?: string;
+  readonly audit?: readonly VoceAudit[];
+  /** Presente solo quando il bridge è degradato a fallback interno. */
+  readonly motivoFallback?: string;
+  /** Risultato completo della pipeline universale (solo NEW_ENGINE). */
+  readonly pipeline?: RisultatoPipeline;
 }
 
 export interface ParametriValutazioneRouting {
@@ -89,6 +109,12 @@ export interface ParametriValutazioneRouting {
   readonly normativaEngine?: NormativaApplicata;
   /** Classe di laurea del titolo (es. "LM-14") per il check engine. */
   readonly classeLaureaTitolo?: string;
+  /**
+   * Data della procedura dichiarata dall'utente (ISO, es. "2026-03-01").
+   * Opzionale: se assente il comportamento è identico a prima (nessuna data
+   * inventata), cambia solo l'elenco dei dati mancanti in audit.
+   */
+  readonly dataProcedura?: string | null;
 }
 
 /** Classe demo legacy per codice (o null se non presente nella matrice). */
@@ -153,6 +179,9 @@ export function valutaClasseConRouting(
         tabella: parametri.tabella ?? 'A',
         normativa,
         classeLaureaTitolo: parametri.classeLaureaTitolo,
+        dateRilevanza: parametri.dataProcedura
+          ? { procedureDate: parametri.dataProcedura }
+          : undefined,
       });
       // Se il Bridge segnala un fallback interno (nessuna regola traducibile)
       // eseguiamo regolarmente la logica legacy.

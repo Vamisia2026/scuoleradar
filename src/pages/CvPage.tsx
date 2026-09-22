@@ -1,4 +1,5 @@
 import { FileText } from 'lucide-react';
+import { DepartmentErrorBoundary } from '@/components/DepartmentErrorBoundary';
 import { CvTool } from '@/components/CvTool';
 
 export function CvPage() {
@@ -8,7 +9,9 @@ export function CvPage() {
         <FileText className="h-5 w-5 text-primary-600" />
         <h2 className="text-3xl font-bold text-primary-800">Crea CV</h2>
       </div>
-      <CvTool />
+      <DepartmentErrorBoundary dipartimento="Crea CV" etichettaRiprova="Riapri Crea CV">
+        <CvTool />
+      </DepartmentErrorBoundary>
     </div>
   );
 }

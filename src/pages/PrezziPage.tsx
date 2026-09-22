@@ -6,7 +6,7 @@ import { useToast } from '@/components/Toast';
 import { STORAGE_KEY_INTENDED_PLAN, STORAGE_KEY_INTENDED_PLAN_DATA, type PianoId } from '@/lib/pricing';
 import { track } from '@/lib/analytics';
 import { Header } from '@/components/Header';
-import { Footer } from './LandingPage';
+import { Footer } from '@/components/Footer';
 
 interface Vantaggio {
   testo: string;

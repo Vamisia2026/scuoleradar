@@ -122,6 +122,24 @@ export function ordinaVociDigest<T extends VoceOrdinabile>(voci: T[]): T[] {
   });
 }
 
+/* ------------------- Ledger giornaliero (anti-spam email) ------------------- */
+
+/**
+ * Chiave del ledger "digest già inviato in questo giorno" per un utente.
+ *
+ * Perché serve: il Riepilogo deve essere UNO al giorno. Il cron può girare più
+ * volte (due orari UTC per coprire estate/inverno, retry del runner, doppio
+ * trigger) e i `notifications_log` da soli proteggono dalle voci duplicate, non
+ * dal secondo MESSAGGIO con voci nuove. Registrando questa chiave SOLO dopo un
+ * invio riuscito, un secondo run nello stesso giorno (ora italiana) non manda
+ * nulla — tranne i lanci forzati (admin) che la ignorano.
+ *
+ * Formato: `utente|<uuid>:digest|<YYYY-MM-DD>` (stesso schema di `chiaveLedger`).
+ */
+export function chiaveDigestGiorno(userId: string, giorno: string): string {
+  return `utente|${userId}:digest|${giorno}`;
+}
+
 /** Raggruppa le voci per provincia (riepiloghi e log per area). */
 export function raggruppaPerProvincia<T extends VoceOrdinabile>(voci: T[]): Map<string, T[]> {
   const mappa = new Map<string, T[]>();

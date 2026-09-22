@@ -1,16 +1,12 @@
 /**
- * ScuoleRadar.it — Dipartimento CFU · Utility di riconoscimento (OCR layer).
+ * ScuoleRadar.it — Dipartimento CFU · Utility di riconoscimento del testo.
  *
- * Fondazione del motore di parsing: normalizzazione del testo, estrazione di
- * CFU/ECTS numerici e di codici SSD (M-PED/01, L-LIN/12, MAT/05…), parsing di
- * elenchi esami incollati e classificazione dei file allegati (JPG/PNG/PDF).
- *
- * NB: il riconoscimento visivo (foto del libretto) arriverà con un provider
- * OCR dedicato; queste funzioni già normalizzano e validano ciò che il
- * motore restituirà e producono esiti affidabili sul testo.
+ * La V1 non carica documenti: queste funzioni servono SOLO a riconoscere un
+ * elenco di esami incollato dall'utente (denominazione, CFU/ECTS, codice SSD).
+ * Nessuna classificazione di file, nessun OCR, nessun salvataggio.
  */
 
-import type { AffidabilitaRiconoscimento, AllegatoCfu, Esame } from './types';
+import type { AffidabilitaRiconoscimento, Esame } from './types';
 
 export const REGEX_CFU_NUMERICO = /(?:cfu|ects|ecta?|crediti)[:=]?\s*(\d{1,3}(?:[.,]\d)?)/i;
 export const REGEX_CFU_SEMPLICE = /\b(\d{1,2})\s*(?:cfu|ects|crediti)\b/i;
@@ -69,7 +65,7 @@ export interface RigaEsameRiconosciuto {
 }
 
 /**
- * Converte il testo di un intero libretto/elenco in righe esame riconosciute.
+ * Converte il testo di un elenco esami in righe riconosciute.
  * Supporta formati tipici:
  *   "Materia — 6 CFU — M-PED/01", "Materia · 12 cfu", "Materia, 9, SSD MAT/05".
  */
@@ -93,86 +89,21 @@ export function parseEsamiDaTesto(testo: string): RigaEsameRiconosciuto[] {
   return risultati;
 }
 
-/** Converte le righe riconosciute in `Esame[]` pronti per l'analisi. */
+/** Converte le righe riconosciute in `Esame[]` pronti per il calcolo. */
 export function righeVersoEsami(righe: RigaEsameRiconosciuto[]): Esame[] {
   let contatore = 0;
   const adesso = Date.now();
   return righe
-    .filter((r) => r.cfu !== null && r.cfu > 0)
-    .map((r) => {
+    .filter((riga) => riga.cfu !== null && riga.cfu > 0)
+    .map((riga) => {
       contatore += 1;
       return {
         id: `testo-${contatore}-${adesso}`,
-        denominazione: r.denominazione || 'Esame non riconosciuto',
-        cfu: r.cfu ?? 0,
-        ssd: r.ssd,
+        denominazione: riga.denominazione || 'Esame non riconosciuto',
+        cfu: riga.cfu ?? 0,
+        ssd: riga.ssd,
         fonte: 'testo-incollato' as const,
-        affidabilita: r.affidabilita,
+        affidabilita: riga.affidabilita,
       };
     });
 }
-
-/* ----------------------------- Allegati ----------------------------- */
-
-/** Estensioni accettate (immagini + PDF). */
-export const ESTENSIONI_AMMESSE = ['jpg', 'jpeg', 'png', 'pdf'];
-export const MIME_AMMESSI = ['image/jpeg', 'image/png', 'application/pdf'];
-/** Dimensione massima per singolo allegato (10 MB). */
-export const DIMENSIONE_MASSIMA_ALLEGATO = 10 * 1024 * 1024;
-
-export interface ClassificazioneFile {
-  ammesso: boolean;
-  tipo: 'immagine' | 'pdf' | null;
-  motivo: string | null;
-}
-
-/** Verifica nome/MIME/dimensione di un file prima dell'analisi automatica. */
-export function classificaFile(
-  nomeFile: string,
-  tipoMime: string,
-  dimensioneByte: number,
-): ClassificazioneFile {
-  const estensione = (nomeFile ?? '').split('.').pop()?.toLowerCase() ?? '';
-  if (!MIME_AMMESSI.includes(tipoMime)) {
-    return { ammesso: false, tipo: null, motivo: 'Formato non supportato: carica JPG, PNG o PDF.' };
-  }
-  if (!ESTENSIONI_AMMESSE.includes(estensione)) {
-    return { ammesso: false, tipo: null, motivo: 'Estensione non riconosciuta.' };
-  }
-  if (dimensioneByte > DIMENSIONE_MASSIMA_ALLEGATO) {
-    return { ammesso: false, tipo: null, motivo: 'File troppo grande: dimensione massima 10 MB.' };
-  }
-  return {
-    ammesso: true,
-    tipo: tipoMime === 'application/pdf' ? 'pdf' : 'immagine',
-    motivo: null,
-  };
-}
-
-/** Suggerimenti dai nomi tipici dei documenti universitari. */
-export function suggerimentoDaNomeFile(nomeFile: string): string | null {
-  const nome = (nomeFile ?? '').toLowerCase();
-  if (/\blibretto\b/.test(nome)) return 'Libretto universitario';
-  if (/\bstatino\b/.test(nome)) return 'Statino esami';
-  if (/\btranscript\b|\bcarriera\b|\bautocertificazione\b/.test(nome)) {
-    return 'Certificato di carriera';
-  }
-  const anno = nome.match(/20\d{2}/)?.[0] ?? null;
-  return anno ? `Documento carriera ${anno}` : null;
-}
-
-/** Id univoco leggibile per un allegato. */
-let idAllegati = 0;
-export function allegatoDaFile(file: { name: string; type: string; size: number }): AllegatoCfu | null {
-  const classificazione = classificaFile(file.name, file.type, file.size);
-  if (!classificazione.ammesso || !classificazione.tipo) return null;
-  idAllegati += 1;
-  return {
-    id: `allegato-${idAllegati}`,
-    nomeFile: file.name,
-    tipo: classificazione.tipo,
-    dimensioneByte: file.size,
-    suggerimento: suggerimentoDaNomeFile(file.name),
-  };
-}
-

@@ -7,14 +7,16 @@
 > **Repo**: `ScuoleRadar_app/project` · **Dominio prod**: https://scuoleradar.it
 > **Progetto Supabase**: `gwdmsgsshvdnfrplbjiv` (URL `https://gwdmsgsshvdnfrplbjiv.supabase.co`)
 > **GitHub**: `Vamisia2026/scuoleradar` · **Branch prod**: `main` (Vercel auto-deploy)
-> **Ultimo aggiornamento**: 2026-08-31
+> **Ultimo aggiornamento**: 2026-09-21 (sincronizzazione: refactoring modulare,
+> contesti splittati, error boundary di dipartimento, standard editoriale stretto delle
+> notizie, gate `test:architettura`)
 
 ---
 
 ## Indice
 
 0. Quick Start
-1. Architettura & Tech Stack
+1. Architettura & Tech Stack (**+ §1.5 tassonomia a 5 dipartimenti, §1.6 standard modulare e gate**)
 2. Directory & File Map (ogni file)
 3. Stato globale & Data Models TypeScript
 4. Flusso di Autenticazione
@@ -34,6 +36,11 @@
 18. Script npm, CI, Vercel
 19. Moduli bloccati (LOCKED_MODULES)
 20. Stato attuale & note operative
+21. Pipeline di notifica end-to-end (specifica completa)
+22. Error handling, resilienza e anti-silent-fail
+23. Confini dei moduli e superfici pubbliche
+24. Runbook operativi
+25. Invarianti, glossario e mappa di lettura
 
 ---
 
@@ -64,8 +71,12 @@ Supabase servono `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` (vedi §17).
 
 - **SPA** React 18.3 + Vite 5.4 + TypeScript 5.5, deployata su **Vercel** con rewrite SPA
   (`vercel.json`: `/(.*)` → `/index.html`).
-- **Backend**: Supabase — Auth (email/Google/One Tap), Postgres (24 migrations), 8 **Edge
-  Functions Deno**, pg_cron (3 job), RLS.
+- **Backend**: Supabase — Auth (email/Google/One Tap), Postgres (**52 migration**), **10 Edge
+  Functions Deno** (+ cartella `_shared`), pg_cron, RLS.
+- **Architettura modulare** (§1.5–§1.6): 5 domini verticali isolati in `src/departments/`
+  (+ `src/modules/modulistica`), stato globale splittato in `src/contexts/app/*`,
+  error boundary per dipartimento; regole e gate in [`MODULAR_ARCHITECTURE.md`](./MODULAR_ARCHITECTURE.md)
+  e [`DEPARTMENT_MAP.md`](./DEPARTMENT_MAP.md).
 - **Notifiche**: Resend (email) + Bot Telegram `@ScuoleRadar_bot`; orchestrazione nel
   `notifier` Node (scraper) e nel DB (trigger + cron → Edge `send-notification`).
 - **AI**: DeepSeek (`deepseek-chat`) per la generazione modulistica (Edge `genera-modulo`),
@@ -98,7 +109,7 @@ Supabase servono `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` (vedi §17).
 ### 1.3 Topologia & data flow
 
 ```
-Browser (SPA) ──► src/App.tsx ──► BrowserRouter ──► Routes (20 pagine)
+Browser (SPA) ──► src/App.tsx ──► BrowserRouter ──► Routes (30 route, 24 pagine)
      │                  ├─ AppProvider (contexts/AppContext)  ← stato globale
      │                  ├─ AuthModal / VetrinaModal / GoogleOneTap / RadarWizardModal / DevToolbar
      │                  └─ ScrollToTop
@@ -112,6 +123,7 @@ Browser (SPA) ──► src/App.tsx ──► BrowserRouter ──► Routes (20
 GitHub Actions (cron):
   scraper.yml        → src/scraper/index.ts → Supabase interpelli → canali Telegram (nessun invio personale)
   digest.yml         → notifier: BATCH 17:00 (Telegram) per BASE + riepilogo email per tutti
+                       + PROMEMORIA 24h (una sola email per utente, una voce per interpello)
   scrape-notizie.yml → ingestNotizie.ts → data/notizieIngestite.ts → commit → Vercel
 
 Supabase DB (pg_cron + trigger):
@@ -135,9 +147,56 @@ Supabase DB (pg_cron + trigger):
   `slate.50=#F4F7F9`; font Inter / Source Serif 4; shadow `card`/`soft`; keyframes
   `fade-in`, `pop`, `pulse-soft`.
 - **`postcss.config.js`**: tailwindcss + autoprefixer.
+- **Favicon & brand asset (radice, non `src/`)**: il set favicon ufficiale è generato da
+  `npm run favicon` (`scripts/make-favicons.mjs`) ritagliando la **tessera azzurra**
+  dalla grafica originale `public/logo.png` (tessera 181×181, azzurro `#2B6F9E` campionato dal
+  marchio) e produce `public/favicon-16.png`, `favicon-32.png`, `favicon-48.png`,
+  `favicon-256.png`, `favicon.ico` (multi-misura 16/32/48) e `apple-touch-icon.png`
+  (180×180, **opaco**). `index.html` li dichiara con `sizes` esplicite + `theme-color`.
+  Guardia: **`npm run test:favicon`** (decodifica i PNG senza dipendenze e verifica
+  identità azzurra, radar bianco, misure, peso e assenza di asset legacy/scuri).
+  ⚠️ `index.html` e `public/**` **non** passano dal gate di architettura ma finiscono nel
+  deploy: una loro modifica **non committata non arriva in produzione** (è la causa della
+  favicon scura rimasta online fino al 2026-09-22).
 - **`eslint.config.js`**: flat config, typescript-eslint, react-hooks, react-refresh; globals
   browser; sezione separata per `src/scraper/**` con globals node e regole React off.
 
+
+---
+
+### 1.5 Tassonomia a 5 dipartimenti
+
+| # | Dipartimento (prodotto) | Dove vive nel codice | Entry point |
+|---|---|---|---|
+| 1 | **Radar Interpelli** | `departments/radar/` + `lib/{matchingEngine,radarValidation,scadenza,interpelloRouting}.ts` + `scraper/` + `lib/{notifier,telegram,resend,digest,dedupAvvisi,frequenzaNotifiche,emailScuola,alertInterpello}.ts` | `RadarWizardModal`, `PreferenzeRadar` |
+| 2 | **Notizie & Blog** | `departments/notizie/**` (hero, grid, dettaglio, motore di rilevanza, ingestione, archivio) | `NotizieHero`, `NotizieGrid`, `NotizieDettaglio` |
+| 3 | **Modulistica** | `modules/modulistica/**` (catalogo + cache, Archivista Capo, generatore PDF, esplora archivio) | `ModuliModule` |
+| 4 | **Formazione & Carriera** | `departments/cfu/**` (calcolatore, engine normativo, dossier, landing) + CV Builder in `components/CvTool.tsx` + `pages/CvPage.tsx` | `CalcolatoreCfuApp`, `CalcolatoreCfuLanding` |
+| 5 | **Strumenti & Extra** | PureFocus (`lib/purefocus-bridge.ts`, `pages/PureFocusPage.tsx`), Assistente AI (`pages/AssistenteAIPage.tsx`), billing/piani (`lib/{pricing,abbonamento,planLimits,promo}.ts`, `pages/PrezziPage.tsx`, Edge `checkout`/`webhook`) | pagine pubbliche |
+| — | **Scadenze** e **Admin** (domini di codice) | `departments/scadenze/` · `departments/admin/` | `RevolverScadenze` · `TabUtenti`, `TabRadar` |
+
+Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_MAP.md).
+
+### 1.6 Standard modulare, gate di architettura e baseline
+
+- **Tre livelli**: ① piattaforma (`components/`, `contexts/`, `pages/`, `hooks/`) ·
+  ② verticale (`departments/*`, `modules/*`) · ③ basso (`lib/`, `services/`, `data/`,
+  `types/`, `scraper/`). Un file appartiene a un solo livello e a una sola responsabilità.
+- **Regole**: soft cap **250 righe**, hard cap **300** (`E-DIM`); nessun file di codice in
+  radice di dominio (`E-ROOT`); superficie pubblica solo `index.ts` (`E-ENTRY`); import
+  fra domini **solo** via `index.ts` (`E-DOM`); lo strato basso non importa verso l'alto
+  (`E-STRAT`); nessun ciclo (`E-CICLO`). Policy completa: [`MODULAR_ARCHITECTURE.md`](./MODULAR_ARCHITECTURE.md).
+- **Gate**: `npm run test:architettura` (fallisce **solo** sulle violazioni nuove),
+  `… -- --report` (inventario completo), `… -- --baseline` (congela lo stato attuale).
+  In CI: `.github/workflows/architettura.yml` su push e PR.
+- **Stato attuale del gate** (2026-09-21): `371 file analizzati · 145 violazioni
+  (82 errori, 63 warning) · ✅ nessuna violazione nuova`. Debito congelato in
+  `scripts/architettura-baseline.json`: `E-DIM 41 · E-DOM 24 · E-ROOT 14 · W-UI 38 ·
+  W-DIM 25 · E-CICLO 3`.
+- **Error boundary**: `AppErrorBoundary` (app intera) + `DepartmentErrorBoundary`
+  (per dipartimento) + `CfuErrorBoundary` (in `departments/cfu/shared/`) +
+  `ModuleCreatorErrorBoundary` (sotto-modulo creator della Modulistica).
+- **Audit e backlog**: [`STRUCTURAL_AUDIT.md`](./STRUCTURAL_AUDIT.md).
 
 ---
 
@@ -171,37 +230,40 @@ Supabase DB (pg_cron + trigger):
 
 | File | Righe | Responsabilità |
 |---|---|---|
-| `main.tsx` | 10 | `createRoot` + `<App/>` in StrictMode |
-| `App.tsx` | 139 | Provider (`AppProvider`, `ToastProvider`), `BrowserRouter`, TUTTE le 20 route (§16), modali globali (`AuthModal`, `VetrinaModal`, `GoogleOneTap`, `RadarWizardModal`, `DevToolbar`), `RequireAuth` guard |
+| `main.tsx` | 18 | `createRoot` + `<App/>` in StrictMode |
+| `App.tsx` | 264 | Provider (`AppProvider`, `ToastProvider`), `BrowserRouter`, TUTTE le 30 route (§16), modali globali (`AuthModal`, `VetrinaModal`, `GoogleOneTap`, `DevToolbar`), error boundary (`AppErrorBoundary` + `DepartmentErrorBoundary` per i domini montati sulle pagine), `RequireAuth` guard |
 | `index.css` | 45 | `@tailwind`; `body bg-slate-50 text-primary-900`; `.input`; `.finestra-conversazione`; scrollbar custom; focus-ring |
 
 ### 2.3 `src/components/` — UI condivisa
 
 | File | Righe | Responsabilità / dipendenze |
 |---|---|---|
-| `Header.tsx` | 360 | Header sticky 2 livelli: top-bar (logo, link istituzionali, accedi/avatar/profilo, badge PRO/Base), barra strumenti (`strumentiLinks` con emoji, es. 📁 Modulistica), menu mobile. Usa `useApp`, `NavLink`, `CreditiModal` |
+| `Header.tsx` | 142 | Header sticky 2 livelli: top-bar (logo, link istituzionali, accedi/avatar/profilo, badge PRO/Base), barra strumenti (`strumentiLinks` con emoji, es. 📁 Modulistica), menu mobile. **Logo importato come asset di build** (`@/assets/logo.png`, nome hashato) con fallback wordmark su `onError`; sottocomponenti in `components/header/**` (`NavIstituzionale`, `MenuUtente`, `MenuMobile`, `BarraStrumenti`, `BadgePiano*`, `navLinks`, `tipiUtente`) |
 | `Modal.tsx` | 64 | Modal riusabile: overlay `bg-primary-900/40`, card `rounded-2xl`, `size sm/md/lg/xl`, `zClass`, prop `cardClassName` (default `bg-white`; es. `bg-slate-50`), Escape/blocco scroll |
-| `AuthModal.tsx` 🔒 | 315 | Login/registrazione (Google OAuth + email demo), contesto `'pro'` (checkout ripreso), `useNavigate`. **BLOCCATO** |
+| `AuthModal.tsx` 🔒 | 400 | Login/registrazione (Google OAuth + email demo), contesto `'pro'` (checkout ripreso), `useNavigate`. **BLOCCATO** |
 | `VetrinaModal.tsx` | — | Modal freemium multi-sezione: radar/cv/cfu/moduli/assistente con CTA di upgrade |
 | `AbbonamentoModal.tsx` | 210 | Modal abbonamento: piano PRO annuale/mensile/crediti, promo, `avviaCheckout` |
-| `CreditiModal.tsx` | 238 | Acquisto crediti a consumo (quantità), promo referral |
 | `ContattiModal.tsx` | 18 | Wrapper `ContactForm` in modal |
 | `ContactForm.tsx` | 286 | Form contatti (dipartimento, oggetto, messaggio, allegato base64, honeypot) → Edge `contatto` |
-| `RadarWizardModal.tsx` | — | Wizard radar 4 passi (ordini/classi/materie/province), `STORAGE_KEY_RADAR_WIZARD_PENDING`, per anonimi e loggati; Passo 3 include `SostegnoToggle` |
 | `SostegnoToggle.tsx` | 96 | Domanda condivisa «Vuoi che includiamo anche le opportunità per il sostegno?» (switch `role="switch"` + nota sull'adesione implicita via classe `AD*`) — usata da wizard e Preferenze Radar |
-| `SimulatorRadar.tsx` | — | Anteprima feed radar (legge `interpelli` da Supabase, fallback mock) |
+| `modals/RadarPromoModal.tsx` | — | Promo del Radar (upsell PRO) |
 | `InterpelloCard.tsx` | 188 | Card singolo interpello: scadenza, provincia, classi, badge "Scuola Preferita", notifica, detail modal |
-| `CfuTool.tsx` | 500 | Calcolatore CFU (§8.1) |
-| `CvTool.tsx` | 174 | CV Builder (§8.2) |
 | `ServiziPaywall.tsx` | — | Paywall condiviso (Base → invita a PRO/registrazione), icona Lock |
+| `ProFeatureModal.tsx` · `ExperimentalBanner.tsx` | — | Vetrina funzione PRO · banner "in sperimentazione" per feature beta |
 | `Pill.tsx` | — | Pill rimovibile (chip selezione) |
 | `Toast.tsx` | — | Sistema toast (provider + `useToast`): success/error |
 | `GoogleOneTap.tsx` | 11 | Componente renderless → `useGoogleOneTap` |
+| `DatiProfiloModal.tsx` · `ForcePasswordModal.tsx` · `OAuthBounceModal.tsx` · `TelegramLoginButton.tsx` | — | Onboarding/profilo: completamento dati, cambio password forzato, bounce OAuth, login Telegram |
+| `SoftOnboardingModal.tsx` | — | Onboarding leggero (invito a completare il profilo) |
 | `DevToolbar.tsx` | 195 | Solo DEV: badge ⚡, switch stato (guest/base/pro via `simulaStato`), reset dati, porta, health check |
-| `HealthCheckModal.tsx` | 121 | Modal diagnostica → `eseguiHealthCheck` |
-| `ExperimentalBanner.tsx` | 11 | Banner "in sperimentazione" per feature beta |
+| `HealthCheckModal.tsx` | 287 | Modal diagnostica → `eseguiHealthCheck` |
+| `AppErrorBoundary.tsx` | — | Error boundary dell'**intera app** (fallback full-screen, reset) |
+| `DepartmentErrorBoundary.tsx` | — | Error boundary **per dipartimento**: isola il crash di un dominio (radar/notizie/modulistica/cfu) senza spegnere il resto della SPA |
 | `ScrollToTop.tsx` | — | Scroll-to-top a ogni cambio rotta |
-| `InterpelloCard`, `Pill` | — | vedi sopra |
+| `Footer.tsx` · `Accordion.tsx` | — | Footer condiviso · accordion riusabile |
+| `CvTool.tsx` | 174 | CV Builder legacy in `src/components/` (§8); il vecchio wrapper CFU (`CfuTool.tsx`) è stato **rimosso** con la V1 |
+| `landing/Landing*.tsx` | — | Sezioni della landing pubblica (`LandingHero`, `LandingBenefici`, `LandingCards`, `LandingCta`) |
+| `VetrinaModal.tsx` · `profile/ReferralSection.tsx` | — | vedi sopra · modulo referral "Invita un Collega" |
 
 ### 2.4 `src/components/profile/`
 
@@ -213,16 +275,30 @@ Supabase DB (pg_cron + trigger):
 
 | File | Righe | Responsabilità |
 |---|---|---|
-| `AppContext.tsx` | 820 | Stato globale (§3), auth, preferenze, radar, checkout, crediti, vetrina, dev-simulation |
+| `AppContext.tsx` | 282 | **Facade** del provider: compone i hook di dominio sotto e riesporta `useApp` (prima era un monolite da 1634 righe — §3.1) |
+| `app/types.ts` | 179 | Tipi dello stato globale (`User`, `Preferenze`, `Esame`, `RuoloSimulato`, tipi di ritorno dei hook) |
+| `app/costanti.ts` | 26 | Costanti condivise (`LIMITE_NOTIFICHE_PROVA`, chiavi localStorage, storage del wizard) |
+| `app/helpers.ts` | 101 | Utility **pure** del contesto (normalizzazioni, riduzioni) |
+| `app/useAuthSync.ts` | 167 | Sincronizzazione sessione Supabase ↔ utente locale (login/logout, eventi auth) |
+| `app/useAnagraficaProfilo.ts` | 194 | Anagrafica del docente (lettura/scrittura su `profiles`) |
+| `app/useProfileBootstrap.ts` · `app/useBootstrapProfilo.ts` | 180 · 112 | Bootstrap del profilo all'avvio (demo su localStorage e reale su Supabase) |
+| `app/usePreferenzeUtente.ts` | 139 | Preferenze Radar (ordini, classi, materie, province, sostegno, scuole preferite/ignorate) |
+| `app/useRadarTrial.ts` | 186 | Trial PRO del Radar + preavvisi di rinnovo |
+| `app/useCheckout.ts` · `app/useBootstrapCheckout.ts` | 186 · 87 | Checkout Stripe (`avviaCheckout`) e ripresa post-login del piano intentato |
+| `app/useProfiloAccount.ts` | 139 | Azioni sull'account (piano, crediti, dati profilo) |
+| `app/useAzioniAccount.ts` | 255 | Azioni account di livello superiore (compone i hook precedenti) |
+| `app/useInterpelliFeed.ts` | 141 | Feed interpelli dell'utente (query + matching) |
+| `app/useStatoSimulato.ts` | 106 | DevToolbar: simulazione `guest`/`base`/`pro` senza reload |
+| `app/useModaliApp.ts` | 103 | Apertura/chiusura delle modali globali (auth, vetrina, wizard Radar) |
 
 ### 2.6 `src/data/` — dati statici
 
 | File | Righe | Contenuto |
 |---|---|---|
-| `moduli.ts` | 3941 | Catalogo modulistica: 271+ moduli, `macroAree`, `macroAreeModulistica`, `ordineMacroAree`, helper `conAggiuntaInCima`, `getModuliScaricati`, `macroAreaById`; tipo `DocumentoModulistica` |
+| `moduli.ts` | 298 | ⚠️ **Ereditato**: il catalogo è stato diviso in `moduliAltreAree.ts` (500), `moduliEntiAltro.ts` (487), `moduliOrdiniScuola.ts` (2710), `classiConcorso.ts` (944); `moduli.ts` conserva tipi, `macroAree`, `ordineMacroAree`, helper `conAggiuntaInCima`, `getModuliScaricati`, `macroAreaById` e il tipo `DocumentoModulistica` |
 | `interpelli.ts` | — | Tipo `Interpello` + feed mock (~12 voci demo) per modalità demo |
 | `classiConcorso.ts` | — | `ClasseConcorso[]` (A-XX, ADEE, ADSS…) con `ordine`, `materie[]`, `requisitiCfu[]`; helper `classeByCodice` |
-| `ordiniMaterie.ts` | 79 | `OrdineScuola` (infanzia/primaria/secondaria1/secondaria2/cpia/serali/pon/ata), `ordiniScuola`, `materie` |
+| `ordiniMaterie.ts` | ~150 | `OrdineScuola` (infanzia/primaria/secondaria1/secondaria2/cpia/serali/pon/ata), `ordiniScuola`, `materie`, **`MATERIE_GENERICHE`** + **`materieCompetenzeExtra()`** (esclude le discipline curricolari: Storia/Geografia non sono "competenze extra"), **`competenzeSuggerite`** (5 aree ad alta richiesta PNRR/PON: AI nella didattica, robotica educativa, digital storytelling, metodologia CLIL, creatività digitale). Verificato da `npm run test:radar:preferenze` |
 | `province.ts` | 117 | `Provincia[]` (107 province: codice/nome/regione) + `regioni` |
 | `servizi.ts` | 99 | Vetrina servizi: `Servizio[]` (slug, emoji, titolo, caratteristiche, destinatari, dashboard, sperimentazione) + `servizioDaSlug` |
 
@@ -232,19 +308,21 @@ Supabase DB (pg_cron + trigger):
 | File | Righe | Responsabilità |
 |---|---|---|
 | `supabase.ts` | 20 | Client Supabase frontend (anon); `supabase === null` in demo; `isSupabaseConfigurato` |
-| `matchingEngine.ts` | ~195 | Matching Radar + utenti compatibili (§5.2); `searchInterpelli` esclude gli scaduti; **`elencaUtentiNotificabili`** → TUTTI i profili con canale valido e Radar attivo (`findUtentiCompatibili(..., { ignoraFiltri: true })`, così anche chi ha province/classi configurate riceve il riepilogo) |
+| `matchingEngine.ts` | ~330 | Matching Radar + utenti compatibili (§5.2); `searchInterpelli` esclude gli scaduti; **`elencaUtentiNotificabili`** → TUTTI i profili con canale valido e Radar attivo (`findUtentiCompatibili(..., { ignoraFiltri: true })`, così anche chi ha province/classi configurate riceve il riepilogo). **Normalizzazione CLASSI robusta**: `normalizzaClasse` (`A-18` ≡ `A18` ≡ `a 18` ≡ `A_18` ≡ `A-018` → `A-18`; i codici sostegno `ADEE`/`AD24` restano invariati), **`normalizzaClassi`** (dedup + formato canonico), **`contieneClasse`**/**`rimuoviClasse`** (confronto a prova di formato per le caselle UI). Verificato da `npm run test:matching` e `npm run test:radar:preferenze` |
 | `scadenza.ts` | ~90 | Helper scadenza (puro): `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `stileScadenza` (semaforo 🟢 lungo / 🟡 vicino / 🔴 imminente) |
-| `alertInterpello.ts` | ~390 | Costruttore dell'**avviso strutturato** (gerarchia obbligatorie/opzionali + campo `email` dell'avviso), `pulisciTitoloAvviso` (via i dump di codici classe), **`emailAvviso`** + costanti condivise `EMAIL_ICONA`/`EMAIL_ETICHETTA`/`EMAIL_ETICHETTA_WEB`, **`ISTRUZIONE_AVVISO_UFFICIALE`** (direttiva standard "clicca STAMPA") e **`suggerimentoRicercaAvviso({ compatto })`** (guida operativa per elenchi/"Stampa" o fonte mancante), **`emailAvviso`** ed **`etichettaFonteLink`/`classificaFonteLink`/`ePaginaRiepilogo`** (etichetta ONESTA del link: PDF / Albo Pretorio / **pagina di riepilogo "Stampa"** / avviso — mai "Candidati") |
+| `alertInterpello.ts` | ~480 | Costruttore dell'**avviso strutturato** (gerarchia obbligatorie/opzionali + campo `email` dell'avviso), `pulisciTitoloAvviso` (via i dump di codici classe), **`emailAvviso`** + costanti condivise `EMAIL_ICONA`/`EMAIL_ETICHETTA`/`EMAIL_ETICHETTA_WEB`, **`ISTRUZIONE_AVVISO_UFFICIALE`** (direttiva standard "clicca STAMPA") e **`suggerimentoRicercaAvviso({ compatto })`** (guida operativa per elenchi/"Stampa" o fonte mancante), **`emailAvviso`** ed **`etichettaFonteLink`/`classificaFonteLink`/`ePaginaRiepilogo`** (etichetta ONESTA del link: PDF / Albo Pretorio / **pagina di riepilogo "Stampa"** / avviso — mai "Candidati"), **GATE DI QUALITÀ**: `eUrlAvvisoDiretto` (link = avviso specifico, mai home/elenco/ricerca/archivio regionale), `motivoAvvisoNonInviabile` e `avvisoInviabile` (**link diretto AND email di candidatura**: altrimenti nessun invio). Verificato da `npm run test:qualita` |
 | `interpelloRouting.ts` | ~40 | Deep link LEGACY `/interpello/:id` (puro): `eUuid`, `chiaveInterpelloDaParam` (uuid → `id`, hash → `hash_id`). **Policy**: le notifiche non generano più link interni; la rotta resta solo per i deep link storici (che reindirizzano subito alla fonte esterna) |
 | `digest.ts` | ~130 | **Puro, senza import** — finestra del BATCH giornaliero: `oraLocaleItalia`/`dataLocaleItalia`/`etichettaDataItalia` (fuso `Europe/Rome`), `ORA_DIGEST` (**17:00**), `eOraDelDigest(istante, forzato)`, `descrizioneFinestraDigest`, `ordinaVociDigest` (scadenza più vicina in cima), `raggruppaPerProvincia` |
-| `resend.ts` | 434 | **Node-only** — email Resend: 8 `TipoMessaggio` (`welcome, prova1, prova2, prova3, extra, recap, welcome_pro, notifica_pro`), SUBJECT, CORPO_MESSAGGI, `TIPI_CON_OPPORTUNITA`, `renderEmailHtml`, `inviaNotificaEmail`, `inviaNotificheInterpello` |
-| `telegram.ts` | ~600 | **Node-only** — messaggi Telegram. `formattaMessaggioTelegram`: ALERT di **solo testo** (nessuna foto/logo → niente anteprima gigante, nessun marchio ridondante, nessun disclaimer operativo) con riga `🔗 Apri l'avviso ufficiale: <url>`, riga `📧 Candidature` e CTA finale `CTA_RADAR_INTERESSI` (ricalibra il Radar su `/dashboard/radar`); i messaggi di ciclo di vita mantengono copy + `FOOTER_NOTIZIE`. Poi `formattaDigestTelegram` (BATCH BASE), `formattaPostCanaleTelegram`, `inviaNotificaTelegram` (`sendMessage`, mai `sendPhoto`), `inviaMessaggioTelegram`, `getTelegramBotToken`, **`pulisciUrlTelegram`**: ogni URL è VISIBILE (nessun `text_link` nascosto). **Nessun prompt "Filtra per provincia e classi" nei messaggi personali** |
-| `dedupAvvisi.ts` | ~85 | **Puro** — `improntaAvviso` / `normalizzaPerImpronta` / `GIORNI_IMPRONTA`: identità STABILE dell'opportunità (provincia + scuola + classi + titolo normalizzato senza date/numeri/riempitivi). Intercetta la stessa notizia ripubblicata con titolo/data diversi (hash nuovo) → nessuna notifica ripetuta a distanza di giorni |
+| `resend.ts` | 1.153 | **Node-only** — email Resend: 8 `TipoMessaggio` (`welcome, prova1, prova2, prova3, extra, recap, welcome_pro, notifica_pro`), **OGGETTO STANDARD delle opportunità** `OGGETTO_OPPORTUNITA = 'Nuove opportunità per te!'` (`subjectDigest`/`subjectOpportunita`/`subjectPerNotifica`; gli oggetti di ciclo di vita restano specifici), **`vociAttive`** (il digest contiene SOLO opportunità non scadute), **`footerEmailHtml`** (footer unico crisp: firma → CTA Notizie email → link Radar **in piccolo** (12.5 px) → riga brand → avviso "non rispondere" in coda; niente "P.S.", niente grigio `#94a3b8`), `ctaNotizieHtml`/`URL_NOTIZIE_VISIBILE`/`CTA_NOTIZIE_TESTO_EMAIL`/`TESTO_NON_RISPOSTA`, `linkOpportunita` (solo link diretto, via `eUrlAvvisoDiretto`) e **`fonteInEvidenza`** (link ufficiale IN EVIDENZA nella card: scatola blu brand + etichetta standard; **nessun box giallo né guida operativa nelle email**), CORPO_MESSAGGI, `TIPI_CON_OPPORTUNITA`, `renderEmailHtml`, `inviaNotificaEmail`, `inviaNotificheInterpello`, `renderDigestEmailHtml`/`inviaDigestEmail`, **`renderPromemoriaEmailHtml`/`inviaPromemoriaEmail`**. Verificato da `npm run test:email`, `npm run test:digest`, `npm run test:promemoria`, `npm run test:link` |
+| `telegram.ts` | 1.286 | **Node-only** — messaggi Telegram. `formattaMessaggioTelegram`: ALERT di **solo testo** (nessuna foto/logo → niente anteprima gigante, nessun disclaimer operativo) con **testata brand cliccabile** (`📡 <a href="https://www.scuoleradar.it">Scuole Radar.it</a>`), apertura **`🎯 Abbiamo trovato una nuova opportunità per te` (+ contesto classe·provincia)**, riga `📧 Candidature`, **etichetta UNICA del link di fonte `🔗 Fonte Ufficiale`** (URL solo nell'`href`) e CTA finale `CTA_RADAR_INTERESSI` (ricalibra il Radar su `/dashboard/radar`, **solo nel ~20% dei messaggi**: `deveMostrareCtaRadar`/`FREQUENZA_CTA_RADAR`, forzabile con `{ mostraCtaRadar }`); i messaggi di ciclo di vita mantengono copy + `CTA_NOTIZIE_TELEGRAM`. Poi `formattaDigestTelegram` (BATCH BASE), **`formattaPostCanaleTelegram`** (post canali a 7 sezioni, testate tipografiche `📝 Interpello docenti`/`🗂️ Avviso ATA`/`📣 Bando / PNRR / Esperto`; brand in testa, **URL ufficiali mai in chiaro** — solo la riga iperlinkata `🔗 Fonte Ufficiale` — e link SOLO se diretto all'avviso, `eUrlAvvisoDiretto`), **`pubblicaInterpelloSuCanali`** con **gate di link safety** (`EsitoPubblicazioneCanali.saltato`: nessuna pubblicazione senza avviso specifico), `inviaNotificaTelegram`, `inviaMessaggioTelegram` (**`payloadMessaggioTesto`**: punto UNICO del payload `sendMessage` con `link_preview_options.is_disabled` + `disable_web_page_preview: true`; mai `sendPhoto`/`sendMediaGroup`), `rigaFonteUfficiale`/`rigaAvvisoUfficiale` (etichetta canonica + gate `eUrlAvvisoDiretto` interno), `getTelegramBotToken`, **`pulisciUrlTelegram`**. **Nessun prompt "Filtra per provincia e classi" nei messaggi personali**; verifica con `npm run test:telegram:canali` |
+| `dedupAvvisi.ts` | ~95 | **Puro** — `improntaAvviso` / `normalizzaPerImpronta` / `GIORNI_IMPRONTA`: identità STABILE dell'opportunità (provincia + scuola + **classi NORMALIZZATE `A-022` ≡ `A-22`** + titolo normalizzato senza date/numeri/riempitivi). Intercetta la stessa notizia ripubblicata con titolo/data diversi (hash nuovo) → nessuna notifica ripetuta a distanza di giorni. Usata dallo scraper (dedup in inserimento) e dal **frequency cap per utente** (§6.5.1). Verificata da `npm run test:dedup` e `npm run test:dedup:utente` |
+| `frequenzaNotifiche.ts` | ~140 | **Puro** — **FREQUENCY CAP** delle notifiche personali: `MAX_INVII_OPPORTUNITA` (2), `hashContenuto` (FNV-1a del contenuto normalizzato), **`identitaFrequenza`** (`scuola|classi|hashContenuto`, classi normalizzate `A-022` ≡ `A-22`), `giornoFrequenza` (fuso `Europe/Rome`), `valutaFrequenza` → `stesso-giorno` / `limite-raggiunto` / `ok`. Verificato da `npm run test:frequenza` |
 | `emailScuola.ts` | ~110 | **Puro** — email UFFICIALE della scuola: `normalizzaCodiceMeccanografico`, `estraiCodiceMeccanograficoDaTesto`, `emailDaCodiceMeccanografico` (PEO `@istruzione.it` / PEC `@pec.istruzione.it`), `risolviEmailUfficialeScuola` (email di fonte → convenzione MIM; mai email inventate) |
 | `liveBoard.ts` | ~110 | **Puro** — vetrina "Radar Live": `scuolaDaTitolo`, `nomeScuolaRiga` (campo → registro per codice → titolo → ente), `preparaRigheBoard` (arricchisce e **scarta** le righe senza scuola o senza scadenza: mai "Scuola non indicata"/"Scadenza n/d") |
 | `school-lookup.ts` | ~50 | Registro scuole per codice meccanografico: `resolveSchoolByCode` (PEO/PEC) e **`nomeScuolaDaCodice`** (solo nomi REALI, mai "Istituto &lt;codice&gt;") |
-| `notifier.ts` | ~1090 | **Node-only** — orchestratore notifiche: **`inviaAlertTelegramTempoReale(client, nuovi, opts)`** (alert INDIVIDUALI su Telegram per i soli **PRO**, invocata dallo scraper; non consuma quota) e **`inviaDigestGiornaliero(client, opts)`** (BATCH: email per tutti + Telegram solo per **BASE**; opzioni `forzato`, `soloUtente`, `soloRegistrare`/`finoA` per il recupero). **Deduplica PER CANALE** (`giaNotificatoCanale`: chiavi locali `…&#124;<canale>` + `notifications_log`, con compatibilità per la chiave LEGACY `…&#124;notifica`), persistenza incrementale del ledger, `recapitoNotifica` (PEO dal codice MIM) |
-| `ledgerLocale.ts` | ~110 | **Node-only** — ledger anti-duplicato su file (`.scuoleradar/notifiche-ledger.json`): `chiaveLedger`, `ledgerLocaleGia`, `ledgerLocaleRegistra`, `ledgerLocaleSalva`, `percorsoLedgerLocale`. Rete di sicurezza quando le tabelle DB non sono ancora create; committato dai workflow. **Percorso sovrascrivibile con `SCUOLERADAR_LEDGER_PATH`** (usato dai test per NON sporcare il ledger reale). **Tolleranza BOM** in lettura e scrittura senza BOM; un file ILLEGGIBILE produce un warning esplicito (mai deduplica silenziosamente disattivata). Verificato da `npm run test:ledger` |
+| `notifier.ts` | 1.999 | **Node-only** — orchestratore notifiche: **`inviaAlertTelegramTempoReale`** (alert INDIVIDUALI Telegram per i **PRO**), **`inviaDigestGiornaliero`** (BATCH: email per tutti + Telegram solo per **BASE**; opzioni `forzato`, `soloUtente`, `soloRegistrare`/`finoA`, seam di test `inviaEmail`/`inviaTelegram`; guardia "una email al giorno" `chiaveDigestGiorno`) e **`inviaPromemoria24h`** (promemoria email ≥ 24h per scadenze entro 3 giorni). **REGISTRO INVII per utente** (§6.5.1): `avvisoGiaInviato` (**FREQUENCY CAP**: identità = scuola + classi + impronta del contenuto; **max 2 invii in 2 giorni diversi**, mai due volte nello stesso giorno, per canale di consegna, con marcatori storici pre-cap conservativi) e `registraInvioAvviso` (registra il **GIORNO** dell'invio su ledger file + `notifications_log` con canale `freq_email`/`freq_telegram`) → nessuno spam, e un contenuto aggiornato riparte come nuova opportunità. `recapitoNotifica` (PEO dal codice MIM), **GATE DI QUALITÀ STRICT** (`superaGateQualita`, da `avvisoInviabile`): nessun invio di avvisi senza **link diretto** o senza **recapito** — applicato a `notificaNuoviInterpelli`, `notificaInterpelliPerUtente`, `inviaAlertTelegramTempoReale`, `raccogliVociCanale` (digest) e `inviaPromemoria24h` |
+| `promemoria.ts` | ~130 | **Puro** (nessun I/O) — regole del **PROMEMORIA 24h**: `ORE_PROMEMORIA` (24), `GIORNI_URGENZA_PROMEMORIA` (3), `CANALE_PROMEMORIA` (`promemoria`), `oreTrascorse`, `eVoceUrgente`, `motivoPromemoria` (`ok`/`inviata-da-meno-di-24h`/`gia-promemoria`/`scaduta`/`scadenza-non-urgente`/`mai-inviata`/`senza-id`), `ePromemoriaDovuto`, `chiavePromemoria` (chiave di deduplica per coppia utente×interpello). Verificato da `npm run test:promemoria` |
+| `ledgerLocale.ts` | ~110 | **Node-only** — ledger anti-duplicato su file (`.scuoleradar/notifiche-ledger.json`): `chiaveLedger`, `ledgerLocaleGia`, `ledgerLocaleChiaviConPrefisso` (conteggio frequenza per identità), `ledgerLocaleRegistra`, `ledgerLocaleSalva`, `percorsoLedgerLocale`. Rete di sicurezza quando le tabelle DB non sono ancora create; committato dai workflow. **Percorso sovrascrivibile con `SCUOLERADAR_LEDGER_PATH`** (usato dai test per NON sporcare il ledger reale). **Tolleranza BOM** in lettura e scrittura senza BOM; un file ILLEGGIBILE produce un warning esplicito (mai deduplica silenziosamente disattivata). Verificato da `npm run test:ledger` |
 | `pricing.ts` | 18 | Piani: `PianoId = 'pro_annuale'|'pro_mensile'|'a_consumo'`; localStorage `STORAGE_KEY_INTENDED_PLAN` |
 | `promo.ts` | 34 | `validaPromo(codice, userId)` via RPC `valida_codice_promo`; `SCONTO_PROMO_EUR = 10` |
 
@@ -256,7 +334,26 @@ Supabase DB (pg_cron + trigger):
 | `useGoogleOneTap.ts` | Carica GSI su entry pages, `signInWithIdToken` con client ID Google; solo se non autenticato |
 | `useReferral.ts` | Referral: genera codice fallback client-side (stessa regola trigger), `ReferralStats`, `ReferralEntry`, link `?ref=` |
 
-### 2.9 `src/departments/notizie/` — dipartimento isolato (blog)
+### 2.9 `src/departments/` — 5 domini verticali isolati
+
+Ogni dominio è una **unità autonoma** (`index.ts` = unica superficie pubblica; import
+interni fra domini vietati dal gate) con la struttura `components/ · hooks/ · services/ ·
+data/ · types.ts`. Dettaglio e regole: [`DEPARTMENT_MAP.md`](./DEPARTMENT_MAP.md), §1.5–§1.6.
+
+| Dominio | File | Righe | Sottocartelle | Entry `index.ts` |
+|---|---|---|---|---|
+| `radar/` | 19 | 3.413 | `wizard/` · `preferenze/` · `flightBoard/` | `RadarWizardModal`, `PreferenzeRadar`, `RadarStatusToggle` |
+| `notizie/` | 17 | 4.776 | `components/` (+ `hero/`) · `services/` · `data/` | componenti Notizie + servizi/tipi |
+| `scadenze/` | 11 | 1.357 | `components/` · `hooks/` | `RevolverScadenze` (+ `RevolverScadenzeProps`) |
+| `admin/` | 14 | 2.281 | `tabs/` (+ `tabs/utenti/`) | `TabUtenti`, `TabRadar`, `TabAccount` |
+| `cfu/` | 105 | 17.677 | `calcolatore/` · `engine/` · `dossier/` · `landing/` · `shared/` · `__tests__/` | `CalcolatoreCfuApp`, `CalcolatoreCfuLanding` |
+
+```tsx
+// App.tsx — i domini si montano solo tramite entry point pubblici
+<DepartmentErrorBoundary nome="notizie"><NotizieHero /></DepartmentErrorBoundary>
+```
+
+#### `departments/notizie/` — blog (dettaglio)
 
 | File | Righe | Responsabilità |
 |---|---|---|
@@ -264,12 +361,12 @@ Supabase DB (pg_cron + trigger):
 | `index.ts` | — | Barrel exports (componenti + services) |
 | `data/notizieSeed.ts` | — | Articoli editoriali seed |
 | `data/notizieIngestite.ts` | — | **File GENERATO** dall'ingestione (accumulo, dedupe per id, refresh delle voci esistenti, SOLO fonti nazionali) |
-| `services/newsFetcher.ts` | ~560 | **Node-only** — fetch fonti **NAZIONALI**: MIM (`/web/guest/notizie`, `/web/guest/avvisi`, home, `/notizie`) + Gazzetta Ufficiale (RSS + elenco atti `/home`) + ARAN/giurisdizione; **waterfall** `LIVELLI_NAZIONALI`/`raccogliLivello` |
-| `services/relevanceEngine.ts` | ~1300 | **Node-only, puro** — regole editoriali (§9): `èFonteNazionale`/`èFonteMim`, **anti-burocrazia** (`attoBurocraticoVuoto`, `titoloInformativo`, `riferimentiObsoleti`), **impatto** (`categoriaDaImpatto`/`PAROLE_IMPATTO`), **`titoloAzione`**, **`linkDirettoUfficiale`** + **`linkVietatiInHtml`** (link PUNTO-A-PUNTO: mai indici/home/URP), `articoloValido`, `generaArticoloEditoriale` (copy azione, un solo link diretto), **`limitaCadenzaSettimanale`** (max 3 articoli datati/7 giorni) |
-| `services/ingestNotizie.ts` | ~400 | **Node-only** — CLI pipeline: **waterfall** livelli 1→4 → filtra → **gate link punto-a-punto** → tetto 6 (finestra 15 gg) → igiene nazionale → scrive `notizieIngestite.ts` |
+| `services/newsFetcher.ts` | 573 | **Node-only** — fetch fonti **NAZIONALI** (`FONTI_ISTITUZIONALI`, `FONTI_GU_RSS`; **`FONTI_MIM_RSS = []`**: le fonti MIM si leggono via scraping/waterfall, non via RSS): MIM (`/web/guest/notizie`, `/web/guest/avvisi`, home, `/notizie`) + Gazzetta Ufficiale (RSS + elenco atti `/home`) + ARAN/giurisdizione; **waterfall** `LIVELLI_NAZIONALI`/`raccogliLivello` |
+| `services/relevanceEngine.ts` | ~1.875 | **Node-only, puro** — regole editoriali STRETTE (§9): `èFonteNazionale`/`èFonteMim`, **allow-list dei temi** (`TEMI_PERSONALE` + `classificaTemaPersonale`), **anti-ufficio-stampa** (`titoloDaUfficioStampa`, `FRASI_FLUFF`/`contieneFraseFluff`), **gate 2-bis** (`PAROLE_IMPATTO` + `PAROLE_SCUOLA`), **`GLOSSARIO_ACRONIMI`/`espandiAcronimi`**, **`titoloAzione`** (rimozione etichette/date/codici), **`CANALI_DOMANDA`/`linkDomandaUfficiale`/`richiedePresentazioneDomanda`**, `classificaLink` + `linkVietatiInHtml`, **`applicaFormatoEditoriale`** (`summary_points` a bullet, **DOPPIO LINK**: fonte ufficiale + presentazione della domanda), **`verificaCadenzaSettimanale`** (`MAX_ARTICOLI_SETTIMANA = 3`, `FINESTRA_LOOKBACK_GIORNI = 15`, `FINESTRA_LOOKBACK_NAZIONALE_GIORNI = 60`, `MAX_ARTICOLI_FINESTRA = 6`), `articoloValido` (gate finale) |
+| `services/ingestNotizie.ts` | 566 | **Node-only** — CLI pipeline: **waterfall** livelli 1→4 → filtra → **gate procedura senza canale di presentazione** → gate link punto-a-punto → verifica HTTP 200 → **formattazione editoriale PRIMA dell'igiene** → **tetto settimanale** (`MAX_ARTICOLI_SETTIMANA`) con **riserve + `applicaGaranziaSettimanale`** → scrive `notizieIngestite.ts`; **exit 1 se la settimana resta vuota** (il workflow fallisce, niente silenzio) |
 | `services/archivioNotizie.ts` | ~85 | Lettura/scrittura del file archivio (`scriviArchivioNotizie`, `leggiArchivioNotizie`, `estraiArticoliDaTesto`): unico punto di serializzazione di `notizieIngestite.ts` |
 | `services/tracciaFonte.ts` | ~250 | **Node-only** — tracciamento della fonte granulare: `tokenizza`, `valutaCandidato` (numeri dell'atto decisivi), `scegliLinkSpecifico`, `risolviFonteGranulare` (da pagina-contenitore alla sottopagina/circolare/PDF) |
-| `services/newsService.ts` | ~105 | Frontend: `unisciNotizie` (seed+ingested, dedupe), **`ordinaNotizie`** (data di pubblicazione DECRESCENTE; il punteggio è solo tie-break), `newsArticles` (feed già ordinato), `categorieNotizie`, `getNotiziaById`, `formatDataNotizia`, `newsFallback` |
+| `services/newsService.ts` | 185 | Frontend: `unisciNotizie` (seed+ingested, dedupe), **`ordinaNotizie`** (data di pubblicazione DECRESCENTE; il punteggio è solo tie-break), `newsArticles` (feed già ordinato), `categorieNotizie`, `getNotiziaById`, `formatDataNotizia`, `newsFallback` |
 | `components/NotizieHero.tsx` | — | Hero editoriale pagina Notizie + `SeoMeta` |
 | `components/NotizieGrid.tsx` | — | Griglia articoli + filtro categoria + CTA radar |
 | `components/NotizieDettaglio.tsx` | — | Dettaglio articolo (in sintesi, link PDF, fonte) |
@@ -294,10 +391,13 @@ Supabase DB (pg_cron + trigger):
 | `creator/ArchivistaCapo.tsx` | 425 | Interfaccia "Indovina Chi?" — chat guidata Archivista (§7.5) |
 | `creator/PensieriArchivista.tsx` | — | Frasi di recupero durante la generazione |
 | `creator/ModuloPreview.tsx` | — | Anteprima documento (print, salva) |
-| `creator/ModuleCreatorErrorBoundary.tsx` | — | Error boundary del sotto-modulo creator |
+| `creator/ModuleCreatorErrorBoundary.tsx` | 66 | Error boundary del sotto-modulo creator |
+| `creator/pdf/documento.ts` · `creator/pdf/layout.ts` · `creator/pdf/testo.ts` | 62 · 78 · 16 | **Generatore PDF modulare**: costruzione del documento A4, layout/paginazione, normalizzazione del testo |
+| `creator/pdf/stili*.ts` (`stiliBase`, `stiliStampa`, `stiliBlocchi`, `stiliDensita`, `stiliDocumento`) | 175 · 170 · 141 · 148 · 18 | Stili del documento (base, stampa, blocchi, densità, override finale) — riferimento [`PDF_DESIGN_SYSTEM.md`](./PDF_DESIGN_SYSTEM.md) |
+| `creator/logoDataUri.ts` | 9 | Logo come data-URI per il PDF (nessuna dipendenza da `public/`) |
 
 
-### 2.11 `src/pages/` — 20 pagine
+### 2.11 `src/pages/` — 24 pagine (+ 14 file di supporto = 38 file; 30 `<Route>` in `App.tsx`)
 
 | File | Responsabilità |
 |---|---|
@@ -314,45 +414,50 @@ Supabase DB (pg_cron + trigger):
 | `AuthCallback.tsx` | Rotta ritorno Google OAuth (scambia code → sessione) |
 | `OnboardingPage.tsx` | Wizard onboarding preferenze + collegamento Telegram |
 | `DashboardPage.tsx` | `DashboardLayout` (tab + `Outlet`) + `DashboardPage` (Radar Scuole: notifiche restanti, abbonamento, crediti, feed, blacklist) |
-| `CvPage.tsx` / `CfuPage.tsx` | Wrapper `CvTool` / `CfuTool` |
+| `CvPage.tsx` / `CfuPage.tsx` | Wrapper `CvTool` (`components/`) / `CalcolatoreCfuApp` (`departments/cfu/`) |
 | `AssistenteAIPage.tsx` | Chat Assistente Sindacalista (demo simulata, paywall) |
 | `ModuliPage.tsx` | Wrapper `ModuliModule` |
 | `PureFocusPage.tsx` | Ambiente distrazione-free (focus timer) |
 | `ProfiloPage.tsx` | Gestione profilo, preferenze, Telegram, account |
 | `InvitaPage.tsx` | Referral (`ReferralSection`) |
-| `AdminPage.tsx` | Pannello admin (indirizzi autorizzati): diagnostica, override, statistiche |
+| `AdminPage.tsx` | Pannello admin (indirizzi autorizzati): diagnostica, override, statistiche (monta `departments/admin`) |
+| `dashboard/CalcolatoreCFUDashboardPage.tsx` | Calcolatore CFU dentro la dashboard (`DashboardLayout`) |
+| `dashboard/components/**` | `DashboardLayout`, `DashboardNav`, `ElencoOpportunita`, `VetrinaRadarOspiti`, `BannerBozzaOnboarding` |
+| `interpello/**` | `InterpelloDettaglioPage`, `SchedaAvviso`, `AvvisoAssente`, `ReindirizzamentoAllaFonte`, `helpers` |
+| `onboarding/**` | `OnboardingPage` + `components/` (wizard 4 passi: anagrafica/ordini, classi/materie, province, canali) |
+| `CalcolatoreCFUPage.tsx` · `CheckoutRedirectPage.tsx` | Landing calcolatore · redirect post-checkout Stripe |
 
 ### 2.12 `src/scraper/` — Node-only
 
 | File | Righe | Responsabilità |
 |---|---|---|
-| `index.ts` | 522 | Pipeline scraper interpelli (§5.3): env, province attive da `profiles`, fonti per provincia, **espansione ELENCHI** (`espandiElenchi`), dedupe hash_id, upsert `interpelli`/`notices`, notifiche ai nuovi |
+| `index.ts` | 1.515 | Pipeline scraper interpelli (§5.3): env, province attive da `profiles`, fonti per provincia, **espansione ELENCHI** (`espandiElenchi`), dedupe hash_id, upsert `interpelli`/`notices`, notifiche ai nuovi |
 | `elenchi.ts` | ~215 | **Node-only, puro** — espansione delle PAGINE INDICE ("elenchi" USR/USP): `eUrlElenco`/`sembraTitoloElenco`/`ePaginaElenco` riconoscono l'elenco, `estraiVociElenco` estrae **una voce per avviso** (riga più specifica vince, mai la lista master), `espandiElencoInAvvisi` le trasforma in avvisi strutturati con link proprio |
-| `parser.ts` | ~560 | Parser: `rilevaClassi` (A-XX/ADEE + compatti A042/AB25), `rilevaCategoriaAvviso`, `sembraOpportunita`, `estraiProvincia`/`estraiScuola` (dai dati reali), `estraiDataPubblicazione`/`estraiDataScadenza` (pubblicazione ≠ scadenza), `inferisciMateria`, `estraiEmail`, `verificaAvviso`/`eSorgenteVerificata` (anti-mock/dummy), `generaHashId`, `parseInterpello` |
+| `parser.ts` | ~600 | Parser: `rilevaClassi` (A-XX/ADEE + compatti A042/AB25), `rilevaCategoriaAvviso`, `sembraOpportunita`, `estraiProvincia`/`estraiScuola` (dai dati reali; **`ALIAS_CITTA` completata** — es. **Forlì → FC**, Monza → MB, Pesaro → PU, Barletta → BT, Carbonia → SU, La Spezia → SP: prima un avviso di Forlì-Cesena ricadeva sulla provincia della FONTE, es. TO), `estraiDataPubblicazione`/`estraiDataScadenza` (pubblicazione ≠ scadenza; **due passate** per la scadenza: parola chiave PRIMA della data, poi DOPO — "Pubblicato il 12/09/2026. Scadenza: 15/09/2026" → **15/09**, non 12/09), `inferisciMateria`, `estraiEmail`, **`scegliUrlFonte`** (solo candidati con `eUrlAvvisoDiretto`: **mai la home dell'ente** né un elenco regionale, nessun fallback → `null`), `verificaAvviso`/`eSorgenteVerificata` (anti-mock/dummy), `generaHashId`, `parseInterpello` |
 
 ### 2.13 `src/services/` + `src/types/`
 
 | File | Responsabilità |
 |---|---|
-| `services/healthCheck.ts` | `eseguiHealthCheck(): Promise<HealthCheckResult[]>` — test DB, auth, env, edge functions, rotte SPA |
+| `services/healthCheck.ts` | `eseguiHealthCheck(): Promise<HealthCheckResult[]>` — test DB, auth, env, edge functions, rotte SPA, promo BETA1ANNO. Il ping di `checkout` (protetta da JWT): **401 in Guest = OK** (la configurazione Stripe non va esposta a un anonimo), errore solo se il 401 arriva CON una sessione attiva |
 | `types/google-one-tap.d.ts` | Tipi GSI (`google.accounts.id`) |
 | `vite-env.d.ts` | Tipi import.meta.env |
 
-### 2.14 `supabase/functions/` — 9 Edge Functions (Deno)
+### 2.14 `supabase/functions/` — 10 Edge Functions (Deno) + `_shared`
 
 | Funzione | Righe | Auth | Scopo / payload |
 |---|---|---|---|
-| `send-notification` | ~290 | `x-send-secret` | Step drip (step1 welcome, step5 avviso finale), welcome_pro, notifiche beta/rinnovo, scadenza avvisi; payload `{ tipo, userId, email, nome, chatId, titolo, ... }`; invia email Resend + Telegram |
+| `send-notification` | ~330 | `x-send-secret` | Step drip (step1 welcome, step5 avviso finale), welcome_pro, notifiche beta/rinnovo, scadenza avvisi; payload `{ tipo, userId, email, nome, chatId, titolo, ... }`; invia email Resend + Telegram. **GATE DI QUALITÀ**: per i tipi di opportunità (`step2`/`step3`/`step4`/`notifica_pro`/`prova1..3`/`extra`) l'invio è **saltato** se manca il link diretto o il recapito (`motivoAvvisoNonInviabile`); brand compatto + CTA Notizie a due righe + anteprime disattivate |
 | `genera-modulo` | 1327 | JWT | Azioni `intervista/genera/ricerca/salva/rimuovi/miei`; DeepSeek + cache `generated_modules`; intervista chirurgica con impronta SHA-256 (§7.4) |
 | `checkout` | 288 | JWT | Sessione Stripe Checkout; `{ plan, promo?, quantita?, origin }`; valida promo/referral, coupon -10€; ritorna `{ url }` |
 | `webhook` | 215 | firma Stripe HMAC | Eventi Stripe → piano pro / crediti / referral; ack sempre 200 |
 | `admin` | — | JWT + `ADMIN_EMAILS` | Operazioni admin (es. override piano/crediti, diagnostica) |
 | `contatto` | — | pubblico + anti-spam | Form contatti → Resend a `CONTACT_SUPPORT_EMAIL`; honeypot, alfabeti, impronte spam, max 3 link |
 | `elimina-account` | 80 | JWT | Cancella utente da `auth.users` via `admin.auth.deleteUser` (cascade su profiles) |
-| `telegram-webhook` | 128 | `X-Telegram-Bot-Api-Secret-Token` | `/start <user_id>` → aggiorna `profiles.telegram_chat_id` + conferma |
-| `telegram-admin-webhook` | ~430 | secret header + `ADMIN_TELEGRAM_ID` | Bot Telegram ADMIN **separato** dal bot pubblico: comandi solo da `ADMIN_TELEGRAM_ID` (`/status`, `/ultimi`, `/log`, `/forward`, …), **alert helper** (`ADMIN_ALERT_SECRET` → notifica proattiva su fallimenti/anomalie), log in `admin_telegram_log`, inoltro opz. |
+| `telegram-webhook` | 138 | `X-Telegram-Bot-Api-Secret-Token` | `/start <user_id>` → aggiorna `profiles.telegram_chat_id` + conferma. Ogni messaggio parte dal **brand compatto cliccabile** con **anteprime disattivate** |
+| `telegram-admin-webhook` | ~435 | secret header + `ADMIN_TELEGRAM_ID` | Bot Telegram ADMIN **separato** dal bot pubblico: comandi solo da `ADMIN_TELEGRAM_ID` (`/status`, `/ultimi`, `/log`, `/forward`, …), **alert helper** (`ADMIN_ALERT_SECRET` → notifica proattiva su fallimenti/anomalie), log in `admin_telegram_log`, inoltro opz.; brand compatto in testa e anteprime disattivate |
 
-### 2.15 `supabase/migrations/` — 51 migration (§13 e §14 per dettagli)
+### 2.15 `supabase/migrations/` — 52 migration (§13 e §14 per dettagli)
 
 Ordine: `20260822010000_add_school_filters` · `...22020000_create_interpelli` ·
 `...22030000_create_profiles` · `...22040000_extend_profiles` · `...22050000_add_telegram_chat_id` ·
@@ -400,15 +505,18 @@ implicita (chi ha già una classe `AD*` in `classi_concorso` → `true`), così 
 del matching non toglie copertura a chi riceveva legittimamente gli avvisi di sostegno.
 `npm run db:verifica` sonda anche `profiles.sostegno` (3ª riga di esito).
 
-### 2.16 `.github/workflows/`, `docs/`, `scripts/`, `public/`
+### 2.16 `.github/workflows/` (6), `docs/` (7), `scripts/` (71), `public/`
 
 | Percorso | Contenuto |
 |---|---|
 | `.github/workflows/scraper.yml` | Scraper Interpelli: cron Lun-Ven `0 7,12,15 * * 1-5` + dispatch; secrets SUPABASE_*/RESEND/TELEGRAM; `npm ci` → `scrape:check` → `npm run scrape` (inserimento + canali Telegram + **alert PRO in tempo reale**) → commit del ledger via `bash scripts/commit-ledger.sh` (unione chiavi + retry) |
-| `.github/workflows/digest.yml` | **Riepilogo/BATCH giornaliero**: cron Lun-Ven `0 15,16 * * 1-5` (una delle due esecuzioni cade alle 17:00 italiane: lo script invia solo se `eOraDelDigest` lo conferma) + dispatch (`force: true`); `npm ci` → `scrape:check` → `test:digest` + `test:migrazioni` → **`db:verifica`** (sonda schema, warning non bloccante) → `npm run notifiche:digest` → commit del ledger via `bash scripts/commit-ledger.sh`. **PRO**: già avvisati in tempo reale dallo scraper; **BASE**: batch Telegram + email |
+| `.github/workflows/digest.yml` | **Riepilogo/BATCH giornaliero**: cron Lun-Ven `0 15,16 * * 1-5` (una delle due esecuzioni cade alle 17:00 italiane: lo script invia solo se `eOraDelDigest` lo conferma) + dispatch (`force: true`); `npm ci` → `scrape:check` → `test:digest` + `test:migrazioni` → **`db:verifica`** (sonda schema, warning non bloccante) → `npm run notifiche:digest` → **`npm run notifiche:promemoria`** (promemoria 24h sulle voci di ieri in scadenza vicina, `continue-on-error`, guardia nel ledger) → commit del ledger via `bash scripts/commit-ledger.sh`. **PRO**: già avvisati in tempo reale dallo scraper; **BASE**: batch Telegram + email |
 | `scripts/verifica-schema-notifiche.ts` | **`npm run db:verifica`** — sonda SENZA effetti collaterali dello schema notifiche: esistenza di `notifications_log`, risposta della RPC quota con un UUID inesistente (atteso `(false, 0)`) e presenza di `profiles.sostegno`. Exit 1 + remediation se manca una migrazione |
 | `scripts/test-migrazioni.ts` | **`npm run test:migrazioni`** — regression guard statico su `supabase/migrations`: ledger idempotente con PK/RLS/grants, ULTIMA definizione della RPC non ambigua (blocca il ritorno dell'errore 42702) e colonna+backfill della preferenza sostegno |
 | `scripts/test-sostegno-preferenza.ts` | **`npm run test:sostegno`** — guardia SOSTEGNO: riconoscimento codici `AD*`/titolo (`isCodiceSostegno`, `eAvvisoSostegno`), matrice `sostegnoAmmesso`, matching e digest in DRY-RUN con client stub (falso positivo A-22 tedesco → ADEE, DB non migrato) |
+| `scripts/test-promemoria.ts` | **`npm run test:promemoria`** — oggetti branded (`Scuole Radar — Nuova opportunità per A-22 (Torino)`, digest, promemoria), guardia "una email al giorno" (`chiaveDigestGiorno`, con lancio forzato che la ignora) e **promemoria 24h** con client stub: filtra 24h/urgenza/provincia/scaduti, UNA email per utente e **anti-duplicato** (secondo giro → 0 invii; ledger DB assente → 0 invii) |
+| `scripts/test-dedup-utente.ts` | **`npm run test:dedup:utente`** — **registro invii per utente** (§6.5.1): identificatori stabili (hash/impronta/URL), guard PRIMA dell'invio e registrazione immediata dopo, **per canale** (email ≠ telegram) con compatibilità legacy; caso **Liceo Monti** end-to-end sul DIGEST con sender iniettati: hash diverso ⇒ 0 invii, avviso diverso ⇒ 1 invio; impronta `A-022 ≡ A-22 ≡ A042`; ledger DB assente ⇒ guard dal file |
+| `scripts/invia-promemoria.ts` | **`npm run notifiche:promemoria`** — runner del promemoria 24h (`--dry-run`, `--force`, `--ore`, `--giorni`, `<email\|uuid>`), eseguito dal workflow `digest.yml` dopo il digest |
 | `scripts/unione-ledger.ts` (`npm run ledger:unisci`) | Unisce il ledger del run con quello del branch remoto e scrive l'unione: è il passo che impedisce a scraper e digest (stessi minuti) di **cancellarsi le chiavi a vicenda** |
 | `scripts/commit-ledger.sh` | Commit del ledger usato da `scraper.yml`/`digest.yml`: fetch del remoto → unione chiavi → commit → push con **3 tentativi** (mai "vince l'ultimo") |
 | `.github/workflows/scrape-notizie.yml` | Scraper Notizie: cron giornaliero `0 6 * * *` + dispatch; `contents: write`; `npm ci` → `scrape:notizie:check` → `npm run scrape:notizie` → commit dati (`[skip ci]`) se cambiati |
@@ -417,20 +525,32 @@ del matching non toglie copertura a chi riceveva legittimamente gli avvisi di so
 | `scripts/arricchisci-interpelli.ts` | Manutenzione dati (`npm run dati:arricchisci [-- --apply]`): completa `school_code`, `contact_email` (PEO dalla convenzione MIM) e `school_name` (registro) sugli interpelli esistenti, senza mai sovrascrivere dati presenti |
 | `scripts/test-live-board.ts` | Regressione vetrina Radar Live (`npm run test:board`): righe incomplete arricchite o scartate, mai placeholder |
 | `scripts/test-email-scuola.ts` | Regressione email (`npm run test:email-scuola`): de-offuscamento, correlazione con l'istituto, **PEO/PEC dalla convenzione MIM** e completamento automatico nel parser |
-| `scripts/test-email-template.ts` | Regressione template (`npm run test:email`): logo reale, titolo pulito dai dump di codici classe, footer "modifica il radar qui" → `/dashboard/radar`, notice "non è monitorata" |
+| `scripts/test-email-template.ts` | Regressione template email (`npm run test:email`): **oggetto standard `Nuove opportunità per te!`** (digest/opportunità) e oggetti di ciclo di vita invariati, logo reale, titolo pulito dai dump di codici classe, **footer crisp** (link Radar visibile con URL in chiaro, CTA Notizie email a due righe `scuoleradar.it/notizie` + `… vieni qui!`, avviso "non rispondere" in ULTIMA riga, nessun "P.S.", nessun grigio `#94a3b8`) |
+| `scripts/test-radar-preferenze.ts` | **`npm run test:radar:preferenze`** — preferenze Radar: normalizzazione classi (`A-18` ≡ `A18` ≡ `a 18`), dedup/persistenza (load/save normalizzati in `AppContext`), testo UI **"Dove vuoi lavorare?"**, etichetta **"Le tue competenze e laboratori extra da proporre:"**, 5 competenze PNRR/PON suggerite e lista competenze SENZA discipline curricolari |
+| `scripts/test-qualita-invio.ts` | **`npm run test:qualita`** — gate di qualità: link diretto (`eUrlAvvisoDiretto`), gate link+recapito, mappatura province (Forlì → FC), brand/anteprime, frequenza CTA Radar ~20% |
+| `scripts/test-canali-telegram.ts` | **`npm run test:telegram:canali`** — post dei canali regionali: brand cliccabile in testa, 7 sezioni, testate tipografiche (nessuna fascia colorata/`[BADGE]`, nessuna immagine), **URL ufficiali mai in chiaro** (solo il bottone `👉 Apri l'avviso ufficiale`), **gate link diretto** (home regionale, elenco/tag, landing regionale, ricerca e "nessun link" → post senza link e pubblicazione annullata) + matrice di routing delle 9 regioni + ATA nazionale |
 
+| `docs/MODULAR_ARCHITECTURE.md` | **Regola architetturale vincolante**: SRP, limiti di righe (250/300), gerarchia a 3 livelli, codici del gate, regole di baseline |
+| `docs/DEPARTMENT_MAP.md` | Mappa dei dipartimenti: isolamento per dominio, gerarchia degli import, inventario con numeri reali, debito congelato e backlog |
+| `docs/STRUCTURAL_AUDIT.md` | Audit strutturale e refactoring slice-per-slice (monoliti, contesti, domini) |
+| `docs/RADAR_ROADMAP_V2.md` | Roadmap evolutiva del Radar |
+| `LOCKED_MODULES.md` | Registro moduli bloccati (§19) |
 | `docs/BLOG_EDITORIAL_GUIDELINES.md` | Regole d'oro del blog: max 3 articoli/settimana, zero rumore, acronimi spiegati |
 | `docs/PDF_DESIGN_SYSTEM.md` | Design system PDF (A4, tabelle clean, righe scrittura 24px) |
 | `docs/SYSTEM_HANDOVER.md` | QUESTO FILE |
 | `scripts/` | Test/utility: `invia-digest.ts` (`npm run notifiche:digest`), `verifica-schema-notifiche.ts` (`db:verifica`), `test-digest.ts`, **`test-telegram-tier.ts`** (split PRO/BASE + dedup per canale), **`test-ledger-robustezza.ts`** (`test:ledger`), `test-migrazioni.ts`, `admin-dispatch-user.ts`, `test-pdf-*.ts`, `_validate-modulistica.ts`, ecc. |
-| `public/` | `logo.png`, `ScuoleRadar Favicon Square.png`, `ScuoleRadar Logo Transparent Full Final.png`, `favicon_old.svg`, `logo_old.png` |
+| `public/` | **Set favicon UFFICIALE** (§1.4): `favicon.ico` (multi-misura 16/32/48), `favicon-16.png`, `favicon-32.png`, `favicon-48.png`, `favicon-256.png`, `apple-touch-icon.png` (180×180, opaco) + `logo.png` (882×212: tessera azzurra + radar bianco, **sorgente** del set). Rigenerazione `npm run favicon`, guardia `npm run test:favicon`. Gli asset della **vecchia identità scura** (`ScuoleRadar Favicon Square.png` 2,4 MB, `ScuoleRadar Logo Transparent Full Final.png` 3,5 MB, `favicon_old.svg`, `logo_old.png`) sono stati **rimossi** il 2026-09-22: non devono tornare nel sito servito |
 
 
 ---
 
 ## 3. Stato globale & Data Models TypeScript
 
-### 3.1 `AppContext` (`src/contexts/AppContext.tsx`)
+### 3.1 `AppContext` (`src/contexts/AppContext.tsx`, 282 righe) + hook di contesto
+
+⚠️ Il provider **non è più un monolite**: `AppContext.tsx` è la **facade** che compone i
+hook di `src/contexts/app/` (tabella completa in §2.5) e riesporta `useApp`; i tipi dello
+stato vivono in `contexts/app/types.ts`, le costanti in `contexts/app/costanti.ts`.
 
 Provider unico con **fallback demo** (Supabase null → localStorage). Costanti esportate:
 - `LIMITE_NOTIFICHE_PROVA = 3`
@@ -549,8 +669,9 @@ Modulo puro (client passato come parametro → testabile frontend+Node):
   `.order('expiration_date')`, `.limit(100)`.
 - `getFeedInterpelli(...)`: mappa righe DB → `Interpello[]` (`mapInterpelloDBToInterpello`).
 - `findUtentiCompatibili(client, { province, classi, titolo?, materia? })`: legge **tutti** i `profiles`
-  (select dei campi notifica), filtra: email valida **o** Telegram, `province_interesse`
-  (o `province_attive`) contiene la provincia, `classi_concorso` interseca le classi.
+  (select dei campi notifica), filtra: email valida **o** Telegram, poi applica la **regola unica**
+  `avvisoCompatibileConProfilo` (vedi §6.5.1): provincia del profilo == provincia dell'avviso,
+  intersezione reale di classi (o materia coperta), guardia sostegno.
   Restituisce `UtenteCompatibile[]` con flag `notificheBloccoInviato`/`notificheRecapInviato`.
 - **GUARDIA SOSTEGNO** (`sostegnoAmmesso` / `utenteAderisceSostegno`): il sostegno è
   un'abilitazione SEPARATA dalle classi disciplinari. Un avviso è "di sostegno" quando ha
@@ -603,6 +724,25 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
   l'adesione implicita.
 - `InterpelloCard.tsx`: card con scadenza (countdown), classe, provincia, badge
   "Scuola Preferita" (`favoriteSchools`), notifica, detail.
+- **Persistenza CLASSI (bug "la classe si deseleziona da sola" — RISOLTO)**: il DB
+  poteva contenere il formato delle FONTI (`A-022`, `A042`, `A 18`) mentre il
+  catalogo usa `A-22`; il confronto letterale delle caselle falliva e la classe
+  appariva non selezionata (o si duplicava). Ora i codici sono normalizzati in
+  **lettura** (`AppContext` → `normalizzaClassi(data.classi_concorso)`), in
+  **scrittura** (`classi_concorso: normalizzaClassi(...)`), nel `setPreferenze`/
+  `completaOnboarding`, nella bonifica del localStorage e nelle due UI
+  (`PreferenzeRadar`, `RadarWizardModal`) che confrontano con `contieneClasse`.
+  Verificato da `npm run test:radar:preferenze`.
+- **Testo UI**: il passo 1 del wizard e l'accordion degli ordini dicono
+  **"Dove vuoi lavorare?"** (prima: "Dove vuoi insegnare o lavorare?").
+- **Competenze e laboratori extra**: la sezione mostra l'etichetta
+  **"Le tue competenze e laboratori extra da proporre:"** e propone con un click le
+  **5 competenze più richieste dai bandi PNRR/PON** (`competenzeSuggerite`:
+  Intelligenza artificiale nella didattica, Robotica educativa, Digital
+  storytelling, Metodologia CLIL, Creatività digitale). La lista selezionabile usa
+  `materieCompetenzeExtra()`: le discipline curricolari (Storia, Geografia,
+  Italiano, …) NON compaiono più — la cattedra si intercetta con le classi di
+  concorso. Il testo libero resta sempre disponibile.
 - **Filtri avanzati**: `ignoredSchools` (blacklist) nasconde gli avvisi
   (match su `istituto + titolo`); `favoriteSchools` (whitelist) marca badge prioritario.
 - **Scadenze (semaforo)**: badge colorati via `src/lib/scadenza.ts` — 🟢 verde > 7 giorni,
@@ -680,17 +820,22 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
 - **POLICY DI ROUTING (mai link interni)**: il link di un avviso punta **SOLO alla fonte
   esterna originale** dell'istituzione (`eLinkEsterno`/`urlEsterna` in `alertInterpello.ts`).
   `linkOpportunita` **non ha più fallback** verso pagine della piattaforma: senza fonte
-  valida la CTA porta al **Radar** con etichetta esplicita ("Apri il tuo Radar Scuole"),
-  mentre il blocco avviso espone recapito + guida. Anche lo scraper **rifiuta** gli URL
-  della piattaforma come fonte (`RE_HOST_NON_ISTITUZIONALE`). Verificato da
-  `npm run test:link` e `npm run test:link-esterno`.
-- **Guida operativa (pagine tabellari/"Stampa")**: `suggerimentoRicercaAvviso()` distingue
-  le pagine di **dettaglio** (nessun testo aggiuntivo) da quelle di **riepilogo/elenco**
-  (`ePaginaRiepilogo`, anche `?stampa=1`, `/print`, tabelle) e dagli avvisi **senza
-  fonte**: in questi casi il template (email, Telegram, card, scheda) aggiunge una nota
-  che spiega come **trovare la riga** («classe» per provincia) e come **candidarsi**
-  scrivendo all'email della scuola. L'etichetta del link diventa "Apri la pagina di
-  riepilogo": onesta su ciò che l'utente troverà.
+  valida la CTA porta al **Radar** con etichetta esplicita ("Apri il tuo Radar Scuole").
+  Anche lo scraper **rifiuta** gli URL della piattaforma come fonte
+  (`RE_HOST_NON_ISTITUZIONALE`). Verificato da `npm run test:link` e `npm run test:link-esterno`.
+- **EMAIL Interpelli: link ufficiale IN EVIDENZA + CTA primaria** (checklist email §4/§5).
+  `fonteInEvidenza(url)` in `resend.ts` rende l'URL **esatto** dell'annuncio/bando pubblicato
+  dalla scuola (dato dello scraper) dentro una **scatola blu brand** nella card, con il link
+  in grassetto e l'etichetta standard `👉 Apri l'avviso ufficiale`; il **bottone CTA primario**
+  punta **allo stesso URL** (senza fonte diretta → fallback esplicito al Radar). Stessa resa
+  in alert, digest e promemoria. La riga compare **solo** per avvisi specifici
+  (`eUrlAvvisoDiretto`): mai per home, elenchi o archivi (checklist §5).
+- **Nel corpo delle email NESSUN box giallo e nessuna guida operativa**: i riquadri ambra
+  (`border-left:3px solid #f59e0b; background:#fffbeb`) con «Nel link la scuola pubblica un
+  elenco… / clicca STAMPA… / cerca la riga con…» sono stati **rimossi** da alert e digest
+  (checklist §4: l'azione è il link stesso). La funzione `suggerimentoRicercaAvviso()` resta
+  per i messaggi **Telegram** e per le **viste web** (`InterpelloCard` /
+  `InterpelloDettaglioPage`, dove il box è ancora presente: follow-up UI).
 - **Email scolastica (asset del piano PRO)**: il recapito di candidatura è un campo
   dell'**avviso strutturato** (`costruisciAvviso.email`) e viene reso **cliccabile**
   (`mailto:`) con etichetta/icona CONDIVISE (`📧 Candidature:` nei messaggi,
@@ -725,9 +870,11 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
     lo script invia SOLO quando in Italia sono le 17:00 (`eOraDelDigest`); con `--force`
     (o l'admin `npm run admin:dispatch`) si ignora la finestra.
   · Contenuto = TUTTE le opportunità attive compatibili **non ancora consegnate SU QUEL
-    CANALE** (ledger per canale), ordinate per scadenza più vicina. Ogni voce porta fonte
-    ESTERNA, email della scuola e guida operativa COMPATTA. Max 12 voci nell'email (con
-    nota delle restanti) e budget di caratteri per Telegram (limite 4096 sempre rispettato).
+    CANALE** (ledger per canale), ordinate per scadenza più vicina. Ogni voce porta la
+    **fonte ESTERNA in evidenza** (scatola blu brand, `fonteInEvidenza`) e l'email della
+    scuola; **nessun bottone globale al Radar nell'email** (le preferenze stanno nel footer,
+    in piccolo). Max 12 voci nell'email (con nota delle restanti) e budget di caratteri per
+    Telegram (limite 4096 sempre rispettato).
   · **Oggetto email** (formula di prodotto): *"ScuoleRadar — Oggi abbiamo trovato
     {N} opportunità per te"* (`subjectDigest`); la testata del messaggio Telegram usa
     la stessa formula (`testataDigest`).
@@ -738,18 +885,34 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
     **solo** se i gruppi sono più di uno: con un solo gruppo resta una lista lineare.
     In Telegram ogni voce è compressa in poche righe (contesto · classe/scadenza ·
     fonte · email · guida).
-  · **Guida standardizzata**: `ISTRUZIONE_AVVISO_UFFICIALE` =
+  · **Guida standardizzata (solo Telegram e viste web)**: `ISTRUZIONE_AVVISO_UFFICIALE` =
     *"Apri l'avviso ufficiale (clicca STAMPA dove possibile, per candidarti)"*, usata
-    identicamente in digest, email e schede; nel digest si usa la variante
-    `suggerimentoRicercaAvviso({ compatto: true })`, che non ripete l'email già
-    mostrata sulla riga precedente.
+    identicamente in Telegram e nelle schede; nel digest **Telegram** si usa la variante
+    `suggerimentoRicercaAvviso({ compatto: true })`, che non ripete l'email già mostrata
+    sulla riga precedente. **Nelle email non c'è nessuna guida** (§4 checklist email).
   · **Quota**: UN credito al giorno e **solo per BASE** (PRO è illimitato, nessuna RPC)
     con la sequenza `prova1 → prova2 → prova3 → extra`; dopo `extra` il cron DB
     `step5-notifiche` invia il recap finale. Il ledger viene marcato per canale con le
     voci consegnate, così né il batch di domani né il tempo reale le ripetono.
+  · **Una sola email al giorno per utente**: la guardia `chiaveDigestGiorno`
+    (`utente|<uuid>:digest|<YYYY-MM-DD>`, lato italiano) viene registrata SOLO dopo
+    una consegna riuscita: retry del runner, doppio cron o lancio manuale senza
+    `--force` non producono una seconda email. I lanci admin (`forzato`) la ignorano.
   · Comando: `npm run notifiche:digest [-- --dry-run] [-- --force] [-- <email|uuid>]`
-    (workflow `.github/workflows/digest.yml`). Verificato da `npm run test:digest` e
-    `npm run test:telegram:tier`.
+    (workflow `.github/workflows/digest.yml`). Verificato da `npm run test:digest`,
+    `npm run test:telegram:tier` e `npm run test:promemoria`.
+- **PROMEMORIA 24h** → `inviaPromemoria24h(client, opts)` (email, in coda al digest):
+  per ogni profilo notificabile legge lo storico delle consegne
+  (`notifications_log.canale = 'email'` + `sent_at`), considera le voci consegnate da
+  **≥ 24h** e non ancora scadute, e invia **UNA sola email** con quelle ad **alta
+  priorità** (scadenza entro **3 giorni**). Regola pura in `src/lib/promemoria.ts`
+  (`motivoPromemoria`, `eVoceUrgente`, `chiavePromemoria`). **Strict anti-duplicato**:
+  la chiave `utente|<uuid>:<hash>|promemoria` (ledger file) + la riga DB con
+  `canale = 'promemoria'` garantiscono **un solo promemoria per interpello**; il
+  secondo giro non rimanda nulla. Non consuma quota (non è una notifica nuova) e non
+  parte mai senza timestamp affidabili (ledger DB assente → 0 invii, con warning).
+  Comando: `npm run notifiche:promemoria [-- --dry-run] [-- --force] [-- --ore 24]
+  [-- --giorni 3] [-- <email|uuid>]`; verificato da `npm run test:promemoria`.
 - **Orchestrazione LEGACY** → `notificaNuoviInterpelli(client, nuovi, opts)` e
   `notificaInterpelliPerUtente(client, target, opts)` restano esportate per test,
   dry-run e backfill manuali, ma **non sono più usate dalla pipeline**; nessuna lancia
@@ -766,6 +929,17 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
 | 6 | `recap`/`step5` (avviso finale) | 2 ore dopo l'avviso | pg_cron `step5-notifiche` → `dispatch_step5_due()` → Edge `send-notification` |
 
 Per **PRO**: `welcome_pro` (attivazione) + `notifica_pro` (ogni opportunità, illimitate).
+
+**Copy del benvenuto** (riga 1): conferma l'attivazione **immediata** del *mese di PRO in
+omaggio* e i 4 strumenti già attivi (Radar Scuole con notifiche illimitate, Modulistica
+scolastica, Crea CV, Calcolatore CFU), con il tono dell'onboarding. **Vietati** i residui del
+vecchio modello: «account Base», quota delle «3 segnalazioni», «piano PRO gratuito per 30
+giorni», ritorno al piano gratuito. Le 4 superfici che generano lo stesso messaggio vanno
+tenute allineate: `TESTI.conferma_base` (Edge `send-notification`, unica fonte usata anche da
+`step1`), `email_1_1_onboarding` (`supabase/functions/_shared/emailTemplates.ts`),
+`CORPO_MESSAGGI.welcome` (`src/lib/resend.ts`), `TESTO_TELEGRAM.welcome`
+(`src/lib/telegram.ts`) e la scheda «Benvenuto / onboarding»
+(`src/config/automazioniEmailCatalogo.ts`). Guardia: `npm run test:email`.
 
 Logica del `notifier` (mappa tipo):
 ```
@@ -801,10 +975,60 @@ dell'opportunità (titolo + dettagli + link fonte). `extra` e `recap` sono solo 
 `classeRilevante()` interseca le classi con quelle del profilo e sceglie la **classe coerente
 con il titolo** (`scegliClasseRilevante`).
 
-**Regole di TEMPLATE (verificate da `npm run test:telegram:template`):**
-- **Copy**: header `notifica_pro` = *"Abbiamo trovato una nuova opportunità per te!"*;
-  nessuna frase ripetuta ("Continuiamo a cercare per te", "A presto!" rimossi) e
-  nessuna riga metadato `🏷️ …` (era vuota/ridondante).
+**Regole di TEMPLATE (verificate da `npm run test:telegram:template`, `npm run test:copy` e `npm run test:promemoria`):**
+- **OGGETTI email**: il testo delle OPPORTUNITÀ è **STANDARD E UNICO**:
+  `OGGETTO_OPPORTUNITA = 'Nuove opportunità per te!'` — vale per il **digest
+  giornaliero** (`subjectDigest`), per gli alert di opportunità
+  (`subjectOpportunita`/`subjectPerNotifica`) e per i tipi di opportunità della
+  Edge (`oggettoOpportunita`). Il contesto (classe · provincia) vive nel CORPO
+  del messaggio, non nell'oggetto. Restano SPECIFICI e descrittivi gli oggetti
+  dei messaggi di **ciclo di vita** (`welcome`, `extra`, `recap`, `welcome_pro`,
+  `conferma_attivazione`, `free_forever_preavviso`) e il **promemoria 24h**
+  (`subjectPromemoria` = *"Scuole Radar — Scadenza vicina: <classe> (<provincia>)"*).
+- **DIGEST = UNA email al giorno con le SOLE opportunità ATTIVE**:
+  `inviaDigestEmail`/`renderDigestEmailHtml` filtrano con **`vociAttive(voci)`**
+  (`eInterpelloAttivo`: scadenza non passata; senza scadenza = attiva) → gli
+  avvisi scaduti NON entrano nel riepilogo e non vengono mai notificati.
+- **Brand**: OGNI messaggio Telegram comincia con la **testata brand compatta e
+  CLIICCABILE** `📡 <a href="https://www.scuoleradar.it">Scuole Radar.it</a>`
+  (`BRAND_RIGA_TELEGRAM`/`URL_HOME`, `alertInterpello.ts`; stessa stringa nella Edge):
+  una sola riga, **tutto** il nome è un link alla home, nessun logo/foto allegata e
+  nessuna anteprima gigante. In **email** il brand è il logo **32 px**
+  (`intestazioneBrandHtml`) accanto al nome ufficiale `Scuole Radar.it`
+  (il vecchio logo da 200 px è stato rimosso: era "gigante"/deformato su mobile).
+- **Copy**: le opportunità si aprono con il **copy di brand COMPLETO**
+  *"Abbiamo trovato una nuova opportunità per te"* — mai la versione abbreviata
+  `🎯 Nuova opportunità: …`. Con il contesto del match diventa
+  `🎯 <b>Abbiamo trovato una nuova opportunità per te</b>: <classe> · <provincia>`
+  (`aperturaOpportunita`, identica per `prova1`/`prova2`/`prova3`/`notifica_pro` e per
+  i tipi `step2`/`step3`/`notifica_pro` della Edge); nessuna frase ripetuta
+  ("Continuiamo a cercare per te", "A presto!" rimossi) e nessuna riga metadato `🏷️ …`.
+- **Post CANALI regionali (solo testo, puliti)**: testate **tipografiche** —
+  `📝 Interpello docenti` / `🗂️ Avviso ATA` / `📣 Bando / PNRR / Esperto` —
+  al posto delle vecchie fasce colorate con parentesi quadre
+  (`🟢 [INTERPELLO DOCENTI]`, `🔵 [AVVISO ATA]`, `🟣 [BANDO / PNRR / ESPERTO]`) che
+  sembravano badge di sistema/banner di errore. Nessuna immagine allegata
+  (`sendPhoto`/`sendMediaGroup` banditi) e **anteprime native disattivate**
+  (`link_preview_options.is_disabled` + `disable_web_page_preview: true`): niente
+  riquadri/media giganti. Struttura fissa in 7 sezioni: brand → header → dettagli →
+  `🔗 Fonte Ufficiale` + 📧 recapito → CTA di lead generation al Radar →
+  CTA Notizie (due righe) → hashtag. Verificato (e reso BLOCCANTE) da
+  `npm run test:telegram:canali`.
+- **Post canale — BRAND in testa**: OGNI post parte dalla riga cliccabile
+  `📡 <a href="https://www.scuoleradar.it">Scuole Radar.it</a>` (`BRAND_RIGA_TELEGRAM`);
+  la testata è la PRIMA sezione del messaggio, senza eccezioni.
+- **Post canale — LINK SAFETY (STRICT)**:
+  · l'URL della fonte ufficiale **non viene mai mostrato in chiaro**: compare SOLO
+    come `href` della riga iperlinkata `🔗 Fonte Ufficiale`
+    (`rigaFonteUfficiale`, che applica anche il gate sui link diretti); gli unici URL
+    visibili sono quelli di ScuoleRadar (CTA di lead generation al Radar e CTA Notizie);
+  · il link deve essere **diretto all'avviso specifico** (`eUrlAvvisoDiretto`):
+    mai home regionali, archivi, elenchi/tag, pagine di ricerca o landing regionali;
+  · `pubblicaInterpelloSuCanali` ha un **gate** che ANNULLA la pubblicazione
+    (`EsitoPubblicazioneCanali.saltato`) quando la fonte non è diretta: nessun invio,
+    nessuna destinazione, nessun falso allarme di "dispatch fermo"
+    (`senzaFonte` nello `scraper_runs`). Il test verifica i casi negativi
+    (home regionale, elenco/tag, landing regionale, ricerca, nessun link).
 - **Gerarchia**: `Ordine di scuola` deriva SEMPRE dalla classe mostrata (o dal testo se la
   classe manca) → mai contraddizioni tipo "Scuola Primaria" + titolo della secondaria;
   `scegliClasseRilevante` preferisce la classe **citata nel titolo** tra quelle della tabella
@@ -815,12 +1039,133 @@ con il titolo** (`scegliClasseRilevante`).
   nella card).
 - **Scadenze** (`scadenzaUtilizzabile`): una data già passata o identica alla pubblicazione è
   considerata **non valida** e non viene mostrata (nessuna scadenza nel passato negli alert).
-- **Link**: sempre etichettati e onesti (`etichettaFonteLink`): *"Apri l'avviso ufficiale"* /
-  *"Apri il bando ufficiale (PDF)"* / *"Apri l'avviso sull'Albo Pretorio"* — mai la parola
-  *"candidati"* né URL nudi (in Telegram il link etichettato evita il popup nativo "Apri link").
-- **Footer**: personale = `📌 Quando vuoi sapere cosa succede di importante, vieni qui:`
-  + link `scuoleradar.it/notizie`; canale = `⚡ Ricevi gli avvisi per la tua provincia e
-  classe in privato: 👉 scuoleradar.it`. Nessuna firma promozionale.
+- **Link alla fonte — UNA etichetta canonica per Telegram**: `🔗 Fonte Ufficiale`
+  (`ETICHETTA_FONTE_UFFICIALE`) in **alert personali, digest e post dei canali**, generata
+  SEMPRE da `rigaFonteUfficiale`/`rigaAvvisoUfficiale` (l'avviso delega alla riga canonica):
+  l'`href` è **esattamente** l'URL dell'avviso, **mai in chiaro nel testo**, e il **gate
+  `eUrlAvvisoDiretto` è applicato DENTRO i generatori** — con home, elenchi/archivi/tag,
+  landing regionali o pagine di ricerca (`?s=INTERPELLO`) la riga è **vuota**: nessun
+  fallback a un link generico, in nessuna tipologia di messaggio.
+  Le **EMAIL** mantengono la loro etichetta descrittiva per destinazione
+  (`etichettaFonteLink`, `👉 Apri l'avviso ufficiale` / `Apri il bando ufficiale (PDF)`…):
+  la canonica vale per i messaggi Telegram. La parola *"candidati"* è vietata ovunque.
+- **Anteprime native — PUNTO UNICO**: `payloadMessaggioTesto(chatId, testo)` è l'unico posto in
+  cui si costruisce il payload di `sendMessage`, con `link_preview_options: { is_disabled: true }`
+  (Bot API attuale) **e** `disable_web_page_preview: true` (client più vecchi). Nessun media
+  (`sendPhoto`/`sendMediaGroup` banditi): i messaggi sono solo testo, senza riquadri che
+  caricano loghi istituzionali o immagini delle fonti.
+- **Post canale — CTA di LEAD GENERATION**: il footer dei canali pubblici invita
+  esplicitamente a creare il Radar personalizzato
+  (`⚡ Vuoi solo le opportunità della TUA provincia e delle TUE classi?` +
+  `👉 Crea il tuo Radar personalizzato: https://scuoleradar.it/dashboard/radar`),
+  con URL **visibile** (nessun popup nativo) e mai la home generica.
+- **CTA Radar (frequenza ridotta)**: la riga di ricalibrazione
+  (`CTA_RADAR_INTERESSI`) NON compare più in **ogni** comunicazione personale:
+  appare nel **~20%** degli alert, con decisione **stabile** sull'identità
+  dell'avviso (`deveMostrareCtaRadar`, hash FNV-1a del `id`/URL; `FREQUENZA_CTA_RADAR = 0.2`).
+  Forzabile con `formattaMessaggioTelegram(..., { mostraCtaRadar })`.
+- **GATE DI QUALITÀ STRICT (nessun avviso incompleto)**: un'opportunità entra nel
+  dispatch SOLO con **link diretto all'avviso** (`eUrlAvvisoDiretto`: mai home,
+  elenchi, tag, pagine di ricerca/`?s=`, landing regionali tipo
+  `/interpelli-lombardia/`) **E** un **recapito di candidatura valido**
+  (`avvisoInviabile`, `motivoAvvisoNonInviabile`). Il gate è applicato in
+  `notifier.ts` (notifiche, dispatch per utente, alert PRO in tempo reale,
+  voci del digest, promemoria 24h) e nella Edge `send-notification`
+  (`TIPI_CON_OPPORTUNITA`). Gli scarti sono loggati con il motivo.
+- **Mappatura province corretta**: i capoluoghi "composti" sono in `ALIAS_CITTA`
+  (`Forlì → FC`, `Monza → MB`, `Pesaro → PU`, `Barletta → BT`, `Carbonia → SU`,
+  `La Spezia → SP`, `Bozen → BZ`). Senza l'alias un avviso di Forlì-Cesena
+  ricadeva sulla provincia della **fonte** (es. `TO` per la pagina Piemonte) →
+  alert "di Torino" con contenuti di Forlì-Cesena. `scegliUrlFonte` non usa
+  **mai** la home dell'ente come ripiego: senza fonte specifica l'avviso non
+  viene pubblicato.
+- **CTA Notizie**: ESATTAMENTE due righe, identiche in ogni canale
+  (`CTA_NOTIZIE_TELEGRAM` in `alertInterpello.ts`, `ctaNotizieHtml` in `resend.ts`,
+  `CTA_NOTIZIE_TESTO/HTML` nella Edge):
+  `📌 https://www.scuoleradar.it/notizie` +
+  `Quando vuoi sapere cosa succede di importante nella scuola, vieni qui`.
+  Footer canale: `⚡ Ricevi solo gli avvisi della tua provincia e per le tue classi: 👉 <setup Radar>`.
+  Nessuna firma promozionale.
+- **CTA Notizie nelle EMAIL (formato dedicato, crisp)**: due righe esatte
+  `scuoleradar.it/notizie` (link cliccabile, URL breve visibile) +
+  `Quando vuoi sapere cosa succede di importante nella scuola vieni qui!`
+  (`ctaNotizieHtml`, `URL_NOTIZIE_VISIBILE`, `CTA_NOTIZIE_TESTO_EMAIL`).
+- **FOOTER email UNICO e CRISP** (`footerEmailHtml` in `resend.ts`, `RADAR_LINE_EMAIL`
+  + `DISCLAIMER_EMAIL` nella Edge), in quest'ordine:
+  1. firma `I tuoi colleghi di Scuole Radar`;
+  2. CTA Notizie (due righe email);
+  3. **link per modificare il Radar, IN PICCOLO** — `modifica il tuo radar su <URL in
+     chiaro>`, blu brand (12.5 px): è la casa definitiva delle preferenze, **non** la CTA
+     del messaggio (la CTA è il link ufficiale di ogni voce, §5 checklist email);
+  4. riga di brand (`ScuoleRadar.it — Interpelli, supplenze, incarichi, PNRR, PON, POR…`);
+  5. **avviso "non rispondere" SEMPRE in ULTIMA riga** (`TESTO_NON_RISPOSTA`), con
+     separatore e colore leggibile (`#475569`, 13 px).
+  **Nessun blocco "P.S."** e **nessun testo sbiadito `#94a3b8`**: la vecchia nota
+  grigia a 12 px sembrava una trappola di disiscrizione.
+- **LINK alla fonte (STRICT)**: `👉 Apri l'avviso ufficiale` punta SOLO all'avviso
+  specifico — pagina dell'ente, **PDF o pagina tabellare/"Stampa" del singolo
+  avviso** (`eUrlAvvisoDiretto`). Mai home di ente, elenchi/archivi/tag, pagine di
+  ricerca (`?s=`, `?q=`), landing regionali (`/interpelli-lombardia/`) o URL della
+  piattaforma: in quei casi la riga è omessa e l'avviso è escluso dal gate di
+  qualità.
+
+### 6.5.1 Registro invii per utente — bug "notifiche ripetute" (RISOLTO)
+**Sintomo**: lo stesso alert (caso reale: gli avvisi del **Liceo Monti**) tornava
+all'utente ciclo dopo ciclo, anche a distanza di giorni.
+
+**Root cause**: il guard per utente usava **solo l'`hash_id`**, ma l'hash non è
+stabile — `generaHashId(provincia, titolo, data)` mescola titolo e data, quindi la
+stessa opportunità **ripubblicata** (o ri-scrapata con rumore: `prot. n. 1234`,
+data, formato del codice classe `A-22` invece di `A-022`) riceve un hash NUOVO →
+il registro non la riconosce → nuovo invio. In più l'impronta del scraper non
+normalizzava i codici classe (`A-022` ≠ `A-22`) e serviva solo alla fase di
+inserimento, non al guard di dispatch.
+
+**Fix — ora FREQUENCY CAP** (`src/lib/notifier.ts` + `src/lib/frequenzaNotifiche.ts`):
+- **Identità dell'opportunità** = `scuola + classi + impronta del contenuto`
+  (`identitaFrequenza`: classi normalizzate `A-022` ≡ `A-22`; hash FNV-1a del
+  titolo normalizzato, senza date/protocolli);
+- **cap**: la stessa opportunità può essere inviata a un utente **al massimo 2
+  volte, in 2 GIORNI DIVERSI** (`MAX_INVII_OPPORTUNITA = 2` + `valutaFrequenza`);
+- **mai due volte nello stesso giorno**: vale per ogni canale di consegna (alert
+  PRO in tempo reale, digest delle 17:00, promemoria) e anche per la stessa
+  **pagina di fonte** (chiave `utente|frequrl|…`): una ripubblicazione con titolo
+  riscritto non genera un secondo messaggio nello stesso giorno;
+- **contenuto NUOVO ⇒ nuovo aggiornamento**: una nuova impronta riazzera il
+  contatore (la scuola può rilanciare l'avviso modificato);
+- **marcatori STORICI** (chiavi `utente|<id>:<hash>|<canale>`, `i:`/`u:` e la
+  chiave agnostica `|notifica` scritte dal codice precedente) ⇒ politica
+  CONSERVATIVA: l'avviso risulta già consegnato e non si rimanda (`per: 'legacy'`).
+  Il codice nuovo NON scrive più quelle chiavi su file; restano su
+  `notifications_log` per lo storico del promemoria;
+- `avvisoGiaInviato(client, userId, avviso, canale)` è l'**UNICO guard**, chiamato
+  PRIMA di ogni invio (digest, tempo reale, dispatch, promemoria); dopo un invio
+  riuscito `registraInvioAvviso(...)` scrive il **GIORNO** dell'invio su file
+  ledger e su `notifications_log` (`canale = 'freq_email'|'freq_telegram'`,
+  `interpello_hash = 'freq:<identità>|<YYYY-MM-DD>'`). Il promemoria 24h consuma
+  il giorno EMAIL: niente digest + promemoria della stessa opportunità nello
+  stesso giorno;
+- il guard è **PER CANALE DI CONSEGNA** (una riga `email` non blocca `telegram`);
+  se il ledger DB non è disponibile resta il file (committato dai workflow):
+  nessun duplicato.
+- Test: **`npm run test:frequenza`** (cap 2 giorni, stesso giorno, contenuto
+  nuovo, marcatori storici) + **`npm run test:dedup:utente`** (guard per canale,
+  ledger DB assente, caso Liceo Monti end-to-end su email e batch Telegram) +
+  **`npm run test:telegram:tier`** (split PRO/Base e conteggio per canale).
+
+### 6.5.2 Filtro STRICT profilo ↔ opportunità (`npm run test:matching`)
+Regola UNICA `avvisoCompatibileConProfilo` (`matchingEngine.ts`), usata da matching in tempo
+reale, digest e dispatch: nessun avviso fuori contesto.
+1. **Sostegno**: avviso AD… solo a chi ha la preferenza (esplicita o classe AD… tra le proprie).
+2. **Provincia**: il profilo deve avere province configurate e quella dell'avviso deve essere
+   tra esse (bug risolto: profilo **Torino/Piemonte** che riceveva avvisi **Prato/Toscana**,
+   perché `searchInterpelli` senza province non filtrava nulla).
+3. **Classe**: serve un'intersezione reale con le classi del profilo (formato normalizzato
+   `A-022 ≡ A-22 ≡ A042`); se l'avviso non dichiara classi, la **materia** deve ricadere tra
+   quelle delle classi utente (`materiaCompatibileConClassi`).
+4. Preferenze incomplete (senza province o senza classi) → **nessun invio**: meglio nessun
+   avviso che un avviso sbagliato. `ignoraFiltri` (enumerazione dei profili notificabili per il
+   digest) salta 2–3 ma **non** la guardia sostegno.
 
 ### 6.6 Ciclo di vita abbonamento — trial PRO 1 mese + promemoria 3–5 giorni
 **Policy trial (1 mese).** Un nuovo utente nasce con `piano='pro'`,
@@ -864,7 +1209,7 @@ template della Edge (risposta `400` → nessun invio): ora la Edge li risolve vi
 
 ## 7. Modulistica & Archivista Capo — deep dive
 
-### 7.1 Catalogo (`src/data/moduli.ts`, ~3941 righe)
+### 7.1 Catalogo (`src/data/moduli.ts` 298 righe + cataloghi dedicati)
 - `Modulo[]` = catalogo statico (~271 voci con `id, nome, categoria, macroArea, tipo, descrizione`);
   a cui si aggiungono le macroaree strutturate `macroAreeModulistica` (Infanzia, Primaria,
   Secondaria 1°/2°, Università, Enti, Altro, Sostegno) con `SottoCategoriaModulistica` e
@@ -875,7 +1220,7 @@ template della Edge (risposta `400` → nessun invio): ora la Edge li risolve vi
 - Macroaree legacy: `Tutti, Sostegno & Inclusione, Supplenze e Interpelli, Burocrazia &
   Permessi, Candidature`.
 
-### 7.2 Cache Service (`src/modules/modulistica/creator/cacheService.ts`, 2819 righe)
+### 7.2 Cache Service (`src/modules/modulistica/creator/cacheService.ts`, 3.126 righe)
 Client tipizzato dell'Edge `genera-modulo` + motore locale cache-first:
 - `cercaDocumento(query)`, `inviaIntervista(query, risposte)`, `generaDocumento(...)`,
   `caricaDocumentoGenerato(id)` — chiamate alla Edge Function.
@@ -891,16 +1236,23 @@ Client tipizzato dell'Edge `genera-modulo` + motore locale cache-first:
 - Tipi: `DocumentoGenerato`, `EsitoRicerca`, `EsitoGenera`, `EsitoIntervista`,
   `PassoIntervista`, `ProfiloIntervista`, `DomandaChiarimento`, `CatalogoSuggerito`.
 
-### 7.3 PDF Generator (`src/modules/modulistica/creator/pdfGenerator.ts`)
-- `costruisciDocumento(titolo, contenutoHtml): DocumentoPronto` — wrappa l'HTML in un
-  documento A4: logo `LOGO_DOCUMENTO='/logo.png'` (42px), divisore, footer
-  "Documento scaricato gratuitamente da ScuoleRadar.it", numerazione `Pagina X di Y`
-  (via `@page` margin boxes), indice automatico (TOC) solo per >3 pagine.
-- `calcolaLayout(html): 'compatto'|'esteso'`; `stimaPagine(html)` (formula
-  `Math.ceil(h2Count)` → elimina pagine bianche); `escapeHtml`.
-- CSS dedicato: font Inter/Arial 10.5-11pt, tabelle padding 8px, righe alternate,
-  `.righe-scrittura` (24px/6px per le dichiarazioni), `.quadro-descrittivo` (100px box).
-  Riferimento: `docs/PDF_DESIGN_SYSTEM.md`.
+### 7.3 Generatore PDF (`src/modules/modulistica/creator/pdf/**`, 8 file / 808 righe)
+
+Il vecchio monolite `pdfGenerator.ts` è stato **diviso per responsabilità** (gate `E-DIM`):
+
+| File | Righe | Responsabilità |
+|---|---|---|
+| `pdf/documento.ts` | 62 | Costruzione del documento (`costruisciDocumento`), intestazione, footer, TOC |
+| `pdf/layout.ts` | 78 | Impaginazione: `calcolaLayout` (`compatto`/`esteso`), `stimaPagine` (nessuna pagina bianca) |
+| `pdf/stiliBase.ts` | 175 | Tipografia base (Inter/Arial 10.5–11pt), reset, tabelle |
+| `pdf/stiliStampa.ts` | 170 | Regole di stampa A4 e margin boxes `@page` |
+| `pdf/stiliBlocchi.ts` | 141 | Blocchi di contenuto (`.righe-scrittura` 24px/6px, `.quadro-descrittivo`) |
+| `pdf/stiliDensita.ts` | 148 | Varianti di densità (compatto/esteso) |
+| `pdf/stiliDocumento.ts` | 18 | Composizione finale degli stili |
+| `pdf/testo.ts` | 16 | `escapeHtml` e normalizzazione del testo |
+| `creator/logoDataUri.ts` | 9 | Logo come data-URI (nessuna dipendenza da `public/`) |
+
+Riferimento di design: [`PDF_DESIGN_SYSTEM.md`](./PDF_DESIGN_SYSTEM.md).
 
 ### 7.4 Edge Function `genera-modulo` (1327 righe)
 - Endpoint DeepSeek `https://api.deepseek.com/chat/completions`, model
@@ -935,15 +1287,42 @@ Client tipizzato dell'Edge `genera-modulo` + motore locale cache-first:
 
 ## 8. Calcolatore CFU & CV Builder
 
-### 8.1 Calcolatore CFU (`CfuTool.tsx`, 500 righe)
-- Preset `TITOLI_STUDIO` (L-19, LM-85, LM-14, …) con `esamiTipici`
-  `{ materia, cfu, settore }`.
-- Input: esami (materia, CFU, settore SSD). Per ogni `ClasseConcorso` selezionata:
-  verifica i `requisitiCfu` per ambito, calcola CFU mancanti, mostra ammissibilità
-  indicativa.
+### 8.1 Calcolatore CFU (`src/departments/cfu/**`, 105 file / 17.677 righe)
+
+**V1 (prodotto oggi, fase 7).** Flusso: `Classe obiettivo → Titolo di studio → Esami → Calcolo → Risultato → Dossier`.
+
+- **Copertura**: solo le classi con regole reali nel SourceRegistry (A-11, A-12, A-22, DM 22/12/2023 Tabella A), elencate da `calcolatore/classi.ts`; le altre non vengono proposte.
+- **Autorità del verdetto**: `EsitoClasseConRouting.esitoMotore` (il verdetto del decisore normativo). `pipeline.stato` **non** è mai letto dalla UI: nessun secondo verdetto.
+- **Adapter**: `valutazioneV1.ts` legge la superficie di routing e la normalizza; `esitoUtente.ts` + `esitoUtenteTesti.ts` + `requisitoUtente.ts` traducono in lingua utente (moduli puri, senza React). I componenti non importano nulla di `engine/pipeline`.
+- **Deficit**: si pubblica un totale **solo** se `deficit.calcolabile === true`; altrimenti si mostrano i problemi requisito per requisito. `null` non diventa mai `0`.
+- **Dati utente**: classe di laurea del titolo e data della procedura sono dichiarati dall'utente; il settore SSD di ogni esame è una scelta esplicita («conosco il settore» / «Non lo so»), mai dedotta.
+- **Nessun documento**: in V1 non esistono upload, OCR, parsing PDF, storage o fascicolo persistente. La promessa privacy (`shared/privacy.ts`) dice esattamente questo.
+- **Pubblicabile, non più "in sperimentazione"**: `servizi.ts` → `sperimentazione: false` per il CFU (nessun banner "solo su invito"); la descrizione CFU nella `VetrinaModal` è stata allineata (niente "in arrivo a Ottobre / riservato ai PRO").
+- **Canale commerciale**: il calcolo e il Dossier sono **gratuiti**. Nel risultato è presente una CTA PRO **discreta** e non bloccante, alimentata dalla pagina (`CalcolatoreCFUDashboardPage` → prop `commerciale`) con il meccanismo esistente `openVetrina('cfu')`; con accesso PRO attivo la CTA diventa solo una conferma. Il dipartimento non importa il contesto applicativo.
+- **Modifiche all'adapter di motore (non normative)**: `legacyAdapter.ts` e `analisi.ts` accettano `dateRilevanza`/`dataProcedura` opzionali e li passano alla pipeline; senza data il comportamento è identico a prima (cambia solo l'elenco dei dati mancanti in audit).
+- **Legacy non raggiungibile dalla UI**: `analisi.ts` conserva `CLASSI_DI_CONCORSO_MATRICE` (A-26/A-27/A-20 demo) e `analizzaPercorsoDiStudi` per le suite `progressiveWiring`/`multiClassScan`; `docs/CFU_*` restano il riferimento per dossier persistente, fascicolo e identità esame (fase 6.x, non in V1).
+
+Il calcolatore **non è più un singolo componente**: è un dominio verticale completo.
+
+| Sottocartella | Contenuto |
+|---|---|
+| `calcolatore/` | V1: `CalcolatoreCfuApp` + `classi.ts` (classi coperte) + `valutazioneV1.ts` (motore → adapter) + `requisitoUtente.ts` / `esitoUtente.ts` / `esitoUtenteTesti.ts` (adapter puro) + `components/Step Welcome/Classe/Titolo/Esami/Analisi/Risultato/Dossier` + `components/risultato/**`. LEGACY (solo test, non raggiungibile dalla UI): `analisi.ts` con matrice demo A-26/A-27/A-20 |
+| `engine/` | motore normativo **PURO**: `requirementSolver`, `normativeResolver`/`normativeDatabase`, `reportEngine`, `documentParser`, `normalizer`, `sourceGate`, `ssdTaxonomy`, `seeds/`, `sources/` (DM 22/12/2023 A11 · A12/A22/LM14 + raw), `traceability/` (`sourceRegistry`, `traceabilityChain`), `bridge/legacyAdapter`, `pipeline/` (**motore universale dei requisiti**: identificazione → fonti (Source Gate v2) → normalizzazione → requisiti strutturati → valutazione per requisito → deficit → stato semantico + payload sola-lettura per l'Assistente Creativo) |
+| `dossier/` | `dossierV1.ts` — Dossier Requisiti `.txt` generato dal RISULTATO V1 (download locale, nessuna conservazione) |
+| `landing/` | `CalcolatoreCfuLanding` + `SeoMeta` (pagina pubblica) |
+| `shared/` | `CfuErrorBoundary`, `normativa`, `ocrUtils`, `privacy`, `ssdMatrix`, `tutorIntro`, `types` |
+| `__tests__/` · `engine/__tests__/` | 27 suite eseguite da `npm test` (`engineAudit`, `verticalSlice1`, `traceabilityChain`, `sourceRegistry`, `legacyAdapter`, `universalPipeline`, `universalPipelineSemantica`, `universalPipelineRealSource`, `bridgePipelineParity`, `routingPipelineParity`, `reportPipelineParity`, `statusTruthTable`, `statusInvariants`, `statusAmbiguities`, `statusAmbiguitiesTitoli`, `statusContextCause`, `statusRequirementFacts`, `statusAuthorityDivergences`, `statusCoverageGuard`, `dossierAccademicoContract`, `progressiveWiring`, `multiClassScan`, `esitoUtenteV1`, `esitoUtenteV1Guardie`, `valutazioneV1Engine`, `valutazioneV1Casi`, `dossierV1`). Le cinque suite `*V1*` verificano il contratto utente della V1 (5 stati, deficit pubblicabile, dati mancanti, settore SSD non dedotto, contenuto del Dossier .txt) e il percorso `classi.ts → valutaClasseV1 → esitoUtente`. L'aggregazione di stato è verificata contro l'implementazione di PRODUZIONE (`engine/pipeline/status.ts`): nessuna copia dell'algoritmo nei test; contratti e invarianti in `docs/CFU_STATUS_AGGREGATION_SPEC.md`, `docs/CFU_FASCICOLO_ACCADEMICO_SPEC.md` (modello e provenienza), `docs/CFU_DOSSIER_PERSISTENTE_SPEC.md` (fascicolo persistente: politiche e adeguamenti) e `docs/CFU_IDENTITA_ESAME_SPEC.md` (identità semantica dell'esame e confine della deduplica) |
+| `index.ts` | Entry pubblica: `CalcolatoreCfuApp`, `CalcolatoreCfuLanding` |
+
+- Preset `TITOLI_STUDIO` (L-19, LM-85, LM-14, …) con `esamiTipici` `{ materia, cfu, settore }`;
+  input esami (materia, CFU, settore SSD) → per ogni `ClasseConcorso` selezionata verifica i
+  `requisitiCfu` per ambito, calcola i CFU mancanti e mostra l'ammissibilità indicativa.
 - **Paywall**: accesso ai risultati completo solo con account/PRO (`ServiziPaywall`).
 
-### 8.2 CV Builder (`CvTool.tsx`, 174 righe)
+### 8.2 CV Builder (`src/components/CvTool.tsx`, 174 righe; montato da `pages/CvPage.tsx`)
+
+⚠️ È l'ultimo tassello di "Formazione & Carriera" ancora **fuori dalla gerarchia dei domini**:
+candidato a migrare in `src/departments/cv/` (vedi `DEPARTMENT_MAP.md` §6).
 - `parseCv(testo)`: split per righe → sezioni riconosciute da keyword regex
   (Esperienze/Formazione/Competenze/Lingue/Contatti/Profilo/Certificazioni/Pubblicazioni).
 - Anteprima sezioni + **download PDF**: BASE → watermark "ScuoleRadar.it";
@@ -968,41 +1347,45 @@ Client tipizzato dell'Edge `genera-modulo` + motore locale cache-first:
 - `verificaUrlUfficiale(url)` — STRICT URL INTEGRITY: HEAD, se negato (403/405) → GET;
   accetta solo 200/3xx.
 
-### 9.3 `relevanceEngine.ts` (Node-only, PURO)
-- `PAROLE_CATEGORIA` (GPS/Mobilità/Concorsi/Pensioni/Sostegno/Graduatorie/Supplenze/Scuole/PNRR);
-- `PAROLE_ACCETTA` (decreto, ordinanza, nota, bando, scadenza, concorso, …);
-- `PAROLE_RIFIUTA` (intervista, comunicato stampa, campagna, webinar, mostre, …).
-- `valutaRilevanza(voce) → { rilevante, categoria, deadline, motivo }`;
-  `classificaCategoria(testo)`; `punteggioRilevanza(categoria, hasDeadline)`;
-  `estraiDeadline(testo, oggi)` (date italiane con ordinali `1°luglio` + anno implicito;
-  formato numerico `gg/mm/aaaa`).
-- **`MAX_ARTICOLI_FINESTRA = 6`** + **`FINESTRA_LOOKBACK_GIORNI = 15`** con
-  `limitaArticoliSettimanali(articoli, oggi, max)`: finestra di lookback di 15
-  giorni (avvio anno scolastico, ≈3/settimana); se non ci sono provvedimenti
-  vincolanti → **0 articoli**.
-- `generaArticoloEditoriale(dati)` (apertura in chiave AZIONE, acronimi spiegati,
-  **un solo link**: quello diretto al documento ufficiale) +
-  `promptScritturaArticolo`/`promptFiltroLLM`.
-- **Link punto-a-punto**: `classificaLink(url)` divide i link in `diretto`,
-  `contenitore` e `non-valido`: **solo `non-valido` blocca**; i contenitori
-  (indici, elenchi, home) sono pubblicabili come traccia con etichetta onesta.
-  `risolviFonteGranulare` (in `tracciaFonte.ts`) **traccia** la voce specifica
-  quando la fonte è un elenco; senza match la notizia esce comunque con la
-  pagina disponibile. `linkNonValidiInHtml(html)` blocca i link non validi nel
-  testo; `linkVietatiInHtml(html)` resta come diagnostica.
-- `validaUrlDeepLink`, `èLinkPdf`, `èFonteCanonica`, `articoloValido`.
-- `articoloValido` = gate finale: id/titolo/link presenti, fonte canonica e
-  NAZIONALE, link non valido assente (i contenitori producono solo un warning),
-  nessun link non valido nel testo. **Nessuna notizia vera viene scartata per un
-  link poco profondo.**
+### 9.3 `relevanceEngine.ts` (Node-only, PURO) — standard editoriale STRETTO
+
+- **Temi ammessi (allow-list)**: `TEMI_PERSONALE` + `classificaTemaPersonale()` — CCNL e
+  stipendi, pensioni, welfare e polizza sanitaria, mobilità e assegnazioni,
+  GPS/graduatorie/supplenze/interpelli, organico e cattedre, formazione, PNRR, sicurezza;
+  *normativa/scadenze/concorsi* contano solo con riferimento esplicito al personale.
+- **Anti-ufficio-stampa (zero fluff)**: `titoloDaUfficioStampa`, `FRASI_FLUFF` +
+  `contieneFraseFluff` scartano comunicati, lettere del Ministro, dichiarazioni, eventi e
+  rinvii vaghi ("ti avvisiamo appena esce", "verifica nel testo ufficiale").
+- **Gate 2-bis**: `PAROLE_IMPATTO` **+** `PAROLE_SCUOLA` (`valutaRilevanza`) — nessun
+  articolo senza impatto pratico sul personale (corregge lo stop del 14/09).
+- **Link**: `classificaLink` (`diretto` / `contenitore` / `non-valido`: solo `non-valido`
+  blocca), `linkVietatiInHtml`, `validaUrlDeepLink`, `èLinkPdf`, `èFonteCanonica`.
+- **Doppio link obbligatorio**: `CANALI_DOMANDA` + `linkDomandaUfficiale()` +
+  `richiedePresentazioneDomanda()` — per le procedure si pubblica la fonte ufficiale **e**
+  il canale di presentazione (Istanze Online/POLIS, Unica, InPA, INPS, PNRR Istruzione);
+  un annuncio di procedura senza canale viene **scartato**.
+- **Formato editoriale**: `applicaFormatoEditoriale` → `titoloAzione` (rimozione di
+  etichette, date e codici), sintesi `summary_points` a bullet (*Cosa cambia · Chi riguarda
+  · Scadenza · Cosa devi fare · Presenta la domanda*), acronimi spiegati alla prima
+  occorrenza (`GLOSSARIO_ACRONIMI` + `espandiAcronimi`).
+- **Cadenza**: `verificaCadenzaSettimanale` / `limitaCadenzaSettimanale` con
+  `MAX_ARTICOLI_SETTIMANA = 3`, `FINESTRA_LOOKBACK_GIORNI = 15`,
+  `FINESTRA_LOOKBACK_NAZIONALE_GIORNI = 60`, `MAX_ARTICOLI_FINESTRA = 6`.
+- **Gate finale**: `articoloValido` (id/titolo/link presenti, fonte canonica nazionale,
+  nessun link non valido nel testo). Verificato da `npm run test:notizie-editoriale`,
+  `test:notizie-feed`, `test:notizie-nazionale`, `test:notizie-rate`.
 
 ### 9.4 `ingestNotizie.ts` (CLI)
-Pipeline: raccogli voci (fetchTesto) → valuta rilevanza → **gate link
-punto-a-punto** → verifica HTTP 200 → genera articolo → tetto settimanale →
-**accoda a `notizieIngestite.ts`** (scrittura via `archivioNotizie.ts`) o
-`--dry-run`.
-Esiti: `✓ HTTP 200 - 0 new posts criteria matched` (file invariato, nessun commit) oppure
-`✗ HTTP FAIL` (exit 1 → warning nel workflow).
+Pipeline: raccogli voci (`newsFetcher`, waterfall) → valuta rilevanza (**temi ammessi +
+gate 2-bis**, §9.3) → **gate procedura senza canale di domanda** → gate link
+punto-a-punto → verifica HTTP 200 → genera articolo → **formatta PRIMA dell'igiene**
+(`applicaFormatoEditoriale`) → **tetto settimanale** (max 3) con **riserve**
+(`èRiservaSettimanale`) e **`applicaGaranziaSettimanale`** → accoda a
+`notizieIngestite.ts` (scrittura via `archivioNotizie.ts`) o `--dry-run`.
+
+Esiti: `✓ HTTP 200 - 0 new posts criteria matched` (file invariato, nessun commit) ·
+`✗ HTTP FAIL` (exit 1 → warning nel workflow) · **settimana senza articoli → exit 1**
+(il workflow fallisce: la bacheca ferma è un incidente, non un esito normale).
 
 **Manutenzione**: `npm run notizie:ripara-archivio` (opzione `-- --dry`) rigenera
 il copy dell'archivio storico (git HEAD + corrente) con le regole editoriali
@@ -1014,8 +1397,8 @@ o di link, perché l'ingestione non riscrive il copy già pubblicato.
 - `npm ci` → `npm run scrape:notizie:check` → `npm run scrape:notizie`.
 - Se ci sono nuove notizie: commit `notizieIngestite.ts` con messaggio
   `chore(notizie): aggiornamento automatico dati ingestiti [skip ci]` e push → deploy Vercel.
-- **Tetto settimanale max 3** prima del salvataggio; "nessun commit" = nessun contenuto
-  meritevole (comportamento atteso, non un bug).
+- **Tetto settimanale max 3** prima del salvataggio; **se la settimana resta vuota il job
+  fallisce** (sorveglianza attiva: la bacheca non può restare ferma senza segnale).
 
 
 ---
@@ -1078,6 +1461,20 @@ Niente menzioni a ricompense o account PRO gratuiti. Nel header/dashboard compar
 - Promo pre-fillato (es. `BETA1ANNO`): mappato server-side sul **Coupon ID** `XRxitsVf`
   (sconto 100% sul PRO annuale → totale 0,00 € subito nel checkout hosted) e applicato alla
   sessione via `discounts[0][coupon]` + `metadata[promo]` (mai `discounts[0][promotion_code]`).
+- **`BETA1ANNO` è validato, non solo applicato** (2026-09-22): accettato SOLO con
+  `plan='pro_annuale'` (su mensile/crediti un coupon "annuale" al 100% regalerebbe un
+  abbonamento che il codice non copre) e **consultato su `promo_codes`** prima di azzerare il
+  totale (lettura service_role di `attivo`/`scade_il`/`monouso`/`usato_il`): se il DB conosce il
+  codice e lo rifiuta → **HTTP 400 con il motivo**; se la tabella non è leggibile o la riga
+  manca (seed non applicato) → fail-open con avviso nel log (un timeout non deve bloccare la
+  campagna beta). Nessun accesso anonimo: `[functions.checkout] verify_jwt = true` in
+  `supabase/config.toml`.
+- `[functions.checkout]` ha `verify_jwt = true` **esplicito** in `supabase/config.toml`: la
+  sessione è creata a nome dell'utente del JWT (un `--no-verify-jwt` permetterebbe di attribuire
+  un pagamento all'account di un altro). Conseguenza voluta: in modalità Guest il ping di
+  diagnostica risponde 401 → il System Health Check lo considera **OK** (§12.4).
+- L'**attivazione** dell'anno PRO gratuito avviene nel `webhook` (§12.2), non nel prezzo:
+  coupon e `piano='pro'` sono solo parte della catena.
 - Referral: `validaPromo` → coupon `REFERRAL_COUPON_ID` (fallback `STRIPE_COUPON_REFERRAL_10`)
   su PRO annuale e crediti;
   `metadata[promo]`/`metadata[promo_referrer]` per il webhook.
@@ -1092,6 +1489,13 @@ Niente menzioni a ricompense o account PRO gratuiti. Nel header/dashboard compar
   - `checkout.session.completed`: `mode=payment` → `+1 credito` (RPC
     `incrementa_crediti_utente`); `mode=subscription` → `piano='pro'` +
     `stripe_subscription_id`; se `metadata.promo_referrer` → `registraReferral(10,10)`.
+  - **Codice beta** (`metadata.promo` ∈ `BETA1ANNO`/`BETALIFETIME`, `payment_status` `paid`
+    o `no_payment_required`): chiama la RPC canonica **`attiva_codice_promo`**, che in modo
+    atomico porta `piano='pro'`, `abbonamento_scade_il = now() + 1 anno` (o NULL per
+    `lifetime`), **`is_beta_tester = true`** (→ flow "Rinnovo Omaggio a Vita") e **consuma il
+    codice monouso**. Prima del 2026-09-22 questa chiamata non esisteva: il coupon Stripe
+    azzerava il prezzo ma il codice restava riusabile e il beta tester non era riconosciuto.
+    Errori e codici già consumati (retry) sono loggati e NON interrompono il webhook.
   - `customer.subscription.created/updated`: piano `pro` se `active|trialing`,
     `abbonamento_scade_il = current_period_end`.
   - `customer.subscription.deleted`: `piano='base'`, reset id/scadenza.
@@ -1145,6 +1549,8 @@ test ID). Per passare in produzione basta aggiornare i secrets Supabase (nessun 
 | `email` | text | email account |
 | `nome`, `cognome` | text | usati dal trigger referral |
 | `genere` | text | `'M'|'F'|NULL` (check `profiles_genere_check`) — declina email (Cara/Caro, stata/stato) |
+| `eta` | integer | età in anni (14–100, check `profiles_eta_check`) — dato demografico del profilo |
+| `provincia` | text | **provincia di RESIDENZA** (codice 2 lettere, es. `RM`; check `profiles_provincia_check`, migrazione `20260922120000_add_profiles_provincia.sql`) — distinta dalle `province_*` del Radar (dove l'utente VUOLE lavorare). Raccolta in registrazione / mini-onboarding anagrafico |
 | `ordini` / `ordini_scuola` | text[] default '{}' | ordini di interesse (legacy / nuovo) |
 | `classi_concorso` | text[] | classi di concorso |
 | `sostegno` | boolean not null default false | preferenza SOSTEGNO: includi anche le opportunità ADAA/ADEE/ADMM/ADSS (migrazione `20260914040000_add_profiles_sostegno.sql`, con backfill dell'adesione implicita di chi ha una classe `AD*` tra le preferenze) |
@@ -1216,7 +1622,20 @@ UNIQUE `(user_id, module_key)`. Indice `(user_id, created_at desc)`.
 
 ### 13.7 `public.app_settings` (KV)
 `key text PK`, `value text not null`. Contiene `send_notification_url` e
-`send_notification_secret` per le chiamate pg_cron/trigger → Edge Function.
+`send_notification_secret` per le chiamate pg_cron/trigger → Edge Function, e le
+**automazioni email** del pannello Admin:
+
+| Chiave | Contenuto |
+|---|---|
+| `send_notification_url` / `send_notification_secret` | endpoint + secret della Edge `send-notification` |
+| `email_automazione_<id>` | JSON `{ abilitata, oggetto?, intro?, corpo?, aggiornatoIl, aggiornatoDa }` — interruttore e testi di UNA automazione (id del catalogo `src/config/automazioniEmail.ts`: benvenuto, attivazione_pro, radar_spento, drip_base, preavvisi_rinnovo, scadenza_abbonamento, free_forever_rinnovo, beta_ritenzione, digest_giornaliero, alert_pro_tempo_reale, promemoria_scadenza) |
+
+Le righe `email_automazione_*` vengono **rimosse** quando lo stato torna al default
+(automazione attiva, testi dal codice). La lettura è sempre difensiva: KV assente
+o illeggibile → automazione ATTIVA (vedi `src/lib/automazioniEmailDb.ts` e
+`supabase/functions/_shared/automazioniEmail.ts`). Il pannello che le governa è
+`components/TabEmailAutomazioni` (tab «✉️ Email & Automazioni»), verificato da
+`npm run test:automazioni`.
 
 ### 13.8 `public.admin_telegram_log` (RLS: nessun accesso client — solo service_role)
 `id uuid PK`, `telegram_id bigint not null`, `chat_id bigint`, `username text`,
@@ -1236,6 +1655,317 @@ Alimenta la diagnostica `/status` (run recenti + tasso errori). Indici su `creat
 dall'helper `inviaAlerta` della Edge `telegram-admin-webhook`. Indici su `created_at desc`, `severity`.
 
 ---
+
+### 13.11 Colonne verificate per tabella (dump delle migrazioni)
+
+Origine: parsing automatico di `supabase/migrations/*.sql` (52 file). Dove il DDL è
+spezzato su più statement la colonna è elencata nella riga `ADD` della tabella migrazioni
+(§13.12). Le colonne sono quelle **realmente dichiarate** in repo: nessuna invenzione.
+
+**`public.interpelli`** — avvisi del Radar (sorgente del feed e delle notifiche)
+
+| Colonna | Tipo / vincolo |
+|---|---|
+| `id` | `uuid primary key default gen_random_uuid()` |
+| `hash_id` | `text unique not null` — chiave di deduplica dello scraper |
+| `title` | `text not null` |
+| `province` | `text not null` — codice provincia (es. `FC`) |
+| `class_codes` | `text[] not null default '{}'` — classi di concorso/ATA |
+| `school_name` | `text` |
+| `school_code` | `text` — codice meccanografico |
+| `source_url` | `text not null` — link ufficiale dell'avviso |
+| `expiration_date` | `timestamptz` — scadenza (≠ pubblicazione) |
+| `published_at` | `timestamptz` — aggiunta da `20260903060000` |
+| `materia` | `text` — aggiunta da `20260903090000` |
+| `contact_email` | `text` — email della scuola (PEO/PEC), aggiunta da `20260903090000` |
+| `created_at` | `timestamptz default now()` |
+
+RLS: `read interpelli` (lettura pubblica/anon, nessuna scrittura client).
+Scritture: solo `service_role` (scraper Node) — upsert per `hash_id`.
+
+**`public.profiles`** — profilo, preferenze Radar, piano, quota notifiche, ciclo di vita
+
+| Gruppo | Colonne |
+|---|---|
+| Identità (base `20260822030000`) | `id uuid primary key references auth.users(id) on delete cascade` · `email text` · `nome text` · `cognome text` · `created_at` · `updated_at` |
+| Preferenze Radar (base + `20260822010000`/`20260822040000`/`20260825160000`) | `ordini text[] default '{}'` · `classi_concorso text[] default '{}'` · `materie_id text[] default '{}'` · `materie_custom text[] default '{}'` · `province_attive text[] default '{}'` · `favorite_schools text[] default '{}'` · `ignored_schools text[] default '{}'` · `ordini_scuola` · `province_interesse` |
+| Recapiti & canali | `telegram_username text default ''` · `telegram_chat_id` (`20260822050000`) · `email_notifica text default ''` · `telefono` (`20260902020000`) · `onboarded boolean default false` |
+| Billing (`20260822060000`) | `piano` · `stripe_customer_id` · `stripe_subscription_id` · `abbonamento_scade_il` · `crediti` · `notifiche_usate` · `notifiche_mese` |
+| Quota notifiche (`20260829100000`→`20260903020000`) | `notifiche_blocco_inviato` · `notifiche_recap_inviato` · `notifiche_anno` |
+| Drip & step (`20260831030000`) | `step` · `step4_inviata_at` · `step5_inviata` (usati da `dispatch_step5_due`, §13.16) |
+| Referral & promo | `referral_code` (`20260822100000`), tabella `coupon_radar` per l'uso RADAR50 |
+| Beta & Free Forever | `is_beta_tester` (`20260831170000`/`20260902040000`) · `beta_rinnovo_email_inviata` · `is_free_forever` (`20260903010000`) |
+| Abbonamento avanzato | `subscription_tier` · `subscription_status` · `current_period_end` (`20260901000000`, ridichiarate in `20260902234600`) · `pro_tipo` (`20260902030000`) |
+| Ciclo scadenza (`20260831180000`, `20260903100000`) | `scadenza_avviso_stadio` · `preavviso_rinnovo_inviato_at` |
+| Admin/diagnostica | `login_type` · `radar_attivo` (`20260902020000`/`20260903000000`) |
+| Anagrafica extra | `genere` (`20260831200000`/`20260902110000`) · `eta` (`20260902110000`) · `avatar_url` (`20260902230000`) · `sostegno` (`20260914040000`) · `moduli_scaricati` (`20260822040000`) |
+
+RLS: `read own profile` (select) · `insert own profile` · `update own profile` — sempre
+`auth.uid() = id`; il trigger `set_profiles_updated_at` mantiene `updated_at`.
+Guardia `profiles_auth_upsert_guard` (`20260903110000`): `piano_protetto(...)` impedisce che
+un upsert client declassi un piano protetto (PRO/Free Forever/beta).
+
+**`public.referrals`** (`20260822100000`) — inviti "Invita un Collega"
+
+| Colonna | Tipo / vincolo |
+|---|---|
+| `id` | `uuid primary key default gen_random_uuid()` |
+| `referrer_id` | `uuid references public.profiles(id) on delete cascade` |
+| `referred_user_id` | `uuid references public.profiles(id) on delete set null` |
+| `discount_applied` | `numeric not null default 10.00` |
+| `reward_amount` | `numeric not null default 10.00` |
+| `status` | `text not null default 'pending'` |
+| `created_at` | `timestamptz not null default now()` |
+
+RLS: `read own referrals` (solo il referrer). Codice generato da `genera_referral_code()` +
+trigger `set_referral_code` su `profiles`.
+
+**`public.generated_modules`** (`20260827100000`) — cache dei moduli generati dall'AI
+
+| Colonna | Tipo / vincolo |
+|---|---|
+| `id` | `uuid primary key default gen_random_uuid()` |
+| `query_hash` | `text unique not null` — SHA-256 della query normalizzata (cache hit a costo zero) |
+| `query` | `text not null` |
+| `title` | `text not null` |
+| `content_html` | `text not null` |
+| `meta` | `jsonb not null default '{}'::jsonb` |
+| `created_at` · `updated_at` | `timestamptz not null default now()` |
+
+RLS: `read generated modules` (select a tutti gli autenticati); scrittura solo
+`service_role` (Edge `genera-modulo`). Trigger `set_generated_modules_updated_at`.
+
+**`public.user_saved_modules`** (`20260827100000` + `20260831190000`) — "I miei Modelli"
+
+| Colonna | Tipo / vincolo |
+|---|---|
+| `id` | `uuid primary key default gen_random_uuid()` |
+| `user_id` | `uuid not null references public.profiles(id) on delete cascade` |
+| `module_key` | `text not null` |
+| `module_source` | `text not null default 'generated'` |
+| `title` | `text not null` |
+| `tipo` | `text not null default ''` |
+| `template_id` | aggiunta da `20260831190000` (versioning template) |
+| `master_version` | aggiunta da `20260831190000` |
+| `created_at` | `timestamptz not null default now()` |
+
+**`public.app_settings`** (`20260831030000`) — KV di servizio usata dal DB per chiamare la Edge
+
+| Colonna | Tipo / vincolo |
+|---|---|
+| `key` | `text primary key` |
+| `value` | `text not null` |
+
+Valori seminati dalla migration: `send_notification_url`
+(`https://gwdmsgsshvdnfrplbjiv.supabase.co/functions/v1/send-notification`) e
+`send_notification_secret` (header `x-send-secret` verificato dalla Edge). RLS: nessun
+accesso client (solo `service_role`/funzioni `security definer`).
+
+**`public.promo_codes`** (`20260831160000`) — codici promo (BETA1ANNO, RADAR50, -50% primo anno)
+
+| Colonna | Tipo / vincolo |
+|---|---|
+| `id` | `uuid primary key default gen_random_uuid()` |
+| altre colonne | gestite esclusivamente da `valida_codice_promo()` / `attiva_codice_promo()` (§14): lettura e consumo mai dal client (§11.2) |
+
+RLS: nessuna policy client. L'uso RADAR50 è tracciato in **`public.coupon_radar`**
+(policy `read own radar50 usage` + `insert own radar50 usage`).
+
+**`public.school_deadlines`** (`20260902000000`) — scadenze scolastiche (Revolver)
+
+Popolata da `npm run scadenze:sync` (`scripts/sync-deadlines.ts`) e letta dal widget
+`RevolverScadenze`; policy `read school_deadlines` (lettura pubblica). Fallback locale:
+`src/data/deadlinesFallback.json` (nessuna configurazione = nessuna rete).
+
+**`public.admin_telegram_log`** (`20260903070000`) — comandi ricevuti dal bot admin
+
+| Colonna | Tipo / vincolo |
+|---|---|
+| `id` | `uuid primary key default gen_random_uuid()` (implicito) |
+| `telegram_id` | `bigint not null` |
+| `chat_id` | `bigint` |
+| `username` | `text` |
+| `command` | `text not null` |
+| `payload` | `text` |
+| `autorizzato` | `boolean not null default false` |
+| `created_at` | `timestamptz not null default now()` |
+
+Presente anche `update_id` (idempotenza del webhook). RLS: nessun accesso client.
+
+**`public.scraper_runs`** (`20260903080000`) — telemetria di ogni run dello scraper
+
+| Colonna | Tipo / vincolo |
+|---|---|
+| `id` | `uuid primary key default gen_random_uuid()` |
+| `started_at` · `finished_at` | `timestamptz` (`started_at not null default now()`) |
+| `durata_ms` | `integer` |
+| `modalita` | `text not null default 'reali'` (reali/`--dry-run`) |
+| `province` | `text[] not null default '{}'` |
+| `trovati` · `nuovi` | `integer not null default 0` |
+| `upsert_ok` | `boolean not null default true` |
+| `telegram_attesi` · `telegram_riusciti` | `integer not null default 0` |
+| `errori` | `integer not null default 0` |
+| `esito` | `text not null default 'ok'` |
+| `messaggio` | `text` |
+| `created_at` | `timestamptz not null default now()` |
+
+**`public.admin_telegram_alerts`** (`20260903080000`) — alert verso il bot admin
+
+| Colonna | Tipo / vincolo |
+|---|---|
+| `id` | `uuid primary key default gen_random_uuid()` |
+| `severity` | `text not null default 'warning'` |
+| `category` | `text not null default 'generale'` |
+| `title` · `message` | `text not null` |
+| `meta` | `jsonb` |
+| `inviato` | `boolean not null default false` |
+| `created_at` | `timestamptz not null default now()` |
+
+**`public.notifications_log`** (`20260914010000`, riparata in `20260914030000`) — registro invii per utente
+
+| Colonna | Tipo / vincolo |
+|---|---|
+| `user_id` | `uuid not null references public.profiles(id) on delete cascade` |
+| `interpello_hash` | `text not null` |
+| `canale` | `text not null` — `email` \| `telegram` \| `freq_email` \| `freq_telegram` |
+| `sent_at` | `timestamptz not null default now()` |
+
+È il ledger **server-side** che affianca il ledger su file (§6.5.1): entrambi alimentano il
+frequency cap e la deduplica. RLS: nessun accesso client.
+
+**`public.channel_posts_log`** (`20260914020000`) — registro pubblicazioni sui canali Telegram
+
+| Colonna | Tipo / vincolo |
+|---|---|
+| `interpello_hash` | `text not null` |
+| `canale` | `text not null` — handle del canale regionale/ATA |
+| `sent_at` | `timestamptz not null default now()` |
+
+Serve al gate "un solo post per canale" (`deduplica PER CANALE`, `test:telegram:tier`).
+
+**`public.notices`** — tabella parallela agli interpelli gestita dallo scraper
+
+Non compare nel DDL rilevato automaticamente (creata con DDL multi-statement), ma è
+referenziata dagli script di manutenzione (`pulisci-scaduti.ts`,
+`pulisci-dati-non-verificati.ts`, `audit-dati.ts`): ogni igiene applicata a `interpelli`
+viene applicata anche a `notices`.
+
+---
+
+### 13.12 Indice completo delle 52 migrazioni (cosa introduce ognuna)
+
+| Migrazione | Contenuto |
+|---|---|
+| `20260822010000_add_school_filters` | `profiles.favorite_schools`, `profiles.ignored_schools` |
+| `20260822020000_create_interpelli` | tabella `interpelli` + policy `read interpelli` |
+| `20260822030000_create_profiles` | tabella `profiles` + `handle_profiles_updated_at()` + 3 policy + trigger `set_profiles_updated_at` |
+| `20260822040000_extend_profiles` | `ordini_scuola`, `province_interesse`, `moduli_scaricati` |
+| `20260822050000_add_telegram_chat_id` | `telegram_chat_id` |
+| `20260822060000_add_billing_stripe` | `incrementa_notifiche_utente()` v1 + `piano`, `stripe_customer_id`, `stripe_subscription_id`, `abbonamento_scade_il`, `crediti`, `notifiche_usate`, `notifiche_mese` |
+| `20260822070000_add_rpc_incrementa_crediti` | `incrementa_crediti_utente(p_user_id uuid, p_delta integer default 1)` |
+| `20260822100000_add_referrals` | tabella `referrals` + `genera_referral_code()`, `handle_referral_code()`, `valida_codice_promo()` + policy + trigger `set_referral_code` + `profiles.referral_code` |
+| `20260825160000_align_profiles_schema` | `nome`, `cognome`, `ordini`, `materie_id`, `materie_custom`, `telegram_username`, `email_notifica`, `onboarded` |
+| `20260826100000_add_rpc_consuma_credito` | `consuma_credito_utente(p_user_id uuid)` |
+| `20260827100000_create_generated_modules` | tabelle `generated_modules` + `user_saved_modules` + `handle_generated_modules_updated_at()` + 4 policy + trigger |
+| `20260829000000_add_rpc_notifiche_limite_totale` | `incrementa_notifiche_utente()` v2 (limite totale) |
+| `20260829100000_add_notifiche_blocco_inviato` | `notifiche_blocco_inviato` (guardia d'invio email) |
+| `20260829110000_add_notifiche_recap_inviato` | `notifiche_recap_inviato` (guardia d'invio Telegram) |
+| `20260830000000_add_rpc_notifiche_annuali` | `incrementa_notifiche_utente()` v3 + `notifiche_anno` (quota annuale) |
+| `20260831010000_fix_rpc_notifiche_ambiguita` | `incrementa_notifiche_utente()` v4 — fix ambiguità di colonna |
+| `20260831030000_add_step5_scheduling` | tabella `app_settings` + `dispatch_step5_due()` + trigger su `auth.users` + **cron `step5-notifiche` (ogni minuto)** + `profiles.step`, `step4_inviata_at`, `step5_inviata` |
+| `20260831100000_add_rpc_notifiche_annuali_reset_extra` | `incrementa_notifiche_utente()` v5 (reset extra) |
+| `20260831150000_switch_rpc_notifiche_anno_scolastico` | `incrementa_notifiche_utente()` v6 (quota sull'anno scolastico) |
+| `20260831160000_add_promo_codes_beta` | tabella `promo_codes` + `valida_codice_promo()` v2 + `attiva_codice_promo()` |
+| `20260831170000_add_beta_tester_retention` | `attiva_codice_promo()` v2 + `beta_rinnovo_omaggio_vita()` + **cron `beta-rinnovo-omaggio-vita` (09:00)** + `is_beta_tester`, `beta_rinnovo_email_inviata` |
+| `20260831180000_add_scadenza_avvisi_multistep` | `invia_avvisi_scadenza_abbonamento()` + `beta_rinnovo_omaggio_vita()` v2 + **cron `scadenza-avvisi-multistep` (09:00 e 18:00)** + `scadenza_avviso_stadio` |
+| `20260831190000_add_template_versioning` | `user_saved_modules.template_id`, `master_version` |
+| `20260831200000_add_profiles_genere` | `profiles.genere` |
+| `20260901000000_add_account_bridge` | `get_user_pro_status(p_user_id uuid)` + `subscription_tier`, `subscription_status`, `current_period_end` |
+| `20260901010000_update_welcome_email` | trigger `trg_auth_users_step` aggiornato (email di benvenuto) |
+| `20260902000000_create_school_deadlines` | tabella `school_deadlines` + policy `read school_deadlines` |
+| `20260902010000_free_forever_plan` | `incrementa_notifiche_utente()` v7 + `send_conferma_attivazione()` + `rinnova_free_forever_annuale()` + trigger `trg_profiles_conferma_attivazione` + **cron `free-forever-rinnovo-annuale` (08:30)** |
+| `20260902020000_admin_support` | `telefono`, `login_type`, `radar_attivo` |
+| `20260902030000_add_pro_tipo` | `profiles.pro_tipo` |
+| `20260902040000_beta_testers_view` | `profiles.is_beta_tester` (retention beta) |
+| `20260902110000_add_profiles_genere_eta` | `genere`, `eta` |
+| `20260902230000_sync_oauth_profiles` | `sync_profilo_oauth()` + trigger `trg_auth_users_sync_oauth` + `avatar_url` |
+| `20260902234600_free_forever_account_bridge` | `get_user_pro_status()` v2 (bridge Free Forever ↔ PureFocus) |
+| `20260902234800_ffe_rinnovo_email` | `rinnova_free_forever_scadenza()` + re-schedule del cron `free-forever-rinnovo-annuale` |
+| `20260903000000_add_radar_attivo` | `radar_attivo` (interruttore del Radar) |
+| `20260903010000_add_is_free_forever` | `sync_is_free_forever_flag()` + trigger `trg_profiles_sync_is_free_forever` + `is_free_forever` |
+| `20260903020000_free_forever_bypass` | `incrementa_notifiche_utente()` v8 + `invia_avvisi_scadenza_abbonamento()` v2 (bypass FFE) |
+| `20260903030000_default_new_user_pro_1anno` | `sync_profilo_oauth()` v2 (nuovo utente = PRO 1 anno) + trigger aggiornati |
+| `20260903040000_new_user_pro_trial_30gg` | `sync_profilo_oauth()` v3 (trial 30gg) + `reverti_prove_pro_scadute()` + **cron `revert-prove-pro-scadute` (03:30)** |
+| `20260903050000_coupon_radar50_drip_guard` | `cancella_drip_pro(p_user_id uuid)`, `stop_drip_on_pro_trigger()` + policy `coupon_radar` + trigger `trg_profiles_stop_drip_on_pro` |
+| `20260903060000_add_interpelli_published_at` | `interpelli.published_at` |
+| `20260903070000_admin_telegram_log` | tabella `admin_telegram_log` |
+| `20260903080000_scraper_runs_and_alerts` | tabelle `scraper_runs` + `admin_telegram_alerts` |
+| `20260903090000_add_interpelli_materia_contact` | `interpelli.materia`, `interpelli.contact_email` |
+| `20260903100000_preavvisi_rinnovo_trial_pro` | `invia_preavvisi_rinnovo()` + **cron `rinnovo-preavvisi-3-5g` (09:00)** + `preavviso_rinnovo_inviato_at` |
+| `20260903110000_profiles_auth_upsert_guard` | `piano_protetto(p_piano, p_is_free_forever, p_is_beta_tester)` + `sync_profilo_oauth()` v4 + `reverti_prove_pro_scadute()` v2 (guardia anti-declassamento) |
+| `20260914000000_fix_pampararo_cognome` | fix dati puntuale (account di test admin) |
+| `20260914010000_notifications_log` | tabella `notifications_log` |
+| `20260914020000_channel_posts_log` | tabella `channel_posts_log` |
+| `20260914030000_repair_notifications_log_e_rpc_quota` | ricostruzione `notifications_log` + `incrementa_notifiche_utente()` v9 (quota) |
+| `20260914040000_add_profiles_sostegno` | `profiles.sostegno` (preferenza sostegno nel Radar) |
+| `20260922120000_add_profiles_provincia` | `profiles.provincia` (provincia di **residenza**, dato demografico; check `^[A-Z]{2}$`) |
+| `20260922130000_welcome_metadata_anagrafica` | `send_step1_welcome()` v2: dal `user_metadata` di `signUp` salva **nome, cognome, genere, età e provincia** (con i vincoli della tabella) e li passa alla email di benvenuto |
+
+### 13.13 Policy RLS complete (nome → tabella)
+
+| Policy | Tabella | Operazione |
+|---|---|---|
+| `read interpelli` | `interpelli` | select (pubblico) |
+| `read own profile` · `insert own profile` · `update own profile` | `profiles` | select / insert / update (solo `auth.uid() = id`) |
+| `read own referrals` | `referrals` | select (solo referrer) |
+| `read generated modules` | `generated_modules` | select (autenticati; scrittura `service_role`) |
+| `read own saved modules` · `insert own saved modules` · `delete own saved modules` | `user_saved_modules` | select / insert / delete per utente |
+| `read own radar50 usage` · `insert own radar50 usage` | `coupon_radar` | select / insert per utente |
+| `read school_deadlines` | `school_deadlines` | select (pubblico) |
+
+Tabelle **senza** policy client (accesso esclusivo `service_role` / funzioni
+`security definer`): `app_settings`, `promo_codes`, `admin_telegram_log`,
+`scraper_runs`, `admin_telegram_alerts`, `notifications_log`, `channel_posts_log`.
+
+### 13.14 Trigger (tabella → trigger)
+
+| Tabella | Trigger | Effetto |
+|---|---|---|
+| `profiles` | `set_profiles_updated_at` | mantiene `updated_at` |
+| `profiles` | `set_referral_code` | genera il codice referral alla creazione |
+| `profiles` | `trg_profiles_conferma_attivazione` | invia la conferma di attivazione |
+| `profiles` | `trg_profiles_sync_is_free_forever` | sincronizza `is_free_forever` |
+| `profiles` | `trg_profiles_stop_drip_on_pro` | passaggio a PRO → `cancella_drip_pro` |
+| `generated_modules` | `set_generated_modules_updated_at` | mantiene `updated_at` |
+| `auth.users` | `trg_auth_users_step` | avvia la sequenza drip (step 1 → welcome) |
+| `auth.users` | `trg_auth_users_sync_oauth` | crea/sincronizza il profilo OAuth (`sync_profilo_oauth`) |
+
+### 13.15 pg_cron (job attivi nel DB)
+
+| Job | Schedule | Funzione |
+|---|---|---|
+| `step5-notifiche` | `* * * * *` (ogni minuto) | `dispatch_step5_due()` → HTTP POST alla Edge `send-notification` |
+| `beta-rinnovo-omaggio-vita` | `0 9 * * *` | `beta_rinnovo_omaggio_vita()` |
+| `scadenza-avvisi-multistep` | `0 9,18 * * *` | `invia_avvisi_scadenza_abbonamento()` |
+| `free-forever-rinnovo-annuale` | `30 8 * * *` | `rinnova_free_forever_annuale()` / `rinnova_free_forever_scadenza()` |
+| `revert-prove-pro-scadute` | `30 3 * * *` | `reverti_prove_pro_scadute()` |
+| `rinnovo-preavvisi-3-5g` | `0 9 * * *` | `invia_preavvisi_rinnovo()` (preavviso 3–5 giorni) |
+
+### 13.16 `dispatch_step5_due()` — il ponte DB → Edge (implementazione verificata)
+
+Funzione `security definer`, `search_path = public`. Sequenza esatta:
+
+1. legge `send_notification_url` e `send_notification_secret` da `public.app_settings`;
+2. se mancano → `raise notice 'app_settings mancanti'` e ritorna `0` (**mai un errore silenzioso**);
+3. scorre i profili con `piano = 'base'`, `step4_inviata_at is not null`,
+   `step5_inviata = false` e `step4_inviata_at + interval '2 hours' <= now()`;
+4. per ciascuno esegue `net.http_post(url, jsonb_build_object('tipo','step5','userId', id), …)`
+   con header `Content-Type: application/json` e `x-send-secret: <secret>`;
+5. ritorna il numero di dispatch eseguiti.
+
+Questo è l'unico punto in cui il database "spinge" verso una Edge Function: qualsiasi
+nuovo automatismo lato DB deve seguire lo stesso schema (URL+secret in `app_settings`,
+header `x-send-secret`, funzione idempotente lato Edge).
 
 ## 14. RPC functions (security definer, search_path=public)
 
@@ -1258,6 +1988,55 @@ dall'helper `inviaAlerta` della Edge `telegram-admin-webhook`. Indici su `create
 
 
 ---
+
+### 14.1 Reference completa delle funzioni Postgres (22 + `dispatch_step5_due`)
+
+| Funzione | Firma | Tipo | Ruolo |
+|---|---|---|---|
+| `incrementa_notifiche_utente` | `(p_user_id uuid)` | `security definer` | Consuma una notifica applicando la quota (BASE 3/anno scolastico, PRO illimitate, crediti a consumo); riscritta **9 volte** (v1→v9): limite totale → annuale → anno scolastico → reset extra → bypass Free Forever → quota definitiva (`20260914030000`) |
+| `incrementa_crediti_utente` | `(p_user_id uuid, p_delta integer default 1)` | `security definer` | Aggiunge crediti a consumo (acquisto/omaggio) |
+| `consuma_credito_utente` | `(p_user_id uuid)` | `security definer` | Scala 1 credito per una generazione extra |
+| `get_user_pro_status` | `(p_user_id uuid)` | `security definer` | Stato PRO normalizzato per l'Account Bridge PureFocus (`subscription_tier`, `subscription_status`, `current_period_end`) |
+| `genera_referral_code` | `(nome text, cognome text, email text)` | helper | Genera il codice referral deterministico |
+| `handle_referral_code` | `()` | trigger fn | Assegna `profiles.referral_code` |
+| `valida_codice_promo` | `(p_codice text)` | `security definer` | Valida un codice promo senza consumarlo (usata da `lib/promo.ts`) |
+| `attiva_codice_promo` | `(p_codice text, p_user_id uuid)` | `security definer` | Consuma il codice e applica l'effetto (es. RADAR50, BETA1ANNO) |
+| `piano_protetto` | `(p_piano text, p_is_free_forever boolean, p_is_beta_tester boolean)` | helper | Guardia anti-declassamento usata da `sync_profilo_oauth`/`reverti_prove_pro_scadute` |
+| `sync_profilo_oauth` | `()` | trigger fn | Crea/sincronizza il profilo al primo accesso OAuth (v4: nuovo utente = trial PRO 30 giorni, piano protetto) |
+| `reverti_prove_pro_scadute` | `()` | cron fn | Riporta a BASE i trial PRO scaduti (cron `revert-prove-pro-scadute`) |
+| `cancella_drip_pro` | `(p_user_id uuid)` | `security definer` | Cancella la sequenza drip residua quando l'utente diventa PRO |
+| `stop_drip_on_pro_trigger` | `()` | trigger fn | Invoca `cancella_drip_pro` sul passaggio a PRO |
+| `send_conferma_attivazione` | `()` | trigger fn | Conferma di attivazione piano |
+| `beta_rinnovo_omaggio_vita` | `()` | cron fn | Rinnova l'omaggio beta (cron `beta-rinnovo-omaggio-vita`) |
+| `rinnova_free_forever_annuale` | `()` | cron fn | Rinnova il piano Free Forever annuale |
+| `rinnova_free_forever_scadenza` | `()` | cron fn | Riallinea la scadenza FFE e le email |
+| `sync_is_free_forever_flag` | `()` | trigger fn | Mantiene coerente `profiles.is_free_forever` |
+| `invia_avvisi_scadenza_abbonamento` | `()` | cron fn | Avvisi multistep di scadenza abbonamento (tipi `scadenza_preavviso_7d/3d/1d`, `scadenza_finale` → alias sui template FLUSSO 3 della Edge) |
+| `invia_preavvisi_rinnovo` | `()` | cron fn | Preavviso rinnovo 3–5 giorni (trial PRO → `rinnovo_preavviso_prova`, PRO a pagamento → `rinnovo_preavviso_pro`) |
+| `handle_profiles_updated_at` | `()` | trigger fn | `profiles.updated_at` |
+| `handle_generated_modules_updated_at` | `()` | trigger fn | `generated_modules.updated_at` |
+| `dispatch_step5_due` | `()` | cron fn | Ponte DB → Edge `send-notification` (§13.16) |
+
+Note operative:
+
+- tutte le funzioni "di dominio" sono **`security definer` con `search_path = public`**:
+  nessuna dipendenza dal `search_path` del chiamante;
+- i parametri sono sempre nominali (`p_*`), così le chiamate `supabase.rpc('nome', { p_... })`
+  restano leggibili e stabili;
+- le funzioni di quota/crediti **non lanciano eccezioni verso il client**: ritornano lo stato
+  risultante e il client decide il messaggio (nessun errore 500 da mostrare all'utente);
+- una funzione ricreata più volte (come `incrementa_notifiche_utente`) è **idempotente per
+  contratto**: l'ultima definizione in ordine di timestamp è quella in produzione
+  (`supabase db push` applica le migrazioni in ordine alfabetico di nome file).
+
+### 14.2 Regole per aggiungere una nuova RPC
+
+1. migrazione dedicata con timestamp `YYYYMMDDHHMMSS_nome_descrittivo.sql`;
+2. `create or replace function public.<nome>(p_*) returns … language plpgsql security definer set search_path = public`;
+3. `grant execute` solo ai ruoli necessari (`authenticated` o `service_role`);
+4. se scrive su tabelle protette (senza policy client) non serve alcuna policy aggiuntiva;
+5. test di regressione in `scripts/` se la funzione entra nel percorso notifiche
+   (`test-migrazioni.ts` è il guard dedicato).
 
 ## 15. Edge Functions — contratti payload
 
@@ -1283,6 +2062,54 @@ dall'helper `inviaAlerta` della Edge `telegram-admin-webhook`. Indici su `create
 - **Google GSI**: `https://accounts.google.com/gsi/client` (One Tap).
 
 ---
+
+### 15.4 Inventario completo delle 10 Edge Functions (Deno)
+
+| Function | File (`supabase/functions/…/index.ts`) | Righe | Secret letti (`Deno.env.get`) | Note di contratto |
+|---|---|---|---|---|
+| `admin` | `admin/index.ts` | 510 | `ADMIN_EMAILS`, `SEND_NOTIFICATION_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL` | Azioni di amministrazione (utenti, dispatch, override) con verifica dell'email admin; usa il service role |
+| `checkout` | `checkout/index.ts` | 414 | `APP_URL`, `REFERRAL_COUPON_ID`, `STRIPE_MODE`, `STRIPE_PRICE_*`, `STRIPE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL`, `WEBHOOK_ENDPOINT` | Crea la sessione Stripe Checkout (piani annuo/mensile/a consumo, coupon referral/promo), JWT obbligatorio |
+| `contatto` | `contatto/index.ts` | 217 | `CONTACT_SUPPORT_EMAIL`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | Form contatti pubblico (honeypot lato client), invio via Resend |
+| `elimina-account` | `elimina-account/index.ts` | 80 | `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL` | Cancellazione account (GDPR) — solo con JWT valido |
+| `genera-modulo` | `genera-modulo/index.ts` | 1326 | `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL` | Azioni `intervista` · `genera` · `ricerca` · `salva` · `rimuovi` · `miei`; cache SHA-256 su `generated_modules`; azioni riconosciute anche `pei`/`sostegno` |
+| `send-notification` | `send-notification/index.ts` | 670 | `RESEND_API_KEY`, `RESEND_DASHBOARD_URL`, `RESEND_FROM_EMAIL`, `SCUOLERADAR_BASE_URL`, `SEND_NOTIFICATION_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL`, `TELEGRAM_BOT_TOKEN` | Unico punto di invio email/Telegram server-side: **richiede header `x-send-secret`**, risolve i template in `_shared/emailTemplates.ts` |
+| `telegram-admin-webhook` | `telegram-admin-webhook/index.ts` | 465 | `ADMIN_ALERT_SECRET`, `ADMIN_COMMAND_FORWARD_SECRET`, `ADMIN_COMMAND_FORWARD_URL`, `ADMIN_TELEGRAM_BOT_TOKEN`, `ADMIN_TELEGRAM_ID`, `ADMIN_TELEGRAM_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL` | Bot admin: riceve comandi (log in `admin_telegram_log`), accetta alert machine-to-machine (`x-admin-alert-secret`) |
+| `telegram-login` | `telegram-login/index.ts` | 208 | `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL`, `TELEGRAM_BOT_TOKEN` | Login Widget Telegram → verifica hash → collega `telegram_chat_id` |
+| `telegram-webhook` | `telegram-webhook/index.ts` | 197 | `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` | Webhook del bot pubblico (comandi utente, deep link) |
+| `webhook` | `webhook/index.ts` | 338 | `SEND_NOTIFICATION_SECRET`, `STRIPE_MODE`, `STRIPE_PRICE_*`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL` | Webhook Stripe con **verifica firma HMAC**: aggiorna `piano`, `subscription_*`, `current_period_end`, crediti |
+
+`supabase/functions/_shared/` non è una function: contiene i moduli condivisi
+(es. `emailTemplates.ts` con i template `email_3_*`, `email_*_rinnovo_*`).
+
+### 15.5 Contratti di sicurezza delle Edge
+
+- **Autenticazione**: `admin`, `checkout`, `elimina-account`, `genera-modulo` verificano il
+  **JWT** dell'utente; `send-notification` verifica l'**header `x-send-secret`**
+  (server-to-server: GitHub Actions, pg_cron via `app_settings`);
+  `telegram-admin-webhook` verifica `ADMIN_TELEGRAM_WEBHOOK_SECRET` (Telegram) e
+  `ADMIN_ALERT_SECRET` (scraper); `webhook` verifica la **firma Stripe**.
+- **Service role**: nessuna Edge espone la service role al client — la usa solo internamente
+  per scrivere su tabelle senza policy.
+- **Errori**: le Edge rispondono sempre JSON con stato esplicito; i fallimenti di invio
+  vengono restituiti al chiamante (mai inghiottiti), così il chiamante può registrare
+  l'esito in `notifications_log`/`scraper_runs`.
+- **Segreti**: si impostano con
+  `supabase secrets set <NOME>=<valore> --project-ref gwdmsgsshvdnfrplbjiv` e si
+  deployano con `supabase functions deploy <nome> --project-ref gwdmsgsshvdnfrplbjiv`.
+
+### 15.6 Matrice "chi chiama quale Edge"
+
+| Chiamante | Edge | Perché |
+|---|---|---|
+| Frontend (JWT utente) | `checkout`, `genera-modulo`, `elimina-account` | pagamento, generazione AI, cancellazione account |
+| Frontend (contatti pubblici) | `contatto` | form contatti |
+| GitHub Actions `scraper.yml` / `digest.yml` (secret condiviso) | `send-notification` | email/Telegram di opportunità, digest, promemoria |
+| pg_cron (`dispatch_step5_due`, `invia_avvisi_*`, `invia_preavvisi_rinnovo`) | `send-notification` | drip e ciclo di vita abbonamento |
+| GitHub Actions (verifica post-run) | `telegram-admin-webhook` | alert su fallimenti critici / anomalie |
+| Telegram | `telegram-webhook`, `telegram-admin-webhook` | comandi bot pubblico e bot admin |
+| Frontend (Login Widget) | `telegram-login` | collegamento chat Telegram |
+| Stripe | `webhook` | eventi di pagamento/abbonamento |
+| Pannello admin (JWT admin) | `admin` | diagnostica, dispatch manuale, override |
 
 ## 16. Routes, Endpoints & API
 
@@ -1311,6 +2138,63 @@ dall'helper `inviaAlerta` della Edge `telegram-admin-webhook`. Indici su `create
 
 
 ---
+
+### 16.1.1 Tabella completa delle rotte (fonte: `src/App.tsx`, 30 `<Route>`)
+
+| # | Path | Elemento | Guardia | Note |
+|---|---|---|---|---|
+| 1 | `/` | `LandingPage` | pubblica | hero, simulatore radar, servizi, pricing snippet |
+| 2 | `/prezzi` | `PrezziPage` | pubblica | 🔒 modulo bloccato (§19) |
+| 3 | `/chi-siamo` | `ChiSiamoPage` | pubblica | 🔒 modulo bloccato |
+| 4 | `/faq` | `FAQPage` | pubblica | |
+| 5 | `/servizi` | `ServiziPage` | pubblica | griglia da `data/servizi.ts` |
+| 6 | `/servizi/:slug` | `ServizioPage` | pubblica | dettaglio servizio |
+| 7 | `/notizie` | `NotiziePage` | pubblica | `NotizieHero` + `NotizieGrid` (dipartimento notizie) |
+| 8 | `/notizie/:id` | `NotizieDettaglioPage` | pubblica | `NotizieDettaglio` |
+| 9 | `/interpello/:id` | `InterpelloDettaglioPage` | pubblica | **atterraggio dei deep link delle notifiche** quando l'avviso non ha fonte esterna |
+| 10 | `/contatti` | `ContattiPage` | pubblica | form → Edge `contatto` |
+| 11 | `/moduli` | `Navigate → /dashboard/moduli` | pubblica | la vecchia landing di anteprima è stata rimossa |
+| 12 | `/calcolatore-cfu` | `CalcolatoreCFUPage` | pubblica | landing del dominio CFU |
+| 13 | `/auth/callback` | `AuthCallback` | pubblica | ritorno OAuth (scambio code → sessione) |
+| 14 | `/checkout/:plan` | `CheckoutRedirectPage` | pubblica | checkout diretto con coupon (`?coupon=RADAR50`) |
+| 15 | `/onboarding` | `OnboardingPage` | **`RequireAuth`** | wizard preferenze + Telegram |
+| 16 | `/dashboard` | `DashboardLayout` | pubblica (layout) | guscio con tab + `Outlet` |
+| 17 | `/dashboard` (index) | `Navigate → radar` | — | default della dashboard |
+| 18 | `/dashboard/radar` | `DashboardPage` | pubblica | feed Radar, notifiche residue, blacklist |
+| 19 | `/dashboard/cv` | `CvPage` | pubblica | CV Builder |
+| 20 | `/dashboard/cfu` | redirect → `/dashboard/calcolatore-cfu` | pubblica | Vecchio mockup CFU rimosso in V1 (nessun numero inventato in pagina) |
+| 21 | `/dashboard/calcolatore-cfu` | `CalcolatoreCFUDashboardPage` | **`RequireAuth`** | strumento privato del dipartimento CFU |
+| 22 | `/dashboard/assistente-ai` | `AssistenteAIPage` | pubblica | Assistente Sindacalista (paywall PRO) |
+| 23 | `/dashboard/moduli` | `ModuliPage` | pubblica | `ModuliModule` |
+| 24 | `/dashboard/purefocus` | `PureFocusPage` | pubblica | focus timer / bridge PRO |
+| 25 | `/dashboard/profilo` | `ProfiloPage` | **`RequireAuth`** | dati, preferenze, Telegram, account |
+| 26 | `/dashboard/invita` | `InvitaPage` | **`RequireAuth`** | referral |
+| 27 | `/admin` | `AdminPage` | **`RequireAuth`** + `ADMIN_EMAILS` | pannello admin (monta `departments/admin`) |
+| 28 | `*` | `Navigate → /` | — | catch-all: mai una pagina bianca (prima del fix, i deep link non gestiti finivano in 404 bianco) |
+
+### 16.1.2 Comportamento di `RequireAuth` (implementazione esatta)
+
+```tsx
+function RequireAuth({ children }: { children: ReactNode }) {
+  const { user, loading, openAuthModal } = useApp();
+  useEffect(() => { if (!loading && !user) openAuthModal('login'); }, [user, loading, openAuthModal]);
+  if (loading) return null;          // attende la verifica sessione: nessun redirect/modal prematuro
+  if (!user) return <AreaRiservata />; // card "Area riservata" + CTA che apre il modal di registrazione
+  return <>{children}</>;
+}
+```
+
+Regole: **nessun redirect forzato** — l'utente non autenticato vede una card e il modal di auth;
+durante `loading` non viene montato nulla (evita il "flash" di modali su utenti già loggati).
+
+### 16.1.3 Modali globali montate fuori dalle rotte
+
+`AuthModal` · `VetrinaModal` · `GoogleOneTap` · `RadarWizardModal` (entry `departments/radar`) ·
+`ForcePasswordModal` · `SoftOnboardingModal` · `DatiProfiloModal` · `OAuthBounceModal` ·
+`DevToolbar` (solo `import.meta.env.DEV`).
+
+Sempre attivi: `ToastProvider` (notifiche UI) · `ScrollToTop` · `trackPageview` (analytics
+privacy-first, attivo solo con `VITE_POSTHOG_KEY`).
 
 ## 17. Ambiente & Secrets
 
@@ -1346,17 +2230,93 @@ workflow `health-check.yml` (env opzionali: `HEALTH_STALE_HOURS`, `HEALTH_NEWS_S
 
 ---
 
+### 17.4 Inventario completo delle variabili e dei segreti (verificato)
+
+**A. Frontend (Vite — inlined nel bundle al build; tutto ciò che è `VITE_*` è PUBBLICO)**
+
+| Variabile | Uso |
+|---|---|
+| `VITE_SUPABASE_URL` · `VITE_SUPABASE_ANON_KEY` | client `src/lib/supabase.ts` (se assenti → **modalità demo**, §22) |
+| `VITE_ADMIN_PASSWORD` | password "di riserva" del pannello admin (solo per email in `ADMIN_EMAILS`); **vuota in produzione** |
+| `VITE_STRIPE_PRICE_PRO_ANNUALE` · `VITE_STRIPE_PRICE_PRO_MENSILE` · `VITE_STRIPE_PRICE_ALACARTE` | Price ID visibili al client (la fonte autorevole resta server-side) |
+| `VITE_STRIPE_PUBLISHABLE_KEY` | chiave pubblica Stripe (`pk_live_…`) |
+| `VITE_GOOGLE_CLIENT_ID` | Google Identity / One Tap |
+| `VITE_TELEGRAM_BOT_USERNAME` | `ScuoleRadar_bot` — Login Widget |
+| `VITE_POSTHOG_KEY` · `VITE_POSTHOG_HOST` | analytics privacy-first (key vuota = nessun invio) |
+| `VITE_PUREFOCUS_BRIDGE_SECRET` · `VITE_PUREFOCUS_BRIDGE_URL` | bridge account ScuoleRadar ↔ PureFocus (HMAC condiviso) |
+| `VITE_DEADLINES_API_URL` | override dinamico delle scadenze (altrimenti `school_deadlines` → fallback locale JSON) |
+
+Utilizzi diretti nel codice (`import.meta.env.*` verificati): `DEV`, `MODE`,
+`VITE_GOOGLE_CLIENT_ID`, `VITE_SUPABASE_ANON_KEY`, `VITE_TELEGRAM_BOT_USERNAME`.
+
+**B. Node / scraper e script (`.env` locale, mai committato)**
+
+| Variabile | Uso |
+|---|---|
+| `SUPABASE_URL` · `SUPABASE_SERVICE_ROLE_KEY` | scritture server-side (scraper, script, notifier) |
+| `SUPABASE_ANON_KEY` | alternativa read-only per sviluppo |
+| `TELEGRAM_BOT_TOKEN` | bot `@ScuoleRadar_bot` (invio messaggi e post sui canali) |
+| `TELEGRAM_CHANNELS` · `TELEGRAM_CHANNELS_REGIONALI` | override opzionali dei canali (JSON provincia→canale / regione→canale) |
+| `ADMIN_ALERT_SECRET` · `ADMIN_ALERT_URL` | alert machine-to-machine verso la Edge `telegram-admin-webhook` |
+| `DEEPSEEK_API_KEY` · `DEEPSEEK_MODEL` | generazione modulistica (`deepseek-chat`) |
+| `STRIPE_SECRET_KEY` · `STRIPE_WEBHOOK_SECRET` · `STRIPE_PUBLISHABLE_KEY` · `STRIPE_PRICE_*` · `STRIPE_COUPON_*` · `REFERRAL_COUPON_ID` · `WEBHOOK_ENDPOINT` | billing |
+| `SCUOLERADAR_LEDGER_PATH` | override del percorso del ledger file (§6.5.1) — usato dai test per non sporcare il ledger reale |
+| `FEATURE_RADAR` · `FEATURE_CFU` · `FEATURE_MODULISTICA` · `FEATURE_PUREFOCUS` · `FEATURE_REFERRAL` · `FEATURE_CV_BUILDER` | **feature flags dei dipartimenti** (`on`/`test`/`off`, §4.8 di `DEPARTMENT_MAP.md`): hanno priorità sugli override locali e pilotano anche le notifiche automatiche |
+| `FEATURE_TEST_REDIRECT` · `FEATURE_ADMIN_EMAIL` · `FEATURE_ADMIN_TELEGRAM_ID` | destinazione di test del gate notifiche in stato `test` (default: prima email di `ADMIN_EMAILS` e `ADMIN_TELEGRAM_ID`) |
+
+**C. GitHub Actions secrets** (verificati nei workflow):
+
+`SUPABASE_URL` · `SUPABASE_SERVICE_ROLE_KEY` · `TELEGRAM_BOT_TOKEN` · `TELEGRAM_CHANNELS` ·
+`RESEND_API_KEY` · `ADMIN_ALERT_SECRET`.
+
+**D. Supabase Edge secrets** (`supabase secrets set …`; elenco completo letto dal codice Deno):
+
+| Gruppo | Secret |
+|---|---|
+| Supabase | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
+| Invio | `SEND_NOTIFICATION_SECRET`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `RESEND_DASHBOARD_URL`, `SCUOLERADAR_BASE_URL`, `APP_URL`, `CONTACT_SUPPORT_EMAIL` |
+| Telegram (pubblico) | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` |
+| Telegram (admin) | `ADMIN_TELEGRAM_BOT_TOKEN`, `ADMIN_TELEGRAM_ID`, `ADMIN_TELEGRAM_WEBHOOK_SECRET`, `ADMIN_ALERT_SECRET`, `ADMIN_COMMAND_FORWARD_SECRET`, `ADMIN_COMMAND_FORWARD_URL`, `ADMIN_EMAILS` |
+| AI | `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL` |
+| Stripe | `STRIPE_MODE`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `WEBHOOK_ENDPOINT`, `STRIPE_PRICE_ID_ANNUAL`, `STRIPE_PRICE_ID_MONTHLY`, `STRIPE_PRICE_ID_CONSUMO`, `STRIPE_PRICE_PRO_ANNUALE`, `STRIPE_PRICE_PRO_MENSILE`, `STRIPE_PRICE_A_CONSUMO`, `STRIPE_PRICE_ALACARTE`, `STRIPE_PRICE_CONSUMO`, `REFERRAL_COUPON_ID`, `STRIPE_COUPON_BETA1ANNO`, `STRIPE_COUPON_RADAR50`, `STRIPE_COUPON_REFERRAL_10` |
+
+### 17.5 Matrice di degradazione (cosa succede se un secret manca)
+
+| Secret mancante | Effetto | Comportamento di progetto |
+|---|---|---|
+| `VITE_SUPABASE_URL`/`ANON_KEY` | nessun backend | **modalità demo**: auth locale su localStorage, feed vuoto, nessuna Edge |
+| `RESEND_API_KEY` (Edge/Node) | email non inviate | l'esito viene restituito come errore e registrato; il digest Telegram resta attivo |
+| `TELEGRAM_BOT_TOKEN` | nessun messaggio/post | `send-notification` e lo scraper riportano l'errore in `scraper_runs.errori` |
+| `DEEPSEEK_API_KEY` | nessuna generazione AI | l'Archivista/il generatore rispondono con errore esplicito; i **template locali** (`creaDocumentoLocale`, ~60 tipologie) continuano a funzionare senza API |
+| `STRIPE_SECRET_KEY` / `STRIPE_PRICE_*` | checkout non creabile | `avviaCheckout` ritorna `{ ok:false, errore }` senza lanciare; la pagina `/prezzi` resta navigabile |
+| `ADMIN_ALERT_SECRET` | nessun alert admin | le anomalie restano visibili in `scraper_runs`/`admin_telegram_alerts` (tabella comunque scritta) |
+| `VITE_DEADLINES_API_URL` | sorgente scadenze statica | `school_deadlines` → fallback `src/data/deadlinesFallback.json` |
+
 ## 18. Script npm, CI, Vercel
 
 ### 18.1 npm scripts
-`dev` (vite 5174), `build`, `lint`, `preview`, `typecheck` (tsc app), `scrape`,
-`scrape:check`, `scrape:notizie`, `scrape:notizie:check`, `test:telegram`, `test:notifiche`,
-`test:pdf*` (mad/breve/brevi/universita/completo).
 
-### 18.2 CI / cron (GitHub Actions)
+| Gruppo | Comandi |
+|---|---|
+| Build & qualità | `dev` (vite 5174), `build`, `preview`, `lint`, `typecheck`, `test` (7 suite del motore CFU) |
+| Architettura | `test:architettura` (gate), `arch:check` (= gate), `arch:report` (inventario) |
+| Scraper & dati | `scrape` (`-- --dry-run`), `scrape:check`, `scrape:notizie`, `scrape:notizie:check`, `dati:arricchisci`, `dati:pulisci`, `dati:pulisci-scaduti`, `scadenze:sync`, `notizie:ripara-archivio` |
+| Notizie (test) | `test:notizie-feed`, `test:notizie-editoriale`, `test:notizie-nazionale`, `test:notizie-rate` |
+| Radar & matching | `test:matching`, `test:radar`, `test:radar:preferenze`, `test:sostegno`, `test:materia`, `test:interpello-scadenza`, `test:scadenze`, `test:rinnovo-preavvisi`, `test:board`, `test:elenchi`, `test:traccia`, `test:parser*`, `test:dati-fallback` |
+| Notifiche & canali | `test:notifiche`, `test:notifier-dry`, `test:telegram` (`:template`, `:tier`, `:canali`), `test:qualita`, `test:copy`, `test:dedup`, `test:dedup:utente`, `test:frequenza`, `test:digest`, `test:email`, `test:email:scuola`, `test:email-alert`, `test:alert`, `test:link`, `test:link-esterno`, `test:promemoria`, `test:ledger`, `notifiche:digest`, `notifiche:promemoria`, `ledger:unisci` |
+| Modulistica & PDF | `test:moduli`, `test:pdf` (`:breve`, `:brevi`, `:universita`, `:completo`) |
+| Admin & DB | `admin:health`, `admin:dispatch`, `admin:profiles`, `admin:link-telegram`, `admin:fix-pampararo`, `provision:beta` (`:check`), `db:verifica`, `test:migrazioni` |
+| Brand & favicon | `favicon` (rigenera il set ufficiale da `public/logo.png` + autoverifica), `test:favicon` (guardia: `index.html` ↔ `public/`, identità azzurra, nessun asset scuro/legacy, pesi) |
+| Checkout & promo | `test:checkout-promo` (guardia: `verify_jwt` di `checkout`, **BETA1ANNO validato su `promo_codes` e SOLO sul PRO annuale**, attivazione PRO+1anno/`is_beta_tester`/consumo del monouso dal `webhook`, `profiles.provincia` nel form di registrazione, 401 Guest del health check = OK) |
+| Piano & funnel | `test:piano` (guardia: piano letto dal BACKEND — tier `pro_*` e `is_beta_tester` ⇒ PRO; tetti PRO finché il piano non è confermato; Beta Tester mai retrocessi; bozza di registrazione con nome composto, merge e corruzione; Realtime, paywall `pianoStato === 'pronto'`, prefill email/nota del form, trigger DB dell'anagrafica) |
+
+### 18.2 CI / cron (GitHub Actions — 6 workflow)
 - `scraper.yml`: Lun–Ven 07/12/15 UTC → interpelli + canali Telegram (nessun invio personale).
 - `digest.yml`: Lun–Ven 15/16 UTC → BATCH alle 17:00 italiane (Telegram per BASE + email per tutti).
-- `scrape-notizie.yml`: giornaliero 06:00 UTC → notizie + commit + deploy.
+- `scrape-notizie.yml`: giornaliero 06:00 UTC → notizie + commit + deploy; **fallisce se la settimana resta vuota**.
+- `pulisci-scaduti.yml`: giornaliero 04:00 UTC → pulizia degli avvisi scaduti.
+- `health-check.yml`: giornaliero 08:00 UTC → diagnostica (`scripts/admin-health-check.ts`).
+- `architettura.yml`: su push e PR → gate `npm run test:architettura` (il debito strutturale non può crescere).
 - Commit con `[skip ci]` → nessun loop.
 
 ### 18.3 Vercel
@@ -1365,6 +2325,54 @@ workflow `health-check.yml` (env opzionali: `HEALTH_STALE_HOURS`, `HEALTH_NEWS_S
 - Production branch `main`: ogni push triggera il build.
 
 ---
+
+### 18.4 Reference dei 71 script `scripts/*.ts` — produzione, manutenzione, diagnostica
+
+| Script | Scopo (dalla testa del file) |
+|---|---|
+| `check-architettura.ts` | **Gate strutturale** (`docs/MODULAR_ARCHITECTURE.md`): dimensioni, radici di dominio, entry point, import fra domini, strati, cicli, baseline |
+| `_validate-modulistica.ts` | Validazione modulistica: coerenza di layout, contenuti, sezioni per ordine scolastico (60/60 + PEI infanzia) |
+| `arricchisci-interpelli.ts` | `npm run dati:arricchisci [-- --apply]` → completa `school_code`, `contact_email` (PEO dalla convenzione MIM) e `school_name` senza sovrascrivere dati presenti |
+| `audit-dati.ts` | Audit dei dati in `interpelli` e `notices` (igiene e coerenza) |
+| `pulisci-dati-non-verificati.ts` | `npm run dati:pulisci` → rimuove i record NON verificati da `interpelli`/`notices` |
+| `pulisci-scaduti.ts` | `npm run dati:pulisci-scaduti` → rimuove gli interpelli scaduti (workflow `pulisci-scaduti.yml`, 04:00 UTC) |
+| `sync-deadlines.ts` | `npm run scadenze:sync` → sincronizza le scadenze verso Supabase (`school_deadlines`) |
+| `ripara-archivio-notizie.ts` | `npm run notizie:ripara-archivio [-- --dry]` → rigenera il copy dell'archivio notizie con le regole correnti |
+| `invia-digest.ts` | `npm run notifiche:digest` → digest giornaliero (batch email + Telegram BASE) |
+| `invia-promemoria.ts` | `npm run notifiche:promemoria` → promemoria 24h per scadenze entro 3 giorni |
+| `unione-ledger.ts` | `npm run ledger:unisci` → unifica i file ledger (più run/macchine) senza perdere chiavi |
+| `verifica-schema-notifiche.ts` | `npm run db:verifica` → verifica schema/RPC del percorso notifiche |
+| `provision-beta-users.ts` | `npm run provision:beta[:check]` → provisioning degli accessi BETA / utenti pre-approvati |
+| `admin-health-check.ts` | `npm run admin:health` → monitor di salute del dispatch Radar (workflow `health-check.yml`, 08:00 UTC) |
+| `admin-dispatch-user.ts` | `npm run admin:dispatch` → digest immediato per un singolo utente |
+| `admin-profiles-manutenzione.ts` | `npm run admin:profiles` → manutenzione profili: Free Forever, dedupe, igiene |
+| `admin-link-telegram.ts` | `npm run admin:link-telegram` → collega un Chat ID Telegram a un profilo |
+| `admin-fix-pampararo.ts` | `npm run admin:fix-pampararo` → cleanup mirato di un account di test |
+| `diag-flightboard.ts` | Diagnostica: perché la tabella "Radar Live" è nascosta (righe scartate) |
+| `diag-fonti.ts` | Diagnostica: struttura HTML del post giornaliero di scuolainterpelli.it |
+| `diag-interpelli-multiregione.ts` | Diagnostica: verifica l'ingestione multi-regione in `interpelli` |
+
+### 18.5 Reference degli script di test (`scripts/test-*.ts`)
+
+| Gruppo | Script |
+|---|---|
+| Radar & matching | `test-matching-profilo` · `test-radar-validation` · `test-radar-preferenze` · `test-sostegno-preferenza` · `test-materia-classe` · `test-scadenza` · `test-scadenze` · `test-live-board` · `test-elenchi` · `test-traccia-fonte` · `test-dati-fallback` |
+| Parser & fonti | `test-parser-province` · `test-parser-date` · `test-parser-materia` · `test-parser-tabelle` · `test-parser-validazione` |
+| Link & routing | `test-link-fonte` · `test-link-esterno` · `test-alert-avviso` |
+| Notifiche & dedup | `test-notifiche` · `test-notifier-dry` · `test-dedup` · `test-dedup-utente` · `test-frequenza` · `test-qualita-invio` · `test-copy-notifiche` · `test-ledger-robustezza` · `test-migrazioni` |
+| Email & digest | `test-email-template` (**benvenuto post-registrazione**: blocco `conferma_base` della Edge + template `email_1_1_onboarding` + renderer `welcome` → conferma del mese PRO in omaggio e copy «account Base»/«3 segnalazioni» **vietate**) · `test-email-scuola` · `test-email-alert` · `test-digest` · `test-promemoria` · `test-rinnovo-preavvisi` · **`test:automazioni`** (catalogo + interruttori del pannello Admin) |
+| Feature flags | `test-feature-flags` (matrice stati, gate notifiche, cablaggio UI, scrittura di `sr_flag_dipartimenti`) · `test-flags-render` (render dei toggle OFF/TEST/ON in `variante="lista"` e `card`) |
+| Telegram & canali | `test-telegram` · `test-telegram-template` (etichetta fonte unica `🔗 Fonte Ufficiale`, URL **mai** in chiaro in tutte le tipologie, etichetta sempre cliccabile, payload con anteprime disattivate) · `test-telegram-tier` · `test-canali-telegram` (post canali: etichetta canonica, URL non in chiaro, gate link diretti) |
+| Brand & favicon | **`test-favicon`** (`npm run test:favicon`): `index.html` ↔ `public/` (misure dichiarate = misure reali), PNG decodificati per provare **campo azzurro #2B6F9E + radar bianco**, `favicon.ico` multi-misura valido, `apple-touch-icon` opaco, pesi e assenza di asset legacy/scuri. Supporto: `scripts/lib/pngRgba.ts` (decoder PNG senza dipendenze) |
+| Checkout & promo | **`test-checkout-promo`** (`npm run test:checkout-promo`, 44 controlli): invarianti di `supabase/functions/checkout` (BETA1ANNO solo PRO annuale + validazione `promo_codes` + `discounts[0][coupon]`, mai `promotion_code`), `webhook` (RPC `attiva_codice_promo`: PRO+1anno, `is_beta_tester`, consumo del monouso), `config.toml` (`verify_jwt`), RPC/seed nelle migrazioni, `profiles.provincia`, 401 Guest del health check, form di registrazione (provincia, nota istituti scolastici, errori non silenziosi) |
+| Piano & funnel | **`test-piano-sync`** (`npm run test:piano`, 43 controlli): chiama le **funzioni vere** (`pianoDaProfilo`, `provaProScaduta`, `pianoLimits`, bozza di registrazione con stub di `localStorage`) + invarianti di cablaggio: PRO concesso dal backend (tier `pro_*`/`is_beta_tester`), tetti PRO mentre il piano è in lettura, Beta Tester mai retrocessi, nome composto «Bison Productions» integro nella bozza, prefill del form (nome/cognome/email dal wizard), Realtime sulla riga `profiles`, paywall solo con piano confermato, trigger DB dell'anagrafica |
+| Notizie | `test-notizie-feed` · `test-notizie-editoriale` · `test-notizie-nazionale` · `test-notizie-rate` |
+| Modulistica & PDF | `test-moduli-integrity` · `test-pdf-mad` · `test-pdf-breve` · `test-pdf-brevi` · `test-pdf-universita` · `test-pdf-completo` |
+
+Nota di lettura: ogni test è un **programma `tsx` autonomo** (non una suite Vitest): lancia,
+stampa esiti espliciti e imposta l'exit code. Molti accettano flag (`--dry`, `--apply`) e
+usano il seam di test (`inviaEmail`/`inviaTelegram`, `SCUOLERADAR_LEDGER_PATH`) per non
+produrre effetti collaterali.
 
 ## 19. Moduli bloccati (🔒 LOCKED_MODULES.md)
 
@@ -1377,15 +2385,540 @@ Non modificare senza autorizzazione esplicita ("Sblocca il modulo X"):
 
 ## 20. Stato attuale & note operative
 
-- **Ultimo commit**: `41f3d54` "feat: update drip sequence, fix UI text to Radar Scuole,
-  and add system handover report" (6 file: resend/telegram/notifier/index.html/send-notification/handover).
-- **Working tree**: modifiche non committate (restyling Archivista Capo, template modulistica,
-  token palette, modal). Migrations recenti **staged** (da committare in un commit dedicato).
-- **`git stash@{0}`**: WIP precedente (modulistica/Vault/branding) non ripristinato.
-- **Notizie**: ultimo contenuto reale ingestito 2026-07-16; il cron produce 0 articoli quando
-  non ci sono provvedimenti vincolanti (atteso).
-- **Archivista Capo**: teaser PRO a Ottobre; la ricerca resta live sul catalogo.
-- **Verifiche**: `npm run typecheck` exit 0; `scrape:check` exit 0; `scrape:notizie:check`
-  exit 0; `_validate-modulistica.ts` 60/60 + PEI infanzia PASS.
-- **Dev server**: porta fissa 5174.
+- **Regola di lavoro permanente — Isolamento dei dipartimenti (Consorzio)**: si opera
+  **solo** nel dipartimento in lavorazione (`src/departments/<nome>/**`) + nei
+  condivisi essenziali (`src/config/**`, `src/lib/**`, `src/data/**`, `src/hooks/**`,
+  `src/types/**`, `supabase/functions/_shared/**`) + negli artefatti della modifica
+  (test collegati, `docs/**`, `comunicazione/**`). **Vietato** leggere/scansionare o
+  modificare gli altri dipartimenti: per uscire dal perimetro serve lo **sblocco
+  congiunto** esplicito nella richiesta dell'utente. Regola scritta in `.clinerules`
+  (radice del workspace e `project/`) e dettagliata in `docs/DEPARTMENT_ISOLATION.md`.
+
+- **Sessione 2026-09-22 · Email di benvenuto allineata alla promo «Mese PRO omaggio»**
+  (solo copy, nessun cambio di logica): il messaggio inviato alla registrazione dal trigger DB
+  `trg_auth_users_step1_welcome` (Edge `send-notification`, tipo `step1` → copy di
+  `conferma_base`) conferma ora l'**attivazione immediata** del mese di PRO in omaggio ed
+  elenca i quattro strumenti già disponibili *senza restrizioni* (Radar Scuole con notifiche
+  illimitate, Modulistica scolastica, Crea CV, Calcolatore CFU), con invito a impostare
+  provincia e classi di concorso. Eliminati i riferimenti al vecchio modello (**«account
+  Base»**, quota delle **«3 segnalazioni»**, «piano PRO gratuito per 30 giorni», ritorno al
+  piano gratuito). Allineate le 4 superfici che generano lo stesso messaggio:
+  `TESTI.conferma_base` (email + Telegram; `TESTI.step1` ne resta un clone ⇒ unica fonte),
+  il template `email_1_1_onboarding` (`supabase/functions/_shared/emailTemplates.ts`, usato
+  dal pannello Admin e dal tipo omonimo), `CORPO_MESSAGGI.welcome` (`src/lib/resend.ts`),
+  `TESTO_TELEGRAM.welcome` (`src/lib/telegram.ts`) e la scheda «Benvenuto / onboarding»
+  (`src/config/automazioniEmailCatalogo.ts`). Guardie estese: `test:email` (blocco
+  `conferma_base` + template + renderer, con elenco di copy **vietate**), `test:telegram:template`,
+  `test:automazioni` (anteprima senza «piano Base»).
+  ⚠️ Operativo: il benvenuto parte solo se l'automazione `benvenuto` è **attiva** nel pannello
+  Admin; per il tipo `step1` il corpo è fissato nel codice (dal pannello si personalizzano solo
+  oggetto e intro), mentre i tipi basati su `emailTemplates` accettano anche un corpo
+  personalizzato che **vince** sul copy del codice → serve ri-deployare la Edge `send-notification`.
+
+- **Sessione 2026-09-22 · DEV Toolbar (toggle dipartimenti)**: i sei selettori
+  OFF | TEST | ON vivono **dentro** la DEV Toolbar laterale, in forma lista compatta
+  (`FlagDipartimentiPanel variante="lista"`, sezione «Dipartimenti (feature flags)» subito
+  sotto «Stato utente»). Ogni click salva in `localStorage: sr_flag_dipartimenti` (store
+  condiviso → navbar/rotte aggiornate all'istante). Nuovo
+  `src/components/FlagDipartimentiProva.tsx`: anteprima «Navbar ora», valore grezzo
+  persistito riletto a ogni click e pulsante «Verifica scrittura localStorage» (round-trip
+  con ripristino del valore). `npm run test:flags` verifica anche la scrittura della chiave
+  (stub di `localStorage`) e il cablaggio dei tre componenti.
+  **Aggiornamento (stessa giornata) — copertura totale della vetrina pubblica**: lo store
+  notifica ora anche le **altre schede** del browser (evento `storage`, attivato al primo
+  sottoscrittore) e l'hook espone `primaRottaVisibile()` (primo dipartimento visibile con
+  fallback `/dashboard/profilo`), usato da `ReindirizzaDipartimentoPrincipale`, post-login
+  (`AuthModal`), post-onboarding e ritorno dal checkout. Le superfici che prima mostravano
+  «in chiaro» i moduli spenti sono ora filtrate dallo stesso store: griglia strumenti della
+  landing (`LandingStrumenti`), bacheca radar e CTA finali, catalogo servizi
+  (`serviziVisibili`, con `modulo` per servizio in `src/data/servizi.ts`), pagine
+  `/servizi` e `/servizi/:slug` (redirect se `off`), footer, vetrina freemium, rimandi in
+  profilo e nelle schede avviso. Invariante: `off` = sparisce da navbar desktop/mobile,
+  sito pubblico e rotte, per tutti (admin incluso); `test` = solo admin/DEV.
+
+- **Sessione 2026-09-22** (logo · feature flags · email):
+  · logo dell'header **riportato all'asset originale** (882×212: tile azzurra con
+    radar bianco + wordmark blu/arancione/azzurro) in `public/logo.png` e
+    `src/assets/logo.png`; favicon leggera `public/favicon-256.png` (256×256, ~20 KB)
+    al posto del PNG da 2,4 MB;
+  · **DEV Toolbar**: selettore a 3 stati dei dipartimenti con legenda OFF/TEST/ON e
+    persistenza `sr_flag_dipartimenti` (store condiviso, aggiornamento immediato);
+  · nuovo pannello **Admin → «✉️ Email & Automazioni»**: per ogni automazione
+    trigger, oggetto, anteprima visiva del copy, editor (oggetto/intro/corpo) e
+    interruttore. File: `components/{TabEmailAutomazioni,RigaAutomazione,
+    AutomazioniInterruttore,PannelloCopyAutomazione,automazioniSupporto}`, stato in
+    `hooks/useAutomazioniEmail`, dati in `services/automazioniService`. Lo stato vive
+    in `public.app_settings` (`email_automazione_<id>`) e viene rispettato dalla Edge
+    `send-notification` e dal notifier (`src/lib/automazioniEmailDb.ts`).
+    Guardia: `npm run test:automazioni` (inclusa in `npm test`).
+
+- **Sessione 2026-09-22 · Motore Telegram (anteprime, etichetta fonte, link generici)**:
+  risanamento del modulo `src/lib/telegram.ts`, il solo che genera i messaggi Telegram:
+  1. **Anteprime**: il payload di `sendMessage` è costruito in un UNICO punto
+     (`payloadMessaggioTesto`) con `link_preview_options.is_disabled` **e**
+     `disable_web_page_preview: true` → nessun riquadro che carica loghi istituzionali o
+     immagini casuali delle fonti (le «FC»/«FE»); nessun media nel modulo
+     (`sendPhoto`/`sendMediaGroup` banditi e verificati dai test);
+  2. **Etichetta fonte UNICA**: `🔗 Fonte Ufficiale` (`ETICHETTA_FONTE_UFFICIALE`) in alert
+     personali, digest e post dei canali — prima erano due (`👉 Apri l'avviso ufficiale` e
+     `🔗 Leggi la Fonte Ufficiale`); `rigaAvvisoUfficiale` ora delega a
+     `rigaFonteUfficiale`, quindi esiste una sola implementazione. L'URL ufficiale resta
+     SOLO nell'`href`: mai in chiaro nel testo (verificato su tutte le tipologie). Le email
+     mantengono la loro etichetta descrittiva per destinazione (fuori scope);
+  3. **Niente link generici**: il gate `eUrlAvvisoDiretto` è applicato DENTRO i generatori
+     di riga → home dell'ente, elenchi/archivi/tag, landing regionali e pagine di ricerca
+     (`?s=INTERPELLO`) non producono riga di fonte (`''`), senza alcun fallback; nel digest
+     la guida operativa si calcola sull'URL **effettivamente mostrato** (non su quello
+     grezzo), così non rimanda a un link assente. Gli URL di ScuoleRadar (CTA Radar,
+     Notizie) restano volutamente visibili: il divieto riguarda le fonti.
+  Guardie estese: `test:telegram:template` (etichetta unica + sempre cliccabile, URL mai in
+  chiaro in TUTTE le tipologie, payload anti-anteprima, link non diretti scartati),
+  `test:telegram:canali` (etichetta canonica + URL non in chiaro), `test:digest`,
+  `test:link`, `test:copy`.
+
+- **Sessione 2026-09-22 · PRO sincronizzato, dati del wizard e feature flags** (codice rosso):
+  tre disallineamenti corretti alla radice:
+  1. **Piano PRO letto dal BACKEND**: `pianoDaProfilo` ignorava `subscription_tier` (Account
+     Bridge: `pro_annuale`/`pro_mensile`) e `is_beta_tester`, quindi un PRO concesso via promo,
+     omaggio, codice beta o pannello admin restava **Base** nel frontend (limiti province,
+     «Opportunità mappate» bloccate, badge errati). Ora entrambe le fonti valgono come PRO, i
+     Beta Tester **non vengono mai retrocessi** (come nella funzione DB) e la UI è reattiva
+     **senza latenza**: sottoscrizione **Realtime** sulla riga `profiles` (oltre a focus/60 s),
+     guardia anti-blocco del caricamento (10 s) e — finché il piano non è confermato — **tetti
+     PRO** applicati alle preferenze con riallineamento automatico quando il piano arriva
+     (`useGuardiaPiano`, `pianoLimits(..., confermato)`); paywall solo con piano confermato.
+  2. **Dati del wizard → registrazione**: la bozza anagrafica (nome, cognome, genere, età,
+     provincia dedotta, email di notifica) vive in `sr_registrazione_bozza`
+     (`src/lib/bozzaRegistrazione.ts`) e precompila il form finale — **niente dati richiesti due
+     volte** e nome composto («Bison Productions») conservato integro (il sync OAuth non
+     sovrascrive più i valori esistenti e spezza `full_name` solo se mancano i campi espliciti).
+     `salvaProfilo` scrive finalmente `nome`/`cognome` e la **migrazione
+     `20260922130000_welcome_metadata_anagrafica.sql`** fa sì che il trigger di benvenuto salvi
+     anche cognome/età/provincia (prima il cognome andava perso e il mini-onboarding lo
+     richiedeva di nuovo). Passo finale del wizard: **registrazione rapida con Google** in
+     evidenza + enfasi su **Telegram** (avvisi istantanei) vs email (solo riepiloghi).
+  3. **Feature flags e navbar**: i moduli in `off` restavano «in chiaro» sul sito pubblico
+     (griglia servizi della landing, pagine `/servizi`, footer, vetrina freemium, rimandi in
+     profilo/schede avviso). Ora tutte quelle superfici leggono lo **stesso store** e i redirect
+     post-login/onboarding usano `primaRottaVisibile()` (mai un modulo spento); in più lo store
+     si sincronizza **tra schede** dello stesso browser (evento `storage`).
+  Nuova guardia `npm run test:piano` (43 controlli con le funzioni vere + cablaggio) e controlli
+  aggiunti a `test:flags` sulle superfici pubbliche. ⚠️ Da fare a mano: applicare la migrazione
+  `20260922130000` e **abilitare Realtime su `public.profiles`** in Supabase (senza, restano
+  focus + polling 60 s).
+
+- **Sessione 2026-09-22 · Checkout Stripe, coupon `BETA1ANNO` e onboarding** (verifica mirata):
+  tre scostamenti reali, tutti invisibili dalla UI:
+  1. `BETA1ANNO` applicava il coupon al 100% su **qualsiasi** piano (anche mensile/crediti) e
+     **senza leggere il DB** → ora è accettato solo su `pro_annuale` e lo stato del codice è
+     letto da `promo_codes` (disattivato/scaduto/già usato ⇒ HTTP 400 con il motivo; tabella
+     non leggibile o riga assente ⇒ fail-open loggato). `[functions.checkout] verify_jwt = true`
+     dichiarato esplicitamente in `supabase/config.toml`;
+  2. il codice **non veniva mai consumato** e l'utente non diventava `is_beta_tester`: la RPC
+     canonica `attiva_codice_promo` (PRO + 1 anno + beta tester + consumo del monouso) esisteva
+     ma **non era chiamata da nessuno** → ora la invoca il `webhook` al completamento del
+     checkout (anche `no_payment_required`, il caso del coupon al 100%);
+  3. il **System Health Check** segnalava come warning il 401 di `checkout` in modalità Guest:
+     è invece il comportamento corretto (nessuna configurazione Stripe agli anonimi) → ora è
+     **OK**; autenticati, il ping mostra modalità TEST/LIVE, mappatura `BETA1ANNO` e webhook.
+  Onboarding e auth: il form di registrazione (ultimo passo del wizard, anche per i Guest)
+  raccoglie ora anche la **provincia di residenza** (`profiles.provincia`, migrazione
+  `20260922120000`, con fallback se la colonna non è ancora nel DB) e precompila sesso/età dalla
+  bozza del wizard; aggiunta la **nota di supporto per gli account istituzionali** (domini
+  `.edu.it` → account Google personale o email/password, rimando FAQ `#animatore-digitale`,
+  complementare a `OAuthBounceModal`) e resi **non silenziosi** gli errori di `signUp`
+  (`register` ora è `async` e traduce l'errore Supabase nel form). Nuova guardia
+  `npm run test:checkout-promo` (44 controlli statici su Edge/config/migrazioni/UI).
+  ⚠️ Da fare a mano: applicare la migrazione, `supabase functions deploy checkout webhook` e
+  verificare nel dashboard Stripe la **durata** del coupon `XRxitsVf` (vedi promo `BETA1ANNO`).
+
+- **Sessione 2026-09-22 · Favicon ufficiale & identità nella scheda** (correzione definitiva):
+  la tab del browser mostrava la **vecchia tessera blu scuro** perché `index.html`
+  **committato** (quello che Vercel mette in produzione) puntava a
+  `/ScuoleRadar Favicon Square.png` (2,4 MB, identità precedente) mentre la correzione
+  esisteva solo nel working copy non committato. Risolto in modo strutturale:
+  nuovo generatore **`scripts/make-favicons.mjs`** (`npm run favicon`) che ritaglia la
+  **tessera azzurra** da `public/logo.png` e produce `favicon-16/32/48/256.png`,
+  `favicon.ico` (multi-misura 16/32/48) e `apple-touch-icon.png` (180×180, opaco, sfondo =
+  colore dominante del marchio), `index.html` con `sizes` esplicite + `theme-color`
+  `#2B6F9E`, nuova guardia **`npm run test:favicon`** (43 controlli: wiring HTML ↔ `public/`,
+  decodifica PNG e identità azzurra, radar bianco, pieno formato, ICO valido, pesi) e
+  **rimozione** dal sito servito di `ScuoleRadar Favicon Square.png`,
+  `ScuoleRadar Logo Transparent Full Final.png`, `favicon_old.svg`, `logo_old.png`
+  (`public/` passa da ≈6 MB a ≈91 KB). ⚠️ Serve **commit + push** perché il fix
+  raggiunga la produzione.
+
+- **Sessione di riallineamento 2026-09-21**: refactoring modulare (contesti splittati
+  `AppContext` 1634 → 282 righe, dominio `departments/cfu/`, generatore PDF modulare,
+  `departments/{admin,radar,scadenze}`), **standard editoriale stretto** delle notizie,
+  logo dell'header da **asset di build hashato**, **gate di architettura in CI**.
+- **Gate**: `npm run test:architettura` → `462 file · 144 violazioni (82 errori / 62 warning)`,
+  tutte congelate in `scripts/architettura-baseline.json` → **✅ nessuna violazione nuova**.
+- **Verifiche di prodotto**: `npm test` (7 suite del motore CFU), `npm run typecheck`,
+  `npm run build`, `npm run test:favicon`, `npm run test:checkout-promo`, `npm run test:piano`,
+  `npm run test:flags`, `scrape:check`, `scrape:notizie:check`, `test:notizie-*`, `test:moduli`,
+  `test:pdf*`.
+- **Dev server**: porta fissa **5174** (`strictPort` in `vite.config.ts`).
+- **Notizie**: 1–3 articoli/settimana; il cron **fallisce se la settimana resta vuota**;
+  manutenzione dell'archivio con `npm run notizie:ripara-archivio`.
+- **Modulistica / Archivista Capo**: teaser PRO, ricerca live sul catalogo; il PDF nasce dal
+  modulo `creator/pdf/**` (§7.3).
+- **File temporanei in radice** (`dev-server*.log`): non versionati, da ripulire.
+- **Follow-up aperto**: asset pesanti in `public/` **RISOLTO** il 2026-09-22 (set favicon
+  ufficiale ≈91 KB in totale, `npm run favicon` + `npm run test:favicon`); resta la
+  promozione a dominio dedicato di
+  **CV Builder**, **PureFocus** e **Assistente AI** (oggi fuori dalla gerarchia a
+  5 dipartimenti — §1.5 e `DEPARTMENT_MAP.md` §6).
+
+---
+
+## 21. Pipeline di notifica end-to-end (specifica completa)
+
+### 21.1 Schema dei flussi
+
+```
+A) ALERT TEMPO REALE (solo PRO)
+   scraper.yml (07/12/15 UTC Lun–Ven) → src/scraper/index.ts → upsert interpelli
+     └─► lib/notifier.ts :: inviaAlertTelegramTempoReale
+           ├─ gate qualità (avvisoInviabile)
+           ├─ frequency cap (valutaFrequenza)
+           ├─ inviaMessaggioTelegram (Bot API)
+           └─ registraInvioAvviso (ledger file + notifications_log)
+
+B) DIGEST GIORNALIERO (BASE via Telegram, tutti via email)
+   digest.yml (15/16 UTC Lun–Ven) → notifier :: inviaDigestGiornaliero
+     ├─ finestra: eOraDelDigest (ORA_DIGEST, fuso Europe/Rome)
+     ├─ guardia una-email-al-giorno: chiaveDigestGiorno
+     ├─ raccolta voci: vociAttive (solo non scadute) + raggruppaPerProvincia
+     ├─ email: renderDigestEmailHtml → Resend (TIPI_CON_OPPORTUNITA, OGGETTO_OPPORTUNITA)
+     └─ Telegram: formattaDigestTelegram (MAX_VOCI_TELEGRAM_DIGEST) solo per piano BASE
+
+C) PROMEMORIA 24h (email)
+   notifier :: inviaPromemoria24h
+     ├─ regole pure: promemoria.ts (ORE_PROMEMORIA, GIORNI_URGENZA_PROMEMORIA, eVoceUrgente)
+     ├─ chiave di deduplica per coppia utente×interpello: chiavePromemoria
+     └─ renderPromemoriaEmailHtml → Resend
+
+D) DRIP BASE (email, 6 step)
+   auth.users → trigger trg_auth_users_step → Edge send-notification (step 1…)
+   pg_cron step5-notifiche (ogni minuto) → dispatch_step5_due → Edge (tipo 'step5')
+
+E) CICLO DI VITA ABBONAMENTO (email/Telegram)
+   pg_cron → invia_avvisi_scadenza_abbonamento / invia_preavvisi_rinnovo
+             / reverti_prove_pro_scadute / rinnova_free_forever_*
+     └─► Edge send-notification (template _shared/emailTemplates.ts)
+
+F) CANALI TELEGRAM REGIONALI (pubblico)
+   scraper → telegram.ts :: pubblicaInterpelloSuCanali
+     ├─ destinazioniPubblicazione (regionePerProvincia → canalePerRegione, + ATA nazionale)
+     ├─ gate link safety (EsitoPubblicazioneCanali.saltato: nessun post senza avviso specifico)
+     └─ channel_posts_log (un post per canale per avviso)
+```
+
+### 21.2 Le quattro barriere anti-spam (in ordine di applicazione)
+
+| # | Barriera | Implementazione | Regola |
+|---|---|---|---|
+| 1 | **Qualità** | `lib/alertInterpello.ts`: `avvisoInviabile`, `motivoAvvisoNonInviabile` | niente invio senza **link diretto** (`eUrlAvvisoDiretto`) **e** recapito (PEO dalla convenzione MIM) |
+| 2 | **Identità dell'avviso** | `lib/dedupAvvisi.ts`: `improntaAvviso`, `normalizzaPerImpronta`, `GIORNI_IMPRONTA` | la stessa notizia ripubblicata con titolo/data diversi produce la stessa impronta → non si rinotifica |
+| 3 | **Frequency cap** | `lib/frequenzaNotifiche.ts` + `notifier.avvisoGiaInviato` | `MAX_INVII_OPPORTUNITA = 2` in `GIORNI_MASSIMI_OPPORTUNITA` giorni **diversi**, mai due volte lo stesso giorno, **per canale**; `identitaFrequenza = scuola/classi/hashContenuto` (classi normalizzate `A-022` ≡ `A-22`) |
+| 4 | **Ledger persistente** | `lib/ledgerLocale.ts` (`.scuoleradar/notifiche-ledger.json`) + `public.notifications_log` | ogni invio è registrato con il **giorno**; i due ledger si fondono (`unioneChiavi`, `unisciFileLedger`) |
+
+Override e seam: `SCUOLERADAR_LEDGER_PATH` sposta il ledger (usato dai test),
+`inviaEmail`/`inviaTelegram` iniettano i trasporti, `forzato`/`soloUtente`/`soloRegistrare`/`finoA`
+sono le opzioni di `inviaDigestGiornaliero`.
+
+### 21.3 Contratto della Edge `send-notification`
+
+- **Input**: JSON con `tipo` (`step5`, `welcome`, `prova1..3`, `extra`, `recap`, `welcome_pro`,
+  `notifica_pro`, `scadenza_preavviso_7d/3d/1d`, `scadenza_finale`, `rinnovo_preavviso_prova`,
+  `rinnovo_preavviso_pro`), `userId` e contesto; header `x-send-secret: <SEND_NOTIFICATION_SECRET>`.
+- **Output**: JSON con esito per canale. `400` = secret non valido o tipo non mappato (i tipi
+  storici sono risolti via `TIPO_ALIAS` sui template FLUSSO 3).
+- **Template**: `_shared/emailTemplates.ts` (`email_3_1_scadenza_5` … `email_3_4_scadenza_0`,
+  `email_3_5_rinnovo_prova`, `email_3_6_rinnovo_pro`, CTA `{{link_prezzi}}`).
+- **Idempotenza**: la Edge **non** deduplica i contenuti — la deduplica vive nel chiamante
+  (ledger + frequency cap) e in `preavviso_rinnovo_inviato_at` per i preavvisi.
+
+### 21.4 Punti di rottura noti e contromisure
+
+| Sintomo | Causa tipica | Contromisura implementata |
+|---|---|---|
+| "lo stesso alert arriva più volte" | stessa opportunità con hash/titolo diverso | barriera 2 (impronta normalizzata) + barriera 3 (frequency cap) |
+| Utente BASE senza Telegram e senza digest | recapito mancante | il gate qualità blocca l'invio **e** la quota non viene consumata |
+| Digest con voci scadute | filtro mancante | `vociAttive` esclude le scadenze passate |
+| Post canale su avviso generico | fonte non puntuale | gate link safety in `pubblicaInterpelloSuCanali` (`saltato`) |
+| Drip che continua dopo l'upgrade a PRO | sequenza non cancellata | trigger `trg_profiles_stop_drip_on_pro` → `cancella_drip_pro` |
+| Quota non allineata | RPC indeterminata | `incrementa_notifiche_utente` idempotente + `test:migrazioni` |
+
+---
+
+## 22. Error handling, resilienza e anti-silent-fail (specifica)
+
+### 22.1 Error boundary a strati
+
+| Boundary | Dove | Ambito | Fallback |
+|---|---|---|---|
+| `AppErrorBoundary` | `src/components/AppErrorBoundary.tsx` (esterno) | intera SPA | schermata di errore con reset |
+| `DepartmentErrorBoundary` | `src/components/DepartmentErrorBoundary.tsx` | singolo dipartimento (radar/notizie/modulistica/cfu) | contenuto sostitutivo locale: il resto dell'app resta viva |
+| `CfuErrorBoundary` | `departments/cfu/shared/CfuErrorBoundary.tsx` | dominio CFU (motore normativo + OCR) | messaggio dedicato, il calcolatore non crasha la dashboard |
+| `ModuleCreatorErrorBoundary` | `modules/modulistica/creator/ModuleCreatorErrorBoundary.tsx` | sotto-modulo Archivista | la modulistica classica resta utilizzabile |
+
+Regola: **un errore in un dominio non deve mai spegnere la SPA**; i boundary di dominio sono
+montati *dentro* `AppErrorBoundary`, quindi anche un doppio crash degrada in modo ordinato.
+
+### 22.2 Modalità demo (nessun backend)
+
+Con `isSupabaseConfigurato() === false` (`supabase === null`):
+
+- auth locale su `localStorage`, ruolo simulato `guest`/`base`/`pro` pilotabile da `DevToolbar`;
+- feed Radar vuoto ma **strutturato** (`src/data/interpelli.ts` espone il tipo + `interpelli = []`:
+  nessun mock che possa finire in produzione — coperto da `npm run test:dati-fallback`);
+- modulistica e CFU funzionano con cataloghi statici e template locali;
+- scadenze dal fallback `src/data/deadlinesFallback.json`;
+- notizie dal file `data/notizieIngestite.ts` (committato dal cron): la sezione resta visibile.
+
+### 22.3 Gate che impediscono i fallimenti silenziosi
+
+| Gate | Dove | Cosa impedisce |
+|---|---|---|
+| **HTTP integrity** | `newsFetcher.verificaUrlUfficiale` (HEAD → GET su 403/405; solo 200/3xx) + log `✓ HTTP 200 - <url>` | link rotti nelle notizie |
+| **Qualità notifica** | `avvisoInviabile` + `superaGateQualita` | invii senza link diretto o senza recapito |
+| **Link safety canali** | `pubblicaInterpelloSuCanali` | post su canali con URL non puntuali |
+| **Anti-mock dati** | `test:dati-fallback`, `verificaAvviso`/`eSorgenteVerificata` | placeholder ("Scuola non indicata", "Scadenza n/d") |
+| **Editorial gate** | `articoloValido` + `verificaCadenzaSettimanale` (§9.3) | notizie senza sostanza o fuori standard |
+| **Telemetria scraper** | `public.scraper_runs` (`esito`, `errori`, `upsert_ok`, `telegram_attesi/riusciti`) | run "verdi" senza dati |
+| **Cron notizie** | `npm run scrape:notizie` → exit 1 su settimana vuota | bacheca ferma senza segnale |
+| **Ledger illeggibile** | `ledgerLocale` emette **warning esplicito** su file corrotto | deduplica silenziosamente disattivata |
+| **Gate strutturale** | `npm run test:architettura` | degrado architetturale non tracciato |
+
+### 22.4 Pattern di errore nel codice applicativo
+
+1. **Le funzioni non lanciano verso la UI**: `avviaCheckout`, i servizi di dominio e le Edge
+   ritornano `{ ok, errore }` o un esito tipizzato (`EsitoRicerca`, `EsitoGenera`,
+   `EsitoIntervista`, `EsitoTelegram`, `EsitoPubblicazioneCanali`, `EsitoNotifiche`, `EsitoDigest`,
+   `EsitoPromemoria`, `EsitoDispatchUtente`, `EsitoDedup`, `EsitoCompatibilita`).
+2. **Traduzione degli errori**: `lib/authErrors.ts` (`traduciErroreAuthSupabase`,
+   `MSG_ACCOUNT_NON_ATTIVATO`) — mai un messaggio tecnico Supabase in faccia all'utente.
+3. **UI mai bloccata**: gli stati `busy` sono rilasciati in `finally` (regola "mai stuck busy"
+   dell'Archivista); i modali si chiudono anche in caso di errore.
+4. **Fallback graduale**: se il dato ricco manca si degrada senza inventare — `preparaRigheBoard`
+   **scarta** la riga invece di mostrare un segnaposto; se la fonte è un elenco,
+   `risolviFonteGranulare` prova a tracciare la voce specifica e altrimenti pubblica la pagina
+   disponibile con etichetta onesta.
+5. **Nessuna scrittura distruttiva automatica**: le manutenzioni (`dati:pulisci*`,
+   `dati:arricchisci`, `notizie:ripara-archivio`) richiedono `--apply`/`--dry` espliciti.
+
+---
+
+## 23. Confini dei moduli e superfici pubbliche
+
+### 23.1 `src/lib/` — API pubbliche verificate (27 moduli)
+
+| Modulo | Righe | Superficie pubblica (principali) |
+|---|---|---|
+| `alertInterpello.ts` | 704 | `costruisciAvviso`, `avvisoInviabile`, `motivoAvvisoNonInviabile`, `eUrlAvvisoDiretto`, `classificaFonteLink`, `scegliClasseRilevante`, `pulisciTitoloAvviso`, `righeTestoAvviso`, `inferisciOrdineDaTesto`, `formatDataAvviso` |
+| `matchingEngine.ts` | 536 | `searchInterpelli`, `getFeedInterpelli`, `avvisoCompatibileConProfilo`, `utenteAderisceSostegno`, `findUtentiCompatibili`, `elencaUtentiNotificabili`, `normalizzaClasse`, `normalizzaProvincia` |
+| `notifier.ts` | 1.999 | `notificaNuoviInterpelli`, `notificaInterpelliPerUtente`, `inviaDigestGiornaliero`, `inviaPromemoria24h`, `inviaAlertTelegramTempoReale`, `avvisoGiaInviato`, `registraInvioAvviso` |
+| `telegram.ts` | 1.264 | `formattaMessaggioTelegram`, `formattaDigestTelegram`, `formattaPostCanaleTelegram`, `pubblicaInterpelloSuCanali`, `destinazioniPubblicazione`, `CANALI_TELEGRAM_REGIONALI`, `canaleAtaNazionale`, `deveMostrareCtaRadar` |
+| `resend.ts` | 1.145 | `renderEmailHtml`, `inviaNotificaEmail`, `inviaNotificheInterpello`, `renderDigestEmailHtml`, `inviaDigestEmail`, `renderPromemoriaEmailHtml`, `inviaPromemoriaEmail`, `footerEmailHtml`, `OGGETTO_OPPORTUNITA` |
+| `frequenzaNotifiche.ts` | 133 | `valutaFrequenza`, `identitaFrequenza`, `hashContenuto`, `giornoFrequenza`, `MAX_INVII_OPPORTUNITA`, `GIORNI_MASSIMI_OPPORTUNITA` |
+| `ledgerLocale.ts` | 178 | `chiaveLedger`, `ledgerLocaleGia`, `ledgerLocaleRegistra`, `ledgerLocaleSalva`, `unioneChiavi`, `unisciFileLedger`, `percorsoLedgerLocale` |
+| `digest.ts` | 153 | `eOraDelDigest`, `ORA_DIGEST`, `chiaveDigestGiorno`, `ordinaVociDigest`, `raggruppaPerProvincia`, `descrizioneFinestraDigest`, `oraLocaleItalia` |
+| `promemoria.ts` | 122 | `ePromemoriaDovuto`, `motivoPromemoria`, `chiavePromemoria`, `eVoceUrgente`, `oreTrascorse`, `ORE_PROMEMORIA` |
+| `dedupAvvisi.ts` | 97 | `improntaAvviso`, `normalizzaPerImpronta`, `GIORNI_IMPRONTA` |
+| `emailScuola.ts` | 92 | `risolviEmailUfficialeScuola`, `emailDaCodiceMeccanografico`, `normalizzaCodiceMeccanografico`, `estraiCodiceMeccanograficoDaTesto` |
+| `scadenza.ts` | 91 | `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `stileScadenza`, `SOGLIA_IMMINENTE`, `SOGLIA_VICINA` |
+| `liveBoard.ts` | 106 | `preparaRigheBoard`, `nomeScuolaRiga`, `scuolaDaTitolo` |
+| `radarValidation.ts` | 81 | `validaConfigRadar`, `messaggioCampiMancanti`, `impostaPassoRadar`, `STORAGE_KEY_RADAR_WIZARD_STEP` |
+| `school-lookup.ts` | 65 | `resolveSchoolByCode`, `nomeScuolaDaCodice` |
+| `planLimits.ts` | 65 | `LIMITI_RADAR`, `PROGRAMMA_NOTIFICHE`, `BANNER_PIANO`, `pianoLimits`, `limitaSelezione` |
+| `abbonamento.ts` | 68 | `giorniAllaScadenza`, `inFinestraPreavviso`, `etichettaScadenzaAbbonamento`, `dataScadenzaBreve`, `FINESTRA_PREAVVISO_RINNOVO` |
+| `promo.ts` | 168 | `validaPromo`, `CATALOGO_PROMO`, `leggiOverridePromo`, `salvaOverridePromo`, `SCONTO_PROMO_EUR` |
+| `pricing.ts` | 28 | `PIANI`, `PianoId`, `GIORNI_TRIAL_PRO`, `STORAGE_KEY_INTENDED_PLAN`, `STORAGE_KEY_INTENDED_PLAN_DATA` |
+| `purefocus-bridge.ts` | 116 | `generatePureFocusBridgeToken`, `generatePureFocusBridgeUrl`, `verifyPureFocusBridgeToken` |
+| `auth-bridge.ts` | 58 | `ottieniStatoPro`, `buildPureFocusBridgeUrl` |
+| `authErrors.ts` | 109 | `traduciErroreAuthSupabase`, `ErroreAuthSupabase`, `MSG_ACCOUNT_NON_ATTIVATO` |
+| `analytics.ts` | 171 | `initAnalytics`, `trackPageview`, `track`, `identify` |
+| `interpelloRouting.ts` | 39 | `chiaveInterpelloDaParam`, `eUuid` |
+| `deep-parser.ts` | 69 | `parseDeepInterpelloContent` |
+| `showroomRedirect.ts` | 27 | `getPostLoginRedirect`, `setPostLoginRedirect`, `SR_POST_LOGIN_REDIRECT` |
+| `supabase.ts` | 20 | `supabase`, `isSupabaseConfigurato` |
+
+### 23.2 Confini dei componenti globali (`src/components/`, 43 file)
+
+- **Primitivi senza logica di dominio** (solo props): `Modal`, `Pill`, `Toast`, `Accordion`,
+  `Footer`, `ScrollToTop`, `ExperimentalBanner`, `ProFeatureModal`, `ServiziPaywall`.
+- **Modali di flusso applicativo** (stato in `AppContext` via `useModaliApp`): `AuthModal`,
+  `VetrinaModal`, `AbbonamentoModal`, `DatiProfiloModal`, `ForcePasswordModal`,
+  `SoftOnboardingModal`, `OAuthBounceModal`, `HealthCheckModal`.
+- **Composizione per area**: `header/**` (6 file + `navLinks`/`tipiUtente`), `landing/**` (4),
+  `modals/**` (1), `profile/**` (1) — un componente per file, e i file di un'area nella sua
+  sottocartella (i `.tsx` fuori da `components/`/`pages/` sono segnalati come `W-UI`).
+- **Legacy in attesa di migrazione**: `CfuTool.tsx` (sostituito da `departments/cfu/`),
+  `CvTool.tsx` (candidato a `departments/cv/`).
+- **Regola di consumo**: i globali ricevono dati/stato via props o `useApp` e **non** importano
+  mai file interni di un dominio (solo entry point pubblici, quando serve).
+
+### 23.3 Confini dei domini (`src/departments/*`, `src/modules/*`)
+
+| Dominio | Entry pubblica | Vietato dall'esterno | Chi lo monta |
+|---|---|---|---|
+| `radar` | `RadarWizardModal`, `PreferenzeRadar`, `RadarStatusToggle` | `wizard/**`, `preferenze/**`, `flightBoard/**`, `SimulatorRadar`, `valutaConfigurazione` | `App.tsx` (modal), `DashboardPage` |
+| `notizie` | `NotizieHero`, `NotizieGrid`, `NotizieDettaglio`, servizi/tipi | `services/**` interni, `data/**` | `NotiziePage`, `NotizieDettaglioPage`, hero dashboard |
+| `scadenze` | `RevolverScadenze` (+ `RevolverScadenzeProps`) | `components/**`, `hooks/**`, `engine.ts` | hero di Notizie, dashboard |
+| `admin` | `TabUtenti`, `TabRadar`, `TabAccount`, `ADMIN_EMAILS`, `STORAGE_KEY_ADMIN_REDIRECT` | `tabs/**`, `adminService`, `adminUi` | `AdminPage` |
+| `cfu` | `CalcolatoreCfuApp`, `CalcolatoreCfuLanding` | `calcolatore/**`, `engine/**`, `dossier/**`, `shared/**` | `CalcolatoreCFUPage`, `CalcolatoreCFUDashboardPage` |
+| `modules/modulistica` | `ModuliModule` + tipi | `components/**`, `creator/**`, `hooks/**` | `ModuliPage` |
+
+Verifica automatica di questi confini: `npm run test:architettura` (`E-ENTRY`, `E-DOM`,
+`E-STRAT`, `E-ROOT`) con il debito congelato in `scripts/architettura-baseline.json`.
+
+---
+
+## 24. Runbook operativi
+
+### 24.1 Deploy del frontend (Vercel)
+
+0. `npm run test:favicon` → set favicon ufficiale e `index.html` ↔ `public/` coerenti
+   (e `git status --short -- index.html public`: **committa** l'HTML e gli asset — un fix
+   non committato non entra in produzione, ed è la causa della favicon scura vista fino
+   al 2026-09-22);
+1. `npm run typecheck` → exit 0;
+2. `npm run build` → `dist/` (attesi in radice: `favicon*.png`, `favicon.ico`,
+   `apple-touch-icon.png`, `logo.png`);
+3. push su `main` → build automatico (rewrite SPA `/(.*) → /index.html` da `vercel.json`);
+4. verifica post-deploy: `/`, `/notizie`, `/dashboard/moduli`, `/dashboard/calcolatore-cfu`
+   + **hard-reload della scheda**: le favicon sono cache-ate a lungo, se resta quella
+   vecchia prova in incognito o svuota la cache del sito.
+
+### 24.2 Migrazioni DB
+
+```bash
+supabase migration new <nome_descrittivo>     # crea il file con timestamp
+# … scrivi il DDL (seguendo §14.2) …
+supabase db push --project-ref gwdmsgsshvdnfrplbjiv
+npm run db:verifica && npm run test:migrazioni  # guard di regressione
+```
+
+Regole: mai modificare una migrazione già applicata (si aggiunge una nuova); ogni funzione
+`security definer` dichiara `set search_path = public`; ogni tabella nuova nasce con RLS
+abilitata e con una decisione esplicita ("policy client" oppure "solo service_role").
+
+### 24.3 Deploy di una Edge Function
+
+```bash
+supabase secrets set <NOME>=<valore> --project-ref gwdmsgsshvdnfrplbjiv   # se serve
+supabase functions deploy <nome> --project-ref gwdmsgsshvdnfrplbjiv
+```
+
+Verifica: `HealthCheckModal` nell'app (`services/healthCheck.ts`) e una chiamata reale con
+JWT/secret corretto.
+
+### 24.4 Scraper interpelli
+
+```bash
+npm run scrape:check          # typecheck della pipeline
+npm run scrape -- --dry-run   # nessuna scrittura
+npm run scrape                # scrittura + notifiche
+```
+
+Diagnostica post-run: `scraper_runs` (esito/errori/telegram_*), poi `diag-flightboard.ts`,
+`diag-fonti.ts`, `diag-interpelli-multiregione.ts`, `audit-dati.ts`.
+Igiene: `npm run dati:pulisci-scaduti` (04:00 UTC dal workflow), `npm run dati:pulisci`.
+
+### 24.5 Notizie (editoriale)
+
+```bash
+npm run scrape:notizie:check
+npm run scrape:notizie -- --dry-run
+npm run scrape:notizie                      # scrive data/notizieIngestite.ts
+npm run notizie:ripara-archivio -- --dry    # anteprima della riscrittura dello storico
+npm run test:notizie-feed && npm run test:notizie-editoriale
+npm run test:notizie-nazionale && npm run test:notizie-rate
+```
+
+Se il cron fallisce la settimana: leggere il log dell'ingestione (waterfall dei livelli), poi
+`test:notizie-nazionale` per distinguere un problema di policy da un problema di fonti.
+
+### 24.6 Notifiche (digest, promemoria, alert)
+
+```bash
+npm run test:notifier-dry            # end-to-end senza effetti collaterali
+npm run notifiche:digest             # digest manuale
+npm run notifiche:promemoria         # promemoria manuale
+npm run admin:dispatch -- <email>    # digest immediato per un singolo utente
+npm run test:qualita && npm run test:frequenza && npm run test:dedup:utente
+```
+
+In caso di "notifiche ripetute": controllare `notifications_log` + ledger file, poi
+`npm run ledger:unisci` (fusione) e `npm run test:ledger`.
+
+### 24.7 Modulistica e PDF
+
+```bash
+npm run test:moduli            # integrità del catalogo
+npm run test:pdf && npm run test:pdf:brevi && npm run test:pdf:universita && npm run test:pdf:completo
+npx tsx scripts/_validate-modulistica.ts
+```
+
+### 24.8 Billing & Stripe (passaggio TEST → LIVE)
+
+1. verificare i Price ID nei secret (`STRIPE_PRICE_ID_*`) e in `.env` (`VITE_STRIPE_PRICE_*`);
+2. `STRIPE_SECRET_KEY` con prefisso `sk_live_` → `STRIPE_MODE=live` (rilevato automaticamente);
+3. firmare il webhook: `STRIPE_WEBHOOK_SECRET` + `WEBHOOK_ENDPOINT`;
+4. test: `npm run test:rinnovo-preavvisi` + HealthCheck (`testCheckout`, `testPromoBeta1Anno`);
+5. coupon: `REFERRAL_COUPON_ID`, `STRIPE_COUPON_BETA1ANNO`, `STRIPE_COUPON_RADAR50`.
+
+---
+
+## 25. Invarianti, glossario e mappa di lettura
+
+### 25.1 Invarianti non negoziabili
+
+1. **Nessun invio senza link diretto e recapito** (`avvisoInviabile`).
+2. **Nessuna notifica duplicata** (impronta + frequency cap + ledger).
+3. **Nessun dato inventato**: mai placeholder in UI o nei post; la riga si scarta.
+4. **Nessun errore silenzioso**: ogni fallimento lascia una traccia (log, `scraper_runs`,
+   `admin_telegram_alerts`, exit code).
+5. **Nessun segreto nel bundle**: solo `VITE_*` è pubblico; chiavi e token solo server-side.
+6. **Un file = una responsabilità** (250/300 righe, gate `test:architettura`).
+7. **I domini comunicano solo via `index.ts` / `AppContext`**.
+8. **La modalità demo funziona sempre** (nessun backend necessario per navigare l'app).
+9. **Il calcolatore CFU non manda nulla in rete senza consenso** (privacy-first, OCR locale).
+10. **Ogni modifica alle regole editoriali si riflette sull'archivio** con
+    `npm run notizie:ripara-archivio`.
+
+### 25.2 Glossario
+
+| Termine | Significato nel progetto |
+|---|---|
+| **Avviso / interpello** | Opportunità di lavoro pubblicata da una scuola (record `interpelli`) |
+| **PRO** | Piano a pagamento (annuale/mensile) o trial; alias storici: "VIP", "Admin Reale" |
+| **BASE / prova** | Piano gratuito: 3 notifiche per anno scolastico + strumenti base |
+| **Dipartimento** | Modulo verticale isolato in `src/departments/` (o `src/modules/`) |
+| **Flight board / Radar Live** | Vetrina pubblica delle opportunità, con righe mai placeholder |
+| **Ledger** | Registro invii (file `.scuoleradar/notifiche-ledger.json` + `notifications_log`) |
+| **Frequency cap** | Barriera anti-spam: max 2 invii in 2 giorni diversi per identità/canale |
+| **Gate** | Controllo che blocca pubblicazione/invio/merge se non superato |
+| **Impronta** | Identità stabile dell'avviso (provincia+scuola+classi normalizzate+titolo) |
+| **Scheda avviso** | `/interpello/:id` con gerarchia, guida operativa e un solo link esterno |
+| **Sostegno** | Preferenza/filtro per posti di sostegno (`profiles.sostegno`) |
+| **Waterfall** | Sequenza dei livelli di raccolta notizie (MIM → GU → ARAN → giurisdizione) |
+| **Soft cap / hard cap** | 250 righe (pianificare lo split) / 300 righe (vietato su file nuovi) |
+
+### 25.3 Mappa di lettura (da dove partire)
+
+| Se devi… | Leggi |
+|---|---|
+| Orientarti nel prodotto | `DEPARTMENT_MAP.md` (§1–§4) |
+| Rispettare le regole di codice | `MODULAR_ARCHITECTURE.md` + §1.6 di questo documento |
+| Capire il database | §13.11–§13.16 |
+| Chiamare correttamente una RPC/Edge | §14, §15 |
+| Lavorare sulle notifiche | §6 + §21 |
+| Lavorare sulle notizie | §9 + `BLOG_EDITORIAL_GUIDELINES.md` |
+| Lavorare su modulistica/PDF | §7 + `PDF_DESIGN_SYSTEM.md` |
+| Capire i flussi di fallimento | §22 |
+| Fare manutenzione/deploy | §18 + §24 |
+| Refactoring strutturale | `STRUCTURAL_AUDIT.md` + §6 di questo documento |
 

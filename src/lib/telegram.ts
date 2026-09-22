@@ -20,17 +20,20 @@ import {
 } from './resend';
 import { province } from '../data/province';
 import {
+  BRAND_RIGA_TELEGRAM,
+  CTA_NOTIZIE_TELEGRAM,
   EMAIL_ETICHETTA,
   EMAIL_ICONA,
+  ETICHETTA_AVVISO_UFFICIALE as ETICHETTA_AVVISO_UFFICIALE_SHARED,
   ICONA_RIGA,
   costruisciAvviso,
+  eUrlAvvisoDiretto,
   emailAvviso,
-  etichettaFonteLink,
   pulisciTitoloAvviso,
   scegliClasseRilevante,
   suggerimentoRicercaAvviso,
-  urlEsterna,
 } from './alertInterpello';
+import { gateTelegram } from '../config/gateNotifiche';
 
 /** Interfaccia per l'ambiente (evita la dipendenza da @types/node nel frontend). */
 declare const process: { env: Record<string, string | undefined> };
@@ -93,15 +96,6 @@ function proUrl(dashboardUrl: string): string {
   }
 }
 
-/** True se l'URL punta a un file PDF (es. avviso pubblicato in PDF sull'Albo). */
-function eLinkPdf(url?: string | null): boolean {
-  try {
-    return new URL(url ?? '').pathname.toLowerCase().endsWith('.pdf');
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Restituisce l'URL SOLO se è http(s) assoluto e valido, altrimenti `null`.
  * Evita di inviare a Telegram/email link relativi o malformati (che farebbero
@@ -132,15 +126,6 @@ export function pulisciUrlTelegram(url?: string | null): string {
     .replace(/[.,;:'")\]]+$/g, '');
 }
 
-/**
- * Barra/CTA per il PDF ufficiale: URL nativo e visibile (nessun popup di
- * conferma) invece di un'etichetta che nasconde la destinazione.
- */
-function barraPdf(url: string): string {
-  const href = pulisciUrlTelegram(url);
-  return `📄 <b>PDF ufficiale</b>\n${href}`;
-}
-
 /** Restituisce il token del bot o `null` se non configurato (o placeholder). */
 export function getTelegramBotToken(): string | null {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -166,6 +151,28 @@ interface TestoTelegram {
   cta?: (linkPro: string, linkOpp: string, dashboardUrl: string, etichettaOpp: string) => string;
 }
 
+/**
+ * Apertura UNIFORME degli alert di opportunità: il copy di brand COMPLETO
+ * ("Abbiamo trovato una nuova opportunità per te"), mai la versione abbreviata
+ * "Nuova opportunità: …". Le voci `prova1`/`prova2`/`prova3`/`notifica_pro`
+ * condividono la stessa apertura.
+ */
+const TESTO_OPPORTUNITA = 'Abbiamo trovato una nuova opportunità per te';
+const TESTA_OPPORTUNITA = `🎯 <b>${TESTO_OPPORTUNITA}</b>`;
+
+/**
+ * Testata CONTESTUALE dell'alert: copy di brand completo + classe di concorso e
+ * provincia del match (esattamente le preferenze scelte nel Radar). Se il
+ * contesto manca resta il copy completo, mai una riga abbreviata.
+ */
+export function aperturaOpportunita(
+  classe?: string | null,
+  provincia?: string | null,
+): string {
+  const contesto = [classe, provincia].filter(Boolean).join(' · ');
+  return contesto ? `${TESTA_OPPORTUNITA}: ${escapeHtml(contesto)}` : TESTA_OPPORTUNITA;
+}
+
 const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
   // Voce di DIGEST: serve alla completezza della mappa, ma l'invio reale del
   // riepilogo usa il renderer dedicato `formattaDigestTelegram` (una voce per
@@ -175,32 +182,34 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
     paragrafi: [],
     cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 ${pulisciUrlTelegram(dashboardUrl)}`,
   },
+  // BENVENUTO (post-registrazione): mese di PRO in omaggio GIÀ attivo, vantaggi
+  // elencati come in email. Nessun riferimento al vecchio piano Base.
   welcome: {
     testa: '🎉 Mese di PRO attivo — benvenuto in ScuoleRadar!',
     paragrafi: [
-      'Per i primi 30 giorni hai il piano PRO gratuito.',
-      'Hai accesso a Modulistica, Crea CV, Calcolatore CFU e Radar Scuole con notifiche illimitate.',
-      'Quando vuoi sapere cosa succede di importante nella scuola, passa dal nostro Notiziario.',
+      'Il tuo <b>mese di PRO in omaggio</b> è già attivo: da questo momento hai tutto disponibile, senza restrizioni.',
+      'Radar Scuole con notifiche illimitate, Modulistica scolastica, Crea CV e Calcolatore CFU.',
+      'Indica provincia e classi di concorso: da lì cerchiamo noi le opportunità per te, ogni giorno.',
     ],
     cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 ${pulisciUrlTelegram(dashboardUrl)}`,
   },
   prova1: {
-    testa: '🎯 Nuova opportunità per te',
+    testa: TESTA_OPPORTUNITA,
     paragrafi: [],
     cta: (_linkPro, linkOpp, _dashboardUrl, etichettaOpp) =>
-      `👉 <b>${escapeHtml(etichettaOpp)}</b>\n${pulisciUrlTelegram(linkOpp)}`,
+      `👉 <b>${escapeHtml(etichettaOpp)}</b>`,
   },
   prova2: {
-    testa: '🎯 Nuova opportunità per te',
+    testa: TESTA_OPPORTUNITA,
     paragrafi: [],
     cta: (_linkPro, linkOpp, _dashboardUrl, etichettaOpp) =>
-      `👉 <b>${escapeHtml(etichettaOpp)}</b>\n${pulisciUrlTelegram(linkOpp)}`,
+      `👉 <b>${escapeHtml(etichettaOpp)}</b>`,
   },
   prova3: {
-    testa: '🎯 Nuova opportunità per te',
+    testa: TESTA_OPPORTUNITA,
     paragrafi: [],
     cta: (_linkPro, linkOpp, _dashboardUrl, etichettaOpp) =>
-      `👉 <b>${escapeHtml(etichettaOpp)}</b>\n${pulisciUrlTelegram(linkOpp)}`,
+      `👉 <b>${escapeHtml(etichettaOpp)}</b>`,
   },
   extra: {
     testa: '🛎️ Notifiche del piano gratuito in pausa',
@@ -222,11 +231,8 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
     testa: '🎉 Benvenuto in ScuoleRadar PRO!',
     paragrafi: [
       'Da oggi continuiamo a cercare per te le opportunità più interessanti in base al tuo profilo: interpelli, supplenze, incarichi, PNRR, PON, POR e altro ancora.',
-      'Tu non devi passare ore a cercarle: quando troviamo qualcosa che sembra fatto per te, te lo segnaliamo.',
+      'Tu non devi passare ore a cercarle: quando troviamo qualcosa che corrisponde al tuo profilo, te lo segnaliamo.',
       'E hai accesso a tutti i servizi PRO di ScuoleRadar: CV, calcolo CFU, modulistica, Pure Focus e gli altri strumenti che stiamo sviluppando per chi lavora nella scuola.',
-      'Hai fatto un buon investimento.',
-      'Noi continuiamo a cercare per te!',
-      'A presto!',
     ],
     cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 ${pulisciUrlTelegram(dashboardUrl)}`,
   },
@@ -234,7 +240,7 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
     testa: '🎯 Radar attivato con successo!',
     paragrafi: [
       'Ora puoi rilassarti: il tuo Radar è attivo e sta già lavorando per te.',
-      "Non ti invieremo comunicazioni inutili e spam. Quando vedi un nostro messaggio qui su Telegram, aprilo subito: abbiamo intercettato un'opportunità per te!",
+      'Non ti invieremo comunicazioni inutili e spam: quando arriva un messaggio qui su Telegram, aprilo subito — significa che c\'è un\'opportunità compatibile con il tuo profilo.',
     ],
     cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 ${pulisciUrlTelegram(dashboardUrl)}`,
   },
@@ -248,10 +254,10 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
     cta: (_linkPro, _linkOpp, dashboardUrl) => `👉 ${pulisciUrlTelegram(dashboardUrl)}`,
   },
   notifica_pro: {
-    testa: 'Abbiamo trovato una nuova opportunità per te!',
+    testa: TESTA_OPPORTUNITA,
     paragrafi: [],
     cta: (_linkPro, linkOpp, _dashboardUrl, etichettaOpp) =>
-      `👉 <b>${escapeHtml(etichettaOpp)}</b>\n${pulisciUrlTelegram(linkOpp)}`,
+      `👉 <b>${escapeHtml(etichettaOpp)}</b>`,
   },
 };
 
@@ -260,12 +266,17 @@ const TESTO_TELEGRAM: Record<TipoMessaggio, TestoTelegram> = {
 /**
  * Formatta il messaggio per una delle 8 tipologie (parse_mode HTML).
  * `interpello` può essere null per i messaggi transazionali (welcome, recap, welcome_pro).
+ *
+ * `opts.mostraCtaRadar` forza (true/false) la CTA di ricalibrazione del Radar:
+ * quando è omesso la decisione è automatica (~20% delle comunicazioni, stabile
+ * sull'identità dell'avviso — vedi `deveMostrareCtaRadar`).
  */
 export function formattaMessaggioTelegram(
   interpello: DettagliNotifica | null,
   classe: string,
   dashboardUrl: string = DASHBOARD_URL,
   tipo: TipoMessaggio = 'welcome',
+  opts: { mostraCtaRadar?: boolean } = {},
 ): string {
   const copy = TESTO_TELEGRAM[tipo];
   const linkPro = proUrl(dashboardUrl);
@@ -314,10 +325,10 @@ export function formattaMessaggioTelegram(
   }
 
   // UNA SOLA CTA cliccabile per l'opportunità: il link di fonte è il bottone in
-  // fondo, con etichetta ONESTA (mai "Candidati" se punta a un Albo Pretorio).
+  // fondo, con etichetta canonica `🔗 Fonte Ufficiale` (URL solo nell'href).
   // La vecchia riga duplicata "Fonte ufficiale verificata … apri e candidati" è
   // stata rimossa: puntava allo stesso URL del bottone.
-  const etichettaOpp = etichettaFonteLink(linkOpp);
+  const etichettaOpp = ETICHETTA_FONTE_UFFICIALE;
 
   // Email di candidatura della scuola: mostrata SOLO se estratta con certezza.
   // Se manca si OMETTE la riga (mai "Email non disponibile": nessuno stato
@@ -329,28 +340,48 @@ export function formattaMessaggioTelegram(
       : '';
 
   // LAYOUT degli ALERT (testo pulito, niente immagini e niente marchio ripetuto):
-  //   testata · titolo · dettagli · 📧 candidature · 🔗 avviso ufficiale · CTA radar
-  // I messaggi di CICLO DI VITA mantengono il loro copy + il footer Notiziario.
-  const parti: string[] = [];
-  parti.push(copy.testa);
+  //   brand · apertura · titolo · dettagli · 📧 candidature · 👉 avviso ufficiale · CTA radar
+  // I messaggi di CICLO DI VITA mantengono il loro copy + la CTA Notizie.
+  // TESTATA BRAND: UNA sola riga compatta (icona + nome ufficiale) in cima a
+  // OGNI messaggio: nessun logo grande, nessuna anteprima a occupare lo schermo.
+  const parti: string[] = [BRAND_RIGA_TELEGRAM];
+  // Apertura CONTESTUALE per gli alert (classe · provincia): la vecchia frase
+  // generica non diceva nulla di utile.
+  parti.push(
+    conOpportunita
+      ? aperturaOpportunita(
+          classe,
+          nomeProvincia(interpello?.province ?? '') ?? interpello?.province ?? '',
+        )
+      : copy.testa,
+  );
   if (titolo) parti.push(titolo);
   if (dettagli) parti.push(dettagli);
   if (emailRiga) parti.push(emailRiga);
 
   if (conOpportunita) {
-    // LINK alla pubblicazione ufficiale: SEMPRE presente (URL visibile, nessun
-    // link nascosto). Se la fonte non è disponibile la riga è omessa — mai un
-    // fallback a una pagina interna spacciata per "fonte".
+    // LINK alla pubblicazione ufficiale: etichetta canonica `🔗 Fonte Ufficiale`
+    // (l'anteprima del link è disattivata a monte: nessun riquadro con loghi o
+    // immagini). La riga compare SOLO con un avviso diretto (`eUrlAvvisoDiretto`
+    // dentro `rigaFonteUfficiale`): con una home, un elenco o una pagina di
+    // ricerca il messaggio resta senza riga di fonte — mai un fallback generico.
     const rigaLink = rigaAvvisoUfficiale(linkOpp);
     if (rigaLink) parti.push(rigaLink);
     // CTA UNICA: ricalibrare il Radar. Sostituisce il vecchio footer promozionale
     // e la guida operativa ("Questo avviso non indica la pagina ufficiale…"),
     // rimossa perché confondeva più di quanto aiutasse.
-    parti.push(ctaRadarInteressi(dashboardUrl));
+    // FREQUENZA RIDOTTA: compare solo nel ~20% delle comunicazioni personalizzate
+    // (scelta stabile sull'identità dell'avviso) — vedi `deveMostrareCtaRadar`.
+    const mostraCtaRadar =
+      opts.mostraCtaRadar ??
+      deveMostrareCtaRadar(interpello?.id ?? interpello?.link ?? null);
+    if (mostraCtaRadar) parti.push(ctaRadarInteressi(dashboardUrl));
+    // CTA informativa Notizie (formato a due righe, identico a email e digest).
+    parti.push(CTA_NOTIZIE_TELEGRAM);
   } else {
     if (copy.paragrafi.length) parti.push(copy.paragrafi.join('\n'));
     if (copy.cta) parti.push(copy.cta(linkPro, linkOpp, dashboardUrl, etichettaOpp));
-    parti.push(FOOTER_NOTIZIE);
+    parti.push(CTA_NOTIZIE_TELEGRAM);
   }
 
   return parti.join('\n\n');
@@ -378,18 +409,91 @@ const TELEGRAM_MAX_TENTATIVI = 3;
 export const CTA_RADAR_INTERESSI =
   '👉 Se questi risultati non corrispondono più ai tuoi interessi, modifica il tuo radar su';
 
-/** Etichetta condivisa della riga con il link alla fonte ufficiale dell'avviso. */
-export const ETICHETTA_AVVISO_UFFICIALE = "Apri l'avviso ufficiale";
+/**
+ * FREQUENZA della CTA di ricalibrazione del Radar nelle comunicazioni
+ * personalizzate: 20%. La riga è utile ma non deve ripetersi in OGNI messaggio
+ * (diventa rumore e fa sembrare l'alert automatico un banner). Viene mostrata
+ * solo nel ~20% degli alert, scelto in modo STABILE sull'identità dell'avviso:
+ * lo stesso avviso non alterna il footer tra un tentativo e il successivo.
+ */
+export const FREQUENZA_CTA_RADAR = 0.2;
 
-/** Footer informativo (Notiziario): solo per i messaggi di ciclo di vita. */
-export const FOOTER_NOTIZIE =
-  '📌 Quando vuoi sapere cosa succede di importante, vieni qui: https://www.scuoleradar.it/notizie';
+/**
+ * Hash FNV-1a a 32 bit → frazione [0, 1). Deterministico: stesso seme ⇒ stessa
+ * decisione (nessun footer "ballerino" in caso di retry dello stesso invio).
+ */
+function frazioneDaSeme(seme: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seme.length; i += 1) {
+    h ^= seme.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return (h >>> 0) / 0x1_0000_0000;
+}
 
-/** Riga "🔗 Apri l'avviso ufficiale: <url>" (URL VISIBILE: nessun popup). */
-export function rigaAvvisoUfficiale(link?: string | null): string {
+/**
+ * True quando la CTA di ricalibrazione del Radar deve comparire nel messaggio.
+ * Con un seme (id/URL dell'avviso) la decisione è DETERMINISTICA e copre ~20%
+ * delle comunicazioni; senza seme si usa il caso (es. messaggi di ciclo di vita).
+ */
+export function deveMostrareCtaRadar(seme?: string | null): boolean {
+  const s = (seme ?? '').trim();
+  if (!s) return Math.random() < FREQUENZA_CTA_RADAR;
+  return frazioneDaSeme(s) < FREQUENZA_CTA_RADAR;
+}
+
+/**
+ * Etichetta CONDIVISA storica del link alla fonte (definita in `alertInterpello.ts`
+ * e usata dalle EMAIL): resta esportata per parità con gli altri canali, ma nei
+ * messaggi Telegram la riga della fonte usa l'etichetta canonica
+ * `ETICHETTA_FONTE_UFFICIALE` (sotto).
+ */
+export const ETICHETTA_AVVISO_UFFICIALE = ETICHETTA_AVVISO_UFFICIALE_SHARED;
+
+/**
+ * ETICHETTA UNICA della riga con la FONTE UFFICIALE in OGNI messaggio Telegram
+ * (alert personali, digest, post dei canali pubblici).
+ *
+ * Regole di prodotto applicate QUI (non nei chiamanti):
+ *   · testo iperlinkato pulito `🔗 Fonte Ufficiale`: l'URL ufficiale non compare
+ *     MAI in chiaro nel messaggio, sta solo nell'`href`;
+ *   · la destinazione deve essere un avviso SPECIFICO e DIRETTO (gate
+ *     `eUrlAvvisoDiretto`): mai home dell'ente, elenchi/archivi/tag, landing
+ *     regionali o pagine di ricerca (`?s=INTERPELLO`). Un link non diretto
+ *     produce una riga VUOTA: nessun fallback a una pagina di ricerca.
+ */
+export const ETICHETTA_FONTE_UFFICIALE = '🔗 Fonte Ufficiale';
+
+/**
+ * Riga della fonte ufficiale: `<a href="URL"><b>🔗 Fonte Ufficiale</b></a>`.
+ * Ritorna stringa vuota quando il link non è un avviso diretto (o è assente):
+ * il messaggio resta senza riga di fonte, mai con un link generico.
+ *
+ * L'anteprima nativa è disattivata in `inviaMessaggioTelegram`
+ * (`link_preview_options.is_disabled`): nessun riquadro con loghi/immagini.
+ */
+export function rigaFonteUfficiale(link?: string | null): string {
+  if (!eUrlAvvisoDiretto(link)) return '';
   const url = urlAssolutaValida(link);
   if (!url) return '';
-  return `🔗 <b>${escapeHtml(ETICHETTA_AVVISO_UFFICIALE)}</b>: ${pulisciUrlTelegram(url)}`;
+  return `<a href="${escapeHtml(pulisciUrlTelegram(url))}"><b>${escapeHtml(
+    ETICHETTA_FONTE_UFFICIALE,
+  )}</b></a>`;
+}
+
+/**
+ * CTA Notizie (due righe esatte): unica in tutti i canali.
+ * Vedi `CTA_NOTIZIE_TELEGRAM` in `alertInterpello.ts`.
+ */
+export const FOOTER_NOTIZIE = CTA_NOTIZIE_TELEGRAM;
+
+/**
+ * Riga dell'avviso ufficiale negli ALERT personali e nel DIGEST: delega alla riga
+ * canonica (`rigaFonteUfficiale`) così l'etichetta e il gate sui link diretti
+ * restano UNICI in tutto il modulo Telegram.
+ */
+export function rigaAvvisoUfficiale(link?: string | null): string {
+  return rigaFonteUfficiale(link);
 }
 
 /** Riga finale dell'alert con il link al setup del Radar dell'utente. */
@@ -461,18 +565,50 @@ async function chiamaBotApi(metodo: string, payload: Record<string, unknown>): P
 }
 
 /**
- * Invia un messaggio di TESTO al chat_id indicato (`parse_mode: 'HTML'` per la
- * formattazione: bold, link).
+ * PAYLOAD UNICO di `sendMessage` con le ANTEPRIME DISATTIVATE.
+ *
+ * Tutti gli invii di testo Telegram passano da qui, quindi nessun chiamante può
+ * reintrodurre i riquadri di anteprima (che caricavano loghi istituzionali o
+ * immagini casuali delle pagine di fonte, coprendo il messaggio):
+ *   · `link_preview_options.is_disabled` → opzione corrente della Bot API;
+ *   · `disable_web_page_preview: true`   → fallback per client/bot più vecchi.
+ *
+ * Esportato per essere verificabile dai test: la regressione sulle anteprime è
+ * un semplice assert su questo payload.
  */
-export async function inviaMessaggioTelegram(chatId: string, testo: string): Promise<EsitoTelegram> {
-  const destinatario = chatId.trim();
-  if (!destinatario) return { ok: false, error: 'Chat ID mancante' };
-  return chiamaBotApi('sendMessage', {
-    chat_id: destinatario,
+export function payloadMessaggioTesto(chatId: string, testo: string): Record<string, unknown> {
+  return {
+    chat_id: chatId,
     text: testo,
     parse_mode: 'HTML',
-    disable_web_page_preview: false,
-  });
+    link_preview_options: { is_disabled: true },
+    disable_web_page_preview: true,
+  };
+}
+
+/**
+ * Invia un messaggio di TESTO al chat_id indicato (`parse_mode: 'HTML'` per la
+ * formattazione: bold, link).
+ *
+ * ANTEPRIME DISATTIVATE: vedi `payloadMessaggioTesto` — punto unico del payload.
+ *
+ * GATE FEATURE FLAGS (punto unico di ogni invio Telegram): con dipartimento
+ * Radar in `test` il messaggio parte solo verso l'account admin di test (o
+ * viene dirottato lì), in `off` non parte affatto — vale anche per i canali
+ * pubblici, così un modulo in prova non raggiunge mai terzi.
+ */
+export async function inviaMessaggioTelegram(chatId: string, testo: string): Promise<EsitoTelegram> {
+  const gate = gateTelegram('radar', chatId);
+  if (!gate.consentito || !gate.recapito) return { ok: false, error: `gate dipartimenti: ${gate.motivo}` };
+  const destinatario = gate.recapito.trim();
+  if (!destinatario) return { ok: false, error: 'Chat ID mancante' };
+  // GARANZIA DI BRAND: OGNI messaggio parte dalla testata compatta CLIICCABILE
+  // (icona + `Scuole Radar.it` verso la home). È idempotente: i renderer che la
+  // includono già non la duplicano.
+  const corpo = testo.startsWith(BRAND_RIGA_TELEGRAM)
+    ? testo
+    : `${BRAND_RIGA_TELEGRAM}\n\n${testo}`;
+  return chiamaBotApi('sendMessage', payloadMessaggioTesto(destinatario, corpo));
 }
 
 /**
@@ -486,7 +622,13 @@ export async function inviaMessaggioTelegram(chatId: string, testo: string): Pro
 export async function inviaNotificaTelegram(
   chatId: string,
   interpello: DettagliNotifica | null,
-  opts: { classiUtente?: string[]; dashboardUrl?: string; tipo?: TipoMessaggio } = {},
+  opts: {
+    classiUtente?: string[];
+    dashboardUrl?: string;
+    tipo?: TipoMessaggio;
+    /** Forza la presenza/assenza della CTA Radar (~20% di default, stabile). */
+    mostraCtaRadar?: boolean;
+  } = {},
 ): Promise<EsitoTelegram> {
   const classe = interpello
     ? classeRilevante(interpello, {
@@ -496,7 +638,9 @@ export async function inviaNotificaTelegram(
       })
     : '';
   const tipo = opts.tipo ?? 'welcome';
-  const testo = formattaMessaggioTelegram(interpello, classe, opts.dashboardUrl, tipo);
+  const testo = formattaMessaggioTelegram(interpello, classe, opts.dashboardUrl, tipo, {
+    mostraCtaRadar: opts.mostraCtaRadar,
+  });
   return inviaMessaggioTelegram(chatId, testo);
 }
 
@@ -530,7 +674,7 @@ export const CHIAVE_CANALE_ATA_NAZIONALE = 'ATA Italia (National)';
  *
  * Le regioni NON ancora attive non hanno un canale regionale: per gli avvisi
  * di quelle regioni l'unico canale è ATA Italia. Il canale @scuoleradar_ata
- * riceve OGNI 🔵 [AVVISO ATA] d'Italia (in aggiunta al canale regionale).
+ * riceve OGNI avviso ATA (🗂️ Avviso ATA) d'Italia (in aggiunta al canale regionale).
  */
 export const CANALI_TELEGRAM_REGIONALI: Record<string, string> = {
   Piemonte: '@scuoleradar_piemonte',
@@ -569,7 +713,7 @@ export function getTelegramCanaliRegionali(): Record<string, string> {
   return canali;
 }
 
-/** Canale nazionale ATA (@scuoleradar_ata): riceve ogni 🔵 [AVVISO ATA] d'Italia. */
+/** Canale nazionale ATA (@scuoleradar_ata): riceve ogni avviso ATA d'Italia. */
 export function canaleAtaNazionale(): string | null {
   // Passa da canalePerRegione per beneficiare del confronto normalizzato.
   return canalePerRegione(CHIAVE_CANALE_ATA_NAZIONALE);
@@ -659,15 +803,22 @@ export function canalePerProvincia(provincia: string): string | null {
   return regione ? canalePerRegione(regione) : null;
 }
 
-/* ------------------- Formato post canali regionali (colori & hashtag) ------------------- */
+/* ------------------- Formato post canali regionali (testate & hashtag) ------------------- */
 
 export type CategoriaPost = 'interpello_docenti' | 'avviso_ata' | 'bando_pnrr_esperto';
 
-/** Testate cromatiche per tipologia di avviso. */
+/**
+ * Testate TIPOGRAFICHE pulite per tipologia di avviso.
+ *
+ * Perché non più le vecchie fasce colorate (`🟢 [INTERPELLO DOCENTI]`,
+ * `🔵 [AVVISO ATA]`, `🟣 [BANDO / PNRR / ESPERTO]`): i cerchi colorati e le
+ * parentesi quadre sembravano "badge di sistema"/banner di errore e spezzavano
+ * la lettura. Resta un'icona semantica + testo in grassetto, senza cornici.
+ */
 const HEADER_POST: Record<CategoriaPost, string> = {
-  interpello_docenti: '🟢 [INTERPELLO DOCENTI]',
-  avviso_ata: '🔵 [AVVISO ATA]',
-  bando_pnrr_esperto: '🟣 [BANDO / PNRR / ESPERTO]',
+  interpello_docenti: '📝 <b>Interpello docenti</b>',
+  avviso_ata: '🗂️ <b>Avviso ATA</b>',
+  bando_pnrr_esperto: '📣 <b>Bando / PNRR / Esperto</b>',
 };
 
 /** Keyword profili ATA (amministrativi, tecnici, collaboratori scolastici). */
@@ -684,7 +835,7 @@ const RE_CLASSE_CONCORSO = /\b(?:[A-Z]{1,2}-\d{2,3}|AD(?:[A-Z]{2,3}|\d{2}))\b/i;
 /**
  * Codici dei profili ATA definiti nel catalogo (`src/data/classiConcorso.ts`,
  * ordine 'ata': 'ATA-CS', 'ATA-AT', 'ATA-AA') più le abbreviazioni sintetiche
- * 'AA' / 'AT' / 'CS' e il ruolo 'DSGA'. Serve a riconoscere come 🔵 [AVVISO ATA]
+ * 'AA' / 'AT' / 'CS' e il ruolo 'DSGA'. Serve a riconoscere come avviso ATA
  * anche i bandi in cui il profilo ATA è indicato solo nel codice classe.
  */
 const RE_CLASSE_ATA = /^(?:ATA(?:[-_][A-Z]{2})?|AA|AT|CS|DSGA)$/i;
@@ -753,7 +904,7 @@ function comuneAvviso(interpello: InterpelloCanale): string | null {
 
 /**
  * Classifica l'avviso in una delle tre categorie del post canale.
- * 🔵 ATA ha la priorità: un titolo "Personale ATA" / "Assistente amministrativo"
+ * La categoria ATA ha la priorità: un titolo "Personale ATA" / "Assistente amministrativo"
  * NON deve mai essere etichettato come interpello docenti o bando PNRR. Il
  * profilo ATA viene riconosciuto sia dal titolo sia dal codice classe
  * (`ATA-AA` / `ATA-AT` / `ATA-CS`, abbreviazioni `AA`/`AT`/`CS`, `DSGA`).
@@ -770,14 +921,21 @@ export function classificaCategoriaPost(interpello: InterpelloCanale): Categoria
 }
 
 /**
- * Formatta il post canale Telegram (STRUTTURA UFFICIALE — 5 sezioni fisse):
- *   1. HEADER   → emoji + tipologia: 🟢 [INTERPELLO DOCENTI] / 🔵 [AVVISO ATA]
- *                / 🟣 [BANDO / PNRR / ESPERTO];
- *   2. DETTAGLI → 📍 Provincia ([PR]) — Comune · 🏫 Scuola · 👩🏫 Ruolo · 📅 Scadenza;
- *   3. LINK     → 🔗 Leggi l'Avviso Originale (link ufficiale della fonte);
- *   4. CTA      → ⚡ Ricevi solo gli avvisi per la tua provincia e classe: 👉 scuoleradar.it;
- *   5. HASHTAG  → #Regione #Provincia #Tipologia #Ruolo #ScuoleRadar.
- * Nessuna riga extra (nessun 📌 titolo): i blocchi pubblicati sono sempre 5.
+ * Formatta il post canale Telegram (STRUTTURA UFFICIALE — solo TESTO, pulita):
+ *   1. BRAND    → `📡 <a href="https://www.scuoleradar.it">Scuole Radar.it</a>`;
+ *   2. HEADER   → icona semantica + tipologia, SENZA fasce colorate né parentesi:
+ *                 `📝 Interpello docenti` / `🗂️ Avviso ATA` / `📣 Bando / PNRR / Esperto`;
+ *   3. DETTAGLI → 📍 Provincia ([PR]) — Comune · 🏫 Scuola · 🎓 Ordine · 📚 Classe/Materia · 📅 Scadenza;
+ *   4. FONTE    → `🔗 Fonte Ufficiale` (testo iperlinkato, MAI URL in chiaro;
+ *                 chiaro, solo avviso specifico/PDF/"Stampa") + 📧 recapito scuola;
+ *   5. CTA      → LEAD GEN: invito esplicito a creare il Radar personalizzato su
+ *                 `https://scuoleradar.it/dashboard/radar` (URL visibile);
+ *   6. NOTIZIE  → CTA a due righe verso scuoleradar.it/notizie;
+ *   7. HASHTAG  → #Regione #Provincia #Tipologia #Ruolo #ScuoleRadar.
+ *
+ * Nessuna immagine allegata e nessuna anteprima nativa: il messaggio è solo testo
+ * (`link_preview_options.is_disabled` in `inviaMessaggioTelegram`), quindi non
+ * compaiono riquadri/media giganti che coprono l'avviso.
  */
 export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string {
   const codice = (interpello.province ?? '').trim().toUpperCase() || 'ND';
@@ -852,14 +1010,14 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
     .filter(Boolean)
     .join(' ');
 
-  // Link alla fonte: SOLO un URL ESTERNO valido (mai link interni della
-  // piattaforma, mai relativi/malformati). Se è un PDF, barra dedicata.
-  const linkFonte = urlEsterna(interpello.link);
-  const linkRiga = linkFonte
-    ? eLinkPdf(linkFonte)
-      ? barraPdf(linkFonte)
-      : `🔗 <b>Fonte ufficiale</b>\n${pulisciUrlTelegram(linkFonte)}`
-    : '';
+  // Link alla fonte: SOLO un avviso SPECIFICO e DIRETTO — pagina dell'ente, PDF
+  // o pagina tabellare/"Stampa" del singolo avviso (`eUrlAvvisoDiretto`). MAI
+  // home regionali, archivi, elenchi, tag o pagine di ricerca. L'URL NON viene
+  // mai mostrato in chiaro: il post espone solo la riga iperlinkata
+  // "🔗 Fonte Ufficiale" con l'URL nell'`href`. Nessuna anteprima nativa
+  // (disattivata a monte in `inviaMessaggioTelegram`).
+  const linkFonte = eUrlAvvisoDiretto(interpello.link) ? (interpello.link ?? '').trim() : null;
+  const linkRiga = linkFonte ? rigaFonteUfficiale(linkFonte) : '';
 
   // Email di candidatura: OMESSA se non estratta (mai "Email non disponibile":
   // nessuno stato negativo, nessuna email inventata). Il recapito è normalizzato
@@ -870,26 +1028,38 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
     ? `${EMAIL_ICONA} ${EMAIL_ETICHETTA}: <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`
     : '';
 
-  // FOOTER CANALE (broadcast regionale/generale): invito DIRETTO al setup del
-  // Radar (province + classi), non alla home generica. URL etichettato, mai
-  // nudo (evita il popup nativo "Apri link" di Telegram).
+  // FOOTER CANALE (broadcast regionale/generale): LEAD GENERATION. Invito
+  // ESPLICITO a creare il Radar personalizzato (province + classi) su
+  // /dashboard/radar — non alla home generica. URL VISIBILE (niente popup
+  // nativo): i link ScuoleRadar possono restare in chiaro, l'URL UFFICIALE della
+  // fonte no.
   const cta =
-    '⚡ Ricevi solo gli avvisi della tua provincia e per le tue classi: 👉 ' +
-    `${pulisciUrlTelegram(RADAR_SETUP_URL)}`;
+    '⚡ <b>Vuoi solo le opportunità della TUA provincia e delle TUE classi?</b>\n' +
+    `👉 Crea il tuo Radar personalizzato: ${pulisciUrlTelegram(RADAR_SETUP_URL)}`;
 
   // NIENTE guida operativa nel post pubblico: il testo che spiegava "questo
   // avviso non indica la pagina ufficiale…" confondeva più di quanto aiutasse e
   // duplicava il link qui sotto. Restano i contenuti utili: link ufficiale + email.
   const bloccoContatto = [linkRiga, emailRiga].filter(Boolean).join('\n');
-  const parti: string[] = [HEADER_POST[categoria], dettagli.join('\n'), bloccoContatto, cta, hashtag];
-  return parti.join('\n\n');
+  // BRAND in testa (una riga compatta) + CTA Notizie a due righe in coda: la
+  // struttura del post è uniforme a quella degli alert personali.
+  const parti: string[] = [
+    BRAND_RIGA_TELEGRAM,
+    HEADER_POST[categoria],
+    dettagli.join('\n'),
+    bloccoContatto,
+    cta,
+    CTA_NOTIZIE_TELEGRAM,
+    hashtag,
+  ];
+  return parti.filter(Boolean).join('\n\n');
 }
 
 /**
  * Destinazioni di pubblicazione per un avviso (ordine di invio):
  *   1. il canale REGIONALE attivo della provincia (se la regione è tra le 10
  *      attive — altrimenti nessun canale regionale);
- *   2. il canale ATA nazionale per OGNI 🔵 [AVVISO ATA], in qualunque regione
+ *   2. il canale ATA nazionale per OGNI avviso ATA (🗂️), in qualunque regione
  *      d'Italia (in AGGIUNTA al canale regionale).
  */
 export function destinazioniPubblicazione(interpello: InterpelloCanale): string[] {
@@ -911,12 +1081,22 @@ export interface EsitoPubblicazioneCanali {
   pubblicati: number;
   /** Errori per singolo canale. */
   errori: { canale: string; errore: string }[];
+  /**
+   * Motivo dell'ANNULLAMENTO preventivo (gate di link safety): nessuna
+   * pubblicazione è stata tentata su nessun canale.
+   */
+  saltato?: string;
 }
 
 /**
  * Pubblica un avviso NUOVO su TUTTE le destinazioni corrette:
  *   - regionale: solo se la regione della provincia è tra i canali attivi;
- *   - ATA nazionale: SEMPRE in aggiunta se l'avviso è 🔵 [AVVISO ATA].
+ *   - ATA nazionale: SEMPRE in aggiunta se l'avviso è della categoria ATA.
+ *
+ * GATE DI LINK SAFETY (STRICT): un post di canale NON viene mai pubblicato senza
+ * un link DIRETTO all'avviso specifico (`eUrlAvvisoDiretto`). Sui canali pubblici
+ * non devono mai comparire home regionali, archivi, elenchi o pagine di ricerca:
+ * in quel caso la pubblicazione è annullata (`saltato`) e nulla viene inviato.
  */
 export async function pubblicaInterpelloSuCanali(
   interpello: InterpelloCanale,
@@ -925,6 +1105,15 @@ export async function pubblicaInterpelloSuCanali(
     escludi?: string[];
   } = {},
 ): Promise<EsitoPubblicazioneCanali> {
+  if (!eUrlAvvisoDiretto(interpello.link)) {
+    const saltato =
+      'fonte ufficiale non diretta: pubblicazione annullata (serve l\'avviso specifico)';
+    console.warn(
+      `  ⛔ Canali Telegram: avviso non pubblicato — ${saltato} · ` +
+        `${(interpello.title ?? '').slice(0, 60)} · link=${interpello.link ?? 'nessuno'}`,
+    );
+    return { destinazioni: [], pubblicati: 0, errori: [], saltato };
+  }
   const esclusi = new Set((opts.escludi ?? []).map((c) => c.trim()).filter(Boolean));
   const destinazioni = destinazioniPubblicazione(interpello).filter((c) => !esclusi.has(c));
   const testo = formattaPostCanaleTelegram(interpello);
@@ -958,12 +1147,12 @@ const LIMITE_TELEGRAM = 4096;
 const MARGINE_TELEGRAM = 400;
 
 /**
- * Testata del digest — stessa formula dell'oggetto email:
- * "ScuoleRadar — Oggi abbiamo trovato {N} opportunità per te".
+ * Testata del digest: NON ripete più il marchio (è già nella riga brand in
+ * cima al messaggio) — resta la formula utile con il conteggio.
  */
 export function testataDigest(numero: number): string {
   const n = Math.max(0, Math.trunc(numero));
-  return `📡 <b>ScuoleRadar — Oggi abbiamo trovato ${n} opportunità per te</b>`;
+  return `🗓️ <b>Oggi abbiamo trovato ${n} opportunità per te</b>`;
 }
 
 /** Valore di una riga dell'avviso strutturato (etichetta → valore). */
@@ -1010,17 +1199,21 @@ function bloccoVoceTelegram(
     .join(' · ');
   if (cosa) righe.push(cosa);
 
-  const fonte = urlEsterna(v.link);
-  if (fonte) {
-    righe.push(`🔗 <b>${escapeHtml(etichettaFonteLink(fonte))}</b>`);
-    righe.push(pulisciUrlTelegram(fonte));
-  }
+  // Fonte ufficiale nel digest personale: stessa regola dei canali — SOLO un
+  // avviso specifico (mai home/elenchi/ricerche), con l'etichetta canonica
+  // `🔗 Fonte Ufficiale` e l'URL nascosto nell'href.
+  const fonte = eUrlAvvisoDiretto(v.link) ? (v.link ?? '').trim() : null;
+  if (fonte) righe.push(rigaAvvisoUfficiale(fonte));
   const email = avviso.email ?? emailAvviso(v.contactEmail);
   if (email) {
     righe.push(`${EMAIL_ICONA} ${EMAIL_ETICHETTA}: <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`);
   }
+  // Guida operativa: si calcola sull'URL EFFETTIVAMENTE mostrato (`fonte`), non
+  // su quello grezzo. Con un link non diretto la riga "nel link la scuola
+  // pubblica un elenco…" sarebbe senza riferimento: in quel caso resta la sola
+  // indicazione pulita (chiedi alla segreteria / scrivi al recapito).
   const guida = suggerimentoRicercaAvviso({
-    url: v.link,
+    url: fonte,
     classe: cl,
     provincia,
     schoolName: v.schoolName,
@@ -1047,14 +1240,16 @@ export function formattaDigestTelegram(
   const testata = testataDigest(voci.length);
   const intro = opts.data ? `Riepilogo del <b>${escapeHtml(opts.data)}</b>.` : 'Riepilogo della giornata.';
   const introCompleta = `${intro} Una sola segnalazione al giorno, nel pomeriggio.`;
-  const footer =
-    '📌 Quando vuoi sapere cosa succede di importante, vieni qui: https://www.scuoleradar.it/notizie';
+  // CTA Notizie (due righe esatte): identica a email e alert personali.
+  const footer = CTA_NOTIZIE_TELEGRAM;
 
   // NIENTE prompt "Filtra per provincia e classi" nei messaggi PERSONALI: era una
   // riga di conversione ripetuta in ogni notifica (rumore). Restano i contenuti
-  // utili (voci + footer informativo). Il budget si calcola sulle parti rimaste.
+  // utili (voci + CTA informativa). Il budget si calcola sulle parti rimaste.
   // `opts.dashboardUrl` è ancora accettato per compatibilità dei chiamanti.
-  const fissi = [testata, introCompleta, footer].join('\n\n').length + MARGINE_TELEGRAM;
+  // Il BRAND (una riga compatta) apre SEMPRE il messaggio.
+  const fissi =
+    [BRAND_RIGA_TELEGRAM, testata, introCompleta, footer].join('\n\n').length + MARGINE_TELEGRAM;
   const budget = Math.max(500, LIMITE_TELEGRAM - fissi);
 
   const blocchi: string[] = [];
@@ -1068,6 +1263,7 @@ export function formattaDigestTelegram(
   const restanti = Math.max(voci.length - blocchi.length, 0);
 
   const parti: string[] = [
+    BRAND_RIGA_TELEGRAM,
     testata,
     introCompleta,
     ...blocchi,

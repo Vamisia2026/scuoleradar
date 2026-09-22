@@ -26,6 +26,7 @@ import {
   MAX_VOCI_EMAIL_DIGEST,
   renderDigestEmailHtml,
   subjectDigest,
+  vociAttive,
   type DettagliNotifica,
   type DestinatarioNotifica,
 } from '../src/lib/resend.ts';
@@ -92,30 +93,31 @@ const perProvincia = raggruppaPerProvincia([voce(1, '2026-09-30'), { ...voce(2, 
 check('due gruppi per provincia', 2, perProvincia.size);
 check('gruppo AT presente', true, perProvincia.has('AT'));
 
-console.log('\n— Oggetto dell\'email —');
+console.log('\n— Oggetto dell\'email (branded, con conteggio) —');
 check(
   'una sola opportunità',
-  'ScuoleRadar — Oggi abbiamo trovato 1 opportunità per te',
+  'Nuove opportunità per te!',
   subjectDigest(1),
 );
 check(
-  'più opportunità (conteggio)',
-  'ScuoleRadar — Oggi abbiamo trovato 3 opportunità per te',
+  'più opportunità',
+  'Nuove opportunità per te!',
   subjectDigest(3),
 );
 check(
   'formula richiesta (letterale)',
-  'ScuoleRadar — Oggi abbiamo trovato 2 opportunità per te',
+  'Nuove opportunità per te!',
   subjectDigest(2),
 );
 check(
-  'la testata Telegram usa la stessa formula',
+  'la testata Telegram NON ripete il marchio (già nella riga brand)',
   true,
-  testataDigest(2).includes('ScuoleRadar — Oggi abbiamo trovato 2 opportunità per te'),
+  testataDigest(2).includes('Oggi abbiamo trovato 2 opportunità per te') &&
+    !testataDigest(2).includes('ScuoleRadar'),
 );
 
 console.log('\n— Email di digest: UNA sola email con tutte le voci —');
-const voci = [voce(1, '2026-09-30'), voce(2, '2026-09-18', ELENCO)];
+const voci = [voce(1, '2026-09-30'), voce(2, '2026-09-25', ELENCO)];
 const html = renderDigestEmailHtml(voci, destinatario, 'https://www.scuoleradar.it/dashboard/radar', {
   data: '10 luglio 2026',
 });
@@ -124,16 +126,27 @@ check('titolo voce 2 presente', true, html.includes('Interpello supplenza A-022 
 check('fonte ESTERNA cliccabile', true, html.includes(`href="${ESTERNO}"`));
 check('nessun link interno /interpello/', false, html.includes('/interpello/'));
 check('email scuola cliccabile', true, html.includes('mailto:astf01000x@istruzione.it'));
-check('guida operativa sull\'elenco', true, html.includes('cerca la riga con «A-022»'));
-check('spiega la cadenza giornaliera', true, html.includes('una volta al giorno'));
-check('CTA verso il Radar', true, html.includes('Apri il tuo Radar Scuole'));
+// Checklist email §4: ZERO riquadri gialli e nessuna guida operativa nel corpo.
+check('nessun riquadro giallo di avviso', false, html.includes('#fffbeb'));
+check("nessuna guida operativa (l'azione è il link)", false, html.includes('cerca la riga con'));
+// NIENTE blocco "P.S.": la cadenza del digest è già nell'intro ("Una sola email").
+check('nessun blocco "P.S."', false, /\bP\.S\./.test(html));
+check('intro: una sola email al giorno', true, html.includes('Una sola email, come promesso'));
+check('nessuna nota grigia sbiadita (#94a3b8)', false, html.includes('#94a3b8'));
+check('nessun bottone verso il Radar', false, html.includes('Apri il tuo Radar Scuole'));
+check('link ufficiale IN EVIDENZA in ogni voce', true, /👉 Apri l(&#39;|')avviso ufficiale/.test(html));
+check(
+  'preferenze del Radar nel footer, in PICCOLO',
+  true,
+  html.includes('modifica il tuo radar su') && html.includes('font-size:12.5px'),
+);
 // Layout "crisp": voci NUMERATE nell'email (come nel messaggio Telegram).
 check('voci numerate nell\'email', true, />1\.<\/span>\s*Interpello/.test(html));
-// Guida standardizzata (Step 2): l'istruzione STAMPA è presente anche nella
-// versione compatta usata dal digest. NB: in HTML l'apostrofo è escapato.
+// L'istruzione STAMPA è stata RIMOSSA dal corpo email (era dentro il box giallo):
+// resta solo nei messaggi Telegram, dove il box non esiste.
 check(
-  'direttiva STAMPA standard nel digest',
-  true,
+  'nessuna direttiva STAMPA nel corpo email',
+  false,
   html.includes(ISTRUZIONE_AVVISO_UFFICIALE.replace(/'/g, '&#39;')),
 );
 // La versione compatta NON ripete l'email (è già sulla riga precedente).
@@ -147,6 +160,21 @@ const molte = Array.from({ length: MAX_VOCI_EMAIL_DIGEST + 4 }, (_, i) => voce(i
 const htmlMolte = renderDigestEmailHtml(molte, destinatario, 'https://www.scuoleradar.it/dashboard/radar');
 check('numero voci limitato nell\'email', false, htmlMolte.includes(`n.${MAX_VOCI_EMAIL_DIGEST + 1}`));
 check('nota sulle opportunità restanti', true, htmlMolte.includes('altre <strong>4</strong> opportunità'));
+
+console.log('\n— Digest = SOLO opportunità attive (gli scaduti NON partono) —');
+{
+  const oggi = new Date('2026-09-18T12:00:00');
+  const scaduto = voce(10, '2026-09-01');
+  const attiva = voce(11, '2026-09-30');
+  const senzaScadenza = voce(12, null);
+  const filtrate = vociAttive([scaduto, attiva, senzaScadenza], oggi);
+  check('scaduta esclusa', ['hash-11', 'hash-12'], filtrate.map((v) => v.id));
+  const htmlAttive = renderDigestEmailHtml([scaduto, attiva], destinatario, 'https://www.scuoleradar.it/dashboard/radar');
+  check('il digest non cita l\'avviso scaduto', false, htmlAttive.includes('n.10'));
+  check('il digest cita l\'avviso attivo', true, htmlAttive.includes('n.11'));
+  check('conteggio basato sulle voci ATTIVE', true, htmlAttive.includes('una opportunità'));
+  check('solo scadute → nessun contenuto utile', 0, vociAttive([scaduto], oggi).length);
+}
 
 console.log('\n— Raggruppamento per urgenza (solo con più gruppi) —');
 // Date RELATIVE a oggi: le soglie sono 2 e 7 giorni (semaforo dell'app).
@@ -188,19 +216,36 @@ check('rispetta il limite Telegram (4096)', true, tgMolte.length <= 4096);
 check('nessun prompt di conversione nei messaggi PERSONALI', false, /Filtra per provincia/.test(tg));
 check('intro senza "chiusura delle scuole"', false, /chiusura delle scuole/.test(tg));
 
-console.log('\n— Layout degli ALERT individuali (testo puro, senza marchio/foto) —');
+console.log('\n— Layout degli ALERT individuali (testo puro, brand compatto in testa) —');
+const BRAND_TG = '📡 <a href="https://www.scuoleradar.it">Scuole Radar.it</a>';
+/** Link etichettati (`<a href="http…">`) presenti, ESCLUSO il link di BRAND. */
+const linkHttp = (testo: string): string[] =>
+  [...testo.matchAll(/<a\s+href="(https?:[^"]+)"/g)]
+    .map((m) => m[1])
+    .filter((u) => u !== 'https://www.scuoleradar.it');
 const alertPro = formattaMessaggioTelegram(
   voce(1, '2099-12-31'),
   'A-022',
   'https://www.scuoleradar.it/dashboard/radar',
   'notifica_pro',
+  // La CTA di ricalibrazione del Radar compare nel ~20% dei messaggi:
+  // qui viene FORZATA per verificarne il formato esatto.
+  { mostraCtaRadar: true },
 );
-// Il marchio "📡 ScuoleRadar" è stato RIMOSSO: era una riga ridondante sotto il
-// logo (e la foto non viene più allegata: niente anteprima gigante).
-check('nessun marchio ridondante in testa', false, alertPro.startsWith('📡'));
+// Il brand è UNA riga compatta (icona + nome ufficiale) in testa: nessuna foto,
+// nessuna anteprima gigante (il logo grande è stato rimosso).
+check('brand compatto in testa, una sola volta', 1, alertPro.split(BRAND_TG).length - 1);
+check('alert parte dalla testata brand', true, alertPro.startsWith(BRAND_TG));
 check('alert senza disclaimer operativo', false, alertPro.includes('ℹ️'));
 check('alert senza la frase "non indica la pagina ufficiale"', false, /non indica la pagina ufficiale/i.test(alertPro));
-check('alert con link ufficiale visibile', true, alertPro.includes("🔗 <b>Apri l'avviso ufficiale</b>:"));
+// Link UFFICIALE con etichetta canonica e href verso l'URL dell'avviso (nessuna
+// pagina di ricerca di un'altra provincia).
+check(
+  "alert con etichetta unica '🔗 Fonte Ufficiale'",
+  true,
+  alertPro.includes('<b>🔗 Fonte Ufficiale</b></a>'),
+);
+check('link dell\'avviso = URL della fonte', [ESTERNO], linkHttp(alertPro));
 check(
   'alert con CTA di ricalibrazione del Radar',
   true,
@@ -215,11 +260,13 @@ const benvenuto = formattaMessaggioTelegram(
   'https://www.scuoleradar.it/dashboard/radar',
   'welcome',
 );
-check('messaggi di ciclo di vita: nessun marchio', false, benvenuto.includes('📡'));
+check('messaggi di ciclo di vita: brand compatto in testa', true, benvenuto.startsWith(BRAND_TG));
 check(
-  'messaggi di ciclo di vita: footer Notiziario presente',
+  'messaggi di ciclo di vita: CTA Notizie a due righe',
   true,
-  benvenuto.includes('📌 Quando vuoi sapere cosa succede di importante'),
+  benvenuto.includes(
+    '📌 https://www.scuoleradar.it/notizie\nQuando vuoi sapere cosa succede di importante nella scuola, vieni qui',
+  ),
 );
 
 console.log(errori === 0 ? '\n✅ DIGEST: nessun problema' : `\n❌ DIGEST: ${errori} errore/i`);

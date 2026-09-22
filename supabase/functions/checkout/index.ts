@@ -184,6 +184,59 @@ async function validaPromo(
 }
 
 /**
+ * Stato di un codice in `promo_codes` (lettura diretta con service_role): serve a
+ * decidere se applicare un coupon a sconto TOTALE (BETA1ANNO/BETALIFETIME).
+ * Tre esiti, deliberatamente diversi:
+ *   · null → tabella non leggibile (rete/secrets): **fail-open** + log, perché
+ *     non si blocca un beta tester per un timeout della diagnostica;
+ *   · { esiste: false } → riga assente (seed non applicato): fail-open con
+ *     avviso esplicito (il codice resta coperto dal solo coupon Stripe);
+ *   · { esiste: true, spendibile: false, motivo } → il DB lo conosce e lo
+ *     rifiuta (disattivato / scaduto / monouso già utilizzato): il checkout
+ *     si ferma con 400 e il motivo esatto, così un monouso non si riusa.
+ */
+async function statoPromoCodice(
+  codice: string,
+): Promise<{ esiste: boolean; spendibile: boolean; motivo: string } | null> {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/promo_codes?codice=ilike.${encodeURIComponent(
+        codice,
+      )}&select=codice,attivo,scade_il,monouso,usato_il`,
+      {
+        headers: {
+          apikey: SUPABASE_SERVICE_ROLE,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
+        },
+      },
+    );
+    if (!res.ok) {
+      console.error('promo_codes non leggibile:', res.status, await res.text());
+      return null;
+    }
+    const righe = (await res.json()) as Array<{
+      attivo?: boolean;
+      scade_il?: string | null;
+      monouso?: boolean;
+      usato_il?: string | null;
+    }>;
+    const riga = righe[0];
+    if (!riga) return { esiste: false, spendibile: false, motivo: 'codice assente in promo_codes' };
+    if (riga.attivo !== true) return { esiste: true, spendibile: false, motivo: 'codice disattivato' };
+    if (riga.scade_il && new Date(riga.scade_il).getTime() <= Date.now()) {
+      return { esiste: true, spendibile: false, motivo: 'codice scaduto' };
+    }
+    if (riga.monouso === true && riga.usato_il) {
+      return { esiste: true, spendibile: false, motivo: 'codice già utilizzato' };
+    }
+    return { esiste: true, spendibile: true, motivo: '' };
+  } catch (err) {
+    console.error('promo_codes non raggiungibile:', err);
+    return null;
+  }
+}
+
+/**
  * Valida il coupon DINAMICO RADAR50 (RPC server-side): finestra 40 giorni dalla
  * registrazione iniziale, monouso per utente e anti-abuso (stesso Telegram ID o
  * email secondaria già usati da un altro account).
@@ -358,9 +411,37 @@ serve(async (req: Request) => {
         campi['metadata[promo]'] = 'RADAR50';
         console.log(`  → coupon RADAR50 applicato (${STRIPE_COUPON_RADAR50}) per user ${userId.slice(0, 8)}…`);
       } else if (codiceUpp === 'BETA1ANNO') {
+        // Coupon 100% (PRO annuale): l'accesso gratuito per 1 anno è un DIRITTO
+        // del codice, non un effetto collaterale del prezzo. Prima di azzerare il
+        // totale si controlla quindi il codice sul DB e si accetta SOLO il piano
+        // PRO annuale: su mensile/crediti un coupon "annuale" al 100% regalerebbe
+        // un abbonamento che il codice non copre.
+        if (plan !== 'pro_annuale') {
+          return risposta(
+            { success: false, error: 'Il coupon BETA1ANNO è valido solo sul piano PRO annuale.' },
+            400,
+          );
+        }
+        const stato = await statoPromoCodice(codiceUpp);
+        if (stato && stato.esiste && !stato.spendibile) {
+          return risposta(
+            {
+              success: false,
+              error: `Il codice BETA1ANNO non è più utilizzabile (${stato.motivo}). Scrivici da /contatti: troviamo una soluzione.`,
+            },
+            400,
+          );
+        }
         campi['discounts[0][coupon]'] = STRIPE_COUPON_BETA1ANNO;
         campi['metadata[promo]'] = codiceUpp;
-        console.log(`  → coupon Stripe applicato: ${codiceUpp} (${STRIPE_COUPON_BETA1ANNO})`);
+        console.log(
+          `  → coupon Stripe applicato: ${codiceUpp} (${STRIPE_COUPON_BETA1ANNO})` +
+            (stato === null
+              ? ' ⚠ promo_codes non leggibile: validazione DB saltata (fail-open)'
+              : stato.esiste
+                ? ' ✓ codice spendibile secondo promo_codes'
+                : ' ⚠ codice assente in promo_codes (seed non applicato?)'),
+        );
       } else {
         const promo = await validaPromo(body.promo);
         if (promo?.valido && promo.referrer_id) {

@@ -5,89 +5,80 @@
  *  - documentParser     → estrazione OCR → Fascicolo Accademico Canonico;
  *  - normalizer         → normalizzazione SSD/GSD e titoli (mai su dati grezzi);
  *  - normativeResolver  → risoluzione temporale decreto/tabella in vigore;
- *  - requirementSolver  → constraint solver sui vincoli CFU;
+ *  - requirementSolver  → constraint solver sui vincoli CFU (AUTORITÀ del verdetto);
  *  - reportEngine       → outcome strutturato, Audit Trail, orientamento.
  *
- * NB: le tabelle e le matrici qui referenziate sono la FONDAZIONE dimostrativa
- * del motore; le matrici ufficiali complete verranno caricate dagli stessi
- * formati dai decreti validati (D.P.R. 19/2016, DM 259/2017, DM 639/2024).
+ * NOTA DI ARCHITETTURA (fase 3 — foglia dei tipi; fase 4 — autorità interna):
+ * il vocabolario di esito/audit e i record canonici vivono nel modulo foglia
+ * `pipeline/resultTypes.ts` (che non importa nulla) per rendere
+ * `RisultatoPipelineBase` e `MetadatiPipeline` utilizzabili QUI senza cicli di
+ * import. Le dichiarazioni sono riesportate, quindi gli import storici del
+ * motore restano validi.
+ *
+ * CONFINE DI AUTORITÀ (fase 4): `RisultatoPipeline.stato` è l'aggregazione
+ * autorevole DENTRO la pipeline (regole R0-R10 in `pipeline/status.ts`); il
+ * verdetto usato da bridge, routing, report e UI resta quello del decisore
+ * aggregato legacy `valutaRequisitoClasse` (`RisultatoPipeline.statoSolutore`).
  */
+import type {
+  DecretoNormativo,
+  EsitoValutazione,
+  EsameCanonico,
+  GsdCode,
+  IntegrabilitaStatus,
+  NormativaApplicata,
+  Provenienza,
+  SsdCode,
+  StatoContestoNormativa,
+  TabellaNormativa,
+  TitoloAccademicoCanonico,
+  VoceAudit,
+} from './pipeline/resultTypes';
 
-/* ----------------------------- 1. Outcome (5 stati) ----------------------------- */
+export type {
+  DateRilevanza,
+  DecretoNormativo,
+  EsameCanonico,
+  EsitoValutazione,
+  FaseAudit,
+  FonteEsame,
+  GsdCode,
+  IntegrabilitaStatus,
+  NaturaRequisitoAggregato,
+  NormativaApplicata,
+  Provenienza,
+  RiferimentoDocumento,
+  SsdCode,
+  StatoContestoNormativa,
+  StatoDato,
+  TabellaNormativa,
+  TipoAudit,
+  TitoloAccademicoCanonico,
+  VoceAudit,
+} from './pipeline/resultTypes';
+export type {
+  AmbiguitaIdentita,
+  ConservazioneDocumento,
+  DiscrepanzaDato,
+  DossierAccademico,
+  DocumentoCaricato,
+  EsitoEstrazioneDocumento,
+  TipoDocumento,
+  ValoreInDiscrepanza,
+} from './pipeline/dossierTypes';
+export type { MetadatiPipeline, RisultatoPipelineBase } from './pipeline/requirementTypes';
+import type { MetadatiPipeline, RisultatoPipelineBase } from './pipeline/requirementTypes';
 
-/** Sostituisce l'esito binario idoneo/non-idoneo con 5 stati valutativi. */
-export type EsitoValutazione =
-  | 'ELIGIBLE' // tutti i vincoli soddisfatti
-  | 'CONDITIONALLY_ELIGIBLE' // ammissibile se si integrano X CFU (percorso what-if)
-  | 'INSUFFICIENT_DATA' // dati mancanti per esprimere un giudizio
-  | 'MANUAL_VERIFICATION_REQUIRED' // OCR/riconoscimento non affidabile: serve verifica
-  | 'NOT_ELIGIBLE'; // vincolo duro non soddisfatto (titolo/requisito irrecuperabile)
-
-/* ----------------------------- 2. Provenienza (page/line) ----------------------------- */
-
-/** Riferimento fisico a un documento sorgente (pagina e riga). */
-export interface RiferimentoDocumento {
-  documentId: string;
-  /** Numero pagina (1-based) nel documento caricato. */
-  pagina: number;
-  /** Numero riga (1-based) nella pagina, quando disponibile. */
-  riga?: number;
-  /** Testo grezzo della riga (per il controllo umano). */
-  testo?: string;
-}
-
-/** Provenienza di una singola informazione usata nella valutazione. */
-export interface Provenienza {
-  fonte?: RiferimentoDocumento;
-  /** Confidenza complessiva 0..1 (es. affidabilità OCR × match della riga). */
-  confidenza: number;
-  metodo: 'ocr' | 'testo-incollato' | 'manuale' | 'normalizzazione' | 'riconoscimento';
-}
+/**
+ * RISULTATO DELLA PIPELINE UNIVERSALE — vista completa per il motore:
+ * specializza il modello foglia con lo snapshot del decisore normativo
+ * aggregato (`valutazioneClasse`), che resta l'AUTORITÀ per i consumatori legacy
+ * (bridge, routing, report, UI). Il campo `stato` è l'aggregazione autorevole
+ * DENTRO la pipeline (R0-R10 di `pipeline/status.ts`).
+ */
+export type RisultatoPipeline = RisultatoPipelineBase<ValutazioneRequisito>;
 
 /* ------------------------------ 3. Academic Record ------------------------------ */
-
-/** Codice SSD canonico (es. MAT/05) oppure GSD 2024 (es. MATH-01/A, DM 639/2024). */
-export type SsdCode = string;
-export type GsdCode = string;
-
-export type FonteEsame = 'manuale' | 'ocr-documento' | 'testo-incollato';
-
-/** Esame accademico in forma canonica. I dati grezzi dell'utente NON vengono alterati. */
-export interface EsameCanonico {
-  id: string;
-  denominazione: string;
-  /** CFU/ECTS maturati. */
-  cfu: number;
-  voto?: number | null;
-  anno?: string | null;
-  /** SSD canonico normalizzato (es. "MAT/05"). */
-  ssd?: SsdCode | null;
-  /** SSD come scritto dall'utente/OCR (immutato). */
-  ssdOrigine?: string | null;
-  /** GSD 2024 (DM 639/2024) assegnato dal normalizer, se disponibile. */
-  gsd?: GsdCode | null;
-  fonte: FonteEsame;
-  /** Flag impostato SOLO dopo verifica umana esplicita. */
-  manualVerified?: boolean;
-  affidabilita?: 'alta' | 'media' | 'bassa' | null;
-  provenienza: Provenienza[];
-}
-
-/** Titolo di studio accademico in forma canonica (dati originali preservati in `raw`). */
-export interface TitoloAccademicoCanonico {
-  denominazione: string;
-  /** Classe di laurea / vecchio ordinamento originale, se riconosciuta. */
-  classe?: string | null;
-  classeLegacy?: string | null;
-  istituzione?: string | null;
-  /** null/Italia = titolo nazionale; altrimenti paese estero. */
-  paese?: string | null;
-  titoloEstero?: boolean;
-  dataInizio?: string | null;
-  dataLaurea?: string | null;
-  /** Payload originale dell'utente: mai modificato dal motore. */
-  raw?: unknown;
-}
 
 /** Fascicolo accademico canonico prodotto dal documentParser. */
 export interface FascicoloAccademicoCanonico {
@@ -100,43 +91,11 @@ export interface FascicoloAccademicoCanonico {
 }
 
 /* ------------------------------ 4. Normativa ------------------------------ */
-
-export type DecretoNormativo =
-  | 'DPR 19/2016'
-  | 'DM 259/2017'
-  | 'DM 22/12/2023'
-  | 'DM 639/2024';
-
-export type TabellaNormativa = 'A' | 'B';
-
-/** Riferimento normativo esatto di un requisito valutato. */
-export interface NormativaApplicata {
-  decreto: DecretoNormativo;
-  tabella: TabellaNormativa;
-  nota?: string;
-  /** Es. periodo transitorio Riforma 2024 (nuovi GSD vs vecchie tabelle A/B). */
-  periodoTransitorio?: string | null;
-  /** Normative freshness date: data di aggiornamento della versione usata. */
-  dataAggiornamentoNormativa: string;
-}
-
-/** Date rilevanti per la risoluzione temporale della normativa. */
-export interface DateRilevanza {
-  /** @deprecated usa `enrollmentDate`. */
-  dataInizioCorso?: string | null;
-  /** @deprecated usa `awardedDate`. */
-  dataLaurea?: string | null;
-  /** @deprecated usa `procedureDate`. */
-  dataDomanda?: string;
-
-  /** Data di immatricolazione/inizio corso del titolo (ISO). */
-  enrollmentDate?: string | null;
-  /** Data di conseguimento del titolo (ISO). */
-  awardedDate?: string | null;
-  /** Data della procedura (domanda/concorso) (ISO, sempre richiesta). */
-  procedureDate?: string;
-}
-
+/*
+ * `DecretoNormativo`, `TabellaNormativa`, `NormativaApplicata`, `DateRilevanza`
+ * e `StatoContestoNormativa` sono nel modulo foglia `pipeline/resultTypes.ts`
+ * (riesportati sopra): il vocabolario è condiviso con la pipeline universale.
+ */
 
 /* ------------------------------ 5. Requisiti ------------------------------ */
 
@@ -261,19 +220,11 @@ export interface ValutazioneRequisito {
 }
 
 /* ------------------------------ 7. Audit Trail ------------------------------ */
-
-export type FaseAudit = 'document' | 'normalize' | 'normative' | 'solve' | 'report';
-export type TipoAudit = 'info' | 'warning' | 'errore';
-
-export interface VoceAudit {
-  id: string;
-  fase: FaseAudit;
-  tipo: TipoAudit;
-  messaggio: string;
-  normativa?: NormativaApplicata;
-  provenienza?: Provenienza[];
-  createdAt: string;
-}
+/*
+ * `FaseAudit`, `TipoAudit` e `VoceAudit` sono nel modulo foglia
+ * `pipeline/resultTypes.ts` (riesportati sopra): la pipeline universale usa lo
+ * STESSO formato di audit del motore, senza nuovi modelli.
+ */
 
 
 /* ------------------------------ 8. Career & What-If ------------------------------ */
@@ -337,10 +288,19 @@ export interface EsitoTitoloEstero {
 
 /* ------------------------------ 10. Report finale ------------------------------ */
 
-/** Esito di classe arricchito per il report (denominazione + what-if). */
-export interface EsitoClasseReport extends ValutazioneRequisito {
+/**
+ * Esito di classe arricchito per il report (denominazione + what-if).
+ *
+ * Fase 3: la superficie di report espone anche i metadati strutturati della
+ * pipeline universale (fonti, conflitti, esiti per requisito, deficit, payload).
+ * Il verdetto resta però `stato` (autorità: `valutaRequisitoClasse`): il campo
+ * candidato è `pipeline.stato` e non è usato dall'UI.
+ */
+export interface EsitoClasseReport extends ValutazioneRequisito, MetadatiPipeline {
   denominazioneClasse: string;
   percorsoWhatIf?: PercorsoWhatIf;
+  /** Risultato completo della pipeline universale per questa classe. */
+  pipeline?: RisultatoPipeline;
 }
 
 export interface ReportCarriera {
@@ -377,8 +337,6 @@ export interface NormativaTemporalContext {
   note?: string;
 }
 
-export type StatoContestoNormativa = 'applicabile' | 'transitorio' | 'non-risolto';
-
 export interface EsitoRisoluzioneNormativa {
   stato: StatoContestoNormativa;
   normativa?: NormativaApplicata | null;
@@ -386,8 +344,7 @@ export interface EsitoRisoluzioneNormativa {
   motivazione: string;
 }
 
-/** Stato dell'integrazione dei CFU mancanti, come dichiarato dalla norma. */
-export type IntegrabilitaStatus = 'ALLOWED' | 'PROHIBITED' | 'NOT_SPECIFIED';
+/** Stato dell'integrazione dei CFU mancanti: vocabolario foglia (vedi `pipeline/resultTypes`). */
 
 /**
  * Regola normativa dichiarata: trasposizione FEDELE del testo di legge.

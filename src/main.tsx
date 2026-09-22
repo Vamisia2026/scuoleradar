@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { initAnalytics } from '@/lib/analytics';
 import './index.css';
 
@@ -9,6 +10,9 @@ initAnalytics();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    {/* Ultima linea di difesa: nessun guasto globale può lasciare la pagina bianca. */}
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
   </StrictMode>
 );

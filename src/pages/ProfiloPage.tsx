@@ -11,9 +11,13 @@ import {
 import { Modal } from '@/components/Modal';
 import { Accordion } from '@/components/Accordion';
 import { useToast } from '@/components/Toast';
-import { RadarStatusToggle } from '@/components/RadarStatusToggle';
+import { RadarStatusToggle } from '@/departments/radar';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 
 export function ProfiloPage() {
+  // Feature flags: il rimando alla Modulistica non deve comparire se il
+  // dipartimento è disattivato (`off`).
+  const { visibile } = useFeatureFlags();
 
   // Storico dei modelli scaricati (condiviso con la pagina Moduli via localStorage)
   const [moduliScaricati, setModuliScaricati] = useLocalStorage<ModuloScaricato[]>(
@@ -33,11 +37,7 @@ export function ProfiloPage() {
 
   const formatDataScaricato = (iso: string) => {
     try {
-      return new Date(iso).toLocaleDateString('it-IT', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      });
+      return new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' });
     } catch {
       return iso;
     }
@@ -47,8 +47,8 @@ export function ProfiloPage() {
 
   const riscaricaModulo = (m: ModuloScaricato) => {
     setModuliScaricati(conAggiuntaInCima(moduliScaricati, m));
-    // Nessun dialogo di "download simulato": il documento esiste già in archivio
-    // e viene aperto/riscaricato come file statico dalla pagina Modulistica.
+    // Nessun dialogo di "download simulato": il documento esiste già in archivio e
+    // viene aperto/riscaricato come file statico dalla pagina Modulistica.
     mostraToast('successo', 'Modulo già pronto: aprilo in "Modelli Scaricati" per vederlo e stamparlo.');
   };
 
@@ -141,13 +141,11 @@ export function ProfiloPage() {
             </ul>
           )}
           <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-primary-100 pt-3">
-            <Link
-              to="/dashboard/moduli?tab=miei"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-600"
-            >
-              <FolderOpen className="h-3.5 w-3.5" />
-              Vai alla pagina Modulistica
-            </Link>
+            {visibile('modulistica') && (
+              <Link to="/dashboard/moduli?tab=miei" className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-600">
+                <FolderOpen className="h-3.5 w-3.5" /> Vai alla pagina Modulistica
+              </Link>
+            )}
             {moduliScaricati.length > 0 && (
               <button
                 onClick={svuotaStorico}

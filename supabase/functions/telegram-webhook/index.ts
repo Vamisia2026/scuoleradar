@@ -30,6 +30,13 @@ const WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') ?? '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
+/**
+ * BRAND COMPATTO (icona + nome ufficiale CLIICCABILE): apre OGNI messaggio
+ * Telegram del bot, esattamente come negli alert dello scraper. Niente loghi o
+ * immagini: il marchio è una riga, non un'anteprima gigante.
+ */
+const BRAND_TELEGRAM = '📡 <a href="https://www.scuoleradar.it">Scuole Radar.it</a>';
+
 const MESSAGGIO_CONFERMA =
   '✅ Account collegato con successo a ScuoleRadar! ' +
   'Riceverai qui le notifiche per le classi di concorso selezionate.';
@@ -45,10 +52,19 @@ const MESSAGGIO_ISTRUZIONI =
 /** Invia un messaggio su Telegram via Bot API. */
 async function inviaMessaggio(chatId: number, testo: string): Promise<void> {
   if (!TELEGRAM_TOKEN) return;
+  // Brand compatto in testa + anteprime dei link DISATTIVATE: nessun riquadro
+  // "gigante" generato da Telegram che coprirebbe il contenuto del messaggio.
+  const corpo = `${BRAND_TELEGRAM}\n\n${testo}`;
   await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text: testo, parse_mode: 'HTML' }),
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: corpo,
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
+      disable_web_page_preview: true,
+    }),
   }).catch((err) => console.error('Errore invio messaggio Telegram:', err.message));
 }
 

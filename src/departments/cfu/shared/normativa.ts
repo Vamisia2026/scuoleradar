@@ -13,9 +13,9 @@ export const SIGLA_ECTS = 'ECTS';
 
 /** Testo SEO ripetuto: cosa fa il calcolatore. */
 export const DESCRIZIONE_BREVE_CFU =
-  "Calcola le tue classi di concorso dal piano di studi (esami, ECTS/CFU e settori " +
-  'scientifico-disciplinari) e ti dice quali puoi insegnare oggi e quanti CFU ti mancano ' +
-  'per quelle che sogni.';
+  'Verifica la classe di concorso che ti interessa: confronta gli esami che hai sostenuto (CFU/ECTS ' +
+  'e settore SSD) con i requisiti scritti nella norma e vedi requisito per requisito cosa risulta ' +
+  'soddisfatto, cosa manca e cosa va verificato.';
 
 /** Disclaimer metodologico mostrato accanto a ogni risultato. */
 export const DISCLAIMER_INDICATIVO =

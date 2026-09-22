@@ -42,6 +42,13 @@ const TABELLA_LOG = 'admin_telegram_log';
 const TABELLA_ALERT = 'admin_telegram_alerts';
 const TABELLA_RUNS = 'scraper_runs';
 
+/**
+ * BRAND compatto (icona + nome ufficiale cliccabile): apre OGNI messaggio del
+ * bot admin, per uniformità con le notifiche del bot pubblico. Niente immagini
+ * o anteprime: il marchio è una riga, non un riquadro gigante.
+ */
+const BRAND_TELEGRAM = '📡 <a href="https://www.scuoleradar.it">Scuole Radar.it</a>';
+
 const AIUTO = [
   '🛠️ <b>ScuoleRadar · Bot Admin</b>',
   '',
@@ -157,13 +164,17 @@ async function inviaMessaggio(chatId: number, testo: string): Promise<boolean> {
     console.error('ADMIN_TELEGRAM_BOT_TOKEN non configurato: impossibile rispondere.');
     return false;
   }
+  // Brand compatto in testa + anteprime dei link DISATTIVATE (nessun riquadro
+  // generato da Telegram che copra il contenuto del messaggio).
+  const corpo = `${BRAND_TELEGRAM}\n\n${testo}`;
   const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       chat_id: chatId,
-      text: testo,
+      text: corpo,
       parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
       disable_web_page_preview: true,
     }),
   }).catch((err) => {

@@ -3,7 +3,8 @@ import { Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { Header } from '@/components/Header';
-import { Footer } from './LandingPage';
+import { DepartmentErrorBoundary } from '@/components/DepartmentErrorBoundary';
+import { Footer } from '@/components/Footer';
 import { CalcolatoreCfuLanding } from '@/departments/cfu';
 
 /**
@@ -43,7 +44,15 @@ export function CalcolatoreCFUPage() {
     <div className="flex min-h-screen flex-col bg-white">
       <Header />
       <main className="flex-1">
-        <CalcolatoreCfuLanding />
+        <DepartmentErrorBoundary
+          dipartimento="Calcolatore CFU"
+          titolo="Il Calcolatore CFU non è disponibile"
+          messaggio="La pagina non può essere mostrata in questo momento. Puoi ricaricarla oppure esplorare gli altri servizi di ScuoleRadar dal menu qui sopra."
+          etichettaRiprova="Ricarica il Calcolatore CFU"
+          className="mx-auto max-w-7xl px-4 sm:px-6"
+        >
+          <CalcolatoreCfuLanding />
+        </DepartmentErrorBoundary>
       </main>
       <Footer />
     </div>

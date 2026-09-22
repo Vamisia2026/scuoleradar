@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Interpello } from '../data/interpelli';
 import { classeByCodice, eAvvisoSostegno, isCodiceSostegno } from '../data/classiConcorso';
+import { materie as catalogoMaterie } from '../data/ordiniMaterie';
 import { province } from '../data/province';
 
 /**
@@ -236,15 +237,186 @@ export function sostegnoAmmesso(
  * letterale (`'A-026' === 'A-26'` → false) fa fallire il match e l'utente non
  * riceve MAI le notifiche reali: qui entrambi i lati vengono ricondotti alla
  * forma `PREFISSO-NUMERO` senza zeri iniziali (`A-026` → `A-26`, `A-042` → `A-42`).
- * I codici sostegno (`ADEE`, `ADSS`, `AD24`, …) restano invariati.
+ *
+ * TOLLERANZA DI SCRITTURA (stessa classe, qualunque sia il formato digitato):
+ *   `A-18` · `A18` · `a 18` · `A_18` · `A.18` · `A - 018` → **`A-18`**
+ * I codici a 4 lettere (sostegno/ATA: `ADEE`, `EEEE`, `ADSS`, `AD24`, …) restano
+ * invariati: la conversione riguarda SOLO il formato `lettera/e + numero`.
  */
 export function normalizzaClasse(codice?: string | null): string {
-  const c = (codice ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  const c = (codice ?? '')
+    .trim()
+    .toUpperCase()
+    // Separatori equivalenti (spazi, trattini, underscore, punti) → trattino unico.
+    .replace(/[\s._–—-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '');
   if (!c) return '';
   // Formato con trattino (A-026, B-001, A-02) oppure compatto a una lettera (A042).
   const m = c.match(/^([A-Z]{1,2})-0*(\d{1,3})$/) ?? c.match(/^([A-Z])0*(\d{2,3})$/);
   if (!m) return c;
   return `${m[1]}-${Number(m[2])}`;
+}
+
+/**
+ * Normalizza una LISTA di classi di concorso: applica `normalizzaClasse`,
+ * elimina i valori vuoti e i duplicati (anche se scritti in formati diversi:
+ * `A-022` e `A-22` sono la stessa classe). Usata al CARICAMENTO e al SALVATAGGIO
+ * del profilo: così le classi scelte dall'utente non "spariscono" (casella
+ * deselezionata) per un disallineamento di formato tra DB e catalogo.
+ */
+export function normalizzaClassi(classi?: readonly (string | null | undefined)[] | null): string[] {
+  const out: string[] = [];
+  const visti = new Set<string>();
+  for (const c of classi ?? []) {
+    const n = normalizzaClasse(c);
+    if (!n || visti.has(n)) continue;
+    visti.add(n);
+    out.push(n);
+  }
+  return out;
+}
+
+/**
+ * True se la lista di classi contiene (in QUALSIASI formato) il codice indicato.
+ * È il confronto usato dalle caselle di selezione dell'interfaccia: evita che una
+ * classe salvata come `A-022` appaia non selezionata rispetto al catalogo `A-22`.
+ */
+export function contieneClasse(
+  classi: readonly (string | null | undefined)[] | null | undefined,
+  codice?: string | null,
+): boolean {
+  const target = normalizzaClasse(codice);
+  if (!target) return false;
+  return (classi ?? []).some((c) => normalizzaClasse(c) === target);
+}
+
+/** Rimuove (in QUALSIASI formato) la classe indicata dalla lista. */
+export function rimuoviClasse(
+  classi: readonly (string | null | undefined)[] | null | undefined,
+  codice?: string | null,
+): string[] {
+  const target = normalizzaClasse(codice);
+  return normalizzaClassi(classi).filter((c) => c !== target);
+}
+
+
+/* ------------- Compatibilità profilo ↔ opportunità (STRICT) ------------- */
+
+/** Motivo dello scarto di un'opportunità rispetto a un profilo. */
+export type MotivoScarto =
+  | 'sostegno'
+  | 'profilo-senza-province'
+  | 'profilo-senza-classi'
+  | 'provincia'
+  | 'classe';
+
+/** Esito del confronto profilo ↔ opportunità (con motivo, per log e test). */
+export interface EsitoCompatibilita {
+  ok: boolean;
+  motivo?: MotivoScarto;
+}
+
+/** Profilo minimo richiesto dal confronto (riga `profiles`). */
+export interface ProfiloCompatibilita {
+  province?: readonly string[] | null;
+  classi?: readonly string[] | null;
+  sostegno?: boolean | null;
+}
+
+/** Avviso minimo richiesto dal confronto (riga `interpelli` o avviso parsato). */
+export interface AvvisoCompatibilita {
+  province?: string | null;
+  classi?: readonly string[] | null;
+  materia?: string | null;
+  titolo?: string | null;
+}
+
+/** Normalizza un codice provincia per il confronto (maiuscolo, senza spazi). */
+export function normalizzaProvincia(codice?: string | null): string {
+  return (codice ?? '').trim().toUpperCase();
+}
+
+/** Nomi/etichette delle materie coperte da una classe di concorso del catalogo. */
+export function etichetteMaterieClasse(codice?: string | null): string[] {
+  const classe = classeByCodice(normalizzaClasse(codice));
+  if (!classe) return [];
+  const nomi = classe.materie
+    .map((id) => catalogoMaterie.find((m) => m.id === id)?.nome ?? '')
+    .filter(Boolean);
+  return [classe.denominazione, ...nomi];
+}
+
+/**
+ * True se la MATERIA dichiarata dall'avviso è coperta da almeno una delle classi
+ * del profilo. Serve agli avvisi che NON citano il codice classe (le fonti a
+ * volte pubblicano solo "Interpello di Matematica"): senza questo confronto
+ * finirebbero a TUTTI i profili (falso positivo), mentre con il confronto
+ * arrivano solo a chi insegna quella materia.
+ */
+export function materiaCompatibileConClassi(
+  materia?: string | null,
+  classi?: readonly string[] | null,
+): boolean {
+  const tokens = (materia ?? '')
+    .toLowerCase()
+    .split(/[/,;·|]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 4);
+  if (tokens.length === 0) return false;
+  for (const codice of classi ?? []) {
+    const etichette = etichetteMaterieClasse(codice).map((e) => e.toLowerCase());
+    if (etichette.length === 0) continue;
+    const coperta = tokens.some((t) =>
+      etichette.some((e) => e.includes(t) || t.includes(e)),
+    );
+    if (coperta) return true;
+  }
+  return false;
+}
+
+/**
+ * REGOLA UNICA di compatibilità profilo ↔ opportunità (Radar e notifiche).
+ *
+ * STRICT: un'opportunità viene consegnata SOLO se
+ *   1. l'avviso non è di sostegno oppure l'utente ha aderito al sostegno;
+ *   2. il profilo ha almeno una PROVINCIA configurata e quella dell'avviso è tra
+ *      esse (mai avvisi di un'altra provincia: era il bug "Torino/Piemonte →
+ *      opportunità di Prato/Toscana" per i profili senza province salvate);
+ *   3. il profilo ha almeno una CLASSE configurata e c'è intersezione con le
+ *      classi dell'avviso (formato normalizzato A-022 ≡ A-22); se l'avviso non
+ *      dichiara classi, la MATERIA deve ricadere tra quelle delle classi utente.
+ *
+ * `ignoraFiltri` serve SOLO a enumerare i profili notificabili (digest): salta i
+ * controlli geografici/di classe, ma NON la guardia sostegno.
+ */
+export function avvisoCompatibileConProfilo(
+  profilo: ProfiloCompatibilita,
+  avviso: AvvisoCompatibilita,
+  opts: { ignoraFiltri?: boolean } = {},
+): EsitoCompatibilita {
+  if (!sostegnoAmmesso(profilo, avviso)) return { ok: false, motivo: 'sostegno' };
+  if (opts.ignoraFiltri === true) return { ok: true };
+
+  const provinceProfilo = (profilo.province ?? []).map(normalizzaProvincia).filter(Boolean);
+  if (provinceProfilo.length === 0) return { ok: false, motivo: 'profilo-senza-province' };
+  const provinciaAvviso = normalizzaProvincia(avviso.province);
+  if (!provinciaAvviso || !provinceProfilo.includes(provinciaAvviso)) {
+    return { ok: false, motivo: 'provincia' };
+  }
+
+  const classiProfilo = (profilo.classi ?? []).map(normalizzaClasse).filter(Boolean);
+  if (classiProfilo.length === 0) return { ok: false, motivo: 'profilo-senza-classi' };
+  const classiAvviso = (avviso.classi ?? []).filter(Boolean);
+  if (classiAvviso.length > 0) {
+    const set = new Set(classiProfilo);
+    return classiAvviso.some((c) => set.has(normalizzaClasse(c)))
+      ? { ok: true }
+      : { ok: false, motivo: 'classe' };
+  }
+  return materiaCompatibileConClassi(avviso.materia, classiProfilo)
+    ? { ok: true }
+    : { ok: false, motivo: 'classe' };
 }
 
 /**
@@ -308,38 +480,22 @@ export async function findUtentiCompatibili(
 
       const provinceProfilo: string[] = riga.province_interesse ?? riga.province_attive ?? [];
       const classiProfilo: string[] = riga.classi_concorso ?? [];
-      // Confronto NORMALIZZATO delle classi (A-026 ≡ A-26 ≡ A042): senza questa
-      // canonicalizzazione il catalogo (A-22) non incontrerebbe mai le classi
-      // estratte dalle fonti (A-022) e l'utente non riceverebbe notifiche reali.
-      const classiProfiloNormalizzate = new Set(classiProfilo.map(normalizzaClasse));
 
-      // GUARDIA SOSTEGNO: un avviso di sostegno (ADEE/ADMM/ADSS… anche quando cita
-      // classi disciplinari) viene consegnato SOLO a chi ha aderito alla preferenza.
-      // Prima di questa regola un docente di tedesco (A-22/A-25) riceveva gli
-      // interpelli di sostegno: era il falso positivo principale del Radar.
-      if (
-        !sostegnoAmmesso(
-          { sostegno: riga.sostegno === true, classi: classiProfilo },
-          { classi: interpello.classi, titolo: interpello.titolo, materia: interpello.materia },
-        )
-      ) {
-        continue;
-      }
-
-      // `ignoraFiltri` = "tutti i profili notificabili" (base del riepilogo
-      // giornaliero): NON si applica alcun filtro di provincia/classe. Senza
-      // questo flag una lista di classi VUOTA significherebbe "nessuna classe in
-      // comune" e gli utenti con preferenze configurate verrebbero ESCLUSI.
-      const matchProvincia =
-        opts.ignoraFiltri === true ||
-        interpello.province === null ||
-        provinceProfilo.length === 0 ||
-        provinceProfilo.includes(interpello.province);
-      const matchClasse =
-        opts.ignoraFiltri === true ||
-        classiProfilo.length === 0 ||
-        interpello.classi.some((c) => classiProfiloNormalizzate.has(normalizzaClasse(c)));
-      if (!matchProvincia || !matchClasse) continue;
+      // REGOLA UNICA (profilo ↔ opportunità): provincia E classe devono
+      // combaciare davvero, con le classi normalizzate (A-026 ≡ A-26 ≡ A042) e la
+      // guardia sostegno. La logica sta in `avvisoCompatibileConProfilo`, la stessa
+      // usata dal digest e dal dispatch: nessuna copia divergente.
+      const compatibilita = avvisoCompatibileConProfilo(
+        { province: provinceProfilo, classi: classiProfilo, sostegno: riga.sostegno === true },
+        {
+          province: interpello.province,
+          classi: interpello.classi,
+          materia: interpello.materia,
+          titolo: interpello.titolo,
+        },
+        { ignoraFiltri: opts.ignoraFiltri === true },
+      );
+      if (!compatibilita.ok) continue;
 
       compatibili.push({
         id: String(riga.id),

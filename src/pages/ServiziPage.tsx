@@ -1,10 +1,14 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { Header } from '@/components/Header';
-import { Footer } from './LandingPage';
-import { servizi } from '@/data/servizi';
+import { Footer } from '@/components/Footer';
+import { serviziVisibili } from '@/data/servizi';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 
 export function ServiziPage() {
+  // Feature flags: la griglia pubblica mostra solo i dipartimenti disponibili.
+  const { visibile } = useFeatureFlags();
+  const voci = serviziVisibili(visibile);
   return (
     <div className="min-h-screen">
       <Header />
@@ -18,7 +22,7 @@ export function ServiziPage() {
           </p>
 
           <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {servizi.map((s) => (
+            {voci.map((s) => (
               <Link
                 key={s.slug}
                 to={`/servizi/${s.slug}`}

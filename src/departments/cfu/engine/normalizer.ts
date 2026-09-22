@@ -59,9 +59,11 @@ export function classificaCodiceDisciplinare(
 /**
  * Normalizza un esame restituendo UNA COPIA: assegna il campo `ssd` SOLO se il
  * codice è un SSD, `gsd` SOLO se è un GSD. I dati grezzi restano immutati.
+ * L'origine è il primo codice DICHIARATO disponibile (`ssdOrigine` → `ssd` →
+ * `gsd`): un esame con solo GSD non perde il proprio codice disciplinare.
  */
 export function normalizzaEsame(esame: EsameCanonico): EsameCanonico {
-  const origine = esame.ssdOrigine ?? esame.ssd ?? null;
+  const origine = esame.ssdOrigine ?? esame.ssd ?? esame.gsd ?? null;
   const classificazione = classificaCodiceDisciplinare(origine);
   return {
     ...esame,

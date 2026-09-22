@@ -51,6 +51,8 @@ function NotizieCard({ articolo }: { articolo: NewsArticle }) {
       <h3 className="mt-3 min-w-0 text-base font-bold leading-snug text-primary-900">
         <Link
           to={`/notizie/${articolo.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
           className="break-words transition hover:text-primary-600"
         >
           {articolo.title}
@@ -83,6 +85,8 @@ function NotizieCard({ articolo }: { articolo: NewsArticle }) {
           )}
           <Link
             to={`/notizie/${articolo.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex items-center gap-1 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-primary-600"
           >
             Leggi

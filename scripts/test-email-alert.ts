@@ -140,7 +140,11 @@ const html = renderEmailHtml(
 );
 check('email cliccabile (mailto)', true, html.includes('mailto:astf01000x@istruzione.it'));
 check('etichetta email nei messaggi', true, html.includes(`${EMAIL_ICONA} ${EMAIL_ETICHETTA}:`));
-check('etichetta ONESTA del link di riepilogo', true, html.includes('Apri la pagina di riepilogo'));
+// Il bottone di fonte usa l'etichetta STANDARD ("👉 Apri l'avviso ufficiale"),
+// identica in tutte le superfici; la pagina di riepilogo resta spiegata dalla
+// guida operativa del blocco opportunità.
+check("etichetta standard del link di fonte", true, html.includes("👉 Apri l'avviso ufficiale"));
+check('guida per la pagina di riepilogo presente', true, /elenco|STAMPA/i.test(html));
 check('niente "Email non disponibile"', false, html.includes('Email non disponibile'));
 
 const htmlSenza = renderEmailHtml(

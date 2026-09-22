@@ -204,7 +204,7 @@ const RE_RIFERIMENTO_ATTO =
  * sicurezza, organico, stipendi…).
  */
 const PAROLE_IMPATTO =
-  /(?:stipend|paga|retribuzion|indennit|contratt|ccnl|welfare|polizza|sanitari|previdenz|contributiv|formazione|aggiornamento professionale|abilitazione|specializzazione|sicurezza|edilizia|digitalizzazione|organico|cattedre|classi|iscrizion|scrutini|esam[ei]|valutazion|orientamento|inclusione|bullismo|tutor|supplent|interpell|graduator|mobilit[aà]|trasferiment|assegnazion|nomine|assunzion|reclutament|pension|riscatto|ricostruzione|concors|reggenz|comandi|utilizzazion|permessi|aspettativa|telelavoro)/i;
+  /(?:stipend|paga|retribuzion|indennit|contratt|ccnl|welfare|polizza|sanitari|previdenz|contributiv|formazione|aggiornamento professionale|abilitazione|specializzazione|sicurezza|edilizia|digitalizzazione|organico|cattedre|classi|iscrizion|scrutini|esam[ei]|indirizz|maturit[aà]|diplom|calendario|festivit|benessere|psicolog|valutazion|orientamento|inclusione|bullismo|tutor|supplent|interpell|graduator|mobilit[aà]|trasferiment|assegnazion|nomine|assunzion|reclutament|pension|riscatto|ricostruzione|concors|reggenz|comandi|utilizzazion|permessi|aspettativa|telelavoro)/i;
 
 /**
  * TITOLO DI BUROCRAZIA VUOTA: è SOLO il riferimento formale di un atto
@@ -252,6 +252,12 @@ const CATEGORIE_IMPATTO: Array<{ categoria: string; parole: string[] }> = [
       'welfare', 'polizza', 'sanitari', 'formazione', 'aggiornamento professionale',
       'sicurezza', 'organico', 'cattedre', 'iscrizion', 'orientamento',
       'inclusione', 'bullismo',
+      // DIDATTICA, ORDINAMENTO ED ESAMI: la produzione MIM di settembre è fatta
+      // di passaggi di indirizzo, esami integrativi, sessioni d'esame, maturità,
+      // calendario e benessere a scuola. Senza queste voci la categoria non
+      // veniva riconosciuta e l'intero flusso finiva nel rifiuto generico.
+      'esam', 'indirizz', 'maturit', 'diplom', 'calendario', 'festivit',
+      'benessere', 'psicolog',
     ],
   },
 ];
@@ -292,6 +298,265 @@ export function categoriaDaImpatto(testo: string): string | null {
   return null;
 }
 
+/**
+ * RISERVA SETTIMANALE (garanzia di cadenza ≥ 1 articolo/settimana).
+ *
+ * Vero se la voce — pur non superata dal filtro editoriale principale — è
+ * ammissibile come articolo di riserva quando la bacheca rischia una settimana
+ * vuota. Requisiti (doppio vocabolario, nessun rumore):
+ *  · titolo informativo (dice CHI/CHE COSA) e non burocrazia vuota;
+ *  · non materiale d'archivio (riferimenti obsoleti senza data recente);
+ *  · un termine di IMPATTO *e* un riferimento al mondo scuola nel TITOLO.
+ * La validazione strutturale (URL canonico, HTTP 200/3xx, fonte nazionale)
+ * resta a carico della pipeline: una riserva non può scavalcare quei gate.
+ */
+export function èRiservaSettimanale(
+  title: string,
+  descrizione?: string | null,
+  dataFonte?: string | null,
+): boolean {
+  const titolo = (title ?? '').replace(/\s+/g, ' ').trim();
+  const testo = `${titolo} ${(descrizione ?? '').replace(/\s+/g, ' ')}`
+    .trim()
+    .toLowerCase();
+  if (!titolo || titolo.length < 20) return false;
+  if (!titoloInformativo(titolo)) return false;
+  if (attoBurocraticoVuoto(titolo)) return false;
+  // Mai un comunicato/lettera/evento, nemmeno come riserva: il fluff resta fuori.
+  if (titoloDaUfficioStampa(titolo)) return false;
+  if (riferimentiObsoleti(testo, dataFonte)) return false;
+  return PAROLE_IMPATTO.test(titolo) && PAROLE_SCUOLA.test(titolo);
+}
+
+/* ============ STANDARD EDITORIALE STRETTO (nessun fluff) ============ */
+
+/**
+ * GLOSSARIO ACRONIMI: ogni sigla va spiegata in parentesi alla PRIMA occorrenza
+ * (titolo, sintesi, testo). Se il testo contiene già la forma estesa, non si
+ * ripete l'espansione.
+ */
+export const GLOSSARIO_ACRONIMI: Record<string, string> = {
+  MIM: 'Ministero dell\u2019Istruzione e del Merito',
+  GPS: 'Graduatorie Provinciali per le Supplenze',
+  GAE: 'Graduatorie ad Esaurimento',
+  PNRR: 'Piano Nazionale di Ripresa e Resilienza',
+  PON: 'Programma Operativo Nazionale',
+  ATA: 'personale Amministrativo, Tecnico e Ausiliario',
+  CCNL: 'Contratto Collettivo Nazionale di Lavoro',
+  ARAN: 'Agenzia per la Rappresentanza Negoziale delle Pubbliche Amministrazioni',
+  INPS: 'Istituto Nazionale della Previdenza Sociale',
+  SPID: 'Sistema Pubblico di Identit\u00e0 Digitale',
+  CIE: 'Carta d\u2019Identit\u00e0 Elettronica',
+  SIDI: 'Sistema Informativo dell\u2019Istruzione',
+  POLIS: 'la piattaforma unica dei servizi pubblici di istruzione',
+  USR: 'Ufficio Scolastico Regionale',
+  USP: 'Ufficio Scolastico Provinciale',
+  OM: 'Ordinanza Ministeriale',
+  DM: 'Decreto Ministeriale',
+  MAD: 'Messa A Disposizione',
+};
+
+/**
+ * TEMI AMMESSI (allow-list): una notizia si pubblica SOLO se riguarda il
+ * personale scolastico in modo operativo. `autosufficiente: true` quando le
+ * parole del tema bastano; altrimenti serve anche un contesto di personale
+ * (`PAROLE_PERSONALE`), così un "concorso per studenti" non passa come concorso
+ * riservato al personale della scuola.
+ */
+const TEMI_PERSONALE: Array<{ categoria: string; parole: string[]; autosufficiente: boolean }> = [
+  {
+    categoria: 'CCNL',
+    autosufficiente: true,
+    parole: ['ccnl', 'contratto collettivo', 'contrattazione', 'rinnovo del contratto', 'stipendi', 'retribuzion', 'indennit', 'progressioni economiche', 'busta paga'],
+  },
+  {
+    categoria: 'Pensioni',
+    autosufficiente: true,
+    parole: ['previdenz', 'pension', 'riscatto', 'ricongiunzione', 'ricostruzione di carriera', 'ricostruzione carriera', 'contributiv'],
+  },
+  {
+    categoria: 'Welfare',
+    autosufficiente: true,
+    parole: ['welfare', 'polizza', 'sanitari', 'assistenza', 'benefit', 'tutela della salute'],
+  },
+  {
+    categoria: 'Mobilità',
+    autosufficiente: true,
+    parole: ['mobilit', 'trasferiment', 'passaggio di ruolo', 'assegnazioni provvisorie', 'utilizzazioni', 'comandi', 'assegnazione'],
+  },
+  {
+    categoria: 'GPS',
+    autosufficiente: true,
+    parole: ['gps', 'graduator', 'supplenz', 'interpello', 'interpelli', 'messa a disposizione', 'scelta delle sedi', 'ruoli docenti', 'nomine'],
+  },
+  {
+    categoria: 'Organico',
+    autosufficiente: true,
+    parole: ['organico', 'organici', 'cattedre', 'dotazione organica', 'posti di ruolo', 'esuberi', 'reggenz'],
+  },
+  {
+    categoria: 'Formazione',
+    autosufficiente: true,
+    parole: ['formazione', 'aggiornamento professionale', 'abilitazione', 'specializzazione', 'accreditamento'],
+  },
+  {
+    categoria: 'PNRR',
+    autosufficiente: true,
+    parole: ['pnrr', 'piano nazionale di ripresa', 'scuola 4.0', 'finanziament', 'edilizia scolastica'],
+  },
+  {
+    categoria: 'Sicurezza',
+    autosufficiente: true,
+    parole: ['sicurezza sui luoghi di lavoro', 'tutela della sicurezza', 'infortuni', 'stress lavoro-correlato', 'sorveglianza sanitaria'],
+  },
+  {
+    categoria: 'Normativa',
+    autosufficiente: false,
+    parole: ['nuove regole', 'nuova disciplina', 'linee guida', 'semplificazione', 'modifiche al regolamento', 'requisiti'],
+  },
+  {
+    categoria: 'Scadenze',
+    autosufficiente: false,
+    parole: ['scadenza', 'entro il', 'termine ultimo', 'presentazione delle domande', 'riapertura dei termini', 'proroga', 'istanze'],
+  },
+  {
+    categoria: 'Concorsi',
+    autosufficiente: false,
+    parole: ['concorso', 'concorsi', 'reclutament', 'assunzion', 'graduatorie di merito'],
+  },
+];
+
+/** Contesto di PERSONALE scolastico (obbligatorio per i temi non autosufficienti). */
+const PAROLE_PERSONALE =
+  /(?:personale|docenti|docente|\bata\b|dirigenti scolastici|supplent|graduator|interpell|contratt|stipend|mobilit|organico|cattedre|reclutament|assunzion|nomine|gps|ccnl|welfare|polizza|previdenz|pension|riscatto|formazione|abilitazione|carriera|permessi|aspettativa|utilizzazion|ricostruzione|ruolo)/i;
+
+/**
+ * Classifica il TEMA OPERATIVO della notizia per il personale scolastico
+ * (contratti, welfare, mobilità, GPS/interpelli, scadenze, normativa…).
+ * `null` = nessun impatto pratico → non si pubblica.
+ */
+export function classificaTemaPersonale(testo: string): string | null {
+  const t = (testo ?? '').replace(/\s+/g, ' ').toLowerCase();
+  if (!t) return null;
+  const contestoForte = PAROLE_PERSONALE.test(t);
+  const contestoScuola = contestoForte || PAROLE_SCUOLA.test(t);
+  for (const tema of TEMI_PERSONALE) {
+    if (!tema.parole.some((p) => t.includes(p))) continue;
+    // Temi autosufficienti (contratti, welfare, mobilità, GPS…): bastano le
+    // loro parole. Gli altri (normativa, scadenze, concorsi) valgono solo con un
+    // riferimento ESPLICITO al personale: così un concorso o un evento per
+    // studenti non passa come notizia operativa per docenti e ATA.
+    if (tema.autosufficiente ? contestoScuola : contestoForte) return tema.categoria;
+  }
+  return null;
+}
+
+/**
+ * TITOLO DA UFFICIO STAMPA: lettere, annunci, congratulazioni, dichiarazioni,
+ * visite, protocolli, eventi. È comunicazione istituzionale, non notizia
+ * operativa: si pubblica solo se il testo ha comunque un tema pratico forte
+ * (vedi `classificaTemaPersonale`).
+ */
+export function titoloDaUfficioStampa(titolo?: string | null): boolean {
+  const t = (titolo ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!t) return false;
+  return /(?:lettera del ministro|lettera aperta|il ministro\b|la ministra\b|valditara|sottosegretario|dichiarazion|comunicato|nota stampa|soddisfazione|ringrazia|compliment|congratul|auguri|visita\b|incontro con|colloquio|memorandum|protocollo d.?intesa|intesa con|partnership|seminario|convegno|dibattito|tavola rotonda|cerimonia|premiazione|consegna del premio|rassegna stampa|giornata nazionale|giornata mondiale|celebrazion|anniversario|diretta\b|tutti a scuola|intervento del|presenzia|messaggio\b|augurio)/i.test(
+    t,
+  );
+}
+
+/**
+ * Spiega gli ACRONIMI alla prima occorrenza: "GPS" → "GPS (Graduatorie
+ * Provinciali per le Supplenze)". Restituisce il testo aggiornato e le sigle
+ * spiegate, così le chiamate successive (sintesi, corpo) non le ripetono.
+ */
+export function espandiAcronimi(
+  testo: string,
+  giàSpiegati: Set<string> = new Set(),
+): { testo: string; spiegati: string[] } {
+  let out = testo ?? '';
+  const spiegati: string[] = [];
+  for (const [sigla, spiegazione] of Object.entries(GLOSSARIO_ACRONIMI)) {
+    if (giàSpiegati.has(sigla)) continue;
+    // Già spiegato nel testo (forma estesa presente) → niente doppioni.
+    if (out.toLowerCase().includes(spiegazione.toLowerCase().slice(0, 24))) {
+      giàSpiegati.add(sigla);
+      continue;
+    }
+    const re = new RegExp(`\\b${sigla}\\b(?!\\s*\\()`);
+    // Se la sigla è già spiegata tra parentesi nel testo (es. "(POLIS)"), non si
+    // annida una seconda parentesi: si considera spiegata.
+    if (new RegExp(`\\(\\s*${sigla}\\b`).test(out)) {
+      giàSpiegati.add(sigla);
+      continue;
+    }
+    if (!re.test(out)) continue;
+    out = out.replace(re, `${sigla} (${spiegazione})`);
+    giàSpiegati.add(sigla);
+    spiegati.push(sigla);
+  }
+  return { testo: out, spiegati };
+}
+
+/**
+ * FRASI DI FLUFF / PROMESSE VUOTE — mai pubblicabili.
+ *
+ * Sono riempitivi che non danno nulla di operativo al lettore ("ti avvisiamo
+ * appena esce", "la scadenza non è ancora pubblicata", "verifica nel testo
+ * ufficiale"): un articolo che ne contiene una viene scartato, in generazione e
+ * in igiene dell'archivio. La notizia parla solo se ha fatti completi: scadenza,
+ * requisiti, modalità e link diretti.
+ */
+export const FRASI_FLUFF: string[] = [
+  'ti avvisiamo appena esce',
+  'ti avviseremo appena esce',
+  'appena esce',
+  'non ancora pubblicata',
+  'non ancora pubblicate',
+  'non è ancora indicata',
+  'non sono ancora indicati',
+  'non è ancora stata fissata',
+  'prossimo aggiornamento è in arrivo',
+  'prossimo aggiornamento',
+  'resta aggiornato',
+  'continua a seguirci',
+  'sarà pubblicata prossimamente',
+  'verifica apertura nel testo ufficiale',
+  'verifica nel testo ufficiale',
+  'controlla nel testo ufficiale',
+  'ti aggiorneremo',
+  'le date saranno confermate',
+];
+
+/** Vero se il testo contiene una frase di fluff/promessa vuota (non pubblicabile). */
+export function contieneFraseFluff(testo?: string | null): boolean {
+  const t = (testo ?? '').replace(/\s+/g, ' ').toLowerCase();
+  if (!t) return false;
+  return FRASI_FLUFF.some((f) => t.includes(f));
+}
+
+/**
+ * CADENZA SETTIMANALE: minimo 1, massimo `MAX_ARTICOLI_SETTIMANA` articoli
+ * datati negli ultimi 7 giorni. Espone l'esito per i log della pipeline e per i
+ * test (`npm run test:notizie-feed`, `npm run test:notizie-rate`).
+ */
+export function verificaCadenzaSettimanale(
+  articoli: NewsArticle[],
+  oggi: Date = new Date(),
+): { recenti: number; ok: boolean; min: number; max: number } {
+  const soglia = oggi.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const recenti = articoli.filter((a) => {
+    const t = a.published_at ? new Date(a.published_at).getTime() : Number.NaN;
+    return !Number.isNaN(t) && t >= soglia;
+  }).length;
+  return {
+    recenti,
+    ok: recenti >= 1 && recenti <= MAX_ARTICOLI_SETTIMANA,
+    min: 1,
+    max: MAX_ARTICOLI_SETTIMANA,
+  };
+}
+
 /** Data breve italiana (UTC) per l'urgenza nel titolo: "16 lug". */
 function dataBreveIt(iso: string): string {
   const d = new Date(iso);
@@ -314,6 +579,19 @@ export function titoloAzione(
   const originale = (titolo ?? '').replace(/\s+/g, ' ').trim();
   let t = originale;
 
+  // 0) Via le etichette da ufficio stampa: il lettore vuole il fatto, non la
+  //    firma. Copre "Comunicato stampa:", "Lettera del Ministro …", "Il Ministro …",
+  //    "Valditara: «…»" e il prefisso data delle rassegne ("05/09/2026 - ").
+  t = t
+    .replace(/^\s*\d{1,2}\/\d{1,2}\/\d{4}\s*[-–—]\s*/, '')
+    .replace(
+      /^\s*(?:comunicato stampa|nota stampa|lettera del ministro(?:\s+dell[’'][a-zà-ù]+)?|lettera aperta|il ministro|la ministra|intervento del ministro|dichiarazione del ministro|messaggio del ministro)\b[^:]{0,120}[-–—:]\s*/i,
+      '',
+    )
+    .replace(/^\s*(?:[A-ZÀ-Ù][a-zà-ù’']+\s){0,2}(?:valditara|ministro|ministra)\s*:\s*/i, '')
+    .replace(/^[«“"']\s*/, '')
+    .replace(/\s*[»”"']\s*$/, '');
+
   // 1) Via l'intestazione burocratica: designazione + numero + data.
   t = t.replace(
     /^\s*(?:d\.?\s*p\.?\s*r\.?|d\.?\s*p\.?\s*c\.?\s*m\.?|d\.?\s*l\.?|decreto(?:\s+(?:ministeriale|direttoriale|dirigenziale|legislativo|del\s+presidente))?|ordinanza(?:\s+ministeriale)?|nota(?:\s+prot(?:ocollo)?\.?)?|circolare|comunicato|delibera|determina)\s*(?:n\.?\s*\d+)?(?:\s*del(?:l['’])?\s*\d{1,2}\s+[a-zà-ù]+\s+\d{4})?\s*[-–—:]\s*/i,
@@ -323,6 +601,14 @@ export function titoloAzione(
   // 2) Via le code burocratiche ("— Pubblicazione dell'Ordinanza Ministeriale").
   t = t.replace(
     /\s*[-–—:]\s*(?:pubblicazione|pubblicato|trasmissione|comunicazione|decreto|ordinanza|nota|avviso)\b[^.]*$/i,
+    '',
+  );
+
+  // 2-bis) Via la CODA DA COMUNICATO: il titolo si ferma alla frase che dice il
+  // fatto ("Nuove Indicazioni Nazionali 2025, al via il percorso di formazione
+  // per le scuole. Domani, 16 settembre, il Ministro…" → si taglia al punto).
+  t = t.replace(
+    /\s*[.;]\s*(?:domani|oggi|ieri|dopodomani|il ministro|la ministra|il mim|alle ore|\d{1,2}\s+(?:gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre))\b[\s\S]*$/i,
     '',
   );
 
@@ -355,6 +641,12 @@ export function titoloAzione(
   if (deadline && conScadenza && !t.toLowerCase().includes('entro il')) {
     t = `${t.replace(/[.\s]+$/, '')} — domande entro il ${dataBreveIt(deadline)}`;
   }
+
+  // 6) ACRONIMI: spiegati alla prima occorrenza (standard editoriale, anche nel
+  //    titolo). Se il titolo diventerebbe troppo lungo, l'espansione resta
+  //    comunque nella sintesi e nel corpo dell'articolo.
+  const espanso = espandiAcronimi(t).testo;
+  if (espanso.length <= 170) t = espanso;
 
   return t.length >= 12 ? t : originale;
 }
@@ -459,14 +751,24 @@ export function valutaRilevanza(voce: VoceInValutazione): ValutazioneNotizia {
   const testo = `${voce.title} ${voce.description ?? ''}`.toLowerCase();
 
   for (const parola of PAROLE_RIFIUTA) {
-    if (testo.includes(parola)) {
-      return {
-        rilevante: false,
-        categoria: null,
-        deadline: null,
-        motivo: `Contenuto non vincolante rilevato ("${parola}")`,
-      };
+    if (!testo.includes(parola)) continue;
+    // 'ipotesi'/'bozza' sono rumore negli avvisi generici, ma per i CONTRATTI
+    // ("ipotesi di accordo CCNL") sono il documento ufficiale della trattativa:
+    // un rinnovo contrattuale è sempre una notizia operativa per il personale.
+    if (
+      /^(?:ipotesi(?: di)?|bozz[ae])$/.test(parola) &&
+      /(?:ccnl|contratto collettivo|ipotesi di accordo|contrattazione collettiva|comparto istruzione e ricerca)/i.test(
+        testo,
+      )
+    ) {
+      continue;
     }
+    return {
+      rilevante: false,
+      categoria: null,
+      deadline: null,
+      motivo: `Contenuto non vincolante rilevato ("${parola}")`,
+    };
   }
 
   // 0) BUROCRAZIA VUOTA: un titolo che è SOLO il riferimento formale di un atto
@@ -505,48 +807,42 @@ export function valutaRilevanza(voce: VoceInValutazione): ValutazioneNotizia {
     };
   }
 
-  // 1) Categoria UFFICIALE mappata: specifica per il personale scolastico.
-  const categoriaMappata = classificaCategoria(testo);
-  if (categoriaMappata) {
-    // I contratti collettivi valgono SOLO per il comparto SCUOLA: i CCNL di
-    // Sanità, Funzioni Locali, Presidenza del Consiglio… non interessano a
-    // docenti e ATA (ScuoleRadar è una piattaforma nazionale per la scuola).
-    if (categoriaMappata === 'CCNL' && !PAROLE_SCUOLA.test(testo)) {
-      return {
-        rilevante: false,
-        categoria: null,
-        deadline: null,
-        motivo: 'Contratto non pertinente al comparto scuola',
-      };
-    }
-    return { rilevante: true, categoria: categoriaMappata, deadline: estraiDeadline(testo) };
-  }
-
-  // 2) IMPATTO PRATICO: la notizia cambia qualcosa per chi lavora a scuola
-  //    (welfare e polizza sanitaria del personale, formazione ATA, sicurezza,
-  //    organico, iscrizioni…): si racconta anche senza una parola-categoria
-  //    ufficiale e senza una parola "operativa" da burocrazia.
-  const categoriaImpatto = categoriaDaImpatto(voce.title);
-  if (categoriaImpatto && PAROLE_IMPATTO.test(voce.title)) {
-    return { rilevante: true, categoria: categoriaImpatto, deadline: estraiDeadline(testo) };
-  }
-
-  // 3) Rete di sicurezza: avviso OPERATIVO con un termine "FORTE" di avvio anno.
-  const operativa = PAROLE_ACCETTA.some((p) => testo.includes(p));
-  if (operativa && PAROLE_FORTI_INIZIO_ANNO.some((p) => testo.includes(p))) {
+  // 1) CCNL: i contratti collettivi valgono SOLO per il comparto SCUOLA (i CCNL
+  //    di Sanità, Funzioni Locali, Presidenza del Consiglio… non interessano a
+  //    docenti e ATA: ScuoleRadar è una piattaforma nazionale per la scuola).
+  // 2) TEMA OPERATIVO (allow-list): si pubblica SOLO ciò che ha un impatto
+  //    pratico per il personale scolastico — contratti/CCNL, welfare, mobilità,
+  //    GPS/interpelli, organizzazione e organico, formazione, scadenze
+  //    operative, cambi normativi. Tutto il resto (comunicati, lettere,
+  //    dichiarazioni, annunci politici, iniziative rivolte agli studenti,
+  //    eventi) è comunicazione istituzionale, non una notizia operativa: fuori.
+  const tema = classificaTemaPersonale(`${voce.title} ${voce.description ?? ''}`);
+  if (tema === 'CCNL' && !PAROLE_SCUOLA.test(testo)) {
     return {
-      rilevante: true,
-      categoria: categoriaInizioAnno(testo) ?? 'Scuole',
-      deadline: estraiDeadline(testo),
+      rilevante: false,
+      categoria: null,
+      deadline: null,
+      motivo: 'Contratto non pertinente al comparto scuola',
     };
   }
-
-  return {
-    rilevante: false,
-    categoria: null,
-    deadline: null,
-    motivo: 'Avviso tecnico/amministrativo generale non pertinente a docenti e ATA',
-  };
+  if (titoloDaUfficioStampa(voce.title) && !tema) {
+    return {
+      rilevante: false,
+      categoria: null,
+      deadline: null,
+      motivo: 'Comunicazione istituzionale/press-office: nessun impatto pratico per il personale',
+    };
+  }
+  if (!tema) {
+    return {
+      rilevante: false,
+      categoria: null,
+      deadline: null,
+      motivo:
+        'Nessun impatto pratico su contratti, welfare, mobilità, GPS/interpelli, scadenze o normativa per il personale',
+    };
+  }
+  return { rilevante: true, categoria: tema, deadline: estraiDeadline(testo) };
 }
 
 /**
@@ -1090,7 +1386,78 @@ export function articoloValido(a: NewsArticle): boolean {
     console.warn(`✗ Articolo scartato (${a.id}): link non validi nel testo — ${nonValidi[0]}`);
     return false;
   }
+  // STANDARD EDITORIALE STRETTO: resta in bacheca solo ciò che ha un tema
+  // pratico per il personale (contratti, welfare, mobilità, GPS/interpelli,
+  // organizzazione, formazione, scadenze, normativa) e non è una comunicazione
+  // d'ufficio stampa. Vale anche per le voci già in archivio (igiene).
+  // ZERO FLUFF: nessuna promessa vuota né rinvio generico ("ti avvisiamo appena
+  // esce", "verifica nel testo ufficiale"). Vale anche per l'igiene dell'archivio.
+  if (contieneFraseFluff(`${a.title} ${(a.summary_points ?? []).join(' ')} ${a.content_html ?? ''}`)) {
+    console.warn(`✗ Articolo scartato (${a.id}): contiene una frase di fluff/promessa vuota`);
+    return false;
+  }
+  const temaArticolo = classificaTemaPersonale(`${a.title} ${a.category ?? ''}`);
+  const riservaAmmessa = èRiservaSettimanale(
+    a.title,
+    (a.summary_points ?? []).join(' '),
+    a.deadline_date,
+  );
+  if (!temaArticolo && !riservaAmmessa) {
+    console.warn(`✗ Articolo scartato (${a.id}): nessun impatto pratico per il personale scolastico`);
+    return false;
+  }
+  if (titoloDaUfficioStampa(a.title) && !PAROLE_PERSONALE.test(a.title)) {
+    console.warn(`✗ Articolo scartato (${a.id}): comunicazione istituzionale/press-office`);
+    return false;
+  }
   return true;
+}
+
+/** Fonte editoriale dedotta dall'host della fonte ufficiale (rigenerazione formato). */
+export function fonteDaUrl(url: string): string {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    if (host.endsWith('mim.gov.it') || host.endsWith('istruzione.it')) return 'MIM';
+    if (host.endsWith('gazzettaufficiale.it')) return 'Gazzetta Ufficiale';
+    if (host.endsWith('aranagenzia.it')) return 'ARAN';
+    if (host.endsWith('inps.it')) return 'INPS';
+    if (host.endsWith('corteconti.it')) return 'Corte dei Conti';
+    if (host.endsWith('giustizia-amministrativa.it')) return 'Consiglio di Stato';
+    return host.replace(/^www\./, '');
+  } catch {
+    return 'Fonte ufficiale';
+  }
+}
+
+/**
+ * RIGENERA IL FORMATO EDITORIALE di un articolo già in archivio: titolo con
+ * acronimi spiegati, sintesi "IN SINTESI" a bullet pratici e copy a 3 paragrafi
+ * secondo lo standard corrente. Non tocca fatti, data, link, categoria e
+ * punteggio: interviene solo sulla forma (id e dedupe restano invariati).
+ */
+export function applicaFormatoEditoriale(a: NewsArticle): NewsArticle {
+  // Il canale di presentazione si ricava dallo stesso testo pubblicato: se la
+  // notizia parla di una domanda, il link diretto entra anche nella voce già in
+  // archivio (zero rinvii vaghi anche sulle notizie storiche).
+  const canale = linkDomandaUfficiale(
+    `${a.title} ${(a.summary_points ?? []).join(' ')} ${a.content_html ?? ''}`,
+  );
+  const { content_html, summary_points } = generaArticoloEditoriale({
+    title: a.title,
+    categoria: a.category,
+    deadline: a.deadline_date,
+    fonte: fonteDaUrl(a.official_source_url),
+    official_url: a.official_source_url,
+    application_url: canale?.url ?? null,
+    application_label: canale?.etichetta ?? null,
+  });
+  const titolo = espandiAcronimi(a.title).testo;
+  return {
+    ...a,
+    title: titolo.length <= 170 ? titolo : a.title,
+    content_html,
+    summary_points,
+  };
 }
 
 
@@ -1104,6 +1471,65 @@ export interface DatiArticoloEditoriale {
   descrizione?: string;
   /** URL ufficiale della fonte (per il link contestuale nel testo). */
   official_url?: string | null;
+  /** Link diretto al canale di presentazione della domanda (Istanze Online, POLIS…). */
+  application_url?: string | null;
+  /** Etichetta del canale di presentazione ("Istanze Online (POLIS)"…). */
+  application_label?: string | null;
+}
+
+/**
+ * CANALI DI PRESENTAZIONE ufficiali: quando la notizia riguarda una domanda, una
+ * istanza o una candidatura, il link diretto al canale va SEMPRE pubblicato
+ * accanto a quello della fonte (regola "zero fluff": niente rinvii vaghi).
+ */
+const CANALI_DOMANDA: Array<{ re: RegExp; url: string; etichetta: string }> = [
+  {
+    re: /istanze\s*online|polis/i,
+    url: 'https://www.istruzione.it/polis/Istanzeonline.htm',
+    etichetta: 'Istanze Online (POLIS)',
+  },
+  {
+    re: /\bunica\b|unic[aà]\s*istruzione/i,
+    url: 'https://unica.istruzione.gov.it/',
+    etichetta: 'Unica, il portale del Ministero',
+  },
+  {
+    re: /\binpa\b/i,
+    url: 'https://www.inpa.gov.it/',
+    etichetta: 'InPA, il portale del reclutamento pubblico',
+  },
+  {
+    re: /\binps\b/i,
+    url: 'https://www.inps.it/',
+    etichetta: 'INPS',
+  },
+  {
+    re: /pnrr\s*istruzione|futura/i,
+    url: 'https://pnrr.istruzione.it/',
+    etichetta: 'PNRR Istruzione',
+  },
+];
+
+/** Canale di presentazione citato nel testo (link diretto + etichetta onesta). */
+export function linkDomandaUfficiale(
+  testo: string,
+): { url: string; etichetta: string } | null {
+  const t = (testo ?? '').replace(/\s+/g, ' ');
+  for (const canale of CANALI_DOMANDA) {
+    if (canale.re.test(t)) return { url: canale.url, etichetta: canale.etichetta };
+  }
+  return null;
+}
+
+/**
+ * Vero se il testo annuncia una PROCEDURA DA PRESENTARE (domanda, istanza,
+ * candidatura, iscrizione): in quel caso la pubblicazione richiede il link
+ * diretto al canale di presentazione, altrimenti l'avviso è incompleto.
+ */
+export function richiedePresentazioneDomanda(testo: string): boolean {
+  return /(?:presentazione\s+delle\s+domande|presenta(?:re)?\s+(?:la\s+|le\s+)?(?:domanda|istanza|candidatura)|domanda\s+online|istanz[ae]\s+online|invio\s+della\s+domanda|candidatur[ae]|messa\s+a\s+disposizione|iscrizion[ei]\s+(?:al|alla|ai|online))/i.test(
+    testo ?? '',
+  );
 }
 
 interface ArticoloCopy {
@@ -1316,6 +1742,39 @@ export function generaArticoloEditoriale(
   const a = override?.copy ?? ARTICOLO[cat] ?? ARTICOLO['Scuole'];
   const scadenza = d.deadline ? formattaDataItaliana(d.deadline) : null;
 
+  // ACRONIMI: spiegati alla PRIMA occorrenza nell'articolo (titolo → sintesi →
+  // corpo). La sigla già espansa non viene ripetuta nei passaggi successivi.
+  const spiegati = new Set<string>();
+  const titoloAcr = espandiAcronimi(d.title, spiegati).testo;
+  const fattoAcr = espandiAcronimi(a.fatto, spiegati).testo;
+  const chiAcr = espandiAcronimi(a.chi, spiegati).testo;
+  const praticaAcr = espandiAcronimi(a.pratica, spiegati).testo;
+  // Il "vai a controllare" generico è rumore: le indicazioni operative devono
+  // portare a un link diretto, non a un rinvio. Si rimuovono le code vaghe del
+  // copy di categoria prima di comporre il terzo paragrafo.
+  const pulisciRinvio = (testo: string): string =>
+    testo
+      .replace(
+        /\s*(?:Il testo completo è quello ufficiale|Le informazioni complete sono consultabili|I dettagli completi sono nel testo ufficiale)[^.]*\./gi,
+        '',
+      )
+      .replace(
+        /\s*(?:controlla|verifica|consulta)\s+(?:nel|il|sul)\s+(?:testo|sito|documento)\s+ufficiale[^.]*\./gi,
+        '',
+      )
+      // Qualunque frase che rinvia al "testo ufficiale" è un rinvio vago: si
+      // toglie del tutto (il link diretto sta già nel paragrafo).
+      .replace(/\s*[^.]*?\b(?:nel|sul)\s+(?:testo|sito|documento)\s+ufficiale\b[^.]*\./gi, '')
+      .trim();
+  const comeBase = espandiAcronimi(a.come, spiegati).testo;
+  const comePulito = pulisciRinvio(comeBase);
+  // Se la sanificazione svuota le indicazioni (la frase era SOLO un rinvio), si
+  // usa un default operativo: niente "leggi tutto", solo il fatto + il link.
+  const comeAcr =
+    comePulito.length >= 30
+      ? comePulito
+      : 'Le modalità operative e i requisiti sono quelli fissati dal documento ufficiale linkato qui sotto.';
+
   // LINK DELLA FONTE: si usa SEMPRE la traccia disponibile (documento specifico
   // quando tracciato, altrimenti la pagina ufficiale/elenco). Non si pubblica
   // mai un link non valido (mockup/login), ma non si lascia MAI la notizia senza
@@ -1328,36 +1787,55 @@ export function generaArticoloEditoriale(
       ? `<a href="${escapeHtmlEditoriale(hrefDiretto)}" target="_blank" rel="noopener noreferrer">${escapeHtmlEditoriale(testo)}</a>`
       : escapeHtmlEditoriale(testo);
 
-  // 1) Che cosa cambia, subito (nessuna apertura istituzionale). Una scadenza
-  // già passata non si presenta come invito all'azione: si invita a verificare.
+  // CANALE DI PRESENTAZIONE: quando la notizia riguarda una domanda, il link
+  // diretto va pubblicato INSIEME a quello della fonte (niente rinvii vaghi del
+  // tipo "verifica nel testo ufficiale"). Se coincide con la fonte, non si duplica.
+  const etichettaDomanda = d.application_label ?? 'il canale ufficiale di presentazione';
+  const hrefDomanda =
+    d.application_url && d.application_url !== hrefDiretto ? d.application_url : '';
+  const anchorDomanda = (testo: string): string =>
+    hrefDomanda
+      ? `<a href="${escapeHtmlEditoriale(hrefDomanda)}" target="_blank" rel="noopener noreferrer">${escapeHtmlEditoriale(testo)}</a>`
+      : escapeHtmlEditoriale(testo);
+
+  // 1) Che cosa cambia, subito: la frase contiene SEMPRE un'informazione completa
+  // (scadenza oppure canale di presentazione) e MAI una promessa di aggiornamento.
   const scadenzaMs = d.deadline ? new Date(d.deadline).getTime() : Number.NaN;
   const scadenzaPassata = !Number.isNaN(scadenzaMs) && scadenzaMs < Date.now();
-  const par1 = `${a.fatto} \u00ab${escapeHtmlEditoriale(d.title)}\u00bb. ${
+  const par1 = `${fattoAcr} \u00ab${escapeHtmlEditoriale(titoloAcr)}\u00bb. ${
     scadenza && !scadenzaPassata
       ? `Hai tempo fino al ${scadenza}: non rimandare all'ultimo giorno.`
       : scadenzaPassata
-        ? `Il termine indicato era il ${scadenza}: controlla nel testo ufficiale se la procedura è ancora aperta.`
-        : `Scadenza ufficiale non ancora pubblicata: la trovi ${anchor("nell'avviso ufficiale")} — ti avvisiamo appena esce.`
+        ? hrefDomanda
+          ? `Il termine dell'avviso era il ${scadenza}; la procedura si presenta da ${anchorDomanda(etichettaDomanda)}.`
+          : `Il termine indicato nell'avviso era il ${scadenza}.`
+        : hrefDomanda
+          ? `La procedura è attiva: si presenta da ${anchorDomanda(etichettaDomanda)}.`
+          : `Cosa cambia in pratica e a chi serve è spiegato qui sopra; nel ${anchor('documento ufficiale')} trovi condizioni, requisiti e decorrenza.`
   }`;
 
   // 2) Perché conta (a chi serve, che cosa rischia).
-  const par2 = `Riguarda ${a.chi}. ${a.pratica}`;
+  const par2 = `Riguarda ${chiAcr}. ${praticaAcr}`;
 
-  // 3) Che cosa fare, con il link diretto al documento ufficiale.
-  const par3 = `${a.come}${
-    hrefDiretto ? ` Testo ufficiale: ${anchor(etichettaLinkDiretto(hrefDiretto))}.` : ''
-  }`;
+  // 3) Che cosa fare: canale di presentazione (se la procedura è da presentare) e
+  // fonte ufficiale — entrambi come link diretti.
+  const par3 = `${comeAcr}${
+    hrefDomanda ? ` Presenta la domanda da ${anchorDomanda(etichettaDomanda)}.` : ''
+  }${hrefDiretto ? ` Fonte ufficiale: ${anchor(etichettaLinkDiretto(hrefDiretto))}.` : ''}`;
 
   const content_html = `<p>${par1}</p>\n    <p>${par2}</p>\n    <p>${par3}</p>`;
 
+  // "IN SINTESI": SOLO fatti diretti — che cosa cambia, chi è coinvolto, entro
+  // quando, che cosa fare e da dove si presenta. Nessun preambolo retorico,
+  // nessuna promessa: chi legge ha tutto quello che serve per agire.
+  // `summary_points[0]` resta una frase autosufficiente perché è usata come
+  // descrizione della card e come meta description (SEO).
   const summary_points = [
-    d.title,
-    `Interessati: ${a.chi}.`,
-    scadenza
-      ? scadenzaPassata
-        ? `Scadenza indicata: ${scadenza} (verifica apertura nel testo ufficiale).`
-        : `Scadenza: ${scadenza}.`
-      : `Come: apri il documento ufficiale dell'avviso.`,
+    `Cosa cambia: ${fattoAcr.replace(/[.\s]+$/, '')}.`,
+    `Chi riguarda: ${chiAcr.replace(/[.\s]+$/, '')}.`,
+    ...(scadenza ? [`Scadenza: ${scadenza} (termine indicato nell’avviso).`] : []),
+    `Cosa devi fare: ${comeAcr.replace(/[.\s]+$/, '')}.`,
+    ...(hrefDomanda ? [`Presenta la domanda: ${etichettaDomanda} (link diretto nell’articolo).`] : []),
   ];
 
   return { content_html, summary_points };

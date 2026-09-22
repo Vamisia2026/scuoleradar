@@ -104,14 +104,27 @@ export function caricaRegoleMappaturaTitoli(regole: LegacyTitleMappingEntry[]): 
 
 /* ------------------------------ Lookup (senza fallback) ------------------------------ */
 
-/** Restituisce i contesti in vigore alla data (0 = non risolto; >1 = ambiguità). */
-export function trovaContestiPerData(dataISO: string): NormativaTemporalContext[] {
+/**
+ * Contesti di vigenza ammessi da UNA data, su un insieme fornito di contesti.
+ * Unica implementazione del predicato di vigenza (riusata dalla pipeline
+ * universale su registri alternativi/mock): 0 = non risolto, >1 = ambiguità.
+ */
+export function contestiInVigoreAllaData(
+  contesti: readonly NormativaTemporalContext[],
+  dataISO: string,
+): NormativaTemporalContext[] {
   const data = new Date(dataISO).getTime();
-  return contestiNormativi.filter(
+  if (Number.isNaN(data)) return [];
+  return contesti.filter(
     (contesto) =>
       new Date(contesto.validFrom).getTime() <= data &&
       (!contesto.validUntil || new Date(contesto.validUntil).getTime() >= data),
   );
+}
+
+/** Restituisce i contesti in vigore alla data (0 = non risolto; >1 = ambiguità). */
+export function trovaContestiPerData(dataISO: string): NormativaTemporalContext[] {
+  return contestiInVigoreAllaData(contestiNormativi, dataISO);
 }
 
 /** Regole requisito per classe; opzionalmente filtrate per decreto/tabella. */

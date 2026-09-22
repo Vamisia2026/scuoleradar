@@ -49,6 +49,13 @@ import {
   generaArticoloEditoriale,
   classificaLink,
   èFonteCanonica,
+  èRiservaSettimanale,
+  applicaFormatoEditoriale,
+  verificaCadenzaSettimanale,
+  categoriaDaImpatto,
+  estraiDeadline,
+  linkDomandaUfficiale,
+  richiedePresentazioneDomanda,
   limitaArticoliSettimanali,
   limitaCadenzaSettimanale,
   FINESTRA_LOOKBACK_GIORNI,
@@ -93,14 +100,18 @@ function dataRilevazione(): string {
  * esplicito (visibile nei log del cron) senza far fallire la pipeline.
  */
 function reportCadenza(articoli: NewsArticle[]): void {
-  const soglia = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const recenti = articoli.filter((a) => {
-    const t = a.published_at ? new Date(a.published_at).getTime() : Number.NaN;
-    return !Number.isNaN(t) && t >= soglia;
-  }).length;
-  console.log(`📈 Cadenza settimanale: ${recenti} articolo/i negli ultimi 7 giorni (target ≥ 1).`);
-  if (recenti === 0) {
-    console.warn('⚠ RATE: nessun articolo negli ultimi 7 giorni — verificare fonti/cron di ingestione.');
+  const esito = verificaCadenzaSettimanale(articoli);
+  console.log(
+    `📈 Cadenza settimanale: ${esito.recenti} articolo/i negli ultimi 7 giorni (limite ${esito.min}–${esito.max}).`,
+  );
+  if (esito.recenti < esito.min) {
+    console.warn(
+      '⚠ RATE: nessun articolo negli ultimi 7 giorni — verificare fonti, motore di rilevanza (èRiservaSettimanale) e cron.',
+    );
+  } else if (esito.recenti > esito.max) {
+    console.warn(`⚠ RATE: ${esito.recenti} articoli negli ultimi 7 giorni (limite ${esito.max}).`);
+  } else {
+    console.log('✓ RATE: cadenza settimanale rispettata.');
   }
 }
 
@@ -124,16 +135,56 @@ function cercaPdf(descrizione: string, baseUrl: string): string | null {
  * Trasforma una voce grezza in un NewsArticle (se supera il filtro editoriale,
  * la validazione STRICT URL INTEGRITY e il controllo HTTP 200/3xx della fonte).
  */
-async function costruisciArticolo(v: VoceFonte): Promise<NewsArticle | null> {
-  const valutazione: ValutazioneNotizia = valutaRilevanza({
-    title: v.title,
-    description: v.description,
-    url: v.link,
-    data: v.pubDate,
-  });
+async function costruisciArticolo(
+  v: VoceFonte,
+  opzioni: { promozioneRiserva?: boolean } = {},
+): Promise<NewsArticle | null> {
+  // PROMOZIONE DI RISERVA (garanzia settimanale ≥ 1 articolo/7 giorni): la voce è
+  // già stata ammessa da `èRiservaSettimanale` (titolo informativo, niente
+  // burocrazia vuota, niente archivio, doppio vocabolario impatto+scuola); qui si
+  // assegna soltanto la categoria. TUTTI gli altri gate — link diretto, fonte
+  // canonica, risposta HTTP 200/3xx — restano obbligatori.
+  const valutazione: ValutazioneNotizia = opzioni.promozioneRiserva
+    ? {
+        rilevante: true,
+        categoria: categoriaDaImpatto(v.title) ?? 'Scuole',
+        deadline: estraiDeadline(`${v.title} ${v.description ?? ''}`),
+      }
+    : valutaRilevanza({
+        title: v.title,
+        description: v.description,
+        url: v.link,
+        data: v.pubDate,
+      });
   if (!valutazione.rilevante) {
     console.log(
       `  ✗ RIFIUTATA: ${v.title.slice(0, 70)} — ${valutazione.motivo ?? 'non rilevante'}`,
+    );
+    return null;
+  }
+
+  // ZERO FLUFF / CONTENUTO COMPLETO: l'avviso si pubblica solo se è azionabile.
+  //  · se annuncia una PROCEDURA DA PRESENTARE (domanda, istanza, candidatura…)
+  //    deve indicare il canale ufficiale → altrimenti il link di presentazione
+  //    non esisterebbe e la notizia rinvierebbe a un generico "consultare l'avviso";
+  //  · i temi Normativa/Scadenze/Concorsi richiedono un fatto concreto: una
+  //    scadenza oppure il canale di presentazione.
+  const testoFonte = `${v.title} ${v.description ?? ''}`;
+  const canale = linkDomandaUfficiale(testoFonte);
+  if (richiedePresentazioneDomanda(testoFonte) && !canale) {
+    console.log(
+      `  ✗ RIFIUTATA (avviso incompleto: procedura senza link di presentazione): ${v.title.slice(0, 70)}`,
+    );
+    return null;
+  }
+  const temaContext = valutazione.categoria ?? '';
+  if (
+    !valutazione.deadline &&
+    !canale &&
+    ['Normativa', 'Scadenze', 'Concorsi'].includes(temaContext)
+  ) {
+    console.log(
+      `  ✗ RIFIUTATA (nessuna scadenza né canale di presentazione): ${v.title.slice(0, 70)}`,
     );
     return null;
   }
@@ -192,6 +243,8 @@ async function costruisciArticolo(v: VoceFonte): Promise<NewsArticle | null> {
     fonte: v.fonte,
     descrizione: v.description,
     official_url: fonteUrl,
+    application_url: canale?.url ?? null,
+    application_label: canale?.etichetta ?? null,
   });
   const articolo: NewsArticle = {
     id: `notizia-${slug(v.title)}-${slug(v.fonte)}`,
@@ -250,10 +303,13 @@ async function raccogliConWaterfall(): Promise<{
   fontiRaggiunte: number;
   vociValutate: number;
   articoli: NewsArticle[];
+  /** Voci ammissibili come RISERVA settimanale (vedi `èRiservaSettimanale`). */
+  riserve: VoceFonte[];
   livello: number | null;
 }> {
   let fontiRaggiunte = 0;
   let vociValutate = 0;
+  const riserve: VoceFonte[] = [];
 
   for (const meta of LIVELLI_NAZIONALI) {
     const raccolta = await raccogliLivello(meta.priorita);
@@ -281,27 +337,87 @@ async function raccogliConWaterfall(): Promise<{
     }
 
     // Filtro editoriale + STRICT URL INTEGRITY (validazione locale e HTTP 200/3xx).
-    const articoli = (await Promise.all(inFinestra.map(costruisciArticolo))).filter(
+    const articoli = (await Promise.all(inFinestra.map((v) => costruisciArticolo(v)))).filter(
       (a): a is NewsArticle => a !== null,
     );
     console.log(`  ↳ articoli validi: ${articoli.length}`);
+    // Candidati di RISERVA per la garanzia settimanale (≥ 1 articolo ogni 7
+    // giorni): voci dichiaratamente scolastiche che il filtro principale non ha
+    // pubblicato. Nessun costo di rete: la validazione strutturale (URL
+    // canonico + HTTP 200/3xx) avviene solo se la riserva serve davvero.
+    const riserveLivello = inFinestra.filter((v) =>
+      èRiservaSettimanale(v.title, v.description, v.pubDate),
+    );
+    riserve.push(...riserveLivello);
+    if (riserveLivello.length > 0) {
+      console.log(
+        `  ↳ riserve settimanali disponibili: ${riserveLivello.length} voce/i (usate solo se la bacheca resta ferma).`,
+      );
+    }
     if (articoli.length > 0) {
       console.log(
         `✓ LIVELLO ${meta.priorita} (${meta.etichetta}) produttivo: waterfall interrotto.`,
       );
-      return { fontiRaggiunte, vociValutate, articoli, livello: meta.priorita };
+      return { fontiRaggiunte, vociValutate, articoli, riserve, livello: meta.priorita };
     }
     console.log('  ↳ nessun articolo valido: passo al livello successivo.');
   }
 
-  return { fontiRaggiunte, vociValutate, articoli: [], livello: null };
+  return { fontiRaggiunte, vociValutate, articoli: [], riserve, livello: null };
+}
+
+/** Vero se c'è almeno un articolo DATATO negli ultimi 7 giorni. */
+function haArticoloRecente(articoli: NewsArticle[], oggi: Date = new Date()): boolean {
+  const soglia = oggi.getTime() - 7 * 24 * 60 * 60 * 1000;
+  return articoli.some((a) => {
+    const t = a.published_at ? new Date(a.published_at).getTime() : Number.NaN;
+    return !Number.isNaN(t) && t >= soglia;
+  });
+}
+
+/**
+ * GARANZIA SETTIMANALE (≥ 1 articolo ogni 7 giorni).
+ *
+ * Se nessun articolo è datato negli ultimi 7 giorni — le fonti rispondono ma
+ * nessuna voce supera il filtro editoriale — si promuove la RISERVA più fresca:
+ * la voce è già ammessa da `èRiservaSettimanale` e passa comunque TUTTI i gate
+ * strutturali di `costruisciArticolo` (link diretto, fonte canonica, HTTP
+ * 200/3xx). È l'unico percorso che può pubblicare una voce non passata dal
+ * filtro principale ed è tracciato nei log come "GARANZIA SETTIMANALE".
+ */
+async function applicaGaranziaSettimanale(
+  articoli: NewsArticle[],
+  riserve: VoceFonte[],
+): Promise<NewsArticle[]> {
+  if (haArticoloRecente(articoli)) return articoli;
+  const candidate = [...riserve].sort((a, b) =>
+    (b.pubDate || '').localeCompare(a.pubDate || ''),
+  );
+  if (candidate.length === 0) {
+    console.warn(
+      '⚠ GARANZIA SETTIMANALE: nessuna riserva disponibile — la bacheca resta invariata.',
+    );
+    return articoli;
+  }
+  for (const voce of candidate.slice(0, 5)) {
+    const articolo = await costruisciArticolo(voce, { promozioneRiserva: true });
+    if (!articolo) continue;
+    console.log(
+      `✓ GARANZIA SETTIMANALE: pubblicata la riserva più fresca (${articolo.published_at}) — ${articolo.title.slice(0, 70)}`,
+    );
+    return [articolo, ...articoli];
+  }
+  console.warn(
+    '⚠ GARANZIA SETTIMANALE: le riserve non superano i gate strutturali (fonte canonica / HTTP 200) — bacheca invariata.',
+  );
+  return articoli;
 }
 
 async function main(): Promise<void> {
   const isDryRun = process.argv.includes('--dry-run');
   console.log('=== Ingestione Notizie ScuoleRadar ===');
 
-  const { fontiRaggiunte, vociValutate, articoli } = await raccogliConWaterfall();
+  const { fontiRaggiunte, vociValutate, articoli, riserve } = await raccogliConWaterfall();
   console.log(`• Voci valutate: ${vociValutate} | fonti raggiunte: ${fontiRaggiunte}`);
 
   // Nessuna fonte ufficiale raggiunta (HTTP 2xx/3xx): niente silent-fail.
@@ -314,7 +430,13 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.log(`• Articoli che soddisfano i criteri editoriali: ${articoli.length}`);
+  // GARANZIA SETTIMANALE: se il filtro editoriale non produce nulla di datato
+  // negli ultimi 7 giorni si promuove la riserva più fresca (gate strutturali
+  // invariati), così la sezione Notizie non resta ferma una settimana intera.
+  const articoliConRiserva = await applicaGaranziaSettimanale(articoli, riserve);
+  console.log(
+    `• Articoli che soddisfano i criteri editoriali: ${articoliConRiserva.length}`,
+  );
 
   // Archiviazione ACCUMULATIVA + IGIENE: le nuove notizie si aggiungono a
   // quelle già presenti (dedupe per id), ma i record preesistenti che non
@@ -325,7 +447,12 @@ async function main(): Promise<void> {
   // "evergreen") NON vengono datati: restano nella loro sottocartella storica e
   // NON consumano il tetto settimanale (vedi `limitaArticoliSettimanali`),
   // altrimenti occuperebbero tutti gli slot e bloccherebbero ogni nuovo articolo.
-  const esistentiValidi = notizieIngestite.filter(
+  // FORMATO EDITORIALE UNIFORME, PRIMA dell'igiene: le voci già in archivio
+  // vengono ricondotte allo standard corrente (zero fluff, doppio link quando la
+  // notizia parla di una domanda, sintesi operativa). Solo dopo si valuta se la
+  // voce merita di restare in bacheca.
+  const archivioRiformattato = notizieIngestite.map((a) => applicaFormatoEditoriale(a));
+  const esistentiValidi = archivioRiformattato.filter(
     (a) =>
       articoloValido(a) &&
       valutaRilevanza({ title: a.title, url: a.official_source_url }).rilevante,
@@ -344,13 +471,16 @@ async function main(): Promise<void> {
   }
   const esistenti = esistentiValidi;
   const perId = new Map(articoli.map((a) => [a.id, a]));
-  const nuovi = articoli.filter((a) => !esistenti.some((e) => e.id === a.id));
+  const nuovi = articoliConRiserva.filter((a) => !esistenti.some((e) => e.id === a.id));
   // REFRESH: un avviso già in archivio viene aggiornato con la versione fresca
   // (stesso id): le correzioni editoriali (scadenza, titolo, contenuto) si
   // propagano senza duplicare la voce.
-  const esistentiFreschi = esistenti.map((e) => perId.get(e.id) ?? e);
-  const aggiornati = esistenti.filter(
-    (e, i) => JSON.stringify(e) !== JSON.stringify(esistentiFreschi[i]),
+  // Le voci esistenti sono già state riformattate prima dell'igiene: nessun
+  // secondo passaggio. Il conteggio degli aggiornamenti confronta il formato
+  // appena applicato con quello pubblicato in precedenza.
+  const esistentiFreschi = esistenti;
+  const aggiornati = archivioRiformattato.filter(
+    (a, i) => JSON.stringify(a) !== JSON.stringify(notizieIngestite[i]),
   ).length;
 
   // NB: nessun early-return qui. Anche quando non arriva nulla di nuovo,

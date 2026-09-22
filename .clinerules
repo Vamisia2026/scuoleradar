@@ -1,0 +1,37 @@
+# Regole di lavoro — ScuoleRadar (Consorzio di dipartimenti)
+
+> Copia di servizio: il file di regole letto da Cline si trova anche nella radice
+> del workspace (`ScuoleRadar_app/.clinerules`). I due testi vanno tenuti allineati.
+> Policy estesa: `docs/DEPARTMENT_ISOLATION.md`.
+
+## 1. ISOLAMENTO DEI DIPARTIMENTI (regola primaria, non negoziabile)
+
+Quando il lavoro riguarda un dipartimento (`src/departments/<nome>/`), opera SOLO
+dentro: la cartella di QUEL dipartimento, i condivisi essenziali (`src/config/**`,
+`src/lib/**`, `src/data/**`, `src/hooks/**`, `src/types/**`,
+`supabase/functions/_shared/**`) e gli artefatti della modifica stessa (test in
+`scripts/` o `__tests__/`, `docs/**`, `comunicazione/**`).
+
+**VIETATO** senza richiesta esplicita: leggere/scansionare o modificare gli ALTRI
+dipartimenti (`notizie`, `cfu`, `modulistica`, …), i loro test, dati, migrazioni e
+documentazione — anche solo per uniformare o "sistemare mentre ci sono".
+
+Se serve uscire dal perimetro: **fermati e chiedi lo SBLOCCO CONGIUNTO** dei
+dipartimenti coinvolti; solo dopo un'esplicita autorizzazione puoi lavorare su più
+dipartimenti nella stessa sessione.
+
+## 2. Prima di modificare
+
+Leggi i file coinvolti, rispetta convenzioni e copy esistenti, non introdurre nuove
+dipendenze, considera `comunicazione/**` e `docs/**` come specifiche vincolanti,
+aggiorna i test insieme al codice.
+
+## 3. Verifiche prima di chiudere (da `project/`)
+
+`npm run typecheck` · `npm test` · `npm run test:architettura` (nessuna violazione
+nuova, max 300 righe/file) · `npm run build` · `npm run lint` (file toccati puliti).
+
+## 4. Documentazione
+
+Aggiorna `docs/SYSTEM_HANDOVER.md` (sezione + nota di sessione) e, se cambiano le
+regole di prodotto, le checklist in `comunicazione/**`.

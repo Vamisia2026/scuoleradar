@@ -59,10 +59,10 @@ jobs:
       - name: Verifica template del digest (link esterni, guida, email)
         continue-on-error: true
         run: |
-          if npm run test:digest && npm run test:migrazioni; then
-            echo "::notice::Digest conforme: link esterni, email scuola, guida operativa, migrazioni coerenti."
+          if npm run test:digest && npm run test:migrazioni && npm run test:dedup:utente; then
+            echo "::notice::Digest conforme: link esterni, email scuola, guida operativa, migrazioni coerenti, deduplica per utente."
           else
-            echo "::warning::Digest/migrazioni non conformi: verificare src/lib/digest.ts, resend.ts e supabase/migrations."
+            echo "::warning::Digest/migrazioni/deduplica non conformi: verificare src/lib/digest.ts, resend.ts, notifier.ts e supabase/migrations."
           fi
 
       - name: Verifica schema notifiche (ledger DB + RPC quota)
@@ -88,6 +88,25 @@ jobs:
           ARGS=""
           if [ "${{ inputs.force }}" = "true" ]; then ARGS="--force"; fi
           npm run notifiche:digest -- $ARGS
+
+      # PROMEMORIA 24h: dopo il digest si guarda INDIETRO di 24 ore (le voci di
+      # IERI) e si invia UN solo promemoria per interpello in scadenza vicina,
+      # riunito in UNA email per utente. La guardia nel ledger
+      # (`notifications_log.canale = 'promemoria'`) impedisce il secondo invio.
+      - name: Promemoria 24h (scadenza vicina)
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          ARGS=""
+          if [ "${{ inputs.force }}" = "true" ]; then ARGS="--force"; fi
+          if npm run notifiche:promemoria -- $ARGS; then
+            echo "::notice::Promemoria 24h completato (nessun duplicato: una voce per interpello)."
+          else
+            echo "::warning::Promemoria 24h con errori di invio: verificare Resend e il ledger notifiche."
+          fi
 
       - name: Commit del LEDGER anti-duplicato (se aggiornato)
         if: always()
