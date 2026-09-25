@@ -8,7 +8,7 @@
  * Il guscio della dashboard vive in `components/DashboardLayout`.
  */
 import { useState } from 'react';
-import { PreferenzeRadar, RadarStatusToggle } from '@/departments/radar';
+import { BenvenutoProRadar, PreferenzeRadar, RadarStatusToggle } from '@/departments/radar';
 import { ProFeatureModal } from '@/components/ProFeatureModal';
 import { useApp } from '@/contexts/AppContext';
 import { costruisciAvviso } from '@/lib/alertInterpello';
@@ -21,23 +21,19 @@ export function DashboardPage() {
     user,
     interpelliFiltrati,
     preferenze,
-    abbonato,
-    piano,
     pianoStato,
+    hasProAccess,
     openAuthModal,
     openRadarSetup,
     openRadarWizard,
   } = useApp();
 
-  // Accesso PRO: abbonamento attivo, piano PRO (anche in prova) o Free Forever.
-  const hasAccessoPro = abbonato || piano === 'pro' || piano === 'free_forever';
-
-  // Utente BASE autenticato e onboarded → "Opportunità mappate" bloccato (paywall PRO).
-  // Il blocco scatta SOLO quando il piano è confermato dal DB: mentre è in lettura
-  // (o con una promo/omaggio assegnati dal backend) non si nega nulla — era la causa
-  // del feed bloccato per gli utenti PRO/regalo.
+  // Accesso PRO = entitlement UNICO del contesto (`piano` letto dal DB: 'pro' o
+  // 'free_forever'; `pianoStato === 'pronto'` = piano confermato dal backend).
+  // Non si ricalcola nulla da `abbonato`/`piano`: un PRO concesso dal DB (promo,
+  // omaggio, codice beta, pannello admin) non deve mai ricadere su «Base».
   const feedBloccatoBase =
-    Boolean(user) && Boolean(preferenze.onboarded) && pianoStato === 'pronto' && !hasAccessoPro;
+    Boolean(user) && Boolean(preferenze.onboarded) && pianoStato === 'pronto' && !hasProAccess;
 
   // Opportunità attive: pulite dalle scadute e ordinate per scadenza (più prossime prima).
   const oraAttuale = Date.now();
@@ -96,6 +92,10 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-3">
+      {/* BENVENUTO PRO: una sola volta per utente con piano PRO confermato dal DB
+          (congratulazioni + invito immediato ad attivare il Radar). */}
+      {user && <BenvenutoProRadar />}
+
       {/* UNICO stato/upsell Radar: barra di controllo consolidata (titolo + tier + descrizione + toggle + CTA PRO) */}
       {user && <RadarStatusToggle titolo="Radar Scuole" />}
 
@@ -113,7 +113,7 @@ export function DashboardPage() {
         lista={listaOpportunita}
         totale={opportunitaAttive.length}
         accordion={{ aperto: opportunitaAperte, onToggle: toggleOpportunita }}
-        hasAccessoPro={hasAccessoPro}
+        hasAccessoPro={hasProAccess}
         mostraInvitoProfilo={Boolean(user) && !preferenze.onboarded}
         onCompletaProfilo={openRadarSetup}
         filtri={{

@@ -63,12 +63,18 @@ export function statiDipartimenti(): Record<DipartimentoId, StatoDipartimento> {
  *   `off`  → mai visibile;
  *   `test` → solo admin (o DEV forzato dalla DEV Toolbar);
  *   `on`   → sempre visibile.
+ *
+ * `override` permette agli hook React di passare lo snapshot SOTTOSCRITTO degli
+ * override locali: senza, la visibilità verrebbe riletta dallo store al momento
+ * della chiamata e i valori memoizzati a valle (`primaRottaVisibile`, filtri di
+ * navbar/tab) potrebbero restare quelli di prima del cambio («sblocco» non
+ * istantaneo quando l'Admin accende un dipartimento).
  */
 export function dipartimentoVisibile(
   id: DipartimentoId,
-  accesso: { eAdmin?: boolean; forzaDev?: boolean } = {},
+  accesso: { eAdmin?: boolean; forzaDev?: boolean; override?: OverrideDipartimenti } = {},
 ): boolean {
-  const stato = statoDipartimento(id);
+  const stato = statoDipartimento(id, accesso.override);
   if (stato === 'on') return true;
   if (stato === 'off') return false;
   return accesso.eAdmin === true || accesso.forzaDev === true;

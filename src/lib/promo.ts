@@ -17,22 +17,41 @@ export interface PromoValido {
 export const PROMO_CODE_BETA1ANNO = 'BETA1ANNO';
 
 /**
- * Promo "50% primo anno": 24,50 € (prezzo pieno 49 € dal 2° anno).
- * Mappare il codice al coupon percentuale Stripe sul prodotto PRO annuale
- * nella Edge `checkout` (configurazione server-side, coupon "SCUOLERADAR50").
+ * Coupon UNICO di sconto attivo: **SCUOLERADAR50** — 50% sulla sottoscrizione
+ * ANNUALE del piano PRO (49 €/anno → 24,50 €).
+ *
+ * Regole tassative (le stesse applicate server-side da
+ * `valida_coupon_scuoleradar50` in `supabase/migrations/*_coupon_scuoleradar50_unico.sql`):
+ *  1. 50% di sconto sulla sottoscrizione annuale (nessun altro piano);
+ *  2. MONOUSO per email: una sola volta per utente, e nessun altro account con la
+ *     stessa email / email di notifica / Telegram può riutilizzarlo;
+ *  3. valido **40 giorni** a partire dalla registrazione iniziale (la data che ha
+ *     attivato il mese PRO gratuito);
+ *  4. case-insensitive: `scuoleradar50`, `ScuoleRadar50` e `SCUOLERADAR50` sono lo
+ *     stesso codice (`normalizzaCodicePromo`).
+ *
+ * Il coupon `RADAR50` è stato RIMOSSO definitivamente: non è più accettato né dal
+ * client né dalle Edge Function (e la riga è cancellata da `promo_codes`).
  */
 export const PROMO_CODE_50_PRIMO_ANNO = 'SCUOLERADAR50';
 
+/** Sconto percentuale del coupon SCUOLERADAR50 (sottoscrizione annuale). */
+export const SCONTO_SCUOLERADAR50_PERCENTO = 50;
+
+/** Validità del coupon SCUOLERADAR50: giorni dalla registrazione iniziale. */
+export const GIORNI_VALIDITA_SCUOLERADAR50 = 40;
+
 /**
- * Coupon RADAR50 — 50% sul PRO annuale.
- * Dinamico e monouso: valido solo nei primi 40 giorni dalla registrazione,
- * una volta per utente (anti-abuso su Telegram ID / email secondaria).
- * La validazione è server-side (RPC valida_coupon_radar50 → Edge checkout).
+ * Normalizza un codice promo digitato dall'utente: maiuscolo, senza spazi né
+ * separatori. Rende il confronto **case-insensitive** (`scuoleradar50` ≡
+ * `SCUOLERADAR50`) e tollera l'incollo da email/chat (`SCUOLERADAR-50`).
  */
-export const PROMO_CODE_RADAR50 = 'RADAR50';
+export function normalizzaCodicePromo(codice: string): string {
+  return (codice ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
 
 /** Codici promo attivi accettati in pre-fill (mappati server-side sul coupon Stripe). */
-export const PROMO_CODES_ATTIVI = [PROMO_CODE_BETA1ANNO, PROMO_CODE_50_PRIMO_ANNO, PROMO_CODE_RADAR50];
+export const PROMO_CODES_ATTIVI = [PROMO_CODE_BETA1ANNO, PROMO_CODE_50_PRIMO_ANNO];
 
 /**
  * Valida un codice promo/referral contro promo_codes / profiles.referral_code
@@ -42,7 +61,7 @@ export const PROMO_CODES_ATTIVI = [PROMO_CODE_BETA1ANNO, PROMO_CODE_50_PRIMO_ANN
  */
 export async function validaPromo(codice: string, userId?: string | null): Promise<PromoValido> {
   if (!supabase) return { valido: false };
-  const upp = codice.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const upp = normalizzaCodicePromo(codice);
   if (!upp) return { valido: false };
   const { data } = await supabase.rpc('valida_codice_promo', { p_codice: upp });
   const riga =
@@ -116,14 +135,7 @@ export const CATALOGO_PROMO: CatalogoPromo[] = [
   {
     codice: PROMO_CODE_50_PRIMO_ANNO,
     descrizione:
-      'Sconto 50% sul piano PRO dopo il mese di prova. Valido 40 giorni dall\'attivazione account',
-    tipo: 'sconto',
-    origine: 'sistema',
-    defaultStato: 'attivo',
-  },
-  {
-    codice: PROMO_CODE_RADAR50,
-    descrizione: 'Coupon -50% monouso per i nuovi iscritti (finestra 40 giorni)',
+      "Sconto 50% sulla sottoscrizione annuale PRO, monouso per email: valido 40 giorni dalla registrazione (quella che attiva il mese PRO gratuito)",
     tipo: 'sconto',
     origine: 'sistema',
     defaultStato: 'attivo',

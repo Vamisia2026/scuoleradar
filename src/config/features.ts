@@ -13,6 +13,14 @@
  *      pannello Admin / DEV Toolbar, vale per il browser corrente;
  *   3. DEFAULT del codice (`DIPARTIMENTI[].statoBase`).
  *
+ * SUPERFICIE PUBBLICA di produzione (default del codice): restano ACCESI solo i
+ * dipartimenti maturi — `radar` (📡 Radar Scuole) e `purefocus` (🧘 Pure Focus);
+ * `cfu`, `modulistica`, `referral` e `cv_builder` nascono `off` (chiusi) e si
+ * accendono SOLO con un override esplicito (`FEATURE_*=on` per i processi
+ * server-side, pannello Admin o DEV Toolbar per il browser corrente). Nella build
+ * di produzione un utente NON admin non vede quindi nessuna tab, nessun link e
+ * nessuna pagina di dipartimento chiuso (guardia: `npm run test:flags`).
+ *
  * Modulo PURO e isomorfo: nessun import di React, nessun accesso a DOM/storage
  * al caricamento → importabile da frontend, script Node, test e notifier.
  *
@@ -55,6 +63,7 @@ export const DIPARTIMENTI: readonly Dipartimento[] = [
     emoji: '📡',
     rotta: '/dashboard/radar',
     descrizione: 'Monitoraggio interpelli e notifiche automatiche (email + Telegram).',
+    // ACCESO in produzione: è la superficie pubblica principale.
     statoBase: 'on',
     notificheAutomatiche: true,
   },
@@ -64,7 +73,8 @@ export const DIPARTIMENTI: readonly Dipartimento[] = [
     emoji: '🎓',
     rotta: '/dashboard/calcolatore-cfu',
     descrizione: 'Analisi dei requisiti di accesso (Dipartimento CFU).',
-    statoBase: 'on',
+    // CHIUSO in produzione: resta dietro il gate finché non lo accende l'Admin.
+    statoBase: 'off',
     notificheAutomatiche: false,
   },
   {
@@ -73,7 +83,8 @@ export const DIPARTIMENTI: readonly Dipartimento[] = [
     emoji: '📁',
     rotta: '/dashboard/moduli',
     descrizione: 'Archivio moduli, Archivista AI e generazione documenti.',
-    statoBase: 'on',
+    // CHIUSO in produzione: nessuna tab/link «in chiaro», pagina «in arrivo».
+    statoBase: 'off',
     notificheAutomatiche: false,
   },
   {
@@ -82,6 +93,7 @@ export const DIPARTIMENTI: readonly Dipartimento[] = [
     emoji: '🧘',
     rotta: '/dashboard/purefocus',
     descrizione: 'Servizio partner incluso nell’offerta VIP.',
+    // ACCESO in produzione (servizio partner, superficie pubblica).
     statoBase: 'on',
     notificheAutomatiche: false,
   },
@@ -91,7 +103,8 @@ export const DIPARTIMENTI: readonly Dipartimento[] = [
     emoji: '🎁',
     rotta: '/dashboard/invita',
     descrizione: 'Programma referral: inviti, premi e codici sconto.',
-    statoBase: 'on',
+    // CHIUSO in produzione (come gli altri moduli non ancora pubblici).
+    statoBase: 'off',
     notificheAutomatiche: false,
   },
   {

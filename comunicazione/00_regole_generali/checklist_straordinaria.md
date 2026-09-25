@@ -9,7 +9,8 @@
 >
 > **Ancoraggi nel codice**: `src/lib/resend.ts` (`footerEmailHtml`),
 > `src/lib/telegram.ts`, `src/lib/notifier.ts`,
-> `supabase/functions/send-notification/index.ts`.
+> `supabase/functions/send-notification/index.ts`,
+> **gate `scripts/test-copy-etico.ts`** (tono etico, §2-bis).
 
 ## 1. Firma — SEMPRE uguale
 
@@ -35,6 +36,27 @@
 - [ ] Il vantaggio per il lettore viene prima del nome dell'ufficio/ente.
 - [ ] Vietato qualsiasi testo che sembri una trappola di disiscrizione
       (grigi chiarissimi, note legali nascoste, `#94a3b8`).
+
+## 2-bis. Tono — zero competizione, zero fretta (REGOLE IMMUTABILI)
+
+- [ ] **VIETATO** qualunque riferimento a gare fra colleghi o a vantaggi sugli
+      altri: `beccare gli interpelli`, `prima degli altri`, `prima di tutti`,
+      `in anticipo sugli altri`, `vantaggio sugli altri`.
+- [ ] **VIETATA** la fretta artificiale nelle superfici di prodotto (sito, modali,
+      wizard, pagine prezzo): `affrettati`, `scadono in poche ore`,
+      `non perdere l'occasione`, `tempestivamente`, `ultima chiamata`.
+      Restano ammesse — perché sono **informazioni di servizio**, non marketing —
+      le descrizioni fattuali (es. «le convocazioni possono arrivare in poche ore»)
+      e le formule legali («comunicato tempestivamente alla scuola»).
+- [ ] Il beneficio va raccontato come **valore del tempo restituito**, non come
+      paura di perdere qualcosa: es. «Smetti di perdere ore a cercare sui siti delle
+      scuole: ci pensa il Radar a trovare gli interpelli per te, così puoi dedicarti
+      alla tua vita.»
+- [ ] Le CTA restano operative e pacate (`Attiva il Radar`, `Collega Telegram`):
+      niente `subito`, `ora`, `corri` come leva psicologica.
+- [ ] Gate di verifica: **`npm run test:copy:etico`** (incluso in `npm test`) —
+      scansiona `src/**` per le frasi competitive e le superfici di UI/marketing per
+      quelle di fretta, e controlla la copy del mese PRO.
 
 ## 3. Link — completo e corretto
 

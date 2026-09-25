@@ -11,12 +11,17 @@ import type { PianoUtente, StatoPiano } from './tipiUtente';
 interface BadgePianoCompattoProps {
   /** 'loading' finché il piano non è confermato dal DB (mai degradare a Base). */
   pianoStato: StatoPiano;
+  /** Piano letto dal DB (`profiles.piano`): fonte di verità dell'etichetta. */
   piano: PianoUtente;
-  /** true con abbonamento PRO attivo (o piano PRO in prova). */
+  /** true con abbonamento PRO attivo (rinnovo/pagamento): NON decide da solo il piano. */
   abbonato: boolean;
 }
 
 export function BadgePianoCompatto({ pianoStato, piano, abbonato }: BadgePianoCompattoProps) {
+  // L'etichetta segue SEMPRE il piano del DB: `abbonato` resta solo come rete di
+  // sicurezza per gli stati locali/demo e non può mai far comparire «Base» a un
+  // utente PRO (promo, mese omaggio, codice beta, pannello admin).
+  const ePianoPro = piano === 'pro' || abbonato;
   return (
     <>
                   {pianoStato === 'loading' ? (
@@ -34,7 +39,7 @@ export function BadgePianoCompatto({ pianoStato, piano, abbonato }: BadgePianoCo
                     >
                       ✦ Free Forever
                     </span>
-                  ) : abbonato ? (
+                  ) : ePianoPro ? (
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-500 px-2 py-0.5 text-[11px] font-bold text-white">
                       <Sparkles className="h-3 w-3" /> PRO
                     </span>

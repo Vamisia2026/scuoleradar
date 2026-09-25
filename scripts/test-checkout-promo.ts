@@ -198,5 +198,13 @@ check(
 );
 check('select provincia riusa il dataset ufficiale', true, /from '@\/data\/province'/.test(provinciaCampo));
 
+console.log(
+  '\n— 7. Coupon unico SCUOLERADAR50 → guardie dedicate in `npm run test:coupon` —',
+);
+check(
+  'guardia coupon dedicata presente',
+  true,
+  readFileSync('scripts/test-coupon-scuoleradar50.ts', 'utf8').includes('SCUOLERADAR50'),
+);
 console.log(errori === 0 ? '\n✅ CHECKOUT & PROMO: nessun problema' : `\n❌ CHECKOUT & PROMO: ${errori} errore/i`);
 process.exitCode = errori === 0 ? 0 : 1;

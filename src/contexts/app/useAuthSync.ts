@@ -8,8 +8,8 @@
 import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import { identify } from '@/lib/analytics';
 import { supabase } from '@/lib/supabase';
-import { tracciaSignupCompletato } from './helpers';
-import type { User } from './types';
+import { identitaDaSessione, tracciaSignupCompletato } from './helpers';
+import type { Preferenze, User } from './types';
 
 /** Dipendenze esterne: azioni di profilo + setter del provider. */
 export interface OpzioniAuthSync {
@@ -29,6 +29,8 @@ export interface OpzioniAuthSync {
   setAbbonato: Dispatch<SetStateAction<boolean>>;
   setPianoStato: Dispatch<SetStateAction<'loading' | 'pronto'>>;
   setProfiloIncompleto: Dispatch<SetStateAction<boolean>>;
+  /** Preferenze locali: azzerate le SOLE voci anagrafiche al cambio account. */
+  setPref: Dispatch<SetStateAction<Preferenze>>;
 }
 
 /** Effetti di sincronizzazione sessione: nessun valore di ritorno. */
@@ -45,6 +47,7 @@ export function useAuthSync({
   setAbbonato,
   setPianoStato,
   setProfiloIncompleto,
+  setPref,
 }: OpzioniAuthSync): void {
   // Sincronizza la sessione Supabase Auth (es. redirect di ritorno da Google OAuth).
   // Qui NON forziamo cambi di rotta: la navigazione di ritorno è gestita unicamente
@@ -55,81 +58,44 @@ export function useAuthSync({
 
     const { data: subscription } = client.auth.onAuthStateChange((event, session) => {
       console.log('[AUTH EVENT]', event, session);
-      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+      /**
+       * Eventi che portano (o rinnovano) l'identità: oltre a SIGNED_IN /
+       * INITIAL_SESSION contano anche TOKEN_REFRESHED e USER_UPDATED, così un token
+       * rinnovato o un metadata aggiornato NON lasciano la UI in stato ospite e il
+       * piano viene riletto subito (entro un click, mai dopo un reload).
+       */
+      const eventoIdentita =
+        event === 'SIGNED_IN' ||
+        event === 'INITIAL_SESSION' ||
+        event === 'TOKEN_REFRESHED' ||
+        event === 'USER_UPDATED';
+      if (eventoIdentita || event === 'SIGNED_OUT') {
         setLoading(false);
       }
-      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
+      if (eventoIdentita && session?.user) {
         setSupabaseUserId(session.user.id);
         // Analytics: collega l'ID anonimo all'ID utente (nessun dato personale inviato).
         identify(session.user.id);
-        // Funnel: segnala l'iscrizione completata quando il primo accesso coincide con la
-        // creazione dell'account (provider da app_metadata, MAI email o dati anagrafici).
-        const appMeta = (session.user.app_metadata ?? {}) as Record<string, unknown>;
-        const provider =
-          String(appMeta.provider ?? (Array.isArray(appMeta.providers) ? appMeta.providers[0] : '') ?? '') ||
-          'email';
-        const creato = session.user.created_at ? new Date(session.user.created_at).getTime() : 0;
-        const ultimoAccesso = session.user.last_sign_in_at
-          ? new Date(session.user.last_sign_in_at).getTime()
-          : creato;
-        if (creato > 0 && Math.abs(ultimoAccesso - creato) < 60_000) {
-          tracciaSignupCompletato(provider);
+        // Funnel: SOLO al primo accesso, mai su un semplice refresh del token.
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+          const appMeta = (session.user.app_metadata ?? {}) as Record<string, unknown>;
+          const provider =
+            String(appMeta.provider ?? (Array.isArray(appMeta.providers) ? appMeta.providers[0] : '') ?? '') ||
+            'email';
+          const creato = session.user.created_at ? new Date(session.user.created_at).getTime() : 0;
+          const ultimoAccesso = session.user.last_sign_in_at
+            ? new Date(session.user.last_sign_in_at).getTime()
+            : creato;
+          if (creato > 0 && Math.abs(ultimoAccesso - creato) < 60_000) {
+            tracciaSignupCompletato(provider);
+          }
         }
         const meta = (session.user.user_metadata ?? {}) as Record<string, unknown>;
         // Avatar Google OAuth: avatar_url (o picture come fallback) in user_metadata.
         setAvatarUrl(String(meta.avatar_url ?? meta.picture ?? '').trim() || null);
-        // Sincronizza lo "user" locale (usato da RequireAuth / navigazione / header)
-        // con la sessione Supabase REALE. Copre sia gli account Google (full_name)
-        // sia gli account email creati da Admin / beta tester (nome/cognome/genere/eta
-        // in user_metadata, senza full_name) che NON hanno riga in localStorage.
-        // NOME/COGNOME: si preferiscono SEMPRE i campi espliciti (`nome`/`cognome`,
-        // scritti dal form di registrazione/wizard) e i valori già presenti in locale.
-        // Solo in loro assenza si ricava dal `full_name` del provider — e senza mai
-        // spezzare stringhe composte («Bison Productions» resta intero).
-        const nomeEsplicito = String(meta.nome ?? '').trim();
-        const cognomeEsplicito = String(meta.cognome ?? '').trim();
-        const nomeCompleto = String(meta.full_name ?? meta.name ?? '').trim();
-        let nomeDaProvider = nomeEsplicito;
-        let cognomeDaProvider = cognomeEsplicito;
-        if (!nomeDaProvider && nomeCompleto) {
-          const spazio = nomeCompleto.indexOf(' ');
-          if (spazio > 0 && !cognomeDaProvider) {
-            nomeDaProvider = nomeCompleto.slice(0, spazio);
-            cognomeDaProvider = nomeCompleto.slice(spazio + 1).trim();
-          } else {
-            nomeDaProvider = nomeCompleto;
-          }
-        }
-        const emailSess = session.user.email ?? '';
-        const etaSess = meta.eta === null || meta.eta === undefined || Number.isNaN(Number(meta.eta))
-          ? null
-          : Number(meta.eta);
-        const genereSess = meta.genere === 'M' || meta.genere === 'F' ? (meta.genere as 'M' | 'F') : undefined;
-        /** Provincia in user_metadata (dal form di registrazione), se dichiarata. */
-        const provinciaSess = typeof meta.provincia === 'string' && meta.provincia ? meta.provincia : null;
-        setUser((prev) => {
-          // Stesso utente: si COMPLETANO solo i campi vuoti — mai sovrascrivere un
-          // dato inserito dall'utente (era la causa dei nomi «persi o spezzati»).
-          if (prev && prev.email.toLowerCase() === emailSess.toLowerCase()) {
-            return {
-              ...prev,
-              nome: prev.nome?.trim() || nomeDaProvider || prev.nome,
-              cognome: prev.cognome?.trim() || cognomeDaProvider || prev.cognome,
-              genere: prev.genere ?? genereSess ?? null,
-              eta: prev.eta ?? etaSess,
-              provincia: prev.provincia ?? provinciaSess,
-            };
-          }
-          return {
-            nome: nomeDaProvider || 'Docente',
-            cognome: cognomeDaProvider,
-            email: emailSess,
-            password: '',
-            genere: genereSess,
-            eta: etaSess,
-            provincia: provinciaSess,
-          };
-        });
+        // Identità locale: funzione CONDIVISA col bootstrap (nessuna divergenza fra
+        // i due percorsi e un solo posto per la regola nome/cognome).
+        setUser((prev) => identitaDaSessione(session.user, prev));
         // Alla prima autenticazione crea/aggiorna la riga profilo (province/classi sincronizzate).
         const idSessione = session.user.id;
         if (event === 'SIGNED_IN') {
@@ -146,10 +112,19 @@ export function useAuthSync({
         // PULIZIA ANTI-STALE: se cambia l'utente azzeriamo piano/abbonato e
         // ripartiamo dallo stato 'loading' — mai mostrare il piano del vecchio
         // utente o un 'Base' non confermato dal DB.
-        if (pianoSessionUserIdRef.current !== idSessione) {
+        const idPrecedente = pianoSessionUserIdRef.current;
+        if (idPrecedente !== idSessione) {
           setPiano('base');
           setAbbonato(false);
           setPianoStato('loading');
+          // CAMBIO ACCOUNT su un dispositivo già usato (es. Google Bartolo → Pralino):
+          // genere/età/provincia salvati in `sr_preferenze` appartengono all'utente
+          // precedente e NON devono comparire nel nuovo account (verrebbero mostrati
+          // al posto dei dati reali). Si azzerano i soli campi anagrafici, e solo per
+          // uno SWITCH reale: una prima registrazione conserva i dati appena inseriti.
+          if (idPrecedente) {
+            setPref((prev) => ({ ...prev, genere: null, eta: null, provincia: null }));
+          }
         }
         // SINGLE SOURCE OF TRUTH: il piano/ruolo viene (ri)letto dal DB profiles
         // a OGNI cambio di stato auth (SIGNED_IN e INITIAL_SESSION).

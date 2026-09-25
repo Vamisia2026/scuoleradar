@@ -72,8 +72,17 @@
 - [ ] Ogni cifra è **esplicita e completa**: `49 €/anno`, `9 €/mese`,
       `5 € a consumo` (o il prezzo effettivo al momento dell'invio). Mai
       "pochi euro", "prezzo speciale", "a partire da" senza importo.
-- [ ] Mai usare **"gratis/gratuito"** per un piano a pagamento. Per l'offerta
-      Base usare `Accreditamento Base`, `Prova Inclusa`, `Incluso nell'Offerta`.
+- [ ] Mai usare **"gratis/gratuito"** per un **piano a pagamento** (abbonamento) o
+      lasciar intendere che l'abbonamento sia gratuito. Per l'offerta Base usare
+      `Accreditamento Base`, `Prova Inclusa`, `Incluso nell'Offerta`.
+- [ ] **Eccezione documentata (mese PRO senza costi)**: nella **UI di prodotto**
+      (banner di registrazione, benvenuto PRO, vetrina) è ammessa la dicitura
+      `Un mese PRO, completamente gratis` **solo** quando il mese è davvero senza
+      costi e non è previsto alcun addebito — ed è sempre accompagnata dal valore
+      concreto (es. «Smetti di perdere ore a cercare sui siti delle scuole: ci pensa
+      il Radar a trovare gli interpelli per te»). Nelle **comunicazioni di
+      pagamento** (email/notifiche di checkout, scadenza, rinnovo) resta valida la
+      regola stretta: `Prova Inclusa` / `Incluso nell'Offerta`, mai `gratis`.
 - [ ] Il **trial** non contiene mai parole di addebito (`addebito`, `pagamento`,
       `carta`, `rinnovo a pagamento`): è un mese incluso, senza costi.
 - [ ] L'abbonamento a pagamento non contiene mai `gratis/gratuito/rinnovo
@@ -95,8 +104,8 @@
 
 | Concetto | ✅ Ammesso | ❌ Vietato |
 |---|---|---|
-| Offerta senza costi | `Accreditamento Base`, `Prova Inclusa`, `Incluso nell'Offerta` | `gratis`, `gratuito` riferiti a piani a pagamento |
-| Ingaggio | `Passa a PRO`, `Attiva PRO` | `Non perdere l'occasione`, `Ultima chance` (se non vera) |
+| Offerta senza costi | `Accreditamento Base`, `Prova Inclusa`, `Incluso nell'Offerta`; nella **UI di prodotto** anche `Un mese PRO, completamente gratis` (mese senza costi, nessun addebito previsto) | `gratis`, `gratuito` riferiti a piani a pagamento/abbonamenti e nelle comunicazioni di pagamento |
+| Ingaggio | `Passa a PRO`, `Attiva PRO`, `Attiva il Radar` | `Non perdere l'occasione`, `Ultima chance` (se non vera), `prima degli altri`, `beccare gli interpelli` |
 | Scadenza | `Il tuo mese incluso termina il <data>` | `Sta per scadere` senza data |
 | Rinnovo | `Rinnovo automatico di 49 € il <data>` | `Ti rinnoviamo` senza importo/data |
 | Fine trial | `Alla scadenza torni su Base, senza costi` | `Perderai l'accesso` / `Il tuo account sarà limitato` (formule allarmistiche) |

@@ -103,7 +103,7 @@ export function LandingPage() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="mb-6 text-center">
             <h2 className="text-3xl font-bold text-primary-900">Come funziona</h2>
-            <p className="mt-3 text-primary-600">Tre passaggi per non perdere più una sola opportunità.</p>
+            <p className="mt-3 text-primary-600">Tre passaggi, poi ci pensa il Radar a cercare per te.</p>
           </div>
           <div className="animate-fade-in grid gap-6 md:grid-cols-3">
             <StepCard
@@ -116,13 +116,13 @@ export function LandingPage() {
               icon={<Send className="h-6 w-6" />}
               step="2"
               title="Ricevi le notifiche"
-              text="Ti avvisiamo tempestivamente su Telegram ed email appena esce un bando o interpello pertinente."
+              text="Ti avvisiamo su Telegram ed email appena esce un bando o interpello pertinente."
             />
             <StepCard
               icon={<CreditCard className="h-6 w-6" />}
               step="3"
-              title="Candidati subito"
-              text="Accedi ai link ufficiali con un click e invia la tua candidatura prima degli altri."
+              title="Candidati con i link ufficiali"
+              text="Accedi ai link ufficiali con un click e invia la tua candidatura."
             />
           </div>
         </div>

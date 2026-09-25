@@ -4,7 +4,9 @@
  * Nasce dai disallineamenti emersi in produzione:
  *  1. un PRO concesso dal BACKEND (promo, omaggio, Beta Tester, pannello admin) letto
  *     come «Base» dal frontend → limiti province, «Opportunità mappate» bloccate,
- *     badge errati;
+ *     badge errati. Ora: piano dal DB (`pianoDaProfilo`), entitlement UNICO nel
+ *     contesto (`hasProAccess`) usato da dashboard e dalle etichette del piano
+ *     (badge header, chip del menu utente), Realtime + focus/60 s;
  *  2. i dati del wizard (nome/cognome/genere/età/provincia) PERSI o richiesti due
  *     volte alla registrazione, con l'email da reinserire;
  *  3. dipartimenti spenti dalla DEV Bar che restavano visibili «in chiaro» nel sito.
@@ -123,11 +125,39 @@ const anagrafica = leggi('src/contexts/app/useAnagraficaProfilo.ts');
 const authModal = leggi('src/components/AuthModal.tsx');
 const passoNotifica = leggi('src/departments/radar/wizard/PassoNotifica.tsx');
 const migration = leggi('supabase/migrations/20260922130000_welcome_metadata_anagrafica.sql');
+// Superfici che mostrano il piano e reattività delle feature flags.
+const flagsHook = leggi('src/hooks/useFeatureFlags.ts');
+const badgeCompatto = leggi('src/components/header/BadgePianoCompatto.tsx');
+const badgeRiga = leggi('src/components/header/BadgePianoRiga.tsx');
+const menuUtente = leggi('src/components/header/MenuUtente.tsx');
 
 check('Realtime sulla riga profiles', true, /postgres_changes/.test(authSync) && /table: 'profiles'/.test(authSync));
-check('nome/cognome: mai sovrascritti se già presenti', true, /prev\.nome\?\.trim\(\) \|\| nomeDaProvider/.test(authSync));
-check('full_name spezzato solo se mancano i campi espliciti', true, /if \(!nomeDaProvider && nomeCompleto\)/.test(authSync));
-check('badge/paywall: blocco SOLO con piano confermato', true, /pianoStato === 'pronto' && !hasAccessoPro/.test(dashboard));
+// Regola nome/cognome: vive in `contexts/app/helpers.ts` (`identitaDaSessione`),
+// unica fonte per bootstrap + listener (verifica funzionale in `test:sessione`).
+const helpersProfilo = leggi('src/contexts/app/helpers.ts');
+check('nome/cognome: mai sovrascritti se già presenti', true, /prev\.nome\?\.trim\(\) \|\| nomeDaProvider/.test(helpersProfilo));
+check(
+  'full_name spezzato solo se mancano i campi espliciti',
+  true,
+  /if \(!nomeDaProvider && nomeCompleto\)/.test(helpersProfilo),
+);
+check(
+  'identità: bootstrap e listener usano la STESSA funzione',
+  true,
+  /identitaDaSessione/.test(authSync) && /identitaDaSessione\(au, prev\)/.test(leggi('src/contexts/app/useProfileBootstrap.ts')),
+);
+check('badge/paywall: blocco SOLO con piano confermato', true, /pianoStato === 'pronto' && !hasProAccess/.test(dashboard));
+// Entitlement UNICO: la dashboard non ricalcola il piano (abbonato/piano) per
+// conto suo — era la fonte del feed «Opportunità mappate» bloccato per un PRO.
+check('dashboard: entitlement dal contesto (nessun ricalcolo locale)', true, /const \{[\s\S]*hasProAccess/.test(dashboard) && !/const hasAccessoPro/.test(dashboard));
+check('dashboard: card/accordion ricevono hasProAccess', true, /hasAccessoPro=\{hasProAccess\}/.test(dashboard));
+// Etichette del piano: seguono `piano` (dal DB), non il solo flag di pagamento.
+check('badge piano (top bar): etichetta dal piano del DB', true, /piano === 'pro' \|\| abbonato/.test(badgeCompatto));
+check('badge piano (mobile): etichetta dal piano del DB', true, /piano === 'pro' \|\| abbonato/.test(badgeRiga));
+check('menu utente: «Piano PRO/Base» dal piano del DB', true, /piano === 'pro' \|\| abbonato/.test(menuUtente));
+// Feature flags: lo snapshot sottoscritto entra nella visibilità → navbar, tab e
+// primaRottaVisibile si aggiornano nello stesso render (sblocco immediato).
+check('feature flags: visibilità reattiva allo snapshot', true, /dipartimentoVisibile\(id, \{/.test(flagsHook) && /\[eAdmin, dev, forzaDevAttivo, override\]/.test(flagsHook));
 check('wizard: tetti PRO finché il piano non è confermato', true, /pianoLimits\(piano, hasProAccess, pianoStato === 'pronto'\)/.test(wizard));
 check('preferenze: stessi tetti condizionati', true, /pianoLimits\(piano, hasProAccess, pianoStato === 'pronto'\)/.test(preferenze));
 check('riallineamento ai tetti quando il piano è confermato', true, /if \(!tetti \|\| !preferenze\.onboarded\) return;/.test(preferenzeUtente));

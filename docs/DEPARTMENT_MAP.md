@@ -126,6 +126,24 @@ Regole operative:
 | — | **Scadenze** (dominio di codice) | `departments/scadenze/` | alimenta l'hero di Notizie e i promemoria Radar |
 | — | **Admin** (dominio di codice) | `departments/admin/` | area riservata (`ADMIN_EMAILS`), tab utenti/radar/account |
 
+**Regole chiave di piattaforma** (shell condivisa, §5 — vedi `SYSTEM_HANDOVER.md` §26):
+
+- **Coupon**: un solo codice di sconto attivo, `SCUOLERADAR50` (case-insensitive, 50%
+  sulla sottoscrizione **annuale**, monouso per email, valido **40 giorni** dalla
+  registrazione). `RADAR50` è rimosso; validazione in `valida_coupon_scuoleradar50` +
+  tracciamento utilizzi in `coupon_usage` (`supabase/migrations/20260924120000_*`),
+  mappatura Stripe nelle Edge `checkout`/`webhook`.
+- **Tetti di piano** (`lib/planLimits.ts`): limitano l'**uso** (feed del Radar via
+  `useInterpelliFeed`), non i dati salvati: un downgrade a Base non tronca le 4
+  province/4 classi scelte in prova PRO, che restano visibili (badge `PRO`) e
+  tornano attive al rientro in PRO.
+- **Ricerca unificata** (`lib/ricercaSelezioniRadar.ts`): un solo campo per classi di
+  concorso, competenze e parole chiave; più voci separate da virgola creano **tag
+  indipendenti** (`separaParoleChiave`).
+- **Sessione**: `loginConGoogle` chiude la sessione precedente prima dell'OAuth
+  (cambio account Google in un click); al cambio identità le voci anagrafiche locali
+  (`genere`, `eta`, `provincia`) vengono azzerate e rilette da `profiles`.
+
 ### 4.2 Notizie & Blog — `src/departments/notizie/` (17 file · 4.776 righe)
 
 | Sottocartella | File principali | Cosa contiene |
@@ -158,25 +176,27 @@ Regole operative:
    minima settimanale (`èRiservaSettimanale` + `applicaGaranziaSettimanale`) e
    cron che **fallisce** se la bacheca resta ferma.
 
-### 4.3 Modulistica — `src/modules/modulistica/` (39 file · 6.805 righe)
+### 4.3 Modulistica — `src/modules/modulistica/` (40 file · 6.570 righe)
 
 | Sottocartella | File principali | Cosa contiene |
 |---|---|---|
-| `components/` | `ModuliModule`, `ModuliNavigation`, `RicercaArchivista`, `TeaserArchivistaModal`, `esploraArchivio/**` | UI del catalogo (filtri, ricerca, modali) + **Esplora Archivio** + ingresso all'Archivista |
+| `components/` | `ModuliModule`, `ModuliNavigation`, `RicercaArchivista`, `TeaserArchivistaModal`, **`TabDocumentiPersonali`**, `esploraArchivio/**` | UI del catalogo (filtri, ricerca, modali) + **Esplora Archivio** + ingresso all'Archivista + **terza tab «I Miei Documenti»** (storage personale, condiviso con il profilo) |
 | `creator/` | `ArchivistaCapo.tsx`, `ConversazioneArchivista`, `EsitoArchivista`, `IntestazioneArchivista`, `PensieriArchivista`, `archivistaTipi.ts`, `hooks/useIntervistaArchivista.ts` | **Archivista Capo (AI)**: intervista guidata → modulo compilato |
 | `creator/pdf/` | `documento.ts`, `logoDataUri.ts` | **Generatore PDF**: documento A4, tabelle, logo embed |
 | `hooks/` | `useModulistica.ts` | stato, salvataggi e caricamento dei moduli dell'utente |
 | `index.ts` | — | superficie pubblica: `ModuliModule` + tipi (`ModuloSalvatoDB`, `VistaModulistica`, `VoceModulo`) |
 | `creator/cacheService.ts` | — | **cache del catalogo** (memoria + persistenza): nessuna rilettura del DB a ogni apertura |
 
-### 4.4 Radar Interpelli — `src/departments/radar/` (19 file · 3.413 righe)
+### 4.4 Radar Interpelli — `src/departments/radar/` (25 file · 3.958 righe)
 
 | Sottocartella | File principali | Cosa contiene |
 |---|---|---|
-| `wizard/` | step del wizard Radar | onboarding guidato delle regole (ordini, classi/materie, province, sostegno) |
-| `preferenze/` | `PreferenzeRadar` + pannelli | modifica delle regole del Radar senza rifare il wizard |
+| `wizard/` | step del wizard Radar + `tipiSelezione.ts` | onboarding guidato delle regole; il Passo 3 è un **compositore** (ricerca unificata in testa + due colonne) e le sezioni vivono in `wizard/components/` |
+| `wizard/components/` | `SezioneClassiConcorso` · `SezioneCompetenzeExtra` | classi di concorso + adesione al sostegno · tag popolari PNRR/PON e chip delle competenze/parole chiave (nessun elenco statico) |
+| `preferenze/` | `PreferenzeRadar` + pannelli | modifica delle regole del Radar senza rifare il wizard («In cosa puoi lavorare» usa la stessa ricerca unificata) |
 | `flightBoard/` | `FlightBoard*` | bacheca degli interpelli in arrivo per l'utente |
-| `index.ts` | — | superficie pubblica: `RadarWizardModal`, `PreferenzeRadar`, `RadarStatusToggle` |
+| `components/` | `ProvinciaPill` · `BenvenutoProRadar` · `RicercaSelezioni` | pill con il ruolo di **provincia principale** · benvenuto PRO al primo accesso · campo di **ricerca unificata** (classi + competenze + parole chiave) |
+| `index.ts` | — | superficie pubblica: `RadarWizardModal`, `PreferenzeRadar`, `RadarStatusToggle`, `BenvenutoProRadar` |
 
 Componenti di dominio **ancora in radice** (`RadarWizardModal.tsx`,
 `PreferenzeRadar.tsx`, `FlightBoardInterpelli.tsx`, `SimulatorRadar.tsx`,
@@ -235,6 +255,23 @@ Ogni dipartimento/modulo ha **tre stati** (`off` · `test` · `on`):
 | `test` | tab e rotta visibili **solo all'admin** (badge «TEST») | solo verso l'account di test dell'admin (dirottate) |
 | `on` | visibile a tutti | invio regolare |
 
+**Default di produzione** (`DIPARTIMENTI[].statoBase` — nessuna variabile, nessun
+override locale: è la superficie che vede un utente NON admin nella build `vite build`):
+
+| Dipartimento | `statoBase` | Effetto in produzione |
+|---|---|---|
+| 📡 Radar Scuole (`radar`) | `on` | navbar, tab dashboard, landing e notifiche attivi |
+| 🧘 Pure Focus (`purefocus`) | `on` | servizio partner pubblico |
+| 🎓 Calcolatore CFU (`cfu`) | `off` | nessuna tab/link; `/calcolatore-cfu` e `/dashboard/calcolatore-cfu` mostrano la pagina «in arrivo» |
+| 📁 Modulistica (`modulistica`) | `off` | nessuna tab/link (anche nel menu utente e nel footer); `/moduli` e `/dashboard/moduli` dietro il gate |
+| 🎁 Invita un Collega (`referral`) | `off` | nessuna tab; `/dashboard/invita` dietro il gate |
+| 📄 Crea CV (`cv_builder`) | `off` | nessuna tab; `/dashboard/cv` dietro il gate |
+
+Per riaprire un dipartimento: pannello Admin (per il browser corrente) oppure
+`FEATURE_<DIPARTIMENTO>=on` per i processi server-side, oppure si cambia lo
+`statoBase` nel codice. Guardia automatica: `npm run test:flags` verifica che la
+superficie pubblica sia **esattamente** `radar` + `purefocus`.
+
 File e responsabilità:
 
 | File | Responsabilità |
@@ -248,7 +285,8 @@ File e responsabilità:
 | `src/components/FeatureGate.tsx` · `ModuloInManutenzione.tsx` | guardia di rotta + pagina «in arrivo» |
 | `src/components/FlagDipartimentiPanel.tsx` | selettore a 3 posizioni: `variante="card"` (pannello Admin) e `variante="lista"` (DEV Toolbar, una riga per dipartimento) |
 | `src/components/FlagDipartimentiProva.tsx` | prova live dentro la DEV Toolbar: anteprima della navbar (`visibile`), valore salvato in `sr_flag_dipartimenti` riletto a ogni click, test di scrittura/rilettura |
-| `scripts/test-feature-flags.ts` | `npm run test:flags` (matrice stati, gate, cablaggio UI, scrittura reale della chiave con stub di `localStorage`) |
+| `scripts/test-feature-flags.ts` | `npm run test:flags` (matrice stati, **superficie pubblica di produzione = solo radar + purefocus**, snapshot di visibilità, scrittura reale della chiave con stub di `localStorage`, gate notifiche) |
+| `scripts/test-flags-cablaggio.ts` | sempre in `npm run test:flags`: cablaggio delle flag in navbar desktop/mobile, tab, menu utente, superfici pubbliche, redirect e pannelli Admin/DEV (estratto da `test-feature-flags` per il limite di 250 righe/file) |
 | `scripts/test-flags-render.ts` | render del selettore con `react-dom/server` (6 righe × 3 pulsanti in `variante="lista"`, card in Admin): guardia contro la non-visibilità dei toggle |
 
 Nella **DEV Toolbar** (`src/components/DevToolbar.tsx`) la sezione «Dipartimenti (feature

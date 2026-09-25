@@ -5,7 +5,7 @@
 import type { Modulo } from '@/data/moduli';
 
 /** Viste della sezione Modulistica. */
-export type VistaModulistica = 'archivio' | 'intervista' | 'miei';
+export type VistaModulistica = 'archivio' | 'intervista' | 'miei' | 'documenti';
 
 /** Riga della tabella Supabase `user_saved_modules`. */
 export interface ModuloSalvatoDB {

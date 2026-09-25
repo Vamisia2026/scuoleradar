@@ -6,9 +6,10 @@
  */
 import { MapPin } from 'lucide-react';
 import { Accordion } from '@/components/Accordion';
-import { Pill } from '@/components/Pill';
 import { province, type Provincia } from '@/data/province';
+import { provinciaPrincipale } from '@/lib/provinceRadar';
 import type { PianoLimits } from '@/lib/planLimits';
+import { ProvinciaPill } from '../components/ProvinciaPill';
 
 interface PannelloProvinceProps {
   /** Mappa di apertura degli accordion (chiave → stato). */
@@ -21,6 +22,8 @@ interface PannelloProvinceProps {
   provinceSorted: Provincia[];
   /** Aggiunge/rimuove una provincia dalla selezione. */
   toggleProvincia: (codice: string) => void;
+  /** Promuove una provincia di contorno a provincia PRINCIPALE (prima della lista). */
+  onPromuoviPrincipale: (codice: string) => void;
   /** Tetto di province del piano corrente. */
   maxProvince: number;
   /** Limiti del piano (per il copy Base/PRO). */
@@ -33,9 +36,12 @@ export function PannelloProvince({
   provinceCodici,
   provinceSorted,
   toggleProvincia,
+  onPromuoviPrincipale,
   maxProvince,
   limitiPiano,
 }: PannelloProvinceProps) {
+  /** Prima provincia selezionata = provincia di riferimento del Radar. */
+  const principale = provinciaPrincipale(provinceCodici);
   return (
       <Accordion
         icona="📍"
@@ -48,12 +54,15 @@ export function PannelloProvince({
                 Nessuna provincia selezionata: aggiungila dal menu qui sotto.
               </span>
             ) : (
-              provinceCodici.map((c) => (
-                <Pill
+              provinceCodici.map((c, indice) => (
+                <ProvinciaPill
                   key={c}
-                  label={`${province.find((p) => p.codice === c)?.nome ?? c} (${c})`}
-                  onRemove={() => toggleProvincia(c)}
-                  color="primary"
+                  nome={province.find((p) => p.codice === c)?.nome ?? c}
+                  codice={c}
+                  principale={c === principale}
+                  inAttesa={indice >= maxProvince}
+                  onRimuovi={() => toggleProvincia(c)}
+                  onPromuovi={() => onPromuoviPrincipale(c)}
                 />
               ))
             )}
@@ -67,6 +76,17 @@ export function PannelloProvince({
             ? 'PRO: puoi monitorare fino a 4 province.'
             : `Piano Base: ${maxProvince} provincia monitorabile. Passa a PRO per arrivare a 4.`}
         </p>
+        <p className="mb-3 rounded-lg border border-accent-200 bg-accent-50 px-3 py-2 text-xs leading-relaxed text-accent-800">
+          La prima provincia dell&apos;elenco è la <strong>principale</strong>: è la tua zona di
+          riferimento. Tocca la ☆ su un&apos;altra provincia per promuoverla.
+        </p>
+        {provinceCodici.length > maxProvince && (
+          <p className="mb-3 rounded-lg bg-primary-50 px-3 py-2 text-xs leading-relaxed text-primary-600">
+            Le province marcate <strong>PRO</strong> restano salvate: con il piano Base il Radar ne
+            usa {maxProvince}, e tornano automaticamente attive se riattivi il PRO. Nessuna scelta
+            viene cancellata.
+          </p>
+        )}
         <label className="block">
           <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-primary-700">
             <MapPin className="h-4 w-4 text-primary-500" />

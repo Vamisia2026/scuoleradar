@@ -17,10 +17,14 @@ import {
   type BozzaRegistrazione,
 } from '@/lib/bozzaRegistrazione';
 
+/**
+ * Campo del form di autenticazione: etichetta compatta (stessa misura in
+ * registrazione rapida e in incognito) + controllo.
+ */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-primary-700">{label}</span>
+      <span className="mb-1 block text-xs font-semibold text-primary-700">{label}</span>
       {children}
     </label>
   );
@@ -229,28 +233,34 @@ export function AuthModal() {
             ? 'Crea il tuo account'
             : 'Accedi al tuo Radar'
       }
+      // UNICA modale di accesso/registrazione (rapida o da incognito/vetrina):
+      // `dense` + campi su due colonne = contenuto dentro il viewport, senza zoom
+      // ridotto e senza scorrimento verticale forzato.
       size="lg"
+      dense
     >
-      <div className="space-y-3">
+      <div className="space-y-2.5">
         {/* Dati già raccolti nel wizard Radar: si conferma soltanto, non si riscrive. */}
         {isRegister && bozzaHaDati(bozzaWizard) && (
-          <div className="flex items-start gap-2 rounded-xl border border-primary-100 bg-primary-50 px-4 py-3 text-xs leading-relaxed text-primary-700">
+          <div className="flex items-start gap-2 rounded-lg border border-primary-100 bg-primary-50 px-3 py-2 text-xs leading-snug text-primary-700">
             <Radar className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary-500" />
             <p>
               <strong>Abbiamo già i dati del tuo Radar.</strong> Nome, genere, età e provincia sono
-              precompilati da quello che hai inserito: controllali e scegli solo la password. Se hai
-              collegato Telegram, gli avvisi istantanei partiranno da subito.
+              precompilati da quello che hai inserito: controllali e scegli solo la password.
             </p>
           </div>
         )}
 
-        {/* Buone notizie: banner PRO trial (visibile solo in registrazione) */}
+        {/* Buone notizie: banner PRO trial (visibile solo in registrazione).
+            COPY ETICO: nessuna competizione fra colleghi, nessuna fretta artificiale —
+            si parla del VALORE DEL TEMPO che il Radar restituisce. */}
         {isRegister && (
-          <div className="rounded-xl border border-accent-200 bg-accent-50 px-4 py-3 text-sm leading-relaxed text-accent-800">
+          <div className="rounded-lg border border-accent-200 bg-accent-50 px-3 py-2 text-xs leading-snug text-accent-800">
             <p className="font-semibold">Buone notizie! 🚀</p>
             <p className="mt-0.5">
-              Ti diamo <strong>1 mese di PRO</strong> per provare il tuo radar personalizzato con
-              tutti i servizi inclusi. Fanne buon uso!
+              Un mese PRO, completamente gratis. Smetti di perdere ore a cercare sui siti delle
+              scuole: ci pensa il Radar a trovare gli interpelli per te, così puoi dedicarti alla tua
+              vita.
             </p>
           </div>
         )}
@@ -262,7 +272,7 @@ export function AuthModal() {
           type="button"
           onClick={handleGoogle}
           disabled={googleLoading}
-          className="inline-flex w-full items-center justify-center gap-2.5 rounded-xl border-2 border-primary-500 bg-primary-50 px-4 py-3 text-sm font-bold text-primary-800 shadow-soft transition hover:bg-primary-100 disabled:cursor-wait disabled:opacity-70"
+          className="inline-flex w-full items-center justify-center gap-2.5 rounded-lg border-2 border-primary-500 bg-primary-50 px-3 py-2 text-sm font-bold text-primary-800 shadow-soft transition hover:bg-primary-100 disabled:cursor-wait disabled:opacity-70"
         >
           {googleLoading ? (
             <>
@@ -297,9 +307,9 @@ export function AuthModal() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
           {isRegister && (
-            <div className="grid grid-cols-2 gap-3">
+            <>
               <Field label="Nome">
                 <input
                   type="text"
@@ -307,7 +317,7 @@ export function AuthModal() {
                   onChange={(e) => setNome(e.target.value)}
                   className="input"
                   autoComplete="given-name"
-                  placeholder="Mario"
+                  placeholder="Nome"
                 />
               </Field>
               <Field label="Cognome">
@@ -317,93 +327,95 @@ export function AuthModal() {
                   onChange={(e) => setCognome(e.target.value)}
                   className="input"
                   autoComplete="family-name"
-                  placeholder="Rossi"
+                  placeholder="Cognome"
                 />
               </Field>
-            </div>
+              <Field label="Sesso">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setGenere('F')}
+                    aria-pressed={genere === 'F'}
+                    className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                      genere === 'F'
+                        ? 'border-accent-400 bg-accent-50 text-accent-700'
+                        : 'border-primary-200 bg-white text-primary-600 hover:bg-primary-50'
+                    }`}
+                  >
+                    Donna
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGenere('M')}
+                    aria-pressed={genere === 'M'}
+                    className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                      genere === 'M'
+                        ? 'border-accent-400 bg-accent-50 text-accent-700'
+                        : 'border-primary-200 bg-white text-primary-600 hover:bg-primary-50'
+                    }`}
+                  >
+                    Uomo
+                  </button>
+                </div>
+              </Field>
+              <Field label="Età (facoltativa)">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={14}
+                  max={100}
+                  value={etaInput}
+                  onChange={(e) => setEtaInput(e.target.value)}
+                  className="input"
+                  placeholder="Età"
+                />
+              </Field>
+              <div className="sm:col-span-2">
+                <Field label="Provincia di residenza (facoltativa)">
+                  <CampoProvincia value={provincia} onChange={setProvincia} />
+                </Field>
+              </div>
+            </>
           )}
-          {isRegister && (
-            <>
-            <Field label="Genere">
-              <div className="grid grid-cols-2 gap-3">
+          <div className={isRegister ? 'sm:col-span-2' : 'sm:col-span-1'}>
+            <Field label="Email">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="input"
+                autoComplete="email"
+                placeholder="La tua email"
+              />
+            </Field>
+          </div>
+          <div className={isRegister ? 'sm:col-span-2' : 'sm:col-span-1'}>
+            <Field label="Password">
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="input pr-10"
+                  autoComplete={isRegister ? 'new-password' : 'current-password'}
+                  placeholder="••••••••"
+                />
                 <button
                   type="button"
-                  onClick={() => setGenere('F')}
-                  aria-pressed={genere === 'F'}
-                  className={`rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
-                    genere === 'F'
-                      ? 'border-accent-400 bg-accent-50 text-accent-700'
-                      : 'border-primary-200 bg-white text-primary-600 hover:bg-primary-50'
-                  }`}
+                  onClick={() => setShowPassword((s) => !s)}
+                  aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-primary-400 transition hover:text-primary-600"
                 >
-                  Donna
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGenere('M')}
-                  aria-pressed={genere === 'M'}
-                  className={`rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
-                    genere === 'M'
-                      ? 'border-accent-400 bg-accent-50 text-accent-700'
-                      : 'border-primary-200 bg-white text-primary-600 hover:bg-primary-50'
-                  }`}
-                >
-                  Uomo
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </Field>
-            <Field label="Età (anni, facoltativa)">
-              <input
-                type="number"
-                inputMode="numeric"
-                min={14}
-                max={100}
-                value={etaInput}
-                onChange={(e) => setEtaInput(e.target.value)}
-                className="input"
-                placeholder="Es. 34"
-              />
-            </Field>
-            <Field label="Provincia di residenza (facoltativa)">
-              <CampoProvincia value={provincia} onChange={setProvincia} />
-            </Field>
-            </>
-          )}
-          <Field label="Email">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="input"
-              autoComplete="email"
-              placeholder="mario.rossi@email.it"
-            />
-          </Field>
-          <Field label="Password">
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input pr-10"
-                autoComplete={isRegister ? 'new-password' : 'current-password'}
-                placeholder="••••••••"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((s) => !s)}
-                aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-primary-400 transition hover:text-primary-600"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-          </Field>
+          </div>
 
           <button
             type="submit"
             disabled={loginLoading || googleLoading}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600 disabled:cursor-wait disabled:opacity-70"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600 disabled:cursor-wait disabled:opacity-70 sm:col-span-2"
           >
             {loginLoading ? (
               <>

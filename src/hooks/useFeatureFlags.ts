@@ -92,8 +92,16 @@ export function useFeatureFlags(): ApiFeatureFlags {
   }, [override]);
 
   const visibile = useCallback(
-    (id: DipartimentoId) => dipartimentoVisibile(id, { eAdmin, forzaDev: dev && forzaDevAttivo === true }),
-    [eAdmin, dev, forzaDevAttivo],
+    (id: DipartimentoId) =>
+      dipartimentoVisibile(id, {
+        eAdmin,
+        forzaDev: dev && forzaDevAttivo === true,
+        // Snapshot SOTTOSCRITTO (non lo store riletto a ogni chiamata): navbar,
+        // tab e `primaRottaVisibile` si aggiornano nello stesso render in cui
+        // cambia lo stato di un dipartimento → sblocco immediato, senza reload.
+        override,
+      }),
+    [eAdmin, dev, forzaDevAttivo, override],
   );
 
   const primaRottaVisibile = useCallback((): string => {

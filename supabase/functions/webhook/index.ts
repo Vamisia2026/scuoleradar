@@ -205,9 +205,9 @@ async function attivaCodiceBeta(userId: string, codice: string): Promise<void> {
   );
 }
 
-/** Registra l'uso del coupon RADAR50 dopo un pagamento riuscito (monouso, anti-abuso). */
-async function registraUsoRadar50(userId: string, checkoutSessionId: string | null): Promise<boolean> {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/registra_uso_coupon_radar50`, {
+/** Registra l'uso del coupon SCUOLERADAR50 dopo un pagamento riuscito (monouso per email). */
+async function registraUsoScuoleradar50(userId: string, checkoutSessionId: string | null): Promise<boolean> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/registra_uso_coupon_scuoleradar50`, {
     method: 'POST',
     headers: {
       apikey: SUPABASE_SERVICE_ROLE,
@@ -310,10 +310,10 @@ serve(async (req: Request) => {
         // FLOW GUARD: nessun drip residuo dopo l'upgrade a PRO + email di benvenuto.
         await cancellaDripPro(userId);
         await notificaAttivazione(userId, 'pro');
-        // Coupon RADAR50: registra l'uso monouso (pagamento riuscito).
-        if (obj.metadata?.promo === 'RADAR50' && obj.payment_status === 'paid') {
-          const usato = await registraUsoRadar50(userId, obj.id ?? null);
-          console.log(`  → coupon RADAR50 registrato come usato: ${usato}`);
+        // Coupon SCUOLERADAR50: registra l'uso monouso per email (pagamento riuscito).
+        if (obj.metadata?.promo === 'SCUOLERADAR50' && obj.payment_status === 'paid') {
+          const usato = await registraUsoScuoleradar50(userId, obj.id ?? null);
+          console.log(`  → coupon SCUOLERADAR50 registrato come usato: ${usato}`);
         }
       }
 

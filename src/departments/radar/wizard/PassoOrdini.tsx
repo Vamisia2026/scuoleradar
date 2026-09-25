@@ -12,8 +12,8 @@ import { ordiniScuola, type OrdineScuola } from '@/data/ordiniMaterie';
 import { BloccoAnagrafica, type DatiAnagrafica } from '@/components/BloccoAnagrafica';
 import { creaIconeOrdine } from '../ordineIcone';
 
-/** Icone degli ordini di scuola nella taglia grande usata dal wizard. */
-const ordineIcons = creaIconeOrdine('h-6 w-6');
+/** Icone degli ordini di scuola nella taglia compatta usata dal wizard. */
+const ordineIcons = creaIconeOrdine('h-5 w-5');
 
 interface PassoOrdiniProps {
   /** Ordini di scuola attualmente selezionati. */
@@ -35,17 +35,18 @@ export function PassoOrdini({
             <div className="animate-fade-in">
               {/* Anagrafica rapida: evita di richiedere nome/cognome/genere/età alla
                   registrazione finale (i dati viaggiano nella bozza). */}
-              <div className="mb-5">
+              <div className="mb-2.5">
                 <BloccoAnagrafica
                   dati={anagrafica}
                   onChange={onChangeAnagrafica}
+                  compatto
                   nota="Facoltativo. Lo salviamo nel tuo profilo: alla registrazione non te lo chiediamo di nuovo."
                 />
               </div>
-              <h2 className="text-lg font-bold text-primary-800">
+              <h2 className="text-base font-bold text-primary-800">
                 Dove vuoi lavorare?
               </h2>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
                 {ordiniScuola.map((o) => {
                   const selected = ordini.includes(o.id);
                   return (
@@ -53,24 +54,28 @@ export function PassoOrdini({
                       key={o.id}
                       type="button"
                       onClick={() => toggleOrdine(o.id)}
-                      className={`flex items-start gap-3 rounded-xl border p-4 text-left transition ${
+                      className={`flex items-start gap-2.5 rounded-xl border p-2.5 text-left transition ${
                         selected
-                          ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-500'
+                          ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-500'
                           : 'border-primary-200 bg-white hover:border-primary-300'
                       }`}
                     >
                       <span
-                        className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                        className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
                           selected ? 'bg-primary-500 text-white' : 'bg-primary-50 text-primary-600'
                         }`}
                       >
                         {ordineIcons[o.id]}
                       </span>
                       <span className="flex-1">
-                        <span className="block font-semibold text-primary-800">{o.nome}</span>
-                        <span className="block text-xs text-primary-500">{o.descrizione}</span>
+                        <span className="block text-sm font-semibold leading-tight text-primary-800">
+                          {o.nome}
+                        </span>
+                        <span className="block text-[11px] leading-tight text-primary-500">
+                          {o.descrizione}
+                        </span>
                       </span>
-                      {selected && <Check className="h-5 w-5 shrink-0 text-primary-600" />}
+                      {selected && <Check className="h-4 w-4 shrink-0 text-primary-600" />}
                     </button>
                   );
                 })}

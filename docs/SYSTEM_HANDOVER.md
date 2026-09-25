@@ -239,7 +239,7 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | File | Righe | Responsabilità / dipendenze |
 |---|---|---|
 | `Header.tsx` | 142 | Header sticky 2 livelli: top-bar (logo, link istituzionali, accedi/avatar/profilo, badge PRO/Base), barra strumenti (`strumentiLinks` con emoji, es. 📁 Modulistica), menu mobile. **Logo importato come asset di build** (`@/assets/logo.png`, nome hashato) con fallback wordmark su `onError`; sottocomponenti in `components/header/**` (`NavIstituzionale`, `MenuUtente`, `MenuMobile`, `BarraStrumenti`, `BadgePiano*`, `navLinks`, `tipiUtente`) |
-| `Modal.tsx` | 64 | Modal riusabile: overlay `bg-primary-900/40`, card `rounded-2xl`, `size sm/md/lg/xl`, `zClass`, prop `cardClassName` (default `bg-white`; es. `bg-slate-50`), Escape/blocco scroll |
+| `Modal.tsx` | 70 | Modal riusabile: overlay `bg-primary-900/40`, card `rounded-2xl`, `size sm/md/lg/xl`, `zClass`, prop `cardClassName` (default `bg-white`; es. `bg-slate-50`), **prop `dense`** (header/gutter ridotti + `max-h-[94vh]`: usata dal wizard Radar per rientrare nello schermo senza barra interna; default `false`), Escape/blocco scroll |
 | `AuthModal.tsx` 🔒 | 400 | Login/registrazione (Google OAuth + email demo), contesto `'pro'` (checkout ripreso), `useNavigate`. **BLOCCATO** |
 | `VetrinaModal.tsx` | — | Modal freemium multi-sezione: radar/cv/cfu/moduli/assistente con CTA di upgrade |
 | `AbbonamentoModal.tsx` | 210 | Modal abbonamento: piano PRO annuale/mensile/crediti, promo, `avviaCheckout` |
@@ -270,6 +270,15 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | File | Responsabilità |
 |---|---|
 | `ReferralSection.tsx` | Modulo marketing "Invita un Collega": codice personale, link, KPI referrer via `useReferral` |
+| `DocumentiProfilo.tsx` | Sezione **«Documenti»** del profilo: due tab (`Moduli scaricati` · `I Miei Documenti`); `?sezione=documenti` apre la sezione, `&tab=miei` il secondo tab. Monta lo storage condiviso `@/components/documenti/MieiDocumenti` |
+| `ModuliScaricati.tsx` | Tab **«Moduli scaricati»**: archivio dei moduli UFFICIALI (storico locale condiviso con la Modulistica), riscarica/rimuovi/svuota; rimando alla Modulistica filtrato dalle feature flags |
+
+### 2.4-bis `src/components/documenti/`
+
+| File | Responsabilità |
+|---|---|
+| `MieiDocumenti.tsx` | **Spazio di storage personale dell'utente**, componente di PIATTAFORMA condiviso da due superfici (profilo → tab «I Miei Documenti»; Modulistica → terza tab omonima). Elenco dei file (apertura, eliminazione), conteggio dello spazio e **disclaimer** di uso esclusivo e responsabilità; i file restano nel browser (`localStorage`, `lib/mieiDocumenti.ts`), nessun upload su server |
+| `AreaCaricamentoDocumenti.tsx` | **Area di rilascio** (estratta da `MieiDocumenti`, SRP): drag & drop + selezione multipla dal computer, stati visivi (trascinamento, limite, caricamento) e formati PDF/JPG/PNG/Word |
 
 ### 2.5 `src/contexts/`
 
@@ -298,7 +307,7 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `moduli.ts` | 298 | ⚠️ **Ereditato**: il catalogo è stato diviso in `moduliAltreAree.ts` (500), `moduliEntiAltro.ts` (487), `moduliOrdiniScuola.ts` (2710), `classiConcorso.ts` (944); `moduli.ts` conserva tipi, `macroAree`, `ordineMacroAree`, helper `conAggiuntaInCima`, `getModuliScaricati`, `macroAreaById` e il tipo `DocumentoModulistica` |
 | `interpelli.ts` | — | Tipo `Interpello` + feed mock (~12 voci demo) per modalità demo |
 | `classiConcorso.ts` | — | `ClasseConcorso[]` (A-XX, ADEE, ADSS…) con `ordine`, `materie[]`, `requisitiCfu[]`; helper `classeByCodice` |
-| `ordiniMaterie.ts` | ~150 | `OrdineScuola` (infanzia/primaria/secondaria1/secondaria2/cpia/serali/pon/ata), `ordiniScuola`, `materie`, **`MATERIE_GENERICHE`** + **`materieCompetenzeExtra()`** (esclude le discipline curricolari: Storia/Geografia non sono "competenze extra"), **`competenzeSuggerite`** (5 aree ad alta richiesta PNRR/PON: AI nella didattica, robotica educativa, digital storytelling, metodologia CLIL, creatività digitale). Verificato da `npm run test:radar:preferenze` |
+| `ordiniMaterie.ts` | ~160 | `OrdineScuola` (infanzia/primaria/secondaria1/secondaria2/cpia/serali/pon/ata), `ordiniScuola`, `materie`, **`MATERIE_GENERICHE`** + **`materieCompetenzeExtra()`** (esclude le discipline curricolari: Storia/Geografia non sono "competenze extra"), **`competenzeSuggerite`** (12 **tag popolari** PNRR/PON: AI nella didattica, robotica educativa, **Stop Motion**, coding, digital storytelling, CLIL, **Lingua inglese**, STEM, creatività digitale, educazione motoria, progettazione bandi, orientamento). Verificato da `npm run test:radar:preferenze` |
 | `province.ts` | 117 | `Provincia[]` (107 province: codice/nome/regione) + `regioni` |
 | `servizi.ts` | 99 | Vetrina servizi: `Servizio[]` (slug, emoji, titolo, caratteristiche, destinatari, dashboard, sperimentazione) + `servizioDaSlug` |
 
@@ -325,6 +334,9 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `ledgerLocale.ts` | ~110 | **Node-only** — ledger anti-duplicato su file (`.scuoleradar/notifiche-ledger.json`): `chiaveLedger`, `ledgerLocaleGia`, `ledgerLocaleChiaviConPrefisso` (conteggio frequenza per identità), `ledgerLocaleRegistra`, `ledgerLocaleSalva`, `percorsoLedgerLocale`. Rete di sicurezza quando le tabelle DB non sono ancora create; committato dai workflow. **Percorso sovrascrivibile con `SCUOLERADAR_LEDGER_PATH`** (usato dai test per NON sporcare il ledger reale). **Tolleranza BOM** in lettura e scrittura senza BOM; un file ILLEGGIBILE produce un warning esplicito (mai deduplica silenziosamente disattivata). Verificato da `npm run test:ledger` |
 | `pricing.ts` | 18 | Piani: `PianoId = 'pro_annuale'|'pro_mensile'|'a_consumo'`; localStorage `STORAGE_KEY_INTENDED_PLAN` |
 | `promo.ts` | 34 | `validaPromo(codice, userId)` via RPC `valida_codice_promo`; `SCONTO_PROMO_EUR = 10` |
+| `provinceRadar.ts` | 68 | **Puro** — PROVINCIA PRINCIPALE del Radar: `provinciaPrincipale` (la PRIMA selezionata), `eProvinciaPrincipale`, `provinceDiContorno` (tutte tranne la principale), `promuoviProvinciaPrincipale` (porta in testa = priorità, idempotente), **`limitaProvinceMantenendoPrincipale`** (troncamento dei downgrade che conserva SEMPRE la principale). L'ordine dell'array `provinceCodici` è la fonte di verità (persistito su `profiles.province`/`sr_preferenze`). Verificato da `npm run test:province` |
+| `ricercaSelezioniRadar.ts` | 157 | **Puro** — RICERCA UNIFICATA (wizard + Preferenze): `cercaSelezioniRadar` (classi + competenze + parola chiave in un solo risultato), `cercaClassiDiConcorso` (codice `a18` ≡ `A-18`, denominazione **o materia collegata**), `cercaCompetenzeExtra` (solo extra PNRR/PON: le discipline curricolari restano fuori), `normalizzaTestoRicerca`, `etichettaMateria`, `LIMITE_RISULTATI_GRUPPO`, `MIN_CARATTERI_RICERCA`. Verificato da `npm run test:ricerca` |
+| `mieiDocumenti.ts` | 130 | **Storage personale** «I Miei Documenti» (localStorage, nessun upload): `MioDocumento`, `STORAGE_KEY_MIEI_DOCUMENTI`, limiti (`LIMITE_DOCUMENTI` 6 · `LIMITE_BYTE_DOCUMENTO` 1 MB · `LIMITE_BYTE_TOTALE` 3,5 MB · `TIPI_AMMESSI`), `validaNuovoDocumento` (esito ESPLICITO: mai un rifiuto silenzioso), `leggi`/`salva` (quota piena segnalata), `aggiungi`/`rimuovi`, `byteTotali`, `formattaDimensione`. Verificato da `npm run test:documenti` |
 
 ### 2.8 `src/hooks/`
 
@@ -342,7 +354,7 @@ data/ · types.ts`. Dettaglio e regole: [`DEPARTMENT_MAP.md`](./DEPARTMENT_MAP.m
 
 | Dominio | File | Righe | Sottocartelle | Entry `index.ts` |
 |---|---|---|---|---|
-| `radar/` | 19 | 3.413 | `wizard/` · `preferenze/` · `flightBoard/` | `RadarWizardModal`, `PreferenzeRadar`, `RadarStatusToggle` |
+| `radar/` | 25 | 3.958 | `wizard/` (+`components/`) · `preferenze/` · `flightBoard/` · `components/` | `RadarWizardModal`, `PreferenzeRadar`, `RadarStatusToggle`, `BenvenutoProRadar` |
 | `notizie/` | 17 | 4.776 | `components/` (+ `hero/`) · `services/` · `data/` | componenti Notizie + servizi/tipi |
 | `scadenze/` | 11 | 1.357 | `components/` · `hooks/` | `RevolverScadenze` (+ `RevolverScadenzeProps`) |
 | `admin/` | 14 | 2.281 | `tabs/` (+ `tabs/utenti/`) | `TabUtenti`, `TabRadar`, `TabAccount` |
@@ -377,9 +389,10 @@ data/ · types.ts`. Dettaglio e regole: [`DEPARTMENT_MAP.md`](./DEPARTMENT_MAP.m
 | File | Righe | Responsabilità |
 |---|---|---|
 | `index.ts` | — | Barrel exports (`ModuliModule`, components, creator) |
-| `types.ts` | 30 | `VistaModulistica = 'archivio'|'intervista'|'miei'`, `ModuloSalvatoDB`, `VoceModulo` |
-| `ModuliModule.tsx` | ~280 | Contenitore: ricerca live, macroaree, archivio, anteprima, teaser Archivista, "I miei Modelli", nota accesso |
-| `components/ModuliNavigation.tsx` | 39 | Tab: Esplora archivio / I miei Modelli Scaricati |
+| `types.ts` | 30 | `VistaModulistica = 'archivio'|'intervista'|'miei'|'documenti'`, `ModuloSalvatoDB`, `VoceModulo` |
+| `ModuliModule.tsx` | ~285 | Contenitore: ricerca live, macroaree, archivio, anteprima, teaser Archivista, "I miei Modelli", **terza tab «I Miei Documenti»**, nota accesso |
+| `components/ModuliNavigation.tsx` | ~57 | Tab: Esplora archivio / I miei Modelli Scaricati / **I Miei Documenti** |
+| `components/TabDocumentiPersonali.tsx` | 38 | Terza tab: intestazione + storage personale (`components/documenti/MieiDocumenti`), senza paywall PRO |
 | `components/MacroAreaMenu.tsx` | 59 | Schede macroaree (Infanzia, Primaria, Secondaria 1°/2°, Università, Enti, Altro, Sostegno) |
 | `components/EsploraArchivio.tsx` | ~200 | Griglia 3×5 sottocategorie con paginazione, doppio click, ricerca |
 | `components/RicercaArchivista.tsx` | 64 | Barra ricerca: filtro LIVE catalogo + pulsante teaser Archivista (`FolderSearch`, `bg-sky-700`, badge `bg-[#E67E22]` "Esclusivo PRO") |
@@ -411,7 +424,7 @@ data/ · types.ts`. Dettaglio e regole: [`DEPARTMENT_MAP.md`](./DEPARTMENT_MAP.m
 | `NotiziePage.tsx` | Wrapper `NotizieHero`+`NotizieGrid` |
 | `NotizieDettaglioPage.tsx` | Wrapper `NotizieDettaglio` |
 | `InterpelloDettaglioPage.tsx` | Scheda PUBBLICA dell'avviso (`/interpello/:id` — LEGACY, deep link storici): risolve per `id`/`hash_id` (fallback `notices`), gerarchia strutturata, **guida operativa** quando la pagina è un elenco/"Stampa" o la fonte manca, **un solo** bottone verso la fonte ESTERNA con etichetta onesta; stato "non più disponibile" con link al Radar (mai rimbalzo sulla Home) |
-| `AuthCallback.tsx` | Rotta ritorno Google OAuth (scambia code → sessione) |
+| `AuthCallback.tsx` | Rotta ritorno Google OAuth: **ATTENDE la sessione** (polling `getSession` fino a 8 s) prima di rimbalzare alla home — lo scambio PKCE è asincrono, quindi niente più «ospite» al primo render né secondo click su «Accedi» |
 | `OnboardingPage.tsx` | Wizard onboarding preferenze + collegamento Telegram |
 | `DashboardPage.tsx` | `DashboardLayout` (tab + `Outlet`) + `DashboardPage` (Radar Scuole: notifiche restanti, abbonamento, crediti, feed, blacklist) |
 | `CvPage.tsx` / `CfuPage.tsx` | Wrapper `CvTool` (`components/`) / `CalcolatoreCfuApp` (`departments/cfu/`) |
@@ -486,7 +499,8 @@ Ordine: `20260822010000_add_school_filters` · `...22020000_create_interpelli` �
 `...20260914000000_fix_pampararo_cognome` · `...20260914010000_notifications_log` ·
 `...20260914020000_channel_posts_log` ·
 `...20260914030000_repair_notifications_log_e_rpc_quota` ·
-`...20260914040000_add_profiles_sostegno`
+`...20260914040000_add_profiles_sostegno` ·
+`...20260924120000_coupon_scuoleradar50_unico`
 
 **REPAIR notifiche** (`...20260914030000_repair_notifications_log_e_rpc_quota.sql`): DDL
 idempotente che (1) ri-asserisce la tabella `notifications_log` (mai applicata) e
@@ -526,7 +540,11 @@ del matching non toglie copertura a chi riceveva legittimamente gli avvisi di so
 | `scripts/test-live-board.ts` | Regressione vetrina Radar Live (`npm run test:board`): righe incomplete arricchite o scartate, mai placeholder |
 | `scripts/test-email-scuola.ts` | Regressione email (`npm run test:email-scuola`): de-offuscamento, correlazione con l'istituto, **PEO/PEC dalla convenzione MIM** e completamento automatico nel parser |
 | `scripts/test-email-template.ts` | Regressione template email (`npm run test:email`): **oggetto standard `Nuove opportunità per te!`** (digest/opportunità) e oggetti di ciclo di vita invariati, logo reale, titolo pulito dai dump di codici classe, **footer crisp** (link Radar visibile con URL in chiaro, CTA Notizie email a due righe `scuoleradar.it/notizie` + `… vieni qui!`, avviso "non rispondere" in ULTIMA riga, nessun "P.S.", nessun grigio `#94a3b8`) |
-| `scripts/test-radar-preferenze.ts` | **`npm run test:radar:preferenze`** — preferenze Radar: normalizzazione classi (`A-18` ≡ `A18` ≡ `a 18`), dedup/persistenza (load/save normalizzati in `AppContext`), testo UI **"Dove vuoi lavorare?"**, etichetta **"Le tue competenze e laboratori extra da proporre:"**, 5 competenze PNRR/PON suggerite e lista competenze SENZA discipline curricolari |
+| `scripts/test-radar-preferenze.ts` | **`npm run test:radar:preferenze`** — preferenze Radar: normalizzazione classi (`A-18` ≡ `A18` ≡ `a 18`), dedup/persistenza (load/save normalizzati in `contexts/app/*`), testo UI **"Dove vuoi lavorare?"**, etichetta **"Le tue competenze e laboratori extra da proporre:"**, 12 tag PNRR/PON, **persistenza ISTANTANEA** del wizard (ordini/province/classi/competenze/tag) e assenza di elenchi statici di materie |
+| `scripts/test-ricerca-unificata.ts` | **`npm run test:ricerca`** — ricerca UNIFICATA: normalizzazione query (accenti/spazi/trattino), classi per codice/denominazione/**materia collegata** («Pedagogia» → A-18), competenze extra, parola chiave proposta/dedup, marcature «già nel profilo» + cablaggio (un solo campo nel passo 3 e in «In cosa puoi lavorare») |
+| `scripts/test-provincia-principale.ts` | **`npm run test:province`** — provincia PRINCIPALE (prima selezionata): badge/pill, promozione in testa, e **sopravvivenza al downgrade** (`limitaProvinceMantenendoPrincipale`: a Base resta la principale, mai una di contorno) + self-heal nel contesto |
+| `scripts/test-sessione-identita.ts` | **`npm run test:sessione`** — sessione/identità: `identitaDaSessione` (full_name, campi espliciti, mai sovrascritture), bootstrap che sincronizza l'identità dalla sessione trovata, listener su `TOKEN_REFRESHED`/`USER_UPDATED`, `AuthCallback` che attende la sessione, wizard che rilegge il piano appena arriva l'identità |
+| `scripts/test-copy-etico.ts` | **`npm run test:copy:etico`** — COPY ETICO: scansione di `src/**` per le frasi competitive («prima degli altri», «beccare»…) e delle superfici UI/marketing per quelle di fretta; verifica la copy del banner PRO («Un mese PRO, completamente gratis… puoi dedicarti alla tua vita») e che il Passo 4 non usi urgenza artificiale |
 | `scripts/test-qualita-invio.ts` | **`npm run test:qualita`** — gate di qualità: link diretto (`eUrlAvvisoDiretto`), gate link+recapito, mappatura province (Forlì → FC), brand/anteprime, frequenza CTA Radar ~20% |
 | `scripts/test-canali-telegram.ts` | **`npm run test:telegram:canali`** — post dei canali regionali: brand cliccabile in testa, 7 sezioni, testate tipografiche (nessuna fascia colorata/`[BADGE]`, nessuna immagine), **URL ufficiali mai in chiaro** (solo il bottone `👉 Apri l'avviso ufficiale`), **gate link diretto** (home regionale, elenco/tag, landing regionale, ricerca e "nessun link" → post senza link e pubblicazione annullata) + matrice di routing delle 9 regioni + ATA nazionale |
 
@@ -609,7 +627,7 @@ interface ModuloScaricato { id; nome; tipo; scaricatoIl; }
 interface NewsArticle { id; title; category; deadline_date; summary_points[3];
   content_html; official_source_url; official_pdf_url; relevance_score; published_at; }
 // src/modules/modulistica/types.ts
-type VistaModulistica = 'archivio'|'intervista'|'miei';
+type VistaModulistica = 'archivio'|'intervista'|'miei'|'documenti';
 interface ModuloSalvatoDB { id; module_key; module_source: 'generated'|'catalogo'; title; tipo; created_at; }
 ```
 
@@ -734,15 +752,27 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
   (`PreferenzeRadar`, `RadarWizardModal`) che confrontano con `contieneClasse`.
   Verificato da `npm run test:radar:preferenze`.
 - **Testo UI**: il passo 1 del wizard e l'accordion degli ordini dicono
-  **"Dove vuoi lavorare?"** (prima: "Dove vuoi insegnare o lavorare?").
+  **"Dove vuoi lavorare?"** (prima: "Dove vuoi insegnare o lavorare?"); è anche il
+  titolo del primo passo in `TITOLI_STEP` (avanzamento del wizard).
 - **Competenze e laboratori extra**: la sezione mostra l'etichetta
-  **"Le tue competenze e laboratori extra da proporre:"** e propone con un click le
-  **5 competenze più richieste dai bandi PNRR/PON** (`competenzeSuggerite`:
-  Intelligenza artificiale nella didattica, Robotica educativa, Digital
-  storytelling, Metodologia CLIL, Creatività digitale). La lista selezionabile usa
-  `materieCompetenzeExtra()`: le discipline curricolari (Storia, Geografia,
-  Italiano, …) NON compaiono più — la cattedra si intercetta con le classi di
-  concorso. Il testo libero resta sempre disponibile.
+  **"Le tue competenze e laboratori extra da proporre:"** e propone con un click i
+  **12 tag più richiesti dai bandi PNRR/PON** (`competenzeSuggerite`: Intelligenza
+  artificiale nella didattica, Robotica educativa, Stop Motion, Coding, Digital
+  storytelling, CLIL, Lingua inglese, STEM, Creatività digitale, Educazione motoria,
+  Progettazione bandi, Orientamento). Le discipline curricolari (Storia, Geografia,
+  Italiano, …) NON compaiono più come elenco: la cattedra si intercetta con le classi
+  di concorso e la ricerca unificata. **Nessun elenco fisso e nessun campo doppio**:
+  un solo campo `RicercaSelezioni` (motore in `lib/ricercaSelezioniRadar.ts`) restituisce
+  insieme classi, competenze extra e la possibilità di aggiungere il testo digitato come
+  parola chiave personale. Le liste complete sono in `wizard/components/SezioneClassiConcorso`
+  e `wizard/components/SezioneCompetenzeExtra` (passo 3 su due colonne).
+  Verificato da `npm run test:ricerca` e `npm run test:radar:preferenze`.
+- **Wizard a prova di scroll**: `Modal` con `dense` (`max-h-[96vh]`, gutter ridotti),
+  progress/footer compatti, liste `max-h-36`/`max-h-44` e passo 3 su due colonne: i
+  quattro passi rientrano nel viewport senza barra di scorrimento interna (desktop).
+- **Sessione al ritorno da Google**: identità sincronizzata da `identitaDaSessione`
+  (bootstrap + listener) e `AuthCallback` che attende lo scambio PKCE prima di
+  navigare. Verificato da `npm run test:sessione`.
 - **Filtri avanzati**: `ignoredSchools` (blacklist) nasconde gli avvisi
   (match su `istituto + titolo`); `favoriteSchools` (whitelist) marca badge prioritario.
 - **Scadenze (semaforo)**: badge colorati via `src/lib/scadenza.ts` — 🟢 verde > 7 giorni,
@@ -1693,7 +1723,7 @@ Scritture: solo `service_role` (scraper Node) — upsert per `hash_id`.
 | Billing (`20260822060000`) | `piano` · `stripe_customer_id` · `stripe_subscription_id` · `abbonamento_scade_il` · `crediti` · `notifiche_usate` · `notifiche_mese` |
 | Quota notifiche (`20260829100000`→`20260903020000`) | `notifiche_blocco_inviato` · `notifiche_recap_inviato` · `notifiche_anno` |
 | Drip & step (`20260831030000`) | `step` · `step4_inviata_at` · `step5_inviata` (usati da `dispatch_step5_due`, §13.16) |
-| Referral & promo | `referral_code` (`20260822100000`), tabella `coupon_radar` per l'uso RADAR50 |
+| Referral & promo | `referral_code` (`20260822100000`), tabella `coupon_usage` per l'uso monouso dei coupon di sconto (SCUOLERADAR50) |
 | Beta & Free Forever | `is_beta_tester` (`20260831170000`/`20260902040000`) · `beta_rinnovo_email_inviata` · `is_free_forever` (`20260903010000`) |
 | Abbonamento avanzato | `subscription_tier` · `subscription_status` · `current_period_end` (`20260901000000`, ridichiarate in `20260902234600`) · `pro_tipo` (`20260902030000`) |
 | Ciclo scadenza (`20260831180000`, `20260903100000`) | `scadenza_avviso_stadio` · `preavviso_rinnovo_inviato_at` |
@@ -1761,15 +1791,17 @@ Valori seminati dalla migration: `send_notification_url`
 `send_notification_secret` (header `x-send-secret` verificato dalla Edge). RLS: nessun
 accesso client (solo `service_role`/funzioni `security definer`).
 
-**`public.promo_codes`** (`20260831160000`) — codici promo (BETA1ANNO, RADAR50, -50% primo anno)
+**`public.promo_codes`** (`20260831160000`) — codici promo (BETA1ANNO; SCUOLERADAR50 = -50% annuale, monouso per email)
 
 | Colonna | Tipo / vincolo |
 |---|---|
 | `id` | `uuid primary key default gen_random_uuid()` |
 | altre colonne | gestite esclusivamente da `valida_codice_promo()` / `attiva_codice_promo()` (§14): lettura e consumo mai dal client (§11.2) |
 
-RLS: nessuna policy client. L'uso RADAR50 è tracciato in **`public.coupon_radar`**
-(policy `read own radar50 usage` + `insert own radar50 usage`).
+RLS: nessuna policy client. L'uso monouso del coupon è tracciato in **`public.coupon_usage`**
+(policy `read own coupon usage` + `insert own coupon usage`), una riga per utente =
+sconto già consumato. Il codice RADAR50 è stato RIMOSSO dalla tabella e dalle funzioni
+(`20260924120000_coupon_scuoleradar50_unico.sql`).
 
 **`public.school_deadlines`** (`20260902000000`) — scadenze scolastiche (Revolver)
 
@@ -1910,6 +1942,7 @@ viene applicata anche a `notices`.
 | `20260914040000_add_profiles_sostegno` | `profiles.sostegno` (preferenza sostegno nel Radar) |
 | `20260922120000_add_profiles_provincia` | `profiles.provincia` (provincia di **residenza**, dato demografico; check `^[A-Z]{2}$`) |
 | `20260922130000_welcome_metadata_anagrafica` | `send_step1_welcome()` v2: dal `user_metadata` di `signUp` salva **nome, cognome, genere, età e provincia** (con i vincoli della tabella) e li passa alla email di benvenuto |
+| `20260924120000_coupon_scuoleradar50_unico` | Coupon unico **SCUOLERADAR50** (50% PRO annuale, monouso per email, 40 giorni dalla registrazione): RADAR50 eliminato da `promo_codes` + drop `valida_coupon_radar50`/`registra_uso_coupon_radar50`, tabella `coupon_radar50_usage` → **`coupon_usage`** (policy rinominate), RPC `valida_coupon_scuoleradar50(uuid)` + `registra_uso_coupon_scuoleradar50(uuid, text)` |
 
 ### 13.13 Policy RLS complete (nome → tabella)
 
@@ -1920,7 +1953,7 @@ viene applicata anche a `notices`.
 | `read own referrals` | `referrals` | select (solo referrer) |
 | `read generated modules` | `generated_modules` | select (autenticati; scrittura `service_role`) |
 | `read own saved modules` · `insert own saved modules` · `delete own saved modules` | `user_saved_modules` | select / insert / delete per utente |
-| `read own radar50 usage` · `insert own radar50 usage` | `coupon_radar` | select / insert per utente |
+| `read own coupon usage` · `insert own coupon usage` | `coupon_usage` | select / insert per utente |
 | `read school_deadlines` | `school_deadlines` | select (pubblico) |
 
 Tabelle **senza** policy client (accesso esclusivo `service_role` / funzioni
@@ -2000,7 +2033,7 @@ header `x-send-secret`, funzione idempotente lato Edge).
 | `genera_referral_code` | `(nome text, cognome text, email text)` | helper | Genera il codice referral deterministico |
 | `handle_referral_code` | `()` | trigger fn | Assegna `profiles.referral_code` |
 | `valida_codice_promo` | `(p_codice text)` | `security definer` | Valida un codice promo senza consumarlo (usata da `lib/promo.ts`) |
-| `attiva_codice_promo` | `(p_codice text, p_user_id uuid)` | `security definer` | Consuma il codice e applica l'effetto (es. RADAR50, BETA1ANNO) |
+| `attiva_codice_promo` | `(p_codice text, p_user_id uuid)` | `security definer` | Consuma il codice e applica l'effetto (es. BETA1ANNO, SCUOLERADAR50) |
 | `piano_protetto` | `(p_piano text, p_is_free_forever boolean, p_is_beta_tester boolean)` | helper | Guardia anti-declassamento usata da `sync_profilo_oauth`/`reverti_prove_pro_scadute` |
 | `sync_profilo_oauth` | `()` | trigger fn | Crea/sincronizza il profilo al primo accesso OAuth (v4: nuovo utente = trial PRO 30 giorni, piano protetto) |
 | `reverti_prove_pro_scadute` | `()` | cron fn | Riporta a BASE i trial PRO scaduti (cron `revert-prove-pro-scadute`) |
@@ -2156,7 +2189,7 @@ Note operative:
 | 11 | `/moduli` | `Navigate → /dashboard/moduli` | pubblica | la vecchia landing di anteprima è stata rimossa |
 | 12 | `/calcolatore-cfu` | `CalcolatoreCFUPage` | pubblica | landing del dominio CFU |
 | 13 | `/auth/callback` | `AuthCallback` | pubblica | ritorno OAuth (scambio code → sessione) |
-| 14 | `/checkout/:plan` | `CheckoutRedirectPage` | pubblica | checkout diretto con coupon (`?coupon=RADAR50`) |
+| 14 | `/checkout/:plan` | `CheckoutRedirectPage` | pubblica | checkout diretto con coupon (`?coupon=SCUOLERADAR50`) |
 | 15 | `/onboarding` | `OnboardingPage` | **`RequireAuth`** | wizard preferenze + Telegram |
 | 16 | `/dashboard` | `DashboardLayout` | pubblica (layout) | guscio con tab + `Outlet` |
 | 17 | `/dashboard` (index) | `Navigate → radar` | — | default della dashboard |
@@ -2261,7 +2294,7 @@ Utilizzi diretti nel codice (`import.meta.env.*` verificati): `DEV`, `MODE`,
 | `DEEPSEEK_API_KEY` · `DEEPSEEK_MODEL` | generazione modulistica (`deepseek-chat`) |
 | `STRIPE_SECRET_KEY` · `STRIPE_WEBHOOK_SECRET` · `STRIPE_PUBLISHABLE_KEY` · `STRIPE_PRICE_*` · `STRIPE_COUPON_*` · `REFERRAL_COUPON_ID` · `WEBHOOK_ENDPOINT` | billing |
 | `SCUOLERADAR_LEDGER_PATH` | override del percorso del ledger file (§6.5.1) — usato dai test per non sporcare il ledger reale |
-| `FEATURE_RADAR` · `FEATURE_CFU` · `FEATURE_MODULISTICA` · `FEATURE_PUREFOCUS` · `FEATURE_REFERRAL` · `FEATURE_CV_BUILDER` | **feature flags dei dipartimenti** (`on`/`test`/`off`, §4.8 di `DEPARTMENT_MAP.md`): hanno priorità sugli override locali e pilotano anche le notifiche automatiche |
+| `FEATURE_RADAR` · `FEATURE_CFU` · `FEATURE_MODULISTICA` · `FEATURE_PUREFOCUS` · `FEATURE_REFERRAL` · `FEATURE_CV_BUILDER` | **feature flags dei dipartimenti** (`on`/`test`/`off`, §4.8 di `DEPARTMENT_MAP.md`): hanno priorità sugli override locali e pilotano anche le notifiche automatiche. **Default di produzione**: accesi `radar` e `purefocus`; chiusi `cfu`, `modulistica`, `referral`, `cv_builder` |
 | `FEATURE_TEST_REDIRECT` · `FEATURE_ADMIN_EMAIL` · `FEATURE_ADMIN_TELEGRAM_ID` | destinazione di test del gate notifiche in stato `test` (default: prima email di `ADMIN_EMAILS` e `ADMIN_TELEGRAM_ID`) |
 
 **C. GitHub Actions secrets** (verificati nei workflow):
@@ -2278,7 +2311,7 @@ Utilizzi diretti nel codice (`import.meta.env.*` verificati): `DEV`, `MODE`,
 | Telegram (pubblico) | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` |
 | Telegram (admin) | `ADMIN_TELEGRAM_BOT_TOKEN`, `ADMIN_TELEGRAM_ID`, `ADMIN_TELEGRAM_WEBHOOK_SECRET`, `ADMIN_ALERT_SECRET`, `ADMIN_COMMAND_FORWARD_SECRET`, `ADMIN_COMMAND_FORWARD_URL`, `ADMIN_EMAILS` |
 | AI | `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL` |
-| Stripe | `STRIPE_MODE`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `WEBHOOK_ENDPOINT`, `STRIPE_PRICE_ID_ANNUAL`, `STRIPE_PRICE_ID_MONTHLY`, `STRIPE_PRICE_ID_CONSUMO`, `STRIPE_PRICE_PRO_ANNUALE`, `STRIPE_PRICE_PRO_MENSILE`, `STRIPE_PRICE_A_CONSUMO`, `STRIPE_PRICE_ALACARTE`, `STRIPE_PRICE_CONSUMO`, `REFERRAL_COUPON_ID`, `STRIPE_COUPON_BETA1ANNO`, `STRIPE_COUPON_RADAR50`, `STRIPE_COUPON_REFERRAL_10` |
+| Stripe | `STRIPE_MODE`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `WEBHOOK_ENDPOINT`, `STRIPE_PRICE_ID_ANNUAL`, `STRIPE_PRICE_ID_MONTHLY`, `STRIPE_PRICE_ID_CONSUMO`, `STRIPE_PRICE_PRO_ANNUALE`, `STRIPE_PRICE_PRO_MENSILE`, `STRIPE_PRICE_A_CONSUMO`, `STRIPE_PRICE_ALACARTE`, `STRIPE_PRICE_CONSUMO`, `REFERRAL_COUPON_ID`, `STRIPE_COUPON_BETA1ANNO`, `STRIPE_COUPON_SCUOLERADAR50` (fallback accettato `STRIPE_COUPON_RADAR50`), `STRIPE_COUPON_REFERRAL_10` |
 
 ### 17.5 Matrice di degradazione (cosa succede se un secret manca)
 
@@ -2361,11 +2394,11 @@ Utilizzi diretti nel codice (`import.meta.env.*` verificati): `DEV`, `MODE`,
 | Link & routing | `test-link-fonte` · `test-link-esterno` · `test-alert-avviso` |
 | Notifiche & dedup | `test-notifiche` · `test-notifier-dry` · `test-dedup` · `test-dedup-utente` · `test-frequenza` · `test-qualita-invio` · `test-copy-notifiche` · `test-ledger-robustezza` · `test-migrazioni` |
 | Email & digest | `test-email-template` (**benvenuto post-registrazione**: blocco `conferma_base` della Edge + template `email_1_1_onboarding` + renderer `welcome` → conferma del mese PRO in omaggio e copy «account Base»/«3 segnalazioni» **vietate**) · `test-email-scuola` · `test-email-alert` · `test-digest` · `test-promemoria` · `test-rinnovo-preavvisi` · **`test:automazioni`** (catalogo + interruttori del pannello Admin) |
-| Feature flags | `test-feature-flags` (matrice stati, gate notifiche, cablaggio UI, scrittura di `sr_flag_dipartimenti`) · `test-flags-render` (render dei toggle OFF/TEST/ON in `variante="lista"` e `card`) |
+| Feature flags | `test-feature-flags` (matrice stati, **superficie pubblica di produzione = solo `radar` + `purefocus`**, snapshot di visibilità, gate notifiche, scrittura di `sr_flag_dipartimenti`) · `test-flags-cablaggio` (navbar/menu/tab/superfici pubbliche/pannelli) · `test-flags-render` (render dei toggle OFF/TEST/ON in `variante="lista"` e `card`) |
 | Telegram & canali | `test-telegram` · `test-telegram-template` (etichetta fonte unica `🔗 Fonte Ufficiale`, URL **mai** in chiaro in tutte le tipologie, etichetta sempre cliccabile, payload con anteprime disattivate) · `test-telegram-tier` · `test-canali-telegram` (post canali: etichetta canonica, URL non in chiaro, gate link diretti) |
 | Brand & favicon | **`test-favicon`** (`npm run test:favicon`): `index.html` ↔ `public/` (misure dichiarate = misure reali), PNG decodificati per provare **campo azzurro #2B6F9E + radar bianco**, `favicon.ico` multi-misura valido, `apple-touch-icon` opaco, pesi e assenza di asset legacy/scuri. Supporto: `scripts/lib/pngRgba.ts` (decoder PNG senza dipendenze) |
 | Checkout & promo | **`test-checkout-promo`** (`npm run test:checkout-promo`, 44 controlli): invarianti di `supabase/functions/checkout` (BETA1ANNO solo PRO annuale + validazione `promo_codes` + `discounts[0][coupon]`, mai `promotion_code`), `webhook` (RPC `attiva_codice_promo`: PRO+1anno, `is_beta_tester`, consumo del monouso), `config.toml` (`verify_jwt`), RPC/seed nelle migrazioni, `profiles.provincia`, 401 Guest del health check, form di registrazione (provincia, nota istituti scolastici, errori non silenziosi) |
-| Piano & funnel | **`test-piano-sync`** (`npm run test:piano`, 43 controlli): chiama le **funzioni vere** (`pianoDaProfilo`, `provaProScaduta`, `pianoLimits`, bozza di registrazione con stub di `localStorage`) + invarianti di cablaggio: PRO concesso dal backend (tier `pro_*`/`is_beta_tester`), tetti PRO mentre il piano è in lettura, Beta Tester mai retrocessi, nome composto «Bison Productions» integro nella bozza, prefill del form (nome/cognome/email dal wizard), Realtime sulla riga `profiles`, paywall solo con piano confermato, trigger DB dell'anagrafica |
+| Piano & funnel | **`test-piano-sync`** (`npm run test:piano`): chiama le **funzioni vere** (`pianoDaProfilo`, `provaProScaduta`, `pianoLimits`, bozza di registrazione con stub di `localStorage`) + invarianti di cablaggio: PRO concesso dal backend (tier `pro_*`/`is_beta_tester`), tetti PRO mentre il piano è in lettura, Beta Tester mai retrocessi, nome composto «Bison Productions» integro nella bozza, prefill del form (nome/cognome/email dal wizard), Realtime sulla riga `profiles`, **entitlement unico dal contesto (`hasProAccess`) in dashboard e badge/menu utente**, visibilità delle feature flags reattiva allo snapshot, paywall solo con piano confermato, trigger DB dell'anagrafica |
 | Notizie | `test-notizie-feed` · `test-notizie-editoriale` · `test-notizie-nazionale` · `test-notizie-rate` |
 | Modulistica & PDF | `test-moduli-integrity` · `test-pdf-mad` · `test-pdf-breve` · `test-pdf-brevi` · `test-pdf-universita` · `test-pdf-completo` |
 
@@ -2393,6 +2426,174 @@ Non modificare senza autorizzazione esplicita ("Sblocca il modulo X"):
   modificare gli altri dipartimenti: per uscire dal perimetro serve lo **sblocco
   congiunto** esplicito nella richiesta dell'utente. Regola scritta in `.clinerules`
   (radice del workspace e `project/`) e dettagliata in `docs/DEPARTMENT_ISOLATION.md`.
+
+- **Sessione 2026-09-24 · Voce di menu «I Miei Documenti» e TERZA tab in Modulistica**:
+  1. **Menu utente**: la voce (vicino al badge PRO) non è più «Documenti» ma
+     **«I Miei Documenti»** e punta alla **terza tab della Modulistica**
+     (`/dashboard/moduli?tab=documenti`); se il dipartimento Modulistica è spento
+     (feature flag) ricade sulla sezione Documenti del profilo — mai un link morto.
+     Il badge continua a contare i moduli ufficiali scaricati.
+  2. **Modulistica — terza tab «I Miei Documenti»**: `VistaModulistica` include
+     `'documenti'`, `ModuliNavigation` mostra la terza voce (`FolderUp`), il
+     contenitore monta `TabDocumentiPersonali` e il deep link `?tab=documenti`
+     atterra direttamente sulla tab. **Nessun paywall PRO**: sono file dell'utente,
+     non moduli del catalogo (il lock resta solo su «I Miei Moduli Scaricati»).
+  3. **Storage personale con TRASCINAMENTO**: `MieiDocumenti` è stato spostato in
+     `src/components/documenti/` (componente di **piattaforma**, una sola
+     implementazione per profilo e Modulistica) e ora supporta **drag & drop** e
+     selezione multipla dei file, con anteprima di stato («Rilascia qui i tuoi
+     file»), conteggio dello spazio, apertura ed eliminazione. Il **disclaimer** è
+     esplicito: *spazio di storage a uso esclusivo dell'utente*, file sotto la sua
+     totale responsabilità, nessun upload sui nostri server (restano nel browser).
+  4. **Verifiche**: `npm run typecheck` ✓ · `npm test` ✓ · `npm run test:modulistica`
+     (`test:moduli`) ✓ · `npm run test:architettura` ✓ (nessuna violazione nuova) ·
+     `npm run build` ✓ · `npm run lint` pulito sui file toccati. `test:documenti`
+     copre ora anche la terza tab, il deep link, l'assenza di paywall e il drag & drop.
+
+- **Sessione 2026-09-24 · Fix UX wizard (zero scroll, ricerca unificata), login/Google,
+  provincia principale e copy PRO**:
+  1. **Login / Google One Tap — niente secondo click su «Accedi»**: l'identità locale
+     ora nasce da un'unica funzione pura, `identitaDaSessione` (`contexts/app/helpers.ts`),
+     usata sia dal **bootstrap** (`useProfileBootstrap`: con un token valido — anche al
+     ritorno da Google OAuth — `setUser`/`setSupabaseUserId` sono sincronizzati SUBITO,
+     senza dipendere dall'ordine degli eventi) sia dal **listener** (`useAuthSync`, che
+     ora copre anche `TOKEN_REFRESHED` e `USER_UPDATED`; il track del funnel resta solo
+     su `SIGNED_IN`/`INITIAL_SESSION`). `AuthCallback` **attende la sessione** (polling
+     `getSession`, max 8 s) invece di rimbalzare alla home: lo scambio PKCE è asincrono e
+     il rimbalzo faceva apparire l'utente come ospite. Nel **wizard**, appena arriva
+     l'identità si rilegge il piano (`refreshProfilo`) → stato PRO riconosciuto nel
+     medesimo render, senza ricaricare la pagina. Verifica: `npm run test:sessione`.
+  2. **Wizard a prova di scroll**: `Modal` con `dense` ancora più compatto (`p-1.5/p-2`,
+     header `py-2`, `max-h-[96vh]`, body `p-3`); progress e footer ridotti; Passo 1 con
+     anagrafica in variante `compatto` e card degli ordini più basse; Passo 2 (lista
+     `max-h-36`); Passo 4 (spaziature e box compatti); **Passo 3 su DUE COLONNE**
+     (`md:grid-cols-2`: classi a sinistra, competenze a destra) con l'elenco classi
+     `max-h-44`. Dicitura uniformata: il passo 1 è **«Dove vuoi lavorare?»** anche nei
+     titoli di avanzamento (`TITOLI_STEP`), che ora ricalcano i titoli reali dei passi.
+  3. **Ricerca UNIFICATA (classi + competenze + parole chiave)**: nuovo modulo puro
+     `lib/ricercaSelezioniRadar.ts` e campo condiviso `radar/components/RicercaSelezioni`
+     (risultati inline, visibili solo mentre si digita). Digitando «Pedagogia» escono le
+     **classi collegate per materia** (A-18) *e* la proposta di usarla come **parola
+     chiave** personale: stesso motore nel passo 3 del wizard e nella sezione «In cosa
+     puoi lavorare» delle Preferenze, dove l'elenco fisso di materie è stato **rimosso**
+     (restano i 12 tag PNRR/PON e i chip di quanto scelto). Le due colonne non hanno più
+     campi di ricerca propri: un solo campo per tutto. Verifica: `npm run test:ricerca`.
+  4. **Provincia principale anche nei downgrade**: nuovo
+     `limitaProvinceMantenendoPrincipale` (in `lib/provinceRadar.ts`), usato dal wizard
+     (prefill, bozza, salvataggio finale), dalle Preferenze e dal **self-heal del
+     contesto** (`usePreferenzeUtente`): se il piano torna Base resta attiva la provincia
+     **principale** (la prima scelta, ordine = priorità), mai una di contorno. Badge e
+     promozione con ☆ già presenti nel wizard e in Preferenze. Verifica:
+     `npm run test:province`.
+  5. **Copy etico (zero competizione, zero fretta)**: rimosso ogni riferimento a
+     «prima degli altri» / «prima di tutti» / fretta artificiale. Il banner PRO
+     (`AuthModal`) e il benvenuto PRO (`BenvenutoProRadar`) ora recitano: «**Un mese
+     PRO, completamente gratis.** Smetti di perdere ore a cercare sui siti delle
+     scuole: ci pensa il Radar a trovare gli interpelli per te, così puoi dedicarti
+     alla tua vita.» — CTA senza «subito». Corretti anche il passo 3 della landing
+     («Candidati **con i link ufficiali**», non più «prima degli altri»), il sottotitolo
+     «Come funziona» e il Passo 4 del wizard (collegamento Telegram senza urgenza).
+     Nuovo gate **`npm run test:copy:etico`** (in `npm test`): scansiona `src/**` per
+     le frasi competitive e le superfici di UI/marketing per quelle di fretta, e
+     verifica la copy del PRO. Le parole generiche («in poche ore», «tempestivamente»)
+     restano ammesse SOLO come informazione di servizio (convocazioni) o in formule
+     legali nei dipartimenti Notizie/Modulistica: **non toccati**.
+     **Conflitto normativo risolto**: `comunicazione/05_abbonamenti_pagamenti` vietava
+     «gratis/gratuito»; la regola è stata resa esplicita (il divieto vale per i piani
+     a pagamento e per le comunicazioni di pagamento) con l'**eccezione documentata**
+     per il mese PRO senza costi nella UI di prodotto, e la sezione §2-bis della
+     checklist generale ora codifica il tono etico (zero competizione, zero fretta).
+  6. **Verifiche**: `npm run typecheck` ✓ · `npm test` ✓ (catena estesa con
+     `test:sessione`, `test:ricerca`, `test:province`, `test:copy:etico`) ·
+     `npm run test:architettura` ✓ (nessuna violazione nuova) · `npm run build` ✓ ·
+     `npm run lint` pulito sui file toccati. `scripts/test-radar-preferenze.ts`
+     snellito (156 righe): le verifiche su ricerca unificata e provincia principale
+     vivono nei nuovi script dedicati.
+
+- **Sessione 2026-09-24 · Wizard Radar (persistenza, provincia principale, UI compatta),
+  Benvenuto PRO e sezione «Documenti» del profilo**:
+  1. **Persistenza ISTANTANEA del wizard** (`departments/radar/RadarWizardModal.tsx`):
+     nuovo helper `persistiSelezione(patch)` che salva a OGNI click (ordini, province,
+     classi, competenze, sostegno, tag liberi) su `sr_preferenze` **e** su `profiles`,
+     senza attendere il passo successivo; **non retrocede `onboarded`**, così chi ha già
+     attivato il Radar e sta solo ritoccando le regole non ricade nello stato «bozza».
+     Prima una selezione fatta e non confermata andava persa uscendo dalla pagina.
+  2. **Provincia PRINCIPALE** (la prima selezionata) vs province di contorno: nuovo modulo
+     puro `lib/provinceRadar.ts` (`provinciaPrincipale`, `eProvinciaPrincipale`,
+     `provinceDiContorno`, `promuoviProvinciaPrincipale`) e pill condivisa
+     `radar/components/ProvinciaPill.tsx` (badge «principale» + ☆ per promuovere), usata
+     dal Passo 2 del wizard e da Preferenze → «Dove vuoi cercare?». L'ordine dell'array
+     `provinceCodici` è la fonte di verità della priorità ed è già autosalvato.
+  3. **UI della modale del Radar**: prop `dense` di `components/Modal.tsx` (header/gutter
+     ridotti, `max-h-[94vh]`) usata dal wizard; gli elenchi lunghi sono ora a **ricerca
+     predittiva** (filtro per materia e competenze: i suggerimenti compaiono solo
+     digitando — rimosse la `<select>` da 50 voci e le liste basse sempre aperte) e i
+     **tag popolari PNRR/PON** passano da 5 a 12 (Stop Motion, Lingua inglese, coding,
+     STEM, educazione motoria, progettazione bandi, orientamento…). `PassoClassiMaterie`
+     è diventato un compositore: le sezioni sono estratte in
+     `wizard/components/SezioneClassiConcorso.tsx` e `wizard/components/SezioneCompetenzeExtra.tsx`
+     (contratti in `wizard/tipiSelezione.ts`) → **E-DIM risolta** (voce rimossa da
+     `scripts/architettura-baseline.json`).
+  4. **Benvenuto PRO al primo accesso**: nuovo `radar/components/BenvenutoProRadar`
+     (esportato da `departments/radar/index.ts`, montato in `/dashboard/radar`): una sola
+     volta per utente (`sr_benvenuto_pro_<id|email>`), solo con piano CONFERMATO dal DB
+     (`pianoStato === 'pronto'` + `hasProAccess`) e profilo completo; congratulazioni per
+     il **mese di PRO in omaggio** (con scadenza) e CTA immediata «Attiva il Radar subito»
+     → `openRadarSetup()`.
+  5. **Sezione «Documenti» del profilo**: la voce del menu utente non è più «Documenti
+     scaricati» ma **«Documenti»** (`/dashboard/profilo?sezione=documenti`) e nel profilo
+     la sezione accoglie due tab: **«Moduli scaricati»** (archivio dei moduli ufficiali,
+     ex «Modelli Scaricati di Recente», in `components/profile/ModuliScaricati.tsx`) e
+     **«I Miei Documenti»** (`components/documenti/MieiDocumenti.tsx`, oggi condiviso con la
+     Modulistica: upload di PDF,
+     immagini, Word e testo, apertura, eliminazione, contatore di spazio e **disclaimer di
+     responsabilità**) con lo storage locale governato da `lib/mieiDocumenti.ts` (6 file ·
+     1 MB per file · 3,5 MB totali, esiti sempre espliciti: nessun salvataggio silenzioso
+     quando la quota del browser è piena). I file restano nel browser dell'utente: nessun
+     upload sui nostri sistemi.
+  6. **Verifiche**: `npm run typecheck` ✓ · `npm test` ✓ (catena estesa con
+     `scripts/test-documenti-utente.ts` → `npm run test:documenti`) ·
+     `npm run test:architettura` ✓ (nessuna violazione nuova; 1 eccezione risolta) ·
+     `npm run build` ✓ · `npm run lint` pulito sui file toccati. Estesi
+     `scripts/test-radar-preferenze.ts` (persistenza istantanea, provincia principale con
+     casi reali) e `scripts/test-flags-cablaggio.ts` (rimando alla Modulistica spostato in
+     `components/profile/ModuliScaricati.tsx`).
+
+- **Sessione 2026-09-23 · Stato PRO letto dal DB (mai «Base» per errore) e chiusura
+  dei dipartimenti in produzione**: due interventi richiesti insieme.
+  1. **Sincronizzazione PRO frontend/backend**: l'entitlement è UNICO e deriva da
+     `profiles.piano` (`pianoDaProfilo`: `piano` + `subscription_tier` `pro_*` +
+     `is_beta_tester`, con Free Forever prioritario); la dashboard non lo ricalcola più
+     per conto suo (rimosso l'`hasAccessoPro` locale → si usa `hasProAccess` del
+     contesto), quindi con un PRO/promo/omaggio/codice beta assegnato dal database
+     «Opportunità mappate» e le province multiple risultano sbloccate subito. Anche le
+     ETICHETTE del piano seguono il piano e non il solo flag di pagamento: badge top bar
+     (`BadgePianoCompatto`), badge mobile (`BadgePianoRiga`) e chip «Piano PRO/Base» /
+     CTA «PASSA A PRO» del `MenuUtente` → un PRO con `abbonamento_scade_il` non
+     aggiornato non può più comparire come «Base». Restano attivi Realtime sulla riga
+     `profiles`, il refresh su focus/60 s e la guardia anti-blocco (10 s) di
+     `useGuardiaPiano`.
+  2. **Feature flags globali (chiusura in produzione)**: `DIPARTIMENTI[].statoBase`
+     (`src/config/features.ts`) espone la superficie PUBBLICA — ACCESI `radar` e
+     `purefocus`; CHIUSI `cfu`, `modulistica`, `referral`, `cv_builder` (prima
+     `cfu`/`modulistica`/`referral` erano accesi). Nella build `vite build`, senza
+     override, un utente non admin non vede nessuna tab/link di un dipartimento chiuso:
+     navbar desktop (`BarraStrumenti`), drawer mobile, tab della dashboard
+     (`DashboardLayout`), menu utente («Documenti» → sezione del profilo con archivio
+     moduli + storage personale; badge filtrato), landing (griglia
+     strumenti, bacheca radar, CTA finali), catalogo servizi e pagine `/servizi`,
+     footer, vetrina freemium, rotte (`FeatureGate`, incluso il `/calcolatore-cfu`
+     pubblico e `/moduli`) e redirect post-login/onboarding (`primaRottaVisibile`). Un
+     dipartimento si riapre dal pannello Admin/DEV Toolbar (browser corrente) o con
+     `FEATURE_<DIPARTIMENTO>=on`. La VISIBILITÀ è ora anche reattiva: `useFeatureFlags`
+     passa lo snapshot sottoscritto degli override a `dipartimentoVisibile`, così
+     navbar, tab e `primaRottaVisibile` si aggiornano nello stesso render in cui cambia
+     uno stato (prima i valori memoizzati restavano quelli precedenti → sblocco non
+     istantaneo).
+  Guardie: `npm run test:flags` (superficie pubblica = esattamente `radar` +
+  `purefocus`, snapshot di visibilità, cablaggio di menu utente e hook) e
+  `npm run test:piano` (entitlement unico in dashboard, etichette del piano dal DB,
+  feature flags reattive).
 
 - **Sessione 2026-09-22 · Email di benvenuto allineata alla promo «Mese PRO omaggio»**
   (solo copy, nessun cambio di logica): il messaggio inviato alla registrazione dal trigger DB
@@ -2868,7 +3069,7 @@ npx tsx scripts/_validate-modulistica.ts
 2. `STRIPE_SECRET_KEY` con prefisso `sk_live_` → `STRIPE_MODE=live` (rilevato automaticamente);
 3. firmare il webhook: `STRIPE_WEBHOOK_SECRET` + `WEBHOOK_ENDPOINT`;
 4. test: `npm run test:rinnovo-preavvisi` + HealthCheck (`testCheckout`, `testPromoBeta1Anno`);
-5. coupon: `REFERRAL_COUPON_ID`, `STRIPE_COUPON_BETA1ANNO`, `STRIPE_COUPON_RADAR50`.
+5. coupon: `REFERRAL_COUPON_ID`, `STRIPE_COUPON_BETA1ANNO`, `STRIPE_COUPON_SCUOLERADAR50`.
 
 ---
 
@@ -2921,4 +3122,99 @@ npx tsx scripts/_validate-modulistica.ts
 | Capire i flussi di fallimento | §22 |
 | Fare manutenzione/deploy | §18 + §24 |
 | Refactoring strutturale | `STRUCTURAL_AUDIT.md` + §6 di questo documento |
+
+## 26. Correzioni UX, registrazione, coupon e sincronizzazione PRO
+
+**Nota di sessione (24/09/2026)** — intervento mirato su sei punti: copy dei campi,
+unificazione della modale di registrazione, parole chiave multiple, coupon unico
+SCUOLERADAR50, downgrade senza perdita di dati e cambio account Google. Tutte le
+regole sotto sono coperte da guardie nei test di prodotto.
+
+### 26.1 Nessun aiutino paternalistico nei campi di input
+
+I `placeholder` non contengono più esempi fittizi o nomi di persona (`Es. 34`,
+`mario.rossi@email.it`, `Mario Rossi`): il campo si spiega con il proprio nome
+(`Nome`, `Cognome`, `Età`, `La tua email`, `Il tuo username Telegram, senza @`,
+`Codice promo`, `Cerca classe di concorso (codice o materia)`).
+Superfici: `AuthModal`, `BloccoAnagrafica`, `DatiProfiloModal`, `onboarding/*`
+(`PassoAnagraficaOrdini`, `PassoClassiMaterie`), wizard Radar e Preferenze Radar
+(`PassoNotifica`, `PassoProvince`, `PannelloCanali`, `PannelloClassi`,
+`PannelloMaterie`, `PannelloFiltriScuole`, `RicercaSelezioni`), `AbbonamentoModal`,
+`ContactForm`.
+Guardia: `scripts/test-copy-etico.ts` § «Campi di input», che scansiona
+`src/components`, `src/pages`, `src/departments/radar`.
+**Fuori perimetro dichiarato** (dipartimenti `admin` e `cfu`, regola di isolamento):
+restano dei placeholder con esempio in tool interni e nel CFU; si uniformano solo su
+richiesta esplicita.
+
+### 26.2 Una sola modale di registrazione, proporzionata al viewport
+
+`openAuthModal('registrazione')` è l'UNICO ingresso (vetrina/incognito, dashboard
+guest, prezzi, servizio, passo finale del wizard): non esiste un secondo form
+«rapido» diverso. `AuthModal` usa `Modal dense` (`max-h-[96vh]`, header e gutter
+compatti) e un form a **due colonne da `sm:`** (Nome | Cognome, Sesso, Età |
+Provincia, Email, Password, CTA) con etichette `text-xs`: rientra nel viewport senza
+zoom ridotto e senza scorrimento verticale forzato. Nessun campo è stato rimosso
+(provincia, Telegram, nota istituti scolastici restano attivi).
+
+### 26.3 Parole chiave multiple separate da virgola
+
+`separaParoleChiave()` (`src/lib/ricercaSelezioniRadar.ts`) divide su `,` e `;`,
+normalizza gli spazi, scarta le voci vuote e i duplicati (confronto senza
+accenti/maiuscole): «Intelligenza artificiale, Didattica digitale, Teatro» produce
+**tre** tag indipendenti, mai un'unica stringa incollata. Usato da
+`RadarWizardModal`, `PreferenzeRadar` e `OnboardingPage.addCustomMateria`.
+`cercaSelezioniRadar` espone ora `paroleChiave: string[]` e la UI propone tutte le
+voci con un solo click.
+
+### 26.4 Un solo coupon attivo: SCUOLERADAR50 (RADAR50 rimosso)
+
+L'unico coupon di sconto è **SCUOLERADAR50** (case-insensitive):
+
+| Regola | Implementazione |
+|---|---|
+| 50% sulla sottoscrizione **annuale** | `SCONTO_SCUOLERADAR50_PERCENTO` + ramo Edge `codiceUpp === 'SCUOLERADAR50'`, ammesso solo su `pro_annuale` |
+| **Monouso per email** | `valida_coupon_scuoleradar50(uuid)`: una riga per utente in `coupon_usage` + anti-replay su email, email di notifica e Telegram ID |
+| **40 giorni** dalla registrazione iniziale | finestra dinamica `auth.users.created_at + interval '40 days'` (la data che attiva il mese PRO gratuito) |
+| Case-insensitive | `normalizzaCodicePromo()` (client) ≡ `toUpperCase().replace(/[^A-Z0-9]/g,'')` (Edge) |
+
+`RADAR50` è eliminato da `promo_codes`, le funzioni `valida_coupon_radar50` /
+`registra_uso_coupon_radar50` sono droppate e nessun ramo applicativo lo accetta più.
+Il consumo è registrato dal webhook (`registra_uso_coupon_scuoleradar50`) solo a
+pagamento riuscito. Migrazione:
+`supabase/migrations/20260924120000_coupon_scuoleradar50_unico.sql` — **da applicare**
+su Supabase insieme al deploy delle Edge `checkout`/`webhook`; secret Stripe
+`STRIPE_COUPON_SCUOLERADAR50` (fallback accettato `STRIPE_COUPON_RADAR50`).
+Guardia: `npm run test:checkout-promo` § 7.
+
+### 26.5 Downgrade: i tetti limitano l'USO, non distruggono i dati
+
+Un passaggio (o un riconoscimento) a piano Base NON tronca più le province e le
+classi salvate durante la prova PRO:
+
+- `usePreferenzeUtente` non riscrive le preferenze: registra solo un avviso;
+- wizard e Preferenze persistono la selezione **integrale** (nessun troncamento in
+  salvataggio o in prefill);
+- i tetti del piano confermato si applicano al momento dell'**uso**:
+  `useInterpelliFeed` usa `limitaSelezione(preferenze.provinceCodici, tetti?.province)`
+  per query e filtri, così l'ex PRO non riceve avvisi fuori piano ma conserva tutto;
+- la provincia **principale** resta la prima dell'elenco e le voci oltre il tetto
+  restano **visibili** e marcate `PRO` in `ProvinciaPill` / `PannelloProvince` /
+  `PassoProvince` («restano salvate: si attivano con il piano PRO»).
+
+Reintegrato il PRO, l'intera selezione torna attiva senza reinserimenti.
+Guardia: `npm run test:province`.
+
+### 26.6 Cambio account Google e sincronizzazione sessione/anagrafica
+
+`loginConGoogle` chiude la sessione precedente **prima** di avviare l'OAuth
+(`signOut({ scope: 'local' })` + azzeramento dello stato locale condiviso con
+`logout`, incluso `sr_user` e la bozza del wizard): passare da un account Google a un
+altro richiede **un solo click**, senza sessione vecchia riproposta.
+Al cambio identità (`pianoSessionUserIdRef` → nuovo `idSessione`) il listener
+`useAuthSync` azzera i soli campi anagrafici locali (`genere`, `eta`, `provincia`) e
+solo per uno switch **reale**: sesso, età e provincia dell'utente precedente non
+compaiono mai nel nuovo account, mentre una prima registrazione conserva i dati
+appena inseriti (la fonte autorevole resta `profiles`).
+Guardia: `npm run test:sessione`.
 

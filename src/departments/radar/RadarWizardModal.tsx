@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Radar, ArrowRight, ArrowLeft, AlertCircle, PartyPopper, Loader2 } from 'lucide-react';
 import { Modal } from '@/components/Modal';
@@ -13,11 +13,18 @@ import {
 } from '@/lib/bozzaRegistrazione';
 import type { DatiAnagrafica } from '@/components/BloccoAnagrafica';
 import { supabase } from '@/lib/supabase';
-import { materieCompetenzeExtra, type OrdineScuola } from '@/data/ordiniMaterie';
+import type { OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso } from '@/data/classiConcorso';
 import { province } from '@/data/province';
-import { pianoLimits, limitaSelezione } from '@/lib/planLimits';
+import { pianoLimits } from '@/lib/planLimits';
 import { normalizzaClasse, normalizzaClassi } from '@/lib/matchingEngine';
+import { promuoviProvinciaPrincipale } from '@/lib/provinceRadar';
+import {
+  cercaClassiDiConcorso,
+  cercaSelezioniRadar,
+  separaParoleChiave,
+  type SuggerimentoSelezione,
+} from '@/lib/ricercaSelezioniRadar';
 import {
   STORAGE_KEY_RADAR_WIZARD_STEP,
   impostaPassoRadar,
@@ -39,10 +46,10 @@ const ALIAS_LAUREA_CLASSI: Record<string, string[]> = {
 
 const TITOLI_STEP = [
   '',
-  'Ordini di Scuola & PNRR',
-  'Province',
-  'Classi di Concorso / Materie',
-  'Canali di Notifica',
+  'Dove vuoi lavorare?',
+  'Dove vuoi cercare?',
+  'Classi di concorso e competenze',
+  'Canali di notifica',
 ];
 
 // La chiave del passo wizard è condivisa in `lib/radarValidation.ts`.
@@ -59,7 +66,7 @@ export function RadarWizardModal() {
   const {
     user, preferenze, radarWizardOpen, closeRadarWizard, setPreferenze, completaOnboarding, salvaProfilo,
     aggiornaRadarAttivo, attivaTrialPro, openAuthModal, piano, hasProAccess, pianoStato, trialAttivo,
-    loginConGoogle, aggiornaAnagrafica,
+    loginConGoogle, aggiornaAnagrafica, supabaseUserId, refreshProfilo,
   } = useApp();
 
   const [fase, setFase] = useState<'wizard' | 'done'>('wizard');
@@ -122,11 +129,13 @@ export function RadarWizardModal() {
     setOrdini(preferenze.ordini ?? []);
     // Prefill NORMALIZZATO: una classe salvata come `A-022`/`A042` torna
     // selezionata come `A-22` (casella non più "spenta" dopo un ricaricamento).
-    setClassiCodici(limitaSelezione(normalizzaClassi(preferenze.classiCodici), maxClassiConcorso));
+    // NESSUN troncamento: se il profilo ha 4 classi/province salvate (prova PRO) si
+    // rivedono TUTTE; i tetti del piano limitano solo ciò che il Radar usa.
+    setClassiCodici(normalizzaClassi(preferenze.classiCodici));
     setMaterieId(preferenze.materieId ?? []);
     setMaterieCustom(preferenze.materieCustom ?? []);
     setSostegno(preferenze.sostegno === true);
-    setProvinceCodici(limitaSelezione(preferenze.provinceCodici, maxProvince));
+    setProvinceCodici([...preferenze.provinceCodici]);
     setTelegramUsername(preferenze.telegramUsername ?? '');
     setEmailNotifica(preferenze.emailNotifica || user?.email || '');
     // ANAGRAFICA: prima la bozza di registrazione (dati inseriti in un giro
@@ -140,14 +149,28 @@ export function RadarWizardModal() {
       genere: bozza?.genere ?? preferenze.genere ?? user?.genere ?? prev.genere ?? null,
       eta: etaDaBozza != null ? String(etaDaBozza) : prev.eta,
     }));
-    setQueryClasse('');
-    setQueryMateria('');
+    setQuerySelezioni('');
     setQueryProvincia('');
-    setMateriaFilter('');
-    setCustomMateriaInput('');
     setProvinceWarning(false);
     setClassiWarning(false);
   }, [radarWizardOpen, preferenze, user, maxProvince, maxClassiConcorso]);
+
+  /**
+   * AUTENTICAZIONE COMPLETATA DENTRO IL WIZARD (Google / email, anche senza reload
+   * via One Tap): appena arriva l'identità Supabase si RILEGGE il piano dal DB.
+   * Così lo stato PRO viene riconosciuto SUBITO — badge, limiti (4 province e 4
+   * classi) e copy del passo 4 — senza ricaricare la pagina e senza aspettare il
+   * refresh periodico (60 s) o un nuovo click su «Accedi».
+   */
+  const identitaPrecedente = useRef<string | null>(null);
+  useEffect(() => {
+    if (!supabaseUserId) return;
+    const identitaCambiata = identitaPrecedente.current !== supabaseUserId;
+    identitaPrecedente.current = supabaseUserId;
+    if (!radarWizardOpen) return;
+    // Piano ancora in lettura (o utente appena cambiato): rileggi adesso.
+    if (identitaCambiata || pianoStato !== 'pronto') void refreshProfilo();
+  }, [radarWizardOpen, supabaseUserId, pianoStato, refreshProfilo]);
 
   // Deeplink Telegram: https://t.me/ScuoleRadar_bot?start=<user_id> — il bot collega
   // automaticamente il Chat ID dell'utente al suo profilo (webhook /start).
@@ -171,23 +194,49 @@ export function RadarWizardModal() {
   /** True se il profilo ha già un Chat ID Telegram collegato (via bot o manuale). */
   const telegramCollegato = Boolean(preferenze.telegramChatId);
 
-  const [queryClasse, setQueryClasse] = useState('');
-  const [materiaFilter, setMateriaFilter] = useState('');
-  const [customMateriaInput, setCustomMateriaInput] = useState('');
-  const [queryMateria, setQueryMateria] = useState('');
+  const [querySelezioni, setQuerySelezioni] = useState('');
   const [queryProvincia, setQueryProvincia] = useState('');
   const [provinceWarning, setProvinceWarning] = useState(false);
 
   const provinceSorted = useMemo(() => [...province].sort((a, b) => a.nome.localeCompare(b.nome)), []);
 
-  const materieFiltrate = useMemo(() => {
-    // Solo COMPETENZE EXTRA: le discipline curricolari (Storia, Geografia, …)
-    // non hanno senso in questa sezione e sono già coperte dalle classi.
-    const extra = materieCompetenzeExtra();
-    const q = queryMateria.trim().toLowerCase();
-    if (!q) return extra;
-    return extra.filter((m) => m.nome.toLowerCase().includes(q));
-  }, [queryMateria]);
+  /**
+   * RICERCA UNIFICATA (una sola query per entrambe le colonne): classi di concorso
+   * + competenze extra + parola chiave. Il motore è condiviso con le Preferenze
+   * (`lib/ricercaSelezioniRadar.ts`): i risultati sono sempre gli stessi.
+   */
+  const gruppiSelezioni = useMemo(
+    () => cercaSelezioniRadar(querySelezioni, { classiCodici, materieId, materieCustom }),
+    [querySelezioni, classiCodici, materieId, materieCustom],
+  );
+
+  /**
+   * Classi mostrate nella colonna: filtrate dalla STESSA query (codice,
+   * denominazione o materia collegata), più gli alias laurea→classe (LM).
+   */
+  const classiFiltrate = useMemo(() => {
+    const trovate = cercaClassiDiConcorso(querySelezioni, 200);
+    const qNorm = querySelezioni.toLowerCase().replace(/[\s-]/g, '').trim();
+    const alias = ALIAS_LAUREA_CLASSI[qNorm] ?? [];
+    if (alias.length === 0) return trovate;
+    const extra = classiConcorso.filter(
+      (c) => alias.includes(c.codice) && !trovate.some((t) => t.codice === c.codice),
+    );
+    return [...trovate, ...extra];
+  }, [querySelezioni]);
+
+  /** Applica un risultato della ricerca unificata (classe, competenza o tag). */
+  const scegliSelezione = (suggerimento: SuggerimentoSelezione) => {
+    if (suggerimento.tipo === 'classe') {
+      toggleClasse(suggerimento.chiave);
+      return;
+    }
+    if (suggerimento.tipo === 'competenza') {
+      aggiungiCompetenzaSuggerita(suggerimento.chiave);
+      return;
+    }
+    aggiungiParolaChiave(suggerimento.chiave);
+  };
 
   const provinceFiltrate = useMemo(() => {
     const q = queryProvincia.trim().toLowerCase();
@@ -197,41 +246,28 @@ export function RadarWizardModal() {
     );
   }, [queryProvincia, provinceSorted]);
 
-  const classiFiltrate = useMemo(() => {
-    let list = classiConcorso;
-    if (materiaFilter) list = list.filter((c) => c.materie.includes(materiaFilter));
-    if (queryClasse.trim()) {
-      // Tolleranza di ricerca: spazi e trattini vengono ignorati nel match
-      // (es. "a-18", "a 18" e "a18" restituiscono tutte la classe A-18).
-      const q = queryClasse.toLowerCase();
-      const qNorm = q.replace(/[\s-]/g, '');
-      const classiDaAlias = ALIAS_LAUREA_CLASSI[qNorm] ?? [];
-      list = list.filter(
-        (c) =>
-          c.codice.toLowerCase().replace(/[\s-]/g, '').includes(qNorm) ||
-          c.denominazione.toLowerCase().includes(q) ||
-          classiDaAlias.includes(c.codice),
-      );
-    }
-    return list;
-  }, [queryClasse, materiaFilter]);
-
   const toggleOrdine = (id: OrdineScuola) => {
-    setOrdini((prev) => (prev.includes(id) ? prev.filter((o) => o !== id) : [...prev, id]));
+    const prossimi = ordini.includes(id) ? ordini.filter((o) => o !== id) : [...ordini, id];
+    setOrdini(prossimi);
+    // Persistenza ISTANTANEA: uscendo dalla pagina la selezione è già salvata.
+    persistiSelezione({ ordini: prossimi });
   };
 
   /**
    * Selezione/deselezione di una classe di concorso su codici NORMALIZZATI
    * (`A-18` ≡ `A18` ≡ `a 18`): la scelta dell'utente non può perdersi e la
    * casella non può restare "spenta" per un formato diverso dal catalogo.
+   * Ogni click è persistito SUBITO (localStorage + profilo).
    */
   const toggleClasse = (codice: string) => {
     const canonico = normalizzaClasse(codice);
     if (!canonico) return;
     const attuale = normalizzaClassi(classiCodici);
     if (attuale.includes(canonico)) {
-      setClassiCodici(attuale.filter((c) => c !== canonico));
+      const prossime = attuale.filter((c) => c !== canonico);
+      setClassiCodici(prossime);
       setClassiWarning(false);
+      persistiSelezione({ classiCodici: prossime });
       return;
     }
     // Piano Base: massimo 2 classi di concorso · PRO: massimo 4.
@@ -239,8 +275,10 @@ export function RadarWizardModal() {
       setClassiWarning(true);
       return;
     }
-    setClassiCodici([...attuale, canonico]);
+    const prossime = [...attuale, canonico];
+    setClassiCodici(prossime);
     setClassiWarning(false);
+    persistiSelezione({ classiCodici: prossime });
   };
 
   const toggleMateria = (id: string) => {
@@ -248,66 +286,82 @@ export function RadarWizardModal() {
       ? materieId.filter((m) => m !== id)
       : [...materieId, id];
     setMaterieId(prossime);
-    // Sync IMMEDIATO della bozza (keyword predefinite): non si perdono cambiando passo.
-    persistiDraft({ ...bozzaPreferenze(), materieId: prossime });
+    // Sync IMMEDIATO (competenza predefinita): non si perde cambiando passo.
+    persistiSelezione({ materieId: prossime });
   };
 
   /**
    * Aggiunge al volo una COMPETENZA SUGGERITA (aree ad alta richiesta PNRR/PON):
-   * è il “precompilato” della sezione competenze — un click e il profilo è già
-   * appetibile per i bandi per esperti (AI, robotica, storytelling, CLIL…).
+   * un click e il profilo è già appetibile per i bandi per esperti (AI, robotica,
+   * stop motion, storytelling, CLIL, lingue…).
    */
   const aggiungiCompetenzaSuggerita = (materiaIdSuggerita: string) => {
     if (materieId.includes(materiaIdSuggerita)) return;
     const prossime = [...materieId, materiaIdSuggerita];
     setMaterieId(prossime);
-    persistiDraft({ ...bozzaPreferenze(), materieId: prossime });
+    persistiSelezione({ materieId: prossime });
   };
 
   /**
-   * Preferenza SOSTEGNO (Passo 3): persistita SUBITO nella bozza, così la scelta
-   * non si perde cambiando passo o chiudendo/riaprendo il wizard.
+   * Preferenza SOSTEGNO (Passo 3): persistita SUBITO, così la scelta non si perde
+   * cambiando passo o chiudendo/riaprendo il wizard.
    */
   const toggleSostegno = (prossimo: boolean) => {
     setSostegno(prossimo);
-    persistiDraft({ ...bozzaPreferenze(), sostegno: prossimo });
+    persistiSelezione({ sostegno: prossimo });
   };
 
-  const addCustomMateria = () => {
-    const val = customMateriaInput.trim();
-    if (!val) return;
-    const giaPresente = materieCustom.some((m) => m.toLowerCase() === val.toLowerCase());
-    if (giaPresente) {
-      // Dedup: niente duplicati, il campo viene comunque pulito.
-      setCustomMateriaInput('');
-      return;
-    }
-    const next = [...materieCustom, val];
+  /**
+   * Aggiunge una PAROLA CHIAVE personale (tag libero): arriva dalla ricerca
+   * unificata («Aggiungi "Pedagogia" come tua parola chiave») e alimenta la CTA
+   * anche quando l'utente la scrive a mano. Dedup case-insensitive e persistenza
+   * IMMEDIATA: nessun testo digitato va perso.
+   */
+  const aggiungiParolaChiave = (testo: string) => {
+    setQuerySelezioni('');
+    // Più voci separate da virgola → più tag INDIPENDENTI (mai una stringa incollata).
+    const nuove = separaParoleChiave(testo).filter(
+      (voce) => !materieCustom.some((m) => m.toLowerCase() === voce.toLowerCase()),
+    );
+    if (nuove.length === 0) return;
+    const next = [...materieCustom, ...nuove];
     setMaterieCustom(next);
-    setCustomMateriaInput('');
-    // Sync IMMEDIATO della bozza (localStorage + profilo): il tag non si perde
-    // cambiando passo o chiudendo/riaprendo il wizard.
-    persistiDraft({ ...bozzaPreferenze(), materieCustom: next });
+    persistiSelezione({ materieCustom: next });
   };
 
   const removeCustomMateria = (m: string) => {
     const next = materieCustom.filter((x) => x !== m);
     setMaterieCustom(next);
-    persistiDraft({ ...bozzaPreferenze(), materieCustom: next });
+    persistiSelezione({ materieCustom: next });
   };
 
   const toggleProvincia = (codice: string) => {
     if (provinceCodici.includes(codice)) {
-      setProvinceCodici((prev) => prev.filter((c) => c !== codice));
+      const prossime = provinceCodici.filter((c) => c !== codice);
+      setProvinceCodici(prossime);
       setProvinceWarning(false);
+      persistiSelezione({ provinceCodici: prossime });
       return;
     }
     if (provinceCodici.length >= maxProvince) {
       setProvinceWarning(true);
       return;
     }
-    setProvinceCodici((prev) => [...prev, codice]);
+    // Le province aggiunte dopo la prima sono "di contorno" (ordine = priorità).
+    const prossime = [...provinceCodici, codice];
+    setProvinceCodici(prossime);
     setProvinceWarning(false);
+    persistiSelezione({ provinceCodici: prossime });
+  };
+
+  /**
+   * Provincia PRINCIPALE = la prima selezionata. Promuovere una provincia di
+   * contorno la porta in testa (l'ordine è la priorità) con salvataggio immediato.
+   */
+  const promuoviPrincipale = (codice: string) => {
+    const prossime = promuoviProvinciaPrincipale(provinceCodici, codice);
+    setProvinceCodici(prossime);
+    persistiSelezione({ provinceCodici: prossime });
   };
 
   const canNext = () => {
@@ -325,10 +379,10 @@ export function RadarWizardModal() {
   const bozzaPreferenze = (): Preferenze => ({
     ...preferenze,
     ordini,
-    classiCodici: limitaSelezione(classiCodici, maxClassiConcorso),
+    classiCodici,
     materieId,
     materieCustom,
-    provinceCodici: limitaSelezione(provinceCodici, maxProvince),
+    provinceCodici,
     telegramUsername: telegramUsername.trim(),
     telegramChatId: preferenze.telegramChatId || '',
     emailNotifica: emailNotifica.trim(),
@@ -344,6 +398,18 @@ export function RadarWizardModal() {
     setPreferenze(bozza);
     if (user && supabase) void salvaProfilo(bozza);
   };
+
+  /**
+   * Persistenza ISTANTANEA di una SELEZIONE (ordini, province, classi, competenze,
+   * sostegno, tag): scrive subito su localStorage/context — e sul profilo se
+   * autenticato — a OGNI click, così uscire dalla pagina non perde nulla.
+   *
+   * Differenza da `bozzaPreferenze()`: NON retrocede `onboarded`. Chi ha già
+   * attivato il Radar e sta solo ritoccando le regole non deve ricadere nello
+   * stato «bozza» (banner «finisci di completare»).
+   */
+  const persistiSelezione = (patch: Partial<Preferenze>) =>
+    persistiDraft({ ...bozzaPreferenze(), ...patch, onboarded: preferenze.onboarded });
 
   /**
    * Provincia di RESIDENZA dedotta dal wizard: se l'utente ha scelto UNA sola
@@ -449,10 +515,10 @@ export function RadarWizardModal() {
 
     const preferenzeFinali = {
       ordini,
-      classiCodici: limitaSelezione(classiCodici, maxClassiConcorso),
+      classiCodici,
       materieId,
       materieCustom,
-      provinceCodici: limitaSelezione(provinceCodici, maxProvince),
+      provinceCodici,
       telegramUsername: telegramUsername.trim(),
       telegramChatId: preferenze.telegramChatId || '',
       emailNotifica: emailNotifica.trim(),
@@ -543,6 +609,7 @@ export function RadarWizardModal() {
       open={radarWizardOpen}
       onClose={chiudi}
       title={fase === 'done' ? 'Radar attivato! 🎉' : 'Attiva il tuo Radar'}
+      dense
       size="lg"
     >
       {fase === 'done' ? (
@@ -575,15 +642,15 @@ export function RadarWizardModal() {
         </div>
       ) : (
         <>
-          {/* Progress */}
-          <div className="mb-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-medium text-primary-600">
+          {/* Progress — compatto: il passo deve restare tutto nel viewport */}
+          <div className="mb-2">
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-xs font-medium text-primary-600">
                 Passo {step} di {totalSteps}
               </span>
               <span className="text-xs font-semibold text-primary-400">{TITOLI_STEP[step]}</span>
             </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-primary-100">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-primary-100">
               <div
                 className="h-full rounded-full bg-primary-500 transition-all duration-500"
                 style={{ width: `${(step / totalSteps) * 100}%` }}
@@ -606,6 +673,7 @@ export function RadarWizardModal() {
             <PassoProvince
               provinceCodici={provinceCodici}
               toggleProvincia={toggleProvincia}
+              onPromuoviPrincipale={promuoviPrincipale}
               provinceFiltrate={provinceFiltrate}
               queryProvincia={queryProvincia}
               setQueryProvincia={setQueryProvincia}
@@ -615,14 +683,32 @@ export function RadarWizardModal() {
             />
           )}
 
-          {/* Passo 3: Classi di Concorso / Materie */}
+          {/* Passo 3: Classi di Concorso / Materie — ricerca UNIFICATA + 2 colonne */}
           {step === 3 && (
             <PassoClassiMaterie
-              selezioneClassi={{ classiCodici, classiFiltrate, classiWarning, maxClassiConcorso, queryClasse, setQueryClasse, toggleClasse }}
+              selezioneClassi={{
+                classiCodici,
+                classiFiltrate,
+                classiWarning,
+                maxClassiConcorso,
+                toggleClasse,
+                sostegno,
+                toggleSostegno,
+              }}
               selezioneMaterie={{
-                materieId, materieCustom, materieFiltrate, materiaFilter, setMateriaFilter, queryMateria,
-                setQueryMateria, customMateriaInput, setCustomMateriaInput, addCustomMateria, removeCustomMateria,
-                toggleMateria, aggiungiCompetenzaSuggerita, sostegno, toggleSostegno,
+                materieId,
+                materieCustom,
+                toggleMateria,
+                aggiungiCompetenzaSuggerita,
+                aggiungiParolaChiave,
+                removeCustomMateria,
+              }}
+              ricerca={{
+                query: querySelezioni,
+                setQuery: setQuerySelezioni,
+                gruppi: gruppiSelezioni,
+                onScegli: scegliSelezione,
+                onParolaChiave: aggiungiParolaChiave,
               }}
               limitiPiano={limitiPiano}
             />
@@ -650,12 +736,12 @@ export function RadarWizardModal() {
           )}
 
           {/* Navigation — sticky in fondo al pannello: azioni sempre visibili anche a schermi bassi */}
-          <div className="sticky bottom-0 z-10 mt-5 flex items-center justify-between border-t border-primary-100 bg-white pb-1 pt-3">
+          <div className="sticky bottom-0 z-10 mt-3 flex items-center justify-between border-t border-primary-100 bg-white pb-0.5 pt-2">
             {step > 1 ? (
               <button
                 type="button"
                 onClick={() => vaiAlPasso(step - 1)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-primary-200 px-4 py-2.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-primary-200 px-3.5 py-2 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Indietro
@@ -669,7 +755,7 @@ export function RadarWizardModal() {
                 type="button"
                 onClick={() => vaiAlPasso(step + 1)}
                 disabled={!canNext()}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Avanti
                 <ArrowRight className="h-4 w-4" />
@@ -679,7 +765,7 @@ export function RadarWizardModal() {
                 type="button"
                 onClick={() => void handleFinish()}
                 disabled={!canNext() || salvando}
-                className="inline-flex items-center gap-2 rounded-xl bg-accent-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-xl bg-accent-500 px-4 py-2 text-sm font-semibold text-white shadow-soft transition hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radar className="h-4 w-4" />}
                 {salvando ? 'Attivazione…' : 'Attiva il Radar'}

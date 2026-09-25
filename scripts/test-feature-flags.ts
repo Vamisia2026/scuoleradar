@@ -2,13 +2,16 @@
  * Test — FEATURE FLAGS dei dipartimenti (stati OFF | TEST | ON).
  *
  * Verifica:
- *  1. anagrafica e default dei 6 dipartimenti (incluso `cv_builder` = off);
+ *  1. anagrafica e default dei 6 dipartimenti (incluso `cv_builder` = off) e la
+ *     SUPERFICIE PUBBLICA di produzione: accesi solo radar + purefocus, tutti i
+ *     dipartimenti chiusi invisibili a un utente non admin (nessuna tab/link morta);
  *  2. store condiviso: override locale, persistenza, reset, notifica agli ascoltatori;
  *  3. matrice di VISIBILITÀ (off/test/on × guest/admin/DEV forzato);
  *  4. override da variabile d'ambiente (`FEATURE_RADAR=…`) e sua priorità;
  *  5. GATE notifiche: on (invariato) · test (solo admin / dirottamento) · off (bloccato);
- *  6. cablaggio reale: i choke point di invio (resend/telegram/Edge) e la UI
- *     (navbar, rotte, pannelli Admin/DEV) usano davvero le flag.
+ *  6. cablaggio reale dei CHOKE POINT di invio (resend/telegram/Edge) e della UI:
+ *     le superfici di navigazione e i pannelli Admin/DEV sono verificati da
+ *     `scripts/test-flags-cablaggio.ts` (stessa catena `npm run test:flags`).
  *
  * Uso: npm run test:flags
  */
@@ -32,7 +35,6 @@ import { gateEmail, gateTelegram, valutaInvioNotifica } from '../src/config/gate
 import { ADMIN_EMAILS, EMAIL_ADMIN_TEST, eEmailAdmin } from '../src/lib/utentiAdmin.ts';
 import { inviaNotificaEmail } from '../src/lib/resend.ts';
 import { inviaMessaggioTelegram } from '../src/lib/telegram.ts';
-import { readFileSync } from 'node:fs';
 
 /**
  * Stub di `localStorage`: il test gira in Node (nessun browser) e serve a verificare
@@ -69,10 +71,33 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
 }
 
 console.log('— 1. Anagrafica e default —');
+// Default del codice = superficie PUBBLICA di produzione: si parte sempre da qui.
+azzeraStatiDipartimento();
 check('6 dipartimenti', 6, DIPARTIMENTI.length);
 check('id univoci', DIPARTIMENTI.length, new Set(DIPARTIMENTI.map((d) => d.id)).size);
 check('default Radar Scuole = on', 'on', DIPARTIMENTI.find((d) => d.id === 'radar')?.statoBase);
+check('default Pure Focus = on', 'on', DIPARTIMENTI.find((d) => d.id === 'purefocus')?.statoBase);
+check('default Calcolatore CFU = off', 'off', DIPARTIMENTI.find((d) => d.id === 'cfu')?.statoBase);
+check('default Modulistica = off', 'off', DIPARTIMENTI.find((d) => d.id === 'modulistica')?.statoBase);
+check(
+  'default Invita un Collega = off',
+  'off',
+  DIPARTIMENTI.find((d) => d.id === 'referral')?.statoBase,
+);
 check('default Crea CV = off', 'off', DIPARTIMENTI.find((d) => d.id === 'cv_builder')?.statoBase);
+// CHIUSURA IN PRODUZIONE: senza override (build di produzione, utente non admin)
+// la navbar/tab pubblica può mostrare SOLO i dipartimenti maturi. Qualunque
+// dipartimento chiuso che ricomparisse qui sarebbe una tab/link «morta».
+check(
+  'superficie pubblica = solo radar + purefocus',
+  ['radar', 'purefocus'],
+  DIPARTIMENTI.filter((d) => dipartimentoVisibile(d.id)).map((d) => d.id),
+);
+check(
+  'nessun dipartimento chiuso visibile senza admin/DEV',
+  ['radar', 'purefocus'],
+  DIPARTIMENTI.filter((d) => dipartimentoVisibile(d.id, { eAdmin: false, forzaDev: false })).map((d) => d.id),
+);
 check('3 stati ammessi', ['off', 'test', 'on'], STATI_DIPARTIMENTO);
 check('stato valido riconosciuto', true, eStatoDipartimento('test'));
 check('stato non valido scartato', false, eStatoDipartimento('beta'));
@@ -115,6 +140,13 @@ for (const stato of ['on', 'test', 'off'] as StatoDipartimento[]) {
   check(`visibilità ${stato} (guest/admin/dev)`, attesi[stato], [guest, admin, dev]);
 }
 azzeraStatiDipartimento();
+// SNAPSHOT degli override passato esplicitamente (useFeatureFlags): è il percorso
+// che rende lo «sblocco» immediato — navbar, tab e `primaRottaVisibile` devono
+// ricalcolarsi nello stesso render in cui cambia lo stato.
+check('override esplicito: modulo chiuso → visibile', true, dipartimentoVisibile('modulistica', { override: { modulistica: 'on' } }));
+check('override esplicito: modulo acceso → chiuso', false, dipartimentoVisibile('radar', { override: { radar: 'off' } }));
+check('override esplicito: stato effettivo coerente', 'off', statoDipartimento('radar', { radar: 'off' }));
+check('override esplicito: guest vede modulo in TEST? no', false, dipartimentoVisibile('cfu', { override: { cfu: 'test' } }));
 
 console.log('\n— 4. Override da variabile d’ambiente —');
 impostaStatoDipartimento('radar', 'test');
@@ -197,45 +229,10 @@ check('telegram.ts: invio bloccato dal gate (OFF)', false, esitoTelegram.ok);
 check('telegram.ts: errore dal gate', true, String(esitoTelegram.error ?? '').includes('gate'));
 delete process.env.FEATURE_RADAR;
 
-console.log('\n— 7. Cablaggio di UI, rotte e pannelli —');
-const soggetti: [string, string, string[]][] = [
-  ['src/lib/resend.ts', 'gate email nei 3 invii automatici', ['recapitoEmailAmmesso', 'gateEmail']],
-  ['src/lib/telegram.ts', 'gate Telegram nel punto unico di invio', ['gateTelegram', "gateTelegram('radar'"]],
-  ['supabase/functions/send-notification/index.ts', 'gate nella Edge Function', ['recapitoAmmesso', 'FEATURE_RADAR']],
-  ['src/components/FeatureGate.tsx', 'guardia di rotta', ['ModuloInManutenzione', 'useFeatureFlags']],
-  ['src/components/header/BarraStrumenti.tsx', 'navbar desktop filtrata', ['useFeatureFlags', 'visibile(l.modulo)']],
-  ['src/components/header/MenuMobile.tsx', 'menu mobile filtrato', ['useFeatureFlags', 'visibile(l.modulo)']],
-  ['src/pages/dashboard/components/DashboardLayout.tsx', 'tab dashboard filtrate', ['visibile(t.modulo)', 'modulo:']],
-  ['src/config/features.ts', 'persistenza degli override in localStorage', ['STORAGE_KEY_FLAG_DIPARTIMENTI', 'setItem(STORAGE_KEY_FLAG_DIPARTIMENTI']],
-  ['src/components/DevToolbar.tsx', 'toggle OFF | TEST | ON dentro la DEV Toolbar', ['FlagDipartimentiPanel', 'variante="lista"', 'FlagDipartimentiProva', 'impostaStato']],
-  ['src/components/FlagDipartimentiPanel.tsx', 'selettore riusabile (Admin card + DEV lista)', ['SelettoreStati', 'aria-pressed', "variante === 'lista'"]],
-  ['src/components/FlagDipartimentiProva.tsx', 'prova live: navbar + chiave localStorage', ['visibile(d.id)', 'leggiSalvato', 'verificaScrittura']],
-  ['src/departments/admin/components/TabDipartimenti.tsx', 'tab Admin dei dipartimenti', ['FlagDipartimentiPanel', 'FEATURE_']],
-  // Superfici PUBBLICHE: un modulo `off` non deve restare «in chiaro» sul sito.
-  ['src/components/landing/LandingStrumenti.tsx', 'landing: griglia strumenti filtrata', ['useFeatureFlags', 'visibile(s.modulo)']],
-  ['src/pages/LandingPage.tsx', 'landing: bacheca radar e CTA finali sotto flag', ["<LandingStrumenti", "visibile('radar') && <FlightBoardInterpelli"]],
-  ['src/data/servizi.ts', 'catalogo servizi con modulo di riferimento', ["modulo: 'radar'", 'serviziVisibili']],
-  ['src/pages/ServiziPage.tsx', 'griglia servizi filtrata', ['serviziVisibili(visibile)']],
-  ['src/components/Footer.tsx', 'footer pubblico filtrato', ['serviziVisibili(visibile)']],
-  ['src/pages/ServizioPage.tsx', 'pagina servizio non raggiungibile se OFF', ['servizio.modulo && !visibile(servizio.modulo)']],
-  ['src/components/VetrinaModal.tsx', 'vetrina freemium: scheda solo se visibile', ["modulo: 'modulistica'", 'visibile(selezionato.modulo)']],
-  ['src/pages/ProfiloPage.tsx', 'profilo: nessun rimando a Modulistica spenta', ["visibile('modulistica')"]],
-  ['src/pages/interpello/components/AvvisoAssente.tsx', 'scheda avviso: CTA radar filtrata', ["visibile('radar')"]],
-  ['src/pages/interpello/components/SchedaAvviso.tsx', 'avviso: ritorno al radar filtrato', ["visibile('radar')"]],
-  ['src/pages/CheckoutRedirectPage.tsx', 'checkout: ritorno alla prima sezione disponibile', ['primaRottaVisibile()']],
-  ['src/components/AuthModal.tsx', 'post-login: prima sezione disponibile', ['primaRottaVisibile()']],
-  ['src/pages/onboarding/OnboardingPage.tsx', 'post-onboarding: prima sezione disponibile', ['primaRottaVisibile()']],
-  ['src/pages/dashboard/components/ReindirizzaDipartimentoPrincipale.tsx', 'atterraggio dashboard dall\'hook (fonte unica)', ['primaRottaVisibile()']],
-  ['src/config/features.ts', 'sincronizzazione TRA SCHEDE (evento storage)', ["addEventListener('storage'", 'attivaAscoltoStorage']],
-];
-for (const [file, nome, attesi] of soggetti) {
-  const sorgente = readFileSync(file, 'utf8');
-  check(nome, true, attesi.every((frammento) => sorgente.includes(frammento)));
-}
-const app = readFileSync('src/App.tsx', 'utf8');
-// 7 guardie: cfu (pagina pubblica + sezione dashboard), radar, cv, moduli, purefocus, invita.
-check('App.tsx: FeatureGate su ogni dipartimento', 7, app.split('<FeatureGate modulo=').length - 1);
-check('App.tsx: atterraggio dinamico della dashboard', true, app.includes('ReindirizzaDipartimentoPrincipale'));
+// Il CABLAGGIO di UI, rotte e pannelli (navbar desktop/mobile, tab della
+// dashboard, menu utente, superfici pubbliche, pannelli Admin/DEV) è verificato
+// da `scripts/test-flags-cablaggio.ts`: estratto qui per restare sotto il limite
+// di 250 righe per file del gate strutturale. Stessa catena `npm run test:flags`.
 
 process.exitCode = errori === 0 ? 0 : 1;
 console.log(

@@ -29,7 +29,12 @@ interface BloccoAnagraficaProps {
 const campoInput =
   'w-full rounded-lg border border-primary-200 px-3 py-2 text-sm text-primary-800 focus:border-primary-400 focus:outline-none';
 
+/** Campo compatto (wizard a prova di scroll: meno altezza, stesso contenuto). */
+const campoInputCompatto =
+  'w-full rounded-lg border border-primary-200 px-2.5 py-1.5 text-sm text-primary-800 focus:border-primary-400 focus:outline-none';
+
 export function BloccoAnagrafica({ dati, onChange, nota, compatto }: BloccoAnagraficaProps) {
+  const campo = compatto ? campoInputCompatto : campoInput;
   return (
     <div className={`rounded-xl border border-primary-100 bg-primary-50/40 ${compatto ? 'p-3' : 'p-4'}`}>
       <p className="text-sm font-bold text-primary-800">Qualche dato su di te</p>
@@ -37,16 +42,16 @@ export function BloccoAnagrafica({ dati, onChange, nota, compatto }: BloccoAnagr
         {nota ?? 'Facoltativo: personalizza le email e il profilo. Puoi compilarlo anche dopo.'}
       </p>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+      <div className={`${compatto ? 'mt-2 gap-2' : 'mt-3 gap-3'} grid sm:grid-cols-2`}>
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-primary-700">Nome</span>
           <input
             type="text"
             value={dati.nome}
             onChange={(e) => onChange({ nome: e.target.value })}
-            className={campoInput}
+            className={campo}
             autoComplete="given-name"
-            placeholder="Es. Maria o Bison Productions"
+            placeholder="Nome"
           />
         </label>
         <label className="block">
@@ -55,9 +60,9 @@ export function BloccoAnagrafica({ dati, onChange, nota, compatto }: BloccoAnagr
             type="text"
             value={dati.cognome}
             onChange={(e) => onChange({ cognome: e.target.value })}
-            className={campoInput}
+            className={campo}
             autoComplete="family-name"
-            placeholder="Es. Rossi"
+            placeholder="Cognome"
           />
         </label>
         <div>
@@ -89,8 +94,8 @@ export function BloccoAnagrafica({ dati, onChange, nota, compatto }: BloccoAnagr
             max={100}
             value={dati.eta}
             onChange={(e) => onChange({ eta: e.target.value })}
-            className={campoInput}
-            placeholder="Es. 34"
+            className={campo}
+            placeholder="Età"
           />
         </label>
       </div>

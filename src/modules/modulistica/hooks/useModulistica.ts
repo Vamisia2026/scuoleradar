@@ -46,7 +46,9 @@ export function useModulistica() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [vista, setVista] = useState<VistaModulistica>(() => {
     const tab = searchParams.get('tab');
-    return tab === 'miei' ? 'miei' : 'archivio';
+    // Deep link: ?tab=miei (modelli scaricati) · ?tab=documenti (spazio personale).
+    if (tab === 'miei' || tab === 'documenti') return tab;
+    return 'archivio';
   });
   /** Macroarea selezionata dal menu (oggetto: supporta anche la scheda unita "Enti e Altro"). */
   const [areaSelezionata, setAreaSelezionata] = useState<MacroAreaModulistica | null>(null);
@@ -298,6 +300,8 @@ export function useModulistica() {
   const apriTab = (v: VistaModulistica) => {
     // Paywall soft-sell: "I Miei Moduli Scaricati" è una Funzionalità PRO.
     // Gli utenti Base vedono il modale informativo invece dell'archivio.
+    // «I Miei Documenti» (spazio personale) NON è soggetto al paywall: sono file
+    // dell'utente, non moduli del catalogo.
     if (v === 'miei' && !abbonato) {
       setProLockAperto(true);
       return;

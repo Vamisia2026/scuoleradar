@@ -5,7 +5,7 @@ import {
 import { Modal } from '@/components/Modal';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
-import { PROMO_CODES_ATTIVI } from '@/lib/promo';
+import { PROMO_CODES_ATTIVI, normalizzaCodicePromo } from '@/lib/promo';
 
 interface AbbonamentoModalProps {
   open: boolean;
@@ -50,15 +50,17 @@ export function AbbonamentoModal({ open, onClose, onConfirm }: AbbonamentoModalP
 
   const applicaPromo = async (codice: string) => {
     if (!supabase) return;
-    const upp = codice.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const upp = normalizzaCodicePromo(codice);
     if (!upp) {
       setPromoStato('idle');
       setPromoMsg('');
       return;
     }
     setPromoStato('verifica');
-    // Coupon attivo (es. BETA1ANNO): applicato direttamente al checkout Stripe
-    // (la Edge Function `checkout` lo mappa sul Coupon ID XRxitsVf, sconto 100%).
+    // Coupon attivi (BETA1ANNO = 100%, SCUOLERADAR50 = 50% sul PRO annuale):
+    // applicati direttamente al checkout Stripe dalla Edge Function `checkout`,
+    // che li valida server-side (per SCUOLERADAR50: monouso per email e finestra
+    // di 40 giorni dalla registrazione). Ogni altro codice passa dalla RPC.
     if (PROMO_CODES_ATTIVI.includes(upp)) {
       setPromo(upp);
       setPromoStato('applicato');
@@ -143,7 +145,7 @@ export function AbbonamentoModal({ open, onClose, onConfirm }: AbbonamentoModalP
                 setPromoStato('idle');
                 setPromoMsg('');
               }}
-              placeholder="ES. BETA1ANNO"
+              placeholder="Codice promo"
               className="input font-mono text-sm"
               disabled={promoStato === 'applicato'}
             />

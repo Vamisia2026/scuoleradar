@@ -1,32 +1,13 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Download, FolderOpen, Loader2, Trash2 } from 'lucide-react';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { Loader2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import {
-  conAggiuntaInCima,
-  STORAGE_KEY_MODULI_SCARICATI,
-  type ModuloScaricato,
-} from '@/data/moduli';
 import { Modal } from '@/components/Modal';
 import { Accordion } from '@/components/Accordion';
-import { useToast } from '@/components/Toast';
+import { DocumentiProfilo } from '@/components/profile/DocumentiProfilo';
 import { RadarStatusToggle } from '@/departments/radar';
-import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 
 export function ProfiloPage() {
-  // Feature flags: il rimando alla Modulistica non deve comparire se il
-  // dipartimento è disattivato (`off`).
-  const { visibile } = useFeatureFlags();
-
-  // Storico dei modelli scaricati (condiviso con la pagina Moduli via localStorage)
-  const [moduliScaricati, setModuliScaricati] = useLocalStorage<ModuloScaricato[]>(
-    STORAGE_KEY_MODULI_SCARICATI,
-    [],
-  );
-
-  // Tendina "Modelli Scaricati" (solo PRO) e sezione Sicurezza
-  const [moduliAperti, setModuliAperti] = useState(true);
+  // Tendina "Sicurezza e Account" + modale di cancellazione account.
   const [sicurezzaAperti, setSicurezzaAperti] = useState(false);
 
   // Disdetta / cancellazione account
@@ -34,28 +15,6 @@ export function ProfiloPage() {
   const [testoConferma, setTestoConferma] = useState('');
   const [cancellando, setCancellando] = useState(false);
   const [erroreElimina, setErroreElimina] = useState('');
-
-  const formatDataScaricato = (iso: string) => {
-    try {
-      return new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' });
-    } catch {
-      return iso;
-    }
-  };
-
-  const { mostraToast } = useToast();
-
-  const riscaricaModulo = (m: ModuloScaricato) => {
-    setModuliScaricati(conAggiuntaInCima(moduliScaricati, m));
-    // Nessun dialogo di "download simulato": il documento esiste già in archivio e
-    // viene aperto/riscaricato come file statico dalla pagina Modulistica.
-    mostraToast('successo', 'Modulo già pronto: aprilo in "Modelli Scaricati" per vederlo e stamparlo.');
-  };
-
-  const rimuoviModulo = (id: string) =>
-    setModuliScaricati(moduliScaricati.filter((m) => m.id !== id));
-
-  const svuotaStorico = () => setModuliScaricati([]);
 
   /** Cancellazione definitiva: Edge Function elimina-account (cascata su profiles/referrals). */
   const handleEliminaAccount = async () => {
@@ -93,69 +52,9 @@ export function ProfiloPage() {
       {/* Stato Radar: Attivo / In Pausa (preferenze conservate quando in pausa) */}
       <RadarStatusToggle />
 
-      {/* Gestione Moduli — disponibile per tutti (Base, PRO, Free Forever) */}
-      <Accordion
-          icona="📁"
-          titolo="Modelli Scaricati di Recente"
-          badge={moduliScaricati.length ? `${moduliScaricati.length} scaricati` : undefined}
-          aperto={moduliAperti}
-          onToggle={() => setModuliAperti((v) => !v)}
-        >
-          {moduliScaricati.length === 0 ? (
-            <p className="text-sm text-primary-400">
-              Non hai ancora scaricato modelli. Visita la pagina Modulistica per trovare documenti e
-              template pronti all&apos;uso.
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {moduliScaricati.map((m) => (
-                <li
-                  key={m.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-primary-100 bg-slate-50 px-4 py-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-primary-800">{m.nome}</p>
-                    <p className="text-xs text-primary-400">
-                      {m.tipo} · scaricato il {formatDataScaricato(m.scaricatoIl)}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      onClick={() => riscaricaModulo(m)}
-                      aria-label={`Scarica di nuovo ${m.nome}`}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-white px-3 py-2 text-xs font-semibold text-primary-700 transition hover:bg-primary-50"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      Scarica
-                    </button>
-                    <button
-                      onClick={() => rimuoviModulo(m.id)}
-                      aria-label={`Rimuovi ${m.nome} dallo storico`}
-                      className="rounded-lg p-2 text-primary-400 transition hover:bg-error-50 hover:text-error-600"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-primary-100 pt-3">
-            {visibile('modulistica') && (
-              <Link to="/dashboard/moduli?tab=miei" className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-600">
-                <FolderOpen className="h-3.5 w-3.5" /> Vai alla pagina Modulistica
-              </Link>
-            )}
-            {moduliScaricati.length > 0 && (
-              <button
-                onClick={svuotaStorico}
-                className="text-xs font-medium text-primary-400 transition hover:text-error-600"
-              >
-                Svuota storico
-              </button>
-            )}
-          </div>
-        </Accordion>
+      {/* Documenti — archivio dei Moduli scaricati + «I Miei Documenti» (storage
+          personale con disclaimer). Accessibile anche dal menu utente → Documenti. */}
+      <DocumentiProfilo />
 
       {/* Sicurezza e Account */}
       <Accordion

@@ -211,7 +211,7 @@ export function ContactForm({ onInviato }: { onInviato?: () => void }) {
           type="text"
           value={oggetto}
           onChange={(e) => setOggetto(e.target.value)}
-          placeholder="Es. Problema con le notifiche"
+          placeholder="Oggetto del messaggio"
           className={inputCls}
         />
       </div>

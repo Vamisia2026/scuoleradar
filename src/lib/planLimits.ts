@@ -69,7 +69,14 @@ export function pianoLimits(
   };
 }
 
-/** Tronca una lista (province/classi) al tetto del piano, conservando i primi elementi. */
+/**
+ * Tronca una lista (province/classi) al tetto del piano, conservando i primi elementi.
+ *
+ * ⚠️ SEMANTICA: produce la SELEZIONE ATTIVA da usare ORA (query del feed, filtri);
+ * NON è una migrazione dei dati. Le voci oltre il tetto restano SALVATE nelle
+ * preferenze e tornano automaticamente attive quando il piano torna PRO: un
+ * downgrade a Base non deve mai cancellare le scelte fatte durante la prova PRO.
+ */
 export function limitaSelezione<T>(lista: T[] | undefined, max: number): T[] {
   return Array.isArray(lista) ? lista.slice(0, Math.max(0, max)) : [];
 }

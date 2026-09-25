@@ -82,6 +82,8 @@ export function useBootstrapProfilo({
     setPref,
     setLoading,
     setAvatarUrl,
+    setUser,
+    setSupabaseUserId,
     setPiano,
     setAbbonato,
     setPianoStato,
@@ -106,6 +108,7 @@ export function useBootstrapProfilo({
     setAbbonato,
     setPianoStato,
     setProfiloIncompleto,
+    setPref,
   });
 
   // 4-5) Wizard Radar "in attesa" e ripresa automatica del checkout.

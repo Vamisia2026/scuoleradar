@@ -2,8 +2,11 @@
  * Header — menu utente (chip profilo + tendina) per la top bar desktop.
  *
  * Raccoglie: avatar, nome, badge del piano, freccia di apertura e la tendina con
- * profilo, Radar, documenti scaricati, upgrade PRO, prezzi e uscita.
+ * profilo, Radar, «I Miei Documenti», upgrade PRO, prezzi e uscita.
  * Stato di apertura e azioni arrivano dal contenitore: nessun accesso a `useApp()`.
+ * «I Miei Documenti» è lo spazio personale dell'utente: porta alla terza tab della
+ * Modulistica (`/dashboard/moduli?tab=documenti`) e, se quel dipartimento è spento
+ * (FEATURE FLAGS), ricade sulla sezione Documenti del profilo: mai un link morto.
  */
 import type { Dispatch, SetStateAction } from 'react';
 import { Link } from 'react-router-dom';
@@ -17,6 +20,7 @@ import {
   User as UserIcon,
 } from 'lucide-react';
 import type { User } from '@/contexts/AppContext';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { BadgePianoCompatto } from './BadgePianoCompatto';
 import type { PianoUtente, StatoPiano } from './tipiUtente';
 
@@ -30,7 +34,7 @@ interface MenuUtenteProps {
   piano: PianoUtente;
   /** 'loading' finché il piano non è confermato dal DB. */
   pianoStato: StatoPiano;
-  /** Numero di documenti scaricati (badge nella voce «Documenti scaricati»). */
+  /** Numero di documenti dell'archivio moduli (badge di «I Miei Documenti»). */
   moduliScaricati: number;
   /** Tendina aperta/chiusa. */
   menuUtenteOpen: boolean;
@@ -54,6 +58,12 @@ export function MenuUtente({
   chiudiMenuUtente,
   logout,
 }: MenuUtenteProps) {
+  // Feature flags: le voci di un dipartimento chiuso spariscono dal menu utente.
+  const { visibile } = useFeatureFlags();
+  // Etichetta del piano: la fonte è `piano`, letto dal DB (`profiles.piano`).
+  // `abbonato` (rinnovo/pagamento attivo) resta come rete per gli stati locali e
+  // NON può mai far leggere «Piano Base» a un PRO concesso dal backend.
+  const ePianoPro = piano === 'pro' || abbonato;
   return (
             <div className="relative hidden md:block">
               <div className="flex items-center gap-0.5 rounded-full border border-primary-200 bg-white py-1 pl-1 pr-1 shadow-soft">
@@ -127,10 +137,10 @@ export function MenuUtente({
                         <p className="truncate text-xs text-primary-500">{user.email}</p>
                         <span
                           className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                            abbonato ? 'bg-accent-500 text-white' : 'bg-primary-50 text-primary-600'
+                            ePianoPro ? 'bg-accent-500 text-white' : 'bg-primary-50 text-primary-600'
                           }`}
                         >
-                          {abbonato ? (
+                          {ePianoPro ? (
                             <>
                               <Sparkles className="h-3 w-3" /> Piano PRO
                             </>
@@ -157,18 +167,28 @@ export function MenuUtente({
                         <Radar className="h-4 w-4 text-primary-400" />
                         Il mio Radar
                       </Link>
+                      {/* «I Miei Documenti»: spazio personale dell'utente. Con la
+                          Modulistica attiva apre la sua terza tab; altrimenti ricade
+                          sulla sezione Documenti del profilo (mai un link morto).
+                          Il badge conta i moduli ufficiali, solo con Modulistica attiva. */}
                       <Link
-                        to="/dashboard/moduli"
+                        to={
+                          visibile('modulistica')
+                            ? '/dashboard/moduli?tab=documenti'
+                            : '/dashboard/profilo?sezione=documenti'
+                        }
                         onClick={chiudiMenuUtente}
                         className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
                       >
                         <FileText className="h-4 w-4 text-primary-400" />
-                        Documenti scaricati
-                        <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-50 px-1.5 text-[11px] font-bold text-primary-600">
-                          {moduliScaricati}
-                        </span>
+                        I Miei Documenti
+                        {visibile('modulistica') && moduliScaricati > 0 && (
+                          <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-50 px-1.5 text-[11px] font-bold text-primary-600">
+                            {moduliScaricati}
+                          </span>
+                        )}
                       </Link>
-                      {!abbonato && (
+                      {!ePianoPro && (
                         <Link
                           to="/prezzi"
                           onClick={chiudiMenuUtente}

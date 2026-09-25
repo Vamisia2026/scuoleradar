@@ -66,7 +66,7 @@ export function PannelloCanali({
               type="text"
               value={telegramUsername}
               onChange={(e) => setTelegramUsername(e.target.value)}
-              placeholder="es. mario_rossi (senza @)"
+              placeholder="Il tuo username Telegram, senza @"
               className="input"
             />
             <span className="mt-1.5 block text-xs leading-relaxed text-primary-500">

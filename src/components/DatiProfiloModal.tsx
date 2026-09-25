@@ -109,7 +109,7 @@ export function DatiProfiloModal() {
               type="text"
               value={nome}
               onChange={(e) => setNome(e.target.value)}
-              placeholder="Es. Giuseppe"
+              placeholder="Nome"
               className={campoInput}
             />
           </label>
@@ -119,7 +119,7 @@ export function DatiProfiloModal() {
               type="text"
               value={cognome}
               onChange={(e) => setCognome(e.target.value)}
-              placeholder="Es. Pampararo"
+              placeholder="Cognome"
               className={campoInput}
             />
           </label>

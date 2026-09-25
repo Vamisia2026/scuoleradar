@@ -13,9 +13,15 @@ interface ModalProps {
   zClass?: string;
   /** Classi extra della card (es. sfondo allineato alla palette: `bg-slate-50`). Sostituisce il default `bg-white`. */
   cardClassName?: string;
+  /**
+   * Layout COMPATTO: header/gutter ridotti e card più alta (`max-h-[92vh]`), così
+   * un contenuto denso (es. wizard Radar a 4 passi) rientra nello schermo senza
+   * barra di scorrimento interna. Default `false`: nessun cambio per gli altri modal.
+   */
+  dense?: boolean;
 }
 
-export function Modal({ open, onClose, title, children, size = 'md', zClass = 'z-50', cardClassName = 'bg-white' }: ModalProps) {
+export function Modal({ open, onClose, title, children, size = 'md', zClass = 'z-50', cardClassName = 'bg-white', dense = false }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -39,7 +45,7 @@ export function Modal({ open, onClose, title, children, size = 'md', zClass = 'z
   // `position: fixed` → l'overlay comparirebbe in fondo alla pagina ("card persa").
   return createPortal(
     <div
-      className={`fixed inset-0 ${zClass} flex items-center justify-center p-4`}
+      className={`fixed inset-0 ${zClass} flex items-center justify-center ${dense ? 'p-1.5 sm:p-2' : 'p-4'}`}
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -49,10 +55,12 @@ export function Modal({ open, onClose, title, children, size = 'md', zClass = 'z
         onClick={onClose}
       />
       <div
-        className={`relative w-full ${maxW} max-h-[90vh] overflow-y-auto rounded-2xl ${cardClassName} shadow-card animate-pop`}
+        className={`relative w-full ${maxW} ${dense ? 'max-h-[96vh]' : 'max-h-[90vh]'} overflow-y-auto rounded-2xl ${cardClassName} shadow-card animate-pop`}
       >
-        <div className="flex items-center justify-between border-b border-primary-100 px-5 py-4">
-          <h3 className="text-lg font-bold text-primary-800">{title}</h3>
+        <div
+          className={`flex items-center justify-between border-b border-primary-100 ${dense ? 'px-4 py-2' : 'px-5 py-4'}`}
+        >
+          <h3 className={`font-bold text-primary-800 ${dense ? 'text-base' : 'text-lg'}`}>{title}</h3>
           <button
             onClick={onClose}
             aria-label="Chiudi"
@@ -61,7 +69,7 @@ export function Modal({ open, onClose, title, children, size = 'md', zClass = 'z
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className={dense ? 'p-3' : 'p-5'}>{children}</div>
       </div>
     </div>,
     document.body,

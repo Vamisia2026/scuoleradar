@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { classeByCodice } from '@/data/classiConcorso';
 import { interpelli, type Interpello } from '@/data/interpelli';
+import { limitaSelezione } from '@/lib/planLimits';
 import { getFeedInterpelli, normalizzaClasse } from '@/lib/matchingEngine';
 import { eInterpelloAttivo } from '@/lib/scadenza';
 import { supabase } from '@/lib/supabase';
@@ -27,7 +28,16 @@ export interface FeedInterpelli {
   interpelliFiltrati: Interpello[];
 }
 
-export function useInterpelliFeed(preferenze: Preferenze): FeedInterpelli {
+export function useInterpelliFeed(
+  preferenze: Preferenze,
+  /**
+   * Tetti del piano CONFERMATO (`null`/assente = piano non ancora letto: nessun
+   * limite). Limitano l'**uso** — query al DB e filtri — senza toccare i dati
+   * salvati: le province/classi oltre il tetto restano nelle preferenze e si
+   * riattivano appena il piano torna PRO.
+   */
+  tetti?: { province: number; classi: number } | null,
+): FeedInterpelli {
   // Fonte degli interpelli (FASE 3 — Matching Engine):
   // 1. tabella `interpelli` filtrata per province/classi del profilo,
   // 2. fallback sulla tabella legacy `notices`,
@@ -36,6 +46,19 @@ export function useInterpelliFeed(preferenze: Preferenze): FeedInterpelli {
   const [fontiInterpelli, setFontiInterpelli] = useState<Interpello[]>(interpelli);
   const [origineDati, setOrigineDati] = useState<'vuoto' | 'supabase'>('vuoto');
 
+  /**
+   * SELEZIONE ATTIVA per il piano corrente (tetti confermati dal DB): il feed usa
+   * le prime voci e ignora le eccedenti, ma i dati salvati restano INTATTI.
+   */
+  const provinceAttive = useMemo(
+    () => limitaSelezione(preferenze.provinceCodici, tetti?.province ?? Number.POSITIVE_INFINITY),
+    [preferenze.provinceCodici, tetti?.province],
+  );
+  const classiAttive = useMemo(
+    () => limitaSelezione(preferenze.classiCodici, tetti?.classi ?? Number.POSITIVE_INFINITY),
+    [preferenze.classiCodici, tetti?.classi],
+  );
+
   useEffect(() => {
     if (!supabase) return;
     let attivo = true;
@@ -43,8 +66,8 @@ export function useInterpelliFeed(preferenze: Preferenze): FeedInterpelli {
       try {
         // Matching Engine: query `interpelli` per le province e le classi del profilo
         const feed = await getFeedInterpelli(supabase, {
-          province: preferenze.provinceCodici,
-          classi: preferenze.classiCodici,
+          province: provinceAttive,
+          classi: classiAttive,
         });
         if (!attivo) return;
         if (feed && feed.length > 0) {
@@ -86,14 +109,14 @@ export function useInterpelliFeed(preferenze: Preferenze): FeedInterpelli {
     return () => {
       attivo = false;
     };
-  }, [preferenze.provinceCodici, preferenze.classiCodici]);
+  }, [provinceAttive, classiAttive]);
 
   const interpelliFiltrati = useMemo<Interpello[]>(() => {
     if (!preferenze.onboarded) return [];
     // Normalizzazione classi (A-026 ≡ A-26 ≡ A042): senza di essa il feed
     // dell'utente può risultare VUOTO pur avendo interpelli compatibili.
-    const classiSelezionateNorm = new Set(preferenze.classiCodici.map(normalizzaClasse));
-    const classiSelezionate = preferenze.classiCodici
+    const classiSelezionateNorm = new Set(classiAttive.map(normalizzaClasse));
+    const classiSelezionate = classiAttive
       .map((cod) => classeByCodice(cod))
       .filter(Boolean);
     const materieDelleClassi = new Set(classiSelezionate.flatMap((c) => c!.materie));
@@ -103,14 +126,14 @@ export function useInterpelliFeed(preferenze: Preferenze): FeedInterpelli {
     ]);
     return fontiInterpelli.filter((i) => {
       const matchProvincia =
-        preferenze.provinceCodici.length === 0 || preferenze.provinceCodici.includes(i.provinciaCodice);
+        provinceAttive.length === 0 || provinceAttive.includes(i.provinciaCodice);
       const matchOrdine =
         preferenze.ordini.length === 0 || preferenze.ordini.includes(i.ordine);
       const classe = classeByCodice(i.classeCodice);
       // Match per tutte le classi rilevate (i dati reali di notices hanno class_codes[]),
       // con confronto NORMALIZZATO dei codici (A-026 ≡ A-26 ≡ A042).
       const matchClasse =
-        preferenze.classiCodici.length === 0 ||
+        classiAttive.length === 0 ||
         (i.classiCodes?.some((c) => classiSelezionateNorm.has(normalizzaClasse(c))) ?? false) ||
         classiSelezionateNorm.has(normalizzaClasse(i.classeCodice));
       const matchMateria =
@@ -135,7 +158,7 @@ export function useInterpelliFeed(preferenze: Preferenze): FeedInterpelli {
         nonScaduto
       );
     });
-  }, [preferenze, fontiInterpelli]);
+  }, [preferenze, fontiInterpelli, provinceAttive, classiAttive]);
 
   return { fontiInterpelli, origineDati, interpelliFiltrati };
 }

@@ -188,7 +188,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Feed degli interpelli (Matching Engine): stato, fetch dal DB e filtri del
   // profilo vivono nell'hook dedicato `./app/useInterpelliFeed`.
-  const { origineDati, interpelliFiltrati } = useInterpelliFeed(preferenze);
+  // I TETTI del piano confermato limitano l'USO della selezione (query + filtri):
+  // le province/classi oltre il tetto restano salvate e si riattivano con PRO.
+  const { origineDati, interpelliFiltrati } = useInterpelliFeed(preferenze, tettiPreferenze);
 
   /** Trial PRO attivo: piano 'pro' + stato Stripe 'trialing' + scadenza futura. */
   const trialAttivo =

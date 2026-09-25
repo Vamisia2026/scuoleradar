@@ -110,26 +110,32 @@ export function usePreferenzeUtente({
   }, [preferenze.classiCodici, setPref]);
 
   /**
-   * Riallineamento ai tetti del piano CONFERMATO: se il piano è tornato Base (o se
-   * la selezione eccede i limiti), si tronca e si PERSISTE — così un ex PRO non
-   * continua a ricevere notifiche su 4 province. Con `tetti = null` (piano ancora
-   * in lettura) non si tocca nulla: nessuna perdita durante il caricamento.
+   * TETTI DEL PIANO — solo AVVISO, MAI troncamento dei dati.
+   *
+   * Un downgrade (o un piano tornato Base) NON deve cancellare le province/classi
+   * scelte durante la prova PRO: le selezioni restano SALVATE e tornano attive appena
+   * il piano torna PRO. I tetti si applicano al MOMENTO DELL'USO (feed del Radar:
+   * `limitaSelezione` in `useInterpelliFeed`), così un ex PRO non riceve più avvisi
+   * fuori piano pur conservando tutto ciò che aveva scelto.
    */
   useEffect(() => {
     if (!tetti || !preferenze.onboarded) return;
-    const province = preferenze.provinceCodici.slice(0, Math.max(0, tetti.province));
-    const classi = normalizzaClassi(preferenze.classiCodici).slice(0, Math.max(0, tetti.classi));
-    const provinceOk = province.length === preferenze.provinceCodici.length;
-    const classiOk =
-      classi.length === preferenze.classiCodici.length &&
-      classi.every((c, i) => c === preferenze.classiCodici[i]);
-    if (provinceOk && classiOk) return;
-    console.warn('[piano] selezione oltre i tetti del piano confermato: riallineo preferenze.', {
-      province:  `${preferenze.provinceCodici.length} → ${province.length}`,
-      classi: `${preferenze.classiCodici.length} → ${classi.length}`,
-    });
-    setPref((prev) => ({ ...prev, provinceCodici: province, classiCodici: classi }));
-  }, [tetti, preferenze.onboarded, preferenze.provinceCodici, preferenze.classiCodici, setPref]);
+    const provinceOltre = preferenze.provinceCodici.length > tetti.province;
+    const classiOltre = preferenze.classiCodici.length > tetti.classi;
+    if (!provinceOltre && !classiOltre) return;
+    console.warn(
+      '[piano] selezione oltre i tetti del piano confermato: uso le prime voci, dati conservati.',
+      {
+        province: `${preferenze.provinceCodici.length} salvate (attive: ${tetti.province})`,
+        classi: `${preferenze.classiCodici.length} salvate (attive: ${tetti.classi})`,
+      },
+    );
+  }, [
+    tetti,
+    preferenze.onboarded,
+    preferenze.provinceCodici.length,
+    preferenze.classiCodici.length,
+  ]);
 
   const incrementaNotifica = useCallback(
     (interpelloId: string) => {

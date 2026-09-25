@@ -6,10 +6,11 @@
  * contatori, self-heal della prova PRO scaduta e verifica dell'anagrafica.
  */
 import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
+import { identify } from '@/lib/analytics';
 import { normalizzaClassi } from '@/lib/matchingEngine';
 import { supabase } from '@/lib/supabase';
-import { pianoDaProfilo, provaProScaduta } from './helpers';
-import type { Preferenze } from './types';
+import { identitaDaSessione, pianoDaProfilo, provaProScaduta } from './helpers';
+import type { Preferenze, User } from './types';
 
 /** Dipendenze esterne: setter del provider + verifica anagrafica. */
 export interface OpzioniProfileBootstrap {
@@ -20,6 +21,12 @@ export interface OpzioniProfileBootstrap {
   setPref: Dispatch<SetStateAction<Preferenze>>;
   setLoading: Dispatch<SetStateAction<boolean>>;
   setAvatarUrl: Dispatch<SetStateAction<string | null>>;
+  /**
+   * Identità locale: il bootstrap la sincronizza SUBITO dalla sessione trovata
+   * (`getUser()`), senza aspettare il listener `onAuthStateChange`.
+   */
+  setUser: Dispatch<SetStateAction<User | null>>;
+  setSupabaseUserId: Dispatch<SetStateAction<string | null>>;
   setPiano: Dispatch<SetStateAction<'base' | 'pro' | 'free_forever'>>;
   setAbbonato: Dispatch<SetStateAction<boolean>>;
   setPianoStato: Dispatch<SetStateAction<'loading' | 'pronto'>>;
@@ -36,6 +43,8 @@ export function useProfileBootstrap({
   setPref,
   setLoading,
   setAvatarUrl,
+  setUser,
+  setSupabaseUserId,
   setPiano,
   setAbbonato,
   setPianoStato,
@@ -61,6 +70,15 @@ export function useProfileBootstrap({
         if (!au) return;
         const metaAu = (au.user_metadata ?? {}) as Record<string, unknown>;
         setAvatarUrl(String(metaAu.avatar_url ?? metaAu.picture ?? '').trim() || null);
+        /**
+         * IDENTITÀ IMMEDIATA (fix «secondo click su Accedi»): con un token valido —
+         * compreso il RITORNO DA GOOGLE OAuth — lo stato utente viene sincronizzato
+         * SUBITO dal bootstrap, senza dipendere dall'ordine di arrivo degli eventi
+         * del listener. Un solo posto per la regola nome/cognome (helpers).
+         */
+        setSupabaseUserId(au.id);
+        identify(au.id);
+        setUser((prev) => identitaDaSessione(au, prev));
         // NB: NIENTE colonna `is_free_forever` qui (assente nel DB remoto →
         // errore 42703 che bloccava il piano su 'base'). Il piano si ricava da
         // piano/subscription_tier tramite pianoDaProfilo.

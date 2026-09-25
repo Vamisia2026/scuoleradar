@@ -80,7 +80,7 @@ export function PassoAnagraficaOrdini({
                       value={etaOnb}
                       onChange={(e) => setEtaOnb(e.target.value)}
                       className="input"
-                      placeholder="Es. 34"
+                      placeholder="Età"
                     />
                   </div>
                 </div>

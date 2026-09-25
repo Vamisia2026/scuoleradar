@@ -7,6 +7,7 @@ import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { materie, type OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso } from '@/data/classiConcorso';
 import { province } from '@/data/province';
+import { separaParoleChiave } from '@/lib/ricercaSelezioniRadar';
 import { NavigazioneOnboarding } from './components/NavigazioneOnboarding';
 import { PassoAnagraficaOrdini } from './components/PassoAnagraficaOrdini';
 import { PassoCanali } from './components/PassoCanali';
@@ -132,12 +133,20 @@ export function OnboardingPage() {
     setMaterieId((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
   };
 
+  /**
+   * Aggiunge le materie/competenze personalizzate scritte nel campo libero.
+   * Più voci separate da virgola («Educazione motoria, Dizione, Robotica educativa»)
+   * diventano tag INDIPENDENTI: mai un'unica stringa incollata.
+   */
   const addCustomMateria = () => {
-    const val = customMateriaInput.trim();
-    if (!val) return;
-    if (!materieCustom.some((m) => m.toLowerCase() === val.toLowerCase())) {
-      setMaterieCustom((prev) => [...prev, val]);
+    const nuove = separaParoleChiave(customMateriaInput).filter(
+      (voce) => !materieCustom.some((m) => m.toLowerCase() === voce.toLowerCase()),
+    );
+    if (nuove.length === 0) {
+      setCustomMateriaInput('');
+      return;
     }
+    setMaterieCustom((prev) => [...prev, ...nuove]);
     setCustomMateriaInput('');
   };
 

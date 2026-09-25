@@ -6,6 +6,7 @@ import { RicercaArchivista } from './components/RicercaArchivista';
 import { VetrinaModulistica } from './components/VetrinaModulistica';
 import { ModuliProLockModal } from './components/ModuliProLockModal';
 import { SavedModuli } from './components/SavedModuli';
+import { TabDocumentiPersonali } from './components/TabDocumentiPersonali';
 import { TeaserArchivistaModal } from './components/TeaserArchivistaModal';
 import { ModuloPreview } from './creator/ModuloPreview';
 import { ModuleCreatorErrorBoundary } from './creator/ModuleCreatorErrorBoundary';
@@ -137,6 +138,9 @@ export function ModuliModule() {
             onRimuovi={gestisciRimozione}
           />
         )}
+
+        {/* «I Miei Documenti»: spazio personale dell'utente (upload/drag & drop) */}
+        {vista === 'documenti' && <TabDocumentiPersonali compatto={compattato} />}
       </div>
 
       {/* Modale teaser Archivista Capo (In arrivo a Ottobre per i PRO) */}

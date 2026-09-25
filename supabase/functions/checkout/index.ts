@@ -110,12 +110,19 @@ const STRIPE_PRODUCT_IDS: Record<string, string> = {
 const STRIPE_COUPON_BETA1ANNO = Deno.env.get('STRIPE_COUPON_BETA1ANNO') ?? 'XRxitsVf';
 
 /**
- * Coupon Stripe RADAR50 (-50% sul PRO annuale) — applicato DIRETTAMENTE alla
- * sessione solo dopo la validazione dinamica server-side (RPC valida_coupon_radar50:
- * finestra 40 giorni dalla registrazione, monouso per utente, anti-abuso su
- * Telegram/email). Richiede il secret STRIPE_COUPON_RADAR50 (Coupon ID Stripe).
+ * Coupon Stripe **SCUOLERADAR50** (-50% sul PRO annuale) — applicato DIRETTAMENTE
+ * alla sessione solo dopo la validazione dinamica server-side (RPC
+ * `valida_coupon_scuoleradar50`: 50% sulla sottoscrizione annuale, monouso per email,
+ * finestra di 40 giorni dalla registrazione iniziale, anti-abuso su Telegram/email).
+ * Richiede il secret STRIPE_COUPON_SCUOLERADAR50 (Coupon ID Stripe).
+ *
+ * Fallback: `STRIPE_COUPON_RADAR50` (il vecchio secret del coupon -50% monouso, che
+ * punta allo STESSO tipo di coupon Stripe) resta accettato per continuità finché il
+ * secret nuovo non è configurato. Il codice `RADAR50` invece è dismesso e non è più
+ * accettato in nessun caso.
  */
-const STRIPE_COUPON_RADAR50 = Deno.env.get('STRIPE_COUPON_RADAR50') ?? '';
+const STRIPE_COUPON_SCUOLERADAR50 =
+  Deno.env.get('STRIPE_COUPON_SCUOLERADAR50') ?? Deno.env.get('STRIPE_COUPON_RADAR50') ?? '';
 
 /** Decodifica il payload (base64url) di un JWT senza verificarne la firma (il runtime la verifica con --verify-jwt). */
 function decodeJwt(token: string): { sub?: string; email?: string } | null {
@@ -237,14 +244,15 @@ async function statoPromoCodice(
 }
 
 /**
- * Valida il coupon DINAMICO RADAR50 (RPC server-side): finestra 40 giorni dalla
- * registrazione iniziale, monouso per utente e anti-abuso (stesso Telegram ID o
- * email secondaria già usati da un altro account).
+ * Valida il coupon SCUOLERADAR50 (RPC server-side): 50% sulla sottoscrizione
+ * annuale, monouso per email/utente, finestra di 40 giorni dalla registrazione
+ * iniziale e anti-abuso (stesso Telegram ID, email di notifica o email già usati da
+ * un altro account).
  */
-async function validaRadar50(
+async function validaScuoleradar50(
   userId: string,
 ): Promise<{ ok: boolean; motivo?: string } | null> {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/valida_coupon_radar50`, {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/valida_coupon_scuoleradar50`, {
     method: 'POST',
     headers: {
       apikey: SUPABASE_SERVICE_ROLE,
@@ -254,7 +262,7 @@ async function validaRadar50(
     body: JSON.stringify({ p_user_id: userId }),
   });
   if (!res.ok) {
-    console.error('valida_coupon_radar50 fallita:', res.status, await res.text());
+    console.error('valida_coupon_scuoleradar50 fallita:', res.status, await res.text());
     return null;
   }
   const righe = (await res.json()) as Array<{ ok: boolean; motivo: string; sconto_percent: number }>;
@@ -330,7 +338,7 @@ serve(async (req: Request) => {
         priceMancanti,
         productIds: STRIPE_PRODUCT_IDS,
         couponBeta1Anno: STRIPE_COUPON_BETA1ANNO,
-        couponRadar50: Boolean(STRIPE_COUPON_RADAR50),
+        couponScuoleradar50: Boolean(STRIPE_COUPON_SCUOLERADAR50),
         mode: STRIPE_MODE,
         webhookEndpoint: WEBHOOK_ENDPOINT,
         couponReferral: Boolean(COUPON_REFERRAL),
@@ -386,30 +394,31 @@ serve(async (req: Request) => {
     // 2) Codice referral (-10€): valida via RPC e applica il coupon automatico.
     if (body.promo) {
       const codiceUpp = body.promo.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-      if (codiceUpp === 'RADAR50') {
-        // Coupon DINAMICO 50% (PRO annuale): validazione server-side rigida.
+      if (codiceUpp === 'SCUOLERADAR50') {
+        // Coupon 50% (PRO annuale): validazione server-side rigida (monouso per
+        // email + finestra 40 giorni dalla registrazione iniziale).
         if (plan !== 'pro_annuale') {
           return risposta(
-            { success: false, error: 'Il coupon RADAR50 è valido solo sul piano PRO annuale.' },
+            { success: false, error: 'Il coupon SCUOLERADAR50 è valido solo sul piano PRO annuale.' },
             400,
           );
         }
-        if (!STRIPE_COUPON_RADAR50) {
+        if (!STRIPE_COUPON_SCUOLERADAR50) {
           return risposta(
-            { success: false, error: 'Coupon RADAR50 non configurato: contatta il supporto.' },
+            { success: false, error: 'Coupon SCUOLERADAR50 non configurato: contatta il supporto.' },
             500,
           );
         }
-        const esitoRadar = await validaRadar50(userId);
-        if (!esitoRadar?.ok) {
+        const esitoCoupon = await validaScuoleradar50(userId);
+        if (!esitoCoupon?.ok) {
           return risposta(
-            { success: false, error: esitoRadar?.motivo ?? 'Il coupon RADAR50 non è applicabile.' },
+            { success: false, error: esitoCoupon?.motivo ?? 'Il coupon SCUOLERADAR50 non è applicabile.' },
             400,
           );
         }
-        campi['discounts[0][coupon]'] = STRIPE_COUPON_RADAR50;
-        campi['metadata[promo]'] = 'RADAR50';
-        console.log(`  → coupon RADAR50 applicato (${STRIPE_COUPON_RADAR50}) per user ${userId.slice(0, 8)}…`);
+        campi['discounts[0][coupon]'] = STRIPE_COUPON_SCUOLERADAR50;
+        campi['metadata[promo]'] = 'SCUOLERADAR50';
+        console.log(`  → coupon SCUOLERADAR50 applicato (${STRIPE_COUPON_SCUOLERADAR50}) per user ${userId.slice(0, 8)}…`);
       } else if (codiceUpp === 'BETA1ANNO') {
         // Coupon 100% (PRO annuale): l'accesso gratuito per 1 anno è un DIRITTO
         // del codice, non un effetto collaterale del prezzo. Prima di azzerare il

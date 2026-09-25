@@ -85,7 +85,7 @@ export function PannelloFiltriScuole({
                 value={favoriteScuolaInput}
                 onChange={(e) => setFavoriteScuolaInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addFavoriteScuola()}
-                placeholder="Es. Media Jona Asti, ITIS Artom Asti"
+                placeholder="Nome della scuola da preferire"
                 list="scuole-conosciute"
                 className="input"
               />
@@ -124,7 +124,7 @@ export function PannelloFiltriScuole({
                 value={ignoredScuolaInput}
                 onChange={(e) => setIgnoredScuolaInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addIgnoredScuola()}
-                placeholder="Es. IC Castell'Alfero, IC Incisa Scapaccino"
+                placeholder="Nome della scuola da ignorare"
                 list="scuole-conosciute"
                 className="input"
               />

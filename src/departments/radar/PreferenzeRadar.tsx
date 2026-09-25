@@ -11,8 +11,14 @@ import { supabase } from '@/lib/supabase';
 import { classiConcorso } from '@/data/classiConcorso';
 import type { OrdineScuola } from '@/data/ordiniMaterie';
 import { province } from '@/data/province';
-import { pianoLimits, limitaSelezione } from '@/lib/planLimits';
+import { pianoLimits } from '@/lib/planLimits';
 import { normalizzaClasse, normalizzaClassi } from '@/lib/matchingEngine';
+import { promuoviProvinciaPrincipale } from '@/lib/provinceRadar';
+import {
+  cercaSelezioniRadar,
+  separaParoleChiave,
+  type SuggerimentoSelezione,
+} from '@/lib/ricercaSelezioniRadar';
 import { PannelloCanali } from './preferenze/PannelloCanali';
 import { PannelloClassi } from './preferenze/PannelloClassi';
 import { PannelloFiltriScuole } from './preferenze/PannelloFiltriScuole';
@@ -70,7 +76,8 @@ export function PreferenzeRadar() {
 
   const [queryClasse, setQueryClasse] = useState('');
   const [materiaFilter, setMateriaFilter] = useState('');
-  const [customMateriaInput, setCustomMateriaInput] = useState('');
+  /** Query della RICERCA UNIFICATA (classi di concorso + competenze + parole chiave). */
+  const [querySelezioni, setQuerySelezioni] = useState('');
   const [statoSalvataggio, setStatoSalvataggio] = useState<'idle' | 'salvataggio' | 'salvato'>('idle');
   const primaEsecuzione = useRef(true);
 
@@ -141,13 +148,40 @@ export function PreferenzeRadar() {
    */
   const aggiungiCompetenzaSuggerita = (materiaId: string) =>
     setMaterieId((prev) => (prev.includes(materiaId) ? prev : [...prev, materiaId]));
-  const addCustomMateria = () => {
-    const val = customMateriaInput.trim();
-    if (!val) return;
-    if (!materieCustom.some((m) => m.toLowerCase() === val.toLowerCase())) {
-      setMaterieCustom((prev) => [...prev, val]);
+  /**
+   * RICERCA UNIFICATA condivisa con il wizard (`lib/ricercaSelezioniRadar.ts`):
+   * un solo motore, quindi gli stessi risultati nelle due superfici.
+   */
+  const gruppiSelezioni = useMemo(
+    () => cercaSelezioniRadar(querySelezioni, { classiCodici, materieId, materieCustom }),
+    [querySelezioni, classiCodici, materieId, materieCustom],
+  );
+
+  /** Applica un risultato della ricerca: classe → classe, competenza → competenza. */
+  const scegliSelezione = (suggerimento: SuggerimentoSelezione) => {
+    if (suggerimento.tipo === 'classe') {
+      toggleClasse(suggerimento.chiave);
+      return;
     }
-    setCustomMateriaInput('');
+    if (suggerimento.tipo === 'competenza') {
+      aggiungiCompetenzaSuggerita(suggerimento.chiave);
+      return;
+    }
+    aggiungiParolaChiave(suggerimento.chiave);
+  };
+
+  /**
+   * Aggiunge una PAROLA CHIAVE personale (tag libero) dalla ricerca unificata:
+   * dedup case-insensitive e campo di ricerca ripulito.
+   */
+  const aggiungiParolaChiave = (testo: string) => {
+    setQuerySelezioni('');
+    // Più voci separate da virgola → più tag INDIPENDENTI (mai una stringa incollata).
+    const nuove = separaParoleChiave(testo).filter(
+      (voce) => !materieCustom.some((m) => m.toLowerCase() === voce.toLowerCase()),
+    );
+    if (nuove.length === 0) return;
+    setMaterieCustom((prev) => [...prev, ...nuove]);
   };
   const removeCustomMateria = (m: string) => setMaterieCustom((prev) => prev.filter((x) => x !== m));
   const toggleProvincia = (codice: string) => {
@@ -159,6 +193,12 @@ export function PreferenzeRadar() {
     if (provinceCodici.length >= maxProvince) return;
     setProvinceCodici((prev) => [...prev, codice]);
   };
+  /**
+   * Promuove una provincia di contorno a PRINCIPALE (prima dell'elenco): l'ordine
+   * dell'array è la fonte di verità della priorità ed è già autosalvato.
+   */
+  const promuoviPrincipale = (codice: string) =>
+    setProvinceCodici((prev) => promuoviProvinciaPrincipale(prev, codice));
   const addFavoriteScuola = () => {
     const val = favoriteScuolaInput.trim();
     if (!val) return;
@@ -198,10 +238,12 @@ export function PreferenzeRadar() {
     }
     const modifiche: Preferenze = {
       ordini,
-      classiCodici: limitaSelezione(classiCodici, maxClassiConcorso),
+      // NIENTE troncamento ai tetti: le selezioni salvate (anche 4 province/4 classi
+      // della prova PRO) si conservano integralmente; i tetti limitano solo l'USO.
+      classiCodici,
       materieId,
       materieCustom,
-      provinceCodici: limitaSelezione(provinceCodici, maxProvince),
+      provinceCodici,
       telegramUsername: telegramUsername.trim(),
       telegramChatId: telegramChatIdInput.trim(),
       emailNotifica: emailNotifica.trim(),
@@ -286,9 +328,11 @@ export function PreferenzeRadar() {
         toggleAccordion={toggleAccordion}
         materieId={materieId}
         materieCustom={materieCustom}
-        customMateriaInput={customMateriaInput}
-        setCustomMateriaInput={setCustomMateriaInput}
-        addCustomMateria={addCustomMateria}
+        querySelezioni={querySelezioni}
+        setQuerySelezioni={setQuerySelezioni}
+        gruppiSelezioni={gruppiSelezioni}
+        onScegliSelezione={scegliSelezione}
+        onParolaChiave={aggiungiParolaChiave}
         removeCustomMateria={removeCustomMateria}
         toggleMateria={toggleMateria}
         aggiungiCompetenzaSuggerita={aggiungiCompetenzaSuggerita}
@@ -301,6 +345,7 @@ export function PreferenzeRadar() {
         provinceCodici={provinceCodici}
         provinceSorted={provinceSorted}
         toggleProvincia={toggleProvincia}
+        onPromuoviPrincipale={promuoviPrincipale}
         maxProvince={maxProvince}
         limitiPiano={limitiPiano}
       />

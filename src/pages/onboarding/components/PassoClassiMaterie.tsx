@@ -91,7 +91,7 @@ export function PassoClassiMaterie({ classi, materieScelte }: PassoClassiMaterie
                         type="text"
                         value={queryClasse}
                         onChange={(e) => setQueryClasse(e.target.value)}
-                        placeholder="Es. A-18, A-22, Filosofia..."
+                        placeholder="Cerca classe di concorso (codice o materia)"
                         className="w-full rounded-xl border border-primary-200 bg-white py-2.5 pl-10 pr-4 text-sm text-primary-800"
                       />
                     </div>
@@ -216,7 +216,7 @@ export function PassoClassiMaterie({ classi, materieScelte }: PassoClassiMaterie
                           addCustomMateria();
                         }
                       }}
-                      placeholder="Es. Educazione motoria, Dizione, Robotica educativa…"
+                      placeholder="Scrivi una voce, o più voci separate da virgola"
                       className="input"
                     />
                     <button

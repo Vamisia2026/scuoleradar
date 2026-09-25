@@ -211,18 +211,24 @@ export function useAzioniAccount({
     if (!supabase) setPianoStato('pronto');
   }, []);
 
-  const logout = useCallback(() => {
-    void supabase?.auth.signOut();
+  /**
+   * Azzera TUTTO lo stato locale legato all'utente autenticato in precedenza:
+   * identità, preferenze (incluse genere/età/provincia), contatori, piano, esami,
+   * bozza del wizard e ripresa del wizard. Usata dal logout E dal cambio account
+   * Google, così nessun dato dell'utente precedente sopravvive.
+   */
+  const azzeraStatoUtente = useCallback(() => {
     setUser(null);
     setPref(defaultPreferenze);
     // Pulizia della ripresa del wizard Radar (bozza di un altro account/browser).
     try {
       localStorage.removeItem('sr_radar_wizard_step');
+      localStorage.removeItem('sr_user');
     } catch {
       // localStorage non disponibile
     }
     // Privacy: la bozza di registrazione (nome/cognome/età/provincia) NON deve
-    // sopravvivere al logout su un dispositivo condiviso.
+    // sopravvivere al logout/cambio account su un dispositivo condiviso.
     svuotaBozzaRegistrazione();
     setNotificheUsate(0);
     setAbbonato(false);
@@ -234,13 +240,42 @@ export function useAzioniAccount({
     setSupabaseUserId(null);
     setEsamiState([]);
     setNotificati([]);
-  }, [setUser, setPref, setNotificheUsate, setAbbonato, setPiano, setPianoStato, setRadarAttivo, setCrediti, setSupabaseUserId, setEsamiState, setNotificati]);
+  }, [setUser, setPref, setNotificheUsate, setAbbonato, setPiano, setPianoStato, setRadarAttivo, setCrediti, setSupabaseUserId, setEsamiState, setNotificati, pianoSessionUserIdRef]);
 
+  const logout = useCallback(() => {
+    void supabase?.auth.signOut();
+    azzeraStatoUtente();
+  }, [azzeraStatoUtente]);
+
+  /**
+   * LOGIN/REGISTRAZIONE GOOGLE — sempre con una sessione PULITA.
+   *
+   * Se un utente è già autenticato (caso tipico: passaggio da un account Google a un
+   * altro, es. Bartolo → Pralino) la sessione esistente viene chiusa **prima** di
+   * avviare l'OAuth: senza questo passaggio il client può riproporre la sessione
+   * precedente e servono DUE click (il primo sembra non fare nulla, e genere/età/
+   * provincia restano quelli dell'account di prima). `scope: 'local'` non tocca le
+   * sessioni sugli altri dispositivi; lo stato locale dell'utente precedente viene
+   * azzerato subito, così il ritorno da Google è già il nuovo account.
+   */
   const loginConGoogle = useCallback(async () => {
     if (!supabase) return;
 
     // Analytics: avvio del flusso Google OAuth (login o registrazione).
     track('signin_google_started');
+
+    // Sessione precedente presente (cambio account): si chiude in locale e si azzera
+    // lo stato utente, così il primo click è già quello giusto.
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        console.log('[auth] cambio account Google: chiudo la sessione locale precedente.');
+        await supabase.auth.signOut({ scope: 'local' });
+        azzeraStatoUtente();
+      }
+    } catch (err) {
+      console.warn('Chiusura sessione precedente non riuscita (proseguo con OAuth).', err);
+    }
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -258,7 +293,7 @@ export function useAzioniAccount({
     if (data?.url) {
       window.location.href = data.url; // Forza il browser ad andare direttamente su Google
     }
-  }, []);
+  }, [azzeraStatoUtente]);
 
   return { register, login, loginSupabase, accediDemo, logout, loginConGoogle };
 }

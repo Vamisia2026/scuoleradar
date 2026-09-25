@@ -128,7 +128,7 @@ export function PannelloClassi({
                 setQueryClasse(testo);
                 if (testo.trim()) setMateriaFilter('');
               }}
-              placeholder="Cerca classe (es. A-12)"
+              placeholder="Cerca classe di concorso (codice o materia)"
               aria-label="Cerca classe di concorso"
               className={`input pl-10 ${
                 queryClasse.trim()

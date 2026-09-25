@@ -9,6 +9,7 @@ import { classeByCodice } from '@/data/classiConcorso';
 import type { Interpello } from '@/data/interpelli';
 import { province } from '@/data/province';
 import { track } from '@/lib/analytics';
+import type { User } from './types';
 
 /** Converte una riga della tabella `notices` nel tipo `Interpello` usato dalla dashboard. */
 export function mapNoticiaToInterpello(r: {
@@ -113,4 +114,72 @@ export function tracciaSignupCompletato(method: string, demo?: boolean): void {
   if (ora - ultimoTrackSignupMs < 3000) return;
   ultimoTrackSignupMs = ora;
   track('signup_completed', demo ? { method, demo: true } : { method });
+}
+
+/** Utente di sessione Supabase usato per ricostruire l'identità locale. */
+export interface UtenteSessione {
+  id?: string;
+  email?: string | null;
+  user_metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * IDENTITÀ LOCALE DALLA SESSIONE SUPABASE (fonte unica).
+ *
+ * Costruisce/aggiorna lo `User` usato da RequireAuth, header e navigazione a
+ * partire dall'utente di sessione. È usata sia dal BOOTSTRAP (sessione già valida
+ * all'avvio / ritorno da Google OAuth) sia dal LISTENER `onAuthStateChange`: così
+ * un token valido produce lo stato autenticato IMMEDIATAMENTE, senza un secondo
+ * click su «Accedi» e senza divergenze fra i due percorsi.
+ *
+ * NOME/COGNOME: si preferiscono SEMPRE i campi espliciti (`nome`/`cognome`, scritti
+ * dal form di registrazione/wizard) e i valori già presenti in locale; solo in loro
+ * assenza si usa il `full_name` del provider, spezzato al PRIMO spazio (un nome
+ * composto va quindi dichiarato nei campi dedicati). Per lo stesso utente si
+ * COMPLETANO soltanto i campi vuoti: mai sovrascrivere un dato dell'utente.
+ */
+export function identitaDaSessione(sessione: UtenteSessione, prev: User | null): User {
+  const meta = (sessione.user_metadata ?? {}) as Record<string, unknown>;
+  const nomeEsplicito = String(meta.nome ?? '').trim();
+  const cognomeEsplicito = String(meta.cognome ?? '').trim();
+  const nomeCompleto = String(meta.full_name ?? meta.name ?? '').trim();
+  let nomeDaProvider = nomeEsplicito;
+  let cognomeDaProvider = cognomeEsplicito;
+  if (!nomeDaProvider && nomeCompleto) {
+    const spazio = nomeCompleto.indexOf(' ');
+    if (spazio > 0 && !cognomeDaProvider) {
+      nomeDaProvider = nomeCompleto.slice(0, spazio);
+      cognomeDaProvider = nomeCompleto.slice(spazio + 1).trim();
+    } else {
+      nomeDaProvider = nomeCompleto;
+    }
+  }
+  const email = sessione.email ?? '';
+  const eta =
+    meta.eta === null || meta.eta === undefined || Number.isNaN(Number(meta.eta))
+      ? null
+      : Number(meta.eta);
+  const genere = meta.genere === 'M' || meta.genere === 'F' ? (meta.genere as 'M' | 'F') : undefined;
+  /** Provincia in user_metadata (dal form di registrazione), se dichiarata. */
+  const provincia = typeof meta.provincia === 'string' && meta.provincia ? meta.provincia : null;
+
+  if (prev && prev.email.toLowerCase() === email.toLowerCase()) {
+    return {
+      ...prev,
+      nome: prev.nome?.trim() || nomeDaProvider || prev.nome,
+      cognome: prev.cognome?.trim() || cognomeDaProvider || prev.cognome,
+      genere: prev.genere ?? genere ?? null,
+      eta: prev.eta ?? eta,
+      provincia: prev.provincia ?? provincia,
+    };
+  }
+  return {
+    nome: nomeDaProvider || 'Docente',
+    cognome: cognomeDaProvider,
+    email,
+    password: '',
+    genere,
+    eta,
+    provincia,
+  };
 }

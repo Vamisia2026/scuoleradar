@@ -75,6 +75,7 @@ export const materie: Materia[] = [
   { id: 'clil', nome: 'CLIL' },
   { id: 'coding_robotica', nome: 'Coding e Robotica' },
   { id: 'digital_storytelling', nome: 'Digital storytelling (narrazione digitale)' },
+  { id: 'stop_motion', nome: 'Stop Motion e animazione' },
   { id: 'creativita_digitale', nome: 'Creatività digitale e making' },
   { id: 'beni_culturali', nome: 'Beni culturali e turismo' },
   { id: 'agricoltura', nome: 'Sistemi agricoli e agroalimentari' },
@@ -145,8 +146,15 @@ export interface CompetenzaSuggerita {
 export const competenzeSuggerite: CompetenzaSuggerita[] = [
   { nome: 'Intelligenza artificiale nella didattica', materiaId: 'intelligenza_artificiale' },
   { nome: 'Robotica educativa', materiaId: 'robotica' },
+  { nome: 'Stop Motion', materiaId: 'stop_motion' },
+  { nome: 'Coding e pensiero computazionale', materiaId: 'coding_robotica' },
   { nome: 'Digital storytelling', materiaId: 'digital_storytelling' },
   { nome: 'Metodologia CLIL', materiaId: 'clil' },
-  { nome: 'Creatività digitale', materiaId: 'creativita_digitale' },
+  { nome: 'Lingua inglese', materiaId: 'inglese' },
+  { nome: 'STEM e laboratori scientifici', materiaId: 'stem' },
+  { nome: 'Creatività digitale e making', materiaId: 'creativita_digitale' },
+  { nome: 'Educazione motoria e sportiva', materiaId: 'ed_fisica' },
+  { nome: 'Progettazione e gestione bandi', materiaId: 'progettazione' },
+  { nome: 'Orientamento scolastico', materiaId: 'orientamento' },
 ];
 

@@ -76,7 +76,6 @@
     "E-ROOT:src/departments/radar/SimulatorRadar.tsx": "file di codice nella radice del dominio: va in components/ | hooks/ | services/ | data/",
     "W-UI:src/departments/radar/SimulatorRadar.tsx": "componente fuori da components/ o pages/",
     "E-ROOT:src/departments/radar/valutaConfigurazione.ts": "file di codice nella radice del dominio: va in components/ | hooks/ | services/ | data/",
-    "E-DIM:src/departments/radar/wizard/PassoClassiMaterie.tsx": "345 righe (> 300): dividere in sotto-moduli (SRP)",
     "W-UI:src/departments/radar/wizard/PassoClassiMaterie.tsx": "componente fuori da components/ o pages/",
     "W-UI:src/departments/radar/wizard/PassoNotifica.tsx": "componente fuori da components/ o pages/",
     "W-UI:src/departments/radar/wizard/PassoOrdini.tsx": "componente fuori da components/ o pages/",
