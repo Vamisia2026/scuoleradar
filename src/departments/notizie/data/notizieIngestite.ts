@@ -29,10 +29,10 @@ export const notizieIngestite: NewsArticle[] = [
     "summary_points": [
       "Cosa cambia: Puoi aggiornare punteggi, titoli e servizi delle GPS (Graduatorie Provinciali per le Supplenze, le liste da cui le scuole chiamano i docenti per gli incarichi annuali): è online.",
       "Chi riguarda: docenti e aspiranti docenti che aggiornano la propria posizione in graduatoria.",
-      "Cosa devi fare: La domanda si presenta soltanto online su Istanze Online (POLIS (la piattaforma unica dei servizi pubblici di istruzione)) con identità digitale SPID (Sistema Pubblico di Identità Digitale) o CIE (Carta d’Identità Elettronica). Conserva la ricevuta di presentazione.",
+      "Cosa devi fare: La domanda si presenta soltanto online su Istanze Online (POLIS) con identità digitale SPID (Sistema Pubblico di Identità Digitale) o CIE (Carta d’Identità Elettronica). Conserva la ricevuta di presentazione.",
       "Presenta la domanda: Istanze Online (POLIS) (link diretto nell’articolo)."
     ],
-    "content_html": "<p>Puoi aggiornare punteggi, titoli e servizi delle GPS (Graduatorie Provinciali per le Supplenze, le liste da cui le scuole chiamano i docenti per gli incarichi annuali): è online «Supplenze e ruoli docenti 2026: al via la scelta delle 150 sedi». La procedura è attiva: si presenta da <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online (POLIS)</a>.</p>\n    <p>Riguarda docenti e aspiranti docenti che aggiornano la propria posizione in graduatoria. La posizione in GPS decide l’ordine delle convocazioni: un punteggio sbagliato o un titolo non dichiarato pesa su tutte le chiamate dell’anno. Controlla con calma la sezione dei punteggi prima di inviare, perché dopo la scadenza non si corregge più.</p>\n    <p>La domanda si presenta soltanto online su Istanze Online (POLIS (la piattaforma unica dei servizi pubblici di istruzione)) con identità digitale SPID (Sistema Pubblico di Identità Digitale) o CIE (Carta d’Identità Elettronica). Conserva la ricevuta di presentazione. Presenta la domanda da <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online (POLIS)</a>. Fonte ufficiale: <a href=\"https://www.mim.gov.it/web/guest/-/supplenze-e-ruoli-docenti-2026-al-via-la-scelta-delle-150-sedi\" target=\"_blank\" rel=\"noopener noreferrer\">apri l'avviso ufficiale</a>.</p>",
+    "content_html": "<p>Puoi aggiornare punteggi, titoli e servizi delle GPS (Graduatorie Provinciali per le Supplenze, le liste da cui le scuole chiamano i docenti per gli incarichi annuali): è online «Supplenze e ruoli docenti 2026: al via la scelta delle 150 sedi». La procedura è attiva: si presenta da <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online (POLIS)</a>.</p>\n    <p>Riguarda docenti e aspiranti docenti che aggiornano la propria posizione in graduatoria. La posizione in GPS decide l’ordine delle convocazioni: un punteggio sbagliato o un titolo non dichiarato pesa su tutte le chiamate dell’anno. Controlla con calma la sezione dei punteggi prima di inviare, perché dopo la scadenza non si corregge più.</p>\n    <p>La domanda si presenta soltanto online su Istanze Online (POLIS) con identità digitale SPID (Sistema Pubblico di Identità Digitale) o CIE (Carta d’Identità Elettronica). Conserva la ricevuta di presentazione. Presenta la domanda da <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online (POLIS)</a>. Fonte ufficiale: <a href=\"https://www.mim.gov.it/web/guest/-/supplenze-e-ruoli-docenti-2026-al-via-la-scelta-delle-150-sedi\" target=\"_blank\" rel=\"noopener noreferrer\">apri l'avviso ufficiale</a>.</p>",
     "official_source_url": "https://www.mim.gov.it/web/guest/-/supplenze-e-ruoli-docenti-2026-al-via-la-scelta-delle-150-sedi",
     "official_pdf_url": null,
     "relevance_score": 95,
@@ -64,30 +64,14 @@ export const notizieIngestite: NewsArticle[] = [
     "summary_points": [
       "Cosa cambia: Puoi aggiornare punteggi, titoli e servizi delle GPS (Graduatorie Provinciali per le Supplenze, le liste da cui le scuole chiamano i docenti per gli incarichi annuali): è online.",
       "Chi riguarda: docenti e aspiranti docenti che aggiornano la propria posizione in graduatoria.",
-      "Cosa devi fare: La domanda si presenta soltanto online su Istanze Online (POLIS (la piattaforma unica dei servizi pubblici di istruzione)) con identità digitale SPID (Sistema Pubblico di Identità Digitale) o CIE (Carta d’Identità Elettronica). Conserva la ricevuta di presentazione.",
+      "Cosa devi fare: La domanda si presenta soltanto online su Istanze Online (POLIS) con identità digitale SPID (Sistema Pubblico di Identità Digitale) o CIE (Carta d’Identità Elettronica). Conserva la ricevuta di presentazione.",
       "Presenta la domanda: Istanze Online (POLIS) (link diretto nell’articolo)."
     ],
-    "content_html": "<p>Puoi aggiornare punteggi, titoli e servizi delle GPS (Graduatorie Provinciali per le Supplenze, le liste da cui le scuole chiamano i docenti per gli incarichi annuali): è online «Scioglimento della riserva per l’inclusione a pieno titolo nella I fascia delle GPS (Graduatorie Provinciali per le Supplenze) e conferma del servizio svolto.». La procedura è attiva: si presenta da <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online (POLIS)</a>.</p>\n    <p>Riguarda docenti e aspiranti docenti che aggiornano la propria posizione in graduatoria. La posizione in GPS decide l’ordine delle convocazioni: un punteggio sbagliato o un titolo non dichiarato pesa su tutte le chiamate dell’anno. Controlla con calma la sezione dei punteggi prima di inviare, perché dopo la scadenza non si corregge più.</p>\n    <p>La domanda si presenta soltanto online su Istanze Online (POLIS (la piattaforma unica dei servizi pubblici di istruzione)) con identità digitale SPID (Sistema Pubblico di Identità Digitale) o CIE (Carta d’Identità Elettronica). Conserva la ricevuta di presentazione. Presenta la domanda da <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online (POLIS)</a>. Fonte ufficiale: <a href=\"https://www.mim.gov.it/web/guest/-/scioglimento-della-riserva-per-l-inclusione-a-pieno-titolo-nella-i-fascia-delle-gps-e-conferma-del-servizio-svolto-\" target=\"_blank\" rel=\"noopener noreferrer\">apri l'avviso ufficiale</a>.</p>",
+    "content_html": "<p>Puoi aggiornare punteggi, titoli e servizi delle GPS (Graduatorie Provinciali per le Supplenze, le liste da cui le scuole chiamano i docenti per gli incarichi annuali): è online «Scioglimento della riserva per l’inclusione a pieno titolo nella I fascia delle GPS (Graduatorie Provinciali per le Supplenze) e conferma del servizio svolto.». La procedura è attiva: si presenta da <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online (POLIS)</a>.</p>\n    <p>Riguarda docenti e aspiranti docenti che aggiornano la propria posizione in graduatoria. La posizione in GPS decide l’ordine delle convocazioni: un punteggio sbagliato o un titolo non dichiarato pesa su tutte le chiamate dell’anno. Controlla con calma la sezione dei punteggi prima di inviare, perché dopo la scadenza non si corregge più.</p>\n    <p>La domanda si presenta soltanto online su Istanze Online (POLIS) con identità digitale SPID (Sistema Pubblico di Identità Digitale) o CIE (Carta d’Identità Elettronica). Conserva la ricevuta di presentazione. Presenta la domanda da <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online (POLIS)</a>. Fonte ufficiale: <a href=\"https://www.mim.gov.it/web/guest/-/scioglimento-della-riserva-per-l-inclusione-a-pieno-titolo-nella-i-fascia-delle-gps-e-conferma-del-servizio-svolto-\" target=\"_blank\" rel=\"noopener noreferrer\">apri l'avviso ufficiale</a>.</p>",
     "official_source_url": "https://www.mim.gov.it/web/guest/-/scioglimento-della-riserva-per-l-inclusione-a-pieno-titolo-nella-i-fascia-delle-gps-e-conferma-del-servizio-svolto-",
     "official_pdf_url": null,
     "relevance_score": 95,
     "published_at": "2026-06-15T00:00:00.000Z"
-  },
-  {
-    "id": "notizia-welfare-per-il-personale-della-scuola-parte-la-polizza-sanit-mim",
-    "title": "Welfare per il personale della scuola. Parte la polizza sanitaria: interessati oltre un milione e duecentomila dipendenti",
-    "category": "Welfare",
-    "deadline_date": null,
-    "summary_points": [
-      "Cosa cambia: Una novità concreta per chi lavora a scuola: è stata annunciata.",
-      "Chi riguarda: tutto il personale della scuola — docenti e ATA (personale Amministrativo, Tecnico e Ausiliario) — e le loro famiglie.",
-      "Cosa devi fare: In caso di dubbi, chiedi alla segreteria della tua scuola."
-    ],
-    "content_html": "<p>Una novità concreta per chi lavora a scuola: è stata annunciata «Welfare per il personale della scuola. Parte la polizza sanitaria: interessati oltre un milione e duecentomila dipendenti». Cosa cambia in pratica e a chi serve è spiegato qui sopra; nel <a href=\"https://www.mim.gov.it/web/guest/-/welfare-per-il-personale-della-scuola-parte-la-polizza-sanitaria-interessati-oltre-un-milione-e-duecentomila-dipendenti\" target=\"_blank\" rel=\"noopener noreferrer\">documento ufficiale</a> trovi condizioni, requisiti e decorrenza.</p>\n    <p>Riguarda tutto il personale della scuola — docenti e ATA (personale Amministrativo, Tecnico e Ausiliario) — e le loro famiglie. Non è una circolare operativa ma un cambio di condizioni: leggi coperture, decorrenza e modalità di adesione, per non restare fuori da un beneficio previsto per te.</p>\n    <p>In caso di dubbi, chiedi alla segreteria della tua scuola. Fonte ufficiale: <a href=\"https://www.mim.gov.it/web/guest/-/welfare-per-il-personale-della-scuola-parte-la-polizza-sanitaria-interessati-oltre-un-milione-e-duecentomila-dipendenti\" target=\"_blank\" rel=\"noopener noreferrer\">apri l'avviso ufficiale</a>.</p>",
-    "official_source_url": "https://www.mim.gov.it/web/guest/-/welfare-per-il-personale-della-scuola-parte-la-polizza-sanitaria-interessati-oltre-un-milione-e-duecentomila-dipendenti",
-    "official_pdf_url": null,
-    "relevance_score": 65,
-    "published_at": "2026-09-21T15:59:25.383Z"
   },
   {
     "id": "notizia-nuove-indicazioni-nazionali-2025-al-via-il-percorso-di-forma-mim",
@@ -105,5 +89,21 @@ export const notizieIngestite: NewsArticle[] = [
     "official_pdf_url": null,
     "relevance_score": 73,
     "published_at": "2026-09-15T00:00:00.000Z"
+  },
+  {
+    "id": "notizia-welfare-per-il-personale-della-scuola-parte-la-polizza-sanit-mim",
+    "title": "Welfare per il personale della scuola. Parte la polizza sanitaria: interessati oltre un milione e duecentomila dipendenti",
+    "category": "Welfare",
+    "deadline_date": null,
+    "summary_points": [
+      "Cosa cambia: Una novità concreta per chi lavora a scuola: è stata annunciata.",
+      "Chi riguarda: tutto il personale della scuola — docenti e ATA (personale Amministrativo, Tecnico e Ausiliario) — e le loro famiglie.",
+      "Cosa devi fare: In caso di dubbi, chiedi alla segreteria della tua scuola."
+    ],
+    "content_html": "<p>Una novità concreta per chi lavora a scuola: è stata annunciata «Welfare per il personale della scuola. Parte la polizza sanitaria: interessati oltre un milione e duecentomila dipendenti». Cosa cambia in pratica e a chi serve è spiegato qui sopra; nel <a href=\"https://www.mim.gov.it/web/guest/-/welfare-per-il-personale-della-scuola-parte-la-polizza-sanitaria-interessati-oltre-un-milione-e-duecentomila-dipendenti\" target=\"_blank\" rel=\"noopener noreferrer\">documento ufficiale</a> trovi condizioni, requisiti e decorrenza.</p>\n    <p>Riguarda tutto il personale della scuola — docenti e ATA (personale Amministrativo, Tecnico e Ausiliario) — e le loro famiglie. Non è una circolare operativa ma un cambio di condizioni: leggi coperture, decorrenza e modalità di adesione, per non restare fuori da un beneficio previsto per te.</p>\n    <p>In caso di dubbi, chiedi alla segreteria della tua scuola. Fonte ufficiale: <a href=\"https://www.mim.gov.it/web/guest/-/welfare-per-il-personale-della-scuola-parte-la-polizza-sanitaria-interessati-oltre-un-milione-e-duecentomila-dipendenti\" target=\"_blank\" rel=\"noopener noreferrer\">apri l'avviso ufficiale</a>.</p>",
+    "official_source_url": "https://www.mim.gov.it/web/guest/-/welfare-per-il-personale-della-scuola-parte-la-polizza-sanitaria-interessati-oltre-un-milione-e-duecentomila-dipendenti",
+    "official_pdf_url": null,
+    "relevance_score": 65,
+    "published_at": "2026-09-21T15:59:25.383Z"
   }
 ];
