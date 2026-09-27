@@ -74,8 +74,9 @@ export function PureFocusPage() {
         ) : (
           <div className="mt-6 rounded-2xl bg-white/10 p-5 ring-1 ring-white/20">
             <p className="max-w-2xl text-sm leading-relaxed text-primary-100">
-              PureFocus costa 29$/anno ed è <strong className="text-white">INCLUSO GRATUITAMENTE</strong>{' '}
-              per tutti gli utenti PRO di ScuoleRadar.
+              PureFocus costa 29 $/anno ed è{' '}
+              <strong className="text-white">INCLUSO NELL&apos;OFFERTA</strong> per tutti gli utenti
+              PRO di ScuoleRadar.
             </p>
             <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:items-center">
               <Link

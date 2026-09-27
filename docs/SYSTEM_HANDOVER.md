@@ -209,7 +209,7 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 
 | File | Righe | Responsabilità |
 |---|---|---|
-| `index.html` | 20 | Entry SPA; title/meta "La piattaforma per gli Scuolatori" (terminologia Radar Scuole); favicon; font Google |
+| `index.html` | 20 | Entry SPA; title/meta "Il Radar degli interpelli nella scuola" (Radar Scuole); in meta anche la prova inclusa: 30 giorni di PRO, PureFocus incluso, poi 49 €/anno; favicon; font Google |
 | `package.json` | 52 | Script + dipendenze (§18) |
 | `vite.config.ts` | 22 | Porta 5174 strictPort; alias `@`; exclude lucide |
 | `tailwind.config.js` | 93+ | Token palette, font, shadow, animazioni (§1.4) |
@@ -262,7 +262,7 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `ScrollToTop.tsx` | — | Scroll-to-top a ogni cambio rotta |
 | `Footer.tsx` · `Accordion.tsx` | — | Footer condiviso · accordion riusabile |
 | `CvTool.tsx` | 174 | CV Builder legacy in `src/components/` (§8); il vecchio wrapper CFU (`CfuTool.tsx`) è stato **rimosso** con la V1 |
-| `landing/Landing*.tsx` | — | Sezioni della landing pubblica (`LandingHero`, `LandingBenefici`, `LandingCards`, `LandingCta`) |
+| `landing/Landing*.tsx` | — | Sezioni della landing pubblica (`LandingHero`, `LandingBenefici`, `LandingCards`, `LandingCta`, `LandingStrumenti`, `LandingProvaRadar`, `LandingOffertaPro`, `LandingPartnerPureFocus`) |
 | `VetrinaModal.tsx` · `profile/ReferralSection.tsx` | — | vedi sopra · modulo referral "Invita un Collega" |
 
 ### 2.4 `src/components/profile/`
@@ -1450,7 +1450,10 @@ Niente menzioni a ricompense o account PRO gratuiti. Nel header/dashboard compar
 ### 10.3 Pagine vetrina & servizi
 - `servizi.ts` → `Servizio[]` per `ServiziPage`/`ServizioPage` (radar, cv, cfu, assistente, moduli).
 - `VetrinaModal` → paywall freemium multi-sezione; `ServiziPaywall` → CTA generico.
-- `LandingPage` → hero + `SimulatorRadar` + footer condiviso (`Footer`).
+- `LandingPage` → `LandingHero` (monocolonna, senza simulatore) → `LandingBenefici` →
+  spiegazione piani → `FlightBoardInterpelli` («Radar Live», **primo contenuto dopo
+  l'hero**) → `LandingStrumenti` → `LandingProvaRadar` (simulatore, non più nell'hero) →
+  `LandingOffertaPro` → `LandingPartnerPureFocus` → stats → `LandingCta` → `Footer`.
 
 ---
 
@@ -3215,6 +3218,56 @@ Al cambio identità (`pianoSessionUserIdRef` → nuovo `idSessione`) il listener
 `useAuthSync` azzera i soli campi anagrafici locali (`genere`, `eta`, `provincia`) e
 solo per uno switch **reale**: sesso, età e provincia dell'utente precedente non
 compaiono mai nel nuovo account, mentre una prima registrazione conserva i dati
+
+### 26.7 Homepage: Radar Live subito, offerta PRO in tono elite
+
+**Nota di sessione (27/09/2026)** — riordino della vetrina pubblica e pulizia del copy.
+
+**Ordine dei contenuti** (`pages/LandingPage.tsx`):
+
+| # | Sezione | Ruolo |
+|---|---|---|
+| 1 | `LandingHero` | Promessa + CTA, ora **monocolonna centrato**: niente simulatore che ruba il primo schermo |
+| 2 | `LandingBenefici` | «Ecco cosa riceverai» |
+| 3 | Spiegazione piani | Blocco testuale piani Base/PRO |
+| 4 | `FlightBoardInterpelli` | **«Radar Live» — primo contenuto dopo l'hero** (flag `radar`) |
+| 5 | `LandingStrumenti` | Griglia strumenti (filtrata dalle feature flag) |
+| 6 | `LandingProvaRadar` | Simulatore `SimulatorRadar`: la prova resta a un click, fuori dall'hero |
+| 7 | `LandingOffertaPro` | Offerta PRO: 30 giorni inclusi, PureFocus incluso, poi 49 €/anno |
+| 8 | `LandingPartnerPureFocus` | Fascia sponsor PureFocus (stato PRO a prop) |
+| 9 | Stats + `LandingCta` | Numeri di servizio e CTA finale |
+
+**Offerta PRO.** `LandingOffertaPro` non contiene cifre a mano: importa
+`GIORNI_TRIAL_PRO` e `PREZZO_PRO_ANNUO_ETICHETTA` da `src/lib/pricing.ts`, così la
+vetrina non può divergere dal listino. Descrive il comportamento reale dei piani
+(alert in tempo reale su Telegram; l'email resta una al giorno), PureFocus PRO
+incluso (29 $/anno, nessun costo aggiuntivo) e la fine del periodo con la formula
+ammessa «Alla scadenza torni su Base, senza costi». Nessun countdown, nessun
+«prezzo che cambia»: la prova è la stessa per tutti tutto l'anno.
+
+**Copy ripulito** (vocabolario approvato `Prova Inclusa` / `Incluso nell'Offerta`):
+
+| Superficie | Prima | Ora |
+|---|---|---|
+| `index.html` | «La piattaforma per gli Scuolatori» | «Il Radar degli interpelli nella scuola» + 30 giorni di PRO, PureFocus incluso, poi 49 €/anno |
+| `ChiSiamoPage` | «1 mese di PRO gratuito, senza carta di credito» | «Prova Inclusa: 30 giorni di PRO con PureFocus incluso» |
+| `PrezziPage` (piano Base) | «1 mese di prova gratuito» | «solo nella prova inclusa, 1 mese» |
+| `PureFocusPage` | «INCLUSO GRATUITAMENTE» | «INCLUSO NELL'OFFERTA» |
+| `AssistenteAIPage` | «scuolatori … in anteprima» | «numero limitato di colleghi» |
+
+**Guardia.** `scripts/test-copy-etico.ts` → sezione «Landing: Radar Live in testa,
+offerta PRO senza toni da televendita»: nessun termine da volantino né parola di
+pagamento sulle superfici della homepage (`src/pages/LandingPage.tsx` +
+`src/components/landing/**`), cifre dell'offerta da `pricing.ts`, ordine
+hero → Radar Live → prova del Radar, simulatore fuori dall'hero, e nessun
+«prova gratuita/o» nelle pagine pubbliche. La forbice è volutamente **per superficie**:
+le superfici di prodotto (banner di registrazione, benvenuto PRO) mantengono la
+dicitura ammessa dalla checklist pagamenti, mentre la landing usa il vocabolario
+stretto.
+
+**Nota operativa.** `scripts/_assistente-cleanup.mjs` è uno script di patch una-tantum
+(riga 66 di `AssistenteAIPage`) già eseguito e ormai disallineato: non va rilanciato.
+
 appena inseriti (la fonte autorevole resta `profiles`).
 Guardia: `npm run test:sessione`.
 

@@ -100,7 +100,6 @@
     "E-DIM:src/modules/modulistica/hooks/useModulistica.ts": "373 righe (> 300): dividere in sotto-moduli (SRP)",
     "E-ROOT:src/modules/modulistica/ModuliModule.tsx": "file di codice nella radice del dominio: va in components/ | hooks/ | services/ | data/",
     "W-UI:src/modules/modulistica/ModuliModule.tsx": "componente fuori da components/ o pages/",
-    "W-DIM:src/pages/LandingPage.tsx": "289 righe (> 250): pianificare lo split",
     "W-DIM:src/pages/onboarding/OnboardingPage.tsx": "272 righe (> 250): pianificare lo split",
     "E-DIM:src/pages/PrezziPage.tsx": "364 righe (> 300): dividere in sotto-moduli (SRP)",
     "E-DIM:src/scraper/index.ts": "1516 righe (> 300): dividere in sotto-moduli (SRP)",

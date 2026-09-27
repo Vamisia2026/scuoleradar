@@ -44,7 +44,7 @@ const VANTAGGI_PRO: Vantaggio[] = [
 
 /** Vantaggi e limitazioni del piano a consumo (Base) — misto ✓ / ✗. */
 const VANTAGGI_CONSUMO: Vantaggio[] = [
-  { testo: 'Segnalazioni e notifiche illimitate (1 mese di prova gratuito)', incluso: false },
+  { testo: 'Segnalazioni e notifiche illimitate (solo nella prova inclusa, 1 mese)', incluso: false },
   { testo: 'Crea CV', incluso: true },
   { testo: 'Calcolatore CFU', incluso: false },
   { testo: 'Assistente Sindacalista Virtuale', incluso: false },

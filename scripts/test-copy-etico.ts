@@ -118,6 +118,54 @@ check(
     passoNotifica.includes('Telegram = avvisi ISTANTANEI'),
 );
 
+console.log('\n— Landing: Radar Live in testa, offerta PRO senza toni da televendita —');
+/**
+ * Superfici PUBBLICHE della homepage (pagina contenitore + sue sezioni).
+ * Vale la regola stretta della checklist pagamenti: nessun termine da volantino
+ * per un piano a pagamento e nessuna parola di pagamento accostata al periodo
+ * incluso. La prova si comunica con «Prova Inclusa» / «30 giorni di PRO» più il
+ * valore concreto (Radar attivo, PureFocus incluso).
+ */
+const superficiLanding = ['src/pages/LandingPage.tsx', ...sorgenti('src/components/landing')];
+const offertaPro = leggi('src/components/landing/LandingOffertaPro.tsx');
+const heroLanding = leggi('src/components/landing/LandingHero.tsx');
+check(
+  'landing: niente «gratis/gratuito» né parole di pagamento (televendita)',
+  [],
+  superficiLanding.filter((p) => /gratis|gratuit|carta|addebito/i.test(readFileSync(p, 'utf8'))),
+);
+check(
+  "landing: le cifre dell'offerta PRO arrivano da pricing.ts (30 giorni, 49 €/anno)",
+  true,
+  offertaPro.includes('GIORNI_TRIAL_PRO') &&
+    offertaPro.includes('PREZZO_PRO_ANNUO_ETICHETTA') &&
+    /from '@\/lib\/pricing'/.test(offertaPro),
+);
+check(
+  'landing: offerta PRO con vocabolario approvato e fine prova ammessa',
+  true,
+  /incluso nell'offerta PRO/.test(offertaPro) &&
+    offertaPro.includes('Alla scadenza torni su Base, senza costi') &&
+    /rinnovo automatico di \{PREZZO_PRO_ANNUO_ETICHETTA\}\/anno/.test(offertaPro),
+);
+check(
+  "landing: il Radar Live è il primo contenuto dopo l'hero",
+  true,
+  landing.indexOf('<LandingHero') < landing.indexOf('<FlightBoardInterpelli') &&
+    landing.indexOf('<FlightBoardInterpelli') < landing.indexOf('<LandingProvaRadar'),
+);
+check(
+  "landing: il box «Prova il Radar» non è più nell'hero (spostato sotto gli strumenti)",
+  true,
+  !heroLanding.includes('SimulatorRadar') &&
+    leggi('src/components/landing/LandingProvaRadar.tsx').includes('SimulatorRadar'),
+);
+check(
+  'pagine pubbliche: mai «prova gratuita/o» (si dice «prova inclusa»)',
+  [],
+  sorgenti('src/pages').filter((p) => /prova\s+grat/iu.test(readFileSync(p, 'utf8'))),
+);
+
 console.log('\n— Campi di input: nessun esempio fittizio nei placeholder —');
 /**
  * I placeholder NON devono contenere dati fittizi o nomi di persona («Es. 34»,

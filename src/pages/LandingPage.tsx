@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { BellRing, ShieldCheck, Heart, UserPlus, Send, CreditCard, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { BellRing, ShieldCheck, Heart, UserPlus, Send, CreditCard } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { FlightBoardInterpelli } from '@/departments/radar';
 import { LandingBenefici } from '@/components/landing/LandingBenefici';
 import { LandingCta } from '@/components/landing/LandingCta';
 import { LandingHero } from '@/components/landing/LandingHero';
+import { LandingOffertaPro } from '@/components/landing/LandingOffertaPro';
+import { LandingPartnerPureFocus } from '@/components/landing/LandingPartnerPureFocus';
+import { LandingProvaRadar } from '@/components/landing/LandingProvaRadar';
 import { LandingStrumenti } from '@/components/landing/LandingStrumenti';
 import { Stat, StepCard, ValueCard } from '@/components/landing/LandingCards';
 import { useApp } from '@/contexts/AppContext';
@@ -90,9 +93,10 @@ export function LandingPage() {
         radarPronto={radarPronto}
       />
 
-      {/* Radar Live — flight board interpelli (subito sotto la CTA hero).
-          Visibile SOLO con il dipartimento Radar attivo: mai la bacheca «in chiaro»
-          di un modulo spento (feature flags). */}
+      {/* Radar Live — flight board interpelli: è il PRIMO contenuto dopo l'hero e il
+          protagonista visivo della pagina (l'hero è volutamente monocollonna, senza
+          simulatore). Visibile SOLO con il dipartimento Radar attivo: mai la bacheca
+          «in chiaro» di un modulo spento (feature flags). */}
       {visibile('radar') && <FlightBoardInterpelli />}
 
       {/* Ecco cosa riceverai — subito sotto l'hero, prima di "Come funziona". */}
@@ -139,8 +143,8 @@ export function LandingPage() {
             />
             <ValueCard
               icon={<ShieldCheck className="h-6 w-6" />}
-              title="Niente rumore, solo ciò che conta"
-              text="Inviamo notifiche solo quando c'è un'opportunità in linea con il tuo profilo."
+              title="Zero rumore"
+              text="Ti scriviamo solo quando esce un'opportunità nella tua provincia e per la tua classe di concorso."
             />
             <ValueCard
               icon={<Heart className="h-6 w-6" />}
@@ -154,98 +158,16 @@ export function LandingPage() {
       {/* Servizi (griglia filtrata dalle feature flags) */}
       <LandingStrumenti />
 
-      {/* PureFocus — partner / sponsor ufficiale: accesso esterno per tutti */}
-      <section className="bg-white py-8">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6">
-          <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-primary-700 to-primary-900 text-white shadow-card">
-            {/* Fascia partner */}
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/15 px-6 py-3 sm:px-8">
-              <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-primary-200">
-                <Sparkles className="h-3.5 w-3.5" />
-                Partner ufficiale
-              </span>
-              <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary-300">
-                Sponsor Ufficiale
-              </span>
-            </div>
+      {/* Prova il Radar — il box «Prova il Radar» non vive più nell'hero: qui resta
+          a un click di distanza, senza rubare il primo schermo al Radar Live. */}
+      <LandingProvaRadar />
 
-            <div className="p-6 sm:p-8">
-              <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-                <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/10 text-2xl">
-                  🧘
-                </span>
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-2xl font-bold sm:text-3xl">PureFocus</h2>
-                  <p className="mt-1 text-sm text-primary-200">purefocus.one — studio e lavoro su YouTube senza distrazioni</p>
-                </div>
-                <a
-                  href="https://purefocus.one"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-white/15 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/25"
-                >
-                  Scopri PureFocus ↗
-                </a>
-              </div>
+      {/* Offerta PRO — 30 giorni di PRO inclusi, PureFocus incluso, poi 49 €/anno.
+          Presentazione pura: la CTA riusa l'handler del Radar del contenitore. */}
+      <LandingOffertaPro handleRadarClick={handleRadarClick} radarPronto={radarPronto} />
 
-              <p className="mt-5 max-w-2xl leading-relaxed text-primary-100">
-                La piattaforma che trasforma YouTube in un ambiente di studio e lavoro: elimina
-                distrazioni, suggerimenti e contenuti irrilevanti, lasciandoti solo ciò che ti serve
-                per ottimizzare il tuo tempo.
-              </p>
-
-              {hasProAccess ? (
-                <div className="mt-6 rounded-2xl bg-white/10 p-5 ring-1 ring-white/20">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-400/20 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-accent-300 ring-1 ring-inset ring-accent-300/40">
-                        <Sparkles className="h-3 w-3" />
-                        Incluso nel tuo piano
-                      </span>
-                      <p className="mt-2 text-sm leading-relaxed text-primary-100">
-                        Hai PureFocus già incluso nel piano PRO (mensile, annuale o Free Forever):
-                        nessun costo aggiuntivo, entra e inizia subito.
-                      </p>
-                    </div>
-                    <a
-                      href="https://purefocus.one"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-bold text-primary-800 shadow-soft transition hover:bg-primary-50"
-                    >
-                      ACCEDI A PUREFOCUS ↗
-                    </a>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-6 rounded-2xl bg-white/10 p-5 ring-1 ring-white/20">
-                  <p className="max-w-2xl text-sm leading-relaxed text-primary-100">
-                    PureFocus costa 29$/anno ed è{' '}
-                    <strong className="text-white">INCLUSO GRATUITAMENTE</strong> per tutti gli utenti
-                    PRO di ScuoleRadar.
-                  </p>
-                  <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:items-center">
-                    <Link
-                      to="/prezzi"
-                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-secondary-500 px-6 py-3 text-sm font-bold text-white shadow-soft transition hover:bg-secondary-600"
-                    >
-                      PASSA A PRO
-                    </Link>
-                    <a
-                      href="https://purefocus.one"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-white/15 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/25"
-                    >
-                      Visita purefocus.one ↗
-                    </a>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* PureFocus — partner / sponsor ufficiale: fascia dedicata, stato PRO a prop. */}
+      <LandingPartnerPureFocus hasProAccess={hasProAccess} />
 
       {/* Stats / social proof */}
       <section className="bg-primary-900 py-10">

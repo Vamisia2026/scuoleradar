@@ -71,8 +71,8 @@ export function AssistenteAIPage() {
           domanda e ricevi una risposta chiara, con i riferimenti giusti e i moduli che ti servono.
         </p>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-primary-500">
-          Stiamo cercando scuolatori che vogliono provare il servizio in anteprima. Lascia i tuoi dati
-          qui: ti contatteremo appena apriremo l'accesso.
+          L'anteprima è aperta a un numero limitato di colleghi in questa prima fase. Lascia i tuoi
+          dati: ti contattiamo appena attiviamo il tuo accesso.
         </p>
       </div>
 

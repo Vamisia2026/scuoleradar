@@ -59,7 +59,7 @@ export function ChiSiamoPage() {
               Unisciti a noi
             </button>
             <p className="mt-3 text-sm text-primary-500">
-              1 mese di PRO gratuito, senza carta di credito.
+              Prova Inclusa: 30 giorni di PRO con PureFocus incluso.
             </p>
           </div>
         </div>
