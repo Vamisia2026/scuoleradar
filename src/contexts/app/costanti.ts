@@ -21,6 +21,7 @@ export const defaultPreferenze: Preferenze = {
   onboarded: false,
   favoriteSchools: [],
   ignoredSchools: [],
-  // Sostegno: OFF di default → nessun avviso di sostegno senza adesione esplicita.
-  sostegno: false,
+  // Sostegno: INCLUSO di default (nessun filtro silenzioso sugli avvisi AD…).
+  // Chi non lo vuole lo spegne dalle Preferenze Radar (`SostegnoToggle`).
+  sostegno: true,
 };

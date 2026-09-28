@@ -1,19 +1,18 @@
 /**
  * Landing — sezione «Offerta PRO».
  *
- * È il blocco che spiega piano e prezzo in una schermata sola. Le regole di
- * prodotto stanno in `comunicazione/05_abbonamenti_pagamenti/checklist_pagamenti.md`
- * e sono vincolanti: cifre esplicite (`30 giorni`, `49 €/anno`, `9 €/mese`),
- * nessun termine da volantino (omaggi, sconti a tempo, parole di pagamento
- * accostate al periodo incluso), nessuna spinta all'urgenza. L'elenco esatto
- * delle diciture vietate e ammesse sta nella checklist stessa.
- * Le cifre arrivano da `@/lib/pricing` (fonte unica lato client).
+ * La sezione CHIUDE la conversione: le tre colonne contengono SOLO i benefici
+ * reali del piano — avvisi Telegram in tempo reale, email riepilogativa delle
+ * 17.00, PureFocus incluso — e non esistono vie d'uscita (nessun link ad altri
+ * piani o alla pagina dei piani). Qui non compare nessun importo né alcuna
+ * condizione contrattuale: la dichiarazione commerciale vive in `/prezzi`, nelle
+ * FAQ e nel passo di pagamento (regole vincolanti in
+ * `comunicazione/05_abbonamenti_pagamenti/checklist_pagamenti.md`).
  *
  * Presentazione pura: la CTA riusa l'handler del Radar passato dal contenitore.
  */
 import { ArrowRight, Check, Sparkles } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import { GIORNI_TRIAL_PRO, PREZZO_PRO_ANNUO_ETICHETTA } from '@/lib/pricing';
+import { GIORNI_TRIAL_PRO } from '@/lib/pricing';
 
 interface LandingOffertaProProps {
   /** Avvia il setup del Radar (wizard) o apre la gestione se è già attivo. */
@@ -28,25 +27,25 @@ interface PuntoOfferta {
 }
 
 /**
- * I tre punti dell'offerta: cosa cambia con il PRO, il partner incluso, il prezzo.
- * Il primo descrive il comportamento reale dei piani (Base = digest, PRO = alert in
- * tempo reale su Telegram; l'email resta una al giorno), senza promettere «tutto».
+ * I TRE punti dell'offerta — e solo questi tre: avvisi Telegram in tempo reale,
+ * email riepilogativa delle 17.00, PureFocus incluso nel piano PRO. Descrivono
+ * ciò che il piano fa davvero, senza aprire nessuna via d'uscita.
  */
 const PUNTI: readonly PuntoOfferta[] = [
   {
-    titolo: 'Alert in tempo reale su Telegram',
+    titolo: 'Avvisi Telegram in tempo reale',
     testo:
-      "Appena esce un interpello per una delle tue province e classi di concorso il messaggio parte: niente riassunto una volta al giorno.",
+      "Appena esce un interpello per una delle tue province il messaggio parte: niente riepilogo una volta al giorno.",
   },
   {
-    titolo: 'PureFocus PRO incluso',
+    titolo: 'Email riepilogativa tutti i giorni alle 17.00',
     testo:
-      "Studio e lavoro su YouTube senza distrazioni (29 $/anno): incluso nell'offerta PRO, nessun costo aggiuntivo.",
+      "Un solo messaggio al giorno con tutte le opportunità uscite: le ritrovi nella tua casella, quando puoi.",
   },
   {
-    titolo: `Poi ${PREZZO_PRO_ANNUO_ETICHETTA}/anno`,
+    titolo: 'PureFocus incluso nel piano PRO',
     testo:
-      "Un'unica quota annuale (9 €/mese se preferisci il mensile). Alla scadenza torni su Base, senza costi.",
+      "Studio e lavoro su YouTube senza distrazioni (29 $/anno): incluso nel PRO, nessun costo aggiuntivo.",
   },
 ];
 
@@ -63,9 +62,9 @@ export function LandingOffertaPro({ handleRadarClick, radarPronto }: LandingOffe
             <h2 className="mt-3 text-3xl font-bold text-primary-900">
               {GIORNI_TRIAL_PRO} giorni di PRO, tutto incluso
             </h2>
-            <p className="mx-auto mt-3 max-w-2xl text-primary-600">
-              La prova è la stessa per tutti e resta disponibile tutto l&apos;anno: nessun countdown,
-              nessun prezzo che cambia. Alla scadenza torni su Base, senza costi.
+            <p className="mx-auto mt-3 max-w-2xl font-medium text-primary-700">
+              Un mese intero di PRO offerto da noi: attivi il Radar e da subito le opportunità
+              arrivano a te.
             </p>
           </div>
 
@@ -81,28 +80,19 @@ export function LandingOffertaPro({ handleRadarClick, radarPronto }: LandingOffe
             ))}
           </div>
 
-          <div className="flex flex-col items-center gap-3 border-t border-primary-100 bg-white px-6 py-5 sm:flex-row sm:justify-center sm:px-8">
+          {/* CTA unica: nessun link alla pagina prezzi — la sezione chiude la
+              conversione e non offre vie d'uscita verso altri piani. */}
+          <div className="flex justify-center border-t border-primary-100 bg-white px-6 py-5 sm:px-8">
             <button
               onClick={handleRadarClick}
               className={`inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-base font-semibold text-white shadow-soft transition ${
                 radarPronto ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-[#2B6F9E] hover:bg-[#225a82]'
               }`}
             >
-              {radarPronto ? 'Gestisci il tuo Radar' : 'Attiva il Radar'}
+              {radarPronto ? 'Gestisci il tuo Radar' : 'Attiva il tuo Radar'}
               <ArrowRight className="h-4 w-4" />
             </button>
-            <Link
-              to="/prezzi"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-primary-200 bg-white px-6 py-3 text-base font-semibold text-primary-700 transition hover:bg-primary-50"
-            >
-              Confronta i piani
-            </Link>
           </div>
-
-          <p className="border-t border-primary-100 bg-primary-50/70 px-6 py-3 text-center text-xs text-primary-500 sm:px-8">
-            PRO: rinnovo automatico di {PREZZO_PRO_ANNUO_ETICHETTA}/anno, disdici quando vuoi. La
-            prova termina senza costi.
-          </p>
         </div>
       </div>
     </section>

@@ -83,6 +83,9 @@ const authModal = leggi('src/components/AuthModal.tsx');
 const benvenuto = leggi('src/departments/radar/components/BenvenutoProRadar.tsx');
 const landing = leggi('src/pages/LandingPage.tsx');
 const passoNotifica = leggi('src/departments/radar/wizard/PassoNotifica.tsx');
+const passoOrdini = leggi('src/departments/radar/wizard/PassoOrdini.tsx');
+/** Blocco anagrafico (genere/età): l'UNICO punto del percorso in cui si chiedono. */
+const bloccoAnagrafica = leggi('src/components/BloccoAnagrafica.tsx');
 
 console.log('\n— Banner di benvenuto PRO: valore del tempo —');
 check(
@@ -112,10 +115,24 @@ console.log('\n— Landing e Passo 4: nessuna promessa di vantaggio sui colleghi
 check('landing: il passo finale non promette «prima degli altri»', true, !/prima degli altri/i.test(landing));
 check('landing: il passo finale è neutro e operativo', true, landing.includes('Candidati con i link ufficiali'));
 check(
-  'passo Telegram: collega il canale senza urgenza artificiale',
+  'passo Telegram: canale immediato, senza formule deboli né urgenza artificiale',
   true,
   !/scadono in poche ore|per non perdere le opportunità/i.test(passoNotifica) &&
-    passoNotifica.includes('Telegram = avvisi ISTANTANEI'),
+    passoNotifica.includes('Telegram — avvisi istantanei') &&
+    passoNotifica.includes('riepilogo giornaliero') &&
+    !/fortemente consigliato|Telegram =/i.test(passoNotifica),
+);
+check(
+  'passo Telegram: nessun suggerimento su cosa scrivere nel campo',
+  true,
+  !/Modifica profilo|lo trovi su Telegram/i.test(passoNotifica),
+);
+check(
+  'wizard: anagrafica a FINE percorso (Passo 4), mai in apertura, senza etichetta «account Base»',
+  true,
+  passoNotifica.includes('<BloccoAnagrafica') &&
+    !passoOrdini.includes('BloccoAnagrafica') &&
+    !/account Base/i.test(passoNotifica),
 );
 
 console.log('\n— Landing: Radar Live in testa, offerta PRO senza toni da televendita —');
@@ -135,30 +152,53 @@ check(
   superficiLanding.filter((p) => /gratis|gratuit|carta|addebito/i.test(readFileSync(p, 'utf8'))),
 );
 check(
-  "landing: le cifre dell'offerta PRO arrivano da pricing.ts (30 giorni, 49 €/anno)",
+  'landing: i giorni dell’offerta PRO arrivano da pricing.ts (30 giorni)',
   true,
-  offertaPro.includes('GIORNI_TRIAL_PRO') &&
-    offertaPro.includes('PREZZO_PRO_ANNUO_ETICHETTA') &&
-    /from '@\/lib\/pricing'/.test(offertaPro),
+  offertaPro.includes('GIORNI_TRIAL_PRO') && /from '@\/lib\/pricing'/.test(offertaPro),
 );
 check(
-  'landing: offerta PRO con vocabolario approvato e fine prova ammessa',
+  'landing: offerta PRO senza importi, rinnovo o disdetta (sezione solo-benefici)',
+  [],
+  [/rinnovo/i, /disdici/i, /torni su Base/i, /quota annuale/i, /€/, /PREZZO_PRO/].filter((r) => r.test(offertaPro)),
+);
+check(
+  'landing: offerta PRO diretta e sicura, senza copy difensivo e senza vie d’uscita',
   true,
-  /incluso nell'offerta PRO/.test(offertaPro) &&
-    offertaPro.includes('Alla scadenza torni su Base, senza costi') &&
-    /rinnovo automatico di \{PREZZO_PRO_ANNUO_ETICHETTA\}\/anno/.test(offertaPro),
+  offertaPro.includes('Un mese intero di PRO offerto da noi') &&
+    offertaPro.includes('Attiva il tuo Radar') &&
+    !/Siamo così sicuri|passi semplicemente a un account Base/i.test(offertaPro) &&
+    !/Confronta i piani|Scopri i piani|Vedi tutti i piani/i.test(offertaPro) &&
+    !/countdown|prezzo che cambia/.test(offertaPro),
+);
+check(
+  'landing: i TRE blocchi dell’offerta PRO sono esattamente quelli previsti',
+  true,
+  offertaPro.includes('Avvisi Telegram in tempo reale') &&
+    offertaPro.includes('Email riepilogativa tutti i giorni alle 17.00') &&
+    offertaPro.includes('PureFocus incluso nel piano PRO') &&
+    (offertaPro.match(/titolo: '/g) ?? []).length === 3 &&
+    !/<Link|to="\/prezzi"/.test(offertaPro),
 );
 check(
   "landing: il Radar Live è il primo contenuto dopo l'hero",
   true,
   landing.indexOf('<LandingHero') < landing.indexOf('<FlightBoardInterpelli') &&
-    landing.indexOf('<FlightBoardInterpelli') < landing.indexOf('<LandingProvaRadar'),
+    !landing.includes('LandingProvaRadar'),
 );
 check(
-  "landing: il box «Prova il Radar» non è più nell'hero (spostato sotto gli strumenti)",
+  'landing: offerta PRO PRIMA di «Cosa riceverai» (leva di conversione)',
   true,
-  !heroLanding.includes('SimulatorRadar') &&
-    leggi('src/components/landing/LandingProvaRadar.tsx').includes('SimulatorRadar'),
+  landing.indexOf('<LandingOffertaPro') > 0 &&
+    landing.indexOf('<LandingOffertaPro') < landing.indexOf('<LandingBenefici'),
+);
+check(
+  'landing: hero a due colonne col box «Prova il Radar», titolo senza <br> e spacing compatto',
+  true,
+  heroLanding.includes('<SimulatorRadar') &&
+    heroLanding.includes("from '@/departments/radar'") &&
+    /lg:grid-cols-\[minmax\(0,1fr\)_34rem\]/.test(heroLanding) &&
+    !/<br\s*\/?>/.test(heroLanding) &&
+    heroLanding.includes('pb-8 pt-6'),
 );
 check(
   'pagine pubbliche: mai «prova gratuita/o» (si dice «prova inclusa»)',
@@ -168,12 +208,12 @@ check(
 
 console.log('\n— Campi di input: nessun esempio fittizio nei placeholder —');
 /**
- * I placeholder NON devono contenere dati fittizi o nomi di persona («Es. 34»,
- * «mario.rossi@gmail.com», «Mario Rossi»): il campo si spiega con il proprio nome.
- * Vale per registrazione, onboarding, wizard e anagrafica.
+ * I placeholder NON devono contenere dati fittizi o nomi di persona (esempi
+ * numerici preceduti da «Es.», indirizzi email di fantasia, nomi di persona): il
+ * campo si spiega con il proprio nome. Vale per registrazione, onboarding, wizard
+ * e anagrafica.
  */
-const RE_PLACEHOLDER_ESEMPIO =
-  /placeholder="[^"]*(?:Es\.|es\.|ES\.|Mario Rossi|mario\.rossi|@gmail|@email\.)/;
+const RE_PLACEHOLDER_ESEMPIO = /placeholder="[^"]*(?:Es\.|es\.|ES\.|@gmail|@email\.)/;
 const esempiFittizi = fileMarketing.filter((p) => RE_PLACEHOLDER_ESEMPIO.test(readFileSync(p, 'utf8')));
 check('nessun placeholder con esempi fittizi o nomi di persona', [], esempiFittizi);
 check(
@@ -181,8 +221,15 @@ check(
   true,
   /placeholder="Nome"/.test(authModal) &&
     /placeholder="Cognome"/.test(authModal) &&
-    /placeholder="Età"/.test(authModal) &&
     /placeholder="La tua email"/.test(authModal),
+);
+check(
+  'genere ed età: SOLO a fine percorso (Passo 4), mai nel form di registrazione',
+  true,
+  !/placeholder="Età"/.test(authModal) &&
+    !/label="Sesso"/.test(authModal) &&
+    /placeholder="Età"/.test(bloccoAnagrafica) &&
+    passoNotifica.includes('<BloccoAnagrafica'),
 );
 
 console.log(errori === 0 ? '\n✅ COPY ETICO: nessun problema' : `\n❌ COPY ETICO: ${errori} errore/i`);

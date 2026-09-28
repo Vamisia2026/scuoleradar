@@ -2,6 +2,7 @@ import { Radar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
+import { GIORNI_TRIAL_PRO } from '@/lib/pricing';
 
 export function ChiSiamoPage() {
   const navigate = useNavigate();
@@ -26,8 +27,7 @@ export function ChiSiamoPage() {
 
           <p className="mt-6 text-lg leading-relaxed text-primary-700">
             Cerchiamo di sopravvivere professionalmente in{' '}
-            <strong>un Sistema che sembra costruito per farci affogare</strong> (e se hai mai cercato
-            di usare la Carta del Docente, sai di cosa parliamo).
+            <strong>un Sistema che sembra costruito per farci affogare</strong>.
           </p>
 
           <p className="mt-6 text-lg leading-relaxed text-primary-700">
@@ -56,10 +56,10 @@ export function ChiSiamoPage() {
               className="inline-flex items-center gap-2 rounded-xl bg-primary-500 px-8 py-4 text-base font-semibold text-white shadow-soft transition hover:bg-primary-600"
             >
               <Radar className="h-5 w-5" />
-              Unisciti a noi
+              Attiva il tuo radar
             </button>
             <p className="mt-3 text-sm text-primary-500">
-              Prova Inclusa: 30 giorni di PRO con PureFocus incluso.
+              Prova inclusa: {GIORNI_TRIAL_PRO} giorni di PRO con PureFocus incluso.
             </p>
           </div>
         </div>

@@ -3,13 +3,12 @@
  *
  * Componente di sola presentazione: la selezione vive nel contenitore
  * (`RadarWizardModal`) e arriva qui come props. Nessuno stato locale.
- * In testa il blocco ANAGRAFICA facoltativo: i dati raccolti qui viaggiano nella
- * bozza di registrazione e vengono precompilati nel form finale (nessun dato
- * richiesto due volte).
+ *
+ * Nessuna domanda personale in apertura: i dati anagrafici (facoltativi) sono
+ * raccolti in fondo al percorso, nel passo 4 (`PassoNotifica`).
  */
 import { Check } from 'lucide-react';
 import { ordiniScuola, type OrdineScuola } from '@/data/ordiniMaterie';
-import { BloccoAnagrafica, type DatiAnagrafica } from '@/components/BloccoAnagrafica';
 import { creaIconeOrdine } from '../ordineIcone';
 
 /** Icone degli ordini di scuola nella taglia compatta usata dal wizard. */
@@ -20,29 +19,11 @@ interface PassoOrdiniProps {
   ordini: OrdineScuola[];
   /** Aggiunge/rimuove un ordine di scuola dalla selezione. */
   toggleOrdine: (id: OrdineScuola) => void;
-  /** Anagrafica dichiarata nel wizard (facoltativa): finisce nella registrazione. */
-  anagrafica: DatiAnagrafica;
-  onChangeAnagrafica: (patch: Partial<DatiAnagrafica>) => void;
 }
 
-export function PassoOrdini({
-  ordini,
-  toggleOrdine,
-  anagrafica,
-  onChangeAnagrafica,
-}: PassoOrdiniProps) {
+export function PassoOrdini({ ordini, toggleOrdine }: PassoOrdiniProps) {
   return (
             <div className="animate-fade-in">
-              {/* Anagrafica rapida: evita di richiedere nome/cognome/genere/età alla
-                  registrazione finale (i dati viaggiano nella bozza). */}
-              <div className="mb-2.5">
-                <BloccoAnagrafica
-                  dati={anagrafica}
-                  onChange={onChangeAnagrafica}
-                  compatto
-                  nota="Facoltativo. Lo salviamo nel tuo profilo: alla registrazione non te lo chiediamo di nuovo."
-                />
-              </div>
               <h2 className="text-base font-bold text-primary-800">
                 Dove vuoi lavorare?
               </h2>

@@ -8,8 +8,9 @@ import { materie, type OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import { separaParoleChiave } from '@/lib/ricercaSelezioniRadar';
+import { provinceInizialiConProva } from '@/lib/provaRadar';
 import { NavigazioneOnboarding } from './components/NavigazioneOnboarding';
-import { PassoAnagraficaOrdini } from './components/PassoAnagraficaOrdini';
+import { PassoOrdiniOnboarding } from './components/PassoOrdiniOnboarding';
 import { PassoCanali } from './components/PassoCanali';
 import { PassoClassiMaterie } from './components/PassoClassiMaterie';
 import { PassoProvince } from './components/PassoProvince';
@@ -44,10 +45,16 @@ export function OnboardingPage() {
   const [classiCodici, setClassiCodici] = useState<string[]>([]);
   const [materieId, setMaterieId] = useState<string[]>([]);
   const [materieCustom, setMaterieCustom] = useState<string[]>([]);
-  const [provinceCodici, setProvinceCodici] = useState<string[]>([]);
+  /**
+   * Province: se il profilo non ne ha ancora nessuna, si eredita quella provata
+   * nel box «Prova il Radar» (`lib/provaRadar.ts`) come provincia principale.
+   */
+  const [provinceCodici, setProvinceCodici] = useState<string[]>(() =>
+    provinceInizialiConProva(preferenze.provinceCodici),
+  );
   const [telegramUsername, setTelegramUsername] = useState('');
   const [emailNotifica, setEmailNotifica] = useState(user?.email ?? '');
-  /** Anagrafica (facoltativa): genere + età, precompilati da registrazione/profilo. */
+  /** Anagrafica (facoltativa): genere + età, chiesti a FINE percorso (passo 4). */
   const [genereOnb, setGenereOnb] = useState<'M' | 'F' | null>(preferenze.genere ?? user?.genere ?? null);
   const [etaOnb, setEtaOnb] = useState(preferenze.eta ? String(preferenze.eta) : '');
 
@@ -194,6 +201,8 @@ export function OnboardingPage() {
       telegramUsername: telegramUsername.trim(),
       telegramChatId: preferenze.telegramChatId || '',
       emailNotifica: emailNotifica.trim(),
+      // Preferenza SOSTEGNO: confermata, mai azzerata dall'onboarding.
+      sostegno: preferenze.sostegno ?? true,
       onboarded: true,
       favoriteSchools: [],
       ignoredSchools: [],
@@ -227,11 +236,7 @@ export function OnboardingPage() {
 
         <div className="rounded-2xl border border-primary-100 bg-white p-6 shadow-card sm:p-8">
           {step === 1 && (
-            <PassoAnagraficaOrdini
-              genereOnb={genereOnb}
-              setGenereOnb={setGenereOnb}
-              etaOnb={etaOnb}
-              setEtaOnb={setEtaOnb}
+            <PassoOrdiniOnboarding
               ordini={ordini}
               toggleOrdine={toggleOrdine}
               ordineIcons={ordineIcons}
@@ -266,6 +271,12 @@ export function OnboardingPage() {
               setTelegramUsername={setTelegramUsername}
               emailNotifica={emailNotifica}
               setEmailNotifica={setEmailNotifica}
+              anagrafica={{
+                genere: genereOnb,
+                setGenere: setGenereOnb,
+                eta: etaOnb,
+                setEta: setEtaOnb,
+              }}
             />
           )}
           {/* Navigation */}

@@ -16,10 +16,13 @@ import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { X, Menu } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
-// Logo della testata come ASSET DI BUILD (non da `public/`): Vite lo emette
-// hashato (`/assets/logo-<hash>.png`), quindi l'immagine è sempre quella giusta,
-// con `base` diverso da `/` funziona comunque e non resta mai in cache stantia.
-import logoScuoleRadar from '@/assets/logo.png';
+// Marchio della testata come ASSET DI BUILD (non da `public/`): Vite lo emette
+// hashato (`/assets/marchio-radar-<hash>.png`), quindi l'immagine è sempre quella
+// giusta, con `base` diverso da `/` funziona comunque e non resta mai in cache
+// stantia. È la TESSERA UFFICIALE del marchio (campo azzurro #2B6F9E + radar
+// bianco): lo stesso disegno del favicon, quindi scheda del browser e header
+// mostrano esattamente lo stesso simbolo.
+import marchioRadar from '@/assets/marchio-radar.png';
 import { BarraStrumenti } from './header/BarraStrumenti';
 import { MenuMobile } from './header/MenuMobile';
 import { MenuUtente } from './header/MenuUtente';
@@ -30,7 +33,7 @@ export function Header() {
   const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuUtenteOpen, setMenuUtenteOpen] = useState(false);
-  /** Fallback del logo: se l'asset non è caricabile si mostra il marchio testuale. */
+  /** Fallback del marchio: se la tessera non è caricabile resta il wordmark testuale. */
   const [logoCaricato, setLogoCaricato] = useState(true);
 
   const chiudiMenu = () => setMenuOpen(false);
@@ -52,36 +55,40 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-primary-100 bg-white/90 backdrop-blur">
-      {/* Livello superiore (Top Bar): Logo | link istituzionali (centro) | Accedi */}
-      <div className="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 sm:px-6">
+      {/* Livello superiore (Top Bar): Logo | link istituzionali (centro) | Accedi.
+          Altezza compatta (h-14): l'header non deve allontanare la hero. */}
+      <div className="mx-auto grid h-14 max-w-7xl grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 sm:px-6">
         <Link
           to="/"
           aria-label="ScuoleRadar.it — torna alla home"
           className="justify-self-start rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400"
         >
-          {logoCaricato ? (
-            <img
-              src={logoScuoleRadar}
-              alt="ScuoleRadar.it — logo"
-              /* Dimensioni INTRINSECHE reali (882×212): il browser riserva il box
-                 con il rapporto corretto, senza deformazioni né layout shift.
-                 L'asset è il LOGO ORIGINALE (tile azzurra con radar bianco +
-                 wordmark blu/arancione/azzurro) — nessuna monocromia. */
-              width={882}
-              height={212}
-              loading="eager"
-              decoding="async"
-              onError={() => setLogoCaricato(false)}
-              className="h-10 w-auto object-contain md:h-12"
-            />
-          ) : (
-            /* Fallback: l'header non resta mai senza marchio (asset mancante,
-               CDN, cache) — al posto dell'immagine compare il wordmark testuale. */
-            <span className="text-lg font-extrabold tracking-tight text-primary-900 md:text-xl">
-              Scuole<span className="text-primary-500">Radar</span>
+          {/* Lockup PULITO e originario: la tessera ufficiale del marchio (identica
+              al favicon) accanto alla scritta «ScuoleRadar.it». Il nome resta testo
+              vero — nitido a qualsiasi zoom e densità di pixel — invece di un logo
+              immagine rimpicciolito, che è ciò che dava l'effetto «template». */}
+          <span className="flex items-center gap-2.5">
+            {logoCaricato && (
+              <img
+                src={marchioRadar}
+                alt=""
+                aria-hidden="true"
+                /* Dimensioni INTRINSECHE reali (256×256): il browser riserva il box
+                   quadrato corretto, senza deformazioni né layout shift. */
+                width={256}
+                height={256}
+                loading="eager"
+                decoding="async"
+                onError={() => setLogoCaricato(false)}
+                className="h-9 w-9 shrink-0 object-contain md:h-10 md:w-10"
+              />
+            )}
+            <span className="text-lg font-extrabold tracking-tight md:text-xl">
+              <span className="text-primary-700">Scuole</span>
+              <span className="text-secondary-500">Radar</span>
               <span className="text-primary-400">.it</span>
             </span>
-          )}
+          </span>
         </Link>
 
         {/* Link istituzionali/informativi — sempre centrati (desktop) */}

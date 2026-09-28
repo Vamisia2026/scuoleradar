@@ -168,8 +168,8 @@ check('wizard: anagrafica salvata nella bozza', true, /aggiornaBozzaRegistrazion
 check('wizard: bozza completa prima del form di registrazione', true, /salvaBozzaRegistrazione\(bozzaCompleta\(\)\);\s+try \{/.test(wizard));
 check('wizard: provincia dedotta da una sola scelta', true, /provinceCodici\.length === 1 \? provinceCodici\[0\] : null/.test(wizard));
 check('wizard: registrazione rapida con Google nel passo finale', true, /registraConGoogle/.test(wizard) && /ospite: !user/.test(wizard));
-check('passo finale: Telegram evidenziato come canale istantaneo', true, /Telegram = avvisi ISTANTANEI/.test(passoNotifica));
-check('passo finale: email descritta come riepiloghi', true, /riepiloghi, non avvisi immediati/.test(passoNotifica));
+check('passo finale: Telegram è il canale degli avvisi istantanei', true, /Telegram — avvisi istantanei/.test(passoNotifica));
+check('passo finale: email = riepilogo giornaliero, non avvisi in tempo reale', true, /Email — riepilogo giornaliero/.test(passoNotifica) && /non arrivano gli avvisi in tempo reale/.test(passoNotifica));
 check('AuthModal: email precompilata dalla bozza', true, /setEmail\(\(prev\) => prev \|\| bozza\?\.email/.test(authModal));
 check('AuthModal: nota «abbiamo già i dati del tuo Radar»', true, /Abbiamo già i dati del tuo Radar/.test(authModal));
 check('AuthModal: prefill nome/cognome dalla bozza', true, /setNome\(\(prev\) => prev \|\| bozza\?\.nome/.test(authModal));

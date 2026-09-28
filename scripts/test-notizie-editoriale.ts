@@ -11,6 +11,14 @@
  */
 import { readFileSync } from 'node:fs';
 import {
+  AREE_TEMATICHE,
+  CATEGORIE_CON_FATTO_CONCRETO,
+  PESI_CATEGORIA,
+  TEMI_OPERATIVI,
+  areeTematicheDalTesto,
+  temiDalTesto,
+} from '../src/departments/notizie/services/editorialStandard.ts';
+import {
   attoBurocraticoVuoto,
   classificaLink,
   classificaTemaPersonale,
@@ -21,6 +29,8 @@ import {
   linkDomandaUfficiale,
   linkNonValidiInHtml,
   linkVietatiInHtml,
+  PAROLE_ACCETTA,
+  punteggioRilevanza,
   richiedePresentazioneDomanda,
   riferimentiObsoleti,
   titoloAzione,
@@ -511,5 +521,196 @@ console.log(
     ? '\n✅ NOTIZIE EDITORIALE: nessun problema'
     : `\n❌ NOTIZIE EDITORIALE: ${errori} errore/i`,
 );
+console.log('\n— ALLOW-LIST 360°: la scuola intera, non solo interpelli —');
+check(
+  'allow-list in ordine di priorità (19 temi)',
+  [
+    'CCNL',
+    'Pensioni',
+    'Welfare',
+    'Mobilit\u00e0',
+    'Sostegno',
+    'ATA',
+    'Istruzione Adulti',
+    'GPS',
+    'Organico',
+    'Formazione',
+    'Reclutamento e Ruolo',
+    'PNRR',
+    'Sicurezza',
+    'Normativa',
+    'Scadenze',
+    'Concorsi',
+    'Innovazione Digitale',
+    'Didattica',
+    'Pedagogia',
+  ],
+  TEMI_OPERATIVI.map((t) => t.categoria),
+);
+check(
+  'ogni tema ha una macro-area dichiarata',
+  [],
+  TEMI_OPERATIVI.filter((t) => !AREE_TEMATICHE.includes(t.area)).map((t) => t.categoria),
+);
+check('macro-aree coperte (>= 6)', true, new Set(TEMI_OPERATIVI.map((t) => t.area)).size >= 6);
+check(
+  'peso del tema = peso nella matrice di scoring',
+  [],
+  TEMI_OPERATIVI.filter((t) => PESI_CATEGORIA[t.categoria] !== t.peso).map((t) => t.categoria),
+);
+check(
+  'solo i temi culturali/didattici esigono un fatto concreto',
+  ['Innovazione Digitale', 'Didattica', 'Pedagogia'],
+  CATEGORIE_CON_FATTO_CONCRETO,
+);
+
+console.log('\n— TEMI 360°: ATA, CPIA, sostegno, formazione, reclutamento —');
+check(
+  'tema ATA (personale e collaboratori scolastici)',
+  'ATA',
+  classificaTemaPersonale('Personale ATA: al via le assunzioni per i collaboratori scolastici'),
+);
+check(
+  'tema Istruzione Adulti (CPIA, percorsi serali)',
+  'Istruzione Adulti',
+  classificaTemaPersonale('CPIA: al via le iscrizioni ai percorsi serali di secondo livello'),
+);
+check(
+  'tema Sostegno (graduatorie dei posti di sostegno)',
+  'Sostegno',
+  classificaTemaPersonale('Docenti di sostegno: pubblicate le graduatorie per i posti di sostegno'),
+);
+check(
+  'tema Formazione (TFA e 60 CFU)',
+  'Formazione',
+  classificaTemaPersonale('TFA e 60 CFU: al via i corsi di specializzazione per i docenti'),
+);
+check(
+  'tema Reclutamento e Ruolo (immissioni in ruolo)',
+  'Reclutamento e Ruolo',
+  classificaTemaPersonale('Immissioni in ruolo 2026: al via le assunzioni dei docenti neoassunti'),
+);
+check(
+  'priorità di match: ATA batte GPS sul testo misto',
+  'ATA',
+  classificaTemaPersonale('Graduatorie ATA di terza fascia e GPS: al via le istanze'),
+);
+
+console.log('\n— SCORING 0-100: la matrice dei pesi è condivisa col motore —');
+check('GPS + scadenza reale → tetto a 100', 100, punteggioRilevanza('GPS', true));
+check('GPS senza scadenza', 95, punteggioRilevanza('GPS', false));
+check('ATA (nuovo tema) → 84', 84, punteggioRilevanza('ATA', false));
+check('Istruzione Adulti (CPIA) → 71', 71, punteggioRilevanza('Istruzione Adulti', false));
+check('Pedagogia in coda: non scavalca i provvedimenti', 66, punteggioRilevanza('Pedagogia', false));
+check('categoria d’archivio ancora ordinabile', 74, punteggioRilevanza('Riconoscimento Titoli', false));
+check('categoria fuori allow-list → fallback 65', 65, punteggioRilevanza('Categoria Ignota', false));
+check('senza categoria → 60', 60, punteggioRilevanza(null, false));
+check('bonus scadenza reale (+8)', 73, punteggioRilevanza('Categoria Ignota', true));
+
+console.log('\n— LESSICO CONDIVISO: alias storico e voci della scuola a 360 gradi —');
+check(
+  'PAROLE_ACCETTA esposte dal motore (alias storico)',
+  [],
+  ['decreto', 'interpello', 'graduatorie', 'bollettino'].filter((p) => !PAROLE_ACCETTA.includes(p)),
+);
+check(
+  'voci 360° presenti nel lessico operativo',
+  [],
+  [
+    'personale ata',
+    'dsga',
+    'cpia',
+    'tfa',
+    '60 cfu',
+    'classi di concorso',
+    'immissioni in ruolo',
+  ].filter((p) => !PAROLE_ACCETTA.includes(p)),
+);
+check(
+  'nessun duplicato nel lessico operativo',
+  true,
+  new Set(PAROLE_ACCETTA).size === PAROLE_ACCETTA.length,
+);
+
+console.log('\n— AUDIT MULTI-TEMA: un testo, più temi e più macro-aree —');
+const testoMisto =
+  'Graduatorie ATA di terza fascia e GPS: al via le istanze per i collaboratori scolastici';
+check('temi riconosciuti nel testo misto (>= 2)', true, temiDalTesto(testoMisto).length >= 2);
+check('macro-aree coinvolte (>= 2)', true, areeTematicheDalTesto(testoMisto).length >= 2);
+check(
+  'temi del testo misto, in ordine di priorità',
+  ['ATA', 'GPS', 'Scadenze'],
+  temiDalTesto(testoMisto).map((t) => t.categoria),
+);
+
+console.log('\n— PUBBLICAZIONE 360°: ATA, CPIA, formazione e reclutamento in bacheca —');
+const ammessi360: Array<{ titolo: string; descrizione?: string; tema: string }> = [
+  { titolo: 'Personale ATA: al via le assunzioni per i collaboratori scolastici', tema: 'ATA' },
+  {
+    titolo: 'CPIA: iscrizioni ai percorsi serali di secondo livello',
+    descrizione: 'Aperte le iscrizioni per i corsi serali dei CPIA: domande entro il 30 settembre 2026.',
+    tema: 'Istruzione Adulti',
+  },
+  {
+    titolo: 'Immissioni in ruolo 2026: le assunzioni dei docenti neoassunti',
+    descrizione: 'Pubblicate le procedure di reclutamento e le assunzioni a tempo indeterminato.',
+    tema: 'Reclutamento e Ruolo',
+  },
+  {
+    titolo: 'TFA e 60 CFU: corsi di specializzazione per i docenti della scuola secondaria',
+    tema: 'Formazione',
+  },
+];
+for (const caso of ammessi360) {
+  const esito = valutaRilevanza({
+    title: caso.titolo,
+    description: caso.descrizione,
+    data: '2026-09-18',
+  });
+  check(`ammesso (${caso.tema})`, true, esito.rilevante);
+  check(`categoria assegnata (${caso.tema})`, caso.tema, esito.categoria);
+}
+
+console.log('\n— FATTO CONCRETO: pedagogia e didattica solo con scadenza o canale —');
+const titoloDidatticoGenerico = 'Didattica digitale integrata: il nuovo curricolo per i docenti';
+check(
+  'tema didattico riconosciuto',
+  'Innovazione Digitale',
+  classificaTemaPersonale(titoloDidatticoGenerico),
+);
+const senzaFatto = valutaRilevanza({ title: titoloDidatticoGenerico, data: '2026-09-18' });
+check('didattica senza scadenza né canale: RESPINTA', false, senzaFatto.rilevante);
+check('categoria non assegnata', null, senzaFatto.categoria);
+check(
+  'motivo: tema senza fatto concreto',
+  true,
+  (senzaFatto.motivo ?? '').includes('Tema Innovazione Digitale senza fatto concreto'),
+);
+
+const titoloDidatticoConScadenza =
+  'Didattica digitale integrata: laboratori digitali per i docenti dal 30 settembre 2026';
+const conScadenza = valutaRilevanza({ title: titoloDidatticoConScadenza, data: '2026-09-18' });
+check('didattica CON scadenza reale: AMMESSA', true, conScadenza.rilevante);
+check('categoria didattica mantenuta', 'Innovazione Digitale', conScadenza.categoria);
+check('scadenza estratta in ISO', '2026-09-30', conScadenza.deadline);
+
+const conCanale = valutaRilevanza({
+  title: 'Didattica digitale integrata: candidature dei docenti ai laboratori digitali',
+  description: 'Le candidature si presentano su Unica, il portale del Ministero.',
+  data: '2026-09-18',
+});
+check('didattica CON canale ufficiale: AMMESSA', true, conCanale.rilevante);
+check('categoria didattica mantenuta (canale)', 'Innovazione Digitale', conCanale.categoria);
+
+const titoloPedagogia = 'Pedagogia di Don Milani: cosa resta della scuola di Barbiana per i docenti';
+check('tema pedagogico riconosciuto', 'Pedagogia', classificaTemaPersonale(titoloPedagogia));
+const pedagogiaSenzaFatto = valutaRilevanza({ title: titoloPedagogia, data: '2026-09-18' });
+check('pedagogia senza fatto concreto: RESPINTA', false, pedagogiaSenzaFatto.rilevante);
+check(
+  'motivo: pedagogia senza fatto concreto',
+  true,
+  (pedagogiaSenzaFatto.motivo ?? '').includes('Tema Pedagogia senza fatto concreto'),
+);
+
 process.exitCode = errori === 0 ? 0 : 1;
 

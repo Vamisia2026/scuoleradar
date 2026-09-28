@@ -90,7 +90,7 @@ export function AssistenteAIPage() {
               required
               value={nomeCognome}
               onChange={(e) => setNomeCognome(e.target.value)}
-              placeholder="Mario Rossi"
+              placeholder="Nome Cognome"
               className="input"
             />
           </label>
@@ -101,7 +101,7 @@ export function AssistenteAIPage() {
               required
               value={emailAccesso}
               onChange={(e) => setEmailAccesso(e.target.value)}
-              placeholder="mario@esempio.it"
+              placeholder="La tua email"
               className="input"
             />
           </label>

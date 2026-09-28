@@ -42,7 +42,7 @@ export function CvTool() {
           {/* Intestazione */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xl font-extrabold text-primary-900">Mario Rossi</p>
+              <p className="text-xl font-extrabold text-primary-900">Nome Cognome</p>
               <p className="text-xs font-semibold text-primary-500">
                 Docente di Matematica e Fisica · A-27
               </p>
@@ -54,7 +54,7 @@ export function CvTool() {
           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-primary-500">
             <span className="inline-flex items-center gap-1.5">
               <Mail className="h-3.5 w-3.5 text-primary-400" />
-              mario.rossi@email.it
+              utente@example.it
             </span>
             <span className="inline-flex items-center gap-1.5">
               <MapPin className="h-3.5 w-3.5 text-primary-400" />

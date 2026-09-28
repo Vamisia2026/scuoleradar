@@ -9,10 +9,11 @@ import { LandingCta } from '@/components/landing/LandingCta';
 import { LandingHero } from '@/components/landing/LandingHero';
 import { LandingOffertaPro } from '@/components/landing/LandingOffertaPro';
 import { LandingPartnerPureFocus } from '@/components/landing/LandingPartnerPureFocus';
-import { LandingProvaRadar } from '@/components/landing/LandingProvaRadar';
+import { LandingRegistrazioneRapida } from '@/components/landing/LandingRegistrazioneRapida';
 import { LandingStrumenti } from '@/components/landing/LandingStrumenti';
 import { Stat, StepCard, ValueCard } from '@/components/landing/LandingCards';
 import { useApp } from '@/contexts/AppContext';
+import { aggiornaBozzaRegistrazione } from '@/lib/bozzaRegistrazione';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 
 export function LandingPage() {
@@ -81,6 +82,26 @@ export function LandingPage() {
     else openAuthModal('login');
   };
 
+  /**
+   * Registrazione rapida (Nome, Cognome, Email sotto l'hero): i dati scritti qui
+   * finiscono nella BOZZA (`lib/bozzaRegistrazione.ts`) e si apre la modale di
+   * onboarding/configurazione del Radar, che li trova già compilati — un solo
+   * passaggio, nessun doppione di modali. Fuori dai campi compilati non si
+   * sovrascrive nulla della bozza (patch solo sui valori presenti).
+   */
+  const handleRegistrazioneRapida = (dati: { nome: string; cognome: string; email: string }) => {
+    if (user) {
+      openRadarSetup();
+      return;
+    }
+    aggiornaBozzaRegistrazione({
+      ...(dati.nome ? { nome: dati.nome } : {}),
+      ...(dati.cognome ? { cognome: dati.cognome } : {}),
+      ...(dati.email ? { email: dati.email } : {}),
+    });
+    openRadarSetup();
+  };
+
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden">
       <Header />
@@ -93,13 +114,24 @@ export function LandingPage() {
         radarPronto={radarPronto}
       />
 
-      {/* Radar Live — flight board interpelli: è il PRIMO contenuto dopo l'hero e il
-          protagonista visivo della pagina (l'hero è volutamente monocollonna, senza
-          simulatore). Visibile SOLO con il dipartimento Radar attivo: mai la bacheca
+      {/* Form rapido — solo per i visitatori: nome, cognome ed email dei tre campi
+          vanno nella bozza e si apre la modale di onboarding/configurazione del
+          Radar, che li trova già compilati (un solo passaggio). */}
+      {!user && <LandingRegistrazioneRapida onSubmit={handleRegistrazioneRapida} />}
+
+      {/* Radar Live — flight board interpelli: primo contenuto sotto l'hero e
+          protagonista visivo della pagina (nel primo schermo vive il box «Prova il
+          Radar»). Visibile SOLO con il dipartimento Radar attivo: mai la bacheca
           «in chiaro» di un modulo spento (feature flags). */}
       {visibile('radar') && <FlightBoardInterpelli />}
 
-      {/* Ecco cosa riceverai — subito sotto l'hero, prima di "Come funziona". */}
+      {/* Offerta PRO — 30 giorni di PRO con Telegram in tempo reale, email delle
+          17.00 e PureFocus incluso; nessuna via d'uscita verso altri piani. È la
+          leva di conversione principale: sta PRIMA di «Cosa riceverai».
+          Presentazione pura: la CTA riusa l'handler del Radar del contenitore. */}
+      <LandingOffertaPro handleRadarClick={handleRadarClick} radarPronto={radarPronto} />
+
+      {/* Ecco cosa riceverai — cosa arriva all'utente quando il Radar è attivo. */}
       <LandingBenefici />
 
       {/* Plan explanation */}
@@ -113,7 +145,7 @@ export function LandingPage() {
             <StepCard
               icon={<UserPlus className="h-6 w-6" />}
               step="1"
-              title="Imposta il tuo profilo"
+              title="Imposta il tuo Radar"
               text="Seleziona ordine di scuola, classi di concorso e province di tuo interesse in pochi secondi."
             />
             <StepCard
@@ -155,16 +187,8 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* Servizi (griglia filtrata dalle feature flags) */}
+      {/* Strumenti in vetrina */}
       <LandingStrumenti />
-
-      {/* Prova il Radar — il box «Prova il Radar» non vive più nell'hero: qui resta
-          a un click di distanza, senza rubare il primo schermo al Radar Live. */}
-      <LandingProvaRadar />
-
-      {/* Offerta PRO — 30 giorni di PRO inclusi, PureFocus incluso, poi 49 €/anno.
-          Presentazione pura: la CTA riusa l'handler del Radar del contenitore. */}
-      <LandingOffertaPro handleRadarClick={handleRadarClick} radarPronto={radarPronto} />
 
       {/* PureFocus — partner / sponsor ufficiale: fascia dedicata, stato PRO a prop. */}
       <LandingPartnerPureFocus hasProAccess={hasProAccess} />

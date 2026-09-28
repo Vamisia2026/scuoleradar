@@ -51,8 +51,6 @@ export function AuthModal() {
 
   const [nome, setNome] = useState('');
   const [cognome, setCognome] = useState('');
-  const [genere, setGenere] = useState<'M' | 'F' | null>(null);
-  const [etaInput, setEtaInput] = useState('');
   /** Provincia di RESIDENZA (codice, es. 'RM'): dato demografico di base, facoltativo. */
   const [provincia, setProvincia] = useState('');
   const [email, setEmail] = useState('');
@@ -69,8 +67,6 @@ export function AuthModal() {
     if (!authModalOpen) {
       setNome('');
       setCognome('');
-      setGenere(null);
-      setEtaInput('');
       setProvincia('');
       setEmail('');
       setPassword('');
@@ -82,10 +78,11 @@ export function AuthModal() {
   }, [authModalOpen]);
 
   /**
-   * Prefill dei dati demografici già raccolti altrove (wizard Radar → questo form
-   * è l'ultimo passo per i Guest): sesso ed età arrivano dalle preferenze, la
-   * provincia dalla scelta fatta nel Radar quando è UNA SOLA (indizio forte,
-   * resta comunque modificabile). Non sovrascrive mai un valore già digitato.
+   * Prefill dei dati già raccolti nel percorso (wizard Radar → questo form è
+   * l'ultimo passo per i Guest): nome, cognome, email e la provincia scelta nel
+   * Radar quando è UNA SOLA (indizio forte, sempre modificabile). Genere ed età
+   * NON si chiedono qui: li raccoglie il Passo 4 (anagrafica a FINE percorso).
+   * Non sovrascrive mai un valore già digitato.
    */
   useEffect(() => {
     if (!authModalOpen || authModalMode !== 'registrazione') return;
@@ -93,12 +90,9 @@ export function AuthModal() {
     // appena inserito) e vale anche per l'EMAIL, così non viene richiesta due volte.
     const bozza = leggiBozzaRegistrazione();
     setBozzaWizard(bozza);
-    const etaBozza = bozza?.eta ?? preferenze.eta ?? null;
     setNome((prev) => prev || bozza?.nome || '');
     setCognome((prev) => prev || bozza?.cognome || '');
     setEmail((prev) => prev || bozza?.email || '');
-    setGenere((prev) => prev ?? bozza?.genere ?? preferenze.genere ?? null);
-    setEtaInput((prev) => prev || (etaBozza != null ? String(etaBozza) : ''));
     setProvincia(
       (prev) =>
         prev ||
@@ -106,7 +100,16 @@ export function AuthModal() {
         preferenze.provincia ||
         (preferenze.provinceCodici.length === 1 ? preferenze.provinceCodici[0] : ''),
     );
-  }, [authModalOpen, authModalMode, preferenze.genere, preferenze.eta, preferenze.provincia, preferenze.provinceCodici]);
+  }, [authModalOpen, authModalMode, preferenze.provincia, preferenze.provinceCodici]);
+
+  /**
+   * Genere ed età per il profilo: raccolti dal Passo 4 del wizard (anagrafica a
+   * FINE percorso) viaggiano nel profilo senza essere richiesti una seconda volta.
+   * Senza quei dati (registrazione rapida: nome, cognome ed email) restano null e
+   * si completano dal proprio profilo.
+   */
+  const genereRegistrazione = bozzaWizard?.genere ?? preferenze.genere ?? null;
+  const etaRegistrazione = bozzaWizard?.eta ?? preferenze.eta ?? null;
 
   const cambiaModo = (modo: 'login' | 'registrazione') => {
     setErrore('');
@@ -131,22 +134,13 @@ export function AuthModal() {
     setErrore('');
 
     if (isRegister) {
-      if (!nome.trim() || !cognome.trim() || !genere || !email.trim() || !password) {
+      if (!nome.trim() || !cognome.trim() || !email.trim() || !password) {
         setErrore('Compila tutti i campi.');
         return;
       }
       if (password.length < 6) {
         setErrore('La password deve avere almeno 6 caratteri.');
         return;
-      }
-      let eta: number | null = null;
-      if (etaInput.trim()) {
-        const n = Number.parseInt(etaInput, 10);
-        if (!Number.isFinite(n) || n < 14 || n > 100) {
-          setErrore("L'età deve essere un numero tra 14 e 100 anni.");
-          return;
-        }
-        eta = n;
       }
       // Registrazione REALE su Supabase Auth: gli errori (email già registrata,
       // password debole, rate limit) NON restano silenziosi — il form li mostra
@@ -158,8 +152,8 @@ export function AuthModal() {
           cognome: cognome.trim(),
           email: email.trim(),
           password,
-          genere,
-          eta,
+          genere: genereRegistrazione,
+          eta: etaRegistrazione,
           provincia: provincia || null,
         });
         if (!esito.ok) {
@@ -245,8 +239,8 @@ export function AuthModal() {
           <div className="flex items-start gap-2 rounded-lg border border-primary-100 bg-primary-50 px-3 py-2 text-xs leading-snug text-primary-700">
             <Radar className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary-500" />
             <p>
-              <strong>Abbiamo già i dati del tuo Radar.</strong> Nome, genere, età e provincia sono
-              precompilati da quello che hai inserito: controllali e scegli solo la password.
+              <strong>Abbiamo già i dati del tuo Radar.</strong> Nome, cognome, email e provincia
+              sono precompilati da quello che hai inserito: scegli solo la password.
             </p>
           </div>
         )}
@@ -330,51 +324,18 @@ export function AuthModal() {
                   placeholder="Cognome"
                 />
               </Field>
-              <Field label="Sesso">
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setGenere('F')}
-                    aria-pressed={genere === 'F'}
-                    className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
-                      genere === 'F'
-                        ? 'border-accent-400 bg-accent-50 text-accent-700'
-                        : 'border-primary-200 bg-white text-primary-600 hover:bg-primary-50'
-                    }`}
-                  >
-                    Donna
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setGenere('M')}
-                    aria-pressed={genere === 'M'}
-                    className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
-                      genere === 'M'
-                        ? 'border-accent-400 bg-accent-50 text-accent-700'
-                        : 'border-primary-200 bg-white text-primary-600 hover:bg-primary-50'
-                    }`}
-                  >
-                    Uomo
-                  </button>
-                </div>
-              </Field>
-              <Field label="Età (facoltativa)">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={14}
-                  max={100}
-                  value={etaInput}
-                  onChange={(e) => setEtaInput(e.target.value)}
-                  className="input"
-                  placeholder="Età"
-                />
-              </Field>
               <div className="sm:col-span-2">
-                <Field label="Provincia di residenza (facoltativa)">
+                <Field label="Provincia di residenza">
                   <CampoProvincia value={provincia} onChange={setProvincia} />
                 </Field>
               </div>
+              {/* Genere ed età arrivano dal Passo 4 del wizard (anagrafica a FINE
+                  percorso): qui non si chiedono una seconda volta, nessuna
+                  etichetta «facoltativo», nessun tono paternalistico. */}
+              <p className="text-xs leading-relaxed text-primary-400 sm:col-span-2">
+                Genere ed età li raccogliamo alla fine del percorso, insieme al resto del profilo:
+                qui bastano la provincia di residenza e la password.
+              </p>
             </>
           )}
           <div className={isRegister ? 'sm:col-span-2' : 'sm:col-span-1'}>

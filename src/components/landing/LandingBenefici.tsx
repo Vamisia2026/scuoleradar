@@ -47,7 +47,8 @@ export function LandingBenefici() {
             />
           </div>
           <p className="mx-auto mt-6 max-w-2xl text-center text-base font-medium leading-relaxed text-primary-700">
-            Inserisci il tuo profilo e vedrai solo le opportunità davvero pertinenti per te.
+            Inserisci quello che ti interessa e vedrai solo le opportunità di lavoro nella scuola
+            inerenti al tuo profilo.
           </p>
         </div>
       </section>

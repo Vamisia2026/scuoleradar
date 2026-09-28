@@ -71,7 +71,7 @@ check('avviso completo', true, avviso.completo);
 
 const destinatario: DestinatarioNotifica = {
   email: 'docente@example.it',
-  nome: 'Mario',
+  nome: 'Docente',
   province: ['TO'],
   classi: ['A-041'],
 };

@@ -38,10 +38,10 @@ const utente = (patch: Partial<User> = {}): User => ({
 
 console.log('— Identità dalla sessione: nome/cognome —');
 const google = identitaDaSessione(
-  { email: 'mario.rossi@gmail.com', user_metadata: { full_name: 'Mario Rossi' } },
+  { email: 'utente.demo@example.it', user_metadata: { full_name: 'Utente Demo' } },
   null,
 );
-check('Google: nome e cognome da full_name', ['Mario', 'Rossi'], [google.nome, google.cognome]);
+check('Google: nome e cognome da full_name', ['Utente', 'Demo'], [google.nome, google.cognome]);
 const azienda = identitaDaSessione(
   { email: 'info@bison.it', user_metadata: { full_name: 'Bison Productions' } },
   null,
@@ -54,15 +54,15 @@ const mononimo = identitaDaSessione(
 check('full_name monolocuto: resta intero nel nome', ['Bison', ''], [mononimo.nome, mononimo.cognome]);
 const esplicito = identitaDaSessione(
   {
-    email: 'maria@example.it',
-    user_metadata: { nome: 'Maria', cognome: 'Bianchi', full_name: 'qualcosa di strano' },
+    email: 'utente.demo@example.it',
+    user_metadata: { nome: 'Utente', cognome: 'Demo', full_name: 'qualcosa di strano' },
   },
   null,
 );
-check('campi espliciti vincono su full_name', ['Maria', 'Bianchi'], [esplicito.nome, esplicito.cognome]);
+check('campi espliciti vincono su full_name', ['Utente', 'Demo'], [esplicito.nome, esplicito.cognome]);
 check(
   'identità nuova: email e password vuota',
-  ['maria@example.it', ''],
+  ['utente.demo@example.it', ''],
   [esplicito.email, esplicito.password],
 );
 check(

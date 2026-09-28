@@ -167,8 +167,8 @@ export function PannelloClassi({
           })}
         </div>
 
-        {/* Preferenza SOSTEGNO — domanda esplicita: il sostegno è un'abilitazione
-            separata, senza adesione gli avvisi ADEE/ADMM/ADSS non si ricevono. */}
+        {/* Preferenza SOSTEGNO — inclusa di default (nessun avviso filtrato via in
+            silenzio): qui l'utente può toglierla quando non la vuole. */}
         <SostegnoToggle
           attivo={sostegno}
           onCambia={setSostegno}

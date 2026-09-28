@@ -46,7 +46,7 @@ const ELENCO = 'https://www.liceoaugustomonti.edu.it/albo/stampa?classe=A022';
 
 const destinatario: DestinatarioNotifica = {
   email: 'docente@example.it',
-  nome: 'Mario',
+  nome: 'Docente',
   province: ['AT'],
   classi: ['A-022'],
 };

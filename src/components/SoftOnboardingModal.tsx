@@ -1,20 +1,21 @@
 /**
- * PRO-GIFT "Sorpresa" (Soft Onboarding) — welcome interstitial esplicitamente
- * richiesto dall'utente.
+ * PRO-GIFT — benvenuto PRO (Soft Onboarding) esplicitamente richiesto dall'utente.
  *
  * NIENTE auto-apertura al load/refresh/post-login: questo modal viene mostrato
  * SOLO quando un utente Base senza regole Radar clicca una CTA "Attiva il tuo
  * Radar" o avvia il setup del Radar (vedi `openRadarSetup` in AppContext).
  *
+ * Il periodo PRO è un regalo di benvenuto: non si rifiuta. Per questo il modal ha
+ * UN SOLO pulsante d'azione (avanzare nel profilo) e nessuna voce di rinvio; la
+ * chiusura resta possibile con la X, per non intrappolare l'utente.
+ *
  * Account NON elegibili (regole Radar già configurate oppure piano
  * PRO / Free Forever / abbonamento attivo) → il modal resta soppresso.
- *
- * Il pulsante primario chiude il regalo e apre il wizard a 4 passi
- * (`RadarWizardModal`) per completare il profilo.
  */
 import { useEffect } from 'react';
 import { Gift, Radar, Sparkles, X } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
+import { GIORNI_TRIAL_PRO } from '@/lib/pricing';
 
 export function SoftOnboardingModal() {
   const {
@@ -64,7 +65,7 @@ export function SoftOnboardingModal() {
       className="fixed inset-0 z-[96] flex items-end justify-center p-4 sm:items-center"
       role="dialog"
       aria-modal="true"
-      aria-label="Sorpresa: hai 1 mese PRO gratis"
+      aria-label="Buone notizie: hai 1 mese di PRO incluso"
     >
       {/* Backdrop soft: chiusura non bloccante */}
       <div
@@ -88,43 +89,36 @@ export function SoftOnboardingModal() {
             <X className="h-4 w-4" />
           </button>
           <h2 className="mt-4 text-2xl font-black leading-tight">
-            🎁 Sorpresa: hai 1 mese PRO gratis!
+            🎁 Buone notizie: hai 1 mese PRO incluso!
           </h2>
         </div>
 
         {/* Corpo */}
         <div className="p-6">
           <p className="text-sm leading-relaxed text-primary-600">
-            Benvenuto su ScuoleRadar! Invece del profilo base, per i primi 30
-            giorni ti regaliamo la versione PRO per provare la ricerca
-            personalizzata senza limiti. Non te l&apos;aspettavi, eh?
+            Benvenuto su ScuoleRadar. Il tuo account parte già con la versione PRO:
+            per i primi {GIORNI_TRIAL_PRO} giorni cerchiamo noi le opportunità per
+            te, con tutti i filtri di ricerca e le notifiche attive.
           </p>
 
           <div className="mt-4 flex items-start gap-2 rounded-xl bg-accent-50 px-3.5 py-2.5 text-xs text-accent-700">
             <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-accent-500" />
             <p>
-              Durante il mese PRO potrai usare tutti i filtri di ricerca e le
-              notifiche senza limiti. Alla scadenza il tuo account tornerà
-              semplicemente sul piano Base.
+              Non serve attivare nulla a mano: configura il tuo Radar e gli avvisi
+              arrivano da soli. Alla scadenza l&apos;account prosegue sul piano Base,
+              senza costi.
             </p>
           </div>
 
-          {/* Footer */}
-          <div className="mt-5 flex flex-col-reverse items-stretch gap-2 border-t border-primary-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <button
-              type="button"
-              onClick={closeSoftOnboarding}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-primary-200 px-4 py-2.5 text-sm font-medium text-primary-600 transition hover:bg-primary-50"
-            >
-              Non ora
-            </button>
+          {/* Footer — unico invito all'azione: il PRO non si rifiuta, si usa. */}
+          <div className="mt-5 border-t border-primary-100 pt-4">
             <button
               type="button"
               onClick={completaProfilo}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-bold text-white shadow-soft transition hover:bg-primary-600"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-500 px-5 py-3 text-sm font-bold text-white shadow-soft transition hover:bg-primary-600"
             >
               <Radar className="h-4 w-4" />
-              Completa il tuo profilo per iniziare
+              Completa il tuo profilo e inizia
             </button>
           </div>
         </div>

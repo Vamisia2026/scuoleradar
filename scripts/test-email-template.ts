@@ -36,7 +36,7 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
 
 const destinatario: DestinatarioNotifica = {
   email: 'docente@example.it',
-  nome: 'Mario',
+  nome: 'Docente',
   province: ['TO'],
   classi: ['A-041'],
 };

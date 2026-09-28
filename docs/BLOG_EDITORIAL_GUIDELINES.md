@@ -80,12 +80,19 @@
      stampa, le lettere del Ministro, le dichiarazioni politiche, i protocolli
      d'intesa, gli eventi e in generale gli avvisi senza impatto pratico. Si
      pubblica solo ciò che ricade in un TEMA operativo per il personale,
-     riconosciuto da `classificaTemaPersonale` (`TEMI_PERSONALE`): **CCNL e
-     stipendi, pensioni, welfare e polizza sanitaria, mobilità e assegnazioni,
-     GPS/graduatorie/supplenze/interpelli, organico e cattedre, formazione,
-     PNRR, sicurezza** — più i temi **normativa/scadenze/concorsi**, che valgono
-     però SOLO con un riferimento esplicito al personale (un concorso per
-     studenti non passa). `titoloDaUfficioStampa` marca la comunicazione
+     riconosciuto da `classificaTemaPersonale` (`TEMI_OPERATIVI`, cioè
+     `standardTemiPersonale` + `standardTemiDidattica`): **CCNL e stipendi,
+     pensioni, welfare e polizza sanitaria, mobilità e assegnazioni,
+     GPS/graduatorie/supplenze/interpelli, organico e cattedre, sostegno, ATA e
+     segreterie (DSGA), istruzione adulti (CPIA), formazione (TFA/CFU, classi di
+     concorso), reclutamento e immissioni in ruolo, PNRR, sicurezza** — più i
+     temi **normativa/scadenze/concorsi**, che valgono però SOLO con un
+     riferimento esplicito al personale (un concorso per studenti non passa). I
+     temi **culturali/didattici** (innovazione digitale, didattica, pedagogia)
+     passano SOLO con un **fatto concreto**: una scadenza reale oppure un canale
+     ufficiale di domanda/candidatura (`CATEGORIE_CON_FATTO_CONCRETO`), così il
+     «seminario pedagogico» non diventa mai una notizia.
+     `titoloDaUfficioStampa` marca la comunicazione
      istituzionale; `articoloValido` applica le stesse regole anche all'igiene
      dell'archivio, quindi le voci di fluff già pubblicate vengono rimosse.
 3. **TITOLI AZIONE (mai copia-incolla istituzionale)**
@@ -105,9 +112,11 @@
      note, circolari, bandi, avvisi e scadenze operative per GPS, mobilità,
      concorsi, pensioni, sostegno, supplenze e graduatorie.
    - **Soglia categoria (avvio anno)**: la categoria viene assegnata SOLO se il
-     titolo contiene una **parola-categoria ufficiale** oppure un termine **"forte"**
+     titolo rientra in un **tema** dell'allow-list (§2-bis) e, per i temi
+     culturali/didattici, solo con un fatto concreto. Il vocabolario **"forte"**
      dell'avvio anno (`interpelli`, `supplenze`, `presa di servizio`, `reggenze`,
-     `bollettini` — `PAROLE_FORTI_INIZIO_ANNO`). Gli **avvisi tecnici/amministrativi
+     `bollettini` — `PAROLE_FORTI_INIZIO_ANNO`) resta come lessico di riferimento
+     per copy e audit. Gli **avvisi tecnici/amministrativi
      generali** (es. bandi di raffrescamento, enti del Terzo settore, manifestazioni)
      vengono **scartati** perché non interessano a docenti e personale ATA.
 
@@ -162,23 +171,33 @@
 
 - Finestra (lookback): **ultimi 15 giorni** dalla data di ingestione (`FINESTRA_LOOKBACK_GIORNI`).
 - Selezione in caso di esubero: prima per **punteggio di rilevanza**
-  (`relevance_score`), poi per data di pubblicazione più recente.
+  (`relevance_score`, calcolato da `punteggioRilevanza` sul **peso del tema**:
+  `PESI_CATEGORIA`), poi per data di pubblicazione più recente.
 - Gli articoli più vecchi della finestra non vengono mai toccati (accumulo).
 - Nessun articolo in assenza di provvedimenti vincolanti: il motore risponde
   con `0` e la bacheca resta invariata.
 
 ## 2. Filtro editoriale: cosa accettare, cosa rifiutare
 
-- **ACCETTA** (`PAROLE_ACCETTA`): decreto, decreto ministeriale, ordinanza,
-  nota prot., circolare, bando, avviso, scadenza, termine ultimo, domanda,
-  istanza, pubblicazione, rettifica, proroga, conferimento, nomina…
+- **ACCETTA** (`PAROLE_OPERATIVE` in `services/lessicoScuola.ts`, ri-esportate da
+  `relevanceEngine.ts` con il nome storico `PAROLE_ACCETTA`): decreto, decreto
+  ministeriale, ordinanza, nota prot., circolare, bando, avviso, scadenza,
+  termine ultimo, domanda,
+  istanza, pubblicazione, rettifica, proroga, conferimento, nomina… più le voci
+  della scuola a 360 gradi (personale ATA e segreterie, DSGA, CPIA, sostegno, TFA
+  e 60 CFU, classi di concorso, immissioni in ruolo).
 - **RIFIUTA** (`PAROLE_RIFIUTA`): intervista, discorso, dichiarazione del
   ministro, comunicato stampa, conferenza stampa, cerimonia, inaugurazione,
   premiazione, premio letterario, spettacolo, spot, campagna di comunicazione,
   campagna social, webinar, seminario, podcast, mostra, fiera, concorso
   artistico, festa, evento sportivo, manifestazione, sondaggio…
-- La categoria viene dedotta con `PAROLE_CATEGORIA` (GPS, Mobilità, Concorsi,
-  Pensioni, Sostegno, Graduatorie, Supplenze, Scuole, PNRR).
+- La categoria viene dedotta dall'**allow-list dei temi** (`TEMI_OPERATIVI` +
+  `classificaTemaPersonale`, in ordine di priorità): CCNL, Pensioni, Welfare,
+  Mobilità, Sostegno, ATA, Istruzione Adulti, GPS, Organico, Formazione,
+  Reclutamento e Ruolo, PNRR, Sicurezza, Normativa, Scadenze, Concorsi,
+  Innovazione Digitale, Didattica, Pedagogia. Le vecchie liste di parole
+  (`PAROLE_CATEGORIA`) non decidono più il verde: la categoria nasce solo dal
+  tema riconosciuto.
 
 ## 3. Validità giuridica e citazioni
 

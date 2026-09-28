@@ -7,6 +7,7 @@ import { STORAGE_KEY_INTENDED_PLAN, STORAGE_KEY_INTENDED_PLAN_DATA, type PianoId
 import { track } from '@/lib/analytics';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
+import { PureFocusCard } from '@/components/PureFocusCard';
 
 interface Vantaggio {
   testo: string;
@@ -93,28 +94,45 @@ const piani: Piano[] = [
   },
 ];
 
+/**
+ * FAQ COMMERCIALI della pagina Prezzi.
+ *
+ * Ogni risposta è un punto di forza o un'istruzione operativa (inserire
+ * ScuoleRadar tra le app attendibili della scuola tramite l'Animatore Digitale,
+ * «Invita un Collega», PureFocus con l'account Gmail, servizi in arrivo):
+ * nessuna domanda difensiva su cancellazione o sicurezza dei pagamenti. Le
+ * stesse risposte vivono nella pagina pubblica `/faq` (`FAQPage`).
+ */
 const faq = [
   {
-    q: 'Posso cancellarmi quando voglio?',
-    a: 'Sì. Un click e cancelliamo tutto: nessun rinnovo automatico nascosto.',
+    q: 'Sono Animatore Digitale o Referente Google: come inserisco ScuoleRadar tra i siti sicuri della scuola?',
+    a: 'Bastano due minuti e vale per tutto l’Istituto: nella Google Admin Console apri Sicurezza › Controllo dell’accesso e dei dati › Controlli API e App terze, scegli «Aggiungi app», cerca ScuoleRadar (oppure incolla il Client ID che ti forniamo) e contrassegnala come «Attendibile» (Trusted). Da quel momento tutti i docenti della scuola accedono con un click, senza email personali e senza blocchi.',
   },
   {
-    q: 'Come funziona il piano Base e quando conviene passare a PRO?',
-    a: 'Il piano Base include il monitoraggio di 1 provincia e fino a 2 classi di concorso, con un digest quotidiano delle opportunità alle 17:00. Con PRO ricevi avvisi istantanei in tempo reale e puoi monitorare fino a 4 province e 4 classi di concorso.',
+    q: 'Come funziona «Invita un Collega»?',
+    a: 'Nella sezione «Invita un Collega» trovi il tuo codice personale e il link pronto da condividere. Chi si abbona al piano PRO annuale con il tuo codice riceve 10 € di sconto; quando l’abbonamento risulta confermato, tu accumuli 10 € di credito. Gli utilizzi li segui dalla tua area, senza vedere alcun dato personale di chi ha usato il codice.',
   },
   {
-    q: 'Le notifiche arrivano davvero solo se c\u2019è qualcosa di rilevante?',
-    a: 'Sì. Se non c\u2019è nulla di pertinente per te, te lo diciamo invece di inondarti di annunci inutili.',
+    q: 'PureFocus richiede un account nuovo? Funziona con la mia Gmail?',
+    a: 'No: funziona nel browser con l’account Google che usi già, anche una normale @gmail.com. Nessun secondo account, nessun browser dedicato. È incluso nel piano PRO e lo apri dal tuo profilo con il link diretto a purefocus.one.',
   },
   {
-    q: 'Il pagamento è sicuro?',
-    a: 'Nel prototipo il pagamento è simulato. Nella versione completa useremo un circuito di pagamento sicuro e autorizzato.',
+    q: 'L’Assistente Sindacalista Virtuale è già disponibile?',
+    a: 'È in anteprima ed è riservato agli abbonati PRO: addestrato su normative e situazioni lavorative scolastiche (GPS, mobilità, supplenze, contratti). Dal tuo account PRO chiedi l’accesso in anteprima; intanto Radar, Calcolatore CFU, Modulistica e PureFocus sono già attivi dal primo giorno.',
+  },
+  {
+    q: 'Posso attivare il PRO con la Carta del Docente?',
+    a: 'Stiamo completando l’integrazione con la Carta del Docente per il piano PRO annuale: sarà uno dei modi per attivarlo, con il valore del buono che copre l’intero anno. Nel frattempo il mese di PRO incluso parte subito e i servizi restano acquistabili anche a consumo.',
+  },
+  {
+    q: 'Che differenza c’è tra il piano Base e il PRO?',
+    a: 'Base: monitoraggio di una provincia con digest quotidiano alle 17:00. PRO: fino a 4 province e 4 classi di concorso con avvisi in tempo reale su Telegram, più PureFocus, CV, Calcolatore CFU, Modulistica e Assistente alla Modulistica in versione completa. Il PRO annuale costa 49 €/anno (circa 4 € al mese) e si disdice quando vuoi.',
   },
 ];
 
 export function PrezziPage() {
   const navigate = useNavigate();
-  const { user, openAuthModal, avviaCheckout } = useApp();
+  const { user, openAuthModal, avviaCheckout, hasProAccess } = useApp();
   const { mostraToast } = useToast();
   const [promoUrl, setPromoUrl] = useState<string | null>(null);
   const [crediti, setCrediti] = useState<number>(5);
@@ -301,21 +319,15 @@ export function PrezziPage() {
         </div>
       </section>
 
-      {/* PureFocus */}
+      {/* PureFocus — vetrina condivisa: wordmark ufficiale + badge verde «INCLUSO NEL PIANO PRO».
+          Stessa larghezza delle colonne dei piani (max-w-5xl): vetrina, non una fascia. */}
       <section className="bg-white py-8 sm:py-10">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6">
-          <div className="rounded-2xl bg-gradient-to-br from-primary-700 to-primary-900 p-8 text-white shadow-card">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-sm font-medium text-primary-100">
-              <Sparkles className="h-4 w-4" />
-              Nuovo: incluso nel piano PRO
-            </span>
-            <h2 className="mt-4 text-2xl font-bold sm:text-3xl">Accesso completo a PureFocus</h2>
-            <p className="mt-3 text-primary-100">
-              La piattaforma che trasforma YouTube in un ambiente di studio e lavoro: elimina
-              distrazioni, suggerimenti e contenuti irrilevanti, lasciandoti solo ciò che ti serve
-              per ottimizzare il tuo tempo.
-            </p>
-          </div>
+        <div className="mx-auto max-w-5xl px-4 sm:px-6">
+          <PureFocusCard
+            hasProAccess={hasProAccess}
+            titolo="Accesso completo a PureFocus"
+            mostraUpsell={false}
+          />
         </div>
       </section>
 

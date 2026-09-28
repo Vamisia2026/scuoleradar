@@ -40,7 +40,7 @@ src/
 | **② Verticale** | `departments/{admin,cfu,notizie,radar,scadenze}` (114) · `modules/modulistica` (39) | funzionalità di dominio complete: `components/`, `hooks/`, `services/`, `data/`, `types.ts` | può usare ① e ③; **altri domini solo via `index.ts`** |
 | **③ Strati bassi** | `lib/` (27) · `data/` (9) · `services/` (1) · `types/` (2) · `scraper/` (5) | motori puri, integrazioni esterne, cataloghi, tipi e costanti condivise | **non** importa ① né ② |
 
-**Codice sorvegliato dal gate**: 371 file (`src/**` + `scripts/**`) — vedi §5.
+**Codice sorvegliato dal gate**: 493 file (`src/**` + `scripts/**`) — vedi §5.
 
 ### 1.1 Regola d'oro
 
@@ -144,22 +144,27 @@ Regole operative:
   (cambio account Google in un click); al cambio identità le voci anagrafiche locali
   (`genere`, `eta`, `provincia`) vengono azzerate e rilette da `profiles`.
 
-### 4.2 Notizie & Blog — `src/departments/notizie/` (17 file · 4.776 righe)
+### 4.2 Notizie & Blog — `src/departments/notizie/` (21 file · 4.922 righe)
 
 | Sottocartella | File principali | Cosa contiene |
 |---|---|---|
 | `components/` | `NotizieHero`, `NotizieGrid`, `NotizieDettaglio`, `SeoMeta`, `hero/{TestataEditoriale,WidgetScadenze}` | **Hero** (testata, categorie, widget scadenze), **Grid** (card paginate con link che aprono l'articolo in **nuova scheda**, `target="_blank" rel="noopener noreferrer"`), **Detail** (badge, "In Sintesi", corpo, Fonti Ufficiali, PDF, condivisione) |
-| `services/` | `relevanceEngine`, `ingestNotizie`, `newsFetcher`, `newsService`, `archivioNotizie`, `tracciaFonte` | **Motore di rilevanza** + **ingestione** (waterfall MIM → Gazzetta Ufficiale → ARAN → giurisdizione, validazione HTTP 200 dei link, igiene archivio, garanzia settimanale) + lettura feed |
+| `services/` | `relevanceEngine`, `editorialStandard`, `lessicoScuola`, `standardTemiPersonale`, `standardTemiDidattica`, `ingestNotizie`, `newsFetcher`, `newsService`, `archivioNotizie`, `tracciaFonte` | **Motore di rilevanza** + **ingestione** (waterfall MIM → Gazzetta Ufficiale → ARAN → giurisdizione, validazione HTTP 200 dei link, igiene archivio, garanzia settimanale) + lettura feed |
 | `data/` | `notizieIngestite.ts` (generato dal cron), `notizieSeed.ts` | archivio accumulato (dedupe per id, formato editoriale uniforme) + seed curati |
 | `index.ts` | — | superficie pubblica: componenti Notizie + servizi/tipi usati dall'app |
 
 **Standard editoriale stretto** (dettaglio in `BLOG_EDITORIAL_GUIDELINES.md`):
 
-1. **Temi ammessi** (`classificaTemaPersonale`): CCNL e stipendi, pensioni,
-   welfare e polizza sanitaria, mobilità e assegnazioni, GPS/graduatorie/
-   supplenze/interpelli, organico e cattedre, formazione, PNRR, sicurezza;
-   *normativa/scadenze/concorsi* valgono solo con un riferimento esplicito al
-   personale.
+1. **Temi ammessi** (`TEMI_OPERATIVI` + `classificaTemaPersonale`: peso in
+   `PESI_CATEGORIA`, macro-area in `AREE_TEMATICHE` — blocco condiviso in
+   `services/editorialStandard.ts` + `services/standardTemi*.ts`): CCNL e
+   stipendi, pensioni, welfare e polizza sanitaria, mobilità e assegnazioni,
+   GPS/graduatorie/supplenze/interpelli, organico e cattedre, sostegno, ATA e
+   segreterie, CPIA, formazione (TFA/CFU, classi di concorso), reclutamento e
+   immissioni in ruolo, PNRR, sicurezza; *normativa/scadenze/concorsi* valgono
+   solo con un riferimento esplicito al personale; i temi *culturali/didattici*
+   (innovazione digitale, didattica, pedagogia) solo con un **fatto concreto**
+   (scadenza reale o canale ufficiale: `CATEGORIE_CON_FATTO_CONCRETO`).
 2. **Niente fluff**: respinti comunicati, lettere del Ministro, dichiarazioni,
    eventi e rinvii vaghi ("ti avvisiamo appena esce", "verifica nel testo
    ufficiale") → `titoloDaUfficioStampa`, `FRASI_FLUFF`, `contieneFraseFluff`,
@@ -187,15 +192,16 @@ Regole operative:
 | `index.ts` | — | superficie pubblica: `ModuliModule` + tipi (`ModuloSalvatoDB`, `VistaModulistica`, `VoceModulo`) |
 | `creator/cacheService.ts` | — | **cache del catalogo** (memoria + persistenza): nessuna rilettura del DB a ogni apertura |
 
-### 4.4 Radar Interpelli — `src/departments/radar/` (25 file · 3.958 righe)
+### 4.4 Radar Interpelli — `src/departments/radar/` (27 file · ~4.300 righe)
 
 | Sottocartella | File principali | Cosa contiene |
 |---|---|---|
 | `wizard/` | step del wizard Radar + `tipiSelezione.ts` | onboarding guidato delle regole; il Passo 3 è un **compositore** (ricerca unificata in testa + due colonne) e le sezioni vivono in `wizard/components/` |
-| `wizard/components/` | `SezioneClassiConcorso` · `SezioneCompetenzeExtra` | classi di concorso + adesione al sostegno · tag popolari PNRR/PON e chip delle competenze/parole chiave (nessun elenco statico) |
+| `wizard/components/` | `SezioneClassiConcorso` · `SezioneCompetenzeExtra` | classi di concorso (nessuna domanda sul sostegno nel wizard: la preferenza vive nelle Preferenze Radar) · campo libero per la parola chiave + tag popolari PNRR/PON e chip delle competenze (nessun elenco statico) |
 | `preferenze/` | `PreferenzeRadar` + pannelli | modifica delle regole del Radar senza rifare il wizard («In cosa puoi lavorare» usa la stessa ricerca unificata) |
 | `flightBoard/` | `FlightBoard*` | bacheca degli interpelli in arrivo per l'utente |
-| `components/` | `ProvinciaPill` · `BenvenutoProRadar` · `RicercaSelezioni` | pill con il ruolo di **provincia principale** · benvenuto PRO al primo accesso · campo di **ricerca unificata** (classi + competenze + parole chiave) |
+| `components/` | `ProvinciaPill` · `BenvenutoProRadar` · `RicercaSelezioni` · `ResponsoProva` | pill con il ruolo di **provincia principale** · benvenuto PRO al primo accesso · campo di **ricerca unificata** (classi + competenze + parole chiave) · **responso del Radar di prova** (sola presentazione) |
+| `services/` | `provaRadarQuery.ts` | lettura degli interpelli del **Radar di prova** (Supabase → fallback): limite 200 righe per provincia, 60 nazionali, attesa della scansione 900 ms |
 | `index.ts` | — | superficie pubblica: `RadarWizardModal`, `PreferenzeRadar`, `RadarStatusToggle`, `BenvenutoProRadar` |
 
 Componenti di dominio **ancora in radice** (`RadarWizardModal.tsx`,
@@ -207,7 +213,7 @@ Il dipartimento è solo la **UI**; il lavoro pesante sta negli strati bassi ③:
 
 | Sottodipartimento di prodotto | Artefatti |
 |---|---|
-| **Motore di Matching** | `lib/matchingEngine.ts`, `lib/radarValidation.ts`, `lib/scadenza.ts`, `lib/interpelloRouting.ts` — puri, coperti da `npm run test:matching`, `test:radar`, `test:sostegno`, `test:interpello-scadenza` |
+| **Motore di Matching** | `lib/matchingEngine.ts`, `lib/radarValidation.ts`, `lib/scadenza.ts`, `lib/interpelloRouting.ts`, **`lib/provaRadarEngine.ts`** + **`lib/provaRadar.ts`** (Radar di prova: maglie larghe + memoria della provincia provata) — puri, coperti da `npm run test:matching`, `test:radar`, `test:sostegno`, `test:interpello-scadenza`, `test:prova-radar` |
 | **Pipeline di Scraping** | `scraper/{index,parser,elenchi,channelLog,adminAlerts}.ts` + `.github/workflows/{scraper,pulisci-scaduti}.yml` + `scripts/{pulisci-scaduti,arricchisci-interpelli,audit-dati}.ts` |
 | **Sistema di Notifica** | `lib/telegram.ts` (bot + canali), `lib/resend.ts` (email), `lib/notifier.ts` (dispatch + dedup), `lib/digest.ts` (batch giornaliero), `lib/{dedupAvvisi,frequenzaNotifiche,planLimits,emailScuola,alertInterpello}.ts`, Edge `supabase/functions/send-notification`, workflow `digest.yml` + `health-check.yml` |
 
@@ -261,7 +267,7 @@ override locale: è la superficie che vede un utente NON admin nella build `vite
 | Dipartimento | `statoBase` | Effetto in produzione |
 |---|---|---|
 | 📡 Radar Scuole (`radar`) | `on` | navbar, tab dashboard, landing e notifiche attivi |
-| 🧘 Pure Focus (`purefocus`) | `on` | servizio partner pubblico |
+| 🎯 Pure Focus (`purefocus`) | `on` | servizio partner pubblico (wordmark ufficiale + badge «Incluso nel piano PRO» su homepage, `/prezzi` e `/dashboard/purefocus`) |
 | 🎓 Calcolatore CFU (`cfu`) | `off` | nessuna tab/link; `/calcolatore-cfu` e `/dashboard/calcolatore-cfu` mostrano la pagina «in arrivo» |
 | 📁 Modulistica (`modulistica`) | `off` | nessuna tab/link (anche nel menu utente e nel footer); `/moduli` e `/dashboard/moduli` dietro il gate |
 | 🎁 Invita un Collega (`referral`) | `off` | nessuna tab; `/dashboard/invita` dietro il gate |

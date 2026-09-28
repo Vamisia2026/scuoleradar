@@ -16,11 +16,19 @@
  *  - tetto articoli: MASSIMO `MAX_ARTICOLI_FINESTRA` (6) articoli ad alto valore
  *    nella finestra di lookback di 15 giorni (`FINESTRA_LOOKBACK_GIORNI`) —
  *    ~3 a settimana; se non ci sono provvedimenti vincolanti si pubblicano 0;
- *  - soglia di rilevanza per l'AVVIO ANNO SCOLASTICO: oltre al gate operativo,
- *    la categoria si assegna SOLO se il titolo ha una parola-categoria ufficiale
- *    oppure un termine "FORTE" di avvio anno (`PAROLE_FORTI_INIZIO_ANNO`:
- *    interpelli, supplenze, presa di servizio, reggenze, bollettini…), così si
- *    scartano gli avvisi tecnici/amministrativi generali;
+ *  - soglia di rilevanza: la categoria si assegna SOLO se la voce rientra in uno
+ *    dei temi dell'ALLOW-LIST (`TEMI_OPERATIVI`: standardTemiPersonale.ts +
+ *    standardTemiDidattica.ts). La copertura è la scuola a 360 gradi —
+ *    normativa e reclutamento, personale ATA e segreterie, istruzione degli
+ *    adulti (CPIA), formazione/titoli e CFU, contratti-previdenza-welfare,
+ *    organizzazione-sicurezza-fonti normative, inclusione e sostegno — più i
+ *    temi culturali e didattici (pedagogia, didattica, innovazione digitale),
+ *    questi ultimi pubblicabili SOLO con un fatto concreto (scadenza reale o
+ *    canale ufficiale di domanda/candidatura: `CATEGORIE_CON_FATTO_CONCRETO`);
+ *  - lessico e scoring CONDIVISI: dizionario, acronimi, frasi di fluff, pesi e
+ *    macro-aree vivono nei moduli `lessicoScuola.ts` e `editorialStandard.ts` e
+ *    sono qui ri-esportati per compatibilità (es. `PAROLE_ACCETTA`,
+ *    `GLOSSARIO_ACRONIMI`, `FRASI_FLUFF`);
  *  - integrità degli URL: niente mockup né root-domain generici, solo link di
  *    approfondimento reali validati HTTP 200;
  *  - PDF ufficiali: se la fonte è un PDF, il link dedicato deve aprire il PDF
@@ -30,6 +38,20 @@
  *    template interni).
  */
 import type { NewsArticle } from '../types';
+import {
+  CATEGORIE_CON_FATTO_CONCRETO,
+  PESI_CATEGORIA,
+  TEMI_OPERATIVI,
+} from './editorialStandard';
+import { FRASI_FLUFF, GLOSSARIO_ACRONIMI, PAROLE_OPERATIVE } from './lessicoScuola';
+
+/**
+ * Lessico del dipartimento: vive in `lessicoScuola.ts` (blocco condiviso dello
+ * standard editoriale) e resta esposto da questo modulo con i nomi storici,
+ * perché copy, igiene dell'archivio e documentazione li citano così.
+ */
+export { FRASI_FLUFF, GLOSSARIO_ACRONIMI };
+export { PAROLE_OPERATIVE as PAROLE_ACCETTA };
 
 export interface ValutazioneNotizia {
   rilevante: boolean;
@@ -47,65 +69,33 @@ export interface VoceInValutazione {
   data?: string | null;
 }
 
-/** Parole che identificano l'ambito/categoria del personale scolastico. */
-const PAROLE_CATEGORIA: Record<string, string[]> = {
-  'GPS': [
-    'gps', 'graduatoria provinciale', 'graduatorie provinciali', 'supplenze',
-    'nomina', 'nomine', 'algoritmo', 'algoritmi',
-  ],
-  'Mobilità': ['mobilità', 'mobilita', 'trasferimento', 'assegnazione provvisoria', 'utilizzazione', 'comma 5'],
-  'Concorsi': ['concorso', 'concorsi', 'bando di concorso', 'selezione', 'assunzione', 'immissione in ruolo', 'reclutamento'],
-  'Pensioni': ['pensione', 'pensioni', 'cessazione dal servizio', 'riscatto', 'buonuscita', 'quota'],
-  'Sostegno': ['sostegno', 'pei', 'inclusione', 'disabilità', 'disabilita', 'bes', 'assistente all’autonomia', 'glo'],
-  'Graduatorie': ['graduatoria', 'graduatorie', 'gae', 'gps', 'istanze online'],
-  'Supplenze': ['supplenza', 'supplenze', 'incarico', 'interpello', 'mad', 'messa a disposizione'],
-  'Scuole': [
-    'organico', 'istituzione scolastica', 'anno scolastico', 'calendario scolastico',
-    'protocollo d’intesa', 'presa di servizio', 'primo settembre',
-  ],
-  'PNRR': [
-    'pnrr', 'piano nazionale di ripresa e resilienza', 'fondi pnrr', 'bandi pnrr',
-    'scuola 4.0', 'nuove competenze',
-  ],
-  'CCNL': [
-    'ccnl', 'contratto collettivo nazionale', 'comparto istruzione e ricerca',
-    'area istruzione e ricerca', 'verbale di accordo', 'contrattazione collettiva',
-  ],
-  'Assegnazioni Provvisorie': ['assegnazioni provvisorie', 'assegnazione provvisoria', 'utilizzazioni'],
-  'Ricostruzione Carriera': ['ricostruzione carriera', 'ricostruzione di carriera', 'ricongiunzione'],
-  'Riconoscimento Titoli': [
-    'riconoscimento titoli', 'riconoscimento dei titoli', 'titolo estero',
-    'titoli esteri', 'equipollenza', 'equiparazione',
-  ],
-};
-
-/** Parole che rendono la notizia OPERATIVA (accettabile). */
-const PAROLE_ACCETTA: string[] = [
-  'decreto', 'decreto ministeriale', 'd.m.', 'ordinanza', 'nota', 'nota prot.', 'circolare',
-  'bando', 'avviso', 'scadenza', 'termine', 'termine ultimo', 'entro il', 'domande',
-  'domanda', 'istanza', 'presentazione', 'pubblicato', 'pubblicazione', 'aggiornamento',
-  'calendario', 'requisiti', 'modalità', 'modalita', 'graduatoria', 'graduatorie',
-  'assunzione', 'assunzioni', 'concorso', 'concorsi', 'reclutamento',
-  'mobilità', 'mobilita', 'pensioni', 'supplenze', 'sostegno',
-  'rettifica', 'integrazione', 'proroga', 'avviso di avvio', 'apertura delle domande',
-  'riserva', 'assegnazione', 'assegnazioni', 'conferimento', 'scelta delle sedi',
-  'nomina', 'nomine', 'algoritmo', 'algoritmi', 'presa di servizio', 'primo settembre',
-  '1° settembre', 'pnrr', 'bollettini', 'ccnl', 'contratto collettivo',
-  'verbale di accordo', 'sottoscrizione', 'riconoscimento', 'equipollenza',
-  'ricostruzione', 'riscatto laurea', 'assegnazioni provvisorie', 'sentenza',
-  'deciso', 'conciliazione', 'ordinanza cautelare',
-  // AVVIO ANNO SCOLASTICO — soglia di rilevanza abbassata: cattura presa di
-  // servizio, interpelli, supplenze, nomine, reggenze, assegnazioni, bollettini.
-  'interpello', 'interpelli', 'reggenza', 'reggenze', 'supplenza',
-  'bollettino', 'assegnazioni', 'presa in servizio',
-];
+/**
+ * Parole che identificano l'ambito/categoria del personale scolastico.
+ *
+ * STORICO: il vocabolario delle categorie vive ora nell'allow-list dei temi
+ * (`TEMI_OPERATIVI`: standardTemiPersonale.ts + standardTemiDidattica.ts), in
+ * ordine di priorità e con macro-aree, pesi e gate del fatto concreto. Le voci
+ * che compaiono solo qui ('Assegnazioni Provvisorie', 'Ricostruzione Carriera',
+ * 'Riconoscimento Titoli', 'Scuole') restano mappate in `PESI_CATEGORIA` perché
+ * arrivano ancora dai dati d'archivio già pubblicati.
+ */
 
 /**
- * Parole "FORTI" dell'avvio anno scolastico: sono la CONDIZIONE NECESSARIA per
- * assegnare la categoria INFERITA quando il titolo non contiene una
- * parola-categoria ufficiale. Servono a scartare gli avvisi tecnici/
- * amministrativi generali (bandi di raffrescamento, enti del Terzo settore,
- * manifestazioni, ecc.) che non interessano a docenti e personale ATA.
+ * Elenco storico delle parole "operative" (decreto, bando, scadenza, nomina…):
+ * ora è `PAROLE_OPERATIVE` in `lessicoScuola.ts` — esteso alle voci della scuola
+ * a 360 gradi (personale ATA e segreterie, DSGA, CPIA, sostegno, TFA/CFU, classi
+ * di concorso, immissioni in ruolo) — ed è qui ri-esportato come
+ * `PAROLE_ACCETTA`. Il GATE effettivo resta l'allow-list dei temi
+ * (`classificaTemaPersonale` → `TEMI_OPERATIVI`).
+ */
+
+/**
+ * Parole "FORTI" dell'avvio anno scolastico: termini che segnalano una
+ * procedura operativa immediata (interpelli, supplenze, presa di servizio,
+ * reggenze, bollettini). Restano il VOCABOLARIO di riferimento del periodo
+ * (audit, copy, docs/BLOG_EDITORIAL_GUIDELINES.md): dalla riforma dello
+ * standard il gate è l'allow-list dei temi (`TEMI_OPERATIVI`), non più una
+ * categoria inferita dal solo titolo.
  */
 export const PAROLE_FORTI_INIZIO_ANNO: string[] = [
   'interpello', 'interpelli', 'supplenza', 'supplenze',
@@ -332,107 +322,38 @@ export function èRiservaSettimanale(
 
 /**
  * GLOSSARIO ACRONIMI: ogni sigla va spiegata in parentesi alla PRIMA occorrenza
- * (titolo, sintesi, testo). Se il testo contiene già la forma estesa, non si
- * ripete l'espansione.
+ * (titolo, sintesi, testo). Il dizionario vive in `lessicoScuola.ts` — con le
+ * sigle della scuola a 360 gradi (GI, DSGA, TFA, CFU, CPIA, PNSD, PCTO, BES,
+ * DSA, PEI, PDP, GLO, STEM/STEAM…) — ed è ri-esportato da questo modulo come
+ * `GLOSSARIO_ACRONIMI` per compatibilità con copy e documentazione.
  */
-export const GLOSSARIO_ACRONIMI: Record<string, string> = {
-  MIM: 'Ministero dell\u2019Istruzione e del Merito',
-  GPS: 'Graduatorie Provinciali per le Supplenze',
-  GAE: 'Graduatorie ad Esaurimento',
-  PNRR: 'Piano Nazionale di Ripresa e Resilienza',
-  PON: 'Programma Operativo Nazionale',
-  ATA: 'personale Amministrativo, Tecnico e Ausiliario',
-  CCNL: 'Contratto Collettivo Nazionale di Lavoro',
-  ARAN: 'Agenzia per la Rappresentanza Negoziale delle Pubbliche Amministrazioni',
-  INPS: 'Istituto Nazionale della Previdenza Sociale',
-  SPID: 'Sistema Pubblico di Identit\u00e0 Digitale',
-  CIE: 'Carta d\u2019Identit\u00e0 Elettronica',
-  SIDI: 'Sistema Informativo dell\u2019Istruzione',
-  POLIS: 'la piattaforma unica dei servizi pubblici di istruzione',
-  USR: 'Ufficio Scolastico Regionale',
-  USP: 'Ufficio Scolastico Provinciale',
-  OM: 'Ordinanza Ministeriale',
-  DM: 'Decreto Ministeriale',
-  MAD: 'Messa A Disposizione',
-};
 
 /**
  * TEMI AMMESSI (allow-list): una notizia si pubblica SOLO se riguarda il
- * personale scolastico in modo operativo. `autosufficiente: true` quando le
+ * personale scolastico in modo operativo. L'elenco vive nei moduli tematici
+ * (`standardTemiPersonale.ts` + `standardTemiDidattica.ts`) ed è unito da
+ * `editorialStandard.ts` in `TEMI_OPERATIVI`, in ordine di PRIORITÀ: la prima
+ * voce che corrisponde assegna la categoria. `autosufficiente: true` quando le
  * parole del tema bastano; altrimenti serve anche un contesto di personale
  * (`PAROLE_PERSONALE`), così un "concorso per studenti" non passa come concorso
  * riservato al personale della scuola.
  */
-const TEMI_PERSONALE: Array<{ categoria: string; parole: string[]; autosufficiente: boolean }> = [
-  {
-    categoria: 'CCNL',
-    autosufficiente: true,
-    parole: ['ccnl', 'contratto collettivo', 'contrattazione', 'rinnovo del contratto', 'stipendi', 'retribuzion', 'indennit', 'progressioni economiche', 'busta paga'],
-  },
-  {
-    categoria: 'Pensioni',
-    autosufficiente: true,
-    parole: ['previdenz', 'pension', 'riscatto', 'ricongiunzione', 'ricostruzione di carriera', 'ricostruzione carriera', 'contributiv'],
-  },
-  {
-    categoria: 'Welfare',
-    autosufficiente: true,
-    parole: ['welfare', 'polizza', 'sanitari', 'assistenza', 'benefit', 'tutela della salute'],
-  },
-  {
-    categoria: 'Mobilità',
-    autosufficiente: true,
-    parole: ['mobilit', 'trasferiment', 'passaggio di ruolo', 'assegnazioni provvisorie', 'utilizzazioni', 'comandi', 'assegnazione'],
-  },
-  {
-    categoria: 'GPS',
-    autosufficiente: true,
-    parole: ['gps', 'graduator', 'supplenz', 'interpello', 'interpelli', 'messa a disposizione', 'scelta delle sedi', 'ruoli docenti', 'nomine'],
-  },
-  {
-    categoria: 'Organico',
-    autosufficiente: true,
-    parole: ['organico', 'organici', 'cattedre', 'dotazione organica', 'posti di ruolo', 'esuberi', 'reggenz'],
-  },
-  {
-    categoria: 'Formazione',
-    autosufficiente: true,
-    parole: ['formazione', 'aggiornamento professionale', 'abilitazione', 'specializzazione', 'accreditamento'],
-  },
-  {
-    categoria: 'PNRR',
-    autosufficiente: true,
-    parole: ['pnrr', 'piano nazionale di ripresa', 'scuola 4.0', 'finanziament', 'edilizia scolastica'],
-  },
-  {
-    categoria: 'Sicurezza',
-    autosufficiente: true,
-    parole: ['sicurezza sui luoghi di lavoro', 'tutela della sicurezza', 'infortuni', 'stress lavoro-correlato', 'sorveglianza sanitaria'],
-  },
-  {
-    categoria: 'Normativa',
-    autosufficiente: false,
-    parole: ['nuove regole', 'nuova disciplina', 'linee guida', 'semplificazione', 'modifiche al regolamento', 'requisiti'],
-  },
-  {
-    categoria: 'Scadenze',
-    autosufficiente: false,
-    parole: ['scadenza', 'entro il', 'termine ultimo', 'presentazione delle domande', 'riapertura dei termini', 'proroga', 'istanze'],
-  },
-  {
-    categoria: 'Concorsi',
-    autosufficiente: false,
-    parole: ['concorso', 'concorsi', 'reclutament', 'assunzion', 'graduatorie di merito'],
-  },
-];
 
-/** Contesto di PERSONALE scolastico (obbligatorio per i temi non autosufficienti). */
+/**
+ * Contesto di PERSONALE scolastico (obbligatorio per i temi non autosufficienti).
+ * Copre la scuola a 360 gradi: docenti di ruolo e precari, personale ATA e
+ * segreterie, DSGA, educatori, CPIA e istruzione degli adulti, sostegno,
+ * formazione e titoli (TFA, CFU, classi di concorso), immissioni in ruolo.
+ */
 const PAROLE_PERSONALE =
-  /(?:personale|docenti|docente|\bata\b|dirigenti scolastici|supplent|graduator|interpell|contratt|stipend|mobilit|organico|cattedre|reclutament|assunzion|nomine|gps|ccnl|welfare|polizza|previdenz|pension|riscatto|formazione|abilitazione|carriera|permessi|aspettativa|utilizzazion|ricostruzione|ruolo)/i;
+  /(?:personale|docenti|docente|insegnant|educator|\bata\b|dsga|segreteri|collaborator|assistent|dirigenti scolastici|supplent|graduator|interpell|contratt|stipend|mobilit|organico|cattedre|reclutament|assunzion|nomine|neoassunt|precari|gps|ccnl|welfare|polizza|previdenz|pension|riscatto|formazione|abilitazione|carriera|permessi|aspettativa|utilizzazion|ricostruzione|ruolo|cpia|tfa|cfu|classi di concorso)/i;
 
 /**
  * Classifica il TEMA OPERATIVO della notizia per il personale scolastico
- * (contratti, welfare, mobilità, GPS/interpelli, scadenze, normativa…).
+ * (contratti e previdenza, welfare, mobilità, GPS/interpelli, sostegno, ATA e
+ * segreterie, istruzione degli adulti, organico, formazione e titoli, PNRR,
+ * sicurezza, normativa, scadenze, concorsi, didattica e pedagogia).
+ * Usa l'allow-list condivisa `TEMI_OPERATIVI` (ordine = priorità).
  * `null` = nessun impatto pratico → non si pubblica.
  */
 export function classificaTemaPersonale(testo: string): string | null {
@@ -440,12 +361,13 @@ export function classificaTemaPersonale(testo: string): string | null {
   if (!t) return null;
   const contestoForte = PAROLE_PERSONALE.test(t);
   const contestoScuola = contestoForte || PAROLE_SCUOLA.test(t);
-  for (const tema of TEMI_PERSONALE) {
+  for (const tema of TEMI_OPERATIVI) {
     if (!tema.parole.some((p) => t.includes(p))) continue;
-    // Temi autosufficienti (contratti, welfare, mobilità, GPS…): bastano le
-    // loro parole. Gli altri (normativa, scadenze, concorsi) valgono solo con un
-    // riferimento ESPLICITO al personale: così un concorso o un evento per
-    // studenti non passa come notizia operativa per docenti e ATA.
+    // Temi autosufficienti (contratti, welfare, mobilità, GPS, sostegno, ATA,
+    // CPIA…): bastano le loro parole. Gli altri (normativa, scadenze, concorsi,
+    // reclutamento, didattica e pedagogia) valgono solo con un riferimento
+    // ESPLICITO al personale: così un concorso o un evento per studenti non
+    // passa come notizia operativa per docenti e ATA.
     if (tema.autosufficiente ? contestoScuola : contestoForte) return tema.categoria;
   }
   return null;
@@ -506,27 +428,10 @@ export function espandiAcronimi(
  * ufficiale"): un articolo che ne contiene una viene scartato, in generazione e
  * in igiene dell'archivio. La notizia parla solo se ha fatti completi: scadenza,
  * requisiti, modalità e link diretti.
+ *
+ * L'elenco vive in `lessicoScuola.ts` (blocco condiviso dello standard
+ * editoriale) ed è ri-esportato come `FRASI_FLUFF`.
  */
-export const FRASI_FLUFF: string[] = [
-  'ti avvisiamo appena esce',
-  'ti avviseremo appena esce',
-  'appena esce',
-  'non ancora pubblicata',
-  'non ancora pubblicate',
-  'non è ancora indicata',
-  'non sono ancora indicati',
-  'non è ancora stata fissata',
-  'prossimo aggiornamento è in arrivo',
-  'prossimo aggiornamento',
-  'resta aggiornato',
-  'continua a seguirci',
-  'sarà pubblicata prossimamente',
-  'verifica apertura nel testo ufficiale',
-  'verifica nel testo ufficiale',
-  'controlla nel testo ufficiale',
-  'ti aggiorneremo',
-  'le date saranno confermate',
-];
 
 /** Vero se il testo contiene una frase di fluff/promessa vuota (non pubblicabile). */
 export function contieneFraseFluff(testo?: string | null): boolean {
@@ -688,49 +593,17 @@ export function estraiDeadline(testo: string, oggi: Date = new Date()): string |
   return null;
 }
 
-/** Classifica la categoria di appartenenza (per il personale scolastico). */
-export function classificaCategoria(testo: string): string | null {
-  const t = testo.toLowerCase();
-  for (const [categoria, parole] of Object.entries(PAROLE_CATEGORIA)) {
-    if (parole.some((p) => t.includes(p))) return categoria;
-  }
-  return null;
-}
-
 /**
- * Categorie di FALLBACK per l'AVVIO dell'anno scolastico: quando il titolo è
- * chiaramente operativo (interpelli, supplenze, nomine, reggenze, presa di
- * servizio…) ma non contiene una parola-categoria mappata, si assegna la
- * categoria più coerente. Il gate operativo resta comunque obbligatorio.
+ * Classifica la categoria di appartenenza (per il personale scolastico).
+ *
+ * DEPRECATA: usa `classificaTemaPersonale`, l'allow-list completa dei temi
+ * (scuola a 360 gradi: ATA e segreterie, istruzione degli adulti, formazione e
+ * titoli, pedagogia e didattica…). Resta un wrapper per i chiamanti storici,
+ * così non esistono due verdi diversi sullo stesso testo. `PAROLE_CATEGORIA`
+ * resta il vocabolario storico (alias e sinonimi presenti in archivio).
  */
-const CATEGORIE_INIZIO_ANNO: Array<{ categoria: string; parole: string[] }> = [
-  {
-    categoria: 'Supplenze',
-    parole: [
-      'interpello', 'interpelli', 'supplenza', 'supplenze', 'nomina', 'nomine',
-      'reggenza', 'reggenze', 'messa a disposizione', 'contratto a tempo determinato',
-    ],
-  },
-  {
-    categoria: 'Graduatorie',
-    parole: ['bollettino', 'bollettini', 'graduatoria', 'graduatorie'],
-  },
-  {
-    categoria: 'Scuole',
-    parole: [
-      'presa di servizio', 'presa in servizio', 'avvio anno scolastico',
-      'inizio anno scolastico', 'calendario scolastico', 'assegnazione',
-      'assegnazioni', 'conferimento',
-    ],
-  },
-];
-
-/** Categoria inferita per l'avvio dell'anno scolastico (o null se non deducibile). */
-function categoriaInizioAnno(testo: string): string | null {
-  for (const { categoria, parole } of CATEGORIE_INIZIO_ANNO) {
-    if (parole.some((p) => testo.includes(p))) return categoria;
-  }
-  return null;
+export function classificaCategoria(testo: string): string | null {
+  return classificaTemaPersonale(testo);
 }
 
 /**
@@ -738,12 +611,16 @@ function categoriaInizioAnno(testo: string): string | null {
  * Regola: niente contenuti non vincolanti; solo provvedimenti, note e
  * scadenze operative per il personale scolastico.
  *
- * SOGLIA (avvio anno scolastico): resta obbligatorio il gate OPERATIVO (almeno
- * una parola di `PAROLE_ACCETTA`). La categoria si assegna SOLO se:
- *   1. il titolo contiene una parola-categoria ufficiale (`PAROLE_CATEGORIA`); oppure
- *   2. contiene un termine "FORTE" di avvio anno (`PAROLE_FORTI_INIZIO_ANNO`) →
- *      categoria inferita (`CATEGORIE_INIZIO_ANNO`, fallback 'Scuole').
- * In assenza di entrambi, l'avviso viene SCARTATO: sono gli avvisi tecnici/
+ * SOGLIA: la categoria si assegna SOLO se la voce rientra nell'ALLOW-LIST dei
+ * temi (`classificaTemaPersonale` → `TEMI_OPERATIVI`: scuola a 360 gradi —
+ * contratti e previdenza, welfare, mobilità, sostegno, ATA e segreterie,
+ * istruzione degli adulti, GPS/interpelli, organico, formazione e titoli,
+ * reclutamento, PNRR, sicurezza, normativa, scadenze, concorsi). I temi
+ * CULTURALI e DIDATTICI (pedagogia, didattica, innovazione digitale) sono
+ * `fattoConcreto: true` (`CATEGORIE_CON_FATTO_CONCRETO`): passano solo con una
+ * scadenza reale o un canale ufficiale di domanda/candidatura, mai come
+ * webinar, convegno o comunicato.
+ * In assenza di un tema, l'avviso viene SCARTATO: sono gli avvisi tecnici/
  * amministrativi generali che non interessano a docenti e ATA. Il filtro
  * anti-rumore (`PAROLE_RIFIUTA`) resta pienamente attivo.
  */
@@ -839,10 +716,28 @@ export function valutaRilevanza(voce: VoceInValutazione): ValutazioneNotizia {
       categoria: null,
       deadline: null,
       motivo:
-        'Nessun impatto pratico su contratti, welfare, mobilità, GPS/interpelli, scadenze o normativa per il personale',
+        'Nessun impatto pratico sui temi del personale scolastico (contratti e previdenza, welfare, mobilità, sostegno, ATA e segreterie, istruzione degli adulti, GPS/interpelli, organico, formazione e titoli, reclutamento, PNRR, sicurezza, normativa, scadenze, concorsi)',
     };
   }
-  return { rilevante: true, categoria: tema, deadline: estraiDeadline(testo) };
+  // 3) FATTO CONCRETO (temi culturali e didattici): pedagogia, didattica e
+  //    innovazione digitale non entrano in bacheca come puro comunicato,
+  //    webinar o convegno. Servono una SCADENZA reale oppure un canale ufficiale
+  //    di domanda/candidatura (procedura concreta da seguire).
+  const deadline = estraiDeadline(testo);
+  if (
+    CATEGORIE_CON_FATTO_CONCRETO.includes(tema) &&
+    !deadline &&
+    !linkDomandaUfficiale(testo) &&
+    !richiedePresentazioneDomanda(testo)
+  ) {
+    return {
+      rilevante: false,
+      categoria: null,
+      deadline: null,
+      motivo: `Tema ${tema} senza fatto concreto: serve una scadenza reale o un canale ufficiale di domanda/candidatura`,
+    };
+  }
+  return { rilevante: true, categoria: tema, deadline };
 }
 
 /**
@@ -854,10 +749,10 @@ export function promptFiltroLLM(voci: VoceInValutazione[]): string {
   return `Sei il filtro editoriale del servizio Notizie di ScuoleRadar per i docenti italiani.
 
 REGOLE VINCOLANTI (strict editorial guidelines):
-1) ZERO RUMORE: rifiuta discorsi, interviste, dichiarazioni non vincolanti, comunicati stampa, campagne di comunicazione ed eventi promozionali. Accetta SOLO provvedimenti VINCOLANTI per il personale scolastico: decreti, ordinanze ministeriali, note, circolari, bandi, avvisi e scadenze operative (GPS, mobilità, concorsi, pensioni, sostegno, supplenze, graduatorie).
+1) ZERO RUMORE: rifiuta discorsi, interviste, dichiarazioni non vincolanti, comunicati stampa, campagne di comunicazione ed eventi promozionali. Accetta SOLO provvedimenti VINCOLANTI per docenti di ruolo e precari, personale ATA e segreterie, DSGA: decreti, ordinanze ministeriali, note, circolari, bandi, avvisi e scadenze operative (contratti e previdenza, welfare, mobilità, sostegno e inclusione, GPS e interpelli, organico, formazione e titoli come TFA e CFU, istruzione degli adulti nei CPIA, immissioni in ruolo, PNRR, sicurezza, normativa, concorsi).
 2) VALIDITÀ GIURIDICA: la notizia DEVE riferirsi a un atto ufficiale preciso (Ordinanza Ministeriale, Decreto, articolo di legge, nota protocollata). Se titolo/descrizione non citano un riferimento ufficiale specifico, rilevanza = false.
 3) CAPACITÀ SETTIMANALE: al massimo 3 articoli ad alto valore per settimana. Se nessun provvedimento è vincolante, la risposta deve avere "items" vuoti (0 articoli pubblicati).
-4) CATEGORIA: una tra GPS, Mobilità, Assegnazioni Provvisorie, Concorsi, Pensioni, Ricostruzione Carriera, Riconoscimento Titoli, CCNL, Sostegno, Graduatorie, Supplenze, Scuole, PNRR.
+4) CATEGORIA: una tra quelle dell'allow-list dei temi — CCNL, Pensioni, Welfare, Mobilità, Sostegno, ATA, Istruzione Adulti, GPS, Organico, Formazione, Reclutamento e Ruolo, PNRR, Sicurezza, Normativa, Scadenze, Concorsi, Innovazione Digitale, Didattica, Pedagogia. I temi culturali e didattici (Innovazione Digitale, Didattica, Pedagogia) valgono SOLO con una scadenza reale o un canale ufficiale di domanda/candidatura: senza fatto concreto rilevanza = false.
 5) DEADLINE: la data di scadenza ufficiale in formato ISO (YYYY-MM-DD) se presente, altrimenti null.
 
 Rispondi SOLO in JSON:
@@ -867,24 +762,17 @@ Notizie da valutare:
 ${voci.map((v) => `- ${v.title} | ${v.description ?? ''}`).join('\n')}`;
 }
 
-/** Punteggio di rilevanza 0-100 per l'ordinamento. */
+/**
+ * Punteggio di rilevanza 0-100 per l'ordinamento.
+ * La matrice dei pesi è CONDIVISA (`PESI_CATEGORIA` in `editorialStandard.ts`),
+ * alimentata dai temi di `standardTemiPersonale.ts`: qui non si duplica nulla,
+ * così pubblicazione, ingest e reportistica ordinano con gli stessi pesi.
+ * `65` resta il fallback per le categorie storiche presenti in archivio ma non
+ * più in allow-list; `60` per le voci senza categoria. Una scadenza reale vale
+ * `+8`.
+ */
 export function punteggioRilevanza(categoria: string | null, hasDeadline: boolean): number {
-  const priorita: Record<string, number> = {
-    GPS: 95,
-    Concorsi: 90,
-    Sostegno: 88,
-    Mobilità: 85,
-    'Assegnazioni Provvisorie': 86,
-    CCNL: 84,
-    Pensioni: 82,
-    Supplenze: 80,
-    PNRR: 80,
-    Graduatorie: 78,
-    'Ricostruzione Carriera': 76,
-    'Riconoscimento Titoli': 74,
-    Scuole: 70,
-  };
-  const base = categoria ? (priorita[categoria] ?? 65) : 60;
+  const base = categoria ? (PESI_CATEGORIA[categoria] ?? 65) : 60;
   return Math.min(100, base + (hasDeadline ? 8 : 0));
 }
 

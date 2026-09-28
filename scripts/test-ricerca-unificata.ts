@@ -104,9 +104,22 @@ const preferenze = leggi('src/departments/radar/PreferenzeRadar.tsx');
 
 check('wizard: campo unico di ricerca unificata', true, wizard.includes('<RicercaSelezioni'));
 check(
-  'wizard: nessun campo di ricerca duplicato nelle due colonne',
+  'wizard: la colonna CLASSI non ha campi di ricerca propri (resta il campo unificato)',
   true,
-  !/<input/.test(wizardClassi) && !/<input/.test(wizardCompetenze),
+  !/<input/.test(wizardClassi),
+);
+check(
+  'wizard: la colonna COMPETENZE ha UN solo campo, la parola chiave libera',
+  true,
+  (wizardCompetenze.match(/<input/g) ?? []).length === 1 &&
+    !wizardCompetenze.includes('<RicercaSelezioni') &&
+    /aggiungiParolaChiave/.test(wizardCompetenze),
+);
+check(
+  'wizard: campo parola chiave accessibile (aria-label) e svuotato dopo l’aggiunta',
+  true,
+  wizardCompetenze.includes('aria-label="Cerca o aggiungi una parola chiave"') &&
+    /setParolaChiave\(''\)/.test(wizardCompetenze),
 );
 check(
   'wizard: nessuna <select> né elenco statico di materie',

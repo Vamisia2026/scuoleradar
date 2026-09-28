@@ -117,7 +117,7 @@ check(
 console.log('\n— Rendering: EMAIL —');
 const destinatario: DestinatarioNotifica = {
   email: 'docente@example.it',
-  nome: 'Mario',
+  nome: 'Docente',
   province: ['AT'],
   classi: ['A-022'],
 };

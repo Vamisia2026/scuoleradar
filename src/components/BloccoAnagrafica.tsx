@@ -1,26 +1,32 @@
 /**
- * Blocco ANAGRAFICA riutilizzabile (wizard Radar da Guest / form di registrazione).
+ * Blocco ANAGRAFICA riutilizzabile (fine percorso del wizard Radar / form di
+ * registrazione).
  *
- * Raccolta facoltativa di nome, cognome, genere ed età: sono i dati demografici di
- * base che personalizzano le email (Cara/Caro) e il profilo. Il NOME è una stringa
- * libera: nomi composti o ragioni («Bison Productions») restano intatti, mai
+ * Nome, cognome, genere ed età: i dati demografici di base che personalizzano le
+ * email (Cara/Caro) e il profilo; genere ed età alimentano anche le statistiche di
+ * settore. Il NOME è una stringa libera: nomi composti restano intatti, mai
  * spezzati in nome/cognome.
  *
  * Il contenitore decide dove salvare (bozza di registrazione + `profiles`): qui
  * c'è solo la presentazione, così lo stesso blocco vive nel wizard e altrove.
+ * Nessuna spiegazione paternalistica e nessuna etichetta «facoltativo»: i campi si
+ * spiegano con il proprio nome e, se serve un contesto, arriva dal chiamante con
+ * la prop `nota`.
  */
 export interface DatiAnagrafica {
   nome: string;
   cognome: string;
   genere: 'M' | 'F' | null;
-  /** Età come stringa: il campo può restare vuoto (facoltativo). */
+  /** Età come stringa: il campo può restare vuoto. */
   eta: string;
 }
 
 interface BloccoAnagraficaProps {
   dati: DatiAnagrafica;
   onChange: (patch: Partial<DatiAnagrafica>) => void;
-  /** Testo di aiuto (il wizard spiega che i dati non verranno richiesti di nuovo). */
+  /** Titolo del blocco (default: «Il tuo profilo»). */
+  titolo?: string;
+  /** Riga di contesto, mostrata SOLO se il chiamante la fornisce. */
   nota?: string;
   /** Compatto: usato dove lo spazio verticale è prezioso. */
   compatto?: boolean;
@@ -33,14 +39,12 @@ const campoInput =
 const campoInputCompatto =
   'w-full rounded-lg border border-primary-200 px-2.5 py-1.5 text-sm text-primary-800 focus:border-primary-400 focus:outline-none';
 
-export function BloccoAnagrafica({ dati, onChange, nota, compatto }: BloccoAnagraficaProps) {
+export function BloccoAnagrafica({ dati, onChange, titolo, nota, compatto }: BloccoAnagraficaProps) {
   const campo = compatto ? campoInputCompatto : campoInput;
   return (
     <div className={`rounded-xl border border-primary-100 bg-primary-50/40 ${compatto ? 'p-3' : 'p-4'}`}>
-      <p className="text-sm font-bold text-primary-800">Qualche dato su di te</p>
-      <p className="mt-0.5 text-xs text-primary-500">
-        {nota ?? 'Facoltativo: personalizza le email e il profilo. Puoi compilarlo anche dopo.'}
-      </p>
+      <p className="text-sm font-bold text-primary-800">{titolo ?? 'Il tuo profilo'}</p>
+      {nota && <p className="mt-0.5 text-xs text-primary-500">{nota}</p>}
 
       <div className={`${compatto ? 'mt-2 gap-2' : 'mt-3 gap-3'} grid sm:grid-cols-2`}>
         <label className="block">

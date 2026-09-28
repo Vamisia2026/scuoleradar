@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Radar, ArrowRight, ArrowLeft, AlertCircle, PartyPopper, Loader2 } from 'lucide-react';
+import { Radar, ArrowRight, ArrowLeft, AlertCircle, Gift, PartyPopper, Loader2 } from 'lucide-react';
 import { Modal } from '@/components/Modal';
 import { useApp, STORAGE_KEY_RADAR_WIZARD_PENDING, type Preferenze } from '@/contexts/AppContext';
 import { track } from '@/lib/analytics';
@@ -19,6 +19,7 @@ import { province } from '@/data/province';
 import { pianoLimits } from '@/lib/planLimits';
 import { normalizzaClasse, normalizzaClassi } from '@/lib/matchingEngine';
 import { promuoviProvinciaPrincipale } from '@/lib/provinceRadar';
+import { provinceInizialiConProva } from '@/lib/provaRadar';
 import {
   cercaClassiDiConcorso,
   cercaSelezioniRadar,
@@ -52,14 +53,26 @@ const TITOLI_STEP = [
   'Canali di notifica',
 ];
 
+/**
+ * SCHERMATA DI BENVENUTO (fine flusso, dopo l'attivazione del Radar).
+ * Testo ESATTO richiesto dal prodotto: sta su una riga sola — non spezzato su più
+ * linee JSX — perché il gate di copy (`npm run test:copy:pubblico`) lo verifica
+ * come stringa letterale.
+ */
+const BENVENUTO_FINE_FLUSSO = 'Buone notizie! Ti offriamo noi il primo mese PRO con Scuole Radar! Il tuo Radar Personalizzato è attivo, sfruttalo!';
+
 // La chiave del passo wizard è condivisa in `lib/radarValidation.ts`.
 // Limiti dinamici per piano (Base 1 provincia / 2 classi · PRO 4/4): vedi lib/planLimits.ts.
 
 /**
  * Wizard "Attiva il tuo Radar" a 4 passi (modal):
- *  1. Ordini di Scuola & PNRR → 2. Province → 3. Classi/Materie → 4. Canali di Notifica.
+ *  1. Ordini di Scuola & PNRR → 2. Province → 3. Classi/Materie → 4. Canali di
+ *  Notifica (+ dati anagrafici facoltativi, a FINE percorso: mai in apertura).
  * Al termine salva le preferenze, attiva i canali di notifica (email/Telegram) e
  * mostra un modal di completamento.
+ *
+ * Il wizard non chiede più la preferenza SOSTEGNO: resta un'impostazione del
+ * profilo (`PreferenzeRadar`) e il valore già salvato viene PRESERVATO.
  */
 export function RadarWizardModal() {
   const navigate = useNavigate();
@@ -77,8 +90,6 @@ export function RadarWizardModal() {
   const [classiCodici, setClassiCodici] = useState<string[]>([]);
   const [materieId, setMaterieId] = useState<string[]>([]);
   const [materieCustom, setMaterieCustom] = useState<string[]>([]);
-  /** Preferenza SOSTEGNO: "includi anche le opportunità per il sostegno". */
-  const [sostegno, setSostegno] = useState(false);
   const [provinceCodici, setProvinceCodici] = useState<string[]>([]);
   const [telegramUsername, setTelegramUsername] = useState('');
   const [emailNotifica, setEmailNotifica] = useState('');
@@ -134,14 +145,20 @@ export function RadarWizardModal() {
     setClassiCodici(normalizzaClassi(preferenze.classiCodici));
     setMaterieId(preferenze.materieId ?? []);
     setMaterieCustom(preferenze.materieCustom ?? []);
-    setSostegno(preferenze.sostegno === true);
-    setProvinceCodici([...preferenze.provinceCodici]);
+    // PROVINCE: le preferenze salvate hanno la precedenza. Se il profilo non ha
+    // ancora nessuna provincia, si EREDITA quella provata nel box «Prova il
+    // Radar» dell'hero (es. Asti): diventa la provincia PRINCIPALE, cioè la prima
+    // dell'elenco (`lib/provinceRadar.ts`), senza richiederla di nuovo.
+    setProvinceCodici(provinceInizialiConProva(preferenze.provinceCodici));
     setTelegramUsername(preferenze.telegramUsername ?? '');
-    setEmailNotifica(preferenze.emailNotifica || user?.email || '');
+    // BOZZA di registrazione: il form rapido della homepage (nome, cognome ed
+    // email) la riempie PRIMA di aprire questo wizard — si legge qui, così i campi
+    // del profilo si presentano già compilati e nessun dato viene richiesto due volte.
+    const bozza = leggiBozzaRegistrazione();
+    setEmailNotifica(preferenze.emailNotifica || bozza?.email || user?.email || '');
     // ANAGRAFICA: prima la bozza di registrazione (dati inseriti in un giro
     // precedente del wizard o prima del ritorno da Google), poi le preferenze, poi
     // il profilo locale. Niente viene mai sovrascritto con un valore vuoto.
-    const bozza = leggiBozzaRegistrazione();
     const etaDaBozza = bozza?.eta ?? preferenze.eta ?? user?.eta ?? null;
     setAnagrafica((prev) => ({
       nome: bozza?.nome || user?.nome || prev.nome,
@@ -303,18 +320,9 @@ export function RadarWizardModal() {
   };
 
   /**
-   * Preferenza SOSTEGNO (Passo 3): persistita SUBITO, così la scelta non si perde
-   * cambiando passo o chiudendo/riaprendo il wizard.
-   */
-  const toggleSostegno = (prossimo: boolean) => {
-    setSostegno(prossimo);
-    persistiSelezione({ sostegno: prossimo });
-  };
-
-  /**
    * Aggiunge una PAROLA CHIAVE personale (tag libero): arriva dalla ricerca
-   * unificata («Aggiungi "Pedagogia" come tua parola chiave») e alimenta la CTA
-   * anche quando l'utente la scrive a mano. Dedup case-insensitive e persistenza
+   * unificata («Aggiungi "Pedagogia" come tua parola chiave»), dal campo dedicato
+   * della colonna competenze e dalla CTA. Dedup case-insensitive e persistenza
    * IMMEDIATA: nessun testo digitato va perso.
    */
   const aggiungiParolaChiave = (testo: string) => {
@@ -389,8 +397,8 @@ export function RadarWizardModal() {
     onboarded: false,
     favoriteSchools: preferenze.favoriteSchools ?? [],
     ignoredSchools: preferenze.ignoredSchools ?? [],
-    // Preferenza SOSTEGNO (Passo 3 → profiles.sostegno).
-    sostegno,
+    // La preferenza SOSTEGNO non si chiede più nel wizard: resta quella già
+    // salvata (`...preferenze`) e si modifica dalle Preferenze Radar.
   });
 
   /** Persiste subito una bozza (context/localStorage + profilo Supabase). */
@@ -525,8 +533,9 @@ export function RadarWizardModal() {
       onboarded: true,
       favoriteSchools: preferenze.favoriteSchools ?? [],
       ignoredSchools: preferenze.ignoredSchools ?? [],
-      // Preferenza SOSTEGNO scelta al Passo 3 (senza, la fine del wizard la perderebbe).
-      sostegno,
+      // La preferenza SOSTEGNO non è più chiesta dal wizard, ma NON va azzerata:
+      // si conserva il valore già salvato sul profilo (si modifica dalle Preferenze).
+      sostegno: preferenze.sostegno ?? true,
     };
     // Salva le preferenze (localStorage) anche per gli anonimi: la configurazione
     // non va mai persa.
@@ -618,7 +627,15 @@ export function RadarWizardModal() {
             <PartyPopper className="h-8 w-8 text-accent-600" />
           </span>
           <h3 className="mt-4 text-xl font-bold text-primary-800">Il tuo Radar è attivo!</h3>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-primary-600">
+
+          {/* RiQUADRO DI BENVENUTO: d'impatto e pulito, con il testo esatto della
+              promessa PRO. Sta QUI, prima che l'utente completi il flusso. */}
+          <div className="mx-auto mt-4 flex max-w-xl items-start gap-3 rounded-2xl bg-gradient-to-br from-primary-600 via-primary-500 to-secondary-500 px-4 py-4 text-left shadow-card">
+            <Gift className="mt-0.5 h-5 w-5 shrink-0 text-white" />
+            <p className="text-base font-black leading-snug text-white">{BENVENUTO_FINE_FLUSSO}</p>
+          </div>
+
+          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-primary-600">
             Preferenze salvate: {provinceCodici.length}{' '}
             {provinceCodici.length === 1 ? 'provincia' : 'province'},{' '}
             {classiCodici.length + materieId.length + materieCustom.length} tra classi e materie. Ti
@@ -659,14 +676,7 @@ export function RadarWizardModal() {
           </div>
 
           {/* Passo 1: Ordini di Scuola & PNRR */}
-          {step === 1 && (
-            <PassoOrdini
-              ordini={ordini}
-              toggleOrdine={toggleOrdine}
-              anagrafica={anagrafica}
-              onChangeAnagrafica={onChangeAnagrafica}
-            />
-          )}
+          {step === 1 && <PassoOrdini ordini={ordini} toggleOrdine={toggleOrdine} />}
 
           {/* Passo 2: Province */}
           {step === 2 && (
@@ -692,8 +702,6 @@ export function RadarWizardModal() {
                 classiWarning,
                 maxClassiConcorso,
                 toggleClasse,
-                sostegno,
-                toggleSostegno,
               }}
               selezioneMaterie={{
                 materieId,
@@ -714,11 +722,12 @@ export function RadarWizardModal() {
             />
           )}
 
-          {/* Passo 4: Canali di Notifica */}
+          {/* Passo 4: Canali di Notifica + dati anagrafici facoltativi (fine percorso) */}
           {step === 4 && (
             <PassoNotifica
               notifica={{ telegramCollegato, telegramDeepLink, telegramUsername, setTelegramUsername, emailNotifica, setEmailNotifica }}
               piano={{ isProAttivo, isTrialAttivo }}
+              anagrafica={{ dati: anagrafica, onChange: onChangeAnagrafica }}
               rapida={{
                 ospite: !user,
                 googleInCorso,

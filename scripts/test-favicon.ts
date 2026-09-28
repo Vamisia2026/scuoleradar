@@ -226,6 +226,18 @@ check(
     .sort(),
 );
 
+console.log('\n— 6. Header: marchio ufficiale accanto alla scritta ScuoleRadar.it —');
+// Il marchio dell'header è la TESSERA ufficiale (stessa grafica del favicon), mai
+// un logo-immagine rimpicciolito: è ciò che dava l'effetto «template».
+const MARCHIO = 'src/assets/marchio-radar.png';
+const header = readFileSync('src/components/Header.tsx', 'utf8');
+check("marchio dell'header = tessera ufficiale (stesso file del favicon 256)", true,
+  existsSync(MARCHIO) && readFileSync(MARCHIO).equals(readFileSync('public/favicon-256.png')));
+check("header: marchio come asset di build, vecchio logo immagine rimosso", true,
+  /from '@\/assets\/marchio-radar\.png'/.test(header) && !/from '@\/assets\/logo\.png'/.test(header));
+check('header: wordmark testuale ScuoleRadar.it accanto al marchio', true,
+  /Scuole<\/span>[\s\S]{0,120}Radar<\/span>[\s\S]{0,120}\.it<\/span>/.test(header));
+
 console.log(errori === 0 ? '\n✅ FAVICON: nessun problema' : `\n❌ FAVICON: ${errori} errore/i`);
 process.exitCode = errori === 0 ? 0 : 1;
 

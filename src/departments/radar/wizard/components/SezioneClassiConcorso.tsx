@@ -1,17 +1,19 @@
 /**
- * Wizard Radar — PASSO 3 · colonna «Classi di concorso» + adesione al SOSTEGNO.
+ * Wizard Radar — PASSO 3 · colonna «Classi di concorso».
  *
  * Presentazione pura: la selezione (e la ricerca unificata) vivono nel
  * contenitore `RadarWizardModal`. Qui restano i chip delle classi scelte e
  * l'elenco FILTRATO dalla ricerca unificata: nessun elenco statico separato,
  * nessuna seconda casella di ricerca.
+ *
+ * Nessuna domanda sul sostegno: nel wizard rallentava e rischiava di far
+ * escludere opportunità. La preferenza resta fra le impostazioni del Radar
+ * (`PreferenzeRadar` → «Classi di concorso») e il wizard non la tocca.
  */
 import { AlertCircle, Check } from 'lucide-react';
 import { Pill } from '@/components/Pill';
-import { SostegnoToggle } from '@/components/SostegnoToggle';
-import { codiciSostegno, isCodiceSostegno } from '@/data/classiConcorso';
 import { etichettaMateria } from '@/lib/ricercaSelezioniRadar';
-import { contieneClasse, normalizzaClasse } from '@/lib/matchingEngine';
+import { contieneClasse } from '@/lib/matchingEngine';
 import type { PianoLimits } from '@/lib/planLimits';
 import type { SelezioneClassi } from '../tipiSelezione';
 
@@ -27,15 +29,7 @@ export function SezioneClassiConcorso({
   limitiPiano,
   ricercaAttiva,
 }: SezioneClassiConcorsoProps) {
-  const {
-    classiCodici,
-    classiFiltrate,
-    classiWarning,
-    maxClassiConcorso,
-    toggleClasse,
-    sostegno,
-    toggleSostegno,
-  } = selezione;
+  const { classiCodici, classiFiltrate, classiWarning, maxClassiConcorso, toggleClasse } = selezione;
 
   return (
     <div className="rounded-xl border border-primary-100 p-2.5">
@@ -110,20 +104,6 @@ export function SezioneClassiConcorso({
             );
           })
         )}
-      </div>
-
-      {/* Preferenza SOSTEGNO: domanda esplicita (abilitazione separata: senza
-          adesione gli avvisi ADEE/ADMM/ADSS non vengono notificati). */}
-      <div className="mt-2 border-t border-primary-100 pt-2">
-        <SostegnoToggle
-          attivo={sostegno}
-          onCambia={toggleSostegno}
-          classiSostegno={classiCodici.filter((c) => isCodiceSostegno(normalizzaClasse(c)))}
-          idPrefisso="wizard-sostegno"
-        />
-        <p className="mt-1 text-[11px] leading-relaxed text-primary-400">
-          Classi di sostegno del catalogo: {codiciSostegno.join(', ')}.
-        </p>
       </div>
     </div>
   );

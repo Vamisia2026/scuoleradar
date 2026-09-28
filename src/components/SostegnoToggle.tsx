@@ -1,23 +1,22 @@
 /**
  * Interruttore della preferenza SOSTEGNO (special education).
  *
- * È la risposta a una domanda esplicita, posta sia nel wizard Radar (Passo 3 —
- * Classi/Materie) sia nelle Preferenze Radar del profilo:
- *   «Vuoi che includiamo anche le opportunità per il sostegno?»
+ * Il sostegno (ADAA/ADEE/ADMM/ADSS) è un'abilitazione SEPARATA dalle classi
+ * disciplinari, ma le fonti lo pubblicano spesso citando anche le classi di
+ * concorso: senza un'impostazione, un docente di tedesco (A-22/A-25) riceveva
+ * interpelli di sostegno (falso positivo storico).
  *
- * Perché esiste: il sostegno (ADAA/ADEE/ADMM/ADSS) è un'abilitazione SEPARATA
- * dalle classi disciplinari, ma le fonti lo pubblicano spesso citando anche le
- * classi di concorso. Senza questa preferenza un docente di tedesco (A-22/A-25)
- * riceveva interpelli di sostegno (falso positivo storico).
- *
- * La preferenza è un GATE: senza adesione gli avvisi di sostegno non vengono
- * notificati. Per RICEVERLI serve anche una classe di sostegno tra le proprie
- * preferenze (ADEE, ADMM…): il messaggio lo dice chiaramente all'utente.
+ * REGOLA ATTUALE: il sostegno è INCLUSO di default — nessun avviso viene
+ * filtrato via in silenzio (`defaultPreferenze.sostegno = true`, migrazione
+ * `20260927120000_default_sostegno_incluso.sql`). Questo interruttore è l'OPZIONE
+ * DI USCITA esplicita, nelle Preferenze Radar: chi lo spegne smette di ricevere
+ * gli avvisi AD…; se ha una classe di sostegno tra le proprie preferenze gli
+ * avvisi di quella classe arrivano comunque (adesione implicita).
  */
 import { Check } from 'lucide-react';
 
 export interface SostegnoToggleProps {
-  /** Stato corrente: true = l'utente vuole anche le opportunità di sostegno. */
+  /** Stato corrente: true = l'utente riceve anche le opportunità di sostegno. */
   attivo: boolean;
   /** Cambio di stato: il chiamante persiste subito (bozza/draft o profilo). */
   onCambia: (attivo: boolean) => void;
@@ -51,20 +50,18 @@ export function SostegnoToggle({
       </span>
 
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-primary-800">
-          Vuoi che includiamo anche le opportunità per il sostegno?
-        </p>
+        <p className="text-sm font-semibold text-primary-800">Opportunità di sostegno</p>
         <p id={idDescrizione} className="mt-1 text-xs leading-relaxed text-primary-500">
           {attivo ? (
             <>
-              <strong>Sì.</strong> Gli avvisi di sostegno (ADAA, ADEE, ADMM, ADSS) non vengono più
-              esclusi: aggiungi tra le classi di concorso quelle di sostegno che ti interessano per
-              riceverli.
+              <strong>Incluse.</strong> Gli avvisi di sostegno (ADAA, ADEE, ADMM, ADSS) arrivano
+              insieme agli altri: aggiungi tra le classi di concorso quelle di sostegno che ti
+              interessano.
             </>
           ) : (
             <>
-              <strong>No.</strong> Gli avvisi di sostegno vengono esclusi dal tuo Radar, anche
-              quando citano le tue classi di concorso.
+              <strong>Escluse.</strong> Su tua scelta il sostegno resta fuori dalle notifiche: puoi
+              riattivarlo quando vuoi da qui.
             </>
           )}
         </p>

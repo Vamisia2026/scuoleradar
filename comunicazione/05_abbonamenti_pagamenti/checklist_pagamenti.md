@@ -88,7 +88,20 @@
 - [ ] L'abbonamento a pagamento non contiene mai `gratis/gratuito/rinnovo
       gratuito`.
 - [ ] È sempre chiaro **se** e **quando** avviene un rinnovo automatico e come
-      disdire; vietato far intendere rinnovi automatici nascosti.
+      disdire; vietato far intendere rinnovi automatici nascosti. Nella **vetrina
+      pubblica** della homepage la dichiarazione vive **fuori** dalla sezione
+      dell'offerta (`/prezzi`, FAQ e passo di pagamento), che resta solo-benefici
+      (bullet successivo).
+- [ ] **Vetrina PRO della homepage** (`LandingOffertaPro`): sezione **solo-benefici**.
+      Presenta i soli tre benefici del piano — avvisi **Telegram in tempo
+      reale**, **email riepilogativa tutti i giorni alle 17.00**, **PureFocus
+      incluso nel piano PRO** — con **una sola** CTA (`Attiva il tuo Radar`):
+      vietati i link verso altri piani (`Confronta i piani`) e le formule difensive
+      di ripiego («se poi non vuoi abbonarti, passi a un account Base»).
+      In questa sezione **non compaiono importi, rinnovi né disdette**: prezzo,
+      rinnovo automatico e modalità di disdetta vivono in `/prezzi` (colonne piani
+      e FAQ), nelle FAQ pubbliche e nel **passo di pagamento** (`AbbonamentoModal`),
+      dove l'utente decide davvero. Guardia: `npm run test:copy:etico`.
 - [ ] "Crediti" / "a consumo" sono spiegati in una riga (cosa sono, quando
       vengono usati, se scadono): nessun termine tecnico non spiegato.
 - [ ] Promo, referral e coupon sono descritti senza ambiguità (percentuale,

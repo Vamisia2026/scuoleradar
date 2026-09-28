@@ -202,7 +202,7 @@ check(
 console.log('\n— Email di promemoria: brand, voci numerate, CTA Notizie —');
 const destinatario: DestinatarioNotifica = {
   email: 'docente@example.it',
-  nome: 'Mario',
+  nome: 'Docente',
   province: ['TO'],
   classi: ['A-22'],
 };

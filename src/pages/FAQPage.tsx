@@ -1,48 +1,68 @@
+/**
+ * Domande frequenti del servizio (pagina pubblica `/faq`).
+ *
+ * Copy di POSIZIONAMENTO: ogni risposta è un punto di forza commerciale o una
+ * istruzione operativa (inserire ScuoleRadar tra le app attendibili della scuola,
+ * «Invita un Collega», PureFocus con l'account Gmail, servizi in arrivo). Nessun
+ * tono difensivo, nessuna parola di pagamento accostata alla prova inclusa.
+ *
+ * L'ancora `#animatore-digitale` è pubblica e referenziata da
+ * `AuthModal`/`NotaAccessoScolastico`: NON va rinominata.
+ */
 import { HelpCircle, MessageCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 
-/** Domande frequenti del servizio (pagina pubblica /faq) — copy sales-oriented. */
 const FAQ_ITEMS: Array<{ id?: string; q: string; a: string }> = [
   {
     id: 'radar-personalizzati',
-    q: 'Come funzionano i radar personalizzati su di me?',
-    a: 'Imposti i parametri come la provincia, la materia e l’ordine di scuola a cui sei interessato e ogni giorno facciamo tre ricerche al giorno per trovare se c’è qualcosa che ci sembra adatto a te. Se lo troviamo te lo mandiamo subito via Telegram e email (per questo raccomandiamo di attivare Telegram). Spesso queste opportunità hanno scadenze temporali molto brevi, quindi trovarle in tempo è importantissimo e l’alternativa è passare la vita a cercarle.',
-  },
-  {
-    id: 'accesso-google-edu',
-    q: 'Perché non riesco ad accedere con l\'email Google della mia scuola (.edu.it)?',
-    a: 'Molti Istituti Scolastici bloccano l\'accesso Google OAuth verso app terze non espressamente autorizzate nella console dell\'amministratore. Per accedere subito puoi utilizzare la registrazione standard con Email e Password oppure accedere con il tuo account Google personale.',
+    q: 'Come funziona il Radar e cosa mi arriva?',
+    a: 'Decidi tu dove e cosa cercare: provincia, classi di concorso, ordine di scuola e le competenze che puoi mettere in campo (bandi PNRR/PON, laboratori, progetti). Da quel momento il Radar controlla le fonti da solo, ogni giorno: le opportunità compatibili con il tuo profilo ti arrivano su Telegram e via email. Quando non c’è nulla che ti riguarda non ricevi messaggi inutili.',
   },
   {
     id: 'animatore-digitale',
-    q: 'Sono un Animatore Digitale o Referente Google: come autorizzo ScuoleRadar per la mia scuola?',
-    a: 'È semplicissimo e richiede meno di 2 minuti: entra nella Google Admin Console del tuo Istituto, vai su Sicurezza > Controllo dell\'accesso e dei dati > Controlli API e App terze, seleziona "Aggiungi app" tramite l\'ID/Client ID di ScuoleRadar o cercandola come App Web, e contrassegnala come "Attendibile" (Trusted). In questo modo tutti i docenti del tuo Istituto potranno accedere con 1 click.',
+    q: 'Sono Animatore Digitale o Referente Google: come inserisco ScuoleRadar tra i siti sicuri della scuola?',
+    a: 'Bastano due minuti e vale per tutto l’Istituto: apri la Google Admin Console, vai su Sicurezza › Controllo dell’accesso e dei dati › Controlli API e App terze, scegli «Aggiungi app», cerca ScuoleRadar (oppure incolla il Client ID che ti forniamo) e contrassegnala come «Attendibile» (Trusted). Da quel momento tutti i docenti della tua scuola accedono con un click, senza email personali e senza blocchi.',
+  },
+  {
+    id: 'accesso-google-edu',
+    q: 'Perché con l’email Google della scuola (.edu.it) non riesco ad accedere?',
+    a: 'Molti Istituti bloccano per impostazione predefinita le app esterne non autorizzate. Puoi entrare subito con email e password oppure con il tuo account Google personale; se sei il referente digitale della scuola, autorizzando ScuoleRadar come app attendibile (domanda qui sopra) sblocchi l’accesso per tutti i colleghi.',
+  },
+  {
+    id: 'invita-un-collega',
+    q: 'Come funziona «Invita un Collega»?',
+    a: 'Nella sezione «Invita un Collega» trovi il tuo codice personale e il link pronto da condividere. Chi si abbona al piano PRO annuale con il tuo codice riceve 10 € di sconto; quando l’abbonamento risulta confermato, tu accumuli 10 € di credito. Gli utilizzi li segui dalla tua area, senza vedere alcun dato personale di chi ha usato il codice.',
+  },
+  {
+    id: 'purefocus-gmail',
+    q: 'Per usare PureFocus devo creare un account nuovo?',
+    a: 'No: funziona nel browser con l’account Google che usi già, anche una normale @gmail.com. Nessun secondo account, nessun browser dedicato. È incluso nel piano PRO e lo apri dal tuo profilo, con il link diretto a purefocus.one.',
   },
   {
     q: 'Non ho un curriculum pronto o aggiornato, come faccio?',
-    a: 'Abbiamo a disposizione il nostro strumento per costruire il CV. Puoi copiare e incollare un vecchio CV o ti aiutiamo noi a costruirne uno da zero. Si può usare liberamente anche durante il mese di prova PRO.',
+    a: 'Usa il nostro strumento CV: incolla un vecchio curriculum e te lo ristrutturiamo, oppure costruiscilo da zero con i campi guidati. Con il piano PRO scarichi il PDF finito, senza logo.',
   },
   {
     q: 'Non so a quali classi di concorso posso accedere col mio titolo.',
-    a: 'Abbiamo messo a disposizione il nostro Calcolatore CFU: basta inserire i tuoi titoli di studio e gli esami sostenuti per avere una stima delle classi di concorso a cui puoi accedere o di quali crediti devi integrare.',
+    a: 'Il Calcolatore CFU stima in pochi minuti le classi di concorso a cui puoi accedere con i tuoi esami e quali crediti ti mancano per aggiungerne altre, sulle Tabelle A/B del D.P.R. 19/2016.',
   },
   {
-    q: 'Perché non ricevo le vostre notifiche tutti i giorni?',
-    a: 'Per scelta personale e professionale, abbiamo deciso di non mettere angoscia alle persone intasando la casella di notifiche inutili. Quando ricevete un messaggio da Scuole Radar è perché dovete aprirlo. Se non ricevete niente è perché non c’è niente di adatto: state tranquilli e dedicatevi ad altro.',
+    q: 'Mi serve un modulo specifico ma non riesco a trovarlo.',
+    a: 'Nella sezione Modulistica ci sono oltre 1.000 modelli già pronti, organizzati per situazione. L’Archivista AI, nella stessa pagina, ti dice quale usare e ti aiuta a compilare i campi.',
   },
   {
-    q: 'Ho un dubbio o un problema sul lavoro a scuola, posso parlarne con qualcuno?',
-    a: 'Mettiamo a disposizione il nostro Assistente Sindacalista Virtuale, addestrato per dare un parere il più accurato possibile su situazioni e normative lavorative scolastiche. Questa funzionalità è riservata agli abbonati PRO.',
+    q: 'Ho un dubbio su una norma o un problema sul lavoro: con chi ne parlo?',
+    a: 'Sta arrivando l’Assistente Sindacalista Virtuale: addestrato su normative e situazioni lavorative scolastiche, risponderà ai dubbi di GPS, mobilità, supplenze e contratti. È riservato agli abbonati PRO: dall’area PRO chiedi l’accesso in anteprima.',
   },
   {
-    q: 'Mi serve un modulo specifico ma non riesco a trovarlo. Potete aiutarmi?',
-    a: 'Abbiamo una sezione Modulistica con oltre 1.000 modelli organizzati. Se hai dubbi su quale sia quello giusto per la tua situazione, puoi chiedere direttamente al nostro Archivista Capo AI presente nella stessa pagina.',
+    q: 'Posso pagare con la Carta del Docente?',
+    a: 'Stiamo completando l’integrazione con la Carta del Docente per il piano PRO annuale: sarà uno dei modi per attivarlo, con il valore del buono che copre l’intero anno. Nel frattempo la prova inclusa parte comunque lo stesso giorno dell’iscrizione.',
   },
   {
-    q: 'Come posso regalare un anno di abbonamento a un collega?',
-    a: 'Ci stiamo attrezzando per il regalo diretto. Per il momento puoi usare il tuo codice personale nella sezione "Invita un collega": il tuo amico riceve 10€ di sconto sull’abbonamento annuale e tu ottieni un buono da 10€.',
+    q: 'Cosa succede quando finisce la prova inclusa?',
+    a: 'Nulla di automatico: la prova è di 30 giorni di PRO, non un abbonamento nascosto. Se non rinnovi, l’account prosegue con il piano Base — monitoraggio di una provincia e riepilogo giornaliero — e i servizi a consumo restano acquistabili singolarmente.',
   },
 ];
 
@@ -59,8 +79,8 @@ export function FAQPage() {
               <h1 className="text-3xl font-bold text-primary-900">Domande frequenti</h1>
             </div>
             <p className="mt-3 max-w-2xl text-lg text-primary-600">
-              Le risposte alle domande più comuni su ScuoleRadar. Se non trovi quello che cerchi,
-              scrivici tramite il{' '}
+              Come funziona il Radar, come attivarlo nella tua scuola, cosa è incluso nel piano: le
+              risposte operative. Se non trovi quello che cerchi, scrivici tramite il{' '}
               <Link to="/contatti" className="font-semibold text-primary-600 underline hover:text-primary-800">
                 modulo contatti
               </Link>

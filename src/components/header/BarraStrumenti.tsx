@@ -19,7 +19,7 @@ export function BarraStrumenti() {
 
   return (
         <div className="hidden border-t border-primary-100 bg-white md:block">
-          <nav className="mx-auto flex w-max items-center justify-center gap-1 overflow-x-auto px-4 py-2 sm:px-6">
+          <nav className="mx-auto flex w-max items-center justify-center gap-1 overflow-x-auto px-4 py-1.5 sm:px-6">
             {voci.map((l) => (
               <NavLink
                 key={l.to}

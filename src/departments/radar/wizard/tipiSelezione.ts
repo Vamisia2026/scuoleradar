@@ -11,10 +11,14 @@ import type { ClasseConcorso } from '@/data/classiConcorso';
 import type { GruppiRicercaSelezioni, SuggerimentoSelezione } from '@/lib/ricercaSelezioniRadar';
 
 /**
- * Stato e azioni della sezione «Classi di concorso» (+ adesione al sostegno).
+ * Stato e azioni della sezione «Classi di concorso».
  *
  * Non c'è più una ricerca separata per la materia: la colonna mostra le classi
  * filtrate dalla RICERCA UNIFICATA del passo (`classiFiltrate`).
+ *
+ * La preferenza SOSTEGNO non è più chiesta nel wizard (domanda fuori contesto e
+ * rischiosa per le province con pochi bandi): resta nelle Preferenze Radar, dove
+ * l'utente la trova quando ne ha bisogno, e il wizard la PRESERVA se già scelta.
  */
 export interface SelezioneClassi {
   classiCodici: string[];
@@ -23,9 +27,6 @@ export interface SelezioneClassi {
   classiWarning: boolean;
   maxClassiConcorso: number;
   toggleClasse: (codice: string) => void;
-  /** Preferenza SOSTEGNO (adesione esplicita): vive con le classi, nel medesimo passo. */
-  sostegno: boolean;
-  toggleSostegno: (prossimo: boolean) => void;
 }
 
 /** Stato e azioni della sezione «Competenze e laboratori extra». */

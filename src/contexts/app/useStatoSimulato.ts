@@ -63,9 +63,9 @@ export function useStatoSimulato({
         return;
       }
       const utenteDemo: User = {
-        nome: 'Mario',
-        cognome: 'Rossi',
-        email: 'mario.rossi@gmail.com',
+        nome: 'Utente',
+        cognome: 'Demo',
+        email: 'demo@scuoleradar.it',
         password: '',
       };
       setUser(utenteDemo);

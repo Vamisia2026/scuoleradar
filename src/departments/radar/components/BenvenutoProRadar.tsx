@@ -163,21 +163,14 @@ export function BenvenutoProRadar() {
         delle scuole.
       </p>
 
-      <div className="mt-5 flex flex-col-reverse gap-2 border-t border-primary-100 pt-4 sm:flex-row-reverse">
+      <div className="mt-5 border-t border-primary-100 pt-4">
         <button
           type="button"
           onClick={attivaRadar}
-          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary-500 px-5 py-3 text-sm font-bold text-white shadow-soft transition hover:bg-primary-600"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-500 px-5 py-3 text-sm font-bold text-white shadow-soft transition hover:bg-primary-600"
         >
           <Radar className="h-4 w-4" />
           {radarConfigurato ? 'Apri il tuo Radar' : 'Attiva il Radar'}
-        </button>
-        <button
-          type="button"
-          onClick={chiudi}
-          className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-primary-200 px-5 py-3 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
-        >
-          Più tardi
         </button>
       </div>
     </Modal>

@@ -238,14 +238,14 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 
 | File | Righe | Responsabilità / dipendenze |
 |---|---|---|
-| `Header.tsx` | 142 | Header sticky 2 livelli: top-bar (logo, link istituzionali, accedi/avatar/profilo, badge PRO/Base), barra strumenti (`strumentiLinks` con emoji, es. 📁 Modulistica), menu mobile. **Logo importato come asset di build** (`@/assets/logo.png`, nome hashato) con fallback wordmark su `onError`; sottocomponenti in `components/header/**` (`NavIstituzionale`, `MenuUtente`, `MenuMobile`, `BarraStrumenti`, `BadgePiano*`, `navLinks`, `tipiUtente`) |
+| `Header.tsx` | 158 | Header sticky 2 livelli: top-bar (**lockup del marchio**: tessera ufficiale + wordmark «ScuoleRadar.it» in testo, link istituzionali, accedi/avatar/profilo, badge PRO/Base), barra strumenti (`strumentiLinks` con emoji, es. 📁 Modulistica), menu mobile. **Marchio importato come asset di build** (`@/assets/marchio-radar.png`, nome hashato, **stessa tessera del favicon**) con fallback sul solo wordmark su `onError`; sottocomponenti in `components/header/**` (`NavIstituzionale`, `MenuUtente`, `MenuMobile`, `BarraStrumenti`, `BadgePiano*`, `navLinks`, `tipiUtente`) |
 | `Modal.tsx` | 70 | Modal riusabile: overlay `bg-primary-900/40`, card `rounded-2xl`, `size sm/md/lg/xl`, `zClass`, prop `cardClassName` (default `bg-white`; es. `bg-slate-50`), **prop `dense`** (header/gutter ridotti + `max-h-[94vh]`: usata dal wizard Radar per rientrare nello schermo senza barra interna; default `false`), Escape/blocco scroll |
 | `AuthModal.tsx` 🔒 | 400 | Login/registrazione (Google OAuth + email demo), contesto `'pro'` (checkout ripreso), `useNavigate`. **BLOCCATO** |
 | `VetrinaModal.tsx` | — | Modal freemium multi-sezione: radar/cv/cfu/moduli/assistente con CTA di upgrade |
 | `AbbonamentoModal.tsx` | 210 | Modal abbonamento: piano PRO annuale/mensile/crediti, promo, `avviaCheckout` |
 | `ContattiModal.tsx` | 18 | Wrapper `ContactForm` in modal |
 | `ContactForm.tsx` | 286 | Form contatti (dipartimento, oggetto, messaggio, allegato base64, honeypot) → Edge `contatto` |
-| `SostegnoToggle.tsx` | 96 | Domanda condivisa «Vuoi che includiamo anche le opportunità per il sostegno?» (switch `role="switch"` + nota sull'adesione implicita via classe `AD*`) — usata da wizard e Preferenze Radar |
+| `SostegnoToggle.tsx` | 99 | Interruttore condiviso «**Opportunità di sostegno**» (switch `role="switch"`): dal **27/09/2026 il sostegno è incluso di default** (`defaultPreferenze.sostegno = true`), quindi il controllo è l'**uscita esplicita** («Incluse» / «Escluse») — con la nota sull'adesione implicita via classe `AD*`. Usato dalle **Preferenze Radar** (il **wizard non lo chiede**: valore salvato preservato, si modifica solo da `/dashboard/radar`) |
 | `modals/RadarPromoModal.tsx` | — | Promo del Radar (upsell PRO) |
 | `InterpelloCard.tsx` | 188 | Card singolo interpello: scadenza, provincia, classi, badge "Scuola Preferita", notifica, detail modal |
 | `ServiziPaywall.tsx` | — | Paywall condiviso (Base → invita a PRO/registrazione), icona Lock |
@@ -254,7 +254,7 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `Toast.tsx` | — | Sistema toast (provider + `useToast`): success/error |
 | `GoogleOneTap.tsx` | 11 | Componente renderless → `useGoogleOneTap` |
 | `DatiProfiloModal.tsx` · `ForcePasswordModal.tsx` · `OAuthBounceModal.tsx` · `TelegramLoginButton.tsx` | — | Onboarding/profilo: completamento dati, cambio password forzato, bounce OAuth, login Telegram |
-| `SoftOnboardingModal.tsx` | — | Onboarding leggero (invito a completare il profilo) |
+| `SoftOnboardingModal.tsx` | — | Benvenuto PRO «**Buone notizie**»: regalo di benvenuto con **un solo pulsante d'azione** (nessuna voce di rinvio; si chiude con la X, non si apre mai da sola). Importa `GIORNI_TRIAL_PRO` da `lib/pricing` |
 | `DevToolbar.tsx` | 195 | Solo DEV: badge ⚡, switch stato (guest/base/pro via `simulaStato`), reset dati, porta, health check |
 | `HealthCheckModal.tsx` | 287 | Modal diagnostica → `eseguiHealthCheck` |
 | `AppErrorBoundary.tsx` | — | Error boundary dell'**intera app** (fallback full-screen, reset) |
@@ -262,7 +262,8 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `ScrollToTop.tsx` | — | Scroll-to-top a ogni cambio rotta |
 | `Footer.tsx` · `Accordion.tsx` | — | Footer condiviso · accordion riusabile |
 | `CvTool.tsx` | 174 | CV Builder legacy in `src/components/` (§8); il vecchio wrapper CFU (`CfuTool.tsx`) è stato **rimosso** con la V1 |
-| `landing/Landing*.tsx` | — | Sezioni della landing pubblica (`LandingHero`, `LandingBenefici`, `LandingCards`, `LandingCta`, `LandingStrumenti`, `LandingProvaRadar`, `LandingOffertaPro`, `LandingPartnerPureFocus`) |
+| `landing/Landing*.tsx` | — | Sezioni della landing pubblica (`LandingHero` — **due colonne** `lg:grid-cols-[minmax(0,1fr)_34rem]`: copy a sinistra, box «Prova il Radar» (`SimulatorRadar`, **sola provincia**) a destra, senza frase difensiva —, **`LandingRegistrazioneRapida`** (Nome, Cognome ed Email subito sotto l'hero, solo visitatori: i dati vanno nella bozza e si apre la **configurazione del Radar** già compilata), `LandingBenefici` («Cosa riceverai»), `LandingCards`, `LandingCta`, `LandingStrumenti` (card **centrate**), `LandingOffertaPro` (**tre benefici**, una sola CTA), `LandingPartnerPureFocus`) |
+| `PureFocusCard.tsx` | — | Vetrina **PureFocus** condivisa (homepage, `/prezzi`, `/dashboard/purefocus`): `PureFocusWordmark` ufficiale (Pure `#0E0C0A` + Focus `#0047AB`, sans-serif, senza spazi), badge verde `BadgeInclusoPro` «Incluso nel piano PRO», descrizione e link in evidenza a **purefocus.one** |
 | `VetrinaModal.tsx` · `profile/ReferralSection.tsx` | — | vedi sopra · modulo referral "Invita un Collega" |
 
 ### 2.4 `src/components/profile/`
@@ -329,6 +330,8 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `emailScuola.ts` | ~110 | **Puro** — email UFFICIALE della scuola: `normalizzaCodiceMeccanografico`, `estraiCodiceMeccanograficoDaTesto`, `emailDaCodiceMeccanografico` (PEO `@istruzione.it` / PEC `@pec.istruzione.it`), `risolviEmailUfficialeScuola` (email di fonte → convenzione MIM; mai email inventate) |
 | `liveBoard.ts` | ~110 | **Puro** — vetrina "Radar Live": `scuolaDaTitolo`, `nomeScuolaRiga` (campo → registro per codice → titolo → ente), `preparaRigheBoard` (arricchisce e **scarta** le righe senza scuola o senza scadenza: mai "Scuola non indicata"/"Scadenza n/d") |
 | `school-lookup.ts` | ~50 | Registro scuole per codice meccanografico: `resolveSchoolByCode` (PEO/PEC) e **`nomeScuolaDaCodice`** (solo nomi REALI, mai "Istituto &lt;codice&gt;") |
+| `provaRadarEngine.ts` | 117 | **Puro** — motore del **Radar di prova** pubblico (si prova con la **sola provincia**): `LIMITE_RISULTATI_PROVA`, `righeAttive` (senza scadenza = attiva), `selezionaRisultatiProva(provincia, nazionali, limite)` (tutte le opportunità ATTIVE della provincia + **completamento nazionale** senza duplicati) e la copy del responso (`messaggioConversione`, `messaggioRadarInScansione`, `CODA_CONVERSIONE_PROVA`); responso `{ gruppo: 'provincia'\|'nazionale'\|'vuoto', righe, daProvincia }`. Mai «zero risultati»: l'elenco resta pieno finché esiste un avviso vivo. Verificato da `npm run test:prova-radar` |
+| `provaRadar.ts` | 81 | **Memoria della provincia provata** (localStorage, tollerante agli errori): `salvaProvinciaProva`/`leggiProvinciaProva`/`svuotaProvinciaProva` + `provinceInizialiConProva` → la provincia del box «Prova il Radar» diventa la **provincia principale** del wizard/onboarding (validata sul catalogo `data/province`). Verificato da `npm run test:prova-radar` |
 | `notifier.ts` | 1.999 | **Node-only** — orchestratore notifiche: **`inviaAlertTelegramTempoReale`** (alert INDIVIDUALI Telegram per i **PRO**), **`inviaDigestGiornaliero`** (BATCH: email per tutti + Telegram solo per **BASE**; opzioni `forzato`, `soloUtente`, `soloRegistrare`/`finoA`, seam di test `inviaEmail`/`inviaTelegram`; guardia "una email al giorno" `chiaveDigestGiorno`) e **`inviaPromemoria24h`** (promemoria email ≥ 24h per scadenze entro 3 giorni). **REGISTRO INVII per utente** (§6.5.1): `avvisoGiaInviato` (**FREQUENCY CAP**: identità = scuola + classi + impronta del contenuto; **max 2 invii in 2 giorni diversi**, mai due volte nello stesso giorno, per canale di consegna, con marcatori storici pre-cap conservativi) e `registraInvioAvviso` (registra il **GIORNO** dell'invio su ledger file + `notifications_log` con canale `freq_email`/`freq_telegram`) → nessuno spam, e un contenuto aggiornato riparte come nuova opportunità. `recapitoNotifica` (PEO dal codice MIM), **GATE DI QUALITÀ STRICT** (`superaGateQualita`, da `avvisoInviabile`): nessun invio di avvisi senza **link diretto** o senza **recapito** — applicato a `notificaNuoviInterpelli`, `notificaInterpelliPerUtente`, `inviaAlertTelegramTempoReale`, `raccogliVociCanale` (digest) e `inviaPromemoria24h` |
 | `promemoria.ts` | ~130 | **Puro** (nessun I/O) — regole del **PROMEMORIA 24h**: `ORE_PROMEMORIA` (24), `GIORNI_URGENZA_PROMEMORIA` (3), `CANALE_PROMEMORIA` (`promemoria`), `oreTrascorse`, `eVoceUrgente`, `motivoPromemoria` (`ok`/`inviata-da-meno-di-24h`/`gia-promemoria`/`scaduta`/`scadenza-non-urgente`/`mai-inviata`/`senza-id`), `ePromemoriaDovuto`, `chiavePromemoria` (chiave di deduplica per coppia utente×interpello). Verificato da `npm run test:promemoria` |
 | `ledgerLocale.ts` | ~110 | **Node-only** — ledger anti-duplicato su file (`.scuoleradar/notifiche-ledger.json`): `chiaveLedger`, `ledgerLocaleGia`, `ledgerLocaleChiaviConPrefisso` (conteggio frequenza per identità), `ledgerLocaleRegistra`, `ledgerLocaleSalva`, `percorsoLedgerLocale`. Rete di sicurezza quando le tabelle DB non sono ancora create; committato dai workflow. **Percorso sovrascrivibile con `SCUOLERADAR_LEDGER_PATH`** (usato dai test per NON sporcare il ledger reale). **Tolleranza BOM** in lettura e scrittura senza BOM; un file ILLEGGIBILE produce un warning esplicito (mai deduplica silenziosamente disattivata). Verificato da `npm run test:ledger` |
@@ -374,7 +377,11 @@ data/ · types.ts`. Dettaglio e regole: [`DEPARTMENT_MAP.md`](./DEPARTMENT_MAP.m
 | `data/notizieSeed.ts` | — | Articoli editoriali seed |
 | `data/notizieIngestite.ts` | — | **File GENERATO** dall'ingestione (accumulo, dedupe per id, refresh delle voci esistenti, SOLO fonti nazionali) |
 | `services/newsFetcher.ts` | 573 | **Node-only** — fetch fonti **NAZIONALI** (`FONTI_ISTITUZIONALI`, `FONTI_GU_RSS`; **`FONTI_MIM_RSS = []`**: le fonti MIM si leggono via scraping/waterfall, non via RSS): MIM (`/web/guest/notizie`, `/web/guest/avvisi`, home, `/notizie`) + Gazzetta Ufficiale (RSS + elenco atti `/home`) + ARAN/giurisdizione; **waterfall** `LIVELLI_NAZIONALI`/`raccogliLivello` |
-| `services/relevanceEngine.ts` | ~1.875 | **Node-only, puro** — regole editoriali STRETTE (§9): `èFonteNazionale`/`èFonteMim`, **allow-list dei temi** (`TEMI_PERSONALE` + `classificaTemaPersonale`), **anti-ufficio-stampa** (`titoloDaUfficioStampa`, `FRASI_FLUFF`/`contieneFraseFluff`), **gate 2-bis** (`PAROLE_IMPATTO` + `PAROLE_SCUOLA`), **`GLOSSARIO_ACRONIMI`/`espandiAcronimi`**, **`titoloAzione`** (rimozione etichette/date/codici), **`CANALI_DOMANDA`/`linkDomandaUfficiale`/`richiedePresentazioneDomanda`**, `classificaLink` + `linkVietatiInHtml`, **`applicaFormatoEditoriale`** (`summary_points` a bullet, **DOPPIO LINK**: fonte ufficiale + presentazione della domanda), **`verificaCadenzaSettimanale`** (`MAX_ARTICOLI_SETTIMANA = 3`, `FINESTRA_LOOKBACK_GIORNI = 15`, `FINESTRA_LOOKBACK_NAZIONALE_GIORNI = 60`, `MAX_ARTICOLI_FINESTRA = 6`), `articoloValido` (gate finale) |
+| `services/relevanceEngine.ts` | ~1.631 | **Node-only, puro** — regole editoriali STRETTE (§9): `èFonteNazionale`/`èFonteMim`, **allow-list dei temi 360°** (`TEMI_OPERATIVI` + `classificaTemaPersonale`, con pesi `PESI_CATEGORIA` e macro-aree `AREE_TEMATICHE`), **gate del fatto concreto** (`CATEGORIE_CON_FATTO_CONCRETO`), **anti-ufficio-stampa** (`titoloDaUfficioStampa`, `FRASI_FLUFF`/`contieneFraseFluff`), **gate 2-bis** (`PAROLE_IMPATTO` + `PAROLE_SCUOLA`), **`GLOSSARIO_ACRONIMI`/`espandiAcronimi`**, **`titoloAzione`** (rimozione etichette/date/codici), **`CANALI_DOMANDA`/`linkDomandaUfficiale`/`richiedePresentazioneDomanda`**, `classificaLink` + `linkVietatiInHtml`, **`applicaFormatoEditoriale`** (`summary_points` a bullet, **DOPPIO LINK**: fonte ufficiale + presentazione della domanda), **`verificaCadenzaSettimanale`** (`MAX_ARTICOLI_SETTIMANA = 3`, `FINESTRA_LOOKBACK_GIORNI = 15`, `FINESTRA_LOOKBACK_NAZIONALE_GIORNI = 60`, `MAX_ARTICOLI_FINESTRA = 6`), `articoloValido` (gate finale) |
+| `services/editorialStandard.ts` | 95 | Blocco **CONDIVISO** dello standard editoriale: `TEMI_OPERATIVI` (allow-list 360° in ordine di priorità), `AREE_TEMATICHE`, `PESI_CATEGORIA` (pesi dello scoring), `CATEGORIE_CON_FATTO_CONCRETO`, `temiDalTesto`/`areeTematicheDalTesto` (audit multi-tema) |
+| `services/standardTemiPersonale.ts` | 232 | Temi operativi del PERSONALE (`TemaOperativo`: categoria, parole-chiave, macro-area, peso, flag `autosufficiente`) |
+| `services/standardTemiDidattica.ts` | 56 | Temi CULTURALI/DIDATTICI (innovazione digitale, didattica, pedagogia): pubblicabili solo con un **fatto concreto** |
+| `services/lessicoScuola.ts` | 202 | Lessico **CONDIVISO** della scuola a 360 gradi: `PAROLE_OPERATIVE` (storico + voci 360° dedupe), `GLOSSARIO_ACRONIMI`, `FRASI_FLUFF` |
 | `services/ingestNotizie.ts` | 566 | **Node-only** — CLI pipeline: **waterfall** livelli 1→4 → filtra → **gate procedura senza canale di presentazione** → gate link punto-a-punto → verifica HTTP 200 → **formattazione editoriale PRIMA dell'igiene** → **tetto settimanale** (`MAX_ARTICOLI_SETTIMANA`) con **riserve + `applicaGaranziaSettimanale`** → scrive `notizieIngestite.ts`; **exit 1 se la settimana resta vuota** (il workflow fallisce, niente silenzio) |
 | `services/archivioNotizie.ts` | ~85 | Lettura/scrittura del file archivio (`scriviArchivioNotizie`, `leggiArchivioNotizie`, `estraiArticoliDaTesto`): unico punto di serializzazione di `notizieIngestite.ts` |
 | `services/tracciaFonte.ts` | ~250 | **Node-only** — tracciamento della fonte granulare: `tokenizza`, `valutaCandidato` (numeri dell'atto decisivi), `scegliLinkSpecifico`, `risolviFonteGranulare` (da pagina-contenitore alla sottopagina/circolare/PDF) |
@@ -430,14 +437,14 @@ data/ · types.ts`. Dettaglio e regole: [`DEPARTMENT_MAP.md`](./DEPARTMENT_MAP.m
 | `CvPage.tsx` / `CfuPage.tsx` | Wrapper `CvTool` (`components/`) / `CalcolatoreCfuApp` (`departments/cfu/`) |
 | `AssistenteAIPage.tsx` | Chat Assistente Sindacalista (demo simulata, paywall) |
 | `ModuliPage.tsx` | Wrapper `ModuliModule` |
-| `PureFocusPage.tsx` | Ambiente distrazione-free (focus timer) |
+| `PureFocusPage.tsx` | Vetrina PureFocus condivisa (`PureFocusCard`: wordmark ufficiale, badge «Incluso nel piano PRO», link a purefocus.one) con CTA dinamica PRO/Base |
 | `ProfiloPage.tsx` | Gestione profilo, preferenze, Telegram, account |
 | `InvitaPage.tsx` | Referral (`ReferralSection`) |
 | `AdminPage.tsx` | Pannello admin (indirizzi autorizzati): diagnostica, override, statistiche (monta `departments/admin`) |
 | `dashboard/CalcolatoreCFUDashboardPage.tsx` | Calcolatore CFU dentro la dashboard (`DashboardLayout`) |
 | `dashboard/components/**` | `DashboardLayout`, `DashboardNav`, `ElencoOpportunita`, `VetrinaRadarOspiti`, `BannerBozzaOnboarding` |
 | `interpello/**` | `InterpelloDettaglioPage`, `SchedaAvviso`, `AvvisoAssente`, `ReindirizzamentoAllaFonte`, `helpers` |
-| `onboarding/**` | `OnboardingPage` + `components/` (wizard 4 passi: anagrafica/ordini, classi/materie, province, canali) |
+| `onboarding/**` | `OnboardingPage` + `components/` (wizard 4 passi: ordini, classi/materie, province, canali; l'anagrafica facoltativa — genere/età — è in **chiusura**, nel passo 4) |
 | `CalcolatoreCFUPage.tsx` · `CheckoutRedirectPage.tsx` | Landing calcolatore · redirect post-checkout Stripe |
 
 ### 2.12 `src/scraper/` — Node-only
@@ -500,7 +507,7 @@ Ordine: `20260822010000_add_school_filters` · `...22020000_create_interpelli` �
 `...20260914020000_channel_posts_log` ·
 `...20260914030000_repair_notifications_log_e_rpc_quota` ·
 `...20260914040000_add_profiles_sostegno` ·
-`...20260924120000_coupon_scuoleradar50_unico`
+`...20260924120000_coupon_scuoleradar50_unico` · `...20260927120000_default_sostegno_incluso`
 
 **REPAIR notifiche** (`...20260914030000_repair_notifications_log_e_rpc_quota.sql`): DDL
 idempotente che (1) ri-asserisce la tabella `notifications_log` (mai applicata) e
@@ -518,6 +525,13 @@ idempotente `profiles.sostegno boolean not null default false` e fa il BACKFILL 
 implicita (chi ha già una classe `AD*` in `classi_concorso` → `true`), così la nuova guardia
 del matching non toglie copertura a chi riceveva legittimamente gli avvisi di sostegno.
 `npm run db:verifica` sonda anche `profiles.sostegno` (3ª riga di esito).
+
+**SOSTEGNO INCLUSO DI DEFAULT** (`...20260927120000_default_sostegno_incluso.sql`): la
+colonna `profiles.sostegno` passa a `not null default true` e il BACKFILL porta a `true`
+anche i profili esistenti — nessun avviso di sostegno (ADAA/ADEE/ADMM/ADSS) viene più
+filtrato via in silenzio. L'esclusione è una **scelta esplicita** dell'utente
+dall'interruttore «Opportunità di sostegno» delle Preferenze Radar (`SostegnoToggle`).
+Guardie: `npm run test:sostegno`, `npm run test:migrazioni`, `npm run test:copy:pubblico`.
 
 ### 2.16 `.github/workflows/` (6), `docs/` (7), `scripts/` (71), `public/`
 
@@ -544,7 +558,8 @@ del matching non toglie copertura a chi riceveva legittimamente gli avvisi di so
 | `scripts/test-ricerca-unificata.ts` | **`npm run test:ricerca`** — ricerca UNIFICATA: normalizzazione query (accenti/spazi/trattino), classi per codice/denominazione/**materia collegata** («Pedagogia» → A-18), competenze extra, parola chiave proposta/dedup, marcature «già nel profilo» + cablaggio (un solo campo nel passo 3 e in «In cosa puoi lavorare») |
 | `scripts/test-provincia-principale.ts` | **`npm run test:province`** — provincia PRINCIPALE (prima selezionata): badge/pill, promozione in testa, e **sopravvivenza al downgrade** (`limitaProvinceMantenendoPrincipale`: a Base resta la principale, mai una di contorno) + self-heal nel contesto |
 | `scripts/test-sessione-identita.ts` | **`npm run test:sessione`** — sessione/identità: `identitaDaSessione` (full_name, campi espliciti, mai sovrascritture), bootstrap che sincronizza l'identità dalla sessione trovata, listener su `TOKEN_REFRESHED`/`USER_UPDATED`, `AuthCallback` che attende la sessione, wizard che rilegge il piano appena arriva l'identità |
-| `scripts/test-copy-etico.ts` | **`npm run test:copy:etico`** — COPY ETICO: scansione di `src/**` per le frasi competitive («prima degli altri», «beccare»…) e delle superfici UI/marketing per quelle di fretta; verifica la copy del banner PRO («Un mese PRO, completamente gratis… puoi dedicarti alla tua vita») e che il Passo 4 non usi urgenza artificiale |
+| `scripts/test-copy-etico.ts` | **`npm run test:copy:etico`** — COPY ETICO: scansione di `src/**` per le frasi competitive («prima degli altri», «beccare»…) e delle superfici UI/marketing per quelle di fretta; verifica la copy del banner PRO («Un mese PRO, completamente gratis… puoi dedicarti alla tua vita»), il Passo 4 senza urgenza né formule debole, l'anagrafica a **fine percorso**, l'hero a due colonne col simulatore e l'offerta PRO senza toni da televendita |
+| `scripts/test-copy-pubblico.ts` | **`npm run test:copy:pubblico`** — COPY PUBBLICO: regalo di benvenuto PRO («Buone notizie», nessuna voce di rinvio), wordmark PureFocus (Pure `#0E0C0A` + Focus `#0047AB`, mai l'emoji-icona), badge «Incluso nel piano PRO», Chi siamo e FAQ come punti di forza commerciali |
 | `scripts/test-qualita-invio.ts` | **`npm run test:qualita`** — gate di qualità: link diretto (`eUrlAvvisoDiretto`), gate link+recapito, mappatura province (Forlì → FC), brand/anteprime, frequenza CTA Radar ~20% |
 | `scripts/test-canali-telegram.ts` | **`npm run test:telegram:canali`** — post dei canali regionali: brand cliccabile in testa, 7 sezioni, testate tipografiche (nessuna fascia colorata/`[BADGE]`, nessuna immagine), **URL ufficiali mai in chiaro** (solo il bottone `👉 Apri l'avviso ufficiale`), **gate link diretto** (home regionale, elenco/tag, landing regionale, ricerca e "nessun link" → post senza link e pubblicazione annullata) + matrice di routing delle 9 regioni + ATA nazionale |
 
@@ -733,13 +748,23 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
 ### 5.4 UI / feed / filtri / blacklist
 - `DashboardPage.tsx`: header notifiche (3/anno, abbonamento, crediti), feed
   `interpelliFiltrati`, CTA wizard/abbonamento, blacklist scuole.
-- `SimulatorRadar.tsx`: anteprima feed (Supabase → mock).
+- `SimulatorRadar.tsx`: anteprima feed (Supabase → mock) — dal 27/09/2026 è il
+  **box «Prova il Radar» nella hero della homepage** (`LandingHero`), oltre alle superfici interne.
+  Si prova con la **sola provincia** (nessun selettore di classe di concorso, §26.12): motore puro
+  condiviso `lib/provaRadarEngine.ts` (tutte le opportunità attive della provincia → completamento
+  nazionale), lettura dati in `radar/services/provaRadarQuery.ts` e responso presentazionale in
+  `radar/components/ResponsoProva.tsx`, che chiude sempre con il messaggio di conversione
+  (`messaggioConversione`: «Abbiamo trovato [X] opportunità attive oggi su [Città]…»); la provincia
+  provata diventa la provincia principale del wizard (`lib/provaRadar.ts`).
 - `RadarWizardModal.tsx`: onboarding 4 passi con `Pill`; persiste `sr_wizard_pending`.
-  Passo 3 (Classi/Materie) include la domanda **«Vuoi che includiamo anche le opportunità per
-  il sostegno?»** (`SostegnoToggle`, salvata subito nella bozza → `profiles.sostegno`); la
-  stessa domanda è nelle **Preferenze Radar** (`PreferenzeRadar.tsx`, accordion Classi di
-  concorso, autosalvataggio). Default OFF; chi ha una classe `AD*` selezionata vede segnalata
-  l'adesione implicita.
+  **Passo 1** = ordini di scuola (nessuna domanda personale in apertura); **Passo 3** = classi di
+  concorso + competenze, con ricerca unificata in testa e campo libero per la **parola chiave**
+  nella colonna competenze; **Passo 4** = canali di notifica e, **in fondo**, l'anagrafica
+  facoltativa (`BloccoAnagrafica`: nome, cognome, genere, età → bozza di registrazione).
+  Il wizard **non chiede più la preferenza SOSTEGNO** (domanda rimossa dal Passo 3): la preferenza
+  resta nelle **Preferenze Radar** (`PreferenzeRadar.tsx`, accordion Classi di concorso,
+  autosalvataggio) e il valore già salvato viene **preservato** al salvataggio finale
+  (`sostegno: preferenze.sostegno ?? false`) — nessun opt-out retroattivo.
 - `InterpelloCard.tsx`: card con scadenza (countdown), classe, provincia, badge
   "Scuola Preferita" (`favoriteSchools`), notifica, detail.
 - **Persistenza CLASSI (bug "la classe si deseleziona da sola" — RISOLTO)**: il DB
@@ -1379,10 +1404,25 @@ candidato a migrare in `src/departments/cv/` (vedi `DEPARTMENT_MAP.md` §6).
 
 ### 9.3 `relevanceEngine.ts` (Node-only, PURO) — standard editoriale STRETTO
 
-- **Temi ammessi (allow-list)**: `TEMI_PERSONALE` + `classificaTemaPersonale()` — CCNL e
-  stipendi, pensioni, welfare e polizza sanitaria, mobilità e assegnazioni,
-  GPS/graduatorie/supplenze/interpelli, organico e cattedre, formazione, PNRR, sicurezza;
+- **Temi ammessi (allow-list 360°)**: `TEMI_OPERATIVI` (= `standardTemiPersonale` +
+  `standardTemiDidattica`, riuniti da `editorialStandard`) + `classificaTemaPersonale()` —
+  CCNL e stipendi, pensioni, welfare e polizza sanitaria, mobilità e assegnazioni,
+  GPS/graduatorie/supplenze/interpelli, organico e cattedre, sostegno, ATA e segreterie
+  (DSGA), istruzione adulti (CPIA), formazione (TFA/CFU, classi di concorso), reclutamento
+  e immissioni in ruolo, PNRR, sicurezza;
   *normativa/scadenze/concorsi* contano solo con riferimento esplicito al personale.
+  L'ordine dell'elenco è la **priorità di match**: vince il primo tema riconosciuto.
+- **Fatto concreto**: `CATEGORIE_CON_FATTO_CONCRETO` (innovazione digitale, didattica,
+  pedagogia) — i temi culturali/didattici passano SOLO con una **scadenza reale** o un
+  **canale ufficiale di domanda/candidatura**; senza, `valutaRilevanza` li respinge con
+  motivo tracciabile («Tema X senza fatto concreto»).
+- **Scoring**: `punteggioRilevanza(categoria, haScadenza)` legge `PESI_CATEGORIA` (base per
+  tema, bonus scadenza, tetto 100): la matrice dei pesi è unica per motore e test. Le
+  categorie d'archivio uscite dall'allow-list (`Assegnazioni Provvisorie`,
+  `Ricostruzione Carriera`, `Riconoscimento Titoli`, `Scuole`) restano mappate.
+- **Lessico condiviso**: `lessicoScuola.ts` (`PAROLE_OPERATIVE` = storico + voci 360°,
+  `GLOSSARIO_ACRONIMI`, `FRASI_FLUFF`), ri-esportate da `relevanceEngine.ts` con i nomi
+  storici (es. `PAROLE_ACCETTA`) per copy, igiene archivio e documentazione.
 - **Anti-ufficio-stampa (zero fluff)**: `titoloDaUfficioStampa`, `FRASI_FLUFF` +
   `contieneFraseFluff` scartano comunicati, lettere del Ministro, dichiarazioni, eventi e
   rinvii vaghi ("ti avvisiamo appena esce", "verifica nel testo ufficiale").
@@ -1403,7 +1443,9 @@ candidato a migrare in `src/departments/cv/` (vedi `DEPARTMENT_MAP.md` §6).
   `FINESTRA_LOOKBACK_NAZIONALE_GIORNI = 60`, `MAX_ARTICOLI_FINESTRA = 6`.
 - **Gate finale**: `articoloValido` (id/titolo/link presenti, fonte canonica nazionale,
   nessun link non valido nel testo). Verificato da `npm run test:notizie-editoriale`,
-  `test:notizie-feed`, `test:notizie-nazionale`, `test:notizie-rate`.
+  `test:notizie-feed`, `test:notizie-nazionale`, `test:notizie-rate`; la catena editoriale
+  copre anche l'allow-list 360° (ordine di priorità, macro-aree, pesi), il gate del fatto
+  concreto, l'alias `PAROLE_ACCETTA` senza duplicati e l'audit multi-tema (`temiDalTesto`).
 
 ### 9.4 `ingestNotizie.ts` (CLI)
 Pipeline: raccogli voci (`newsFetcher`, waterfall) → valuta rilevanza (**temi ammessi +
@@ -1450,10 +1492,15 @@ Niente menzioni a ricompense o account PRO gratuiti. Nel header/dashboard compar
 ### 10.3 Pagine vetrina & servizi
 - `servizi.ts` → `Servizio[]` per `ServiziPage`/`ServizioPage` (radar, cv, cfu, assistente, moduli).
 - `VetrinaModal` → paywall freemium multi-sezione; `ServiziPaywall` → CTA generico.
-- `LandingPage` → `LandingHero` (monocolonna, senza simulatore) → `LandingBenefici` →
-  spiegazione piani → `FlightBoardInterpelli` («Radar Live», **primo contenuto dopo
-  l'hero**) → `LandingStrumenti` → `LandingProvaRadar` (simulatore, non più nell'hero) →
-  `LandingOffertaPro` → `LandingPartnerPureFocus` → stats → `LandingCta` → `Footer`.
+- `LandingPage` → `LandingHero` (**due colonne** `lg:grid-cols-[minmax(0,1fr)_34rem]`: copy a
+  sinistra, box «Prova il Radar» con `SimulatorRadar` a destra — **sola provincia**) →
+  `LandingRegistrazioneRapida` (**solo visitatori**: Nome, Cognome, Email → bozza + modale di
+  configurazione del Radar già compilata) → `FlightBoardInterpelli`
+  («Radar Live», **primo contenuto dopo l'hero**) → `LandingOffertaPro` (leva di conversione:
+  sta **prima** di «Cosa riceverai», **tre benefici** e una sola CTA, nessun link ad altri
+  piani) → `LandingBenefici` → «Come funziona» (primo passo **«Imposta il tuo Radar»**) + valori →
+  `LandingStrumenti` (card centrate) → `LandingPartnerPureFocus` (vetrina `PureFocusCard`) → stats →
+  `LandingCta` → `Footer`.
 
 ---
 
@@ -1586,7 +1633,7 @@ test ID). Per passare in produzione basta aggiornare i secrets Supabase (nessun 
 | `provincia` | text | **provincia di RESIDENZA** (codice 2 lettere, es. `RM`; check `profiles_provincia_check`, migrazione `20260922120000_add_profiles_provincia.sql`) — distinta dalle `province_*` del Radar (dove l'utente VUOLE lavorare). Raccolta in registrazione / mini-onboarding anagrafico |
 | `ordini` / `ordini_scuola` | text[] default '{}' | ordini di interesse (legacy / nuovo) |
 | `classi_concorso` | text[] | classi di concorso |
-| `sostegno` | boolean not null default false | preferenza SOSTEGNO: includi anche le opportunità ADAA/ADEE/ADMM/ADSS (migrazione `20260914040000_add_profiles_sostegno.sql`, con backfill dell'adesione implicita di chi ha una classe `AD*` tra le preferenze) |
+| `sostegno` | boolean not null default **true** | preferenza SOSTEGNO: dal 27/09/2026 il sostegno è **incluso di default** — nessun avviso ADAA/ADEE/ADMM/ADSS filtrato in silenzio; l'utente lo esclude solo con una scelta esplicita (migrazione `20260927120000_default_sostegno_incluso.sql`: `not null default true` + backfill; colonna d'origine `20260914040000_add_profiles_sostegno.sql`, con backfill dell'adesione implicita di chi ha una classe `AD*`) |
 | `materie_id` / `materie_custom` | text[] | materie |
 | `province_attive` / `province_interesse` | text[] | province (legacy / nuovo) |
 | `favorite_schools` / `ignored_schools` | text[] | whitelist / blacklist scuole |
@@ -1887,7 +1934,7 @@ viene applicata anche a `notices`.
 
 ---
 
-### 13.12 Indice completo delle 52 migrazioni (cosa introduce ognuna)
+### 13.12 Indice completo delle 56 migrazioni (cosa introduce ognuna)
 
 | Migrazione | Contenuto |
 |---|---|
@@ -1946,6 +1993,7 @@ viene applicata anche a `notices`.
 | `20260922120000_add_profiles_provincia` | `profiles.provincia` (provincia di **residenza**, dato demografico; check `^[A-Z]{2}$`) |
 | `20260922130000_welcome_metadata_anagrafica` | `send_step1_welcome()` v2: dal `user_metadata` di `signUp` salva **nome, cognome, genere, età e provincia** (con i vincoli della tabella) e li passa alla email di benvenuto |
 | `20260924120000_coupon_scuoleradar50_unico` | Coupon unico **SCUOLERADAR50** (50% PRO annuale, monouso per email, 40 giorni dalla registrazione): RADAR50 eliminato da `promo_codes` + drop `valida_coupon_radar50`/`registra_uso_coupon_radar50`, tabella `coupon_radar50_usage` → **`coupon_usage`** (policy rinominate), RPC `valida_coupon_scuoleradar50(uuid)` + `registra_uso_coupon_scuoleradar50(uuid, text)` |
+| `20260927120000_default_sostegno_incluso` | `profiles.sostegno` → `not null default true` + backfill a `true` sugli esistenti: il sostegno entra negli avvisi di default, l'esclusione è solo volontaria (Preferenze Radar) |
 
 ### 13.13 Policy RLS complete (nome → tabella)
 
@@ -2338,7 +2386,7 @@ Utilizzi diretti nel codice (`import.meta.env.*` verificati): `DEV`, `MODE`,
 | Architettura | `test:architettura` (gate), `arch:check` (= gate), `arch:report` (inventario) |
 | Scraper & dati | `scrape` (`-- --dry-run`), `scrape:check`, `scrape:notizie`, `scrape:notizie:check`, `dati:arricchisci`, `dati:pulisci`, `dati:pulisci-scaduti`, `scadenze:sync`, `notizie:ripara-archivio` |
 | Notizie (test) | `test:notizie-feed`, `test:notizie-editoriale`, `test:notizie-nazionale`, `test:notizie-rate` |
-| Radar & matching | `test:matching`, `test:radar`, `test:radar:preferenze`, `test:sostegno`, `test:materia`, `test:interpello-scadenza`, `test:scadenze`, `test:rinnovo-preavvisi`, `test:board`, `test:elenchi`, `test:traccia`, `test:parser*`, `test:dati-fallback` |
+| Radar & matching | `test:matching`, `test:radar`, `test:radar:preferenze`, `test:sostegno`, `test:materia`, `test:interpello-scadenza`, `test:scadenze`, `test:rinnovo-preavvisi`, `test:board`, `test:elenchi`, `test:traccia`, `test:prova-radar`, `test:parser*`, `test:dati-fallback` |
 | Notifiche & canali | `test:notifiche`, `test:notifier-dry`, `test:telegram` (`:template`, `:tier`, `:canali`), `test:qualita`, `test:copy`, `test:dedup`, `test:dedup:utente`, `test:frequenza`, `test:digest`, `test:email`, `test:email:scuola`, `test:email-alert`, `test:alert`, `test:link`, `test:link-esterno`, `test:promemoria`, `test:ledger`, `notifiche:digest`, `notifiche:promemoria`, `ledger:unisci` |
 | Modulistica & PDF | `test:moduli`, `test:pdf` (`:breve`, `:brevi`, `:universita`, `:completo`) |
 | Admin & DB | `admin:health`, `admin:dispatch`, `admin:profiles`, `admin:link-telegram`, `admin:fix-pampararo`, `provision:beta` (`:check`), `db:verifica`, `test:migrazioni` |
@@ -2392,7 +2440,7 @@ Utilizzi diretti nel codice (`import.meta.env.*` verificati): `DEV`, `MODE`,
 
 | Gruppo | Script |
 |---|---|
-| Radar & matching | `test-matching-profilo` · `test-radar-validation` · `test-radar-preferenze` · `test-sostegno-preferenza` · `test-materia-classe` · `test-scadenza` · `test-scadenze` · `test-live-board` · `test-elenchi` · `test-traccia-fonte` · `test-dati-fallback` |
+| Radar & matching | `test-matching-profilo` · `test-radar-validation` · `test-radar-preferenze` · `test-sostegno-preferenza` · `test-materia-classe` · `test-scadenza` · `test-scadenze` · `test-live-board` · `test-elenchi` · `test-traccia-fonte` · `test-dati-fallback` · **`test-prova-radar`** |
 | Parser & fonti | `test-parser-province` · `test-parser-date` · `test-parser-materia` · `test-parser-tabelle` · `test-parser-validazione` |
 | Link & routing | `test-link-fonte` · `test-link-esterno` · `test-alert-avviso` |
 | Notifiche & dedup | `test-notifiche` · `test-notifier-dry` · `test-dedup` · `test-dedup-utente` · `test-frequenza` · `test-qualita-invio` · `test-copy-notifiche` · `test-ledger-robustezza` · `test-migrazioni` |
@@ -3140,7 +3188,7 @@ I `placeholder` non contengono più esempi fittizi o nomi di persona (`Es. 34`,
 (`Nome`, `Cognome`, `Età`, `La tua email`, `Il tuo username Telegram, senza @`,
 `Codice promo`, `Cerca classe di concorso (codice o materia)`).
 Superfici: `AuthModal`, `BloccoAnagrafica`, `DatiProfiloModal`, `onboarding/*`
-(`PassoAnagraficaOrdini`, `PassoClassiMaterie`), wizard Radar e Preferenze Radar
+(`PassoOrdiniOnboarding`, `PassoCanali`, `PassoClassiMaterie`), wizard Radar e Preferenze Radar
 (`PassoNotifica`, `PassoProvince`, `PannelloCanali`, `PannelloClassi`,
 `PannelloMaterie`, `PannelloFiltriScuole`, `RicercaSelezioni`), `AbbonamentoModal`,
 `ContactForm`.
@@ -3149,6 +3197,8 @@ Guardia: `scripts/test-copy-etico.ts` § «Campi di input», che scansiona
 **Fuori perimetro dichiarato** (dipartimenti `admin` e `cfu`, regola di isolamento):
 restano dei placeholder con esempio in tool interni e nel CFU; si uniformano solo su
 richiesta esplicita.
+Anche l'identità della simulazione dev (`useStatoSimulato`, solo sviluppo) è **neutra**
+(`Utente Demo` / `demo@scuoleradar.it`): nessun nome di persona nemmeno lì (27/09/2026).
 
 ### 26.2 Una sola modale di registrazione, proporzionata al viewport
 
@@ -3222,20 +3272,29 @@ compaiono mai nel nuovo account, mentre una prima registrazione conserva i dati
 ### 26.7 Homepage: Radar Live subito, offerta PRO in tono elite
 
 **Nota di sessione (27/09/2026)** — riordino della vetrina pubblica e pulizia del copy.
+> Aggiornamento dello stesso giorno: la hero è tornata a **due colonne** con il box
+> «Prova il Radar» (§26.8), la **registrazione rapida** è subito sotto l'hero e l'**offerta
+> PRO è salita prima di «Cosa riceverai»**: la tabella qui sotto è **superata** — per
+> l'ordine attuale vedi §26.9.
+> **Aggiornamento (27/09/2026, sesto intervento)**: il box «Prova il Radar» si usa con la
+> **sola provincia** (niente classe di concorso), l'offerta PRO mostra **solo tre benefici**
+> senza link «Confronta i piani» né copy difensivo e il form rapido apre la **configurazione
+> del Radar** già compilata: vedi §26.12.
 
 **Ordine dei contenuti** (`pages/LandingPage.tsx`):
 
 | # | Sezione | Ruolo |
 |---|---|---|
-| 1 | `LandingHero` | Promessa + CTA, ora **monocolonna centrato**: niente simulatore che ruba il primo schermo |
-| 2 | `LandingBenefici` | «Ecco cosa riceverai» |
-| 3 | Spiegazione piani | Blocco testuale piani Base/PRO |
-| 4 | `FlightBoardInterpelli` | **«Radar Live» — primo contenuto dopo l'hero** (flag `radar`) |
-| 5 | `LandingStrumenti` | Griglia strumenti (filtrata dalle feature flag) |
-| 6 | `LandingProvaRadar` | Simulatore `SimulatorRadar`: la prova resta a un click, fuori dall'hero |
-| 7 | `LandingOffertaPro` | Offerta PRO: 30 giorni inclusi, PureFocus incluso, poi 49 €/anno |
-| 8 | `LandingPartnerPureFocus` | Fascia sponsor PureFocus (stato PRO a prop) |
+| 1 | `LandingHero` | Promessa + CTA. Due colonne con il box «Prova il Radar» a destra (§26.8) |
+| 2 | `LandingRegistrazioneRapida` | Nome, Cognome ed Email in un passaggio (solo visitatori) |
+| 3 | `FlightBoardInterpelli` | **«Radar Live» — primo contenuto dopo l'hero** (flag `radar`) |
+| 4 | `LandingOffertaPro` | Offerta PRO: 30 giorni inclusi, PureFocus incluso, poi 49 €/anno — **prima** di «Cosa riceverai» |
+| 5 | `LandingBenefici` | «Ecco cosa riceverai» |
+| 6 | Spiegazione piani + valori | «Come funziona» (3 step) e i tre valori |
+| 7 | `LandingStrumenti` | Griglia strumenti (filtrata dalle feature flag) |
+| 8 | `LandingPartnerPureFocus` | Fascia sponsor PureFocus alla larghezza dei piani (stato PRO a prop) |
 | 9 | Stats + `LandingCta` | Numeri di servizio e CTA finale |
+| — | ~~`LandingProvaRadar`~~ | **Rimosso**: il simulatore è nel box «Prova il Radar» della hero (§26.8) |
 
 **Offerta PRO.** `LandingOffertaPro` non contiene cifre a mano: importa
 `GIORNI_TRIAL_PRO` e `PREZZO_PRO_ANNUO_ETICHETTA` da `src/lib/pricing.ts`, così la
@@ -3259,15 +3318,185 @@ ammessa «Alla scadenza torni su Base, senza costi». Nessun countdown, nessun
 offerta PRO senza toni da televendita»: nessun termine da volantino né parola di
 pagamento sulle superfici della homepage (`src/pages/LandingPage.tsx` +
 `src/components/landing/**`), cifre dell'offerta da `pricing.ts`, ordine
-hero → Radar Live → prova del Radar, simulatore fuori dall'hero, e nessun
-«prova gratuita/o» nelle pagine pubbliche. La forbice è volutamente **per superficie**:
-le superfici di prodotto (banner di registrazione, benvenuto PRO) mantengono la
-dicitura ammessa dalla checklist pagamenti, mentre la landing usa il vocabolario
-stretto.
+hero → Radar Live, hero a due colonne col simulatore (§26.8), titolo senza `<br>` e
+spacing compatto, e nessun «prova gratuita/o» nelle pagine pubbliche. La forbice è
+volutamente **per superficie**: le superfici di prodotto (banner di registrazione,
+benvenuto PRO) mantengono la dicitura ammessa dalla checklist pagamenti, mentre la
+landing usa il vocabolario stretto.
+`scripts/test-copy-pubblico.ts` (sezione «Copy pubblico», §26.8) copre invece regalo
+di benvenuto PRO, wordmark PureFocus, Chi siamo e FAQ.
 
-**Nota operativa.** `scripts/_assistente-cleanup.mjs` è uno script di patch una-tantum
-(riga 66 di `AssistenteAIPage`) già eseguito e ormai disallineato: non va rilanciato.
+**Nota operativa.** `scripts/_assistente-cleanup.mjs` (patch una-tantum sulla riga 66 di
+`AssistenteAIPage`) è stato **eliminato** il 27/09/2026: l'intervento è esaurito e lo script
+era ormai disallineato.
 
-appena inseriti (la fonte autorevole resta `profiles`).
+### 26.8 Finitura homepage, wizard e vetrine (hero a due colonne, PureFocus, FAQ)
+
+**Nota di sessione (27/09/2026, secondo intervento)** — impatto visivo e commerciale
+delle superfici pubbliche, con i flussi di registrazione alleggeriti dalle domande
+personali in apertura.
+
+| # | Intervento | Dettaglio |
+|---|---|---|
+| 1 | **Hero a due colonne** | `LandingHero`: copy + CTA a sinistra, box **«Prova il Radar»** (`SimulatorRadar`) a destra. Il titolo non ha più `<br>` forzati («Ogni giorno decine di opportunità. Noi intercettiamo solo quelle per te.» scorre in linea) e gli spazi sono compatti (`pt-6` / `pb-8`). `LandingProvaRadar` è stato **eliminato** (nessuna sezione duplicata) |
+| 2 | **Regalo PRO non rifiutabile** | `SoftOnboardingModal`: titolo «**Buone notizie**», corpo asciutto, **un solo pulsante** d'azione (la X resta per non intrappolare); `BenvenutoProRadar` perde il rinvio «Più tardi». Entrambi usano `GIORNI_TRIAL_PRO` |
+| 3 | **Anagrafica a fine percorso** | wizard Radar: `BloccoAnagrafica` spostato dal Passo 1 al **Passo 4** (`PassoNotifica`, in fondo); l'onboarding post-registrazione sposta genere/età dal Passo 1 (`PassoOrdiniOnboarding`, ex `PassoAnagraficaOrdini`) al **Passo 4** (`PassoCanali`). Via i testi paternalistici e le istruzioni su cosa scrivere nei campi |
+| 4 | **Passo 3 più utile** | rimossa la domanda sul **sostegno** (`SezioneClassiConcorso`, preferenza preservata e modificabile solo dalle Preferenze Radar); aggiunto nella colonna competenze un **campo di ricerca per parola chiave/competenza libera** (`SezioneCompetenzeExtra` → `aggiungiParolaChiave`) |
+| 5 | **Passo 4 autorevole** | `PassoNotifica`: Telegram = canale immediato con la massima potenza di fuoco, email = **riepilogo giornaliero**; niente «(`consigliato`)», niente notazione algebrica, niente suggerimenti su cosa scrivere; l'account non è mai etichettato «Base» |
+| 6 | **PureFocus** | nuova vetrina condivisa `src/components/PureFocusCard.tsx`: **wordmark ufficiale** (Pure `#0E0C0A` + Focus `#0047AB`, sans-serif, senza spazi) al posto dell'emoji-icona, badge verde «**Incluso nel piano PRO**», link in evidenza a **purefocus.one**. Usata da homepage, `/prezzi` e `/dashboard/purefocus` (coordinamento da un'unica fonte) |
+| 7 | **Chi siamo & FAQ** | `ChiSiamoPage`: CTA «**Attiva il tuo radar**», rimosso il rimando difensivo alla Carta del Docente. `FAQPage` riscritta come **posizionamento**: come inserire ScuoleRadar tra le app attendibili della scuola (`#animatore-digitale`, ancora pubblica), «Invita un Collega», PureFocus con l'account Gmail, in arrivo l'**Assistente Sindacalista Virtuale** e la **Carta del Docente** |
+| 8 | **Marchio** | `Header`: lockup pulito **tessera ufficiale + wordmark «ScuoleRadar.it» in testo** (asset di build `src/assets/marchio-radar.png`, identico al favicon) — niente logo-immagine rimpicciolito, quindi niente effetto «template»; `useStatoSimulato` usa un'identità demo neutra |
+
+**Guardie.** `npm run test:copy:etico` (hero/Passo 4/wizard), `npm run test:copy:pubblico`
+(regalo PRO, PureFocus, Chi siamo, FAQ), `npm run test:ricerca` (campo parola chiave nella
+colonna competenze senza ricerca duplicata), `npm run test:favicon` (il marchio dell'header è
+la **tessera ufficiale**, stesso file del favicon 256: nessun ritorno al logo-immagine).
+
+**Sessione e cambio account.** Al passaggio a un altro account sullo stesso
+dispositivo (es. Google Bartolo → Pralino) si azzerano i **soli** campi anagrafici
+in `sr_preferenze` (`genere`, `eta`, `provincia`), perché appartengono all'utente
+precedente; una **prima** registrazione invece conserva i dati appena inseriti (la
+fonte autorevole resta `profiles`).
 Guardia: `npm run test:sessione`.
+
+### 26.9 Motore del Radar di prova, sostegno incluso di default, offerta in testa
+
+**Nota di sessione (27/09/2026, terzo intervento)** — finitura del Radar di prova,
+eliminazione dei filtri silenziosi sugli avvisi di sostegno e conversione in testa
+alla homepage.
+
+| # | Intervento | Dettaglio |
+|---|---|---|
+| 1 | **Radar di prova a maglie larghe** | nuovo motore **puro** `src/lib/provaRadarEngine.ts`: pertinenti per classe (codice di concorso o materia citata nel titolo) → tutte le opportunità **ATTIVE** della provincia (supplenze, PON/POR, CPIA, ATA, date estese) → **pool nazionale** come ultimo ripiego; le scadute escono, le voci senza scadenza restano. Il responso non è mai vuoto se la provincia ha flusso (`{ gruppo: classe/provincia/nazionale/vuoto, righe }`) |
+| 2 | **Provincia provata = provincia principale** | nuovo `src/lib/provaRadar.ts` (localStorage, validato sul catalogo `data/province`): la provincia scelta nel box «Prova il Radar» arriva **pre-selezionata** come provincia principale nel wizard Radar e nell'onboarding post-registrazione (`provinceInizialiConProva`), senza richieste duplicate |
+| 3 | **Responso senza scroll** | `SimulatorRadar` più largo (`max-w-*` ottimizzato): il responso entra in una schermata a zoom 100% senza scroll verticale. Per il gate strutturale (≤ 300 righe) la query è in `departments/radar/services/provaRadarQuery.ts` (limiti 200 provincia / 60 nazionale, attesa scansione 900 ms) e il responso in `departments/radar/components/ResponsoProva.tsx` (presentazionale) |
+| 4 | **Sostegno incluso di default** | `defaultPreferenze.sostegno = true` + migrazione `20260927120000_default_sostegno_incluso.sql` (§2.15): nessun avviso AD… più filtrato in silenzio. `SostegnoToggle` («**Opportunità di sostegno**», Incluse/Escluse) resta l'**uscita esplicita** nelle Preferenze Radar, con la nota sull'adesione implicita via classe `AD*` |
+| 5 | **Offerta PRO prima di «Cosa riceverai»** | `LandingOffertaPro` sale al 4° posto della homepage (subito dopo «Radar Live») con la formulazione diretta — «Siamo così sicuri che Scuole Radar ti piacerà che ti offriamo il primo mese PRO. E se poi non vuoi abbonarti, passi semplicemente a un account Base, senza costi» — e le cifre da `lib/pricing` (`GIORNI_TRIAL_PRO`, `PREZZO_PRO_ANNUO_ETICHETTA`) |
+| 6 | **Registrazione rapida sotto l'hero** | nuovo `src/components/landing/LandingRegistrazioneRapida.tsx` (Nome, Cognome, Email + CTA «Attiva il Radar»): i dati finiscono nella **bozza** di registrazione e la modale si apre precompilata — un solo passaggio, nessun doppione di modali (solo per i visitatori) |
+| 7 | **FAQ commerciali coerenti** | l'Assistente Sindacalista Virtuale è descritto per lo stato REALE (`AssistenteAIPage` = **accesso in anteprima**): non più «lo trovi dal primo giorno»; `/prezzi` e `/faq` dicono la stessa cosa («in anteprima, riservata agli abbonati PRO») |
+| 8 | **Pulizia** | `scripts/_assistente-cleanup.mjs` **eliminato** (patch esaurita); `useStatoSimulato` con identità demo neutra (nessun «Mario Rossi»); marchio dell'header = **tessera ufficiale**, lo stesso file del favicon (§26.8) |
+| 9 | **Guardia riallineata** | `scripts/test-piano-sync.ts` (passo finale del wizard, §26.8): i due assert sul Passo 4 verificano ora la copy autorevole corrente («Telegram — avvisi istantanei», «Email — riepilogo giornaliero» / «non arrivano gli avvisi in tempo reale») al posto delle formule superate — `npm run test:piano` di nuovo verde |
+
+**Guardie.** `npm run test:prova-radar` (motore + memoria della provincia + cablaggio
+hero/wizard), `npm run test:copy:etico` (hero a due colonne `lg:grid-cols-[minmax(0,1fr)_34rem]`,
+offerta senza toni da televendita), `npm run test:copy:pubblico` (registrazione rapida,
+wordmark PureFocus, Chi siamo, FAQ, sostegno incluso), `npm run test:sostegno` +
+`npm run test:migrazioni` (default `true` con backfill), `npm run test:ricerca`
+(parola chiave nella colonna competenze), `npm run test:piano` (passo finale del
+wizard), `npm run test:favicon` (tessera ufficiale) e `npm run test:architettura`
+(i file nuovi restano sotto le 300 righe).
+
+### 26.10 Finitura commerciale della prova e della registrazione
+
+**Nota di sessione (27/09/2026, quarto intervento)** — la prova pubblica deve stare in
+un solo schermo, non deve **mai** dichiarare «zero risultati» a una provincia che ha
+flusso, e la registrazione non chiede più dati personali.
+
+| # | Intervento | Dettaglio |
+|---|---|---|
+| 1 | **Box di prova più largo e più pulito** | `LandingHero`: la colonna del simulatore passa a **34rem** (`lg:grid-cols-[minmax(0,1fr)_34rem]`) e resta **una sola** riga di istruzioni («Nessuna registrazione: scegli provincia e classe di concorso e guarda cosa il Radar trova in questo momento»): il titolo doppio «Prova il Radar» è rimosso, così il responso entra nel primo schermo a zoom 100% |
+| 2 | **Pool vivo lato database** | `departments/radar/services/provaRadarQuery.ts`: la lettura filtra gli scaduti con `.or(expiration_date.gte.<ieri>, expiration_date.is.null)`. Con l'ordinamento per scadenza **crescente**, gli avvisi scaduti occupavano il tetto di 200 righe e una provincia con flusso pieno dichiarava «zero risultati» (falso negativo). Il filtro per **giornata esatta** resta di `righeAttive` (`lib/provaRadarEngine`), che tiene anche le righe senza data |
+| 3 | **Responso compatto** | `departments/radar/components/ResponsoProva.tsx`: spaziature ridotte (`mt-2.5`/`mt-3`, `p-3.5`, `py-1.5`, `space-y-1`, CTA `py-2`) — nessuno scroll verticale dentro il box |
+| 4 | **Registrazione senza domande personali** | `AuthModal`: rimossi `Sesso` ed `Età` dal modulo (griglia Uomo/Donna e campo numerico); al loro posto la nota «Genere ed età li raccogliamo alla fine del percorso, insieme al resto del profilo: qui bastano la provincia di residenza e la password». Genere ed età si raccolgono **solo** a fine percorso (`BloccoAnagrafica` al Passo 4, §26.8) e la modale di registrazione si apre già precompilata da nome, cognome, email e provincia della bozza (`LandingRegistrazioneRapida`) |
+| 5 | **Copy del simulatore** | `SimulatorRadar`: categorie dichiarate ad alta voce — «interpelli e supplenze, PON/POR e PNRR, CPIA, ATA e bidelli, selezioni di esperti» — coerenti con il motore a maglie larghe (§26.9, passo 1) |
+
+**Guardie.** `npm run test:prova-radar` (box a 34rem con una sola riga di istruzioni,
+responso compatto, pool del simulatore solo di avvisi **vivi** con `LIMITE_PROVINCIA = 200`,
+categorie «ATA e bidelli», memoria della provincia e cablaggio wizard/onboarding),
+`npm run test:copy:etico` (genere ed età **solo** a fine percorso, campi di registrazione
+senza età, hero a 34rem).
+
+**Verifiche (27/09/2026).** `npm run typecheck` ✓ · `npm test` ✓ (catena completa, nessun
+fallimento) · `npm run test:architettura` ✓ (nessuna violazione nuova: 142 in baseline) ·
+`npm run build` ✓ (15,14 s) · `npm run lint` pulito sui file toccati (`AuthModal`,
+`LandingHero`, `ResponsoProva`, `provaRadarQuery`, `SimulatorRadar`, `LandingPage`).
+
+### 26.11 Motore editoriale Notizie a 360° (allow-list dei temi e lessico condiviso)
+
+**Nota di sessione (27/09/2026, quinto intervento)** — il motore delle Notizie non
+conosceva la scuola oltre l'interpello: personale ATA e segreterie, DSGA, istruzione
+adulti (CPIA), sostegno, TFA e classi di concorso, immissioni in ruolo. Il vocabolario e
+lo scoring vivono ora in un **blocco condiviso** e la categoria nasce SOLO da un tema
+ammesso, in ordine di priorità.
+
+| # | Intervento | Dettaglio |
+|---|---|---|
+| 1 | **Blocco editoriale condiviso** | Nuovi moduli in `src/departments/notizie/services/`: `standardTemiPersonale.ts` (temi del personale: parole-chiave, macro-area, peso, flag `autosufficiente`), `standardTemiDidattica.ts` (temi culturali/didattici), `editorialStandard.ts` (unisce in `TEMI_OPERATIVI`, espone `AREE_TEMATICHE`, `PESI_CATEGORIA`, `CATEGORIE_CON_FATTO_CONCRETO`, `temiDalTesto`, `areeTematicheDalTesto`), `lessicoScuola.ts` (lessico, acronimi, frasi di fluff, `PAROLE_OPERATIVE`) |
+| 2 | **Allow-list unica, ordine = priorità** | `classificaTemaPersonale` scorre `TEMI_OPERATIVI` (da CCNL a Pedagogia) e restituisce il primo tema riconosciuto; `PAROLE_CATEGORIA` e le liste duplicate dentro il motore sono rimosse |
+| 3 | **Scoring su matrice unica** | `punteggioRilevanza(categoria, haScadenza)` legge `PESI_CATEGORIA` (base per tema, bonus scadenza, tetto 100): pesi e punteggi non possono più divergere |
+| 4 | **Fatto concreto** | `valutaRilevanza` respinge i temi culturali/didattici senza scadenza reale né canale ufficiale, con motivo tracciabile (il «seminario pedagogico» non diventa notizia) |
+| 5 | **Compatibilità** | `relevanceEngine.ts` ri-esporta `PAROLE_ACCETTA` (alias di `PAROLE_OPERATIVE`), `GLOSSARIO_ACRONIMI` e `FRASI_FLUFF`: copy, igiene dell'archivio e documentazione restano validi; `PAROLE_FORTI_INIZIO_ANNO` resta il vocabolario storico dell'avvio anno |
+
+**Guardie.** `npm run test:notizie-editoriale` copre anche: ordine e macro-aree
+dell'allow-list, equipollenza peso/tema ↔ `PESI_CATEGORIA`, temi ATA/CPIA/sostegno/
+formazione/reclutamento, tetto e bonus di `punteggioRilevanza`, il gate del fatto
+concreto (didattica e pedagogia respinte senza scadenza/canale, ammesse con), l'alias
+`PAROLE_ACCETTA` senza duplicati e l'audit multi-tema (`temiDalTesto`).
+
+**Verifiche (27/09/2026, quinto intervento).** `npm run typecheck` ✓ · `npm test` ✓ (catena
+completa: 13 suite, nessun fallimento) · `npm run
+test:notizie-editoriale` ✓ · `npm run test:notizie-nazionale` ✓ · `npm run
+test:notizie-feed` ✓ · `npm run test:notizie-rate` ✓ · `npm run test:architettura` ✓
+(nessuna violazione nuova: 143 in baseline) · `npm run build` ✓ (11,49 s) · `npm run
+lint` pulito sui file toccati (`relevanceEngine`, `lessicoScuola`, `editorialStandard`,
+`scripts/test-notizie-editoriale`).
+
+### 26.12 Prova del Radar a sola provincia, conversione della homepage e benvenuto di fine flusso
+
+**Nota di sessione (27/09/2026, sesto intervento)** — la prova pubblica non chiede più la
+classe di concorso: si sceglie la provincia e il Radar restituisce **sempre** un elenco reale e
+ricco; la homepage chiude la conversione senza frasi difensive né vie d'uscita e il form rapido
+apre la configurazione con i dati già dentro.
+
+| # | Intervento | Dettaglio |
+|---|---|---|
+| 1 | **Box di prova a sola provincia** | `SimulatorRadar`: rimosso il selettore «Classe di concorso» (con l'import `classiConcorso`); la CTA «Cerca ora» si abilita con la sola provincia (`disabled={!provCodice}`). `LandingHero`: rimossa la riga difensiva «Nessuna registrazione: scegli provincia e classe di concorso…» — sopra il box non resta più nessun testo |
+| 2 | **Elenco sempre ricco** | `lib/provaRadarEngine.ts`: `selezionaRisultatiProva(provincia, nazionali, limite)` porta TUTTE le opportunità attive della provincia e, se non bastano a riempire l'elenco, le completa con il pool nazionale **senza duplicati** (dedup per `id`); `daProvincia` dichiara quante righe mostrate sono locali. Rimossi `rigaPertinente`, `selezionaRisultatiNazionali` e il gruppo `'classe'`. La query nazionale parte **solo** se la provincia ha meno di `LIMITE_RISULTATI_PROVA` righe |
+| 3 | **Messaggio di conversione esatto** | Sotto l'elenco c'è sempre lo stesso testo (`messaggioConversione`): «Abbiamo trovato [X] opportunità attive oggi su [Città]. Attiva ora il tuo radar personalizzato. Ti offriamo un mese PRO con notifiche Telegram in tempo reale e un'email di riepilogo ogni giorno alle 17.00» — con varianti oneste per elenco misto («di cui N su [Città]») e provincia ferma («in Italia»); nessun avviso vivo → `messaggioRadarInScansione`, mai «zero risultati». CTA unica «Attiva il tuo Radar» |
+| 4 | **Offerta PRO: tre blocchi, nessuna via d'uscita** | `LandingOffertaPro`: i punti sono SOLO «Avvisi Telegram in tempo reale», «Email riepilogativa tutti i giorni alle 17.00», «PureFocus incluso nel piano PRO»; rimossi il link «Confronta i piani» e la frase difensiva («Siamo così sicuri… passi semplicemente a un account Base, senza costi» → «Un mese intero di PRO offerto da noi…»). La riga di servizio con importo/rinnovo/disdetta è stata rimossa nell'intervento successivo (§26.13) |
+| 5 | **Etichette e sezioni della homepage** | `LandingPage`: primo passo di «Come funziona» = **«Imposta il tuo Radar»**; `LandingBenefici`: «Inserisci quello che ti interessa e vedrai solo le opportunità di lavoro nella scuola inerenti al tuo profilo»; `LandingStrumenti`: card **centrate** (flex-wrap `justify-center`, non più griglia a 3 colonne con due soli strumenti visibili) |
+| 6 | **Form rapido → configurazione** | `LandingRegistrazioneRapida`: CTA «Attiva il tuo Radar»; i tre campi vanno nella bozza (`lib/bozzaRegistrazione.ts`) e `handleRegistrazioneRapida` (`LandingPage`) apre `openRadarSetup()` — la modale di onboarding/configurazione trova nome, cognome ed **email di notifica** già compilati (`RadarWizardModal`: `preferenze.emailNotifica \|\| bozza?.email \|\| user?.email`) |
+| 7 | **Schermata di benvenuto di fine flusso** | `RadarWizardModal`, fase `done`: riquadro d'impatto con il testo esatto `BENVENUTO_FINE_FLUSSO` — «Buone notizie! Ti offriamo noi il primo mese PRO con Scuole Radar! Il tuo Radar Personalizzato è attivo, sfruttalo!» — su una riga sola, così il gate di copy lo verifica come stringa letterale |
+
+**Guardie.** `npm run test:prova-radar` (motore a sola provincia, completamento nazionale senza
+duplicati, messaggio di conversione con conteggio e provenienza, nessun selettore di classe nel
+simulatore, hero senza frase difensiva, eredità della provincia nel wizard, anagrafica/email
+precompilate, schermata di benvenuto con il testo esatto); `npm run test:copy:etico` (offerta PRO
+senza copy difensivo e senza link ad altri piani, esattamente **tre** blocchi); `npm run
+test:copy:pubblico` (form rapido → configurazione del Radar, etichetta «Imposta il tuo Radar»,
+copy di «Cosa riceverai», card strumenti centrate).
+
+**Verifiche (27/09/2026, sesto intervento).** `npm run typecheck` ✓ · `npm test` ✓ (catena
+completa, nessun fallimento) · `npm run test:prova-radar` ✓ · `npm run test:copy:etico` ✓ ·
+`npm run test:copy:pubblico` ✓ · `npm run test:architettura` ✓ (nessuna violazione nuova: 143 in
+baseline) · `npm run build` ✓ (8,31 s) · `npm run lint` pulito sui file toccati
+(`provaRadarEngine`, `SimulatorRadar`, `ResponsoProva`, `RadarWizardModal`, `LandingHero`,
+`LandingOffertaPro`, `LandingStrumenti`, `LandingBenefici`, `LandingRegistrazioneRapida`,
+`LandingPage`, `scripts/test-prova-radar`, `scripts/test-copy-etico`, `scripts/test-copy-pubblico`).
+Debito noto **non** toccato: 43 problemi ESLint su file estranei a questo intervento.
+
+> **Esito (direttiva del cliente, 27/09/2026).** La riga di servizio è stata **rimossa
+> completamente** dalla sezione: la vetrina PRO è ora solo-benefici, mentre prezzo,
+> rinnovo automatico e disdetta restano dichiarati in `/prezzi`, nelle FAQ e nel passo di
+> pagamento. Regola e guardie aggiornate: checklist `05_abbonamenti_pagamenti` §3 e
+> `npm run test:copy:etico` — vedi §26.13.
+
+### 26.13 Offerta PRO solo-benefici: via importi, rinnovo e disdetta dalla homepage
+
+**Nota di sessione (27/09/2026, settimo intervento)** — la sezione PRO della homepage chiude
+la conversione con TRE colonne e basta: nessun importo, nessun addebito ricorrente, nessuna
+via d'uscita.
+
+| # | Intervento | Dettaglio |
+|---|---|---|
+| 1 | **Riga di servizio rimossa** | `LandingOffertaPro`: eliminata la riga in coda «PRO: rinnovo automatico di 49 €/anno, disdici quando vuoi. La prova termina senza costi.» e l'import ormai inutile `PREZZO_PRO_ANNUO_ETICHETTA` (resta `GIORNI_TRIAL_PRO` per il titolo «30 giorni di PRO, tutto incluso»). Nel file non esistono più occorrenze di `/€/`, «rinnovo», «disdici», «torni su Base», «quota annuale», `PREZZO_PRO` — **commenti inclusi** (la guardia è volutamente severa) |
+| 2 | **Dove vive la dichiarazione commerciale** | Prezzo, condizioni di proseguimento e disdetta restano dichiarati **fuori** dalla sezione di conversione: `/prezzi` (colonne piani + FAQ «Il PRO annuale costa 49 €/anno (circa 4 € al mese) e si disdice quando vuoi»), FAQ pubbliche («Nulla di automatico: la prova è di 30 giorni di PRO, non un abbonamento nascosto…») e **passo di pagamento** (`AbbonamentoModal`: «Rinnovo automatico trasparente, disdicibile in qualsiasi momento dal tuo profilo»). `PREZZO_PRO_ANNUO_ETICHETTA` resta in `src/lib/pricing.ts` come etichetta condivisa del listino (nessun consumatore in `src/` dopo la rimozione) |
+| 3 | **Guardie aggiornate** | `test-copy:etico`: la sezione deve avere esattamente i tre blocchi (`titolo:` ×3), nessun `<Link` / `to="/prezzi"` e **zero** occorrenze di importi o condizioni contrattuali; sostituita la vecchia asserzione che pretendeva la formula «Alla scadenza torni su Base, senza costi». Checklist `05_abbonamenti_pagamenti` §3 aggiornata: la vetrina PRO è **solo-benefici** e la dichiarazione di rinnovo/disdetta vive fuori dalla sezione |
+
+**Verifiche (27/09/2026, settimo intervento).** `npm run test:copy:etico` ✓ · `npm run
+test:copy:pubblico` ✓ · `npm run test:prova-radar` ✓ · `npm run typecheck` ✓ · `npm test` ✓
+(catena completa) · `npm run test:architettura` ✓ (nessuna violazione nuova: 143 in baseline) ·
+`npm run build` ✓ (6,36 s) · `npm run lint` pulito sui file toccati (`LandingOffertaPro`,
+`scripts/test-copy-etico`). Debito noto **non** toccato: 43 problemi ESLint (22 errori, 21
+warning) su file estranei a questo intervento.
 

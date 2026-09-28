@@ -356,10 +356,10 @@ sotto-componenti in `src/pages/onboarding/components/`.
 | Blocco | Righe (prima) | File nuovo | Righe | Props |
 |---|---:|---|---:|---:|
 | Progress (`{/* Progress */}`) | 15 | — (resta nella pagina) | — | — |
-| Passo 1 · anagrafica + ordini | 93 | `components/PassoAnagraficaOrdini.tsx` | 130 | 7 |
+| Passo 1 · anagrafica + ordini | 93 | `components/PassoAnagraficaOrdini.tsx` → **`PassoOrdiniOnboarding.tsx`** (27/09/2026: l'anagrafica è stata spostata a fine percorso) | 130 → **92** | 7 → **3** |
 | Passo 2 · classi + materie | 171 | `components/PassoClassiMaterie.tsx` | 235 | 2 gruppi |
 | Passo 3 · province | 78 | `components/PassoProvince.tsx` | 116 | 7 |
-| Passo 4 · canali di notifica | 66 | `components/PassoCanali.tsx` | 98 | 6 |
+| Passo 4 · canali di notifica | 66 | `components/PassoCanali.tsx` | 98 → **~150** (con genere/età in chiusura) | 6 → **7** |
 | Navigazione (Indietro/Avanti/Attiva) | 33 | `components/NavigazioneOnboarding.tsx` | 65 | 5 |
 
 La pagina conserva: stato del wizard, memos di filtro, validazione `canNext`,
@@ -787,6 +787,28 @@ eslint `src/contexts` 0 errori (13 warning, tutte preesistenti: 3 `react-refresh
 
 ---
 
+## 5-quaterdecies. Finitura 27/09/2026 — split mirato di `SimulatorRadar.tsx`
+
+L'arrivo del **Radar di prova a maglie larghe** (§26.9 di `SYSTEM_HANDOVER.md`)
+aveva portato `departments/radar/SimulatorRadar.tsx` a **323 righe** (sopra il
+limite di 300): query dei dati e responso vivevano inline. Due estrazioni
+chirurgiche, nessun cambio di comportamento: resta il contenitore con lo stato
+(provincia, classe di concorso), la chiamata al motore puro
+`@/lib/provaRadarEngine` e la memoria della provincia provata (`@/lib/provaRadar`).
+
+| Blocco (prima) | Destinazione | Righe |
+|---|---|---:|
+| Lettura degli interpelli del box «Prova il Radar» (limite 200 righe per provincia, 60 nazionali, attesa della scansione) | `departments/radar/services/provaRadarQuery.ts` | 44 |
+| Responso: righe, gruppo di provenienza, copy e stati vuoto/errore (sola presentazione) | `departments/radar/components/ResponsoProva.tsx` | 130 |
+| `SimulatorRadar.tsx` | contenitore: stato, motore puro, memoria provincia, azioni | **176** (era 323) |
+
+**Guardia**: `npm run test:prova-radar` copre il motore
+(`lib/provaRadarEngine.ts`), la memoria (`lib/provaRadar.ts`) e il cablaggio del
+simulatore con hero e wizard; `npm run test:architettura` conferma che i tre file
+restano sotto soglia.
+
+---
+
 ## 6. Wave 3 e 4 — backlog
 
 **Wave 14 (servizi, con test a corredo)** — restano i servizi "grossi" e i
@@ -853,6 +875,7 @@ backend fuori bundle, i 2 moduli 🔒 (`AuthModal`, `PrezziPage`), i test e i ti
 | `npm run test:pdf*` (5 suite PDF) | ✅ **92 documenti generati identici byte-per-byte** alla baseline pre-refactor (hash `0291…FC5D`, 5.713.825 byte) — wave 13 |
 | `npx eslint src/pages src/components src/departments src/modules` | ✅ **0 errori** nei file nuovi/modificati; restano 3 errori **preesistenti e non correlati** (`NotizieDettaglio`, `tracciaFonte`, `cacheService`) + 2 warning `exhaustive-deps` ereditati verbatim dal vecchio `ArchivistaCapo` |
 | File > 300 righe in `src/` | ✅ **44 → 33** (wave 1-13); i nuovi moduli sono tutti ≤ 295 righe |
+| `departments/radar/SimulatorRadar.tsx` (finitura 27/09/2026) | ✅ **323 → 176** (§5-quaterdecies): query in `services/provaRadarQuery.ts` (44) e responso in `components/ResponsoProva.tsx` (130) — i nuovi file sono sotto soglia |
 
 ### ✅ Wave 10 e 11 — verifiche automatiche
 
