@@ -4,6 +4,8 @@
  * Mostrato UNA SOLA VOLTA per utente (chiave localStorage per id/email): dà il
  * benvenuto, si congratula per il mese di PRO in omaggio (prova PureFocus) e
  * invita SUBITO ad attivare il Radar — senza il quale il piano resta inutilizzato.
+ * Con il mese in omaggio attivo mostra anche la **CTA PRO Annuale**
+ * (`CtaProAnnuale`): copy esatta del cliente e coupon `PROANNUALE40` già applicato.
  *
  * Non è un modal bloccante a sorpresa: compare solo con piano CONFERMATO dal DB
  * (`pianoStato === 'pronto'`), profilo anagrafico completo e nessun altro modal
@@ -12,7 +14,10 @@
 import { useEffect, useState } from 'react';
 import { CalendarClock, PartyPopper, Radar, Sparkles } from 'lucide-react';
 import { Modal } from '@/components/Modal';
+import { useToast } from '@/components/Toast';
 import { useApp } from '@/contexts/AppContext';
+import { PROMO_CODE_PRO_ANNUALE_40 } from '@/lib/promo';
+import { CtaProAnnuale } from './CtaProAnnuale';
 
 /** Prefisso della chiave localStorage «benvenuto PRO già mostrato». */
 const PREFISSO_CHIAVE = 'sr_benvenuto_pro_';
@@ -41,7 +46,10 @@ export function BenvenutoProRadar() {
     preferenze,
     radarWizardOpen,
     openRadarSetup,
+    avviaCheckout,
   } = useApp();
+
+  const { mostraToast } = useToast();
 
   /** Identificativo stabile per la chiave «già visto» (id Supabase o email). */
   const identificativo = supabaseUserId ?? user?.email ?? '';
@@ -50,6 +58,8 @@ export function BenvenutoProRadar() {
   // Parte da `true`: nessun benvenuto prima di sapere CHI è l'utente (niente flash).
   const [giaVisto, setGiaVisto] = useState(true);
   const [chiuso, setChiuso] = useState(false);
+  /** Checkout PRO annuale in corso: blocca il pulsante (una scheda Stripe per azione). */
+  const [checkoutInCorso, setCheckoutInCorso] = useState(false);
 
   useEffect(() => {
     if (!chiave) {
@@ -101,6 +111,23 @@ export function BenvenutoProRadar() {
     setChiuso(true);
     segnaVisto();
     openRadarSetup();
+  };
+
+  /**
+   * CTA PRO ANNUALE (direttiva cliente 28/09/2026): al checkout va SOLO il codice del
+   * coupon (`PROANNUALE40`) — la mappatura sul coupon Stripe e l'importo restano
+   * server-side. Il benvenuto resta aperto: il pagamento si apre in una nuova scheda.
+   */
+  const attivaProAnnuale = (): void => {
+    if (checkoutInCorso) return;
+    setCheckoutInCorso(true);
+    void avviaCheckout('pro_annuale', PROMO_CODE_PRO_ANNUALE_40)
+      .then((esito) => {
+        if (!esito.ok) {
+          mostraToast('errore', esito.errore ?? 'Impossibile avviare il pagamento. Riprova.');
+        }
+      })
+      .finally(() => setCheckoutInCorso(false));
   };
 
   if (!elegibile) return null;
@@ -162,6 +189,13 @@ export function BenvenutoProRadar() {
         momento le opportunità compatibili arrivano a te — senza che tu debba controllare i siti
         delle scuole.
       </p>
+
+      {/* CONTINUAZIONE COMMERCIALE (solo con il mese in omaggio attivo): CTA in
+          evidenza per il PRO Annuale scontato, con il coupon PROANNUALE40 già
+          applicato. L'importo e lo scorporo del mese sono dichiarati dalla CTA
+          stessa: questa dichiarazione vive SOLO nelle superfici di fine flusso
+          (qui e nella conferma post-configurazione), mai nella vetrina della homepage. */}
+      {trialAttivo && <CtaProAnnuale onAttiva={attivaProAnnuale} inCorso={checkoutInCorso} />}
 
       <div className="mt-5 border-t border-primary-100 pt-4">
         <button

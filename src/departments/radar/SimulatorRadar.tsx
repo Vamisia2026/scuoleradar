@@ -18,6 +18,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Loader2, Radar, Search } from 'lucide-react';
 import { province } from '@/data/province';
 import { salvaProvinciaProva } from '@/lib/provaRadar';
+import { rigaPresentabileVetrina } from '@/lib/liveBoard';
 import {
   LIMITE_RISULTATI_PROVA,
   selezionaRisultatiProva,
@@ -32,7 +33,16 @@ import {
 } from './services/provaRadarQuery';
 import { ResponsoProva } from './components/ResponsoProva';
 
-export function SimulatorRadar() {
+interface SimulatorRadarProps {
+  /**
+   * Classi aggiuntive del contenitore. L'hero non stira più la colonna: il box
+   * resta alla sua altezza naturale, quindi qui non serve nessun `h-full` — il
+   * responso lungo vive nell'area a scorrimento (`max-h-[24rem]`).
+   */
+  className?: string;
+}
+
+export function SimulatorRadar({ className = '' }: SimulatorRadarProps) {
   const { openRadarSetup } = useApp();
   const [provCodice, setProvCodice] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -67,13 +77,20 @@ export function SimulatorRadar() {
       void (async () => {
         try {
           salvaProvinciaProva(provincia);
-          const locali = await leggiInterpelliProva(provincia, LIMITE_PROVINCIA);
+          // VETRINA: entrano solo righe con almeno un elemento leggibile (titolo
+          // pulito o istituto/ente reale). I dump di codici classe («ADEE | EEEE»)
+          // e i nomi non risolvibili restano fuori da una vista pubblica.
+          const locali = (await leggiInterpelliProva(provincia, LIMITE_PROVINCIA)).filter(
+            rigaPresentabileVetrina,
+          );
           // Provincia già ricca: nessuna seconda query (il box resta scattante).
           if (locali.length >= LIMITE_RISULTATI_PROVA) {
             setEsito(selezionaRisultatiProva(locali));
             return;
           }
-          const nazionali = await leggiInterpelliProva(null, LIMITE_NAZIONALE);
+          const nazionali = (await leggiInterpelliProva(null, LIMITE_NAZIONALE)).filter(
+            rigaPresentabileVetrina,
+          );
           setEsito(selezionaRisultatiProva(locali, nazionali));
         } catch {
           setEsito({ gruppo: 'vuoto', righe: [], daProvincia: 0 });
@@ -85,48 +102,54 @@ export function SimulatorRadar() {
   }, [provCodice, isSearching]);
 
   return (
-    <div className="rounded-2xl border border-primary-100 bg-white p-5 shadow-card sm:p-6">
-      <div className="mb-3 flex items-center gap-2 text-primary-700">
+    <div
+      className={`flex flex-col rounded-2xl border border-primary-100 bg-white p-5 shadow-card ${className}`}
+    >
+      <div className="mb-1.5 flex items-center gap-2 text-primary-700">
         <Radar className="h-5 w-5" />
         <h3 className="text-lg font-bold">Prova il Radar</h3>
       </div>
-      <p className="mb-4 text-sm leading-relaxed text-primary-600">
+      <p className="mb-3 text-sm leading-relaxed text-primary-600">
         Scegli la provincia: cerchiamo su tutte le categorie — interpelli e supplenze, PON/POR e
         PNRR, CPIA, ATA e bidelli, selezioni di esperti.
       </p>
 
-      <label className="block">
-        <span className="mb-1.5 block text-sm font-medium text-primary-700">Provincia</span>
-        <div className="relative">
-          <select
-            value={provCodice}
-            onChange={(e) => {
-              setProvCodice(e.target.value);
-              resettaRicerca();
-            }}
-            className="w-full appearance-none rounded-xl border border-primary-200 bg-white px-3 py-2.5 pr-9 text-sm text-primary-800 transition focus:border-primary-500"
-          >
-            <option value="">Seleziona provincia…</option>
-            {provinceSorted.map((p) => (
-              <option key={p.codice} value={p.codice}>
-                {p.nome} ({p.codice})
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary-400" />
-        </div>
-      </label>
+      {/* Provincia e CTA sulla STESSA riga da `sm` in su: il box resta compatto,
+          quindi l'hero non lascia spazio bianco verticale sotto il copy. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <label className="block sm:flex-1">
+          <span className="mb-1.5 block text-sm font-medium text-primary-700">Provincia</span>
+          <div className="relative">
+            <select
+              value={provCodice}
+              onChange={(e) => {
+                setProvCodice(e.target.value);
+                resettaRicerca();
+              }}
+              className="w-full appearance-none rounded-xl border border-primary-200 bg-white px-3 py-2.5 pr-9 text-sm text-primary-800 transition focus:border-primary-500"
+            >
+              <option value="">Seleziona provincia…</option>
+              {provinceSorted.map((p) => (
+                <option key={p.codice} value={p.codice}>
+                  {p.nome} ({p.codice})
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary-400" />
+          </div>
+        </label>
 
-      {/* CTA «Cerca ora»: sfondo #2B6F9E SEMPRE a piena opacità — anche da
-          disabilitata nessun `disabled:opacity-*` (stesso colore dell'hero). */}
-      <button
-        onClick={handleSimula}
-        disabled={!provCodice}
-        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#2B6F9E] px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-[#225a82] disabled:cursor-not-allowed sm:w-auto"
-      >
-        <Search className="h-4 w-4" />
-        Cerca ora
-      </button>
+        {/* CTA «Cerca ora»: sfondo #2B6F9E SEMPRE a piena opacità — anche da
+            disabilitata nessun `disabled:opacity-*` (stesso colore dell'hero). */}
+        <button
+          onClick={handleSimula}
+          disabled={!provCodice}
+          className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[#2B6F9E] px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-[#225a82] disabled:cursor-not-allowed sm:w-auto"
+        >
+          <Search className="h-4 w-4" />
+          Cerca ora
+        </button>
+      </div>
 
       {isSearching && (
         <div className="animate-fade-in mt-4 flex items-center gap-3 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3">
@@ -135,8 +158,13 @@ export function SimulatorRadar() {
         </div>
       )}
 
+      {/* Risultato dentro un'area a SCROLL LIMITATO: quando il responso verde si
+          espande la pagina non scatta e il box non si allunga all'infinito — la
+          crescita resta fluida e tutta nel primo schermo. */}
       {!isSearching && esito && (
-        <ResponsoProva esito={esito} provincia={provinciaNome} onAttiva={openRadarSetup} />
+        <div className="mt-3 max-h-[24rem] overflow-y-auto overscroll-contain pr-0.5">
+          <ResponsoProva esito={esito} provincia={provinciaNome} onAttiva={openRadarSetup} />
+        </div>
       )}
     </div>
   );

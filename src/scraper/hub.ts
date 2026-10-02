@@ -1,0 +1,111 @@
+/**
+ * ScuoleRadar.it — HUB ISTITUZIONALI dei capoluoghi (Node-only, PURO).
+ *
+ * Un hub USR/USP è una pagina di reclutamento che spesso NON è l'elenco degli
+ * avvisi: è il punto d'ingresso del capoluogo (o dell'ente regionale) da cui si
+ * raggiungono le SEZIONI di interpelli/avvisi. Qui c'è la sola logica di
+ * scoperta dei link di sezione; l'estrazione delle righe resta in
+ * `elenchi.ts`/`parser.ts` (una voce per avviso, mai la pagina indice).
+ *
+ * Nessuna URL è inventata: si seguono solo link PRESENTI nella pagina dell'hub,
+ * stesso host o dominio istituzionale, con percorso di reclutamento.
+ */
+
+import * as cheerio from 'cheerio';
+
+/** Percorsi tipici di una sezione di reclutamento/interpelli. */
+const RE_PATH_RECLUTAMENTO =
+  /(interpell|supplenz|reclutament|concors|avvis|bandi|graduator|incarich|selezion|personale)/i;
+
+/** Link di navigazione/rumore: mai una sezione di avvisi. */
+const RE_PATH_RUMORE =
+  /(privacy|cookie|facebook|twitter|instagram|linkedin|youtube|telegram|t\.me|whatsapp|mailto:|tel:|javascript:|wp-login|wp-admin|wp-json|\.xml$|\/feed\/?$|accessibilit|amministrazione-trasparente|trasparenza|contatti|\/login|accedi|scrivania|mappa-del-sito|note-legali)/i;
+
+/** Estensioni di documento: non sono sezioni da esplorare. */
+const RE_DOCUMENTO = /\.(?:pdf|docx?|odt|xlsx?|pptx?|zip|rar|jpe?g|png|gif|svg|mp4)$/i;
+
+/** Massimo numero di sezioni seguite per hub (budget di fetch per run). */
+export const MAX_SEZIONI_HUB = 3;
+
+/**
+ * Titoli di NAVIGAZIONE/STRUTTURA del sito (menu, archivi, paginazione, ricerca):
+ * non sono avvisi e vengono scartati a monte — erano la causa tipica delle righe
+ * "vuote" (e dei ping inutili) raccolte dalle pagine degli enti.
+ * Il confronto è sull'INTERO titolo: un avviso vero che *inizia* con queste parole
+ * (es. «Dirigenti scolastici: avviso di selezione…») non viene toccato.
+ */
+const RE_TITOLO_NAVIGAZIONE =
+  /^(?:archivio(?: comunicazioni(?: globale)?)?|archivi|categorie(?: e tag)?|category|tag|aree tematiche|area tematica|approfondimenti(?: giuridici)?|menu|home|torna|indietro|leggi(?: tutto)?|continua|scopri(?: tutto)?|vai a|cerca(?: in .*| per argomento| nelle .*)?|ricerca|filtra|ordina|pagina(?: \d+)?|successivo|precedente|tutti|tutte|elenco|comunicazioni(?: alle scuole)?|dirigenti scolastici|personale ata|docenti|studenti|famiglie|istituzioni|enti locali|note legali|privacy|cookie|contatti|accessibilità|amministrazione|trasparenza|link utili|siti di interesse|seguici|social|newsletter|documenti|modulistica|protocolli|avvisi pubblici)\s*[›▸>»:.\-–—]*$/i;
+
+/** True se il titolo è voce di struttura/navigazione (mai un avviso). */
+export function eTitoloNavigazione(titolo?: string | null): boolean {
+  const t = (titolo ?? '').replace(/\s+/g, ' ').trim();
+  if (!t) return true;
+  return RE_TITOLO_NAVIGAZIONE.test(t);
+}
+
+/** True se l'URL è una sezione di reclutamento/interpelli da esplorare. */
+export function eUrlSezioneReclutamento(url?: string | null): boolean {
+  const u = (url ?? '').trim();
+  if (!/^https?:\/\//i.test(u)) return false;
+  try {
+    const p = new URL(u);
+    const percorso = `${p.pathname}${p.search}`;
+    if (RE_DOCUMENTO.test(p.pathname)) return false;
+    if (RE_PATH_RUMORE.test(percorso)) return false;
+    if (p.pathname === '/' && !p.search) return false;
+    return RE_PATH_RECLUTAMENTO.test(percorso);
+  } catch {
+    return false;
+  }
+}
+
+/** True se i due URL appartengono allo stesso host (o al dominio principale). */
+export function stessoHost(a: string, b: string): boolean {
+  try {
+    const ha = new URL(a).hostname.replace(/^www\./i, '').toLowerCase();
+    const hb = new URL(b).hostname.replace(/^www\./i, '').toLowerCase();
+    return ha === hb || ha.endsWith(`.${hb}`) || hb.endsWith(`.${ha}`);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sezioni di reclutamento presenti nella pagina di un hub, in ordine di
+ * PRIORITÀ: prima quelle che nominano gli interpelli, poi supplenze/avvisi,
+ * infine il resto. Deduplicate, stesso host, al massimo `max`.
+ */
+export function scopriSezioniReclutamento(html: string, baseUrl: string, max = MAX_SEZIONI_HUB): string[] {
+  const $ = cheerio.load(html);
+  const priorita: { url: string; punteggio: number }[] = [];
+  const visti = new Set<string>();
+  $('a[href]').each((_, el) => {
+    const href = ($(el).attr('href') ?? '').trim();
+    if (!href || href.startsWith('#')) return;
+    let assoluto: string;
+    try {
+      assoluto = new URL(href, baseUrl).href.split('#')[0];
+    } catch {
+      return;
+    }
+    if (assoluto === baseUrl.split('#')[0]) return;
+    if (visti.has(assoluto) || !stessoHost(assoluto, baseUrl)) return;
+    if (!eUrlSezioneReclutamento(assoluto)) return;
+    const testo = $(el).text().replace(/\s+/g, ' ').trim().toLowerCase();
+    const percorso = assoluto.toLowerCase();
+    let punteggio = 0;
+    if (/interpell/.test(percorso) || /interpell/.test(testo)) punteggio += 4;
+    if (/supplenz/.test(percorso) || /supplenz/.test(testo)) punteggio += 3;
+    if (/reclutament|concors/.test(percorso) || /reclutament|concors/.test(testo)) punteggio += 2;
+    if (/avvis|bandi/.test(percorso) || /avvis|bandi/.test(testo)) punteggio += 1;
+    // Le sottopagine specifiche valgono più della radice dell'area.
+    if (new URL(assoluto).pathname.split('/').filter(Boolean).length >= 2) punteggio += 1;
+    visti.add(assoluto);
+    priorita.push({ url: assoluto, punteggio });
+  });
+  return priorita
+    .sort((a, b) => b.punteggio - a.punteggio)
+    .slice(0, max)
+    .map((s) => s.url);
+}

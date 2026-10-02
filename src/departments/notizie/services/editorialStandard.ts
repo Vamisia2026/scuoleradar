@@ -4,9 +4,9 @@
  * Riferimento permanente: docs/BLOG_EDITORIAL_GUIDELINES.md
  *
  * Punto d'ingresso del dizionario editoriale: unisce i blocchi tematici
- * (`standardTemiPersonale.ts`, `standardTemiDidattica.ts`) e il lessico
- * condiviso (`lessicoScuola.ts`) con la matrice di scoring e gli helper usati
- * da `relevanceEngine.ts`.
+ * (`standardTemiPersonale.ts`, `standardTemiIA.ts`, `standardTemiDidattica.ts`)
+ * e il lessico condiviso (`lessicoScuola.ts`) con la matrice di scoring e gli
+ * helper usati da `relevanceEngine.ts`.
  *
  * MACRO-AREE COPERTE (scuola a 360 gradi, non solo interpelli):
  *  1. normativa, concorsi e reclutamento (interpelli, supplenze, MAD, GPS/GAE/GI,
@@ -24,30 +24,45 @@
  *     infanzia/primaria; Don Milani, Gramsci, Bruner per la secondaria di I
  *     grado; Kant, Hegel, Marx, Nietzsche, Popper per la secondaria di II grado);
  *  6. innovazione didattica e strumenti (STEAM, coding, robotica educativa,
- *     PNSD, intelligenza artificiale, PCTO, debate) e inclusione (BES, DSA, PEI,
- *     PDP, GLO, sostegno).
+ *     PNSD, PCTO, debate) con l'INTELLIGENZA ARTIFICIALE come tema autonomo
+ *     (badge, peso e copy propri: `standardTemiIA.ts`) e inclusione (BES, DSA,
+ *     PEI, PDP, GLO, sostegno).
  *
  * REGOLA D'ORO (invariata): la copertura lessicale NON abbassa il filtro. I temi
- * culturali/didattici sono `autosufficiente: false` e `fattoConcreto: true`:
+ * culturali/didattici (intelligenza artificiale compresa) sono
+ * `autosufficiente: false` e `fattoConcreto: true`:
  * nessun webinar, convegno o comunicato entra in bacheca solo perché cita
  * Montessori o il coding.
  *
  * Modulo PURO: nessuna dipendenza dalla rete né da Node.
  */
 import { TEMI_PERSONALE, type TemaOperativo } from './standardTemiPersonale';
+import { TEMI_IA } from './standardTemiIA';
 import { TEMI_DIDATTICA } from './standardTemiDidattica';
 
 export { AREE_TEMATICHE } from './standardTemiPersonale';
 export type { TemaOperativo } from './standardTemiPersonale';
 
-/** Allow-list completa, già in ordine di priorità di categorizzazione. */
-export const TEMI_OPERATIVI: TemaOperativo[] = [...TEMI_PERSONALE, ...TEMI_DIDATTICA];
+/**
+ * Allow-list completa, già in ordine di priorità di categorizzazione:
+ * personale → intelligenza artificiale → temi didattici. Un tema nuovo si
+ * inserisce dove NON ruba il match ai temi storici (una «formazione sull'IA per
+ * i docenti» resta 'Formazione') e vince solo sui temi da cui si separa:
+ * 'Intelligenza Artificiale' batte 'Innovazione Digitale' e 'Didattica'.
+ */
+export const TEMI_OPERATIVI: TemaOperativo[] = [
+  ...TEMI_PERSONALE,
+  ...TEMI_IA,
+  ...TEMI_DIDATTICA,
+];
 
 /**
  * MATRICE DI SCORING (0-100): priorità di un articolo per categoria.
  * I valori dei temi storici sono INVARIATI (nessuna regressione sul feed già
  * pubblicato); le voci legacy restano mappate perché arrivano anche da
- * `PAROLE_CATEGORIA` e dai dati d'archivio. Le aree culturali/didattiche stanno
+ * `PAROLE_CATEGORIA` e dai dati d'archivio. L'intelligenza artificiale ha un
+ * peso proprio (76), sopra 'Innovazione Digitale' (72), il tema da cui si
+ * separa. Le aree culturali/didattiche stanno
  * in basso: informano, ma non scavalcano mai un provvedimento operativo.
  */
 export const PESI_CATEGORIA: Record<string, number> = {
@@ -68,6 +83,7 @@ export const PESI_CATEGORIA: Record<string, number> = {
   Formazione: 78,
   Sicurezza: 76,
   'Ricostruzione Carriera': 76,
+  'Intelligenza Artificiale': 76,
   'Riconoscimento Titoli': 74,
   'Innovazione Digitale': 72,
   Scadenze: 72,
@@ -81,8 +97,9 @@ export const PESI_CATEGORIA: Record<string, number> = {
 /**
  * CATEGORIE CHE ESIGONO UN FATTO CONCRETO: si pubblicano solo se la voce ha una
  * scadenza reale o un canale ufficiale di domanda/candidatura. È la cintura di
- * sicurezza per i temi culturali e didattici (pedagogia, didattica, innovazione
- * digitale): senza un fatto concreto restano fuori, come i comunicati.
+ * sicurezza per i temi culturali e didattici (intelligenza artificiale,
+ * pedagogia, didattica, innovazione digitale): senza un fatto concreto restano
+ * fuori, come i comunicati.
  */
 export const CATEGORIE_CON_FATTO_CONCRETO: string[] = TEMI_OPERATIVI.filter(
   (t) => t.fattoConcreto,

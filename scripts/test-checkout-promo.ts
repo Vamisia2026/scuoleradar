@@ -35,7 +35,7 @@ const provinciaCampo = readFileSync('src/components/auth/CampoProvincia.tsx', 'u
 const tipi = readFileSync('src/contexts/app/types.ts', 'utf8');
 const azioni = readFileSync('src/contexts/app/useAzioniAccount.ts', 'utf8');
 const anagrafica = readFileSync('src/contexts/app/useAnagraficaProfilo.ts', 'utf8');
-const faq = readFileSync('src/pages/FAQPage.tsx', 'utf8');
+const faq = readFileSync('src/data/faqPubbliche.ts', 'utf8');
 
 /** Migrazione che aggiunge `profiles.provincia` (dato demografico). */
 const MIGRAZIONE_PROVINCIA = '20260922120000_add_profiles_provincia.sql';
@@ -172,7 +172,7 @@ check(
   /<NotaAccessoScolastico onNavigate=\{closeAuthModal\}/.test(authModal),
 );
 check('nota con rimando FAQ Animatore Digitale', true, /\/faq#animatore-digitale/.test(notaScuola));
-check('ancora animatore-digitale esistente nella FAQ', true, /animatore-digitale/.test(faq));
+check('ancora animatore-digitale esistente nell’elenco FAQ', true, /animatore-digitale/.test(faq));
 check(
   'prefill demografico dal wizard (genere/età/provincia)',
   true,
@@ -206,5 +206,15 @@ check(
   true,
   readFileSync('scripts/test-coupon-scuoleradar50.ts', 'utf8').includes('SCUOLERADAR50'),
 );
+console.log('\n— 8. Chiusura annuale: coupon PROANNUALE40 e CTA di fine flusso —');
+console.log(
+  '   Guardie dedicate: `npm run test:checkout:annuale` (estratte qui per la soglia di 250 righe).',
+);
+check(
+  'guardia dedicata presente',
+  true,
+  readFileSync('scripts/test-checkout-annuale.ts', 'utf8').includes('PROANNUALE40'),
+);
+
 console.log(errori === 0 ? '\n✅ CHECKOUT & PROMO: nessun problema' : `\n❌ CHECKOUT & PROMO: ${errori} errore/i`);
 process.exitCode = errori === 0 ? 0 : 1;

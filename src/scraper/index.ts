@@ -1,29 +1,42 @@
 /**
- * ScuoleRadar.it — Modulo di scraping on-demand (Fase 1 · BLOCCO 1: INTERPELLI & PNRR)
+ * ScuoleRadar.it — Motore degli INTERPELLI di lavoro (Node-only) — Capoluoghi & hub.
+ *
+ * PERIMETRO (separazione dei domini): questo motore pubblica SOLO opportunità di
+ * lavoro (interpelli/supplenze docenti e ATA, bandi PNRR/PON/POR, incarichi per
+ * esperti esterni). Le NOTIZIE editoriali del MIM vivono in
+ * `src/departments/notizie/`: nessun comunicato stampa, dichiarazione o rassegna
+ * entra nella bacheca né nelle notifiche (guardia `npm run test:scraper:domini`).
  *
  * Pipeline:
- *   1. Carica le variabili d'ambiente da `.env` (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY).
- *   2. Legge le province di interesse attive (da `profiles.province_attive`; fallback env).
- *   3. Scarica le fonti reali per provincia (pagina regione → post del giorno → interpelli
- *      ufficiali) e, per le PAGINE INDICE ("elenchi" degli USR/USP), espande OGNI voce
- *      dell'elenco in un avviso indipendente con il proprio link (src/scraper/elenchi.ts).
- *      Nessun seed di test: la pipeline usa SOLO fonti live ufficiali.
- *   4. Passa ogni avviso al parser (src/scraper/parser.ts) che estrae:
- *      classi di concorso/sostegno (via Regex), data di scadenza e hash_id SHA-256 univoco.
- *   5. VALIDA ogni avviso (`verificaAvviso`): scarta titoli vuoti/da test e fonti non
- *      ufficiali/non verificabili (niente mock/dummy).
- *   6. Effettua l'UPSERT nella tabella `interpelli` di Supabase usando `hash_id`
- *      (onConflict) per ignorare i duplicati; fallback sulla tabella legacy `notices`.
- *   7. Pubblica gli avvisi NUOVI sui canali Telegram (regionali + ATA nazionale) e
- *      invia gli ALERT INDIVIDUALI in TEMPO REALE ai soli utenti PRO (Telegram).
- *      I BASE non ricevono nulla in tempo reale: un solo BATCH alle 17:00
- *      (`npm run notifiche:digest`), per evitare la fatica da notifica.
+ *   1. `caricaEnv()` (SUPABASE_URL + SERVICE_ROLE_KEY, per profili e scrittura);
+ *   2. `ottieniProvinceAttive()`: province dai profili (`profiles.province_attive`),
+ *      con fallback `SCRAPER_PROVINCE_TEST` (default `MI,TO`);
+ *   3. FONTI (`fonti.ts` + `fontiRegistro.ts`): hub di reclutamento USR/USP dei
+ *      capoluoghi di regione (Torino, Milano, Genova, Bologna, Firenze, Roma,
+ *      Napoli, Bari, Palermo, Cagliari, Perugia, Venezia…) + feed dell'aggregatore.
+ *      Gli hub vengono esplorati con `hub.ts` (sezioni interpelli/avvisi); il post
+ *      giornaliero dell'aggregatore è NAZIONALE e viene letto UNA volta sola;
+ *   4. GATE 1 — conformità: contenuti editoriali, atti informativi (esiti,
+ *      graduatorie), voci fuori target e righe senza provincia rilevabile sono
+ *      scartati a monte (`qualitaOpportunita.ts`); le pagine indice diventano
+ *      avvisi individuali (`elenchi.ts`, mai il link alla lista master);
+ *   5. arricchimento di scadenze ed email di candidatura (fonti ufficiali);
+ *   6. GATE 2 — solo bandi ATTIVI: gli scaduti non entrano in bacheca;
+ *   7. GATE 3 — link: un ping fallito (403/anti-bot/timeout dei server regionali)
+ *      NON scarta il record se il bando è STRUTTURATO (classe/materia + email di
+ *      candidatura); gli altri vengono verificati in parallelo;
+ *   8. dedupe per `hash_id` + validazione anti-mock (`verificaAvviso`) e UPSERT in
+ *      `interpelli` (fallback legacy `notices`);
+ *   9. pubblicazione sui canali Telegram regionali/ATA e alert in tempo reale ai
+ *      soli utenti PRO (i BASE ricevono il digest delle 17:00).
  *
  * Uso:
  *   npm run scrape                       # pipeline completa (serve .env valido)
  *   npm run scrape -- --dry-run          # solo estrazione + validazione, nessun inserimento
  *   npm run scrape -- --no-email         # salta il log di accodamento per il riepilogo
- *   SCRAPER_TELEGRAM_REALTIME=0 npm run scrape   # disattiva gli alert PRO in tempo reale
+ *   SCRAPER_FONTI_MAX=6 npm run scrape   # limita le fonti interrogate (budget di rete)
+ *   SCRAPER_ARCHIVI=1 npm run scrape     # include gli archivi regionali (backfill)
+ *   npm run fonti:verifica               # ricontrolla dal vivo tutte le URL del registro
  */
 
 import process from 'node:process';
@@ -52,6 +65,10 @@ import {
   espandiElencoInAvvisi,
   sembraTitoloElenco,
 } from './elenchi.ts';
+import { MAX_FONTI_PER_RUN, fontiPerRun, type FonteInterpelli } from './fonti.ts';
+import { sintesiCopertura } from './fontiCopertura.ts';
+import { MAX_SEZIONI_HUB, eTitoloNavigazione, scopriSezioniReclutamento } from './hub.ts';
+import { motivoScartoOpportunita, valutaGateLink, eRecordStrutturato } from './qualitaOpportunita.ts';
 import { resolveSchoolByCode } from '../lib/school-lookup.ts';
 import { inviaAlertTelegramTempoReale } from '../lib/notifier.ts';
 import {
@@ -77,6 +94,22 @@ import { GIORNI_IMPRONTA, improntaAvviso } from '../lib/dedupAvvisi.ts';
 export type AvvisoRilevato = InterpelloParsato;
 
 type Env = Record<string, string>;
+
+/** Contatori di raccolta (diagnostica: mai scarti silenziosi). */
+interface StatsRaccolta {
+  /** Righe senza provincia rilevabile (feed nazionale): scartate, mai indovinate. */
+  senzaProvincia: number;
+  /** Voci editoriali (comunicati/dichiarazioni/eventi) scartate: altro dominio. */
+  editoriali: number;
+  /** Voci fuori target (categoria non ammessa, scadute, non-opportunità). */
+  fuoriTarget: number;
+  /** Voci di navigazione del sito (menu/archivi/ricerca) scartate a monte. */
+  navigazione: number;
+}
+
+/** Post giornalieri letti per fonte (il più recente + l'ultimo precedente). */
+const MAX_POST_PER_FONTE = 2;
+
 
 /* ----------------------------- Config / env ----------------------------- */
 
@@ -201,25 +234,11 @@ async function scaricaPagina(url: string): Promise<string> {
   return data;
 }
 
-/* --------------------------- Fonti reali (per provincia) --------------------------- */
+/* --------------------------- Fonti (capoluoghi & hub) --------------------------- */
 
-interface FonteProvincia {
-  provincia: string;
-  url: string;
-}
-
-/** Fonti reali di interpelli: una landing per REGIONE (provincia rappresentativa). */
-const FONTI_REALI: FonteProvincia[] = [
-  { provincia: 'MI', url: 'https://www.scuolainterpelli.it/interpelli-lombardia/' },
-  { provincia: 'RM', url: 'https://www.scuolainterpelli.it/interpelli-lazio/' },
-  { provincia: 'VE', url: 'https://www.scuolainterpelli.it/interpelli-veneto/' },
-  { provincia: 'BO', url: 'https://www.scuolainterpelli.it/interpelli-emilia-romagna/' },
-  { provincia: 'FI', url: 'https://www.scuolainterpelli.it/interpelli-toscana/' },
-  { provincia: 'NA', url: 'https://www.scuolainterpelli.it/interpelli-campania/' },
-  { provincia: 'PA', url: 'https://www.scuolainterpelli.it/interpelli-sicilia/' },
-  { provincia: 'BA', url: 'https://www.scuolainterpelli.it/interpelli-puglia/' },
-  { provincia: 'TO', url: 'https://www.scuolainterpelli.it/tag/interpelli-scuola-piemonte/' },
-];
+// Il CATALOGO delle fonti vive in `fonti.ts` (dati in `fontiRegistro.ts`): feed
+// dell'aggregatore (post NAZIONALI) + hub di reclutamento USR/USP dei capoluoghi.
+// Qui restano solo gli estrattori specifici dei due formati di pagina.
 
 /**
  * Estrae gli URL dei post giornalieri ("Interpelli Scuola <data>...")
@@ -248,6 +267,7 @@ export function parsePostInterpelli(
   postHtml: string,
   provincia: string,
   source: string,
+  opts: { richiedeProvinciaRilevata?: boolean; stats?: { senzaProvincia: number } } = {},
 ): AvvisoRilevato[] {
   const $ = cheerio.load(postHtml);
   const contenuto = $('.entry-content, article, .post-content, main').first();
@@ -319,6 +339,15 @@ export function parsePostInterpelli(
     // risolto entra anche nell'hash_id → niente duplicati tra fonti diverse.
     const codiceCitta = cittaCorrente ? estraiProvincia(cittaCorrente) : null;
 
+    // FEED NAZIONALE (aggregatore): la provincia DEVE essere rilevata dalla riga.
+    // Senza città/codice riconosciuto la riga si scarta: mai attribuire un avviso
+    // alla provincia della landing regionale (era la causa di record duplicati e
+    // di avvisi "spostati" in un'altra regione).
+    if (opts.richiedeProvinciaRilevata && !codiceCitta) {
+      if (opts.stats) opts.stats.senzaProvincia += 1;
+      return;
+    }
+
     risultato.push(
       parseInterpello({
         title: titolo.slice(0, 300),
@@ -339,9 +368,27 @@ export function parsePostInterpelli(
 // distinzione tra PUBBLICAZIONE e SCADENZA: gestita dal parser in
 // src/scraper/parser.ts (estraiDataPubblicazione / estraiDataScadenza).
 
-/** Verifica che un link sia raggiungibile (HEAD con fallback GET). */
-async function verificaLink(url: string): Promise<boolean> {
-  const opts = { timeout: 10_000, maxRedirects: 5, validateStatus: (s: number) => s < 400 };
+/**
+ * Raggiungibilità del link di un avviso (HEAD con fallback GET, UA da browser).
+ *
+ * Cambio di politica (ping fallace): il risultato NON è più una condanna. Molti
+ * server scolastici regionali rispondono 403/timeout ai client automatici; il
+ * record viene quindi valutato dal `gate del link` (vedi
+ * `qualitaOpportunita.ts`): se è strutturato (classe/materia + email di
+ * candidatura) resta in bacheca, altrimenti si scarta.
+ */
+async function linkRaggiungibile(url: string): Promise<boolean> {
+  const opts = {
+    timeout: 12_000,
+    maxRedirects: 5,
+    validateStatus: (s: number) => s < 400,
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+      Accept: 'text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'it-IT,it;q=0.9,en;q=0.6',
+    },
+  };
   try {
     await axios.head(url, opts);
     return true;
@@ -355,67 +402,197 @@ async function verificaLink(url: string): Promise<boolean> {
   }
 }
 
-/** Raccolta interpelli dalle fonti reali: pagina regione → post del giorno → link ufficiali. */
-async function raccogliAvvisiReali(
-  env: Env,
-  province: string[],
-): Promise<{ avvisi: AvvisoRilevato[]; fonti: string }> {
+/** Raggiungibilità in PARALLELO (concorrenza limitata): N ping non sono N attese. */
+async function mappaRaggiungibilita(urls: string[], concorrenza = 8): Promise<Map<string, boolean>> {
+  const unici = [...new Set(urls.filter(Boolean))];
+  const esiti = new Map<string, boolean>();
+  for (let i = 0; i < unici.length; i += Math.max(1, concorrenza)) {
+    const lotto = unici.slice(i, i + Math.max(1, concorrenza));
+    const risultati = await Promise.all(lotto.map((u) => linkRaggiungibile(u)));
+    lotto.forEach((u, idx) => esiti.set(u, risultati[idx] ?? false));
+  }
+  return esiti;
+}
+
+/**
+ * CONNETTORE · FEED DELL'AGGREGATORE (post giornalieri NAZIONALI).
+ *
+ * L'indice e gli archivi regionali espongono gli stessi post del giorno: ogni
+ * POST viene scaricato UNA volta sola (`postVisitati`, condiviso fra le fonti) e
+ * ogni voce diventa un avviso con la PROPRIA provincia, rilevata dall'intestazione
+ * di città (`Interpelli pubblicati da: …`). Nessuna provincia inventata: le righe
+ * senza città riconosciuta si scartano e si contano.
+ */
+async function raccogliDaAggregatore(
+  fonte: FonteInterpelli,
+  postVisitati: Set<string>,
+  stats: StatsRaccolta,
+): Promise<AvvisoRilevato[]> {
   const avvisi: AvvisoRilevato[] = [];
-  const descrizioneFonti: string[] = [];
-
-  for (const provincia of province) {
-    const fonte = FONTI_REALI.find((f) => f.provincia === provincia);
-    if (!fonte) {
-      console.warn(`⚠ Nessuna fonte configurata per la provincia ${provincia} (aggiungila a FONTI_REALI)`);
-      continue;
-    }
-    descrizioneFonti.push(`${fonte.provincia}→${fonte.url}`);
-
-    let lista: string;
-    try {
-      lista = await scaricaPagina(fonte.url);
-    } catch (err) {
-      console.warn(`⚠ Fetch pagina regione [${fonte.provincia}] non riuscito: ${(err as Error).message}`);
-      continue;
-    }
-
-    const postUrl = parsePostUrl(lista);
-    if (postUrl.length === 0) {
-      console.warn(`⚠ Nessun post giornaliero trovato per [${fonte.provincia}]`);
-      continue;
-    }
-    const primoPost = postUrl[0];
-    console.log(`• [${fonte.provincia}] ultimo post: ${primoPost}`);
-
-    let postHtml: string;
-    try {
-      postHtml = await scaricaPagina(primoPost);
-    } catch (err) {
-      console.warn(`⚠ Fetch del post non riuscito: ${(err as Error).message}`);
-      continue;
-    }
-
-    let estratti = parsePostInterpelli(postHtml, fonte.provincia, primoPost);
-    console.log(`• [${fonte.provincia}] interpelli estratti dal post: ${estratti.length}`);
-    // ELENCHI: se la pagina è un INDICE (o il post non ha prodotto voci), ogni
-    // riga dell'elenco diventa un avviso a sé, con il proprio link ufficiale.
-    if (estratti.length === 0) {
-      const daElenco = espandiElencoInAvvisi(postHtml, {
-        baseUrl: primoPost,
-        provincia: fonte.provincia,
-        source: primoPost,
-      });
-      if (daElenco.length > 0) {
-        console.log(
-          `• [${fonte.provincia}] pagina elenco espansa: ${daElenco.length} avvisi individuali`,
-        );
-        estratti = daElenco;
-      }
-    }
-    avvisi.push(...estratti);
+  let lista: string;
+  try {
+    lista = await scaricaPagina(fonte.url);
+  } catch (err) {
+    console.warn(`⚠ Fetch fonte [${fonte.id}] non riuscito: ${(err as Error).message}`);
+    return avvisi;
   }
 
-  return { avvisi, fonti: descrizioneFonti.join(' · ') };
+  const postUrl = parsePostUrl(lista).filter((u) => !postVisitati.has(u));
+  if (postUrl.length === 0) {
+    console.log(`  – [${fonte.id}] nessun post nuovo da leggere`);
+    return avvisi;
+  }
+  const daLeggere = postUrl.slice(0, MAX_POST_PER_FONTE);
+  console.log(`  • [${fonte.id}] post da leggere: ${daLeggere.length} (di ${postUrl.length})`);
+
+  for (const post of daLeggere) {
+    postVisitati.add(post);
+    let html: string;
+    try {
+      html = await scaricaPagina(post);
+    } catch (err) {
+      console.warn(`  ⚠ [${fonte.id}] fetch del post non riuscito: ${(err as Error).message}`);
+      continue;
+    }
+    const estratti = parsePostInterpelli(html, '', post, {
+      richiedeProvinciaRilevata: true,
+      stats,
+    });
+    if (estratti.length > 0) {
+      avvisi.push(...estratti);
+      console.log(`  ✓ [${fonte.id}] voci con provincia rilevata: ${estratti.length}`);
+      continue;
+    }
+    // Nessuna voce strutturata: la pagina può essere un ELENCO (indice) → si espande.
+    const daElenco = espandiElencoInAvvisi(html, {
+      baseUrl: post,
+      provincia: '',
+      source: post,
+    }).filter((a) => {
+      if (a.province) return true;
+      stats.senzaProvincia += 1;
+      return false;
+    });
+    if (daElenco.length > 0) {
+      avvisi.push(...daElenco);
+      console.log(`  ✓ [${fonte.id}] pagina elenco espansa: ${daElenco.length} voci`);
+    }
+  }
+  return avvisi;
+}
+
+/**
+ * CONNETTORE · HUB ISTITUZIONALE DEL CAPOLUOGO (USR/USP).
+ *
+ * 1. scarica la pagina dell'hub;
+ * 2. scopre le SEZIONI di reclutamento presenti (`scopriSezioniReclutamento`,
+ *    max `MAX_SEZIONI_HUB` fetch per hub) e le esplora;
+ * 3. per ogni pagina: righe d'avviso (`parseAvvisi`) + espansione elenchi.
+ * La provincia di fallback è quella del capoluogo dell'hub: le voci che citano
+ * la scuola/città reale vengono comunque riattribuite dal parser.
+ */
+async function raccogliDaHub(
+  fonte: FonteInterpelli,
+  stats: StatsRaccolta,
+): Promise<AvvisoRilevato[]> {
+  const avvisi: AvvisoRilevato[] = [];
+  const fallback = fonte.capoluogo ?? '';
+  let html: string;
+  try {
+    html = await scaricaPagina(fonte.url);
+  } catch (err) {
+    console.warn(`⚠ Fetch hub [${fonte.id}] non riuscito: ${(err as Error).message}`);
+    return avvisi;
+  }
+
+  const pagine = [fonte.url, ...scopriSezioniReclutamento(html, fonte.url, MAX_SEZIONI_HUB)];
+  const hashVisti = new Set<string>();
+  for (const [i, pagina] of pagine.entries()) {
+    let paginaHtml = html;
+    if (i > 0) {
+      try {
+        paginaHtml = await scaricaPagina(pagina);
+      } catch (err) {
+        console.warn(`  ⚠ [${fonte.id}] sezione non raggiungibile (${pagina}): ${(err as Error).message}`);
+        continue;
+      }
+    }
+    const candidati = [
+      ...parseAvvisi(paginaHtml, fallback, pagina),
+      ...espandiElencoInAvvisi(paginaHtml, { baseUrl: pagina, provincia: fallback, source: pagina }),
+    ];
+    let aggiunti = 0;
+    for (const a of candidati) {
+      if (hashVisti.has(a.hashId)) continue;
+      hashVisti.add(a.hashId);
+      // Rumore di navigazione (menu, archivi, paginazione, ricerca): mai un avviso.
+      if (eTitoloNavigazione(a.title)) {
+        stats.navigazione += 1;
+        continue;
+      }
+      if (!a.province) {
+        stats.senzaProvincia += 1;
+        continue;
+      }
+      avvisi.push(a);
+      aggiunti += 1;
+    }
+    console.log(`  ✓ [${fonte.id}] ${pagina} → ${aggiunti} voci`);
+  }
+  return avvisi;
+}
+
+/**
+ * RACCOLTA dalle fonti del registro (capoluoghi & hub).
+ *
+ * Ordine: prima gli hub istituzionali della regione (bandi del capoluogo), poi
+ * il feed dell'aggregatore. Le voci di contenuto editoriale (comunicati stampa,
+ * dichiarazioni, eventi) vengono scartate QUI, a monte: mai in bacheca e mai
+ * nelle notifiche Telegram/email.
+ */
+async function raccogliAvvisiReali(
+  province: string[],
+  maxFonti = MAX_FONTI_PER_RUN,
+  includiArchivi = false,
+): Promise<{ avvisi: AvvisoRilevato[]; fonti: string; stats: StatsRaccolta }> {
+  const avvisi: AvvisoRilevato[] = [];
+  const descrizioneFonti: string[] = [];
+  const postVisitati = new Set<string>();
+  const stats: StatsRaccolta = { senzaProvincia: 0, editoriali: 0, fuoriTarget: 0, navigazione: 0 };
+
+  const fonti = fontiPerRun(province, maxFonti, { includiArchivi });
+  console.log(`• Fonti selezionate: ${fonti.length} (${fonti.map((f) => f.id).join(', ')})`);
+
+  for (const fonte of fonti) {
+    descrizioneFonti.push(fonte.id);
+    const estratti =
+      fonte.tipo === 'hub-istituzionale'
+        ? await raccogliDaHub(fonte, stats)
+        : await raccogliDaAggregatore(fonte, postVisitati, stats);
+
+    // GATE 1 — CONFORMITÀ: solo opportunità di lavoro, mai contenuto editoriale.
+    // Il feed dell'aggregatore è un feed STRUTTURATO di interpelli (la natura è
+    // garantita dalla fonte); le pagine generiche degli enti no, quindi lì si
+    // pretende anche il segnale di opportunità nel testo.
+    const daFonteInterpelli = fonte.tipo === 'aggregatore';
+    let tenuti = 0;
+    for (const a of estratti) {
+      const motivo = motivoScartoOpportunita({ title: a.title }, new Date(), { daFonteInterpelli });
+      if (motivo) {
+        if (motivo.includes('editoriale')) stats.editoriali += 1;
+        else stats.fuoriTarget += 1;
+        if (stats.fuoriTarget + stats.editoriali <= 10) {
+          console.warn(`  ✗ scartato (${motivo}): ${a.title.slice(0, 70)}`);
+        }
+        continue;
+      }
+      avvisi.push(a);
+      tenuti += 1;
+    }
+    console.log(`• [${fonte.id}] ${fonte.etichetta} → ${tenuti}/${estratti.length} voci ammesse`);
+  }
+
+  return { avvisi, fonti: descrizioneFonti.join(' · '), stats };
 }
 
 /**
@@ -1157,9 +1334,26 @@ async function main() {
   console.log(`• Modalità: fonti reali (web) · inserimento: ${isDryRun ? 'DISATTIVATO (dry-run)' : 'Supabase'} · email: ${noEmail ? 'DISATTIVATE' : 'attive (Resend)'}`);
 
   // SOLO fonti reali (nessun fixture/seed): la pipeline non usa dati di test.
-  const { avvisi, fonti } = await raccogliAvvisiReali(env, province);
+  const { avvisi, fonti, stats } = await raccogliAvvisiReali(
+    province,
+    Number(env.SCRAPER_FONTI_MAX ?? MAX_FONTI_PER_RUN),
+    env.SCRAPER_ARCHIVI === '1',
+  );
   let trovati: AvvisoRilevato[] = avvisi;
-  console.log(`• Fonti reali: ${fonti}`);
+  console.log(`• Fonti interrogate: ${fonti}`);
+  console.log(`• ${sintesiCopertura()}`);
+  if (stats.editoriali > 0) {
+    console.log(
+      `• Contenuti editoriali scartati a monte (dominio Notizie, mai in bacheca): ${stats.editoriali}`,
+    );
+  }
+  if (stats.fuoriTarget > 0) console.log(`• Voci fuori target scartate: ${stats.fuoriTarget}`);
+  if (stats.navigazione > 0) {
+    console.log(`• Voci di navigazione scartate (menu/archivi/ricerca, mai avvisi): ${stats.navigazione}`);
+  }
+  if (stats.senzaProvincia > 0) {
+    console.log(`• Righe senza provincia rilevabile scartate (mai province inventate): ${stats.senzaProvincia}`);
+  }
 
   // ELENCHI: ogni voce di una pagina indice (es. elenchi USR) diventa un avviso
   // indipendente con il proprio link (mai il link alla lista master).
@@ -1174,25 +1368,6 @@ async function main() {
   }
   trovati = elenchi.avvisi;
 
-  console.log('• Verifica raggiungibilità dei link…');
-  const raggiungibiliList: AvvisoRilevato[] = [];
-  let raggiungibili = 0;
-  for (const a of trovati) {
-    if (await verificaLink(a.link ?? '')) {
-      raggiungibili++;
-      raggiungibiliList.push(a);
-      continue;
-    }
-    // Link specifico non raggiungibile → l'avviso viene SCARTATO.
-    // ⛔ Nessun fallback alla home dell'ente (USR/USP): sarebbe una pagina
-    // generica (spesso di un'altra provincia, quando la provincia del record è
-    // quella della fonte regionale) e violerebbe la regola "👉 Apri l'avviso
-    // ufficiale = URL esatto dell'avviso". Meglio non pubblicare nulla.
-    console.warn(`  ✗ scartato (link non raggiungibile): ${a.link}`);
-  }
-  console.log(`• Link raggiungibili: ${raggiungibili}/${trovati.length}`);
-  trovati = raggiungibiliList;
-
   // Scadenze mancanti: prova a estrarle dalla pagina ufficiale (best-effort).
   await arricchisciScadenze(trovati, Number(env.SCRAPER_SCADENZA_MAX ?? 20));
 
@@ -1203,6 +1378,63 @@ async function main() {
     Number(env.SCRAPER_CONTATTI_MAX ?? 60),
     env.SCRAPER_EMAIL_DA_CODICE !== '0',
   );
+
+  // GATE 2 — SOLO BANDI ATTIVI: dopo l'arricchimento delle scadenze, un bando già
+  // scaduto non entra in bacheca (né in notifica). Una scadenza ASSENTE non è una
+  // prova di scadenza: senza data il record resta attivo finché una fonte non lo
+  // dichiara chiuso.
+  const attivi: AvvisoRilevato[] = [];
+  let scartatiScaduti = 0;
+  for (const a of trovati) {
+    const motivo = motivoScartoOpportunita({
+      title: a.title,
+      expirationDate: a.expirationDate,
+    });
+    if (motivo && motivo.includes('scaduto')) {
+      scartatiScaduti += 1;
+      continue;
+    }
+    attivi.push(a);
+  }
+  if (scartatiScaduti > 0) console.log(`• Bandi già scaduti scartati: ${scartatiScaduti}`);
+  trovati = attivi;
+
+  // GATE 3 — LINK (ping FALLACE ≠ record scartato).
+  // ⛔ Nessun fallback alla home dell'ente (USR/USP): il link deve restare quello
+  // specifico dell'avviso ("👉 Apri l'avviso ufficiale"). Ma un server regionale
+  // che risponde 403/timeout al client automatico NON è un bando inesistente:
+  // se il record è STRUTTURATO (classe/materia + email di candidatura) si accetta
+  // senza verifica del link; per gli altri il ping resta decisivo. I record
+  // strutturati non vengono nemmeno pingati (risparmio di richieste).
+  console.log('• Gate del link (ping non bloccante per i bandi strutturati)…');
+  const strutturatoDi = (a: AvvisoRilevato) =>
+    eRecordStrutturato({ classCodes: a.classCodes, materia: a.materia, contactEmail: a.contactEmail });
+  // Si pingano SOLO i record non strutturati (i strutturati sono già accettati).
+  const raggiungibilita = await mappaRaggiungibilita(
+    trovati.filter((a) => !strutturatoDi(a)).map((a) => a.link ?? ''),
+    Number(env.SCRAPER_PING_CONCORRENZA ?? 8),
+  );
+  const ammessiLink: AvvisoRilevato[] = [];
+  let linkVerificati = 0;
+  let accettatiStrutturati = 0;
+  let scartatiLink = 0;
+  for (const a of trovati) {
+    const strutturato = strutturatoDi(a);
+    const esito = valutaGateLink(a, strutturato ? null : (raggiungibilita.get(a.link ?? '') ?? false));
+    if (!esito.accetta) {
+      scartatiLink += 1;
+      if (scartatiLink <= 10) console.warn(`  ✗ scartato (${esito.motivo}): ${a.title.slice(0, 60)}`);
+      continue;
+    }
+    if (esito.verificato) linkVerificati += 1;
+    else accettatiStrutturati += 1;
+    ammessiLink.push(a);
+  }
+  console.log(
+    `• Link: ${linkVerificati} verificati · ${accettatiStrutturati} accettati perché strutturati ` +
+      `(classe/materia + email, ping non attendibile) · ${scartatiLink} scartati`,
+  );
+  trovati = ammessiLink;
 
   // Dedupe per hash_id + VALIDAZIONE anti-dummy (solo fonti ufficiali verificabili).
   const dedup = [...new Map(trovati.map((t) => [t.hashId, t])).values()];

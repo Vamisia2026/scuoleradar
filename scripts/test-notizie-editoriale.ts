@@ -1,14 +1,14 @@
 /**
  * Verifica il MOTORE EDITORIALE delle Notizie (taglio giornalistico):
- *  · la burocrazia vuota (soli riferimenti d'atto) NON si pubblica;
- *  · i titoli-lista ("Concorso", "Avviso") NON diventano notizie;
- *  · il materiale d'archivio (riferimenti solo a vecchi anni) resta fuori;
- *  · le notizie di IMPATTO (welfare, formazione, sicurezza…) passano;
- *  · `titoloAzione` riscrive i titoli in chiave AZIONE;
- *  · l'archivio pubblicato non contiene titoli burocratici o pigri.
- *
+ * · la burocrazia vuota (soli riferimenti d'atto) NON si pubblica;
+ * · i titoli-lista ("Concorso", "Avviso") NON diventano notizie;
+ * · il materiale d'archivio (riferimenti solo a vecchi anni) resta fuori;
+ * · le notizie di IMPATTO (welfare, formazione, sicurezza…) passano;
+ * · titoloAzione riscrive i titoli in chiave AZIONE;
+ * · l'archivio pubblicato non contiene titoli burocratici o pigri.
  * Uso: npm run test:notizie-editoriale
  */
+
 import { readFileSync } from 'node:fs';
 import {
   AREE_TEMATICHE,
@@ -19,7 +19,9 @@ import {
   temiDalTesto,
 } from '../src/departments/notizie/services/editorialStandard.ts';
 import {
+  APERTURE_VIETATE,
   attoBurocraticoVuoto,
+  bloccoVoceEditoriale,
   classificaLink,
   classificaTemaPersonale,
   contieneFraseFluff,
@@ -29,8 +31,12 @@ import {
   linkDomandaUfficiale,
   linkNonValidiInHtml,
   linkVietatiInHtml,
+  NOME_VOCE,
   PAROLE_ACCETTA,
+  promptFiltroLLM,
+  promptScritturaArticolo,
   punteggioRilevanza,
+  REGOLE_VOCE,
   richiedePresentazioneDomanda,
   riferimentiObsoleti,
   titoloAzione,
@@ -42,6 +48,7 @@ import {
 import type { NewsArticle } from '../src/departments/notizie/types.ts';
 
 let errori = 0;
+
 function check(nome: string, atteso: unknown, ottenuto: unknown): void {
   const ok = JSON.stringify(atteso) === JSON.stringify(ottenuto);
   if (!ok) errori += 1;
@@ -104,8 +111,7 @@ check(
   'welfare/polizza personale AMMESSA',
   true,
   valutaRilevanza({
-    title:
-      'Welfare per il personale della scuola. Parte la polizza sanitaria: interessati oltre un milione e duecentomila dipendenti',
+    title: 'Welfare per il personale della scuola. Parte la polizza sanitaria: interessati oltre un milione e duecentomila dipendenti',
     data: '2026-09-10',
   }).rilevante,
 );
@@ -160,7 +166,7 @@ check(
 
 console.log('\n— Invariante sull’archivio pubblicato —');
 const archivio = readFileSync('src/departments/notizie/data/notizieIngestite.ts', 'utf8');
-const titoli = [...archivio.matchAll(/"title": "((?:[^"\\]|\\.)*)"/g)].map((m) =>
+const titoli = [...archivio.matchAll(/"title": "((?:[^"\\]|.)*)"/g)].map((m) =>
   m[1].replace(/\\"/g, '"').replace(/\\u([0-9a-f]{4})/gi, (_, h) => String.fromCharCode(parseInt(h, 16))),
 );
 check('archivio non vuoto', true, titoli.length > 0);
@@ -188,7 +194,6 @@ const urlVietati = [
 ];
 const ammessiMale = urlVietati.filter((u) => linkDirettoUfficiale(u).ok);
 check('nessun contenitore/indice è "diretto"', [], ammessiMale);
-// NEW POLICY: i contenitori NON bloccano più la notizia: sono tracciabili.
 const classificati = urlVietati.filter((u) => classificaLink(u).classe !== 'contenitore');
 check('i contenitori restano pubblicabili (classe "contenitore")', [], classificati);
 check(
@@ -211,13 +216,13 @@ check('nessun documento specifico viene respinto', [], rifiutatiMale);
 check(
   'link HTML a contenitore individuato nel testo',
   true,
-  linkVietatiInHtml('<p>vedi <a href="https://www.mim.gov.it/web/guest/notizie">notizie</a></p>').length > 0,
+  linkVietatiInHtml('vedi <a href="https://www.mim.gov.it/">notizie</a>').length > 0,
 );
 check(
   'link HTML al documento specifico accettato',
   [],
   linkVietatiInHtml(
-    '<p><a href="https://www.mim.gov.it/web/guest/-/calendario-delle-festivita-e-degli-esami-anno-scolastico-2026-2027">apri</a></p>',
+    'apri <a href="https://www.mim.gov.it/web/guest/-/supplenze-e-ruoli-docenti-2026-al-via-la-scelta-delle-150-sedi">avviso</a>',
   ),
 );
 
@@ -226,17 +231,11 @@ const marcatore = 'notizieIngestite: NewsArticle[] = [';
 const posArr = archivio.indexOf(marcatore);
 const articoli = JSON.parse(
   archivio.slice(posArr + marcatore.length - 1, archivio.lastIndexOf(']') + 1),
-) as Array<{
-  id: string;
-  title: string;
-  content_html: string;
-  official_source_url: string;
-}>;
+) as Array<{ id: string; title: string; content_html: string; official_source_url: string; }>;
 check('archivio leggibile come JSON', true, articoli.length > 0);
-const aperturaVietata =
-  /^(?:il ministero|il mim|il ministero dell|è stato pubblicato|la notizia riguarda|si comunica|si rende noto)/i;
+const aperturaVietata = /^(?:il ministero|il mim|il ministero dell|è stato pubblicato|la notizia riguarda|si comunica|si rende noto)/i;
 const testoPar1 = (html: string) =>
-  (html.match(/<p>([\s\S]*?)<\/p>/)?.[1] ?? '')
+  (html.match(/([\s\S]*?)<\/p>/)?.[1] ?? '')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&quot;/g, '"')
     .replace(/\s+/g, ' ')
@@ -246,7 +245,7 @@ const apertureBurocratiche = articoli
   .map((a) => a.id);
 check('nessuna apertura istituzionale nel primo paragrafo', [], apertureBurocratiche);
 check(
-  'ogni articolo ha un link di fonte VALIDO (mail 0 senza fonte)',
+  'ogni articolo ha un link di fonte VALIDO (mai 0 senza fonte)',
   [],
   articoli.filter((a) => classificaLink(a.official_source_url).classe === 'non-valido').map((a) => a.id),
 );
@@ -286,6 +285,7 @@ check(
   true,
   /Hai tempo fino al 31 dicembre 2099/.test(generato.content_html),
 );
+
 const generatoScaduto = generaArticoloEditoriale({
   title: 'Mobilità Dirigenti Scolastici, conferimento e mutamento incarichi per il 2026/27',
   categoria: 'Mobilità',
@@ -300,6 +300,7 @@ check(
     generatoScaduto.content_html,
   ),
 );
+
 const senzaLink = generaArticoloEditoriale({
   title: 'Concorso ordinario 2026: prova scritta e requisiti',
   categoria: 'Concorsi',
@@ -313,6 +314,7 @@ check(
   senzaLink.content_html.includes('href="https://www.mim.gov.it/web/guest/notizie"') &&
     senzaLink.content_html.includes('apri la pagina ufficiale della fonte'),
 );
+
 const conMock = generaArticoloEditoriale({
   title: 'Concorso ordinario 2026: prova scritta e requisiti',
   categoria: 'Concorsi',
@@ -342,6 +344,7 @@ check(
   true,
   titoloDaUfficioStampa('Lettera del Ministro dell’Istruzione e del Merito'),
 );
+
 const ammessi: Array<{ titolo: string; tema: string }> = [
   { titolo: 'Rinnovo CCNL scuola 2025-2027: firmata l’ipotesi di accordo sugli aumenti', tema: 'CCNL' },
   { titolo: 'Welfare per il personale della scuola: parte la polizza sanitaria', tema: 'Welfare' },
@@ -395,6 +398,40 @@ check('ATA spiegato', true, esame.testo.includes('ATA (personale Amministrativo,
 check('MIM spiegato una sola volta', 1, (esame.testo.match(/MIM \(/g) ?? []).length);
 check('sigle spiegate: 4', 4, esame.spiegati.length);
 
+console.log('\n— VOCE EDITORIALE centralizzata (editorialVoice): una voce, tutte le uscite —');
+check('voce unica dichiarata', 'colto ma sciolto', NOME_VOCE);
+check('regole di voce con id univoci', REGOLE_VOCE.length, new Set(REGOLE_VOCE.map((r) => r.id)).size);
+check(
+  "la voce impone la spiegazione alla PRIMA menzione",
+  true,
+  REGOLE_VOCE.some((r) => r.id === 'prima_menzione'),
+);
+check('blocco prompt: una riga per regola', REGOLE_VOCE.length, bloccoVoceEditoriale().split('\n').length);
+check(
+  'blocco prompt: ogni regola citata testualmente',
+  [],
+  REGOLE_VOCE.filter((r) => !bloccoVoceEditoriale().includes(r.testo)).map((r) => r.id),
+);
+const promptVoce = promptScritturaArticolo({
+  title: 'Interpelli e supplenze: nuove regole per la scelta delle sedi',
+  categoria: 'GPS',
+  deadline: '2099-12-31',
+  fonte: 'MIM',
+  official_url: 'https://www.mim.gov.it/web/guest/-/interpelli-nuove-regole',
+});
+check(
+  'scrittura: la voce centralizzata entra nel prompt',
+  true,
+  promptVoce.includes(`VOCE EDITORIALE (${NOME_VOCE})`) && promptVoce.includes(bloccoVoceEditoriale()),
+);
+check('scrittura: nessuna regola di voce duplicata nel prompt', false, promptVoce.includes('ZERO BUROCRAZIA'));
+check('scrittura: le aperture vietate sono citate', true, promptVoce.includes(APERTURE_VIETATE[0]));
+check(
+  'filtro LLM: allow-list completa nei temi accettati',
+  [],
+  TEMI_OPERATIVI.filter((t) => !promptFiltroLLM([]).includes(t.categoria)).map((t) => t.categoria),
+);
+
 console.log('\n— SINTESI "IN SINTESI": solo fatti pratici —');
 const conSintesi = generaArticoloEditoriale({
   title: 'Interpelli e supplenze: nuove regole per la scelta delle sedi',
@@ -433,7 +470,7 @@ const newsArticle = (id: string, data: string): NewsArticle => ({
   category: 'Organico',
   deadline_date: null,
   summary_points: ['Cosa cambia: prova.'],
-  content_html: '<p>prova</p>',
+  content_html: 'prova<p>test</p>',
   official_source_url: 'https://www.mim.gov.it/web/guest/-/prova',
   official_pdf_url: null,
   relevance_score: 80,
@@ -517,18 +554,17 @@ check(
 );
 
 console.log(
-  errori === 0
-    ? '\n✅ NOTIZIE EDITORIALE: nessun problema'
-    : `\n❌ NOTIZIE EDITORIALE: ${errori} errore/i`,
+  errori === 0 ? '\n✅ NOTIZIE EDITORIALE: nessun problema' : `\n❌ NOTIZIE EDITORIALE: ${errori} errore/i`,
 );
+
 console.log('\n— ALLOW-LIST 360°: la scuola intera, non solo interpelli —');
 check(
-  'allow-list in ordine di priorità (19 temi)',
+  'allow-list in ordine di priorità (20 temi)',
   [
     'CCNL',
     'Pensioni',
     'Welfare',
-    'Mobilit\u00e0',
+    'Mobilità',
     'Sostegno',
     'ATA',
     'Istruzione Adulti',
@@ -541,6 +577,7 @@ check(
     'Normativa',
     'Scadenze',
     'Concorsi',
+    'Intelligenza Artificiale',
     'Innovazione Digitale',
     'Didattica',
     'Pedagogia',
@@ -560,7 +597,7 @@ check(
 );
 check(
   'solo i temi culturali/didattici esigono un fatto concreto',
-  ['Innovazione Digitale', 'Didattica', 'Pedagogia'],
+  ['Intelligenza Artificiale', 'Innovazione Digitale', 'Didattica', 'Pedagogia'],
   CATEGORIE_CON_FATTO_CONCRETO,
 );
 
@@ -633,8 +670,7 @@ check(
 );
 
 console.log('\n— AUDIT MULTI-TEMA: un testo, più temi e più macro-aree —');
-const testoMisto =
-  'Graduatorie ATA di terza fascia e GPS: al via le istanze per i collaboratori scolastici';
+const testoMisto = 'Graduatorie ATA di terza fascia e GPS: al via le istanze per i collaboratori scolastici';
 check('temi riconosciuti nel testo misto (>= 2)', true, temiDalTesto(testoMisto).length >= 2);
 check('macro-aree coinvolte (>= 2)', true, areeTematicheDalTesto(testoMisto).length >= 2);
 check(
@@ -687,8 +723,7 @@ check(
   (senzaFatto.motivo ?? '').includes('Tema Innovazione Digitale senza fatto concreto'),
 );
 
-const titoloDidatticoConScadenza =
-  'Didattica digitale integrata: laboratori digitali per i docenti dal 30 settembre 2026';
+const titoloDidatticoConScadenza = 'Didattica digitale integrata: laboratori digitali per i docenti dal 30 settembre 2026';
 const conScadenza = valutaRilevanza({ title: titoloDidatticoConScadenza, data: '2026-09-18' });
 check('didattica CON scadenza reale: AMMESSA', true, conScadenza.rilevante);
 check('categoria didattica mantenuta', 'Innovazione Digitale', conScadenza.categoria);
@@ -712,5 +747,93 @@ check(
   (pedagogiaSenzaFatto.motivo ?? '').includes('Tema Pedagogia senza fatto concreto'),
 );
 
-process.exitCode = errori === 0 ? 0 : 1;
+console.log('\n— TEMA AUTONOMO: intelligenza artificiale (badge, peso, fatto concreto) —');
+const temaIA = TEMI_OPERATIVI.find((t) => t.categoria === 'Intelligenza Artificiale');
+check('tema IA nell’allow-list', true, Boolean(temaIA));
+check('macro-area del tema IA', 'Innovazione didattica e strumenti', temaIA?.area);
+check('tema IA non autosufficiente (serve contesto di personale)', false, temaIA?.autosufficiente);
+check('tema IA sotto il gate del fatto concreto', true, temaIA?.fattoConcreto);
+check(
+  'peso IA = 76, sopra Innovazione Digitale (72)',
+  76,
+  punteggioRilevanza('Intelligenza Artificiale', false),
+);
+check(
+  'IA batte Innovazione Digitale e Didattica',
+  'Intelligenza Artificiale',
+  classificaTemaPersonale('Intelligenza artificiale nella didattica: il nuovo curricolo per i docenti'),
+);
+check(
+  'IA non ruba il match ai temi storici (resta Formazione)',
+  'Formazione',
+  classificaTemaPersonale('Formazione sull’intelligenza artificiale: corsi per i docenti'),
+);
+const lessicoIA = ['intelligenza artificiale', 'IA generativa', 'machine learning', 'chatbot', 'prompt', 'LLM'];
+check(
+  'lessico IA riconosciuto dal tema',
+  [],
+  lessicoIA.filter((p) => !temiDalTesto(p).some((t) => t.categoria === 'Intelligenza Artificiale')),
+);
 
+const titoloIA = 'Intelligenza artificiale in classe: il nuovo percorso per i docenti';
+check('tema IA riconosciuto nel testo', 'Intelligenza Artificiale', classificaTemaPersonale(titoloIA));
+const iaSenzaFatto = valutaRilevanza({ title: titoloIA, data: '2026-09-18' });
+check('IA senza scadenza né canale: RESPINTA', false, iaSenzaFatto.rilevante);
+check('categoria non assegnata (IA)', null, iaSenzaFatto.categoria);
+check(
+  'motivo: tema IA senza fatto concreto',
+  true,
+  (iaSenzaFatto.motivo ?? '').includes('Tema Intelligenza Artificiale senza fatto concreto'),
+);
+const iaConScadenza = valutaRilevanza({
+  title: 'Intelligenza artificiale in classe: percorsi per i docenti al via dal 30 settembre 2026',
+  data: '2026-09-18',
+});
+check('IA CON scadenza reale: AMMESSA', true, iaConScadenza.rilevante);
+check('categoria IA mantenuta (scadenza)', 'Intelligenza Artificiale', iaConScadenza.categoria);
+check('scadenza IA in ISO', '2026-09-30', iaConScadenza.deadline);
+
+const iaConCuscinetto = valutaRilevanza({
+  title: 'Intelligenza artificiale a scuola: candidature per i docenti entro il 30 settembre 2026',
+  data: '2026-09-18',
+});
+check(
+  'testo con "entro il" resta sul tema storico Scadenze (nessun match rubato)',
+  'Scadenze',
+  iaConCuscinetto.categoria,
+);
+const iaConCanale = valutaRilevanza({
+  title: 'Intelligenza artificiale a scuola: iscrizioni ai percorsi per i docenti',
+  description: 'Le candidature si presentano online su Unica, il portale del Ministero.',
+  data: '2026-09-18',
+});
+check('IA CON canale ufficiale: AMMESSA', true, iaConCanale.rilevante);
+check('categoria IA mantenuta (canale)', 'Intelligenza Artificiale', iaConCanale.categoria);
+
+console.log('\n— COPY IA: sigla spiegata, nessun fluff, link unico —');
+const articoloIA = generaArticoloEditoriale({
+  title: 'IA generativa in classe: percorsi per i docenti',
+  categoria: 'Intelligenza Artificiale',
+  deadline: null,
+  fonte: 'MIM',
+  official_url: 'https://www.mim.gov.it/web/guest/-/ia-generativa-in-classe-percorsi-per-i-docenti',
+});
+check(
+  'copy dedicato al tema IA (non il generico "Scuole")',
+  true,
+  articoloIA.content_html.includes('intelligenza artificiale entra a scuola'),
+);
+check(
+  'sigla IA spiegata alla prima occorrenza',
+  true,
+  articoloIA.content_html.includes('IA (Intelligenza Artificiale)'),
+);
+check('nessuna promessa vuota nell’articolo IA', false, contieneFraseFluff(articoloIA.content_html));
+check(
+  'un solo URL nel testo IA: quello diretto',
+  1,
+  new Set([...articoloIA.content_html.matchAll(/href="([^"]+)"/g)].map((m) => m[1])).size,
+);
+check('bullet "Cosa cambia" del tema IA', true, articoloIA.summary_points[0].startsWith('Cosa cambia:'));
+
+process.exitCode = errori === 0 ? 0 : 1;

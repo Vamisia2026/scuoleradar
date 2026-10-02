@@ -9,9 +9,8 @@
  * avvisi vivi si promette comunque il Radar, mai una schermata vuota.
  */
 import { ArrowRight, BellRing, ExternalLink, Radar } from 'lucide-react';
-import { enteEmittenteDaTitolo } from '@/lib/matchingEngine';
-import { nomeScuolaDaCodice } from '@/lib/school-lookup';
-import { scuolaDaTitolo } from '@/lib/liveBoard';
+import { nomePresentabileRiga, titoloLeggibile, type RigaBoard } from '@/lib/liveBoard';
+import { nomeProvincia } from '../flightBoard/righeBoard';
 import { giorniRimanenti, stileScadenza } from '@/lib/scadenza';
 import {
   messaggioConversione,
@@ -20,15 +19,32 @@ import {
   type RigaProvaRadar,
 } from '@/lib/provaRadarEngine';
 
-/** Nome presentabile della scuola: mai un placeholder in una vetrina pubblica. */
-function nomeScuola(riga: RigaProvaRadar): string {
-  return (
-    riga.school_name?.trim() ||
-    nomeScuolaDaCodice(riga.school_code) ||
-    scuolaDaTitolo(riga.title) ||
-    enteEmittenteDaTitolo(riga.title, riga.province) ||
-    riga.province
-  );
+/**
+ * Nome d'istituto (o ente emittente) presentabile: mai un codice amministrativo,
+ * mai una stringa grezza — la direttiva di vetrina vale anche qui
+ * (`liveBoard.nomePresentabileRiga`).
+ */
+function etichettaRiga(riga: RigaProvaRadar): string | null {
+  return nomePresentabileRiga(riga as RigaBoard);
+}
+
+/**
+ * Le due righe di testo di una voce: titolo LEGGIBILE (ripulito dai dump di
+ * codici) e, sotto, istituto/ente + città della provincia. Se il titolo è solo un
+ * elenco di codici non si mostra affatto: al suo posto va il nome dell'istituto.
+ */
+function testiRiga(riga: RigaProvaRadar): { principale: string; secondaria: string } {
+  const etichetta = etichettaRiga(riga);
+  const titolo = titoloLeggibile(riga.title);
+  const principale = titolo ?? etichetta ?? '';
+  const citta = nomeProvincia(riga.province);
+  const secondaria = [
+    etichetta && etichetta !== principale ? etichetta : null,
+    citta,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return { principale, secondaria };
 }
 
 interface ResponsoProvaProps {
@@ -83,6 +99,7 @@ export function ResponsoProva({ esito, provincia, onAttiva }: ResponsoProvaProps
         <ul className="mt-2.5 space-y-1">
           {esito.righe.map((o) => {
             const stile = stileScadenza(giorniRimanenti(o.expiration_date));
+            const testi = testiRiga(o);
             return (
               <li key={o.id}>
                 <a
@@ -93,7 +110,7 @@ export function ResponsoProva({ esito, provincia, onAttiva }: ResponsoProvaProps
                 >
                   <span className="flex items-center justify-between gap-2">
                     <span className="min-w-0 flex-1 truncate text-sm font-semibold text-primary-800">
-                      {o.title}
+                      {testi.principale}
                     </span>
                     <span
                       className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${stile.className}`}
@@ -101,12 +118,12 @@ export function ResponsoProva({ esito, provincia, onAttiva }: ResponsoProvaProps
                       {stile.label}
                     </span>
                   </span>
-                  <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-primary-500">
-                    <span className="min-w-0 flex-1 truncate">
-                      {nomeScuola(o)} · {o.province}
+                  {testi.secondaria && (
+                    <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-primary-500">
+                      <span className="min-w-0 flex-1 truncate">{testi.secondaria}</span>
+                      <ExternalLink className="h-3 w-3 shrink-0 text-accent-500" />
                     </span>
-                    <ExternalLink className="h-3 w-3 shrink-0 text-accent-500" />
-                  </span>
+                  )}
                 </a>
               </li>
             );

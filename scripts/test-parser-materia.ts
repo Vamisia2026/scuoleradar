@@ -11,7 +11,7 @@
  */
 
 import { estraiEmail, inferisciMateria, parseInterpello } from '../src/scraper/parser.ts';
-import { formattaPostCanaleTelegram } from '../src/lib/telegram.ts';
+import { formattaPostCanaleTelegram, ETICHETTA_FONTE_UFFICIALE } from '../src/lib/telegram.ts';
 
 /** Interfaccia minima per l'ambiente (senza dipendere da @types/node). */
 declare const process: { exitCode?: number };
@@ -69,16 +69,18 @@ check('classe esplicita → materia null', null, esplicito.materia);
 check('classCodes rilevate', ['A-022'], esplicito.classCodes);
 
 console.log('\n— Scadenza nei post Telegram (mai la pubblicazione) —');
+// Scadenza LONTANA (2099): il formatter sopprime le scadenze già passate, quindi
+// un fixture datato diventerebbe rosso da solo col passare dei giorni.
 const conDate = parseInterpello({
   title: 'Interpello A-026 Matematica — Liceo "Augusto Monti" di Asti',
   link: 'https://esempio.it/avviso3',
   provincia: 'AT',
   source: 'fixture',
-  dataPubblicazione: '2026-09-01',
-  corpo: 'Pubblicato il 01/09/2026. Termine presentazione domande: 20/09/2026.',
+  dataPubblicazione: '2099-09-01',
+  corpo: 'Pubblicato il 01/09/2099. Termine presentazione domande: 20/09/2099.',
 });
-check('expirationDate = scadenza reale', '2026-09-20', conDate.expirationDate);
-check('publishedAt = pubblicazione', '2026-09-01', conDate.publishedAt);
+check('expirationDate = scadenza reale', '2099-09-20', conDate.expirationDate);
+check('publishedAt = pubblicazione', '2099-09-01', conDate.publishedAt);
 
 const postScad = formattaPostCanaleTelegram({
   title: conDate.title,
@@ -89,8 +91,8 @@ const postScad = formattaPostCanaleTelegram({
   expirationDate: conDate.expirationDate,
   link: conDate.link,
 });
-check('il post mostra la scadenza (20 settembre 2026)', true, postScad.includes('20 settembre 2026'));
-check('il post NON mostra la pubblicazione come scadenza', false, postScad.includes('01 settembre 2026'));
+check('il post mostra la scadenza (20 settembre 2099)', true, postScad.includes('20 settembre 2099'));
+check('il post NON mostra la pubblicazione come scadenza', false, postScad.includes('01 settembre 2099'));
 // Il ruolo è mostrato nel blocco Classe/Materia (il "Docente" generico è soppresso).
 check('classe A-026 in Classe/Materia (non "Docente")', true, postScad.includes('Classe/Materia: <b>A-026 - Matematica</b>'));
 check('nessun ruolo generico "Docente"', false, postScad.includes('Ruolo / Categoria: <b>Docente</b>'));
@@ -101,17 +103,20 @@ const postPdf = formattaPostCanaleTelegram({
   province: 'AT',
   materia: 'Matematica',
   contactEmail: 'prot@scuola.edu.it',
-  expirationDate: '2026-09-30',
+  expirationDate: '2099-09-30',
   link: 'https://www.istruzione.piemonte.it/avviso/matematica.pdf',
 });
 check('email candidature presente', true, postPdf.includes('📧 Candidature:'));
-// Sorgente ufficiale = UN solo link, con l'etichetta standard (niente barra "📥 PDF").
+// Sorgente ufficiale = UN solo link, con l'etichetta dei CANALI PUBBLICI
+// ("🔗 Leggi la Fonte Ufficiale"): niente barra "📥 PDF", niente URL in chiaro.
 check(
-  "link ufficiale cliccabile con etichetta standard",
+  'link ufficiale cliccabile con etichetta dei canali',
   true,
-  postPdf.includes('<a href="https://www.istruzione.piemonte.it/avviso/matematica.pdf"><b>👉 Apri l\'avviso ufficiale</b></a>'),
+  postPdf.includes(
+    `<a href="https://www.istruzione.piemonte.it/avviso/matematica.pdf"><b>${ETICHETTA_FONTE_UFFICIALE}</b></a>`,
+  ),
 );
-check('scadenza reale 30 settembre 2026', true, postPdf.includes('30 settembre 2026'));
+check('scadenza reale 30 settembre 2099', true, postPdf.includes('30 settembre 2099'));
 
 console.log('\n──────────────────────────────────────────────────────────');
 if (falliti === 0) {

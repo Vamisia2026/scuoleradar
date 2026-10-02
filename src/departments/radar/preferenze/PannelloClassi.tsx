@@ -39,9 +39,6 @@ interface PannelloClassiProps {
   maxClassiConcorso: number;
   /** Seleziona/deseleziona una classe di concorso. */
   toggleClasse: (codice: string) => void;
-  /** Adesione esplicita alle opportunità di sostegno. */
-  sostegno: boolean;
-  setSostegno: (prossimo: boolean) => void;
   /** Limiti del piano (per il copy Base/PRO). */
   limitiPiano: PianoLimits;
 }
@@ -58,8 +55,6 @@ export function PannelloClassi({
   setQueryClasse,
   maxClassiConcorso,
   toggleClasse,
-  sostegno,
-  setSostegno,
   limitiPiano,
 }: PannelloClassiProps) {
   return (
@@ -167,11 +162,9 @@ export function PannelloClassi({
           })}
         </div>
 
-        {/* Preferenza SOSTEGNO — inclusa di default (nessun avviso filtrato via in
-            silenzio): qui l'utente può toglierla quando non la vuole. */}
+        {/* SOSTEGNO — BLOCCATO SU ON: nessuna uscita, l'utente vede solo lo stato
+            dichiarato (gli avvisi AD… arrivano insieme a tutti gli altri). */}
         <SostegnoToggle
-          attivo={sostegno}
-          onCambia={setSostegno}
           classiSostegno={classiCodici.filter((c) => isCodiceSostegno(normalizzaClasse(c)))}
           idPrefisso="preferenze-sostegno"
         />

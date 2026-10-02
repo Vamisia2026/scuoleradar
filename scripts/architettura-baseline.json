@@ -53,7 +53,6 @@
     "E-DIM:src/departments/notizie/services/relevanceEngine.ts": "1723 righe (> 300): dividere in sotto-moduli (SRP)",
     "W-DIM:src/departments/notizie/services/tracciaFonte.ts": "252 righe (> 250): pianificare lo split",
     "E-ROOT:src/departments/notizie/vacanzeScolastiche.ts": "file di codice nella radice del dominio: va in components/ | hooks/ | services/ | data/",
-    "E-DIM:src/departments/radar/FlightBoardInterpelli.tsx": "324 righe (> 300): dividere in sotto-moduli (SRP)",
     "E-ROOT:src/departments/radar/FlightBoardInterpelli.tsx": "file di codice nella radice del dominio: va in components/ | hooks/ | services/ | data/",
     "W-UI:src/departments/radar/FlightBoardInterpelli.tsx": "componente fuori da components/ o pages/",
     "E-ROOT:src/departments/radar/ordineIcone.tsx": "file di codice nella radice del dominio: va in components/ | hooks/ | services/ | data/",

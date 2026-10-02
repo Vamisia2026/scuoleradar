@@ -18,13 +18,14 @@
  *    ~3 a settimana; se non ci sono provvedimenti vincolanti si pubblicano 0;
  *  - soglia di rilevanza: la categoria si assegna SOLO se la voce rientra in uno
  *    dei temi dell'ALLOW-LIST (`TEMI_OPERATIVI`: standardTemiPersonale.ts +
- *    standardTemiDidattica.ts). La copertura è la scuola a 360 gradi —
- *    normativa e reclutamento, personale ATA e segreterie, istruzione degli
- *    adulti (CPIA), formazione/titoli e CFU, contratti-previdenza-welfare,
- *    organizzazione-sicurezza-fonti normative, inclusione e sostegno — più i
- *    temi culturali e didattici (pedagogia, didattica, innovazione digitale),
- *    questi ultimi pubblicabili SOLO con un fatto concreto (scadenza reale o
- *    canale ufficiale di domanda/candidatura: `CATEGORIE_CON_FATTO_CONCRETO`);
+ *    standardTemiIA.ts + standardTemiDidattica.ts). La copertura è la scuola a
+ *    360 gradi — normativa e reclutamento, personale ATA e segreterie,
+ *    istruzione degli adulti (CPIA), formazione/titoli e CFU,
+ *    contratti-previdenza-welfare, organizzazione-sicurezza-fonti normative,
+ *    inclusione e sostegno — più i temi culturali e didattici (intelligenza
+ *    artificiale, pedagogia, didattica, innovazione digitale), questi ultimi
+ *    pubblicabili SOLO con un fatto concreto (scadenza reale o canale ufficiale
+ *    di domanda/candidatura: `CATEGORIE_CON_FATTO_CONCRETO`);
  *  - lessico e scoring CONDIVISI: dizionario, acronimi, frasi di fluff, pesi e
  *    macro-aree vivono nei moduli `lessicoScuola.ts` e `editorialStandard.ts` e
  *    sono qui ri-esportati per compatibilità (es. `PAROLE_ACCETTA`,
@@ -44,6 +45,15 @@ import {
   TEMI_OPERATIVI,
 } from './editorialStandard';
 import { FRASI_FLUFF, GLOSSARIO_ACRONIMI, PAROLE_OPERATIVE } from './lessicoScuola';
+import { èFonteCanonica, èFonteNazionale, validaUrlDeepLink } from './fontiUfficiali';
+import { classificaLink, linkNonValidiInHtml } from './linkUfficiale';
+import {
+  generaArticoloEditoriale,
+  linkDomandaUfficiale,
+  richiedePresentazioneDomanda,
+} from './articoloEditoriale';
+import { espandiAcronimi } from './editorialVoice';
+import type { ValutazioneNotizia, VoceInValutazione } from './valutazioneTipi';
 
 /**
  * Lessico del dipartimento: vive in `lessicoScuola.ts` (blocco condiviso dello
@@ -52,22 +62,6 @@ import { FRASI_FLUFF, GLOSSARIO_ACRONIMI, PAROLE_OPERATIVE } from './lessicoScuo
  */
 export { FRASI_FLUFF, GLOSSARIO_ACRONIMI };
 export { PAROLE_OPERATIVE as PAROLE_ACCETTA };
-
-export interface ValutazioneNotizia {
-  rilevante: boolean;
-  categoria: string | null;
-  deadline: string | null;
-  motivo?: string;
-}
-
-export interface VoceInValutazione {
-  title: string;
-  description?: string;
-  /** URL della fonte ufficiale (serve al gate NAZIONALE e agli atti MIM). */
-  url?: string;
-  /** Data di pubblicazione dichiarata dalla fonte (ISO), se disponibile. */
-  data?: string | null;
-}
 
 /**
  * Parole che identificano l'ambito/categoria del personale scolastico.
@@ -120,49 +114,6 @@ const PAROLE_RIFIUTA: string[] = [
   'memorandum', 'incontro bilaterale', 'vertice bilaterale', 'visita ufficiale',
   'dichiarazione congiunta', 'missione istituzionale',
 ];
-
-/* ============ PERIMETRO NAZIONALE (ScuoleRadar è una piattaforma nazionale) ============ */
-
-/**
- * Siti ACCREDITATI a livello NAZIONALE. ScuoleRadar copre il livello nazionale:
- * MIM (Ministero dell'Istruzione e del Merito), Gazzetta Ufficiale, ARAN
- * (contrattazione), giurisdizione contabile/amministrativa e previdenza.
- * Le pagine REGIONALI (`/web/usr-*`, USR/AT) sono ESCLUSE per policy.
- */
-const HOST_NAZIONALI = [
-  'mim.gov.it',
-  'istruzione.it',
-  'gazzettaufficiale.it',
-  'aranagenzia.it',
-  'corteconti.it',
-  'giustizia-amministrativa.it',
-  'inps.it',
-  'inpa.gov.it',
-];
-
-/** True se l'URL appartiene a una fonte NAZIONALE accreditata (e non regionale). */
-export function èFonteNazionale(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.toLowerCase();
-    const percorso = parsed.pathname.toLowerCase();
-    // Le pagine regionali del MIM (USR) non sono nazionali.
-    if (/\/web\/usr-/.test(percorso)) return false;
-    return HOST_NAZIONALI.some((h) => host === h || host.endsWith(`.${h}`));
-  } catch {
-    return false;
-  }
-}
-
-/** True se l'URL è pubblicato dal MIM (o dal dominio storico istruzione.it). */
-export function èFonteMim(url?: string | null): boolean {
-  try {
-    const host = new URL(url ?? '').hostname.toLowerCase();
-    return host.endsWith('mim.gov.it') || host.endsWith('istruzione.it');
-  } catch {
-    return false;
-  }
-}
 
 /** NB: la vecchia euristica "atto ufficiale + numero" (RE_ATTO_UFFICIALE /
  *  RE_RIF_ATTO / FINESTRA_ATTI_NAZIONALI_GIORNI) è stata RIMOSSA: accettava gli
@@ -352,7 +303,8 @@ const PAROLE_PERSONALE =
  * Classifica il TEMA OPERATIVO della notizia per il personale scolastico
  * (contratti e previdenza, welfare, mobilità, GPS/interpelli, sostegno, ATA e
  * segreterie, istruzione degli adulti, organico, formazione e titoli, PNRR,
- * sicurezza, normativa, scadenze, concorsi, didattica e pedagogia).
+ * sicurezza, normativa, scadenze, concorsi, intelligenza artificiale, didattica
+ * e pedagogia).
  * Usa l'allow-list condivisa `TEMI_OPERATIVI` (ordine = priorità).
  * `null` = nessun impatto pratico → non si pubblica.
  */
@@ -388,39 +340,6 @@ export function titoloDaUfficioStampa(titolo?: string | null): boolean {
 }
 
 /**
- * Spiega gli ACRONIMI alla prima occorrenza: "GPS" → "GPS (Graduatorie
- * Provinciali per le Supplenze)". Restituisce il testo aggiornato e le sigle
- * spiegate, così le chiamate successive (sintesi, corpo) non le ripetono.
- */
-export function espandiAcronimi(
-  testo: string,
-  giàSpiegati: Set<string> = new Set(),
-): { testo: string; spiegati: string[] } {
-  let out = testo ?? '';
-  const spiegati: string[] = [];
-  for (const [sigla, spiegazione] of Object.entries(GLOSSARIO_ACRONIMI)) {
-    if (giàSpiegati.has(sigla)) continue;
-    // Già spiegato nel testo (forma estesa presente) → niente doppioni.
-    if (out.toLowerCase().includes(spiegazione.toLowerCase().slice(0, 24))) {
-      giàSpiegati.add(sigla);
-      continue;
-    }
-    const re = new RegExp(`\\b${sigla}\\b(?!\\s*\\()`);
-    // Se la sigla è già spiegata tra parentesi nel testo (es. "(POLIS)"), non si
-    // annida una seconda parentesi: si considera spiegata.
-    if (new RegExp(`\\(\\s*${sigla}\\b`).test(out)) {
-      giàSpiegati.add(sigla);
-      continue;
-    }
-    if (!re.test(out)) continue;
-    out = out.replace(re, `${sigla} (${spiegazione})`);
-    giàSpiegati.add(sigla);
-    spiegati.push(sigla);
-  }
-  return { testo: out, spiegati };
-}
-
-/**
  * FRASI DI FLUFF / PROMESSE VUOTE — mai pubblicabili.
  *
  * Sono riempitivi che non danno nulla di operativo al lettore ("ti avvisiamo
@@ -438,28 +357,6 @@ export function contieneFraseFluff(testo?: string | null): boolean {
   const t = (testo ?? '').replace(/\s+/g, ' ').toLowerCase();
   if (!t) return false;
   return FRASI_FLUFF.some((f) => t.includes(f));
-}
-
-/**
- * CADENZA SETTIMANALE: minimo 1, massimo `MAX_ARTICOLI_SETTIMANA` articoli
- * datati negli ultimi 7 giorni. Espone l'esito per i log della pipeline e per i
- * test (`npm run test:notizie-feed`, `npm run test:notizie-rate`).
- */
-export function verificaCadenzaSettimanale(
-  articoli: NewsArticle[],
-  oggi: Date = new Date(),
-): { recenti: number; ok: boolean; min: number; max: number } {
-  const soglia = oggi.getTime() - 7 * 24 * 60 * 60 * 1000;
-  const recenti = articoli.filter((a) => {
-    const t = a.published_at ? new Date(a.published_at).getTime() : Number.NaN;
-    return !Number.isNaN(t) && t >= soglia;
-  }).length;
-  return {
-    recenti,
-    ok: recenti >= 1 && recenti <= MAX_ARTICOLI_SETTIMANA,
-    min: 1,
-    max: MAX_ARTICOLI_SETTIMANA,
-  };
 }
 
 /** Data breve italiana (UTC) per l'urgenza nel titolo: "16 lug". */
@@ -616,7 +513,8 @@ export function classificaCategoria(testo: string): string | null {
  * contratti e previdenza, welfare, mobilità, sostegno, ATA e segreterie,
  * istruzione degli adulti, GPS/interpelli, organico, formazione e titoli,
  * reclutamento, PNRR, sicurezza, normativa, scadenze, concorsi). I temi
- * CULTURALI e DIDATTICI (pedagogia, didattica, innovazione digitale) sono
+ * CULTURALI e DIDATTICI (intelligenza artificiale, pedagogia, didattica,
+ * innovazione digitale) sono
  * `fattoConcreto: true` (`CATEGORIE_CON_FATTO_CONCRETO`): passano solo con una
  * scadenza reale o un canale ufficiale di domanda/candidatura, mai come
  * webinar, convegno o comunicato.
@@ -719,10 +617,10 @@ export function valutaRilevanza(voce: VoceInValutazione): ValutazioneNotizia {
         'Nessun impatto pratico sui temi del personale scolastico (contratti e previdenza, welfare, mobilità, sostegno, ATA e segreterie, istruzione degli adulti, GPS/interpelli, organico, formazione e titoli, reclutamento, PNRR, sicurezza, normativa, scadenze, concorsi)',
     };
   }
-  // 3) FATTO CONCRETO (temi culturali e didattici): pedagogia, didattica e
-  //    innovazione digitale non entrano in bacheca come puro comunicato,
-  //    webinar o convegno. Servono una SCADENZA reale oppure un canale ufficiale
-  //    di domanda/candidatura (procedura concreta da seguire).
+  // 3) FATTO CONCRETO (temi culturali e didattici): intelligenza artificiale,
+  //    pedagogia, didattica e innovazione digitale non entrano in bacheca come
+  //    puro comunicato, webinar o convegno. Servono una SCADENZA reale oppure un
+  //    canale ufficiale di domanda/candidatura (procedura concreta da seguire).
   const deadline = estraiDeadline(testo);
   if (
     CATEGORIE_CON_FATTO_CONCRETO.includes(tema) &&
@@ -741,28 +639,6 @@ export function valutaRilevanza(voce: VoceInValutazione): ValutazioneNotizia {
 }
 
 /**
- * Helper per la valutazione con LLM (filtro editoriale assistito).
- * Produce il prompt da inviare al modello per ottenere una validazione
- * strutturata JSON delle notizie raccolte (vedi docs/BLOG_EDITORIAL_GUIDELINES.md).
- */
-export function promptFiltroLLM(voci: VoceInValutazione[]): string {
-  return `Sei il filtro editoriale del servizio Notizie di ScuoleRadar per i docenti italiani.
-
-REGOLE VINCOLANTI (strict editorial guidelines):
-1) ZERO RUMORE: rifiuta discorsi, interviste, dichiarazioni non vincolanti, comunicati stampa, campagne di comunicazione ed eventi promozionali. Accetta SOLO provvedimenti VINCOLANTI per docenti di ruolo e precari, personale ATA e segreterie, DSGA: decreti, ordinanze ministeriali, note, circolari, bandi, avvisi e scadenze operative (contratti e previdenza, welfare, mobilità, sostegno e inclusione, GPS e interpelli, organico, formazione e titoli come TFA e CFU, istruzione degli adulti nei CPIA, immissioni in ruolo, PNRR, sicurezza, normativa, concorsi).
-2) VALIDITÀ GIURIDICA: la notizia DEVE riferirsi a un atto ufficiale preciso (Ordinanza Ministeriale, Decreto, articolo di legge, nota protocollata). Se titolo/descrizione non citano un riferimento ufficiale specifico, rilevanza = false.
-3) CAPACITÀ SETTIMANALE: al massimo 3 articoli ad alto valore per settimana. Se nessun provvedimento è vincolante, la risposta deve avere "items" vuoti (0 articoli pubblicati).
-4) CATEGORIA: una tra quelle dell'allow-list dei temi — CCNL, Pensioni, Welfare, Mobilità, Sostegno, ATA, Istruzione Adulti, GPS, Organico, Formazione, Reclutamento e Ruolo, PNRR, Sicurezza, Normativa, Scadenze, Concorsi, Innovazione Digitale, Didattica, Pedagogia. I temi culturali e didattici (Innovazione Digitale, Didattica, Pedagogia) valgono SOLO con una scadenza reale o un canale ufficiale di domanda/candidatura: senza fatto concreto rilevanza = false.
-5) DEADLINE: la data di scadenza ufficiale in formato ISO (YYYY-MM-DD) se presente, altrimenti null.
-
-Rispondi SOLO in JSON:
-{"items":[{"rilevante":bool,"categoria":"...","deadline":"YYYY-MM-DD"|null}]}
-
-Notizie da valutare:
-${voci.map((v) => `- ${v.title} | ${v.description ?? ''}`).join('\n')}`;
-}
-
-/**
  * Punteggio di rilevanza 0-100 per l'ordinamento.
  * La matrice dei pesi è CONDIVISA (`PESI_CATEGORIA` in `editorialStandard.ts`),
  * alimentata dai temi di `standardTemiPersonale.ts`: qui non si duplica nulla,
@@ -774,454 +650,6 @@ ${voci.map((v) => `- ${v.title} | ${v.description ?? ''}`).join('\n')}`;
 export function punteggioRilevanza(categoria: string | null, hasDeadline: boolean): number {
   const base = categoria ? (PESI_CATEGORIA[categoria] ?? 65) : 60;
   return Math.min(100, base + (hasDeadline ? 8 : 0));
-}
-
-/** Tetto settimanale "di riferimento": ~3 articoli ad alto valore a settimana. */
-export const MAX_ARTICOLI_SETTIMANA = 3;
-
-/**
- * Finestra di LOOKBACK (giorni) della pipeline Notizie: copre l'avvio
- * dell'anno scolastico (presa di servizio, interpelli, supplenze…). Le notizie
- * pubblicate oltre questa finestra non vengono acquisite; le voci senza data
- * restano ammesse (non dimostrabili come "vecchie").
- */
-export const FINESTRA_LOOKBACK_GIORNI = 15;
-
-/**
- * Finestra di lookback per gli ATTI NAZIONALI STRUTTURALI (contratti collettivi,
- * decreti e ordinanze ministeriali): un CCNL firmato o un decreto nazionale
- * restano vincolanti per mesi, quindi una finestra di 15 giorni li
- * scarterebbe. NON si applica alle pagine di notizie quotidiane.
- */
-export const FINESTRA_LOOKBACK_NAZIONALE_GIORNI = 60;
-
-/**
- * Tetto articoli ad alto valore nella finestra di lookback: ~3 a settimana su
- * 15 giorni → 6 (copre le due settimane di avvio anno scolastico).
- */
-export const MAX_ARTICOLI_FINESTRA = 6;
-
-/**
- * Portali istituzionali il cui dominio RADICE È la destinazione operativa del
- * servizio (l'utente accede da lì): esenti dal divieto di "root-domain".
- * Per TUTTI gli altri domini vale il divieto assoluto di homepage generiche
- * (vedi docs/BLOG_EDITORIAL_GUIDELINES.md, sez. 5).
- */
-const PORTALI_SERVIZIO = new Set<string>([
-  'https://www.inpa.gov.it', // Portale del Reclutamento (InPA)
-  'https://www.inps.it', // Portale INPS
-]);
-
-/** Segnali di URL segnaposto/mockup: vietati nei link pubblicati. */
-const SEGNALI_MOCKUP = [
-  'example.com', 'example.org', 'localhost', 'mockup', 'placeholder',
-  'yourdomain', 'lorem-ipsum', '.test', ':3000', ':5173',
-];
-
-/**
- * Segnali di pagine generiche di ACCESSO (login / area riservata): non sono
- * contenuti informativi e vengono scartate (anti-rumore, es. `/aran/login`).
- */
-const SEGNALI_LOGIN = [
-  '/login', '/log-in', '/signin', '/sign-in', '/accedi',
-  '/area-riservata', '/areariservata', '/area_riservata', '/accesso-riservato',
-];
-
-/** True se l'URL punta a un file PDF (es. fonte ufficiale in PDF). */
-export function èLinkPdf(url: string): boolean {
-  try {
-    return new URL(url).pathname.toLowerCase().endsWith('.pdf');
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Percorsi generici che NON sono un articolo/atto specifico: usati come
- * radice di fallback (homepage, liste notizie, indici). Vietati come
- * `official_source_url` ("Leggi la fonte ufficiale" deve puntare all'articolo).
- */
-const PERCORSI_GENERICI = new Set([
-  '', '/', '/home', '/home.html', '/index', '/index.html',
-  '/notizie', '/news', '/news.html', '/comunicati', '/atti',
-  '/atti-pubblici', '/web/guest', '/web/guest/home', '/web/guest/notizie',
-  '/web/guest/ricerca',
-]);
-
-/**
- * Slug delle PAGINE OPERATIVE delle USR/MIM pubblicate a `/web/<sito>/<slug>`
- * (senza il segmento Liferay `/-/`): sono la destinazione corrente e stabile
- * di provvedimenti per il personale scolastico (elenchi interpelli, mobilità,
- * concorsi, graduatorie, calendario regionale…). A differenza delle homepage e
- * delle pagine di elenco generiche, hanno un contenuto operativo specifico e
- * vengono accettate come fonte canonica (il gate di rilevanza le filtra comunque).
- */
-const RE_SLUG_OPERATIVO =
-  /interpell|supplenz|graduator|concors|reclutament|assunz|mobilita|assegnazion|nomine?|reggenz|avvis|selezion|contratt|personale|organico|trasferiment|pension|sostegno|calendario-scolastic|prese-di-servizio|ricerca-supplenti/;
-
-/**
- * True se l'URL è una FONTE CANONICA (il singolo articolo/atto) e non una
- * pagina generica del sito (es. `https://www.mim.gov.it/web/guest/home`).
- * Per il dominio MIM (incluse le pagine USR regionali) sono accettati:
- *   1. gli articoli canonici Liferay `/web/<sito>/-/<slug>` — es.
- *      `/web/guest/-/…` oppure `/web/usr-lombardia/-/…`;
- *   2. le PAGINE OPERATIVE delle USR `/web/<sito>/<slug>` (es.
- *      `/web/usr-lombardia/interpelli-ricerca-supplenti`), che dal 2026 sono la
- *      destinazione stabile di interpelli/concorsi/graduatorie: senza questo
- *      caso la pipeline non trova più alcuna fonte nuova (stallo).
- * Homepage, indici e pagine di elenco generiche restano sempre escluse.
- */
-export function èFonteCanonica(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    let percorso = parsed.pathname.toLowerCase();
-    if (percorso.length > 1 && percorso.endsWith('/')) percorso = percorso.slice(0, -1);
-    if (PERCORSI_GENERICI.has(percorso)) return false;
-    // MIM + siti regionali (USR)
-    if (parsed.hostname.endsWith('mim.gov.it')) {
-      // 1. Articolo canonico Liferay.
-      if (/\/web\/[^/]+\/-\/.+/.test(percorso)) return true;
-      // 2. Pagina operativa USR/MIM: `/web/<sito>/<slug-operativo>`.
-      const m = percorso.match(/^\/web\/[^/]+\/([^/]+)$/);
-      return Boolean(m && RE_SLUG_OPERATIVO.test(m[1]));
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Controllo PURO (senza rete) di integrità di un link ufficiale:
- *  - solo http(s);
- *  - mai root-domain generici (es. https://www.mim.gov.it/) a meno che il
- *    dominio non sia un portale di servizio esplicitamente autorizzato;
- *  - mai segnaposto/mockup;
- *  - mai pagine generiche di login/area riservata.
- * Ritorna null se valido, altrimenti una stringa col motivo del rifiuto.
- */
-export function validaUrlDeepLink(url: string): string | null {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return 'URL non valido';
-  }
-  if (!/^https?:$/.test(parsed.protocol)) return 'Solo URL HTTP(S)';
-  const indizi = `${parsed.hostname}${parsed.pathname}${parsed.search}`.toLowerCase();
-  if (SEGNALI_MOCKUP.some((m) => indizi.includes(m))) {
-    return 'URL segnaposto/mockup non consentito';
-  }
-  // Anti-rumore: le pagine di login/area riservata non sono contenuti informativi.
-  const percorso = parsed.pathname.toLowerCase();
-  if (SEGNALI_LOGIN.some((s) => percorso.includes(s))) {
-    return 'Pagina di login/area riservata non consentita';
-  }
-  const radiceNuda = parsed.pathname === '' || parsed.pathname === '/';
-  if (radiceNuda && !PORTALI_SERVIZIO.has(parsed.origin)) {
-    return `Root-domain generico non consentito (${parsed.origin}/)`;
-  }
-  return null;
-}
-
-/* -------------- LINK UFFICIALE PUNTO-A-PUNTO (no indici/contenitori) -------------- */
-
-/**
- * Ultimi segmenti di percorso che indicano un CONTENITORE (indice, elenco,
- * archivio, directory di servizio) e non un documento specifico: un link che
- * termina così è VIETATO come fonte ufficiale di una notizia.
- */
-const SEGMENTI_CONTENITORE = new Set([
-  'indice', 'indici', 'index', 'elenco', 'elenchi', 'lista', 'liste', 'archivio',
-  'archivi', 'atti', 'atto', 'albo', 'albo-pretorio', 'pubblicazioni', 'pubblicazione',
-  'notizie', 'notizia', 'news', 'comunicati', 'comunicato', 'comunicazioni',
-  'comunicazione', 'documenti', 'documento', 'normativa', 'urp', 'home', 'homepage',
-  'pagina', 'pagine', 'ricerca', 'search', 'risultati', 'categoria', 'categorie',
-  'tag', 'tags', 'servizi', 'servizio', 'contatti', 'contatto', 'sezione', 'sezioni',
-  'dashboard', 'portale', 'accesso', 'area-riservata', 'sportello', 'agenda',
-  'eventi', 'newsletter', 'tutti-gli-avvisi', 'istanzeonline',
-]);
-
-/**
- * Parole "neutre" (istituzionali/generiche): uno slug composto SOLO da queste
- * parole e senza numeri identifica un elenco/sezione (es.
- * `/interpelli-ricerca-supplenti`), non un avviso specifico.
- */
-const PAROLE_NEUTRE = new Set([
-  'a', 'ad', 'al', 'alla', 'alle', 'agli', 'allo', 'e', 'ed', 'di', 'del', 'della',
-  'delle', 'dei', 'degli', 'il', 'lo', 'la', 'le', 'gli', 'i', 'in', 'per', 'con',
-  'su', 'da', 'dal', 'dalla', 'dalle', 'dallo', 'dai', 'dagli', 'nel', 'nella',
-  'nelle', 'negli', 'tra', 'fra', 'non', 'piu', 'come', 'sul', 'sulla',
-  'scuola', 'scuole', 'scolastico', 'scolastica', 'istruzione', 'ministero',
-  'ministeriale', 'regionale', 'ufficio', 'uffici', 'amministrazione', 'trasparente',
-  'pubblica', 'pubblico', 'personale', 'docenti', 'ata',
-  'elenco', 'elenchi', 'indice', 'indici', 'lista', 'liste', 'archivio', 'archivi',
-  'atti', 'atto', 'albo', 'pubblicazioni', 'pubblicazione', 'notizie', 'notizia',
-  'news', 'comunicati', 'comunicato', 'comunicazioni', 'comunicazione', 'documenti',
-  'documento', 'normativa', 'urp', 'home', 'pagina', 'pagine', 'ricerca', 'search',
-  'risultati', 'categoria', 'categorie', 'tag', 'servizi', 'servizio', 'contatti',
-  'contatto', 'sezione', 'sezioni', 'interpelli', 'interpello', 'supplenze',
-  'supplenza', 'supplenti', 'graduatorie', 'graduatoria', 'concorsi', 'concorso',
-  'bandi', 'bando', 'avvisi', 'avviso', 'selezioni', 'selezione', 'mobilita',
-  'assegnazioni', 'nomine', 'informazioni', 'strumenti', 'modulistica', 'ultime',
-  'tutti', 'tutte', 'precedenti', 'successive',
-]);
-
-/** Finali di percorso SEMPRE considerati contenitori/indici/directory. */
-const FINALI_CONTENITORE = [
-  '/urp', '/amministrazione-trasparente', '/albo-pretorio', '/archivio', '/archivi',
-  '/normativa', '/notizie', '/news', '/comunicati', '/comunicazioni', '/documenti',
-  '/agenda', '/eventi', '/istanzeonline.htm', '/home', '/index',
-];
-
-/**
- * Parole che, in TESTA allo slug, indicano un ELENCO/INDICE anche quando lo slug
- * contiene altre parole ("elenco-circolari-2026", "archivio-note", "lista-avvisi"):
- * sono pagine da tracciare, non la fonte definitiva della notizia.
- */
-const TESTE_CONTENITORE = new Set([
-  'elenco', 'elenchi', 'indice', 'indici', 'lista', 'liste', 'archivio', 'archivi',
-  'albo', 'pubblicazioni', 'documenti', 'atti', 'notizie', 'news', 'comunicazioni',
-  'sezione', 'sezioni', 'categoria', 'categorie', 'raccolta', 'repertorio',
-]);
-
-export interface EsitoLinkDiretto {
-  ok: boolean;
-  motivo?: string;
-}
-
-/**
- * LINK UFFICIALE PUNTO-A-PUNTO (regola editoriale §5): l'unico link ammesso per
- * una notizia è l'URL DIRETTO del documento/avviso/comunicato specifico.
- * Sono VIETATI — e quindi bloccano la pubblicazione — homepage (anche dei
- * portali di servizio), indici ed elenchi, directory URP, pagine di ricerca o
- * paginazione e archivi "master".
- */
-export function linkDirettoUfficiale(url?: string | null): EsitoLinkDiretto {
-  const u = (url ?? '').trim();
-  if (!u) return { ok: false, motivo: 'link ufficiale mancante' };
-  const baseMotivo = validaUrlDeepLink(u);
-  if (baseMotivo) return { ok: false, motivo: baseMotivo };
-
-  let parsed: URL;
-  try {
-    parsed = new URL(u);
-  } catch {
-    return { ok: false, motivo: 'URL non valido' };
-  }
-  // Un PDF è sempre il documento specifico.
-  if (èLinkPdf(u)) return { ok: true };
-
-  const percorso = decodeURIComponent(parsed.pathname).toLowerCase();
-  const senzaSlash = percorso.replace(/\/+$/, '') || '/';
-  const segmenti = senzaSlash.split('/').filter(Boolean);
-
-  // 1) Homepage di qualunque dominio (portali di servizio compresi).
-  if (segmenti.length === 0) {
-    return { ok: false, motivo: 'homepage del sito: serve il link diretto al documento' };
-  }
-  // 2) Ricerca/filtri/paginazione: contenitori, non documenti.
-  const query = parsed.search.toLowerCase();
-  if (
-    /(?:^|[?&])(?:s|q|query|ricerca|search|page|pagina|p|offset|filtro|categoria|cat|tag|anno|mese)=/.test(
-      query,
-    )
-  ) {
-    return { ok: false, motivo: 'URL con parametri di ricerca/filtro (contenitore)' };
-  }
-  if (/\/(?:page|pagina)\/\d+$/.test(senzaSlash)) {
-    return { ok: false, motivo: 'URL di paginazione (contenitore)' };
-  }
-  // 3) Finali di percorso noti (indici, URP, archivi, liste notizie).
-  const finale = FINALI_CONTENITORE.find((f) => senzaSlash.endsWith(f));
-  if (finale) return { ok: false, motivo: `pagina-contenitore ("…${finale}")` };
-
-  // 4) Ultimo segmento che È un nome di contenitore (es. /…/elenco, /…/albo).
-  const ultimo = segmenti[segmenti.length - 1].replace(/\.(?:html?|php|aspx?|jsp)$/i, '');
-  if (SEGMENTI_CONTENITORE.has(ultimo)) {
-    return { ok: false, motivo: `pagina-contenitore ("${ultimo}")` };
-  }
-
-  // 4-bis) Slug di ELENCO/INDICE anche con parole aggiuntive: inizia con una
-  //    parola da contenitore ("elenco-circolari-2026", "archivio-note-2026").
-  //    È una pagina da TRACCIARE, non la fonte definitiva della notizia.
-  const paroleSlug = ultimo.split(/[-_]+/).filter((w) => w && !/^\d+$/.test(w));
-  if (TESTE_CONTENITORE.has(paroleSlug[0] ?? '') && paroleSlug.length >= 2) {
-    return { ok: false, motivo: `elenco/indice ("${ultimo}")` };
-  }
-
-  // 5) Slug "istituzionale puro" (solo parole neutre/anno, senza alcun termine
-  //    identificativo): è un elenco/sezione (es. "elenco-interpelli-2026"), non
-  //    un documento specifico.
-  const parole = paroleSlug;
-  if (parole.length > 0 && parole.every((w) => PAROLE_NEUTRE.has(w))) {
-    return { ok: false, motivo: `elenco/sezione senza riferimento specifico ("${ultimo}")` };
-  }
-
-  return { ok: true };
-}
-
-/**
- * LINK VIETATI presenti in un frammento HTML: garantisce che l'articolo
- * pubblicato non contenga MAI collegamenti a contenitori/indici (solo al
- * documento specifico o a pagine interne di ScuoleRadar).
- */
-export function linkVietatiInHtml(html: string): string[] {
-  const fuori: string[] = [];
-  for (const m of (html ?? '').matchAll(/href="([^"]+)"/gi)) {
-    const href = (m[1] ?? '').trim();
-    if (!/^https?:/i.test(href)) continue;
-    if (/scuoleradar\.it/i.test(href)) continue; // link interni all'app
-    const esito = linkDirettoUfficiale(href);
-    if (!esito.ok) fuori.push(`${href} (${esito.motivo})`);
-  }
-  return fuori;
-}
-
-/* ------------------- Classificazione del link della fonte ------------------- */
-
-export type ClasseLink = 'diretto' | 'contenitore' | 'non-valido';
-
-export interface ValutazioneLink {
-  classe: ClasseLink;
-  motivo?: string;
-}
-
-/**
- * Classifica il link di una fonte in tre classi:
- *   · `diretto`     → documento/pagina specifica (la fonte ideale);
- *   · `contenitore` → pagina REALE ma generica (indice, elenco, sezione, home):
- *                     pubblicabile come ultima traccia, mai ideale;
- *   · `non-valido`  → mockup, login, URL malformato/non http: MAI pubblicabile.
- *
- * Regola editoriale: solo `non-valido` blocca la pubblicazione. Un contenitore
- * NON blocca la notizia: si pubblica con il link disponibile e si segnala che
- * la fonte è una pagina di elenco (vedi `etichettaLinkFonte`).
- */
-export function classificaLink(url?: string | null): ValutazioneLink {
-  const u = (url ?? '').trim();
-  if (!u) return { classe: 'non-valido', motivo: 'link mancante' };
-
-  // Blocco HARD: URL malformato/non http, segnaposto/mockup, pagine di accesso.
-  // Tutto il resto è una pagina REALE: se non è un documento specifico è un
-  // contenitore, quindi una traccia pubblicabile (mai un motivo per scartare).
-  let parsed: URL;
-  try {
-    parsed = new URL(u);
-  } catch {
-    return { classe: 'non-valido', motivo: 'URL non valido' };
-  }
-  if (!/^https?:$/i.test(parsed.protocol)) {
-    return { classe: 'non-valido', motivo: 'Solo URL HTTP(S)' };
-  }
-  const indizi = `${parsed.hostname}${parsed.pathname}${parsed.search}`.toLowerCase();
-  if (SEGNALI_MOCKUP.some((m) => indizi.includes(m))) {
-    return { classe: 'non-valido', motivo: 'URL segnaposto/mockup non consentito' };
-  }
-  if (SEGNALI_LOGIN.some((s) => parsed.pathname.toLowerCase().includes(s))) {
-    return { classe: 'non-valido', motivo: 'Pagina di login/area riservata' };
-  }
-
-  const esito = linkDirettoUfficiale(u);
-  if (esito.ok) return { classe: 'diretto' };
-  return { classe: 'contenitore', motivo: esito.motivo };
-}
-
-/**
- * Etichetta ONESTA del link pubblicato: descrive ciò che l'utente troverà
- * (documento specifico oppure pagina/elenco ufficiale), senza mai promettere
- * una candidatura diretta.
- */
-export function etichettaLinkFonte(url?: string | null): string {
-  const u = (url ?? '').trim();
-  if (èLinkPdf(u)) return 'apri il documento ufficiale (PDF)';
-  return classificaLink(u).classe === 'contenitore'
-    ? 'apri la pagina ufficiale della fonte'
-    : "apri l'avviso ufficiale";
-}
-
-/**
- * Link NON VALIDI (mockup, login, non http) presenti in un frammento HTML:
- * solo questi bloccano la pubblicazione. I link a pagine-contenitore reali sono
- * ammessi (con warning) perché restano una traccia verificabile della fonte.
- */
-export function linkNonValidiInHtml(html: string): string[] {
-  const fuori: string[] = [];
-  for (const m of (html ?? '').matchAll(/href="([^"]+)"/gi)) {
-    const href = (m[1] ?? '').trim();
-    if (!/^https?:/i.test(href)) continue;
-    if (/scuoleradar\.it/i.test(href)) continue;
-    const valutazione = classificaLink(href);
-    if (valutazione.classe === 'non-valido') fuori.push(`${href} (${valutazione.motivo})`);
-  }
-  return fuori;
-}
-
-/**
- * Applica il tetto articoli: al massimo `max` articoli con data di
- * pubblicazione nella finestra di lookback (`FINESTRA_LOOKBACK_GIORNI`, 15 gg).
- * Gli articoli più rilevanti (punteggio, poi data) vengono tenuti; gli esuberi
- * sono scartati. Gli articoli più vecchi della finestra non vengono toccati
- * (accumulo).
- */
-export function limitaArticoliSettimanali(
-  articoli: NewsArticle[],
-  oggi: Date = new Date(),
-  max: number = MAX_ARTICOLI_FINESTRA,
-): { mantenuti: NewsArticle[]; rimossi: NewsArticle[] } {
-  const soglia = oggi.getTime() - FINESTRA_LOOKBACK_GIORNI * 24 * 60 * 60 * 1000;
-  const recenti: NewsArticle[] = [];
-  const storici: NewsArticle[] = [];
-  for (const a of articoli) {
-    const t = a.published_at ? new Date(a.published_at).getTime() : Number.NaN;
-    // Gli articoli SENZA data di fonte (pagine operative USR "evergreen") vanno
-    // negli storici: NON consumano il tetto settimanale. Se li trattassimo come
-    // recenti occuperebbero tutti gli slot del cap (max 6) bloccando ogni nuovo
-    // articolo → bacheca "ferma".
-    if (!Number.isNaN(t) && t >= soglia) recenti.push(a);
-    else storici.push(a);
-  }
-  recenti.sort(
-    (a, b) =>
-      b.relevance_score - a.relevance_score ||
-      (b.published_at || '').localeCompare(a.published_at || ''),
-  );
-  const tenuti = recenti.slice(0, max);
-  const rimossi = recenti.slice(max);
-  return { mantenuti: [...storici, ...tenuti], rimossi };
-}
-
-/* ---------------------- Cadenza settimanale (1–3 / settimana) ---------------------- */
-
-/**
- * CADENZA SETTIMANALE BLOCCATA (1–3 articoli/settimana): mantiene al massimo
- * `max` articoli **datati** nella finestra di 7 giorni; gli altri articoli
- * recenti vengono scartati, mentre lo storico (più vecchio di 7 giorni) resta
- * intatto e non consuma la cadenza.
- *
- * Criterio di scelta: prima la **data più recente**, poi il punteggio. La
- * freschezza vince: il feed mostra sempre gli aggiornamenti nazionali del
- * momento (`newsArticles` è ordinato per data decrescente).
- */
-export function limitaCadenzaSettimanale(
-  articoli: NewsArticle[],
-  oggi: Date = new Date(),
-  max: number = MAX_ARTICOLI_SETTIMANA,
-): { mantenuti: NewsArticle[]; rimossi: NewsArticle[] } {
-  const soglia = oggi.getTime() - 7 * 24 * 60 * 60 * 1000;
-  const recenti: NewsArticle[] = [];
-  const storici: NewsArticle[] = [];
-  for (const a of articoli) {
-    const t = a.published_at ? new Date(a.published_at).getTime() : Number.NaN;
-    if (!Number.isNaN(t) && t >= soglia) recenti.push(a);
-    else storici.push(a);
-  }
-  recenti.sort(
-    (a, b) =>
-      (b.published_at || '').localeCompare(a.published_at || '') ||
-      b.relevance_score - a.relevance_score,
-  );
-  return { mantenuti: [...storici, ...recenti.slice(0, max)], rimossi: recenti.slice(max) };
 }
 
 /** Valida la coerenza di un articolo costruito prima dell'inserimento. */
@@ -1348,415 +776,40 @@ export function applicaFormatoEditoriale(a: NewsArticle): NewsArticle {
   };
 }
 
-
-/* --------------------- Generazione articoli editoriali --------------------- */
-
-export interface DatiArticoloEditoriale {
-  title: string;
-  categoria: string | null;
-  deadline: string | null;
-  fonte: string;
-  descrizione?: string;
-  /** URL ufficiale della fonte (per il link contestuale nel testo). */
-  official_url?: string | null;
-  /** Link diretto al canale di presentazione della domanda (Istanze Online, POLIS…). */
-  application_url?: string | null;
-  /** Etichetta del canale di presentazione ("Istanze Online (POLIS)"…). */
-  application_label?: string | null;
-}
-
-/**
- * CANALI DI PRESENTAZIONE ufficiali: quando la notizia riguarda una domanda, una
- * istanza o una candidatura, il link diretto al canale va SEMPRE pubblicato
- * accanto a quello della fonte (regola "zero fluff": niente rinvii vaghi).
- */
-const CANALI_DOMANDA: Array<{ re: RegExp; url: string; etichetta: string }> = [
-  {
-    re: /istanze\s*online|polis/i,
-    url: 'https://www.istruzione.it/polis/Istanzeonline.htm',
-    etichetta: 'Istanze Online (POLIS)',
-  },
-  {
-    re: /\bunica\b|unic[aà]\s*istruzione/i,
-    url: 'https://unica.istruzione.gov.it/',
-    etichetta: 'Unica, il portale del Ministero',
-  },
-  {
-    re: /\binpa\b/i,
-    url: 'https://www.inpa.gov.it/',
-    etichetta: 'InPA, il portale del reclutamento pubblico',
-  },
-  {
-    re: /\binps\b/i,
-    url: 'https://www.inps.it/',
-    etichetta: 'INPS',
-  },
-  {
-    re: /pnrr\s*istruzione|futura/i,
-    url: 'https://pnrr.istruzione.it/',
-    etichetta: 'PNRR Istruzione',
-  },
-];
-
-/** Canale di presentazione citato nel testo (link diretto + etichetta onesta). */
-export function linkDomandaUfficiale(
-  testo: string,
-): { url: string; etichetta: string } | null {
-  const t = (testo ?? '').replace(/\s+/g, ' ');
-  for (const canale of CANALI_DOMANDA) {
-    if (canale.re.test(t)) return { url: canale.url, etichetta: canale.etichetta };
-  }
-  return null;
-}
-
-/**
- * Vero se il testo annuncia una PROCEDURA DA PRESENTARE (domanda, istanza,
- * candidatura, iscrizione): in quel caso la pubblicazione richiede il link
- * diretto al canale di presentazione, altrimenti l'avviso è incompleto.
- */
-export function richiedePresentazioneDomanda(testo: string): boolean {
-  return /(?:presentazione\s+delle\s+domande|presenta(?:re)?\s+(?:la\s+|le\s+)?(?:domanda|istanza|candidatura)|domanda\s+online|istanz[ae]\s+online|invio\s+della\s+domanda|candidatur[ae]|messa\s+a\s+disposizione|iscrizion[ei]\s+(?:al|alla|ai|online))/i.test(
-    testo ?? '',
-  );
-}
-
-interface ArticoloCopy {
-  /**
-   * Apertura in chiave AZIONE: parte da che cosa cambia per chi legge e termina
-   * con "…l'avviso / la circolare / il bando" (il titolo viene appeso in «…»).
-   * Vietate le aperture istituzionali ("Il Ministero … ha comunicato che…").
-   */
-  fatto: string;
-  chi: string;
-  pratica: string;
-  /**
-   * Che cosa fare: dice DOVE si presenta la domanda in testo semplice (nessun
-   * link: l'unico link pubblicato è quello diretto al documento ufficiale).
-   */
-  come: string;
-  /** Nome del portale di servizio citato (menzione in testo, mai link). */
-  portale: string;
-}
-
-const ARTICOLO_BASE: Record<string, ArticoloCopy> = {
-  'GPS': {
-    fatto:
-      'Puoi aggiornare punteggi, titoli e servizi delle GPS (Graduatorie Provinciali per le Supplenze, le liste da cui le scuole chiamano i docenti per gli incarichi annuali): è online',
-    chi:
-      'docenti e aspiranti docenti che aggiornano la propria posizione in graduatoria',
-    pratica:
-      'La posizione in GPS decide l\u2019ordine delle convocazioni: un punteggio sbagliato o un titolo non dichiarato pesa su tutte le chiamate dell\u2019anno. Controlla con calma la sezione dei punteggi prima di inviare, perché dopo la scadenza non si corregge più.',
-    come:
-      'La domanda si presenta soltanto online su Istanze Online (POLIS) con identità digitale SPID (Sistema Pubblico di Identità Digitale) o CIE (Carta d\u2019Identità Elettronica). Conserva la ricevuta di presentazione.',
-    portale: 'Istanze Online',
-  },
-  'Mobilità': {
-    fatto:
-      'Se chiedi un trasferimento, un passaggio di cattedra o il rientro nella tua provincia, sono online date e regole della mobilità: le trovi nell\u2019avviso',
-    chi:
-      'docenti di ruolo e dirigenti scolastici che chiedono un movimento per il prossimo anno',
-    pratica:
-      'La domanda si costruisce su preferenze e precedenze: vincoli triennali, precedenze di legge e punteggi cambiano l\u2019esito della richiesta. Una domanda incompleta o fuori termine resta senza effetto, quindi verifica i requisiti prima di compilare.',
-    come:
-      'La procedura è interamente online su Istanze Online con accesso SPID o CIE: rispetta la finestra temporale e allega i documenti che certificano le precedenze.',
-    portale: 'Istanze Online',
-  },
-  'Concorsi': {
-    fatto:
-      'Si apre la strada per entrare in ruolo o cambiare classe di concorso: è online il bando',
-    chi:
-      'candidati in possesso dei requisiti richiesti per la classe di concorso o il profilo messo a bando',
-    pratica:
-      'La selezione prevede prove e valutazione dei titoli: requisiti, programmi e modalità cambiano da bando a bando, quindi leggi il testo prima di compilare. La domanda va presentata entro il termine indicato, con i titoli già autocertificati.',
-    come:
-      'La domanda si presenta online sul Portale del Reclutamento (InPA) con SPID o CIE. Prepara in anticipo titoli, autocertificazione e ricevute.',
-    portale: 'InPA',
-  },
-  'Pensioni': {
-    fatto:
-      'Se stai valutando la cessazione dal servizio, sono aggiornate procedure e finestre per la pensione del personale scolastico: è online',
-    chi:
-      'personale scolastico che cessa dal servizio o regolarizza la propria posizione contributiva',
-    pratica:
-      'Le finestre e i requisiti della cessazione sono rigidi: un errore nei tempi fa slittare la decorrenza della pensione di mesi. Verifica prima la posizione contributiva e valuta riscatto o ricongiunzione.',
-    come:
-      'La domanda si presenta online sul portale INPS con identità SPID o CIE. Controlla cedolino ed estratti contributivi prima di inviare.',
-    portale: 'INPS',
-  },
-};
-
-function escapeHtmlEditoriale(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function formattaDataItaliana(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('it-IT', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
-}
-
-
-const ARTICOLO_ALTRE: Record<string, ArticoloCopy> = {
-  'Sostegno': {
-    fatto:
-      'Cambiano le indicazioni su ore di sostegno e documentazione di inclusione: è online la circolare',
-    chi: 'docenti di sostegno, consigli di classe, GLO (Gruppo di Lavoro Operativo) e famiglie',
-    pratica:
-      'PEI (Piano Educativo Individualizzato), verbali e osservazioni vanno predisposti e verificati nei tempi previsti: le scadenze del GLO scandiscono tutto l\u2019anno scolastico e un documento mancante blocca ore e misure di supporto.',
-    come:
-      'Le indicazioni operative sono nel testo ufficiale; le scadenze interne le fissa la segreteria. Prepara in anticipo la documentazione di accoglienza.',
-    portale: 'Ministero',
-  },
-  'Graduatorie': {
-    fatto:
-      'La tua posizione in graduatoria può cambiare: controlla i punteggi aggiornati nell\u2019avviso',
-    chi: 'docenti iscritti o in attesa di iscrizione nelle graduatorie provinciali e di istituto',
-    pratica:
-      'È la posizione pubblicata a decidere l\u2019ordine delle convocazioni: gli errori nei punteggi vanno segnalati entro i termini di rettifica, altrimenti restano e ti seguono per tutto l\u2019anno.',
-    come:
-      'Rettifiche e ricorsi si presentano online su Istanze Online con SPID o CIE. Verifica subito la tua posizione e prepara la documentazione.',
-    portale: 'Istanze Online',
-  },
-  'Supplenze': {
-    fatto:
-      'Cambiano le regole per supplenze e incarichi: è online l\u2019avviso',
-    chi: 'docenti in graduatoria, aspiranti supplenti e chi presenta la messa a disposizione',
-    pratica:
-      'Le convocazioni seguono l\u2019ordine di graduatoria e chi non risponde nei tempi viene saltato: tieni monitorata la posizione e aggiorna i recapiti, perché la chiamata può arrivare in poche ore.',
-    come:
-      'Domande e accettazioni si gestiscono online su Istanze Online con SPID o CIE. Tieni a portata di mano la documentazione di servizio.',
-    portale: 'Istanze Online',
-  },
-  'Scuole': {
-    fatto:
-      'Ci sono novità sull\u2019organizzazione dell\u2019anno scolastico: le trovi nella comunicazione',
-    chi: 'dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie',
-    pratica:
-      'Qui stanno scadenze e adempimenti che ricadono su orari, incarichi e attività della scuola: leggerli adesso evita di rincorrere le comunicazioni interne all\u2019ultimo momento.',
-    come:
-      'I dettagli completi sono nel testo ufficiale. Se la novità riguarda la tua scuola, la segreteria comunicherà le scadenze interne.',
-    portale: 'Ministero',
-  },
-  'PNRR': {
-    fatto:
-      'Ci sono fondi e scadenze da non perdere: è online l\u2019avviso PNRR (Piano Nazionale di Ripresa e Resilienza) per la scuola',
-    chi: 'scuole, dirigenti, docenti e personale coinvolto nei bandi PNRR',
-    pratica:
-      'Le scadenze PNRR sbloccano i finanziamenti per edilizia, digitalizzazione, nuove competenze e inclusione: un termine mancato fa perdere la quota assegnata, senza recuperi.',
-    come:
-      'Istanze e allegati si presentano sulle piattaforme dedicate al PNRR Istruzione. Rispetta la scadenza del bando e conserva la ricevuta di invio.',
-    portale: 'PNRR Istruzione',
-  },
-};
-
-const ARTICOLO: Record<string, ArticoloCopy> = {
-  ...ARTICOLO_BASE,
-  ...ARTICOLO_ALTRE,
-};
-
-/**
- * COPY DEDICATO alle notizie di IMPATTO PRATICO: quando il titolo parla di
- * welfare/polizza, formazione o organizzazione, l'apertura dice subito che cosa
- * cambia (e per chi) invece del generico template di categoria.
- */
-const IMPATTO_COPY: Array<{ re: RegExp; copy: ArticoloCopy }> = [
-  {
-    re: /(?:welfare|polizza|sanitari|assistenza)/i,
-    copy: {
-      fatto: 'Una novità concreta per chi lavora a scuola: è stata annunciata',
-      chi: 'tutto il personale della scuola — docenti e ATA — e le loro famiglie',
-      pratica:
-        'Non è una circolare operativa ma un cambio di condizioni: leggi coperture, decorrenza e modalità di adesione, per non restare fuori da un beneficio previsto per te.',
-      come: 'Coperture, decorrenza e come aderire sono nel testo ufficiale. In caso di dubbi, chiedi alla segreteria della tua scuola.',
-      portale: 'Ministero',
-    },
-  },
-  {
-    re: /(?:formazione|aggiornamento professionale|MIMeraviglIA)/i,
-    copy: {
-      fatto: 'Aggiornarsi conviene: è online un\u2019opportunità di formazione per il personale scolastico',
-      chi: 'docenti, personale ATA e dirigenti scolastici',
-      pratica:
-        'La formazione pesa su punteggi, incarichi e crescita professionale: verifica requisiti, tempi e modalità di iscrizione prima che la finestra chiuda.',
-      come: 'Requisiti, tempi e iscrizioni sono nel testo ufficiale: leggi tutto prima di iscriverti.',
-      portale: 'Ministero',
-    },
-  },
-  {
-    re: /(?:sicurezza|edilizia|digitalizzazione|organico|cattedre)/i,
-    copy: {
-      fatto: 'Cambia qualcosa nell\u2019organizzazione delle scuole: è stato pubblicato',
-      chi: 'il personale scolastico e l\u2019organizzazione della scuola',
-      pratica:
-        'Sono decisioni che ricadono su orari, incarichi e dotazioni: leggerle adesso serve a capire in anticipo che cosa cambia nella tua scuola.',
-      come: 'Il testo completo è quello ufficiale: controlla che cosa cambia per la tua scuola.',
-      portale: 'Ministero',
-    },
-  },
-];
-
-/**
- * Genera un articolo giornalistico naturale in 3 paragrafi fluidi, basato solo
- * sui dati reali della fonte. Nessun cliché da chatbot e nessuna sezione in
- * <h2>: si racconta il fatto, chi è coinvolto e come agire, con il link
- * contestuale alla procedura ufficiale.
- */
-/** Etichetta ONESTA per il link della fonte (vedi `etichettaLinkFonte`). */
-function etichettaLinkDiretto(url: string): string {
-  return etichettaLinkFonte(url);
-}
-
-/**
- * Genera un articolo giornalistico naturale in 3 paragrafi fluidi, basato solo
- * sui dati reali della fonte. Taglio da cronaca utile: 1) che cosa cambia, 2)
- * perché conta per te, 3) che cosa fare — con UN SOLO link, quello diretto al
- * documento ufficiale.
- */
-export function generaArticoloEditoriale(
-  d: DatiArticoloEditoriale,
-): { content_html: string; summary_points: string[] } {
-  const cat = d.categoria ?? 'Scuole';
-  const override = IMPATTO_COPY.find((o) => o.re.test(d.title));
-  const a = override?.copy ?? ARTICOLO[cat] ?? ARTICOLO['Scuole'];
-  const scadenza = d.deadline ? formattaDataItaliana(d.deadline) : null;
-
-  // ACRONIMI: spiegati alla PRIMA occorrenza nell'articolo (titolo → sintesi →
-  // corpo). La sigla già espansa non viene ripetuta nei passaggi successivi.
-  const spiegati = new Set<string>();
-  const titoloAcr = espandiAcronimi(d.title, spiegati).testo;
-  const fattoAcr = espandiAcronimi(a.fatto, spiegati).testo;
-  const chiAcr = espandiAcronimi(a.chi, spiegati).testo;
-  const praticaAcr = espandiAcronimi(a.pratica, spiegati).testo;
-  // Il "vai a controllare" generico è rumore: le indicazioni operative devono
-  // portare a un link diretto, non a un rinvio. Si rimuovono le code vaghe del
-  // copy di categoria prima di comporre il terzo paragrafo.
-  const pulisciRinvio = (testo: string): string =>
-    testo
-      .replace(
-        /\s*(?:Il testo completo è quello ufficiale|Le informazioni complete sono consultabili|I dettagli completi sono nel testo ufficiale)[^.]*\./gi,
-        '',
-      )
-      .replace(
-        /\s*(?:controlla|verifica|consulta)\s+(?:nel|il|sul)\s+(?:testo|sito|documento)\s+ufficiale[^.]*\./gi,
-        '',
-      )
-      // Qualunque frase che rinvia al "testo ufficiale" è un rinvio vago: si
-      // toglie del tutto (il link diretto sta già nel paragrafo).
-      .replace(/\s*[^.]*?\b(?:nel|sul)\s+(?:testo|sito|documento)\s+ufficiale\b[^.]*\./gi, '')
-      .trim();
-  const comeBase = espandiAcronimi(a.come, spiegati).testo;
-  const comePulito = pulisciRinvio(comeBase);
-  // Se la sanificazione svuota le indicazioni (la frase era SOLO un rinvio), si
-  // usa un default operativo: niente "leggi tutto", solo il fatto + il link.
-  const comeAcr =
-    comePulito.length >= 30
-      ? comePulito
-      : 'Le modalità operative e i requisiti sono quelli fissati dal documento ufficiale linkato qui sotto.';
-
-  // LINK DELLA FONTE: si usa SEMPRE la traccia disponibile (documento specifico
-  // quando tracciato, altrimenti la pagina ufficiale/elenco). Non si pubblica
-  // mai un link non valido (mockup/login), ma non si lascia MAI la notizia senza
-  // fonte: una notizia vera non viene soppressa per un link poco profondo.
-  const link = (d.official_url ?? '').trim();
-  const classeLink = classificaLink(link);
-  const hrefDiretto = classeLink.classe === 'non-valido' ? '' : link;
-  const anchor = (testo: string): string =>
-    hrefDiretto
-      ? `<a href="${escapeHtmlEditoriale(hrefDiretto)}" target="_blank" rel="noopener noreferrer">${escapeHtmlEditoriale(testo)}</a>`
-      : escapeHtmlEditoriale(testo);
-
-  // CANALE DI PRESENTAZIONE: quando la notizia riguarda una domanda, il link
-  // diretto va pubblicato INSIEME a quello della fonte (niente rinvii vaghi del
-  // tipo "verifica nel testo ufficiale"). Se coincide con la fonte, non si duplica.
-  const etichettaDomanda = d.application_label ?? 'il canale ufficiale di presentazione';
-  const hrefDomanda =
-    d.application_url && d.application_url !== hrefDiretto ? d.application_url : '';
-  const anchorDomanda = (testo: string): string =>
-    hrefDomanda
-      ? `<a href="${escapeHtmlEditoriale(hrefDomanda)}" target="_blank" rel="noopener noreferrer">${escapeHtmlEditoriale(testo)}</a>`
-      : escapeHtmlEditoriale(testo);
-
-  // 1) Che cosa cambia, subito: la frase contiene SEMPRE un'informazione completa
-  // (scadenza oppure canale di presentazione) e MAI una promessa di aggiornamento.
-  const scadenzaMs = d.deadline ? new Date(d.deadline).getTime() : Number.NaN;
-  const scadenzaPassata = !Number.isNaN(scadenzaMs) && scadenzaMs < Date.now();
-  const par1 = `${fattoAcr} \u00ab${escapeHtmlEditoriale(titoloAcr)}\u00bb. ${
-    scadenza && !scadenzaPassata
-      ? `Hai tempo fino al ${scadenza}: non rimandare all'ultimo giorno.`
-      : scadenzaPassata
-        ? hrefDomanda
-          ? `Il termine dell'avviso era il ${scadenza}; la procedura si presenta da ${anchorDomanda(etichettaDomanda)}.`
-          : `Il termine indicato nell'avviso era il ${scadenza}.`
-        : hrefDomanda
-          ? `La procedura è attiva: si presenta da ${anchorDomanda(etichettaDomanda)}.`
-          : `Cosa cambia in pratica e a chi serve è spiegato qui sopra; nel ${anchor('documento ufficiale')} trovi condizioni, requisiti e decorrenza.`
-  }`;
-
-  // 2) Perché conta (a chi serve, che cosa rischia).
-  const par2 = `Riguarda ${chiAcr}. ${praticaAcr}`;
-
-  // 3) Che cosa fare: canale di presentazione (se la procedura è da presentare) e
-  // fonte ufficiale — entrambi come link diretti.
-  const par3 = `${comeAcr}${
-    hrefDomanda ? ` Presenta la domanda da ${anchorDomanda(etichettaDomanda)}.` : ''
-  }${hrefDiretto ? ` Fonte ufficiale: ${anchor(etichettaLinkDiretto(hrefDiretto))}.` : ''}`;
-
-  const content_html = `<p>${par1}</p>\n    <p>${par2}</p>\n    <p>${par3}</p>`;
-
-  // "IN SINTESI": SOLO fatti diretti — che cosa cambia, chi è coinvolto, entro
-  // quando, che cosa fare e da dove si presenta. Nessun preambolo retorico,
-  // nessuna promessa: chi legge ha tutto quello che serve per agire.
-  // `summary_points[0]` resta una frase autosufficiente perché è usata come
-  // descrizione della card e come meta description (SEO).
-  const summary_points = [
-    `Cosa cambia: ${fattoAcr.replace(/[.\s]+$/, '')}.`,
-    `Chi riguarda: ${chiAcr.replace(/[.\s]+$/, '')}.`,
-    ...(scadenza ? [`Scadenza: ${scadenza} (termine indicato nell’avviso).`] : []),
-    `Cosa devi fare: ${comeAcr.replace(/[.\s]+$/, '')}.`,
-    ...(hrefDomanda ? [`Presenta la domanda: ${etichettaDomanda} (link diretto nell’articolo).`] : []),
-  ];
-
-  return { content_html, summary_points };
-}
-
-/**
- * Prompt per la scrittura dell'articolo con LLM: stesse regole editoriali
- * STRETTE (3 paragrafi fluidi, validità giuridica, linguaggio chiaro, strict
- * URL integrity, PDF ufficiali) — vedi docs/BLOG_EDITORIAL_GUIDELINES.md.
- */
-export function promptScritturaArticolo(d: DatiArticoloEditoriale): string {
-  return `Sei una giornalista esperta di scuola per ScuoleRadar, il sito per la scuola che fa risparmiare tempo.
-Scrivi un articolo di 3 paragrafi fluidi e naturali, in italiano, basandoti SOLO sui dati reali della fonte:
-- Titolo: ${d.title}
-- Categoria: ${d.categoria ?? 'n/d'}
-- Scadenza (ISO): ${d.deadline ?? 'n/d'}
-- Fonte: ${d.fonte}
-- URL fonte: ${d.official_url ?? ''}
-- Descrizione della fonte: ${d.descrizione ?? ''}
-
-Struttura (3 paragrafi, senza titoli di sezione):
-1. CHE COSA CAMBIA: apri con l'azione o la conseguenza pratica per chi legge (es. "Hai tempo fino al 30 settembre per…", "Cambiano le regole per le supplenze:…", "Arrivano i fondi per…") e cita il RIFERIMENTO UFFICIALE ESATTO (es. "l'Ordinanza Ministeriale n. X del ...", "il Decreto Ministeriale ...", "la Nota prot. ...") con la scadenza ESATTA. VIETATE le aperture istituzionali ("Il Ministero dell'Istruzione e del Merito ha comunicato che…", "Il MIM ha pubblicato…", "È stato pubblicato…") e i testi vaghi ("le date saranno confermate").
-2. PERCHÉ CONTA PER TE: a chi serve (docenti, ATA, dirigenti) e che cosa si rischia a non muoversi, spiegando la burocrazia in LINGUAGGIO SEMPLICE.
-3. CHE COSA FARE: come si procede (portale, modalità, documenti) e UN SOLO link, quello diretto al documento ufficiale.
-
-REGOLE VINCOLANTI:
-- VALIDITÀ GIURIDICA: cita SEMPRE il riferimento normativo preciso (Ordinanza Ministeriale, Decreto, Nota prot., articolo di legge) quando la fonte lo contiene; mai riferimenti generici.
-- ZERO BUROCRAZIA: frasi brevi e voce diretta, seconda persona ("hai", "puoi", "devi"), niente premesse istituzionali, niente fluff, niente cliché da chatbot ("C'è una novità ufficiale", "La fonte ufficiale segnala", "Vale la pena di leggere subito").
-- ZERO RUMORE: nessun contenuto promozionale, nessun riferimento a discorsi, interviste o dichiarazioni non vincolanti.
-- FONTE TRACCIABILE (OBBLIGATORIA): nel terzo paragrafo cita SEMPRE la fonte con l'URL fornito (${d.official_url ?? 'n/d'}). Quando la fonte è il documento specifico (pagina dell'avviso o PDF) dillo chiaramente; quando è la pagina ufficiale su cui si basa la notizia (elenco/circolare), cita quella dicendo "nella pagina ufficiale della fonte". Vietato inventare link, usare segnaposto o linkare mockup/login; NON lasciare mai l'articolo senza fonte.
-- PDF UFFICIALE: se la fonte è un PDF ufficiale o ne fornisce uno allegato, usa quell'URL diretto nel link (target="_blank" rel="noopener noreferrer").
-- Spiega SEMPRE gli acronimi alla prima menzione (es. "GPS (Graduatorie Provinciali per le Supplenze, le liste per gli incarichi annuali)", "SPID (Sistema Pubblico di Identità Digitale)").
-- Niente <h2>, niente riempitivi, niente dati inventati. Restituisci SOLO i 3 paragrafi in HTML.
-- NON aggiungere footer, firme, link al blog, inviti a iscriversi o CTA promozionali.`;
-}
-
+/* ============ SUPERFICIE PUBBLICA (re-export dei sotto-moduli) ============ */
+/* Il contratto storico del motore resta invariato: chi importava da qui continua
+   a farlo. La logica vive nei sotto-moduli specializzati. */
+export { èFonteCanonica, èFonteMim, èFonteNazionale, èLinkPdf, validaUrlDeepLink } from './fontiUfficiali';
+export {
+  classificaLink,
+  etichettaLinkFonte,
+  linkDirettoUfficiale,
+  linkNonValidiInHtml,
+  linkVietatiInHtml,
+} from './linkUfficiale';
+export type { ClasseLink, EsitoLinkDiretto, ValutazioneLink } from './linkUfficiale';
+export {
+  FINESTRA_LOOKBACK_GIORNI,
+  FINESTRA_LOOKBACK_NAZIONALE_GIORNI,
+  MAX_ARTICOLI_FINESTRA,
+  MAX_ARTICOLI_SETTIMANA,
+  limitaArticoliSettimanali,
+  limitaCadenzaSettimanale,
+  verificaCadenzaSettimanale,
+} from './cadenzaArticoli';
+export {
+  generaArticoloEditoriale,
+  linkDomandaUfficiale,
+  richiedePresentazioneDomanda,
+} from './articoloEditoriale';
+export type { DatiArticoloEditoriale } from './articoloEditoriale';
+export { promptFiltroLLM, promptScritturaArticolo } from './promptEditoriale';
+export {
+  APERTURE_VIETATE,
+  NOME_VOCE,
+  REGOLE_VOCE,
+  apertureVietateTesto,
+  bloccoVoceEditoriale,
+  espandiAcronimi,
+} from './editorialVoice';
+export type { ValutazioneNotizia, VoceInValutazione } from './valutazioneTipi';

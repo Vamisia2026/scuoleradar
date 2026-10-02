@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Radar, ArrowRight, ArrowLeft, AlertCircle, Gift, PartyPopper, Loader2 } from 'lucide-react';
 import { Modal } from '@/components/Modal';
+import { useToast } from '@/components/Toast';
 import { useApp, STORAGE_KEY_RADAR_WIZARD_PENDING, type Preferenze } from '@/contexts/AppContext';
 import { track } from '@/lib/analytics';
+import { PROMO_CODE_PRO_ANNUALE_40 } from '@/lib/promo';
 import {
   aggiornaBozzaRegistrazione,
   leggiBozzaRegistrazione,
@@ -32,6 +34,7 @@ import {
   messaggioCampiMancanti,
   validaConfigRadar,
 } from '@/lib/radarValidation';
+import { CtaProAnnuale } from './components/CtaProAnnuale';
 import { PassoOrdini } from './wizard/PassoOrdini';
 import { PassoProvince } from './wizard/PassoProvince';
 import { PassoClassiMaterie } from './wizard/PassoClassiMaterie';
@@ -79,12 +82,16 @@ export function RadarWizardModal() {
   const {
     user, preferenze, radarWizardOpen, closeRadarWizard, setPreferenze, completaOnboarding, salvaProfilo,
     aggiornaRadarAttivo, attivaTrialPro, openAuthModal, piano, hasProAccess, pianoStato, trialAttivo,
-    loginConGoogle, aggiornaAnagrafica, supabaseUserId, refreshProfilo,
+    loginConGoogle, aggiornaAnagrafica, supabaseUserId, refreshProfilo, avviaCheckout,
   } = useApp();
+
+  const { mostraToast } = useToast();
 
   const [fase, setFase] = useState<'wizard' | 'done'>('wizard');
   const [step, setStep] = useState(1);
   const [salvando, setSalvando] = useState(false);
+  /** Checkout PRO annuale in corso (CTA della conferma): una sola scheda Stripe. */
+  const [checkoutInCorso, setCheckoutInCorso] = useState(false);
 
   const [ordini, setOrdini] = useState<OrdineScuola[]>([]);
   const [classiCodici, setClassiCodici] = useState<string[]>([]);
@@ -611,6 +618,23 @@ export function RadarWizardModal() {
     navigate('/dashboard/radar');
   };
 
+  /**
+   * CHIUSURA COMMERCIALE ANNUALE (direttiva cliente 28/09/2026): il checkout parte
+   * con il SOLO codice del coupon `PROANNUALE40` — mappatura Stripe e importo restano
+   * server-side. Errori mostrati con un toast, mai silenziosi.
+   */
+  const attivaProAnnuale = (): void => {
+    if (checkoutInCorso) return;
+    setCheckoutInCorso(true);
+    void avviaCheckout('pro_annuale', PROMO_CODE_PRO_ANNUALE_40)
+      .then((esito) => {
+        if (!esito.ok) {
+          mostraToast('errore', esito.errore ?? 'Impossibile avviare il pagamento. Riprova.');
+        }
+      })
+      .finally(() => setCheckoutInCorso(false));
+  };
+
   const totalSteps = 4;
 
   return (
@@ -641,6 +665,15 @@ export function RadarWizardModal() {
             {classiCodici.length + materieId.length + materieCustom.length} tra classi e materie. Ti
             avviseremo appena esce un&apos;opportunità per te.
           </p>
+
+          {/* CTA PRO ANNUALE nella schermata di conferma post-configurazione: pulsante
+              in evidenza con la copy del cliente e il coupon PROANNUALE40 già
+              applicato. Compare con il mese in omaggio attivo (è la continuazione
+              dell'offerta), mai per il PRO gratuito a vita. */}
+          {user && trialAttivo && piano !== 'free_forever' && (
+            <CtaProAnnuale onAttiva={attivaProAnnuale} inCorso={checkoutInCorso} />
+          )}
+
           <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
             <button
               onClick={vaiAlRadar}
@@ -728,6 +761,7 @@ export function RadarWizardModal() {
               notifica={{ telegramCollegato, telegramDeepLink, telegramUsername, setTelegramUsername, emailNotifica, setEmailNotifica }}
               piano={{ isProAttivo, isTrialAttivo }}
               anagrafica={{ dati: anagrafica, onChange: onChangeAnagrafica }}
+              trasparenza={{ provinceCodici, classiCodici, materieId, materieCustom }}
               rapida={{
                 ospite: !user,
                 googleInCorso,

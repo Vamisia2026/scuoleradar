@@ -8,6 +8,8 @@ import { track } from '@/lib/analytics';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { PureFocusCard } from '@/components/PureFocusCard';
+import { FAQ_PUBBLICHE } from '@/data/faqPubbliche';
+import { useTestiEditabili } from '@/hooks/useTestiEditabili';
 
 interface Vantaggio {
   testo: string;
@@ -95,45 +97,18 @@ const piani: Piano[] = [
 ];
 
 /**
- * FAQ COMMERCIALI della pagina Prezzi.
- *
- * Ogni risposta è un punto di forza o un'istruzione operativa (inserire
- * ScuoleRadar tra le app attendibili della scuola tramite l'Animatore Digitale,
- * «Invita un Collega», PureFocus con l'account Gmail, servizi in arrivo):
- * nessuna domanda difensiva su cancellazione o sicurezza dei pagamenti. Le
- * stesse risposte vivono nella pagina pubblica `/faq` (`FAQPage`).
+ * Sezione «Domande frequenti»: STESSO elenco di `/faq` (elenco unico in
+ * `src/data/faqPubbliche.ts`), testi dal registro `src/data/editableTexts.ts` resi per
+ * chiave. La pagina resta 🔒 BLOCCATA (`LOCKED_MODULES.md`) per il listino: piani,
+ * importi e vantaggi non passano dal registro e non si toccano da qui.
  */
-const faq = [
-  {
-    q: 'Sono Animatore Digitale o Referente Google: come inserisco ScuoleRadar tra i siti sicuri della scuola?',
-    a: 'Bastano due minuti e vale per tutto l’Istituto: nella Google Admin Console apri Sicurezza › Controllo dell’accesso e dei dati › Controlli API e App terze, scegli «Aggiungi app», cerca ScuoleRadar (oppure incolla il Client ID che ti forniamo) e contrassegnala come «Attendibile» (Trusted). Da quel momento tutti i docenti della scuola accedono con un click, senza email personali e senza blocchi.',
-  },
-  {
-    q: 'Come funziona «Invita un Collega»?',
-    a: 'Nella sezione «Invita un Collega» trovi il tuo codice personale e il link pronto da condividere. Chi si abbona al piano PRO annuale con il tuo codice riceve 10 € di sconto; quando l’abbonamento risulta confermato, tu accumuli 10 € di credito. Gli utilizzi li segui dalla tua area, senza vedere alcun dato personale di chi ha usato il codice.',
-  },
-  {
-    q: 'PureFocus richiede un account nuovo? Funziona con la mia Gmail?',
-    a: 'No: funziona nel browser con l’account Google che usi già, anche una normale @gmail.com. Nessun secondo account, nessun browser dedicato. È incluso nel piano PRO e lo apri dal tuo profilo con il link diretto a purefocus.one.',
-  },
-  {
-    q: 'L’Assistente Sindacalista Virtuale è già disponibile?',
-    a: 'È in anteprima ed è riservato agli abbonati PRO: addestrato su normative e situazioni lavorative scolastiche (GPS, mobilità, supplenze, contratti). Dal tuo account PRO chiedi l’accesso in anteprima; intanto Radar, Calcolatore CFU, Modulistica e PureFocus sono già attivi dal primo giorno.',
-  },
-  {
-    q: 'Posso attivare il PRO con la Carta del Docente?',
-    a: 'Stiamo completando l’integrazione con la Carta del Docente per il piano PRO annuale: sarà uno dei modi per attivarlo, con il valore del buono che copre l’intero anno. Nel frattempo il mese di PRO incluso parte subito e i servizi restano acquistabili anche a consumo.',
-  },
-  {
-    q: 'Che differenza c’è tra il piano Base e il PRO?',
-    a: 'Base: monitoraggio di una provincia con digest quotidiano alle 17:00. PRO: fino a 4 province e 4 classi di concorso con avvisi in tempo reale su Telegram, più PureFocus, CV, Calcolatore CFU, Modulistica e Assistente alla Modulistica in versione completa. Il PRO annuale costa 49 €/anno (circa 4 € al mese) e si disdice quando vuoi.',
-  },
-];
 
 export function PrezziPage() {
   const navigate = useNavigate();
   const { user, openAuthModal, avviaCheckout, hasProAccess } = useApp();
   const { mostraToast } = useToast();
+  // Testi dal registro (default del codice + eventuale override DEV): zero copy nel markup.
+  const { testo } = useTestiEditabili();
   const [promoUrl, setPromoUrl] = useState<string | null>(null);
   const [crediti, setCrediti] = useState<number>(5);
   /** Piano con checkout in corso (per disabilitare la CTA e mostrare il caricamento). */
@@ -335,16 +310,17 @@ export function PrezziPage() {
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
           <h2 className="text-center text-3xl font-bold text-primary-900">Domande frequenti</h2>
           <div className="mt-8 space-y-3">
-            {faq.map((f) => (
+            {FAQ_PUBBLICHE.map((f) => (
               <details
+                id={f.id}
                 key={f.q}
-                className="group rounded-2xl border border-primary-100 bg-white p-5 shadow-card open:bg-primary-50/50"
+                className="group scroll-mt-24 rounded-2xl border border-primary-100 bg-white p-5 shadow-card open:bg-primary-50/50"
               >
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-base font-semibold text-primary-800">
-                  {f.q}
+                  {testo(f.q)}
                   <span className="text-primary-400 transition group-open:rotate-45">+</span>
                 </summary>
-                <p className="mt-3 text-sm leading-relaxed text-primary-600">{f.a}</p>
+                <p className="mt-3 text-sm leading-relaxed text-primary-600">{testo(f.a)}</p>
               </details>
             ))}
           </div>

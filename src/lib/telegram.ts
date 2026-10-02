@@ -325,10 +325,10 @@ export function formattaMessaggioTelegram(
   }
 
   // UNA SOLA CTA cliccabile per l'opportunità: il link di fonte è il bottone in
-  // fondo, con etichetta canonica `🔗 Fonte Ufficiale` (URL solo nell'href).
-  // La vecchia riga duplicata "Fonte ufficiale verificata … apri e candidati" è
-  // stata rimossa: puntava allo stesso URL del bottone.
-  const etichettaOpp = ETICHETTA_FONTE_UFFICIALE;
+  // fondo, con l'etichetta dei messaggi PERSONALI `👉 Apri l'avviso ufficiale`
+  // (URL solo nell'href). La vecchia riga duplicata "Fonte ufficiale verificata …
+  // apri e candidati" è stata rimossa: puntava allo stesso URL del bottone.
+  const etichettaOpp = ETICHETTA_AVVISO_UFFICIALE;
 
   // Email di candidatura della scuola: mostrata SOLO se estratta con certezza.
   // Se manca si OMETTE la riga (mai "Email non disponibile": nessuno stato
@@ -360,11 +360,12 @@ export function formattaMessaggioTelegram(
   if (emailRiga) parti.push(emailRiga);
 
   if (conOpportunita) {
-    // LINK alla pubblicazione ufficiale: etichetta canonica `🔗 Fonte Ufficiale`
-    // (l'anteprima del link è disattivata a monte: nessun riquadro con loghi o
-    // immagini). La riga compare SOLO con un avviso diretto (`eUrlAvvisoDiretto`
-    // dentro `rigaFonteUfficiale`): con una home, un elenco o una pagina di
-    // ricerca il messaggio resta senza riga di fonte — mai un fallback generico.
+    // LINK alla pubblicazione ufficiale: etichetta dei messaggi PERSONALI
+    // `👉 Apri l'avviso ufficiale` (l'anteprima del link è disattivata a monte:
+    // nessun riquadro con loghi o immagini). La riga compare SOLO con un avviso
+    // diretto (`eUrlAvvisoDiretto` dentro `rigaAvvisoUfficiale`): con una home, un
+    // elenco o una pagina di ricerca il messaggio resta senza riga di fonte — mai
+    // un fallback generico.
     const rigaLink = rigaAvvisoUfficiale(linkOpp);
     if (rigaLink) parti.push(rigaLink);
     // CTA UNICA: ricalibrare il Radar. Sostituisce il vecchio footer promozionale
@@ -451,21 +452,28 @@ export function deveMostrareCtaRadar(seme?: string | null): boolean {
 export const ETICHETTA_AVVISO_UFFICIALE = ETICHETTA_AVVISO_UFFICIALE_SHARED;
 
 /**
- * ETICHETTA UNICA della riga con la FONTE UFFICIALE in OGNI messaggio Telegram
- * (alert personali, digest, post dei canali pubblici).
+ * ETICHETTA della riga con la FONTE UFFICIALE nei POST dei CANALI PUBBLICI
+ * (broadcast regionali/generali).
+ *
+ * `checklist_straordinaria.md` §3 e `checklist_regionali.md` §2 — due etichette
+ * di fonte, UNA per superficie, mai varianti:
+ *   · messaggi PERSONALI (email, alert PRO, digest) → `👉 Apri l'avviso ufficiale`
+ *     (`ETICHETTA_AVVISO_UFFICIALE`, condivisa con le email);
+ *   · post dei CANALI PUBBLICI → `🔗 Leggi la Fonte Ufficiale` (questa costante).
  *
  * Regole di prodotto applicate QUI (non nei chiamanti):
- *   · testo iperlinkato pulito `🔗 Fonte Ufficiale`: l'URL ufficiale non compare
- *     MAI in chiaro nel messaggio, sta solo nell'`href`;
+ *   · testo iperlinkato pulito: l'URL ufficiale non compare MAI in chiaro nel
+ *     messaggio, sta solo nell'`href`;
  *   · la destinazione deve essere un avviso SPECIFICO e DIRETTO (gate
  *     `eUrlAvvisoDiretto`): mai home dell'ente, elenchi/archivi/tag, landing
  *     regionali o pagine di ricerca (`?s=INTERPELLO`). Un link non diretto
  *     produce una riga VUOTA: nessun fallback a una pagina di ricerca.
  */
-export const ETICHETTA_FONTE_UFFICIALE = '🔗 Fonte Ufficiale';
+export const ETICHETTA_FONTE_UFFICIALE = '🔗 Leggi la Fonte Ufficiale';
 
 /**
- * Riga della fonte ufficiale: `<a href="URL"><b>🔗 Fonte Ufficiale</b></a>`.
+ * Riga della fonte ufficiale nei POST dei CANALI PUBBLICI:
+ * `<a href="URL"><b>🔗 Leggi la Fonte Ufficiale</b></a>`.
  * Ritorna stringa vuota quando il link non è un avviso diretto (o è assente):
  * il messaggio resta senza riga di fonte, mai con un link generico.
  *
@@ -488,12 +496,19 @@ export function rigaFonteUfficiale(link?: string | null): string {
 export const FOOTER_NOTIZIE = CTA_NOTIZIE_TELEGRAM;
 
 /**
- * Riga dell'avviso ufficiale negli ALERT personali e nel DIGEST: delega alla riga
- * canonica (`rigaFonteUfficiale`) così l'etichetta e il gate sui link diretti
- * restano UNICI in tutto il modulo Telegram.
+ * Riga dell'avviso ufficiale negli ALERT personali e nel DIGEST — superficie
+ * PERSONALE: etichetta canonica `👉 Apri l'avviso ufficiale`, la stessa delle
+ * email (`ETICHETTA_AVVISO_UFFICIALE`). Il gate sui link diretti è identico a
+ * quello dei canali (`eUrlAvvisoDiretto`): le due superfici cambiano solo
+ * l'etichetta, mai il controllo sulla destinazione.
  */
 export function rigaAvvisoUfficiale(link?: string | null): string {
-  return rigaFonteUfficiale(link);
+  if (!eUrlAvvisoDiretto(link)) return '';
+  const url = urlAssolutaValida(link);
+  if (!url) return '';
+  return `<a href="${escapeHtml(pulisciUrlTelegram(url))}"><b>${escapeHtml(
+    ETICHETTA_AVVISO_UFFICIALE,
+  )}</b></a>`;
 }
 
 /** Riga finale dell'alert con il link al setup del Radar dell'utente. */

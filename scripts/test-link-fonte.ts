@@ -10,6 +10,7 @@
  */
 import { readFileSync } from 'node:fs';
 import {
+  ETICHETTA_AVVISO_UFFICIALE,
   classificaFonteLink,
   etichettaFonteLink,
   costruisciAvviso,
@@ -102,14 +103,18 @@ check('niente etichette di fonte alternative', false, /Apri il bando ufficiale|A
 check('niente vecchia dicitura Albo+candidati', false, html.includes('Fonte ufficiale verificata (Albo Pretorio)'));
 check('email candidature presente (mailto)', true, html.includes('mailto:segreteria@liceoaugustomonti.edu.it'));
 
-console.log('\n— Telegram: UN SOLO link alla fonte + etichetta canonica —');
+console.log('\n— Telegram: UN SOLO link alla fonte + etichetta della superficie PERSONALE —');
 const tg = formattaMessaggioTelegram(interpello, 'A-041', 'https://www.scuoleradar.it/dashboard', 'notifica_pro');
 check('un solo link alla fonte', 1, occorrenze(tg, ALBO));
 check('nessun link "candidati"', false, /candidat/i.test(tg.replace(/Candidature:/g, '')));
+// `checklist_straordinaria.md` §3: UNA etichetta per superficie. I messaggi
+// PERSONALI (alert PRO, digest, email) usano `👉 Apri l'avviso ufficiale`
+// (`ETICHETTA_AVVISO_UFFICIALE`); i POST dei canali pubblici usano
+// `🔗 Leggi la Fonte Ufficiale` (`ETICHETTA_FONTE_UFFICIALE`, vedi test:telegram:canali).
 check(
-  "etichetta canonica nel link: '🔗 Fonte Ufficiale'",
+  "etichetta personale nel link: '👉 Apri l'avviso ufficiale'",
   true,
-  tg.includes('<b>🔗 Fonte Ufficiale</b></a>'),
+  tg.includes(`<b>${ETICHETTA_AVVISO_UFFICIALE}</b></a>`),
 );
 check(
   'Telegram: URL della fonte mai in chiaro',

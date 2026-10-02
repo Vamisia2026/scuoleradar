@@ -113,26 +113,41 @@ check(
   "👉 Apri l'avviso ufficiale",
   ETICHETTA_AVVISO_UFFICIALE,
 );
-// TELEGRAM: etichetta UNICA e canonica del link alla fonte, applicata dai
-// generatori di riga (`rigaFonteUfficiale`/`rigaAvvisoUfficiale`) e MAI un URL
-// di fonte in chiaro nel testo del messaggio.
-check('etichetta unica Telegram del link fonte', '🔗 Fonte Ufficiale', ETICHETTA_FONTE_UFFICIALE);
+// TELEGRAM: UNA etichetta per SUPERFICIE (`checklist_straordinaria.md` §3):
+//   · messaggi PERSONALI (alert PRO, digest) → `👉 Apri l'avviso ufficiale`, la
+//     stessa etichetta condivisa con le email, applicata da `rigaAvvisoUfficiale`;
+//   · POST dei CANALI PUBBLICI → `🔗 Leggi la Fonte Ufficiale`, applicata da
+//     `rigaFonteUfficiale`.
+// In nessun caso un URL di fonte in chiaro nel testo del messaggio.
+check('etichetta dei post dei canali pubblici', '🔗 Leggi la Fonte Ufficiale', ETICHETTA_FONTE_UFFICIALE);
 check(
-  'Telegram: la riga fonte usa l’etichetta canonica',
+  'Telegram: la riga personale usa l’etichetta personale condivisa',
+  true,
+  /rigaAvvisoUfficiale[\s\S]{0,400}ETICHETTA_AVVISO_UFFICIALE/.test(telegramCodice),
+);
+check(
+  'Telegram: la riga dei canali pubblici usa l’etichetta dei canali',
   true,
   /rigaFonteUfficiale[\s\S]{0,400}ETICHETTA_FONTE_UFFICIALE/.test(telegramCodice),
 );
-// Confronto sul CODICE, senza commenti: una nota che cita la vecchia etichetta
-// non deve far fallire la guardia.
+// Confronto sul CODICE, senza commenti: una nota che cita un'etichetta non deve
+// far fallire la guardia.
 const telegramCodiceSenzaCommenti = telegramCodice
   .split('\n')
   .filter((riga) => !/^\s*(?:\/\/|\/\*|\*)/.test(riga))
   .join('\n');
+// Nessuna etichetta riscritta a mano nel modulo: quella personale arriva dalla
+// costante CONDIVISA con le email (`alertInterpello.ts`), quella dei canali
+// pubblici è definita UNA volta sola in `telegram.ts`.
 check(
-  "Telegram: nessuna etichetta legacy nel codice ('Apri l'avviso ufficiale' / 'Leggi la Fonte Ufficiale')",
+  "Telegram: nessun letterale 'Apri l'avviso ufficiale' nel modulo (arriva dalla costante condivisa)",
   false,
-  telegramCodiceSenzaCommenti.includes("Apri l'avviso ufficiale") ||
-    telegramCodiceSenzaCommenti.includes('Leggi la Fonte Ufficiale'),
+  telegramCodiceSenzaCommenti.includes("Apri l'avviso ufficiale"),
+);
+check(
+  'Telegram: etichetta dei canali pubblici definita una sola volta',
+  1,
+  telegramCodiceSenzaCommenti.split("'🔗 Leggi la Fonte Ufficiale'").length - 1,
 );
 check(
   'nessun marchio testuale non cliccabile (il brand è un link)',

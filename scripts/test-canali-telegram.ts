@@ -5,8 +5,9 @@
  * (1 Docenti, 1 ATA, 1 PNRR) e verifica i requisiti STRICT dei post pubblici:
  *   · BRAND cliccabile in testa a OGNI post (`📡 … Scuole Radar.it`);
  *   · 7 sezioni, testate tipografiche (nessuna fascia colorata o `[BADGE]`);
- *   · LINK ALLA FONTE: solo la riga iperlinkata `🔗 Fonte Ufficiale`,
- *     con l'URL dell'AVVISO SPECIFICO nell'href — nessun URL ufficiale in chiaro;
+ *   · LINK ALLA FONTE: solo la riga iperlinkata `🔗 Leggi la Fonte Ufficiale`
+ *     (etichetta dei CANALI PUBBLICI), con l'URL dell'AVVISO SPECIFICO
+ *     nell'href — nessun URL ufficiale in chiaro;
  *   · GATE LINK DIRETTO: home regionali, elenchi/tag, landing regionali e pagine
  *     di ricerca NON vengono pubblicate (post senza link + pubblicazione annullata);
  *   · ROUTING: canale della regione attiva (+ @scuoleradar_ata per gli ATA).
@@ -33,6 +34,7 @@ import {
   canaleAtaNazionale,
   classificaCategoriaPost,
   destinazioniPubblicazione,
+  ETICHETTA_FONTE_UFFICIALE,
   formattaPostCanaleTelegram,
   inviaMessaggioTelegram,
   pubblicaInterpelloSuCanali,
@@ -55,6 +57,16 @@ try {
   process.loadEnvFile?.();
 } catch {
   // Nessun .env: si usano le variabili già presenti nell'ambiente
+}
+
+/**
+ * RegExp della riga canonica dei POST PUBBLICI
+ * (`<a href="URL"><b>ETICHETTA</b></a>`), costruita DALL'etichetta reale —
+ * `checklist_regionali.md` §2 — così il test non duplica il letterale.
+ * L'URL ufficiale resta solo nell'`href`.
+ */
+function rigaFonteCanonica(etichetta: string): RegExp {
+  return new RegExp(`<a href="https?:\\/\\/[^"]+"><b>${etichetta}<\\/b><\\/a>`);
 }
 
 /**
@@ -170,10 +182,10 @@ function verificaStruttura(avviso: InterpelloCanale, testo: string): string[] {
   if (avviso.expirationDate && !testo.includes('📅 Scadenza: <b>')) {
     problemi.push('manca la riga "📅 Scadenza:"');
   }
-  // 4) FONTE: riga iperlinkata con l'etichetta canonica
-  //    "🔗 Fonte Ufficiale" (l'URL ufficiale resta solo nell'href).
-  if (!/<a href="https?:\/\/[^"]+"><b>🔗 Fonte Ufficiale<\/b><\/a>/.test(testo)) {
-    problemi.push('manca la riga canonica "🔗 Fonte Ufficiale"');
+  // 4) FONTE: riga iperlinkata con l'etichetta dei CANALI PUBBLICI
+  //    "🔗 Leggi la Fonte Ufficiale" (l'URL ufficiale resta solo nell'href).
+  if (!rigaFonteCanonica(ETICHETTA_FONTE_UFFICIALE).test(testo)) {
+    problemi.push(`manca la riga canonica dei canali "${ETICHETTA_FONTE_UFFICIALE}"`);
   }
   if (/candidat/i.test(testo.replace(/Candidature:/g, ''))) {
     problemi.push('trovata la parola vietata "candidati"');
@@ -424,8 +436,8 @@ async function main(): Promise<void> {
 
   // ── GATE DI LINK SAFETY ────────────────────────────────────────────────────
   // Con una fonte NON diretta (home regionale, elenco/tag, landing regionale,
-  // pagina di ricerca) l'avviso non deve comparire sui canali: niente link
-  // "Apri l'avviso ufficiale" nel post e pubblicazione annullata a monte.
+  // pagina di ricerca) l'avviso non deve comparire sui canali: niente riga
+  // "Leggi la Fonte Ufficiale" nel post e pubblicazione annullata a monte.
   console.log('\n──────────────────────────────────────────────────────────');
   console.log('🔒 GATE LINK DIRETTO — fonti non dirette mai pubblicate');
   const fontiNonDirette: { nome: string; link: string }[] = [
@@ -447,7 +459,7 @@ async function main(): Promise<void> {
       link: fonte.link,
     };
     const testo = formattaPostCanaleTelegram(avviso);
-    if (testo.includes('Leggi la Fonte Ufficiale')) {
+    if (testo.includes(ETICHETTA_FONTE_UFFICIALE)) {
       problemiGate.push(`${fonte.nome}: il post contiene il link all'avviso nonostante la fonte non diretta`);
     }
     if (fonte.link && testo.includes(fonte.link)) {
@@ -476,8 +488,8 @@ async function main(): Promise<void> {
     link: 'https://www.usp-asti.gov.it/interpelli/avviso-a026',
   };
   const postDiretto = formattaPostCanaleTelegram(avvisoDiretto);
-  if (!postDiretto.includes(`<a href="${avvisoDiretto.link}"><b>🔗 Fonte Ufficiale</b></a>`)) {
-    problemiGate.push('fonte diretta: manca la riga canonica "🔗 Fonte Ufficiale"');
+  if (!postDiretto.includes(`<a href="${avvisoDiretto.link}"><b>${ETICHETTA_FONTE_UFFICIALE}</b></a>`)) {
+    problemiGate.push(`fonte diretta: manca la riga canonica "${ETICHETTA_FONTE_UFFICIALE}"`);
   }
   // L'URL ufficiale NON deve comparire in chiaro: si controlla il testo SENZA gli
   // attributi `href`, così la verifica vale per qualsiasi impaginazione.

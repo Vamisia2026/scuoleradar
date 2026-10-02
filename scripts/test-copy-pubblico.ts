@@ -12,13 +12,14 @@
  *      piano PRO» e link in evidenza a purefocus.one;
  *   3. Chi siamo: CTA «Attiva il tuo radar» e nessun riferimento alla Carta del
  *      Docente in chiave difensiva;
- *   4. FAQ: punti di forza commerciali (app attendibile per la scuola, «Invita un
- *      Collega», PureFocus con Gmail, servizi in arrivo);
- *   5. pagina Prezzi: le FAQ sono commerciali (niente domande difensive) e la
+ *   4. FAQ: punti di forza commerciali, con UN solo elenco condiviso fra `/faq` e
+ *      `/prezzi` (i testi vivono nel registro `src/data/editableTexts.ts`);
+ *   5. pagina Prezzi: le FAQ arrivano dall’elenco condiviso (niente domande difensive) e la
  *      vetrina PureFocus ha la larghezza delle colonne dei piani;
- *   6. form rapido sotto l'hero: nome, cognome ed email finiscono nella bozza e si
- *      apre la modale di configurazione del Radar, già compilata (un solo
- *      passaggio, nessun doppione di modali);
+ *   6. form rapido (condiviso tra la sezione sotto l'hero e la chiusura PRO):
+ *      nome, cognome ed email finiscono nella bozza e si apre la modale di
+ *      configurazione del Radar, già compilata (un solo passaggio, un solo
+ *      percorso: nessun doppione di modali);
  *   7. sostegno INCLUSO di default (nessun filtro silenzioso) e nessuna identità
  *      demo di fantasia nei sorgenti.
  *
@@ -86,31 +87,32 @@ check(
   true,
   chiSiamo.includes('Attiva il tuo radar') && !/Carta del Docente/.test(chiSiamo),
 );
-check(
-  'FAQ: app attendibile, «Invita un Collega», PureFocus con Gmail, servizi in arrivo',
-  true,
-  /id: 'animatore-digitale'/.test(faq) &&
-    /Invita un Collega/.test(faq) &&
-    /gmail\.com/.test(faq) &&
-    /Carta del Docente/.test(faq) &&
-    /Assistente Sindacalista Virtuale/.test(faq),
-);
+// Copy FAQ nel registro testi: si verifica la copy E il cablaggio della pagina.
+const faqTesti = leggi('src/data/editableTexts.ts');
+const elencoFaq = leggi('src/data/faqPubbliche.ts');
+check('FAQ: copy commerciale nel registro, elenco condiviso e pagine cablate', true,
+  /from '@\/data\/faqPubbliche'/.test(faq) && /FAQ_PUBBLICHE\.map/.test(faq) && /testo\(f\.q\)/.test(faq) &&
+  /id: 'animatore-digitale'/.test(elencoFaq) &&
+  /Invita un Collega/.test(faqTesti) && /account Gmail/.test(faqTesti) && /Carta del Docente/.test(faqTesti) &&
+  /buono Amazon da 10 Euro/.test(faqTesti) && /piano-conveniente/.test(faqTesti) &&
+  /regala-pro-collega/.test(faqTesti));
 
-console.log('\n— Pagina Prezzi: FAQ commerciali, partner alla larghezza dei piani —');
+console.log('\n— Pagina Prezzi: FAQ dall’elenco condiviso, partner alla larghezza dei piani —');
 const prezzi = leggi('src/pages/PrezziPage.tsx');
 check(
-  'FAQ Prezzi: animatore digitale, «Invita un Collega», Gmail, servizi in arrivo',
+  'FAQ Prezzi: stesso elenco di /faq, copy dal registro (nessun doppione nel JSX)',
   true,
-  /Animatore Digitale/.test(prezzi) &&
-    /Invita un Collega/.test(prezzi) &&
-    /gmail\.com/.test(prezzi) &&
-    /Assistente Sindacalista Virtuale/.test(prezzi) &&
-    /Carta del Docente/.test(prezzi),
+  /from '@\/data\/faqPubbliche'/.test(prezzi) && /FAQ_PUBBLICHE\.map/.test(prezzi) && /testo\(f\.q\)/.test(prezzi),
 );
 check(
-  'FAQ Prezzi: nessuna domanda difensiva (cancellazione / sicurezza pagamenti)',
+  'FAQ: nessuna domanda difensiva (cancellazione / sicurezza pagamenti)',
   [],
-  [/cancellarmi/i, /pagamento è sicuro/i, /Nel prototipo il pagamento/i].filter((r) => r.test(prezzi)),
+  [/cancellarmi/i, /pagamento è sicuro/i, /Nel prototipo il pagamento/i].filter((r) => r.test(faqTesti)),
+);
+check(
+  'FAQ: nessun rimando a funzioni non attive (CV, Archivista AI, Tabelle A/B)',
+  [],
+  [/strumento CV/i, /Archivista/i, /Tabelle A\/B/i, /in arrivo|sta arrivando/i].filter((r) => r.test(faqTesti)),
 );
 check(
   'vetrina PureFocus larga come le colonne dei piani (max-w-5xl)',
@@ -125,15 +127,28 @@ check(
 check('wordmark PureFocus in sans-serif black', true, /font-black/.test(purefocus));
 
 console.log('\n— Form rapido: un solo passaggio verso la configurazione del Radar —');
-const regRapida = leggi('src/components/landing/LandingRegistrazioneRapida.tsx');
+/**
+ * La registrazione parziale è UN solo form condiviso (`FormRegistrazioneRapida`),
+ * montato da DUE superfici: la sezione sotto l'hero e la chiusura della sezione
+ * PRO. Due punti di ingresso visivi, un unico percorso di prefill: il gate
+ * verifica il form condiviso e delega, non la copia.
+ */
+const formRapido = leggi('src/components/landing/FormRegistrazioneRapida.tsx');
+const sezioneRapida = leggi('src/components/landing/LandingRegistrazioneRapida.tsx');
+const offertaPro = leggi('src/components/landing/LandingOffertaPro.tsx');
 const landingPage = leggi('src/pages/LandingPage.tsx');
 check(
-  'form con Nome, Cognome ed Email e CTA «Attiva il tuo Radar»',
+  'form con Nome, Cognome ed Email e CTA «ATTIVA IL TUO RADAR»',
   true,
-  /placeholder="Nome"/.test(regRapida) &&
-    /placeholder="Cognome"/.test(regRapida) &&
-    /placeholder="La tua email"/.test(regRapida) &&
-    /Attiva il tuo Radar/.test(regRapida),
+  /placeholder="Nome"/.test(formRapido) &&
+    /placeholder="Cognome"/.test(formRapido) &&
+    /placeholder="La tua email"/.test(formRapido) &&
+    /ATTIVA IL TUO RADAR/.test(formRapido),
+);
+check(
+  'form rapido: tre campi nativi OBBLIGATORI (nessun `noValidate`)',
+  [3, true],
+  [(formRapido.match(/^\s*required\s*$/gm) ?? []).length, !/noValidate/.test(formRapido)],
 );
 check(
   'i tre dati vanno nella BOZZA e aprono la modale di configurazione del Radar',
@@ -148,9 +163,15 @@ check(
   /<LandingHero[\s\S]{0,700}LandingRegistrazioneRapida/.test(landingPage),
 );
 check(
-  'la sezione non apre modali proprie (prefill, non doppioni)',
+  'nessuna superficie del form rapido apre modali proprie (prefill, non doppioni)',
   true,
-  !/openAuthModal|Modal/.test(regRapida),
+  !/openAuthModal|Modal/.test(formRapido) && !/openAuthModal|Modal/.test(sezioneRapida),
+);
+check(
+  'un solo form condiviso, attaccato alla copy PRO con la CTA esatta «ATTIVA IL TUO RADAR»',
+  true,
+  sezioneRapida.includes('<FormRegistrazioneRapida') &&
+    /passerai automaticamente a un account Base[\s\S]{0,900}<FormRegistrazioneRapida[\s\S]{0,200}etichetta="ATTIVA IL TUO RADAR"/.test(offertaPro),
 );
 
 console.log('\n— Homepage: etichette e sezioni allineate al prodotto —');

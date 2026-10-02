@@ -12,7 +12,7 @@
  * Esecuzione: npm run test:digest
  */
 
-import { ISTRUZIONE_AVVISO_UFFICIALE } from '../src/lib/alertInterpello.ts';
+import { ETICHETTA_AVVISO_UFFICIALE, ISTRUZIONE_AVVISO_UFFICIALE } from '../src/lib/alertInterpello.ts';
 import {
   ORA_DIGEST,
   dataLocaleItalia,
@@ -117,7 +117,9 @@ check(
 );
 
 console.log('\n— Email di digest: UNA sola email con tutte le voci —');
-const voci = [voce(1, '2026-09-30'), voce(2, '2026-09-25', ELENCO)];
+// Scadenze LONTANE (2099): il render mostra SOLO le voci ancora attive, quindi un
+// fixture con date "vicine" diventerebbe rosso da solo col passare dei giorni.
+const voci = [voce(1, '2099-09-30'), voce(2, '2099-09-25', ELENCO)];
 const html = renderDigestEmailHtml(voci, destinatario, 'https://www.scuoleradar.it/dashboard/radar', {
   data: '10 luglio 2026',
 });
@@ -156,7 +158,8 @@ check(
   /scrivere direttamente a/.test(html),
 );
 
-const molte = Array.from({ length: MAX_VOCI_EMAIL_DIGEST + 4 }, (_, i) => voce(i + 1, '2026-09-30'));
+// Stesso motivo: date lontane, altrimenti il limite non verrebbe mai esercitato.
+const molte = Array.from({ length: MAX_VOCI_EMAIL_DIGEST + 4 }, (_, i) => voce(i + 1, '2099-09-30'));
 const htmlMolte = renderDigestEmailHtml(molte, destinatario, 'https://www.scuoleradar.it/dashboard/radar');
 check('numero voci limitato nell\'email', false, htmlMolte.includes(`n.${MAX_VOCI_EMAIL_DIGEST + 1}`));
 check('nota sulle opportunità restanti', true, htmlMolte.includes('altre <strong>4</strong> opportunità'));
@@ -165,7 +168,7 @@ console.log('\n— Digest = SOLO opportunità attive (gli scaduti NON partono) �
 {
   const oggi = new Date('2026-09-18T12:00:00');
   const scaduto = voce(10, '2026-09-01');
-  const attiva = voce(11, '2026-09-30');
+  const attiva = voce(11, '2099-09-30');
   const senzaScadenza = voce(12, null);
   const filtrate = vociAttive([scaduto, attiva, senzaScadenza], oggi);
   check('scaduta esclusa', ['hash-11', 'hash-12'], filtrate.map((v) => v.id));
@@ -241,9 +244,9 @@ check('alert senza la frase "non indica la pagina ufficiale"', false, /non indic
 // Link UFFICIALE con etichetta canonica e href verso l'URL dell'avviso (nessuna
 // pagina di ricerca di un'altra provincia).
 check(
-  "alert con etichetta unica '🔗 Fonte Ufficiale'",
+  "alert con etichetta personale '👉 Apri l'avviso ufficiale'",
   true,
-  alertPro.includes('<b>🔗 Fonte Ufficiale</b></a>'),
+  alertPro.includes(`<b>${ETICHETTA_AVVISO_UFFICIALE}</b></a>`),
 );
 check('link dell\'avviso = URL della fonte', [ESTERNO], linkHttp(alertPro));
 check(

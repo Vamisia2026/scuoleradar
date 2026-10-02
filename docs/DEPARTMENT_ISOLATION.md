@@ -3,6 +3,11 @@
 > **Stato**: REGOLA DI LAVORO PERMANENTE (non è una convenzione opzionale).
 > **Ancoraggi nel codice**: `.clinerules` (radice del workspace e `project/`),
 > `docs/DEPARTMENT_MAP.md` (§ dipartimenti), `docs/SYSTEM_HANDOVER.md` §20.
+> **Guardie automatiche**: `npm run test:scraper:domini` verifica il confine
+> **Interpelli ↔ Notizie** (nessun import incrociato, nessuna scrittura su
+> `interpelli`/`notices` dal dominio Notizie, nessun contenuto editoriale nella
+> bacheca — §26.17); `npm run test:architettura` (`E-DOM`, `E-STRAT`) blocca gli
+> accoppiamenti diretti fra domini diversi.
 > **Introdotta il**: 2026-09-22, su richiesta di Bartolo.
 
 ## 1. Principio

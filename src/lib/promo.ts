@@ -17,7 +17,7 @@ export interface PromoValido {
 export const PROMO_CODE_BETA1ANNO = 'BETA1ANNO';
 
 /**
- * Coupon UNICO di sconto attivo: **SCUOLERADAR50** — 50% sulla sottoscrizione
+ * Coupon di sconto attivi (unica fonte client-side, mappatura Stripe server-side):
  * ANNUALE del piano PRO (49 €/anno → 24,50 €).
  *
  * Regole tassative (le stesse applicate server-side da
@@ -42,6 +42,24 @@ export const SCONTO_SCUOLERADAR50_PERCENTO = 50;
 export const GIORNI_VALIDITA_SCUOLERADAR50 = 40;
 
 /**
+ * Coupon di CHIUSURA COMMERCIALE **PROANNUALE40** (direttiva cliente 28/09/2026):
+ * PRO Annuale a `PREZZO_PRO_ANNO_DOPO_OMAGGIO_ETICHETTA` (40 €) invece del listino
+ * `PREZZO_PRO_ANNUO_ETICHETTA` (49 €), perché dal totale è scorporato il valore del
+ * mese in omaggio (`SCONTO_OMAGGIO_MESE_EUR` = 9 €).
+ *
+ * Regole:
+ *  1. vale SOLO sul piano `pro_annuale` (validazione server-side nella Edge `checkout`);
+ *  2. è un coupon Stripe `amount_off` da **900 centesimi** con durata `once`: lo sconto
+ *     riguarda il **primo anno**, dal secondo si torna al listino — la copy dice
+ *     esattamente questo;
+ *  3. il frontend invia **solo il codice** (mai un prezzo, mai un importo): la
+ *     mappatura sul Coupon ID vive nel secret `STRIPE_COUPON_PROANNUALE40`;
+ *  4. è applicato dalla CTA di fine flusso (`radar/components/CtaProAnnuale.tsx`):
+ *     schermata di conferma della configurazione + box di benvenuto PRO.
+ */
+export const PROMO_CODE_PRO_ANNUALE_40 = 'PROANNUALE40';
+
+/**
  * Normalizza un codice promo digitato dall'utente: maiuscolo, senza spazi né
  * separatori. Rende il confronto **case-insensitive** (`scuoleradar50` ≡
  * `SCUOLERADAR50`) e tollera l'incollo da email/chat (`SCUOLERADAR-50`).
@@ -50,8 +68,16 @@ export function normalizzaCodicePromo(codice: string): string {
   return (codice ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
-/** Codici promo attivi accettati in pre-fill (mappati server-side sul coupon Stripe). */
-export const PROMO_CODES_ATTIVI = [PROMO_CODE_BETA1ANNO, PROMO_CODE_50_PRIMO_ANNO];
+/**
+ * Codici promo attivi accettati in pre-fill (mappati server-side sul coupon Stripe):
+ * li accettano il deep link `/checkout/pro-annuale?coupon=…` (`CheckoutRedirectPage`)
+ * e il campo codice del passo di pagamento (`AbbonamentoModal`).
+ */
+export const PROMO_CODES_ATTIVI = [
+  PROMO_CODE_BETA1ANNO,
+  PROMO_CODE_50_PRIMO_ANNO,
+  PROMO_CODE_PRO_ANNUALE_40,
+];
 
 /**
  * Valida un codice promo/referral contro promo_codes / profiles.referral_code
@@ -136,6 +162,14 @@ export const CATALOGO_PROMO: CatalogoPromo[] = [
     codice: PROMO_CODE_50_PRIMO_ANNO,
     descrizione:
       "Sconto 50% sulla sottoscrizione annuale PRO, monouso per email: valido 40 giorni dalla registrazione (quella che attiva il mese PRO gratuito)",
+    tipo: 'sconto',
+    origine: 'sistema',
+    defaultStato: 'attivo',
+  },
+  {
+    codice: PROMO_CODE_PRO_ANNUALE_40,
+    descrizione:
+      "PRO Annuale a 40 € invece di 49 € per il primo anno (coupon Stripe amount_off da 900 cent, durata 'once'): lo sconto è lo scorporo del mese in omaggio",
     tipo: 'sconto',
     origine: 'sistema',
     defaultStato: 'attivo',

@@ -124,6 +124,19 @@ const STRIPE_COUPON_BETA1ANNO = Deno.env.get('STRIPE_COUPON_BETA1ANNO') ?? 'XRxi
 const STRIPE_COUPON_SCUOLERADAR50 =
   Deno.env.get('STRIPE_COUPON_SCUOLERADAR50') ?? Deno.env.get('STRIPE_COUPON_RADAR50') ?? '';
 
+/**
+ * Coupon Stripe **PROANNUALE40** (PRO annuale a 40 € invece di 49 €): coupon
+ * `amount_off` da **900 centesimi** (`SCONTO_OMAGGIO_MESE_EUR`) con durata `once`,
+ * cioè sconto del PRIMO anno soltanto (dal rinnovo si torna al listino). Applicato
+ * direttamente alla sessione come `discounts[0][coupon]` e SOLO sul piano
+ * `pro_annuale`. Richiede il secret STRIPE_COUPON_PROANNUALE40.
+ *
+ * ⚠️ Finché il coupon non è provisionato su Stripe (e il secret non è configurato)
+ * la richiesta risponde 500 con un messaggio esplicito: MAI un addebito a listino
+ * silenzioso al posto dello sconto promesso.
+ */
+const STRIPE_COUPON_PROANNUALE40 = Deno.env.get('STRIPE_COUPON_PROANNUALE40') ?? '';
+
 /** Decodifica il payload (base64url) di un JWT senza verificarne la firma (il runtime la verifica con --verify-jwt). */
 function decodeJwt(token: string): { sub?: string; email?: string } | null {
   try {
@@ -339,6 +352,7 @@ serve(async (req: Request) => {
         productIds: STRIPE_PRODUCT_IDS,
         couponBeta1Anno: STRIPE_COUPON_BETA1ANNO,
         couponScuoleradar50: Boolean(STRIPE_COUPON_SCUOLERADAR50),
+        couponProAnnuale40: Boolean(STRIPE_COUPON_PROANNUALE40),
         mode: STRIPE_MODE,
         webhookEndpoint: WEBHOOK_ENDPOINT,
         couponReferral: Boolean(COUPON_REFERRAL),
@@ -419,6 +433,32 @@ serve(async (req: Request) => {
         campi['discounts[0][coupon]'] = STRIPE_COUPON_SCUOLERADAR50;
         campi['metadata[promo]'] = 'SCUOLERADAR50';
         console.log(`  → coupon SCUOLERADAR50 applicato (${STRIPE_COUPON_SCUOLERADAR50}) per user ${userId.slice(0, 8)}…`);
+      } else if (codiceUpp === 'PROANNUALE40') {
+        // Chiusura commerciale annuale dopo il mese in omaggio: 900 cent di sconto
+        // (40 € invece di 49 €) sul PRO ANNUALE, coupon Stripe con durata `once` ⇒
+        // sconto del solo PRIMO anno. Il codice è pubblico (lo porta la CTA di fine
+        // flusso): nessuna RPC di validazione, ma il piano è vincolato come per gli
+        // altri coupon e il frontend non invia mai un prezzo.
+        if (plan !== 'pro_annuale') {
+          return risposta(
+            { success: false, error: 'Il coupon PROANNUALE40 è valido solo sul piano PRO annuale.' },
+            400,
+          );
+        }
+        if (!STRIPE_COUPON_PROANNUALE40) {
+          return risposta(
+            {
+              success: false,
+              error: 'Coupon PROANNUALE40 non configurato: contatta il supporto.',
+            },
+            500,
+          );
+        }
+        campi['discounts[0][coupon]'] = STRIPE_COUPON_PROANNUALE40;
+        campi['metadata[promo]'] = 'PROANNUALE40';
+        console.log(
+          `  → coupon PROANNUALE40 applicato (${STRIPE_COUPON_PROANNUALE40}) per user ${userId.slice(0, 8)}…`,
+        );
       } else if (codiceUpp === 'BETA1ANNO') {
         // Coupon 100% (PRO annuale): l'accesso gratuito per 1 anno è un DIRITTO
         // del codice, non un effetto collaterale del prezzo. Prima di azzerare il

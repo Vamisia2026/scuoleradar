@@ -81,17 +81,25 @@
      d'intesa, gli eventi e in generale gli avvisi senza impatto pratico. Si
      pubblica solo ciò che ricade in un TEMA operativo per il personale,
      riconosciuto da `classificaTemaPersonale` (`TEMI_OPERATIVI`, cioè
-     `standardTemiPersonale` + `standardTemiDidattica`): **CCNL e stipendi,
+     `standardTemiPersonale` + `standardTemiIA` + `standardTemiDidattica`):
+     **CCNL e stipendi,
      pensioni, welfare e polizza sanitaria, mobilità e assegnazioni,
      GPS/graduatorie/supplenze/interpelli, organico e cattedre, sostegno, ATA e
      segreterie (DSGA), istruzione adulti (CPIA), formazione (TFA/CFU, classi di
      concorso), reclutamento e immissioni in ruolo, PNRR, sicurezza** — più i
      temi **normativa/scadenze/concorsi**, che valgono però SOLO con un
-     riferimento esplicito al personale (un concorso per studenti non passa). I
-     temi **culturali/didattici** (innovazione digitale, didattica, pedagogia)
+     riferimento esplicito al personale (un concorso per studenti non passa).
+     **Intelligenza artificiale** è una categoria AUTONOMA (`standardTemiIA`,
+     peso 76, lessico `PAROLE_IA`): nata dentro *innovazione digitale*, ha ora
+     badge, copy e peso propri, vince su *innovazione digitale*, *didattica* e
+     *pedagogia* e NON ruba il match ai temi storici — una «formazione sull'IA
+     per i docenti» resta *formazione*, un «entro il…» resta *scadenze*
+     (`scripts/test-notizie-editoriale.ts`, «tema autonomo IA»). I temi
+     **culturali/didattici** (innovazione digitale, didattica, pedagogia)
      passano SOLO con un **fatto concreto**: una scadenza reale oppure un canale
-     ufficiale di domanda/candidatura (`CATEGORIE_CON_FATTO_CONCRETO`), così il
-     «seminario pedagogico» non diventa mai una notizia.
+     ufficiale di domanda/candidatura (`CATEGORIE_CON_FATTO_CONCRETO`) — e lo
+     stesso gate vale per l'**intelligenza artificiale** —, così il «seminario
+     pedagogico» non diventa mai una notizia.
      `titoloDaUfficioStampa` marca la comunicazione
      istituzionale; `articoloValido` applica le stesse regole anche all'igiene
      dell'archivio, quindi le voci di fluff già pubblicate vengono rimosse.
@@ -195,7 +203,8 @@
   `classificaTemaPersonale`, in ordine di priorità): CCNL, Pensioni, Welfare,
   Mobilità, Sostegno, ATA, Istruzione Adulti, GPS, Organico, Formazione,
   Reclutamento e Ruolo, PNRR, Sicurezza, Normativa, Scadenze, Concorsi,
-  Innovazione Digitale, Didattica, Pedagogia. Le vecchie liste di parole
+  **Intelligenza Artificiale**, Innovazione Digitale, Didattica, Pedagogia. Le
+  vecchie liste di parole
   (`PAROLE_CATEGORIA`) non decidono più il verde: la categoria nasce solo dal
   tema riconosciuto.
 
@@ -242,6 +251,32 @@
 - Frase breve, seconda persona ("hai", "puoi", "devi"): il lettore deve capire
   in 20 secondi se lo riguarda.
 
+### 4-bis. Voce unica: `editorialVoice.ts` ("colto ma sciolto")
+
+La voce non è più ridetta a mano nei prompt né nei template: vive **in un solo
+posto** (`src/departments/notizie/services/editorialVoice.ts`) e ogni uscita la
+usa da lì.
+
+- `NOME_VOCE = 'colto ma sciolto'`: precisa ma leggibile; chi legge non è del
+  settore, se una frase richiede un dizionario va riscritta.
+- `REGOLE_VOCE` — 10 regole **vincolanti**, ognuna con `id` stabile:
+  `voce`, **`prima_menzione`** (ogni sigla, acronimo o termine tecnico è spiegato
+  tra parentesi alla **prima** occorrenza e poi usato senza ripetere la
+  spiegazione), `fatti`, `zero_burocratese`, `zero_press`, `zero_politica`,
+  `pratico`, `zero_fluff`, `link_unico`, `nessuna_cta`.
+- `bloccoVoceEditoriale()` — le stesse regole pronte per i prompt LLM (una riga
+  per regola, nessuna duplicazione): `promptScritturaArticolo` la include come
+  sezione `VOCE EDITORIALE (colto ma sciolto)`.
+- `APERTURE_VIETATE` / `apertureVietateTesto()` — le aperture da non usare mai,
+  citate come contro-esempi nei prompt.
+- `espandiAcronimi()` — l'applicazione della regola alla prima menzione
+  (`GLOSSARIO_ACRONIMI` in `lessicoScuola.ts`), usata da `titoloAzione` e da
+  `generaArticoloEditoriale`.
+- **Guardia**: `npm run test:notizie-editoriale`, sezione «VOCE EDITORIALE
+  centralizzata» — la voce dichiarata, gli `id` univoci, ogni regola
+  testualmente presente nel blocco dei prompt, il blocco dentro
+  `promptScritturaArticolo` e nessuna regola di stile ridetta a mano.
+
 ## 5. Integrità degli URL (tracciabilità e link granulari)
 
 - **Regola d'oro**: una notizia VERA non viene mai soppressa perché il link
@@ -282,7 +317,15 @@
 
 | File | Ruolo |
 |---|---|
-| `src/departments/notizie/services/relevanceEngine.ts` | Motore puro: `valutaRilevanza` (anti-burocrazia: `attoBurocraticoVuoto`, `titoloInformativo`, `riferimentiObsoleti`; impatto: `categoriaDaImpatto`; waterfall nazionale), **`classificaLink`** (`diretto`/`contenitore`/`non-valido`), `etichettaLinkFonte`, `linkNonValidiInHtml`, `èFonteCanonica`, `èFonteNazionale`, `titoloAzione`, `articoloValido`, `limitaCadenzaSettimanale`, `promptFiltroLLM`, `promptScritturaArticolo`, **`generaArticoloEditoriale`** (copy azione a 3 paragrafi, fonte sempre citata) |
+| `src/departments/notizie/services/relevanceEngine.ts` | **Orchestratore del motore** (815 righe): `valutaRilevanza` (anti-burocrazia: `attoBurocraticoVuoto`, `titoloInformativo`, `riferimentiObsoleti`; impatto: `categoriaDaImpatto`; waterfall nazionale), `classificaCategoria`, `classificaTemaPersonale`, `titoloAzione`, `articoloValido`, `PAROLE_FORTI_INIZIO_ANNO` + la **superficie pubblica dei sotto-moduli** (storico invariato: chi importava da qui continua a farlo) |
+| `src/departments/notizie/services/editorialVoice.ts` | **VOCE EDITORIALE unica** ("colto ma sciolto", §4-bis): `REGOLE_VOCE` (10 regole vincolanti), `bloccoVoceEditoriale()` (blocco per i prompt LLM), `APERTURE_VIETATE`/`apertureVietateTesto()`, `espandiAcronimi()` (acronimi alla prima menzione su `GLOSSARIO_ACRONIMI`) |
+| `src/departments/notizie/services/promptEditoriale.ts` | I due prompt LLM: `promptFiltroLLM` (allow-list dei 20 temi) e `promptScritturaArticolo` (3 paragrafi + voce centralizzata + URL integrity) |
+| `src/departments/notizie/services/articoloEditoriale.ts` | **Composizione dell'articolo**: `generaArticoloEditoriale` (copy azione a 3 paragrafi, fonte sempre citata), `linkDomandaUfficiale`, `richiedePresentazioneDomanda` |
+| `src/departments/notizie/services/articoloCopy.ts` | Copy editoriale per categoria (`ARTICOLO`, `IMPATTO_COPY`): fatto / chi / pratica / come / portale |
+| `src/departments/notizie/services/linkUfficiale.ts` | **`classificaLink`** (`diretto`/`contenitore`/`non-valido`), `etichettaLinkFonte`, `linkDirettoUfficiale`, `linkNonValidiInHtml`, `linkVietatiInHtml` |
+| `src/departments/notizie/services/fontiUfficiali.ts` | Fonti: `èFonteCanonica`, `èFonteMim`, `èFonteNazionale`, `èLinkPdf`, `validaUrlDeepLink` |
+| `src/departments/notizie/services/cadenzaArticoli.ts` | Cadenza editoriale: `MAX_ARTICOLI_SETTIMANA`, `limitaCadenzaSettimanale`, `limitaArticoliSettimanali`, `verificaCadenzaSettimanale`, finestre di lookback |
+| `src/departments/notizie/services/valutazioneTipi.ts` | Tipi della valutazione: `ValutazioneNotizia`, `VoceInValutazione` |
 | `src/departments/notizie/services/tracciaFonte.ts` | **Tracciamento della fonte granulare**: `tokenizza`, `valutaCandidato`, `scegliLinkSpecifico`, `risolviFonteGranulare` (elenco → sottopagina/circolare/PDF) |
 | `src/departments/notizie/services/newsFetcher.ts` | Raccolta fonti ufficiali (MIM, G.U.) + `verificaUrlUfficiale` (HTTP 200/3xx) |
 | `src/departments/notizie/services/ingestNotizie.ts` | Pipeline: lookback 15 gg → filtro → **gate link punto-a-punto** → generazione → tetto articoli (6) → accumulo con dedupe |

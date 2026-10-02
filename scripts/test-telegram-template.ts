@@ -7,9 +7,10 @@
  *  · nessuna riga metadato "🏷️ …" né "Email non disponibile";
  *  · Ordine di scuola coerente con Classe/Materia (nessuna contraddizione);
  *  · scadenze passate/errate soppresse;
- *  · link alla fonte ufficiale ETICHETTATO in modo canonico
- *    ("🔗 Fonte Ufficiale", unica etichetta del modulo) e diretto all'URL
- *    dell'avviso, con anteprime native DISATTIVATE (`link_preview_options`);
+ *  · link all'avviso ufficiale ETICHETTATO con l'etichetta della superficie
+ *    PERSONALE ("👉 Apri l'avviso ufficiale", la stessa delle email) e diretto
+ *    all'URL dell'avviso, con anteprime native DISATTIVATE
+ *    (`link_preview_options`);
  *  · nessun URL di fonte in chiaro e nessuna riga per home/elenchi/ricerche;
  *  · nessun residuo della vecchia prova a 3 notifiche ("Te ne restano 2");
  *  · CTA Notizie esattamente nelle due righe ufficiali.
@@ -18,6 +19,7 @@
  */
 import { readFileSync } from 'node:fs';
 import {
+  ETICHETTA_AVVISO_UFFICIALE,
   ETICHETTA_FONTE_UFFICIALE,
   formattaMessaggioTelegram,
   formattaPostCanaleTelegram,
@@ -152,14 +154,18 @@ check('riga 📅 presente per scadenza valida', true, msgFutura.includes('📅')
 console.log('\n— Link: etichetta UNICA, URL diretti e anteprime disattivate —');
 check('un solo link etichettato (la fonte)', [secondaria.link], linkEtichettati(msg));
 check('URL della fonte presente nel link', true, msg.includes(secondaria.link as string));
-// Riga canonica richiesta dal prodotto: `🔗 Fonte Ufficiale` con href verso l'URL
-// ESATTO dell'avviso. L'URL non compare MAI in chiaro nel testo.
+// Riga canonica della superficie PERSONALE (email/alert PRO/digest): l'etichetta
+// è quella condivisa con le email, `ETICHETTA_AVVISO_UFFICIALE`
+// ("👉 Apri l'avviso ufficiale"); i post dei CANALI PUBBLICI usano invece
+// `ETICHETTA_FONTE_UFFICIALE` ("🔗 Leggi la Fonte Ufficiale"). L'href punta
+// all'URL ESATTO dell'avviso e l'URL non compare MAI in chiaro nel testo.
 check(
-  "riga '🔗 Fonte Ufficiale' con href corretto",
+  "riga personale '👉 Apri l'avviso ufficiale' con href corretto",
   true,
-  msg.includes(`<a href="${secondaria.link}"><b>${ETICHETTA_FONTE_UFFICIALE}</b></a>`),
+  msg.includes(`<a href="${secondaria.link}"><b>${ETICHETTA_AVVISO_UFFICIALE}</b></a>`),
 );
-check('etichetta unica del modulo = "🔗 Fonte Ufficiale"', '🔗 Fonte Ufficiale', ETICHETTA_FONTE_UFFICIALE);
+check('etichetta del modulo personale', "👉 Apri l'avviso ufficiale", ETICHETTA_AVVISO_UFFICIALE);
+check('etichetta dei post dei canali pubblici', '🔗 Leggi la Fonte Ufficiale', ETICHETTA_FONTE_UFFICIALE);
 check(
   'URL della fonte MAI in chiaro (solo nell’href)',
   false,
@@ -197,8 +203,8 @@ const conUrlInChiaro: string[] = [];
 for (const tipo of TIPI_TELEGRAM) {
   const testo = formattaMessaggioTelegram(secondaria, 'AA24', DASH, tipo);
   if (
-    testo.includes(ETICHETTA_FONTE_UFFICIALE) &&
-    !testo.includes(`<b>${ETICHETTA_FONTE_UFFICIALE}</b></a>`)
+    testo.includes(ETICHETTA_AVVISO_UFFICIALE) &&
+    !testo.includes(`<b>${ETICHETTA_AVVISO_UFFICIALE}</b></a>`)
   ) {
     conEtichettaNuda.push(tipo);
   }
@@ -206,7 +212,7 @@ for (const tipo of TIPI_TELEGRAM) {
     conUrlInChiaro.push(tipo);
   }
 }
-check('etichetta canonica sempre cliccabile (mai testo nudo)', [], conEtichettaNuda);
+check('etichetta personale sempre cliccabile (mai testo nudo)', [], conEtichettaNuda);
 check('URL della fonte mai in chiaro in nessuna tipologia', [], conUrlInChiaro);
 check('mai la parola "candidati"', false, /candidat/i.test(msg.replace(/Candidature:/g, '')));
 // NIENTE disclaimer operativo: era la frase che confondeva gli utenti.

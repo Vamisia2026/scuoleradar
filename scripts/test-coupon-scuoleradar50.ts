@@ -38,9 +38,11 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
 console.log('— 1. Client: un solo coupon attivo —');
 check('RADAR50 non è più un codice del client', false, /PROMO_CODE_RADAR50/.test(promoClient));
 check(
-  'codici attivi = BETA1ANNO + SCUOLERADAR50',
+  'codici attivi = BETA1ANNO + SCUOLERADAR50 + PROANNUALE40',
   true,
-  /PROMO_CODES_ATTIVI = \[PROMO_CODE_BETA1ANNO, PROMO_CODE_50_PRIMO_ANNO\]/.test(promoClient),
+  /PROMO_CODES_ATTIVI = \[[\s\S]{0,200}?PROMO_CODE_BETA1ANNO[\s\S]{0,120}?PROMO_CODE_50_PRIMO_ANNO[\s\S]{0,120}?PROMO_CODE_PRO_ANNUALE_40/.test(
+    promoClient,
+  ),
 );
 check('SCUOLERADAR50 con sconto 50%', true, /SCONTO_SCUOLERADAR50_PERCENTO = 50/.test(promoClient));
 check('finestra di 40 giorni dalla registrazione', true, /GIORNI_VALIDITA_SCUOLERADAR50 = 40/.test(promoClient));

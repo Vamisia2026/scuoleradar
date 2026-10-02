@@ -22,6 +22,8 @@ import { createHash } from 'node:crypto';
 import { province } from '../data/province.ts';
 import { eUrlAvvisoDiretto } from '../lib/alertInterpello.ts';
 import { risolviEmailUfficialeScuola } from '../lib/emailScuola.ts';
+import { nomeIstitutoPresentabile } from '../lib/nomeIstituto.ts';
+import { scuolaDaRiga } from './scuolaDaRiga.ts';
 
 /* ------------------------------- Tipi ------------------------------- */
 
@@ -385,9 +387,13 @@ const RE_HOST_NON_ISTITUZIONALE =
  * usate SOLO quando non esiste un link specifico/verificato dell'avviso.
  *
  * ⚠️ Solo URL UFFICIALI VERIFICATI: se una regione non è mappata non si inventa
- * nulla → si resta sul link specifico (o l'avviso viene scartato a monte). Lo
- * scraper testa comunque a runtime ogni URL (verificaLink): nessun link rotto
- * viene mai persistito. Per aggiungere una regione: verificare prima la URL.
+ * nulla → si resta sul link specifico (o l'avviso viene scartato a monte). Il
+ * link specifico viene testato a runtime dallo scraper (`linkRaggiungibile`) ma un
+ * ping fallito NON è più una condanna: un bando STRUTTURATO (classe/materia +
+ * email di candidatura) resta in bacheca anche se il server regionale risponde
+ * 403/timeout ai client automatici (vedi `valutaGateLink` in
+ * `qualitaOpportunita.ts`, policy §26.17). Per aggiungere una regione: verificare
+ * prima la URL.
  */
 export const REGIONI_USR: Record<string, string> = {
   Piemonte: 'https://www.istruzionepiemonte.it/',
@@ -1088,8 +1094,18 @@ export function parseInterpello(input: InterpelloInput): InterpelloParsato {
     estraiProvinciaDaCodiceScuola(codiceScuola) ??
     input.provincia.trim().toUpperCase();
 
-  // Scuola emittente: dal campo esplicito, altrimenti estratta dal titolo/contesto.
-  const scuola = input.schoolName?.trim() || estraiScuola(input.title) || estraiScuola(testoCompleto);
+  // Scuola emittente: dal campo esplicito della fonte, oppure dal nome che la
+  // fonte pubblica nella COLONNA accanto al codice meccanografico
+  // (`scuolaDaRiga`: «VCIC80500N | IC LIVORNO-TRONZANO | …»), altrimenti estratta
+  // dal titolo/contesto. Le estrazioni dal testo LIBERO passano dal gate
+  // `nomeIstitutoPresentabile`: un'etichetta di materia o un dump di codici non
+  // finisce più in `school_name` (era la causa delle righe scartate dalla bacheca:
+  // su 58 avvisi attivi solo 5 avevano un nome e NESSUNO era un istituto reale).
+  const scuola =
+    input.schoolName?.trim() ||
+    scuolaDaRiga(testoCompleto, codiceScuola) ||
+    nomeIstitutoPresentabile(estraiScuola(input.title)) ||
+    nomeIstitutoPresentabile(estraiScuola(testoCompleto));
 
   // ENTE EMITTENTE (USP/USR/Ambito): usato quando NON c'è un singolo istituto o
   // quando il nome "scuola" è in realtà un ufficio. Canonicalizza la dicitura

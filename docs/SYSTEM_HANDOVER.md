@@ -255,14 +255,14 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `GoogleOneTap.tsx` | 11 | Componente renderless → `useGoogleOneTap` |
 | `DatiProfiloModal.tsx` · `ForcePasswordModal.tsx` · `OAuthBounceModal.tsx` · `TelegramLoginButton.tsx` | — | Onboarding/profilo: completamento dati, cambio password forzato, bounce OAuth, login Telegram |
 | `SoftOnboardingModal.tsx` | — | Benvenuto PRO «**Buone notizie**»: regalo di benvenuto con **un solo pulsante d'azione** (nessuna voce di rinvio; si chiude con la X, non si apre mai da sola). Importa `GIORNI_TRIAL_PRO` da `lib/pricing` |
-| `DevToolbar.tsx` | 195 | Solo DEV: badge ⚡, switch stato (guest/base/pro via `simulaStato`), reset dati, porta, health check |
+| `DevToolbar.tsx` | 248 | Solo DEV: badge ⚡, switch stato (guest/base/pro via `simulaStato`), flag dei dipartimenti, **«Editor Testi Rapido» UNIVERSALE** (`EditorTestiRapido.tsx`, 145: i testi a schermo nella vista attiva, scanditi dal DOM — `lib/testiDom*.ts` — più il montaggio della scansione **sempre** attiva, anche a pannello chiuso: `useScansioneTestiDom`, §26.31), reset dati, porta, health check |
 | `HealthCheckModal.tsx` | 287 | Modal diagnostica → `eseguiHealthCheck` |
 | `AppErrorBoundary.tsx` | — | Error boundary dell'**intera app** (fallback full-screen, reset) |
 | `DepartmentErrorBoundary.tsx` | — | Error boundary **per dipartimento**: isola il crash di un dominio (radar/notizie/modulistica/cfu) senza spegnere il resto della SPA |
 | `ScrollToTop.tsx` | — | Scroll-to-top a ogni cambio rotta |
 | `Footer.tsx` · `Accordion.tsx` | — | Footer condiviso · accordion riusabile |
 | `CvTool.tsx` | 174 | CV Builder legacy in `src/components/` (§8); il vecchio wrapper CFU (`CfuTool.tsx`) è stato **rimosso** con la V1 |
-| `landing/Landing*.tsx` | — | Sezioni della landing pubblica (`LandingHero` — **due colonne** `lg:grid-cols-[minmax(0,1fr)_34rem]`: copy a sinistra, box «Prova il Radar» (`SimulatorRadar`, **sola provincia**) a destra, senza frase difensiva —, **`LandingRegistrazioneRapida`** (Nome, Cognome ed Email subito sotto l'hero, solo visitatori: i dati vanno nella bozza e si apre la **configurazione del Radar** già compilata), `LandingBenefici` («Cosa riceverai»), `LandingCards`, `LandingCta`, `LandingStrumenti` (card **centrate**), `LandingOffertaPro` (**tre benefici**, una sola CTA), `LandingPartnerPureFocus`) |
+| `landing/Landing*.tsx` | — | Sezioni della landing pubblica (`LandingHero` — **due colonne** `lg:grid-cols-[minmax(0,1fr)_34rem]`: copy a sinistra, box «Prova il Radar» (`SimulatorRadar`, **sola provincia**, `p-5`) a destra con i pulsanti «ATTIVA IL TUO RADAR»/«ACCEDI» SUBITO SOTTO il box su **due colonne simmetriche** (`sm:grid-cols-2`, `w-full`) e ripartizione verticale `lg:items-center` (§26.16, §26.19) —, **`LandingRegistrazioneRapida`** (sezione sotto l'hero, **solo visitatori**) + **`FormRegistrazioneRapida`** (il **form condiviso** Nome + Cognome + Email, montato anche nella chiusura dell'offerta PRO: i dati vanno nella bozza e si apre la **configurazione del Radar** già compilata — un solo percorso, nessun doppione), `LandingBenefici` («Cosa riceverai»), `LandingCards`, `LandingCta`, `LandingStrumenti` (card **centrate**), `LandingOffertaPro` (**tre benefici**, copy autorizzata su **una riga** + lead capture nome/cognome/email **immediatamente sotto**, CTA letterale `ATTIVA IL TUO RADAR` — §26.19), `LandingPartnerPureFocus`) |
 | `PureFocusCard.tsx` | — | Vetrina **PureFocus** condivisa (homepage, `/prezzi`, `/dashboard/purefocus`): `PureFocusWordmark` ufficiale (Pure `#0E0C0A` + Focus `#0047AB`, sans-serif, senza spazi), badge verde `BadgeInclusoPro` «Incluso nel piano PRO», descrizione e link in evidenza a **purefocus.one** |
 | `VetrinaModal.tsx` · `profile/ReferralSection.tsx` | — | vedi sopra · modulo referral "Invita un Collega" |
 
@@ -311,6 +311,9 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `ordiniMaterie.ts` | ~160 | `OrdineScuola` (infanzia/primaria/secondaria1/secondaria2/cpia/serali/pon/ata), `ordiniScuola`, `materie`, **`MATERIE_GENERICHE`** + **`materieCompetenzeExtra()`** (esclude le discipline curricolari: Storia/Geografia non sono "competenze extra"), **`competenzeSuggerite`** (12 **tag popolari** PNRR/PON: AI nella didattica, robotica educativa, **Stop Motion**, coding, digital storytelling, CLIL, **Lingua inglese**, STEM, creatività digitale, educazione motoria, progettazione bandi, orientamento). Verificato da `npm run test:radar:preferenze` |
 | `province.ts` | 117 | `Provincia[]` (107 province: codice/nome/regione) + `regioni` |
 | `servizi.ts` | 99 | Vetrina servizi: `Servizio[]` (slug, emoji, titolo, caratteristiche, destinatari, dashboard, sperimentazione) + `servizioDaSlug` |
+| `editableTexts.ts` | 100 | **Registro dei testi modificabili «al volo» (DEV)**: `TESTI_EDITABILI` (`chiave → testo di default`, 22 voci = 8 FAQ pubbliche `faq.<slug>.domanda|risposta` + i 3 blocchi dell'offerta PRO `prezzi.offerta.<blocco>.titolo|testo`), `ChiaveTesto`/`CHIAVI_TESTO`, `testoDiDefault`, `eChiaveTesto`. **Nessun raggruppamento per pagina** (il `gruppiTesti()` con le etichette cablate è stato rimosso il 29/09/2026, §26.30): le pagine rendono per CHIAVE (`useTestiEditabili`), mai la stringa duplicata, e le chiavi lette alimentano da sole l'elenco contestuale dell'editor (`lib/testiInPagina.ts`). Il `localStorage: sr_simple_text_overrides` dell'editor DEV vale solo in sviluppo. Verificato da `npm run test:editor-testi` (§26.27; selezione delle FAQ in §26.29) |
+| `faqPubbliche.ts` | 51 | **Elenco unico delle FAQ pubbliche** (`FAQ_PUBBLICHE`, `VoceFaq`): 8 voci `{ id, q, a }` = ancora HTML + chiavi del registro testi, nello stesso ordine su `/faq` (`FAQPage`) e su `/prezzi` (`PrezziPage`, 🔒: della pagina è cablata la sola sezione FAQ dal 29/09/2026). Solo copy di **posizionamento**: uscite le voci difensive (disdette, sicurezza dei pagamenti) e i rimandi a funzioni non attive (CV, Archivista AI, Tabelle A/B) — §26.29. L'ancora `#animatore-digitale` è pubblica (referenziata da `AuthModal`/`NotaAccessoScolastico`). Modulo puro: nessun React, nessuna copy |
+
 
 
 ### 2.7 `src/lib/` — librerie
@@ -327,8 +330,15 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `telegram.ts` | 1.286 | **Node-only** — messaggi Telegram. `formattaMessaggioTelegram`: ALERT di **solo testo** (nessuna foto/logo → niente anteprima gigante, nessun disclaimer operativo) con **testata brand cliccabile** (`📡 <a href="https://www.scuoleradar.it">Scuole Radar.it</a>`), apertura **`🎯 Abbiamo trovato una nuova opportunità per te` (+ contesto classe·provincia)**, riga `📧 Candidature`, **etichetta UNICA del link di fonte `🔗 Fonte Ufficiale`** (URL solo nell'`href`) e CTA finale `CTA_RADAR_INTERESSI` (ricalibra il Radar su `/dashboard/radar`, **solo nel ~20% dei messaggi**: `deveMostrareCtaRadar`/`FREQUENZA_CTA_RADAR`, forzabile con `{ mostraCtaRadar }`); i messaggi di ciclo di vita mantengono copy + `CTA_NOTIZIE_TELEGRAM`. Poi `formattaDigestTelegram` (BATCH BASE), **`formattaPostCanaleTelegram`** (post canali a 7 sezioni, testate tipografiche `📝 Interpello docenti`/`🗂️ Avviso ATA`/`📣 Bando / PNRR / Esperto`; brand in testa, **URL ufficiali mai in chiaro** — solo la riga iperlinkata `🔗 Fonte Ufficiale` — e link SOLO se diretto all'avviso, `eUrlAvvisoDiretto`), **`pubblicaInterpelloSuCanali`** con **gate di link safety** (`EsitoPubblicazioneCanali.saltato`: nessuna pubblicazione senza avviso specifico), `inviaNotificaTelegram`, `inviaMessaggioTelegram` (**`payloadMessaggioTesto`**: punto UNICO del payload `sendMessage` con `link_preview_options.is_disabled` + `disable_web_page_preview: true`; mai `sendPhoto`/`sendMediaGroup`), `rigaFonteUfficiale`/`rigaAvvisoUfficiale` (etichetta canonica + gate `eUrlAvvisoDiretto` interno), `getTelegramBotToken`, **`pulisciUrlTelegram`**. **Nessun prompt "Filtra per provincia e classi" nei messaggi personali**; verifica con `npm run test:telegram:canali` |
 | `dedupAvvisi.ts` | ~95 | **Puro** — `improntaAvviso` / `normalizzaPerImpronta` / `GIORNI_IMPRONTA`: identità STABILE dell'opportunità (provincia + scuola + **classi NORMALIZZATE `A-022` ≡ `A-22`** + titolo normalizzato senza date/numeri/riempitivi). Intercetta la stessa notizia ripubblicata con titolo/data diversi (hash nuovo) → nessuna notifica ripetuta a distanza di giorni. Usata dallo scraper (dedup in inserimento) e dal **frequency cap per utente** (§6.5.1). Verificata da `npm run test:dedup` e `npm run test:dedup:utente` |
 | `frequenzaNotifiche.ts` | ~140 | **Puro** — **FREQUENCY CAP** delle notifiche personali: `MAX_INVII_OPPORTUNITA` (2), `hashContenuto` (FNV-1a del contenuto normalizzato), **`identitaFrequenza`** (`scuola|classi|hashContenuto`, classi normalizzate `A-022` ≡ `A-22`), `giornoFrequenza` (fuso `Europe/Rome`), `valutaFrequenza` → `stesso-giorno` / `limite-raggiunto` / `ok`. Verificato da `npm run test:frequenza` |
+| `testiModificabili.ts` | 137 | **Puro e isomorfo** — store degli override dell'**Editor Testi Rapido** (`localStorage: sr_simple_text_overrides`): snapshot stabile `overrideTesti()`, `sottoscriviTesti`, `testoCorrente(chiave)` (`override → default`), `impostaTesto` (campo svuotato = ritorno al default, niente scritture se il valore non cambia), `azzeraTesti()` (cancella la chiave). Letture tolleranti: JSON corrotto, chiavi fuori registro e valori vuoti tornano ai default del codice. Verificato da `npm run test:editor-testi` (§26.27) |
+| `testiInPagina.ts` | 93 | **Puro e isomorfo** — REGISTRO DELLE VISTE dell'editor **contestuale** (§26.30): `registraTestiInPagina(chiavi)` (iscrive l'insieme di UN componente montato, ritorna lo smontaggio), `sincronizzaTestiInPagina()` (riallinea dopo ogni render), `testiInPagina()` (snapshot a riferimento **stabile** per `useSyncExternalStore`, unione delle viste in ordine di registro), `sottoscriviTestiInPagina`, `azzeraTestiInPagina` (reset/test). Nessuna mappa rotta → chiavi: l'iscrizione la fanno i componenti che LEGGONO i testi (`useTestiEditabili`). Verificato da `npm run test:editor-testi` (secondo script, `test-editor-testi-vista.ts`) |
+| `testiDomOverride.ts` | 115 | **Puro e isomorfo** — STORE degli override **sui testi del DOM** dell'editor universale (§26.31): `localStorage: sr_dom_text_overrides` (`chiave → { t, v }`: `t` = testo di default del codice conservato per il reset, `v` = testo scritto a mano), snapshot a riferimento **stabile** `overrideDom()`, `overrideDomSalvatiDaStorage()` (è ciò che vede una pagina RICARICATA), `impostaOverrideDom(chiave, voce \| null)` (ritorna `true` solo se lo store cambia: chi chiama salta la riscrittura inutile) e `azzeraOverrideDom()`. Letture tolleranti: storage bloccato, JSON corrotto o voci malformate → si torna alla copy del codice |
+| `testiDomNodi.ts` | 95 | **Puro e isomorfo** — LETTURA del DOM per l'editor universale (§26.31): tipo minimo **`NodoDom`** (permette di ESEGUIRE la scansione su un DOM finto negli script Node, senza jsdom), `raccogli(radice, out)` in ordine di lettura sui NODI DI TESTO con almeno 2 lettere, salto dei rami tecnici (`script`, `style`, `svg`, `code`…) e dei pannelli DEV (`data-sr-dev-toolbar` o «DevToolbar» in `id`/`aria-label`: l'editor non elenca se stesso), `etichettaDove` («sezione · Paragrafo») e `scriviTesto` (conserva gli spazi di bordo del JSX). Verificato da `npm run test:editor-testi` (terzo script, con `scripts/lib/dom-finto.ts`) |
+| `testiDomRegole.ts` | 69 | **Puro, senza dipendenze** — REGOLE e NOMI della scansione (§26.31): `normalizzaTesto`, `impronta` (djb2 in base 36), `chiaveTestoDom(tag, testo, occorrenza)` → `p#1a2b3c#0` (identità STABILE del testo: non dipende dalla posizione nel DOM, quindi l'override resta agganciato anche quando React ricrea i nodi e due testi identici restano occorrenze distinte), `TAG_IGNORATI` e `campoDi`/`contenitoreDi` per le etichette umane |
+| `testiDom.ts` | 141 | **Puro e isomorfo** — ELENCO dei testi a schermo dell'**Editor Testi Rapido UNIVERSALE** (§26.31): `scansionaTestiDom(radice)` attraversa la vista, **applica** gli override salvati e pubblica lo snapshot (riferimento **stabile**, notifiche solo al cambiamento reale: `sottoscriviTestiDom` / `testiDomInPagina`), `impostaTestoDom(chiave, valore)` (campo svuotato o valore = default ⇒ override tolto) e `azzeraTestiDom()`. Un `WeakMap` ricorda il testo ORIGINALE delle occorrenze toccate: al reset i nodi tornano alla copy del codice all'istante e l'identità non si perde quando `nodeValue` contiene già il testo scritto a mano |
 | `emailScuola.ts` | ~110 | **Puro** — email UFFICIALE della scuola: `normalizzaCodiceMeccanografico`, `estraiCodiceMeccanograficoDaTesto`, `emailDaCodiceMeccanografico` (PEO `@istruzione.it` / PEC `@pec.istruzione.it`), `risolviEmailUfficialeScuola` (email di fonte → convenzione MIM; mai email inventate) |
-| `liveBoard.ts` | ~110 | **Puro** — vetrina "Radar Live": `scuolaDaTitolo`, `nomeScuolaRiga` (campo → registro per codice → titolo → ente), `preparaRigheBoard` (arricchisce e **scarta** le righe senza scuola o senza scadenza: mai "Scuola non indicata"/"Scadenza n/d") |
+| `liveBoard.ts` | 209 | **Puro** — vetrina "Radar Live" (ogni nome passa dal GATE `nomeIstituto.ts`; `titoloLeggibile` per il sottotitolo, `rigaPresentabileVetrina` per la prova): `scuolaDaTitolo` (nome **prima del separatore** quando dopo c'è l'azione amministrativa; respinge frammenti di procedura, elenchi di codici classe e nomi generici), `nomeScuolaRiga` (campo → registro per codice → titolo: l'ente emittente NON è una scuola e non entra in bacheca; un `school_name` fatto solo di codici classe — «ADEE \| EEEE» — **non** è un nome), `nomePresentabileRiga` (per il responso della prova: ultima risorsa l'ENTE emittente, mai un codice), `preparaRigheBoard` (arricchisce e **scarta** le righe senza scuola o con un nome NON leggibile — mai "Scuola non indicata" né codici in vetrina — e tiene gli **avvisi senza scadenza** pubblicati negli ultimi `GIORNI_FINESTRA_SENZA_SCADENZA`=60 giorni con `scadenza: null` + `senzaScadenza`: mai una data inventata), `diversificaProvince` (round-robin deterministico per provincia: nessuna provincia monopolizza le prime pagine) |
+| `nomeIstituto.ts` | 161 | **Puro, senza dipendenze** — GATE dei nomi in vetrina: `nomeIstitutoPresentabile` accetta una stringa solo se ha una **testa d'istituto** (`IC`, `I.I.S.`, `ITIS`, `Liceo`, `Istituto`, `Convitto`…) **e** una **denominazione** (un nome proprio), senza codici amministrativi (classe di concorso, sostegno, meccanografico, token misto lettere+cifre) e senza 3+ cifre consecutive; **taglia la coda di procedura** («IC ALBIGNASEGO Interpello per copertura posti» → «IC ALBIGNASEGO»). Verificato da `npm run test:nome-istituto` |
 | `school-lookup.ts` | ~50 | Registro scuole per codice meccanografico: `resolveSchoolByCode` (PEO/PEC) e **`nomeScuolaDaCodice`** (solo nomi REALI, mai "Istituto &lt;codice&gt;") |
 | `provaRadarEngine.ts` | 117 | **Puro** — motore del **Radar di prova** pubblico (si prova con la **sola provincia**): `LIMITE_RISULTATI_PROVA`, `righeAttive` (senza scadenza = attiva), `selezionaRisultatiProva(provincia, nazionali, limite)` (tutte le opportunità ATTIVE della provincia + **completamento nazionale** senza duplicati) e la copy del responso (`messaggioConversione`, `messaggioRadarInScansione`, `CODA_CONVERSIONE_PROVA`); responso `{ gruppo: 'provincia'\|'nazionale'\|'vuoto', righe, daProvincia }`. Mai «zero risultati»: l'elenco resta pieno finché esiste un avviso vivo. Verificato da `npm run test:prova-radar` |
 | `provaRadar.ts` | 81 | **Memoria della provincia provata** (localStorage, tollerante agli errori): `salvaProvinciaProva`/`leggiProvinciaProva`/`svuotaProvinciaProva` + `provinceInizialiConProva` → la provincia del box «Prova il Radar» diventa la **provincia principale** del wizard/onboarding (validata sul catalogo `data/province`). Verificato da `npm run test:prova-radar` |
@@ -348,6 +358,8 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `useLocalStorage.ts` | `useLocalStorage<T>(key, initial)` con gestione quota errors |
 | `useGoogleOneTap.ts` | Carica GSI su entry pages, `signInWithIdToken` con client ID Google; solo se non autenticato |
 | `useReferral.ts` | Referral: genera codice fallback client-side (stessa regola trigger), `ReferralStats`, `ReferralEntry`, link `?ref=` |
+| `useTestiEditabili.ts` | **Testi modificabili (DEV)**: il registro `src/data/editableTexts.ts` con due API — `useTestiEditabili()` per le PAGINE (`testo(chiave)`, `imposta(chiave, valore)`, `azzera()`, `testi`, `modificati`; le chiavi lette vengono iscritte nel registro delle viste `src/lib/testiInPagina.ts`, `useSyncExternalStore` + riallineamento a ogni render) e `useTestiInPagina()` per l'**editor contestuale** (stessi override + `chiavi` = i testi della vista attiva; questo `testo()` NON registra, altrimenti il pannello si alimenterebbe da sé). Override attivi **solo** con `import.meta.env.DEV` (§26.27, §26.30) |
+| `useTestiDom.ts` | **Editor Testi Rapido UNIVERSALE** (§26.31): `useScansioneTestiDom()` (da montare una volta sola — la monta la DEV Toolbar) scandisce il `body` appena compare la vista, **riapplica** gli override salvati dopo ogni ricarica e osserva il DOM con `MutationObserver` (attesa 60 ms per raggruppare le mutazioni di un render; le scritture dell'editor non riaprono il ciclo); `useTestiDomInPagina()` dà al pannello l'elenco a schermo (`useSyncExternalStore`, snapshot stabile) più `imposta(chiave, valore)` (scrive l'override **e** riscrive il DOM subito) e `azzera()`. Il pannello non elenca più le chiavi del registro: le legge solo per azzerarle nel Reset (`azzeraRegistro`, `sr_simple_text_overrides`). Override attivi **solo** in sviluppo: la scansione la monta la DEV Toolbar |
 
 ### 2.9 `src/departments/` — 5 domini verticali isolati
 
@@ -357,11 +369,17 @@ data/ · types.ts`. Dettaglio e regole: [`DEPARTMENT_MAP.md`](./DEPARTMENT_MAP.m
 
 | Dominio | File | Righe | Sottocartelle | Entry `index.ts` |
 |---|---|---|---|---|
-| `radar/` | 25 | 3.958 | `wizard/` (+`components/`) · `preferenze/` · `flightBoard/` · `components/` | `RadarWizardModal`, `PreferenzeRadar`, `RadarStatusToggle`, `BenvenutoProRadar` |
-| `notizie/` | 17 | 4.776 | `components/` (+ `hero/`) · `services/` · `data/` | componenti Notizie + servizi/tipi |
-| `scadenze/` | 11 | 1.357 | `components/` · `hooks/` | `RevolverScadenze` (+ `RevolverScadenzeProps`) |
-| `admin/` | 14 | 2.281 | `tabs/` (+ `tabs/utenti/`) | `TabUtenti`, `TabRadar`, `TabAccount` |
-| `cfu/` | 105 | 17.677 | `calcolatore/` · `engine/` · `dossier/` · `landing/` · `shared/` · `__tests__/` | `CalcolatoreCfuApp`, `CalcolatoreCfuLanding` |
+| `radar/` | 32 | 4.700 | `wizard/` (+`components/`) · `preferenze/` · `flightBoard/` · `components/` | `RadarWizardModal`, `PreferenzeRadar`, `RadarStatusToggle`, `BenvenutoProRadar` |
+| `notizie/` | 21 | 4.922 | `components/` (+ `hero/`) · `services/` · `data/` | componenti Notizie + servizi/tipi |
+| `scadenze/` | 11 | 1.236 | `components/` · `hooks/` | `RevolverScadenze` (+ `RevolverScadenzeProps`) |
+| `admin/` | 22 | 3.120 | `tabs/` (+ `tabs/utenti/`) | `TabUtenti`, `TabRadar`, `TabAccount` |
+| `cfu/` | 107 | 16.484 | `calcolatore/` · `engine/` · `dossier/` · `landing/` · `shared/` · `__tests__/` | `CalcolatoreCfuApp`, `CalcolatoreCfuLanding` |
+
+> **Come si contano i numeri sopra** (snapshot 28/09/2026, così sono riproducibili): `File` =
+> file `.ts`/`.tsx` sotto il dominio (`__tests__` inclusi); `Righe` = **righe non vuote** degli
+> stessi file (`Get-ChildItem <dominio> -Recurse -File -Include *.ts,*.tsx | Get-Content |
+> Measure-Object -Line`). Sono un indicatore di peso, non una soglia: le soglie vincolanti sono
+> `W-DIM`/`E-DIM` in `scripts/check-architettura.ts`.
 
 ```tsx
 // App.tsx — i domini si montano solo tramite entry point pubblici
@@ -377,11 +395,20 @@ data/ · types.ts`. Dettaglio e regole: [`DEPARTMENT_MAP.md`](./DEPARTMENT_MAP.m
 | `data/notizieSeed.ts` | — | Articoli editoriali seed |
 | `data/notizieIngestite.ts` | — | **File GENERATO** dall'ingestione (accumulo, dedupe per id, refresh delle voci esistenti, SOLO fonti nazionali) |
 | `services/newsFetcher.ts` | 573 | **Node-only** — fetch fonti **NAZIONALI** (`FONTI_ISTITUZIONALI`, `FONTI_GU_RSS`; **`FONTI_MIM_RSS = []`**: le fonti MIM si leggono via scraping/waterfall, non via RSS): MIM (`/web/guest/notizie`, `/web/guest/avvisi`, home, `/notizie`) + Gazzetta Ufficiale (RSS + elenco atti `/home`) + ARAN/giurisdizione; **waterfall** `LIVELLI_NAZIONALI`/`raccogliLivello` |
-| `services/relevanceEngine.ts` | ~1.631 | **Node-only, puro** — regole editoriali STRETTE (§9): `èFonteNazionale`/`èFonteMim`, **allow-list dei temi 360°** (`TEMI_OPERATIVI` + `classificaTemaPersonale`, con pesi `PESI_CATEGORIA` e macro-aree `AREE_TEMATICHE`), **gate del fatto concreto** (`CATEGORIE_CON_FATTO_CONCRETO`), **anti-ufficio-stampa** (`titoloDaUfficioStampa`, `FRASI_FLUFF`/`contieneFraseFluff`), **gate 2-bis** (`PAROLE_IMPATTO` + `PAROLE_SCUOLA`), **`GLOSSARIO_ACRONIMI`/`espandiAcronimi`**, **`titoloAzione`** (rimozione etichette/date/codici), **`CANALI_DOMANDA`/`linkDomandaUfficiale`/`richiedePresentazioneDomanda`**, `classificaLink` + `linkVietatiInHtml`, **`applicaFormatoEditoriale`** (`summary_points` a bullet, **DOPPIO LINK**: fonte ufficiale + presentazione della domanda), **`verificaCadenzaSettimanale`** (`MAX_ARTICOLI_SETTIMANA = 3`, `FINESTRA_LOOKBACK_GIORNI = 15`, `FINESTRA_LOOKBACK_NAZIONALE_GIORNI = 60`, `MAX_ARTICOLI_FINESTRA = 6`), `articoloValido` (gate finale) |
-| `services/editorialStandard.ts` | 95 | Blocco **CONDIVISO** dello standard editoriale: `TEMI_OPERATIVI` (allow-list 360° in ordine di priorità), `AREE_TEMATICHE`, `PESI_CATEGORIA` (pesi dello scoring), `CATEGORIE_CON_FATTO_CONCRETO`, `temiDalTesto`/`areeTematicheDalTesto` (audit multi-tema) |
-| `services/standardTemiPersonale.ts` | 232 | Temi operativi del PERSONALE (`TemaOperativo`: categoria, parole-chiave, macro-area, peso, flag `autosufficiente`) |
-| `services/standardTemiDidattica.ts` | 56 | Temi CULTURALI/DIDATTICI (innovazione digitale, didattica, pedagogia): pubblicabili solo con un **fatto concreto** |
-| `services/lessicoScuola.ts` | 202 | Lessico **CONDIVISO** della scuola a 360 gradi: `PAROLE_OPERATIVE` (storico + voci 360° dedupe), `GLOSSARIO_ACRONIMI`, `FRASI_FLUFF` |
+| `services/relevanceEngine.ts` | 815 | **Node-only, puro — ORCHESTRATORE** (§9): `valutaRilevanza` (anti-burocrazia: `attoBurocraticoVuoto`/`titoloInformativo`/`riferimentiObsoleti`, `categoriaDaImpatto`, waterfall nazionale), **allow-list dei temi 360°** (`classificaCategoria`/`classificaTemaPersonale` su `TEMI_OPERATIVI`), **anti-ufficio-stampa** (`titoloDaUfficioStampa`, `contieneFraseFluff`), **gate 2-bis** (`PAROLE_IMPATTO` + `PAROLE_SCUOLA`), **`titoloAzione`**, **`applicaFormatoEditoriale`** (`summary_points` a bullet, **DOPPIO LINK**), `articoloValido` (gate finale), `PAROLE_FORTI_INIZIO_ANNO`; **ri-esporta** i sotto-moduli qui sotto (superficie pubblica invariata per chi importava da qui) |
+| `services/editorialVoice.ts` | 137 | **VOCE EDITORIALE unica** («colto ma sciolto»): `NOME_VOCE`, `REGOLE_VOCE` (10 regole con `id`, **`prima_menzione`** = ogni sigla/acronimo/termine spiegato alla PRIMA occorrenza), `bloccoVoceEditoriale()` (blocco pronto per i prompt), `APERTURE_VIETATE`/`apertureVietateTesto()`, `espandiAcronimi` (`GLOSSARIO_ACRONIMI`) |
+| `services/promptEditoriale.ts` | 66 | I due prompt LLM: `promptFiltroLLM` (allow-list dei 20 temi) e `promptScritturaArticolo` (3 paragrafi, sezione `VOCE EDITORIALE` importata da `editorialVoice`, URL integrity) |
+| `services/articoloEditoriale.ts` | 227 | Composizione dell'articolo: `generaArticoloEditoriale` (copy azione, fonte sempre citata), `linkDomandaUfficiale`, `richiedePresentazioneDomanda`, `CANALI_DOMANDA` |
+| `services/articoloCopy.ts` | 184 | Copy editoriale per categoria: `ARTICOLO` (fatto / chi / pratica / come / portale), `IMPATTO_COPY` (welfare, formazione, sicurezza…) |
+| `services/linkUfficiale.ts` | 240 | `classificaLink` (`diretto`/`contenitore`/`non-valido`), `etichettaLinkFonte`, `linkDirettoUfficiale`, `linkNonValidiInHtml`, `linkVietatiInHtml` |
+| `services/fontiUfficiali.ts` | 174 | `èFonteCanonica`, `èFonteMim`, `èFonteNazionale`, `èLinkPdf`, `validaUrlDeepLink` (`SEGNALI_MOCKUP`/`SEGNALI_LOGIN`) |
+| `services/cadenzaArticoli.ts` | 123 | Cadenza e tetti: `MAX_ARTICOLI_SETTIMANA = 3`, `FINESTRA_LOOKBACK_GIORNI = 15`, `FINESTRA_LOOKBACK_NAZIONALE_GIORNI = 60`, `MAX_ARTICOLI_FINESTRA = 6`, `limitaArticoliSettimanali`, `limitaCadenzaSettimanale`, `verificaCadenzaSettimanale` |
+| `services/valutazioneTipi.ts` | 23 | Contratto della valutazione: `ValutazioneNotizia` (voce in ingresso e esito) e `VoceInValutazione` |
+| `services/editorialStandard.ts` | 118 | Blocco **CONDIVISO** dello standard editoriale: `TEMI_OPERATIVI` (allow-list 360° in ordine di priorità = personale → IA → didattica), `AREE_TEMATICHE`, `PESI_CATEGORIA` (pesi dello scoring), `CATEGORIE_CON_FATTO_CONCRETO`, `temiDalTesto`/`areeTematicheDalTesto` (audit multi-tema) |
+| `services/standardTemiPersonale.ts` | 235 | Temi operativi del PERSONALE (`TemaOperativo`: categoria, parole-chiave, macro-area, peso, flag `autosufficiente`) |
+| `services/standardTemiIA.ts` | 36 | Tema AUTONOMO «**Intelligenza Artificiale**» (peso 76, `autosufficiente: false`, `fattoConcreto: true`, lessico `PAROLE_IA`): badge, copy e scoring propri; inserito fra i temi del personale e quelli didattici per non rubare il match ai temi storici, vince su innovazione digitale/didattica/pedagogia |
+| `services/standardTemiDidattica.ts` | 59 | Temi CULTURALI/DIDATTICI (innovazione digitale — senza il lessico IA, ora autonomo —, didattica, pedagogia): pubblicabili solo con un **fatto concreto** |
+| `services/lessicoScuola.ts` | 243 | Lessico **CONDIVISO** della scuola a 360 gradi: `PAROLE_OPERATIVE` (storico + voci 360° dedupe), `PAROLE_IA` (intelligenza artificiale, IA generativa, chatbot, machine learning…), `GLOSSARIO_ACRONIMI` (compresa la sigla `IA`), `FRASI_FLUFF` |
 | `services/ingestNotizie.ts` | 566 | **Node-only** — CLI pipeline: **waterfall** livelli 1→4 → filtra → **gate procedura senza canale di presentazione** → gate link punto-a-punto → verifica HTTP 200 → **formattazione editoriale PRIMA dell'igiene** → **tetto settimanale** (`MAX_ARTICOLI_SETTIMANA`) con **riserve + `applicaGaranziaSettimanale`** → scrive `notizieIngestite.ts`; **exit 1 se la settimana resta vuota** (il workflow fallisce, niente silenzio) |
 | `services/archivioNotizie.ts` | ~85 | Lettura/scrittura del file archivio (`scriviArchivioNotizie`, `leggiArchivioNotizie`, `estraiArticoliDaTesto`): unico punto di serializzazione di `notizieIngestite.ts` |
 | `services/tracciaFonte.ts` | ~250 | **Node-only** — tracciamento della fonte granulare: `tokenizza`, `valutaCandidato` (numeri dell'atto decisivi), `scegliLinkSpecifico`, `risolviFonteGranulare` (da pagina-contenitore alla sottopagina/circolare/PDF) |
@@ -422,9 +449,9 @@ data/ · types.ts`. Dettaglio e regole: [`DEPARTMENT_MAP.md`](./DEPARTMENT_MAP.m
 | File | Responsabilità |
 |---|---|
 | `LandingPage.tsx` | Home pubblica: hero, simulatore radar, servizi, pricing snippet, footer condiviso (`Footer`) |
-| `PrezziPage.tsx` 🔒 | Pagina prezzi / offerta PRO + PureFocus. **BLOCCATO** |
+| `PrezziPage.tsx` 🔒 | Pagina prezzi / offerta PRO + PureFocus. **BLOCCATO** (intervento autorizzato 29/09/2026: sola sezione FAQ dall'elenco condiviso) |
 | `ChiSiamoPage.tsx` 🔒 | Pagina istituzionale. **BLOCCATO** |
-| `FAQPage.tsx` | Domande frequenti (pubblica) |
+| `FAQPage.tsx` | Domande frequenti (pubblica): 8 voci e ancore da `data/faqPubbliche.ts`, testi dal registro (§26.27; selezione editoriale in §26.29) |
 | `ServiziPage.tsx` | Griglia servizi da `data/servizi.ts` |
 | `ServizioPage.tsx` | Dettaglio servizio per slug |
 | `ContattiPage.tsx` | Form contatti + info |
@@ -451,7 +478,12 @@ data/ · types.ts`. Dettaglio e regole: [`DEPARTMENT_MAP.md`](./DEPARTMENT_MAP.m
 
 | File | Righe | Responsabilità |
 |---|---|---|
-| `index.ts` | 1.515 | Pipeline scraper interpelli (§5.3): env, province attive da `profiles`, fonti per provincia, **espansione ELENCHI** (`espandiElenchi`), dedupe hash_id, upsert `interpelli`/`notices`, notifiche ai nuovi |
+| `index.ts` | 1.747 | Pipeline scraper interpelli (§5.3): env, province attive da `profiles`, **selezione delle FONTI** (`fontiPerRun`: hub dei capoluoghi + feed nazionale), connettori hub/aggregatore, gate di conformità (§5.3), **espansione ELENCHI** (`espandiElenchi`), dedupe hash_id, upsert `interpelli`/`notices`, notifiche ai nuovi |
+| `fonti.ts` | 190 | **Node-only, puro** — registro fonti: tipi (`FonteInterpelli`, `TipoFonte`), costruzione del catalogo (dati in `fontiRegistro.ts`), `regioneDiProvincia`, `fontiAttive`, `fontiPerProvincia`, `fontiPerRun` (hub locali → feed nazionale; archivi opt-in `SCRAPER_ARCHIVI=1`), tetti `MAX_FONTI_PER_PROVINCIA`/`MAX_FONTI_PER_RUN` |
+| `fontiRegistro.ts` | 111 | **Node-only, puro** — SOLO DATI del registro: feed dell'aggregatore (indice nazionale + archivi regionali) e hub di reclutamento USR/USP dei capoluoghi. Ogni URL verificata (HTTP 200) con data; le fonti non verificabili stanno in `HUB_ESCLUSI` col motivo (mai copertura finta) |
+| `fontiCopertura.ts` | 81 | **Node-only, puro** — copertura dichiarata: `regioniCoperte`/`regioniScoperte`, `CAPOLUOGHI_PRINCIPALI` (Torino…Perugia), `fontiPerCapoluogo`, `capoluoghiScoperti`, `sintesiCopertura` (log) |
+| `hub.ts` | 111 | **Node-only, puro** — connettore dei capoluoghi: `eUrlSezioneReclutamento`/`scopriSezioniReclutamento` (dalle pagine USR si scoprono le sezioni interpelli/avvisi, max `MAX_SEZIONI_HUB`), `eTitoloNavigazione` (menu/archivi/ricerca non sono avvisi) |
+| `qualitaOpportunita.ts` | 202 | **Node-only, puro** — conformità della bacheca: `eContenutoEditoriale`/`motivoScartoEditoriale` (separazione dal dominio Notizie), `eTitoloInformativo` (esiti/graduatorie), `motivoScartoOpportunita` (editoriale → informativo → non-opportunità → categoria → scaduto), `eRecordStrutturato` e **`valutaGateLink`** (ping fallace ≠ record scartato) |
 | `elenchi.ts` | ~215 | **Node-only, puro** — espansione delle PAGINE INDICE ("elenchi" USR/USP): `eUrlElenco`/`sembraTitoloElenco`/`ePaginaElenco` riconoscono l'elenco, `estraiVociElenco` estrae **una voce per avviso** (riga più specifica vince, mai la lista master), `espandiElencoInAvvisi` le trasforma in avvisi strutturati con link proprio |
 | `parser.ts` | ~600 | Parser: `rilevaClassi` (A-XX/ADEE + compatti A042/AB25), `rilevaCategoriaAvviso`, `sembraOpportunita`, `estraiProvincia`/`estraiScuola` (dai dati reali; **`ALIAS_CITTA` completata** — es. **Forlì → FC**, Monza → MB, Pesaro → PU, Barletta → BT, Carbonia → SU, La Spezia → SP: prima un avviso di Forlì-Cesena ricadeva sulla provincia della FONTE, es. TO), `estraiDataPubblicazione`/`estraiDataScadenza` (pubblicazione ≠ scadenza; **due passate** per la scadenza: parola chiave PRIMA della data, poi DOPO — "Pubblicato il 12/09/2026. Scadenza: 15/09/2026" → **15/09**, non 12/09), `inferisciMateria`, `estraiEmail`, **`scegliUrlFonte`** (solo candidati con `eUrlAvvisoDiretto`: **mai la home dell'ente** né un elenco regionale, nessun fallback → `null`), `verificaAvviso`/`eSorgenteVerificata` (anti-mock/dummy), `generaHashId`, `parseInterpello` |
 
@@ -551,7 +583,8 @@ Guardie: `npm run test:sostegno`, `npm run test:migrazioni`, `npm run test:copy:
 | `.github/workflows/health-check.yml` | **Radar Health Check** (Admin bot): cron giornaliero `0 8 * * *` + dispatch; `npm run admin:health` → rileva *dispatch Radar fermo* (nuovi interpelli senza notifiche), *scraper fermo/in errore* e *Notizie ferme*; invia alert a `ADMIN_TELEGRAM_ID` via `inviaAlertaAdmin` (`ADMIN_ALERT_SECRET`). Env: `HEALTH_STALE_HOURS` (48), `HEALTH_NEWS_STALE_DAYS` (14) |
 | `scripts/admin-health-check.ts` | CLI del monitor (`npm run admin:health [-- --dry] [-- --hours N]`): controlla `interpelli`, `notifications_log`, `scraper_runs`, `profiles.radar_attivo` e l'archivio `notizieIngestite.ts`; exit 1 se rileva anomalie |
 | `scripts/arricchisci-interpelli.ts` | Manutenzione dati (`npm run dati:arricchisci [-- --apply]`): completa `school_code`, `contact_email` (PEO dalla convenzione MIM) e `school_name` (registro) sugli interpelli esistenti, senza mai sovrascrivere dati presenti |
-| `scripts/test-live-board.ts` | Regressione vetrina Radar Live (`npm run test:board`): righe incomplete arricchite o scartate, mai placeholder |
+| `scripts/test-live-board.ts` | Regressione vetrina Radar Live (`npm run test:board`, in `npm test`): righe incomplete arricchite o scartate, mai placeholder; i valori REALI dei `school_name` sporchi (etichette di posto, dump di classi) non entrano in bacheca e i nomi reali con coda di procedura vengono ripuliti |
+| `scripts/test-nome-istituto.ts` | Regressione del gate dei nomi d'istituto (`npm run test:nome-istituto`, in `npm test`): codici amministrativi («EEEE \| A246», «AAAA \| A246», «BA02 \| AR04»), etichette di posto/materia, atti amministrativi e artefatti (`timbro_…`) mai in vetrina; nomi reali accettati e coda di procedura tagliata |
 | `scripts/test-email-scuola.ts` | Regressione email (`npm run test:email-scuola`): de-offuscamento, correlazione con l'istituto, **PEO/PEC dalla convenzione MIM** e completamento automatico nel parser |
 | `scripts/test-email-template.ts` | Regressione template email (`npm run test:email`): **oggetto standard `Nuove opportunità per te!`** (digest/opportunità) e oggetti di ciclo di vita invariati, logo reale, titolo pulito dai dump di codici classe, **footer crisp** (link Radar visibile con URL in chiaro, CTA Notizie email a due righe `scuoleradar.it/notizie` + `… vieni qui!`, avviso "non rispondere" in ULTIMA riga, nessun "P.S.", nessun grigio `#94a3b8`) |
 | `scripts/test-radar-preferenze.ts` | **`npm run test:radar:preferenze`** — preferenze Radar: normalizzazione classi (`A-18` ≡ `A18` ≡ `a 18`), dedup/persistenza (load/save normalizzati in `contexts/app/*`), testo UI **"Dove vuoi lavorare?"**, etichetta **"Le tue competenze e laboratori extra da proporre:"**, 12 tag PNRR/PON, **persistenza ISTANTANEA** del wizard (ordini/province/classi/competenze/tag) e assenza di elenchi statici di materie |
@@ -560,6 +593,7 @@ Guardie: `npm run test:sostegno`, `npm run test:migrazioni`, `npm run test:copy:
 | `scripts/test-sessione-identita.ts` | **`npm run test:sessione`** — sessione/identità: `identitaDaSessione` (full_name, campi espliciti, mai sovrascritture), bootstrap che sincronizza l'identità dalla sessione trovata, listener su `TOKEN_REFRESHED`/`USER_UPDATED`, `AuthCallback` che attende la sessione, wizard che rilegge il piano appena arriva l'identità |
 | `scripts/test-copy-etico.ts` | **`npm run test:copy:etico`** — COPY ETICO: scansione di `src/**` per le frasi competitive («prima degli altri», «beccare»…) e delle superfici UI/marketing per quelle di fretta; verifica la copy del banner PRO («Un mese PRO, completamente gratis… puoi dedicarti alla tua vita»), il Passo 4 senza urgenza né formule debole, l'anagrafica a **fine percorso**, l'hero a due colonne col simulatore e l'offerta PRO senza toni da televendita |
 | `scripts/test-copy-pubblico.ts` | **`npm run test:copy:pubblico`** — COPY PUBBLICO: regalo di benvenuto PRO («Buone notizie», nessuna voce di rinvio), wordmark PureFocus (Pure `#0E0C0A` + Focus `#0047AB`, mai l'emoji-icona), badge «Incluso nel piano PRO», Chi siamo e FAQ come punti di forza commerciali |
+| `scripts/test-copy-primo-schermo.ts` | **`npm run test:copy:schermo`** — COPY PRIMO SCHERMO: hero su **due righe** (`span block`, nessuna interruzione di markup), box «Prova il Radar» **non stirato** (`items-start`, niente `h-full`) con ripartizione verticale `lg:items-center` e i pulsanti **SUBITO SOTTO il box su due colonne simmetriche** (`mt-3 grid w-full gap-3 sm:grid-cols-2`, entrambi `w-full`), responso a scorrimento (`max-h-[24rem]`), nessun riquadro ridondante fra Radar Live e offerta PRO (§26.15, §26.16, §26.19) |
 | `scripts/test-qualita-invio.ts` | **`npm run test:qualita`** — gate di qualità: link diretto (`eUrlAvvisoDiretto`), gate link+recapito, mappatura province (Forlì → FC), brand/anteprime, frequenza CTA Radar ~20% |
 | `scripts/test-canali-telegram.ts` | **`npm run test:telegram:canali`** — post dei canali regionali: brand cliccabile in testa, 7 sezioni, testate tipografiche (nessuna fascia colorata/`[BADGE]`, nessuna immagine), **URL ufficiali mai in chiaro** (solo il bottone `👉 Apri l'avviso ufficiale`), **gate link diretto** (home regionale, elenco/tag, landing regionale, ricerca e "nessun link" → post senza link e pubblicazione annullata) + matrice di routing delle 9 regioni + ATA nazionale |
 
@@ -719,28 +753,75 @@ Modulo puro (client passato come parametro → testabile frontend+Node):
 - `findUtentiCompatibili` legge `sostegno` in modo **tollerante** (DB non migrato → rilegge
   senza la colonna: il matching degrada, non si svuota).
 
-### 5.3 Scraper interpelli (`src/scraper/index.ts` + `parser.ts`)
+### 5.3 Scraper interpelli (`src/scraper/` — motore degli interpelli di lavoro)
+
+**Perimetro**: il motore pubblica SOLO opportunità di lavoro (interpelli/supplenze
+docenti e ATA, bandi PNRR/PON/POR, incarichi per esperti esterni). Le notizie
+editoriali del MIM sono un altro dominio (`src/departments/notizie/`) e non
+entrano mai in bacheca né in notifica: la separazione è verificata da
+`npm run test:scraper:domini` (nessun import incrociato + filtro editoriale sul
+testo realistico).
+
 Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
 1. `caricaEnv()` (process.loadEnvFile) → `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`.
 2. `ottieniProvinceAttive()`: legge `profiles.province_attive`; fallback
    `SCRAPER_PROVINCE_TEST` (default `MI,TO`).
-3. Per ogni provincia: scarica la fonte REALE (pagina regione → post del giorno →
-   interpelli ufficiali); NESSUN seed/fixture di test nel codice. Dalla pagina del post
-   si estraggono le voci per-voce (città → provincia reale, classi, link ufficiale).
-3-bis. **ELENCHI** (`elenchi.ts`): se la pagina è un INDICE (es. elenchi USR Lombardia)
-   o l'avviso raccolto punta a un indice, ogni voce diventa un avviso INDIPENDENTE con
-   il proprio link; l'indice non viene mai pubblicato come singolo avviso (tetto:
-   `SCRAPER_ELENCHI_MAX`, default 25 pagine/run). Verificato da `npm run test:elenchi`.
-4. **Parser** (`parser.ts`): `rilevaClassi` (formato classico `A-12`, sostegno `ADEE`,
+3. **FONTI dei capoluoghi** (`fonti.ts` + `fontiRegistro.ts`, tetto
+   `SCRAPER_FONTI_MAX`, default 12):
+   · **hub di reclutamento USR/USP** dei capoluoghi di regione (Torino, Milano,
+     Genova, Bologna, Firenze, Roma, Napoli, Bari, Palermo, Venezia, Cagliari,
+     Perugia, Ancona, L'Aquila, Campobasso, Potenza, Catanzaro…) — `hub.ts` scopre
+     nella pagina dell'hub le **sezioni** interpelli/avvisi (max `MAX_SEZIONI_HUB`)
+     e le esplora; la provincia di fallback è quella del capoluogo e le voci che
+     citano la scuola/città reale vengono riattribuite dal parser;
+   · **feed dell'aggregatore** (indice nazionale): il post giornaliero è NAZIONALE
+     e viene letto **una volta sola** (dedup per URL); ogni voce prende la PROPRIA
+     provincia dall'intestazione di città e, se non è rilevabile, viene scartata
+     (mai province inventate). Gli archivi regionali sono opt-in (`SCRAPER_ARCHIVI=1`,
+     backfill): contengono gli stessi post nazionali dei giorni precedenti.
+   Copertura dichiarata: **19/20 regioni** con hub dedicato (manca la Valle d'Aosta)
+   e **tutti i 12 capoluoghi principali**; il registro è verificabile dal vivo con
+   `npm run fonti:verifica` (43/43 fonti raggiungibili al 2026-09-28) e presidiato
+   da `npm run test:scraper:fonti`.
+3-bis. **ELENCHI** (`elenchi.ts`): se la pagina è un INDICE (es. elenchi USR
+   Lombardia) o l'avviso raccolto punta a un indice, ogni voce diventa un avviso
+   INDIPENDENTE con il proprio link; l'indice non viene mai pubblicato come singolo
+   avviso (tetto: `SCRAPER_ELENCHI_MAX`, default 25 pagine/run). Il rumore di
+   navigazione (menu, archivi, paginazione, ricerca) viene scartato a monte
+   (`eTitoloNavigazione`). Verificato da `npm run test:elenchi`.
+4. **GATE 1 — conformità** (`qualitaOpportunita.ts`): fuori dalla bacheca i
+   contenuti **editoriali** (comunicato stampa, dichiarazione, intervista,
+   rassegna, evento), gli **atti informativi** (esiti, graduatorie, revoche) e le
+   voci **fuori target** (nessun segnale di opportunità, categoria non ammessa:
+   ammesse interpelli/supplenze, esperti, PNRR/PON/POR, avvisi/bandi). I contatori
+   sono loggati (mai scarti silenziosi).
+5. **Parser** (`parser.ts`): `rilevaClassi` (formato classico `A-12`, sostegno `ADEE`,
    e COMPATTO `A042`→`A-042`, `AB25`), `rilevaCategoriaAvviso`, `estraiProvincia`/`estraiScuola`
-   (dai dati reali), `estraiDataPubblicazione`/`estraiDataScadenza` (mai la pubblicazione
-   come scadenza), `inferisciMateria`, `estraiEmail`, `generaHashId` (SHA-256).
-5. Dedupe per `hashId` + **VALIDAZIONE** (`verificaAvviso`): scarta titoli vuoti/troppo corti,
+   (dati reali; `estraiProvincia` risolve anche la CITTÀ dell'intestazione),
+   `estraiDataPubblicazione`/`estraiDataScadenza` (mai la pubblicazione come
+   scadenza), `inferisciMateria`, `estraiEmail`, `generaHashId` (SHA-256).
+5-bis. **Arricchimento**: scadenze dichiarate (max `SCRAPER_SCADENZA_MAX`) ed email
+   di candidatura (max `SCRAPER_CONTATTI_MAX`, ultima ratio dalla convenzione MIM
+   sul codice meccanografico). L'ordine conta: il gate dei "bandi attivi" e il gate
+   del link lavorano sui dati arricchiti.
+6. **GATE 2 — solo bandi ATTIVI**: dopo l'arricchimento, gli avvisi con scadenza
+   già passata non entrano in bacheca (`eScaduto`). Una scadenza ASSENTE non è una
+   prova di scadenza: il record resta attivo finché una fonte non lo chiude.
+7. **GATE 3 — link (ping fallace ≠ record scartato)**: i server scolastici
+   regionali rispondono spesso 403/timeout ai client automatici. Un bando
+   **strutturato** (classe di concorso o materia **+** email di candidatura) viene
+   ACCETTATO senza verifica del link (e non viene nemmeno pingato); per gli altri
+   il ping (parallelo, `SCRAPER_PING_CONCORRENZA`) resta decisivo, e un ping
+   fallito su un record incompleto lo scarta. Il link, accettato o no il ping, deve
+   restare una fonte ufficiale specifica: nessun fallback alla home dell'ente.
+   Verificato da `npm run test:scraper:attivi`.
+8. Dedupe per `hashId` + **VALIDAZIONE** (`verificaAvviso`): scarta titoli vuoti/troppo corti,
    titoli con segnali di test/mock e fonti non ufficiali/non verificabili
    (example.com, localhost, social/hosting, root-domain…).
-6. **Upsert** in `interpelli` (`onConflict: 'hash_id', ignoreDuplicates: true`), resiliente
+9. **Upsert** in `interpelli` (`onConflict: 'hash_id', ignoreDuplicates: true`), resiliente
    alle colonne opzionali mancanti (migrazioni non applicate); fallback `notices`.
-7. **Notifiche** (soli interpelli NUOVI, §6) + pubblicazione sui canali regionali (`pubblicaNuoviSuCanali`).
+10. **Notifiche** (soli interpelli NUOVI, §6) + pubblicazione sui canali regionali
+   (`pubblicaNuoviSuCanali`).
 
 > Igiene dati: `npm run dati:pulisci` (dry-run; `--apply` per applicare) rimuove record non
 > verificati e azzera i nomi scuola fittizi. `npm run test:parser:validazione` verifica le regole.
@@ -1405,15 +1486,23 @@ candidato a migrare in `src/departments/cv/` (vedi `DEPARTMENT_MAP.md` §6).
 ### 9.3 `relevanceEngine.ts` (Node-only, PURO) — standard editoriale STRETTO
 
 - **Temi ammessi (allow-list 360°)**: `TEMI_OPERATIVI` (= `standardTemiPersonale` +
-  `standardTemiDidattica`, riuniti da `editorialStandard`) + `classificaTemaPersonale()` —
+  `standardTemiIA` + `standardTemiDidattica`, riuniti da `editorialStandard`) + `classificaTemaPersonale()` —
   CCNL e stipendi, pensioni, welfare e polizza sanitaria, mobilità e assegnazioni,
   GPS/graduatorie/supplenze/interpelli, organico e cattedre, sostegno, ATA e segreterie
   (DSGA), istruzione adulti (CPIA), formazione (TFA/CFU, classi di concorso), reclutamento
-  e immissioni in ruolo, PNRR, sicurezza;
+  e immissioni in ruolo, PNRR, sicurezza, intelligenza artificiale;
   *normativa/scadenze/concorsi* contano solo con riferimento esplicito al personale.
   L'ordine dell'elenco è la **priorità di match**: vince il primo tema riconosciuto.
-- **Fatto concreto**: `CATEGORIE_CON_FATTO_CONCRETO` (innovazione digitale, didattica,
-  pedagogia) — i temi culturali/didattici passano SOLO con una **scadenza reale** o un
+- **Tema autonomo «Intelligenza Artificiale»** (`standardTemiIA.ts`): categoria propria
+  (`PESI_CATEGORIA` 76, sopra *Innovazione Digitale*), lessico dedicato (`PAROLE_IA` in
+  `lessicoScuola.ts`: intelligenza artificiale, IA generativa, chatbot, machine learning,
+  LLM…), copy dedicato (`ARTICOLO_ALTRE` in `relevanceEngine.ts`) e sigla `IA` nel
+  `GLOSSARIO_ACRONIMI` (spiegata alla prima menzione, anche nel titolo). L'ordine voluto è
+  personale → IA → didattica: l'IA non ruba il match ai temi storici (*formazione*,
+  *scadenze*) ma vince su *innovazione digitale*, *didattica* e *pedagogia*.
+- **Fatto concreto**: `CATEGORIE_CON_FATTO_CONCRETO` (intelligenza artificiale, innovazione
+  digitale, didattica, pedagogia) — i temi culturali/didattici passano SOLO con una
+  **scadenza reale** o un
   **canale ufficiale di domanda/candidatura**; senza, `valutaRilevanza` li respinge con
   motivo tracciabile («Tema X senza fatto concreto»).
 - **Scoring**: `punteggioRilevanza(categoria, haScadenza)` legge `PESI_CATEGORIA` (base per
@@ -1493,12 +1582,17 @@ Niente menzioni a ricompense o account PRO gratuiti. Nel header/dashboard compar
 - `servizi.ts` → `Servizio[]` per `ServiziPage`/`ServizioPage` (radar, cv, cfu, assistente, moduli).
 - `VetrinaModal` → paywall freemium multi-sezione; `ServiziPaywall` → CTA generico.
 - `LandingPage` → `LandingHero` (**due colonne** `lg:grid-cols-[minmax(0,1fr)_34rem]`: copy a
-  sinistra, box «Prova il Radar» con `SimulatorRadar` a destra — **sola provincia**) →
-  `LandingRegistrazioneRapida` (**solo visitatori**: Nome, Cognome, Email → bozza + modale di
+  **due righe** a sinistra — «Ogni giorno decine di opportunità.» / «Noi intercettiamo solo
+  quelle per te.» su `span.block`, mai interruzioni di markup — e box «Prova il Radar»
+  (`SimulatorRadar`, **sola provincia**) a destra, con le due colonne allineate in altezza
+  (`items-stretch`) e gli inviti all'azione ancorati in basso (`lg:mt-auto`)) →
+  `LandingRegistrazioneRapida` (**solo visitatori**: form **condiviso**
+  `FormRegistrazioneRapida` — Nome, Cognome, Email → bozza + modale di
   configurazione del Radar già compilata) → `FlightBoardInterpelli`
-  («Radar Live», **primo contenuto dopo l'hero**) → `LandingOffertaPro` (leva di conversione:
+  («Radar Live», **primo contenuto dopo l'hero**: nessun riquadro di chiusura, §26.15) →
+  `LandingOffertaPro` (leva di conversione:
   sta **prima** di «Cosa riceverai», **tre benefici** e una sola CTA, nessun link ad altri
-  piani) → `LandingBenefici` → «Come funziona» (primo passo **«Imposta il tuo Radar»**) + valori →
+  piani; monta lo stesso form rapido con `onRegistrazioneRapida`) → `LandingBenefici` → «Come funziona» (primo passo **«Imposta il tuo Radar»**) + valori →
   `LandingStrumenti` (card centrate) → `LandingPartnerPureFocus` (vetrina `PureFocusCard`) → stats →
   `LandingCta` → `Footer`.
 
@@ -2294,6 +2388,12 @@ privacy-first, attivo solo con `VITE_POSTHOG_KEY`).
 | `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` | Edge genera-modulo (server) |
 | `SCRAPER_PROVINCE_TEST` | Scraper: province di fallback (se `profiles.province_attive` è vuoto) |
 | `SCRAPER_SCADENZA_MAX` | Scraper: max pagine ufficiali lette per arricchire le scadenze mancanti (default 20) |
+| `SCRAPER_CONTATTI_MAX` | Scraper: max avvisi su cui cercare l'email di candidatura (default 60) |
+| `SCRAPER_ELENCHI_MAX` | Scraper: max pagine indice espanse per run (default 25) |
+| `SCRAPER_FONTI_MAX` | Scraper: max fonti interrogate per run — hub dei capoluoghi + feed nazionale (default 12) |
+| `SCRAPER_ARCHIVI` | Scraper: `1` include gli archivi regionali dell'aggregatore (backfill; di default OFF, contengono gli stessi post nazionali dei giorni precedenti) |
+| `SCRAPER_PING_CONCORRENZA` | Scraper: richieste di verifica link in parallelo (default 8) — i bandi strutturati non vengono pingati |
+| `SCRAPER_TELEGRAM_REALTIME` | Scraper: `0` disattiva gli alert PRO in tempo reale (test della pipeline) |
 
 ### 17.2 Secrets GitHub Actions (`.github/workflows/scraper.yml`)
 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `TELEGRAM_BOT_TOKEN`,
@@ -2384,7 +2484,8 @@ Utilizzi diretti nel codice (`import.meta.env.*` verificati): `DEV`, `MODE`,
 |---|---|
 | Build & qualità | `dev` (vite 5174), `build`, `preview`, `lint`, `typecheck`, `test` (7 suite del motore CFU) |
 | Architettura | `test:architettura` (gate), `arch:check` (= gate), `arch:report` (inventario) |
-| Scraper & dati | `scrape` (`-- --dry-run`), `scrape:check`, `scrape:notizie`, `scrape:notizie:check`, `dati:arricchisci`, `dati:pulisci`, `dati:pulisci-scaduti`, `scadenze:sync`, `notizie:ripara-archivio` |
+| Scraper & dati | `scrape` (`-- --dry-run`, `--no-email`), `scrape:check`, `scrape:notizie`, `scrape:notizie:check`, `dati:arricchisci`, `dati:pulisci`, `dati:pulisci-scaduti`, `scadenze:sync`, `notizie:ripara-archivio`, `fonti:verifica` (network: ricontrolla dal vivo le URL del registro fonti) |
+| Scraper (guardie) | `test:scraper:domini` (isolamento Interpelli ↔ Notizie + filtro editoriale), `test:scraper:fonti` (registro, copertura dei capoluoghi, scoperta sezioni hub), `test:scraper:attivi` (solo bandi attivi, categorie ammesse, gate del link/ping fallace) — tutte in `npm test` |
 | Notizie (test) | `test:notizie-feed`, `test:notizie-editoriale`, `test:notizie-nazionale`, `test:notizie-rate` |
 | Radar & matching | `test:matching`, `test:radar`, `test:radar:preferenze`, `test:sostegno`, `test:materia`, `test:interpello-scadenza`, `test:scadenze`, `test:rinnovo-preavvisi`, `test:board`, `test:elenchi`, `test:traccia`, `test:prova-radar`, `test:parser*`, `test:dati-fallback` |
 | Notifiche & canali | `test:notifiche`, `test:notifier-dry`, `test:telegram` (`:template`, `:tier`, `:canali`), `test:qualita`, `test:copy`, `test:dedup`, `test:dedup:utente`, `test:frequenza`, `test:digest`, `test:email`, `test:email:scuola`, `test:email-alert`, `test:alert`, `test:link`, `test:link-esterno`, `test:promemoria`, `test:ledger`, `notifiche:digest`, `notifiche:promemoria`, `ledger:unisci` |
@@ -2432,7 +2533,7 @@ Utilizzi diretti nel codice (`import.meta.env.*` verificati): `DEV`, `MODE`,
 | `admin-profiles-manutenzione.ts` | `npm run admin:profiles` → manutenzione profili: Free Forever, dedupe, igiene |
 | `admin-link-telegram.ts` | `npm run admin:link-telegram` → collega un Chat ID Telegram a un profilo |
 | `admin-fix-pampararo.ts` | `npm run admin:fix-pampararo` → cleanup mirato di un account di test |
-| `diag-flightboard.ts` | Diagnostica: perché la tabella "Radar Live" è nascosta (righe scartate) |
+| ~~`diag-flightboard.ts`~~ | **Rimosso il 02/10/2026** (§26.34): replicava a mano la vecchia query con `.limit(500)`. La diagnosi della bacheca «Radar Live» vive ora in `npm run board:diag` (`src/departments/radar/flightBoard/__tests__/diagnosticaBoard.ts`) e legge a pagine come il prodotto |
 | `diag-fonti.ts` | Diagnostica: struttura HTML del post giornaliero di scuolainterpelli.it |
 | `diag-interpelli-multiregione.ts` | Diagnostica: verifica l'ingestione multi-regione in `interpelli` |
 
@@ -2448,7 +2549,7 @@ Utilizzi diretti nel codice (`import.meta.env.*` verificati): `DEV`, `MODE`,
 | Feature flags | `test-feature-flags` (matrice stati, **superficie pubblica di produzione = solo `radar` + `purefocus`**, snapshot di visibilità, gate notifiche, scrittura di `sr_flag_dipartimenti`) · `test-flags-cablaggio` (navbar/menu/tab/superfici pubbliche/pannelli) · `test-flags-render` (render dei toggle OFF/TEST/ON in `variante="lista"` e `card`) |
 | Telegram & canali | `test-telegram` · `test-telegram-template` (etichetta fonte unica `🔗 Fonte Ufficiale`, URL **mai** in chiaro in tutte le tipologie, etichetta sempre cliccabile, payload con anteprime disattivate) · `test-telegram-tier` · `test-canali-telegram` (post canali: etichetta canonica, URL non in chiaro, gate link diretti) |
 | Brand & favicon | **`test-favicon`** (`npm run test:favicon`): `index.html` ↔ `public/` (misure dichiarate = misure reali), PNG decodificati per provare **campo azzurro #2B6F9E + radar bianco**, `favicon.ico` multi-misura valido, `apple-touch-icon` opaco, pesi e assenza di asset legacy/scuri. Supporto: `scripts/lib/pngRgba.ts` (decoder PNG senza dipendenze) |
-| Checkout & promo | **`test-checkout-promo`** (`npm run test:checkout-promo`, 44 controlli): invarianti di `supabase/functions/checkout` (BETA1ANNO solo PRO annuale + validazione `promo_codes` + `discounts[0][coupon]`, mai `promotion_code`), `webhook` (RPC `attiva_codice_promo`: PRO+1anno, `is_beta_tester`, consumo del monouso), `config.toml` (`verify_jwt`), RPC/seed nelle migrazioni, `profiles.provincia`, 401 Guest del health check, form di registrazione (provincia, nota istituti scolastici, errori non silenziosi) |
+| Checkout & promo | **`test-checkout-promo`** (`npm run test:checkout-promo`): invarianti di `supabase/functions/checkout` (BETA1ANNO solo PRO annuale + validazione `promo_codes` + `discounts[0][coupon]`, mai `promotion_code`), `webhook` (RPC `attiva_codice_promo`: PRO+1anno, `is_beta_tester`, consumo del monouso), `config.toml` (`verify_jwt`), RPC/seed nelle migrazioni, `profiles.provincia`, 401 Guest del health check, form di registrazione (provincia, nota istituti scolastici, errori non silenziosi); la **chiusura annuale** (`PROANNUALE40`) ha la guardia dedicata **`npm run test:checkout:annuale`** (`scripts/test-checkout-annuale.ts`, 11 controlli, §26.16) |
 | Piano & funnel | **`test-piano-sync`** (`npm run test:piano`): chiama le **funzioni vere** (`pianoDaProfilo`, `provaProScaduta`, `pianoLimits`, bozza di registrazione con stub di `localStorage`) + invarianti di cablaggio: PRO concesso dal backend (tier `pro_*`/`is_beta_tester`), tetti PRO mentre il piano è in lettura, Beta Tester mai retrocessi, nome composto «Bison Productions» integro nella bozza, prefill del form (nome/cognome/email dal wizard), Realtime sulla riga `profiles`, **entitlement unico dal contesto (`hasProAccess`) in dashboard e badge/menu utente**, visibilità delle feature flags reattiva allo snapshot, paywall solo con piano confermato, trigger DB dell'anagrafica |
 | Notizie | `test-notizie-feed` · `test-notizie-editoriale` · `test-notizie-nazionale` · `test-notizie-rate` |
 | Modulistica & PDF | `test-moduli-integrity` · `test-pdf-mad` · `test-pdf-breve` · `test-pdf-brevi` · `test-pdf-universita` · `test-pdf-completo` |
@@ -2981,7 +3082,8 @@ Con `isSupabaseConfigurato() === false` (`supabase === null`):
 | `dedupAvvisi.ts` | 97 | `improntaAvviso`, `normalizzaPerImpronta`, `GIORNI_IMPRONTA` |
 | `emailScuola.ts` | 92 | `risolviEmailUfficialeScuola`, `emailDaCodiceMeccanografico`, `normalizzaCodiceMeccanografico`, `estraiCodiceMeccanograficoDaTesto` |
 | `scadenza.ts` | 91 | `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `stileScadenza`, `SOGLIA_IMMINENTE`, `SOGLIA_VICINA` |
-| `liveBoard.ts` | 106 | `preparaRigheBoard`, `nomeScuolaRiga`, `scuolaDaTitolo` |
+| `liveBoard.ts` | 116 | `preparaRigheBoard`, `nomeScuolaRiga`, `nomePresentabileRiga`, `scuolaDaTitolo`, `titoloLeggibile`, `rigaPresentabileVetrina` (scarto dei codici classe e delle azioni amministrative) |
+| `nomeIstituto.ts` | 161 | `nomeIstitutoPresentabile` (gate: testa d'istituto + denominazione, mai codici amministrativi; taglio della coda di procedura) |
 | `radarValidation.ts` | 81 | `validaConfigRadar`, `messaggioCampiMancanti`, `impostaPassoRadar`, `STORAGE_KEY_RADAR_WIZARD_STEP` |
 | `school-lookup.ts` | 65 | `resolveSchoolByCode`, `nomeScuolaDaCodice` |
 | `planLimits.ts` | 65 | `LIMITI_RADAR`, `PROGRAMMA_NOTIFICHE`, `BANNER_PIANO`, `pianoLimits`, `limitaSelezione` |
@@ -3075,8 +3177,9 @@ npm run scrape -- --dry-run   # nessuna scrittura
 npm run scrape                # scrittura + notifiche
 ```
 
-Diagnostica post-run: `scraper_runs` (esito/errori/telegram_*), poi `diag-flightboard.ts`,
-`diag-fonti.ts`, `diag-interpelli-multiregione.ts`, `audit-dati.ts`.
+Diagnostica post-run: `scraper_runs` (esito/errori/telegram_*), poi `npm run board:diag`
+(`flightBoard/__tests__/diagnosticaBoard.ts`, sostituisce il vecchio
+`diag-flightboard.ts`), `diag-fonti.ts`, `diag-interpelli-multiregione.ts`, `audit-dati.ts`.
 Igiene: `npm run dati:pulisci-scaduti` (04:00 UTC dal workflow), `npm run dati:pulisci`.
 
 ### 24.5 Notizie (editoriale)
@@ -3325,6 +3428,11 @@ benvenuto PRO) mantengono la dicitura ammessa dalla checklist pagamenti, mentre 
 landing usa il vocabolario stretto.
 `scripts/test-copy-pubblico.ts` (sezione «Copy pubblico», §26.8) copre invece regalo
 di benvenuto PRO, wordmark PureFocus, Chi siamo e FAQ.
+**Aggiornamento (28/09/2026, nono intervento)**: i controlli di **layout del primo schermo**
+(hero a due righe con `span block`, colonne allineate in altezza, responso a scorrimento,
+nessun riquadro ridondante prima dell'offerta) vivono in
+`scripts/test-copy-primo-schermo.ts` (`npm run test:copy:schermo`): `test-copy-etico.ts` era
+arrivato a **259 righe**, sopra la soglia strutturale di 250. Vedi §26.15.
 
 **Nota operativa.** `scripts/_assistente-cleanup.mjs` (patch una-tantum sulla riga 66 di
 `AssistenteAIPage`) è stato **eliminato** il 27/09/2026: l'intervento è esaurito e lo script
@@ -3493,6 +3601,11 @@ via d'uscita.
 | 2 | **Dove vive la dichiarazione commerciale** | Prezzo, condizioni di proseguimento e disdetta restano dichiarati **fuori** dalla sezione di conversione: `/prezzi` (colonne piani + FAQ «Il PRO annuale costa 49 €/anno (circa 4 € al mese) e si disdice quando vuoi»), FAQ pubbliche («Nulla di automatico: la prova è di 30 giorni di PRO, non un abbonamento nascosto…») e **passo di pagamento** (`AbbonamentoModal`: «Rinnovo automatico trasparente, disdicibile in qualsiasi momento dal tuo profilo»). `PREZZO_PRO_ANNUO_ETICHETTA` resta in `src/lib/pricing.ts` come etichetta condivisa del listino (nessun consumatore in `src/` dopo la rimozione) |
 | 3 | **Guardie aggiornate** | `test-copy:etico`: la sezione deve avere esattamente i tre blocchi (`titolo:` ×3), nessun `<Link` / `to="/prezzi"` e **zero** occorrenze di importi o condizioni contrattuali; sostituita la vecchia asserzione che pretendeva la formula «Alla scadenza torni su Base, senza costi». Checklist `05_abbonamenti_pagamenti` §3 aggiornata: la vetrina PRO è **solo-benefici** e la dichiarazione di rinnovo/disdetta vive fuori dalla sezione |
 
+**Confine aggiornato (28/09/2026, nono intervento).** La sezione resta **senza importi**: la
+dichiarazione dell'offerta di continuazione (primo anno a `PREZZO_PRO_ANNO_DOPO_OMAGGIO_ETICHETTA`
+invece del listino) vive **solo** nel benvenuto di fine flusso (`BenvenutoProRadar`, con il mese
+in omaggio attivo) — vedi §26.15.
+
 **Verifiche (27/09/2026, settimo intervento).** `npm run test:copy:etico` ✓ · `npm run
 test:copy:pubblico` ✓ · `npm run test:prova-radar` ✓ · `npm run typecheck` ✓ · `npm test` ✓
 (catena completa) · `npm run test:architettura` ✓ (nessuna violazione nuova: 143 in baseline) ·
@@ -3500,3 +3613,1488 @@ test:copy:pubblico` ✓ · `npm run test:prova-radar` ✓ · `npm run typecheck`
 `scripts/test-copy-etico`). Debito noto **non** toccato: 43 problemi ESLint (22 errori, 21
 warning) su file estranei a questo intervento.
 
+### 26.14 Passo 4 «in chiaro»: il Radar dichiara cosa cerca e cosa arriva
+
+**Nota di sessione (28/09/2026, ottavo intervento)** — chiusura dell'ondata di cinque
+correzioni UX/copy; qui è documentato il blocco di **trasparenza** del passo finale del
+wizard Radar (le altre correzioni dell'ondata — sostegno bloccato su ON e le **due
+etichette di fonte** per superficie — restano tracciate dal diff dei rispettivi moduli).
+Il passo finale non chiede più soltanto i canali: **dichiara** che cosa cerca il Radar e
+che cosa arriverà, con i dati reali appena scelti dall'utente.
+
+| # | Intervento | Dettaglio |
+|---|---|---|
+| 1 | **Blocco nuovo, in testa al Passo 4** | nuova `src/departments/radar/wizard/components/SezioneTrasparenza.tsx` («**Cosa fa il tuo Radar, in chiaro**», icona `ShieldCheck`), montata da `PassoNotifica` con `<SezioneTrasparenza selezione={trasparenza} />` e alimentata **viva** dal contenitore (`RadarWizardModal`: `trasparenza={{ provinceCodici, classiCodici, materieId, materieCustom }}`) — mai un esempio, mai una copia della bozza |
+| 2 | **Dati reali dai cataloghi condivisi** | province da `src/data/province` (si mostrano i **nomi**, non i codici), classi di concorso con l'etichetta canonica `etichettaClasseMateria`, competenze dai tag di `src/data/ordiniMaterie` + **parole chiave libere**. Le liste lunghe si accorciano a `MAX_ETICHETTE = 4` voci e si chiudono con «**e N altra/e**»; singolare e plurale corretti («1 provincia» / «2 province») |
+| 3 | **Regole di consegna ancorate al motore** | Telegram = avviso immediato quando la scuola pubblica; email = **una sola consegna al giorno** e **solo se ci sono opportunità nuove**; al massimo **`MAX_INVII_OPPORTUNITA`** invii per la stessa opportunità (importato da `@/lib/frequenzaNotifiche`: mai un numero scritto a mano nel copy) e sempre il link all'**annuncio ufficiale della scuola** |
+| 4 | **Stato incompleto dichiarato, non nascosto** | il blocco si disegna **sempre** (la `<ul>` di riserva esiste anche vuota, così il layout non salta): con profilo vuoto spiega che «mancano i due dati che accendono la ricerca» e le regole di consegna restano comunque visibili; nessuna riga di competenze vuota |
+| 5 | **Guardia dedicata** | nuovo `src/departments/radar/wizard/__tests__/trasparenzaPasso4.test.ts` — **19 controlli** su **render reale** (`react-dom/server`) con selezioni vere dei cataloghi + 4 controlli di **cablaggio** (il Passo 4 monta il blocco, il contenitore passa i dati vivi, le etichette arrivano dai cataloghi, zero dati di esempio nel sorgente). Comando `npm run test:trasparenza`, inserito in `npm test` subito dopo `test:copy:pubblico` |
+
+**Perché sta qui e non nelle guardie di copy generali.** Il controllo vive **dentro il
+dipartimento** (`wizard/__tests__/`) perché il gate di architettura vieta ai file in
+`scripts/` di importare i sorgenti dei dipartimenti se non via `index.ts`
+(**`E-DOM`**: «si importa solo `src/…/<dominio>/index.ts`»): un test in `scripts/` non
+può rendere `SezioneTrasparenza` senza forzare la superficie pubblica. Niente gate duplicati in `scripts/test-copy-etico.ts` o
+`scripts/test-piano-sync.ts`: quei file restano **identici** a `HEAD` (una sola fonte di
+verità per il blocco).
+
+**Verifiche (28/09/2026, ottavo intervento).** `npm run test:trasparenza` ✓ (19/19) ·
+`npm run typecheck` ✓ · `npx eslint` **0 problemi** sui 6 file toccati (`SezioneTrasparenza`,
+`PassoNotifica`, `RadarWizardModal`, il test nuovo, `scripts/test-copy-etico`,
+`scripts/test-piano-sync`) · `npm run test:piano` ✓ · `npm run test:copy` ✓ · `npm run
+test:radar` ✓ · `npm run test:architettura` ✓ (143 violazioni in baseline: **nessuna
+nuova**) · `npm test` ✓ (catena completa) · `npm run build` ✓ (7,37 s).
+
+
+### 26.15 Landing: hero a due righe, metriche reali del Radar Live, offerta di continuazione
+
+**Nota di sessione (28/09/2026, nono intervento)** — sei correzioni strutturali e di copy
+sulla vetrina pubblica, richieste dal cliente: leggibilità del titolo, allineamento del primo
+schermo, **fine dei numeri da mock** nel Radar Live, un riquadro in meno lungo la discesa
+verso il piano e un solo form di registrazione.
+
+| # | Intervento | Dettaglio |
+|---|---|---|
+| 1 | **Hero su DUE righe** | `LandingHero`: il titolo è composto da due `span.block` — «Ogni giorno decine di opportunità.» + «Noi intercettiamo solo quelle per te.» (secondo rigo in `text-secondary-500`) — senza alcun tag di a-capo: la separazione è del layout, non del markup |
+| 2 | **Primo schermo allineato** | `LandingHero`: griglia `items-stretch` + colonna destra `flex flex-col` con `<SimulatorRadar className="h-full" />` e inviti all'azione ancorati in basso (`lg:mt-auto`); `SimulatorRadar`: il responso vive in un contenitore `max-h-[24rem] overflow-y-auto overscroll-contain`, quindi il box **non cambia dimensione** mentre si cerca |
+| 3 | **Metriche reali del Radar Live** | nuovo `radar/flightBoard/metricaBoard.ts` (modulo **puro**, testato in isolamento): `LIMITE_RIGHE_BOARD = 750` (150 pagine da 5 righe), `pagineBoard`, `etichettaPagina` («Pagina 7 di 150+ - Aggiornamento automatico»), `etichettaTotaleAvvisi`, `formattaNumeroIt` (migliaia deterministiche: `toLocaleString('it-IT')` restituisce `3412` dove l'ICU è ridotto). `FlightBoardInterpelli` carica 750 righe e chiede il **conteggio esatto** degli avvisi attivi (`{ count: 'exact', head: true }` su `expiration_date` non scaduta): se il conteggio non arriva, l'etichetta dichiara **solo** le righe in bacheca — mai un totale attribuito all'Italia senza prova |
+| 4 | **Un riquadro in meno** | rimossa la chiusura con la CTA «Attiva il mio Radar» dalla bacheca: fra il Radar Live e l'offerta PRO non c'è più nessun blocco che interrompa la discesa verso il piano (le porte d'ingresso restano hero, form rapido sotto l'hero e sezione PRO) |
+| 5 | **Un solo form di registrazione** | nuovo `src/components/landing/FormRegistrazioneRapida.tsx` (Nome, Cognome, Email) consumato **due volte**: dalla sezione sotto l'hero (`LandingRegistrazioneRapida`, ora solo la cornice della sezione) e dalla chiusura dell'offerta PRO (`LandingOffertaPro`, prop opzionale `onRegistrazioneRapida`, montata da `LandingPage` **solo** per i visitatori). Un solo stato, un solo percorso: i dati vanno nella bozza e aprono la configurazione del Radar già compilata |
+| 6 | **Offerta di continuazione (40 €)** | `lib/pricing.ts`: `PREZZO_PRO_ANNO_DOPO_OMAGGIO_EUR = 40`, `PREZZO_PRO_ANNO_DOPO_OMAGGIO_ETICHETTA`, `SCONTO_OMAGGIO_MESE_EUR` (valore del mese in omaggio scorporato dal listino: 49 − 9 = 40). La dichiarazione vive **solo** nel benvenuto di fine flusso (`BenvenutoProRadar`, blocco visibile con `trialAttivo`): la vetrina della homepage resta **senza importi** (§26.13) |
+
+**Guardie.** Nuovo `scripts/test-copy-primo-schermo.ts` (`npm run test:copy:schermo`, in `npm test`
+subito dopo `test:copy:pubblico`): **3 controlli** su hero a due righe, allineamento in altezza col
+responso a scorrimento e assenza del riquadro ridondante. I controlli sono stati **estratti** da
+`test-copy-etico.ts` perché le righe aggiunte portavano quel gate a **259 righe** (soglia `W-DIM` a
+250): il gate etico è tornato a **240 righe** e il file nuovo nasce con un perimetro dichiarato.
+Nuovo `npm run test:board:metriche`
+(`src/departments/radar/flightBoard/__tests__/metricaBoard.test.ts`, **17 controlli**, in `npm test`):
+scala reale a 150 pagine col `+`, singolare/plurale con il separatore delle migliaia, conteggio
+assente (si dichiara **solo** la bacheca) e robustezza su liste vuote e pagine fuori scala. Resta
+attiva la guardia di §26.13: `LandingOffertaPro` non contiene importi.
+
+**Nota di design delle soglie.** `flightBoard/metricaBoard.ts` è **puro** (nessun React, nessuna
+rete, nessun `Date.now()`): la componente mostra il risultato, le etichette si verificano senza
+rendering. `LIMITE_RIGHE_BOARD = 750` è la scala **dichiarata** (150 pagine da 5 righe) e il conteggio
+esatto decide il `+`: nessun numero mostrato è più grande di quello che il database sa dire.
+
+**⚠️ Blocco di produzione — offerta 40 €.** L'importo **non esiste ancora lato Stripe**: la Edge
+`checkout` mappa i soli Price ID dei piani e non risulta nessun coupon `amount_off` da **900
+centesimi** (`SCONTO_OMAGGIO_MESE_EUR`) applicabile alla sessione annuale. Finché il coupon non è
+provisionato (o il cliente non conferma una strada diversa), l'offerta è **dichiarata ma non
+acquistabile** a quel prezzo: da risolvere prima del rilascio. Tracciato anche in
+`comunicazione/05_abbonamenti_pagamenti/checklist_pagamenti.md` §3.
+
+**Debito noto (non introdotto qui).** `radar/FlightBoardInterpelli.tsx` è a **336 righe** (sopra le
+300: `E-DIM` **già congelato** in `scripts/architettura-baseline.json`); questo intervento ne aggiunge
+una decina in testa (documentazione delle metriche). La chiave del gate è `codice:file`, quindi non
+scattano violazioni nuove, ma lo split resta dovuto al prossimo tocco sul file (tabella e righe di
+riempimento in `flightBoard/`), come previsto da `.clinerules` §3 (soglia di attenzione a 250 righe).
+
+**Allineamento della documentazione.** Nel §2.9 di questo file i **conteggi** dei cinque domini
+sono stati rifatti sul codice di oggi e il metodo è ora dichiarato sotto la tabella (file `.ts`/`.tsx`,
+**righe non vuote**, `__tests__` inclusi): `radar/` 31 / 4.605 → **32 / 4.700** in §26.16,
+`notizie/` 21 / 4.922, `scadenze/`
+11 / 1.236, `admin/` 22 / 3.120, `cfu/` 107 / 16.484 — i valori precedenti erano una fotografia più
+vecchia e non riproducibile. In `DEPARTMENT_MAP.md` la riga di `flightBoard/` ora dichiara
+`metricaBoard.ts`, `righeBoard.ts` e la guardia del dipartimento.
+
+**Confine ribadito (28/09/2026, decimo intervento).** La sezione resta **senza importi**, ma la
+**copy diretta** cambia su direttiva del cliente: al posto di «Un mese intero di PRO offerto da noi»
+ora c'è la frase esatta «Siamo così sicuri che Scuole Radar ti piacerà che il primo mese PRO te lo
+offriamo noi. Se poi non vuoi abbonarti, passerai automaticamente a un account Base.» L'asserzione
+della guardia che **vietava** «Siamo così sicuri…» è stata sostituita dalla verifica della copy
+**autorizzata** (`npm run test:copy:etico`): l'esito «account Base» è **veritiero** — scaduta la
+prova, il self-heal del client e il cron `revert-prove-pro-scadute` riportano l'account su Base
+(§26.16).
+
+**Verifiche (28/09/2026, nono intervento).** `npm run typecheck` ✓ · `npm run test:board:metriche` ✓
+(17/17) · `npm run test:copy:etico` ✓ · `npm run test:copy:schermo` ✓ (3/3) ·
+`npm run test:copy:pubblico` ✓ · `npm run test:architettura` ✓ (143 violazioni in baseline:
+**nessuna nuova**) · **`npm test` ✓ (catena completa)** · `npm run build` ✓ (16,20 s) ·
+`npx eslint` **0 problemi** sui 15 file toccati.
+
+### 26.16 Hero compatto, lead capture sotto la vetrina PRO, chiusura annuale 40 €
+
+**Nota di sessione (28/09/2026, decimo intervento)** — cinque disposizioni del cliente sulla
+homepage e sul fine flusso, con la **copy esatta** richiesta per la vetrina PRO e per la CTA
+annuale.
+
+| # | Intervento | Dettaglio |
+|---|---|---|
+| 1 | **Hero compatto** | `LandingHero`: rimosso lo stiramento in altezza del box «Prova il Radar» (niente `h-full`, colonne `items-start`): il box resta alla sua altezza naturale, quindi **niente spazio bianco verticale** nella colonna destra |
+| 2 | **Pulsanti sotto il box** | «ATTIVA IL TUO RADAR» e «ACCEDI» scendono dal copy alla colonna destra, **subito sotto il box** e allineati a destra (`mt-4 … lg:justify-end`): un solo blocco di conversione compatto. *(Layout poi reso simmetrico su due colonne: §26.19.)* Se il menu verde dei risultati li copre durante l'espansione, è il comportamento **accettato** dal cliente |
+| 3 | **Copy autorizzata dell'offerta PRO** | `LandingOffertaPro`: il testo spezzato è sostituito dalla frase esatta «Siamo così sicuri che Scuole Radar ti piacerà che il primo mese PRO te lo offriamo noi. Se poi non vuoi abbonarti, passerai automaticamente a un account Base.» La sezione resta **senza importi** (§26.13 aggiornato) |
+| 4 | **Lead capture sotto il testo** | il form condiviso `FormRegistrazioneRapida` (campi nativi Nome, Cognome, Email) è montato **immediatamente sotto la copy**, con il pulsante d'azione `ATTIVA IL TUO RADAR` (`etichetta="Attiva il tuo Radar"`; da §26.19 la stringa è letteralmente maiuscola e il form sta a `mt-4`, senza paragrafi intermedi): il submit scrive i dati nella **bozza** e apre la **modale di configurazione del Radar** già compilata. Per gli utenti autenticati resta la CTA unica del Radar |
+| 5 | **Chiusura annuale (PROANNUALE40)** | nuovo `radar/components/CtaProAnnuale.tsx` (presentazione pura): copy esatta «Vuoi toglierti il pensiero e passare subito a PRO Annuale? Ti scontiamo il mese e paghi solo 40 € per tutto l'anno, invece di 49!» + nota su coupon e scorporo del mese (9 €). Montato nella **schermata di conferma post-configurazione** (`RadarWizardModal`, fase «done», con `trialAttivo`) e nel **box di benvenuto PRO** (`BenvenutoProRadar`). Il contenitore chiama `avviaCheckout('pro_annuale', PROMO_CODE_PRO_ANNUALE_40)`: al checkout va **solo il codice**, mai un prezzo. Nuova costante `PROMO_CODE_PRO_ANNUALE_40` in `lib/promo.ts` (anche in `PROMO_CODES_ATTIVI` e nel catalogo del System Health Check) e nuovo ramo nella Edge `checkout` (`plan === 'pro_annuale'`, `discounts[0][coupon]`, **500 esplicito** se il secret `STRIPE_COUPON_PROANNUALE40` non è configurato) |
+
+**Copy e cifre.** La copy della CTA è quella richiesta dal cliente; gli unici scostamenti sono
+dichiarati: gli importi sono resi dalle costanti di `lib/pricing.ts` (`40 €` / `49 €`, non «40 Euro»
+/ «49») perché nel frontend **nessun prezzo si scrive a mano**, e la nota dice esplicitamente che lo
+sconto **vale per il primo anno** (durata `once` del coupon Stripe), così la promessa resta
+veritiera anche al rinnovo.
+
+**Guardie.** `npm run test:copy:schermo` riscritta: il box non deve essere stirato e i due pulsanti
+devono stare **dopo** `<SimulatorRadar` nel markup, con l'etichetta radar prima di «Accedi»
+— **5 controlli**. `npm run test:copy:etico` ora **pretende** la copy autorizzata (non più l'assenza
+della formula) e continua a vietare importi/rinnovo/disdetta nella sezione. Nuovo
+`npm run test:checkout:annuale` (`scripts/test-checkout-annuale.ts`, **11 controlli**) — estratto da
+`test-checkout-promo.ts`, che con le righe nuove arrivava a **266** (`W-DIM` a 250): invarianti del
+coupon PROANNUALE40, CTA di presentazione pura, montaggio nelle due superfici, copy esatta e importi
+dalle costanti di `lib/pricing`. `test:checkout-promo` rinvia alla guardia dedicata e resta sotto
+soglia; entrambe sono in `npm test`.
+
+**⚠️ Blocco di produzione — coupon PROANNUALE40.** Sul progetto Stripe **non esiste ancora** un
+coupon `amount_off` da **900 centesimi** con durata `once` e il secret `STRIPE_COUPON_PROANNUALE40`
+non è configurato: finché non viene provisionato, il checkout risponde **500 con messaggio
+esplicito** — mai un addebito a listino al posto dello sconto promesso. Resta inoltre da decidere il
+rapporto con `SCUOLERADAR50` (50% sull'annuale = 24,50 €), che oggi dà uno sconto **maggiore**: due
+coupon attivi sullo stesso piano sono una scelta commerciale del cliente. Tracciato in
+`comunicazione/05_abbonamenti_pagamenti/checklist_pagamenti.md` §3.
+
+**Conteggi (§2.9).** Con `CtaProAnnuale.tsx` il dominio `radar/` passa a **32 file / 4.700 righe non
+vuote** (stesso metodo dichiarato: file `.ts`/`.tsx`, righe non vuote, `__tests__` inclusi).
+
+**Verifiche (28/09/2026, decimo intervento).** `npm run typecheck` ✓ · **`npm test` ✓ (catena
+completa)** · `npm run test:copy:schermo` ✓ (5/5) · `npm run test:copy:etico` ✓ ·
+`npm run test:copy:pubblico` ✓ · `npm run test:checkout:annuale` ✓ (11/11) ·
+`npm run test:checkout-promo` ✓ · `npm run test:coupon` ✓ · `npm run test:documenti-utente` ✓ ·
+`npm run test:architettura` ✓ (143 violazioni in baseline: **nessuna nuova**) · `npm run build` ✓.
+
+
+
+### 26.17 Motore degli interpelli: domini isolati, hub dei capoluoghi, niente scarti da ping fallace
+
+**Richiesta (28/09/2026, undicesimo intervento).** Quattro disposizioni inderogabili
+sul motore del Radar Live: (1) separazione netta fra interpelli di lavoro e notizie
+editoriali del MIM; (2) connettori puntati su feed e pagine di reclutamento dei
+capoluoghi di regione / hub metropolitani, con estrazione dei soli bandi di
+interpello attivi (docenti, ATA, PNRR, esperti esterni); (3) fine dei blocchi
+«scartato (link non raggiungibile)» causati dagli anti-bot dei server scolastici
+regionali; (4) test di conformità della bacheca.
+
+**1 · Separazione dei domini (mai una notizia in bacheca).** Il motore `src/scraper/`
+non importa (e non importerà) nulla da `src/departments/**`: nessuna dipendenza da
+UI o dal dominio Notizie; nel verso opposto, `src/departments/notizie/**` non tocca
+`interpelli`/`notices` e non importa il motore. Sul piano dei contenuti, il nuovo
+`qualitaOpportunita.ts` scarta a monte (prima di ogni arricchimento di rete) i
+contenuti **editoriali** — comunicato stampa, conferenza stampa, dichiarazione,
+intervista, lettera/nota del Ministro, rassegna stampa, cerimonia, premiazione,
+convegno, campagna di comunicazione, «Notizie per la scuola» — e gli **atti
+informativi** (esiti, graduatorie, revoca, annullamento): mai in bacheca, mai nei
+canali Telegram né nel digest email. Guardia: `npm run test:scraper:domini`, dentro
+`npm test` (include la lettura controllata del dominio Notizie per dimostrare
+l'assenza di canali di ritorno).
+
+**2 · Capoluoghi e hub metropolitani.** Nuovo registro fonti in tre moduli puri:
+`fontiRegistro.ts` (soli dati), `fonti.ts` (tipi + selezione), `fontiCopertura.ts`
+(copertura dichiarata). Le fonti sono passate da 9 landing regionali
+dell'aggregatore a **47 voci**, di cui **43 attive**: hub di reclutamento di
+**17 USR/USP** (Torino, Milano, Genova, Bologna, Firenze, Roma, Napoli, Bari,
+Palermo, Venezia, Cagliari, Perugia, Ancona, L'Aquila, Campobasso, Potenza,
+Catanzaro) + feed dell'aggregatore. Ogni URL è stata **verificata a mano** (HTTP
+200 + contenuto di reclutamento) e la data di verifica è registrata; le fonti non
+verificabili (FVG, Valle d'Aosta, Trentino, hub PNRR nazionale) restano nel
+registro con `attiva: false` **e il motivo dichiarato**: la copertura è un dato
+verificabile, mai una dichiarazione di comodo. Il connettore `hub.ts` scopre nella
+pagina dell'ente le **sezioni** di interpelli/avvisi (es. USR Lombardia →
+`interpelli-ricerca-supplenti`, USR Umbria → `interpelli/interpelli-aperti`,
+USR Sicilia → `interpelli/`, Puglia → `docenti|ata/reclutamento`) e le esplora
+(max 3 per hub). Il post giornaliero dell'aggregatore è **NAZIONALE**: viene letto
+**una volta sola** e ogni voce riceve la provincia dall'intestazione di città; se
+la provincia non è rilevabile la riga si scarta (**mai province inventate**). Gli
+archivi regionali sono opt-in (`SCRAPER_ARCHIVI=1`, backfill). Il rumore di
+navigazione (menu, archivi, ricerca, paginazione) è escluso a monte
+(`eTitoloNavigazione`).
+
+**3 · Fine degli scarti da «ping fallace».** Il vecchio blocco rigido
+(`scartato (link non raggiungibile)`) è stato sostituito dal **gate del link**:
+un ping fallito (403/anti-bot/timeout dei server regionali) **non** scarta un bando
+**strutturato** — classe di concorso o materia **+** email di candidatura — che
+resta in bacheca; i record strutturati non vengono nemmeno pingati, gli altri
+vengono verificati in parallelo (`SCRAPER_PING_CONCORRENZA`, default 8) e scartati
+solo se incompleti. Restano intatte due regole di prodotto: il link pubblicato è
+**sempre** quello specifico dell'avviso (nessun fallback alla home dell'ente) e
+l'anti-mock `verificaAvviso` non è stato allentato (link di prova/piattaforme
+rifiutati). Il vecchio commento in `parser.ts` («nessun link rotto viene mai
+persistito») è stato corretto insieme alla policy.
+
+**4 · Conformità verificata.** Tre guardie nuove in `npm test`:
+`test:scraper:domini` (isolamento + filtro editoriale su 8 titoli realistici e su
+un lotto misto notizie+bandi: ammessi **solo** i 4 bandi), `test:scraper:fonti`
+(igiene del registro, 19/20 regioni, tutti i 12 capoluoghi principali, selezione
+per provincia/run, scoperta sezioni con esclusione del rumore e degli host
+esterni), `test:scraper:attivi` (bandi attivi vs scaduti, categorie ammesse,
+matrice completa del gate del link, anti-mock). Diagnostica dal vivo:
+`npm run fonti:verifica` → **43/43 fonti raggiungibili** (28/09/2026), con le
+sezioni scoperte per ogni hub. Prova end-to-end `npm run scrape -- --dry-run` su
+Piemonte + feed nazionale: 30/33, 13/17 e 10/16 voci ammesse dagli hub USR
+Piemonte, **102/102** voci dal feed nazionale, 29 voci di navigazione scartate,
+4 righe senza provincia scartate, 4 bandi scaduti scartati, 164 link verificati in
+24 secondi.
+
+**File toccati.** `src/scraper/{index.ts,parser.ts}` (commento policy),
+`src/scraper/{fonti.ts,fontiRegistro.ts,fontiCopertura.ts,hub.ts,qualitaOpportunita.ts}`
+(nuovi), `scripts/{test-scraper-domini.ts,test-scraper-fonti.ts,test-scraper-attivi.ts,verifica-fonti-scraper.ts}`
+(nuovi), `package.json` (script + catena `test`), `comunicazione/04_canali_regionali/checklist_regionali.md`,
+`docs/{SYSTEM_HANDOVER.md,DEPARTMENT_MAP.md,DEPARTMENT_ISOLATION.md}`.
+Nessun file fuori dal perimetro Interpelli/Radar (il dominio Notizie è stato
+**letto** — mai modificato — solo per la guardia di isolamento richiesta al punto 1).
+
+**Verifiche (28/09/2026).** `npm run typecheck` ✓ 0 errori · **`npm test` ✓ (catena
+completa, incluse le 3 guardie nuove)** · `npm run test:architettura` ✓ (143
+violazioni in baseline: **nessuna nuova**, nessun file sopra le 250 righe) ·
+`npm run build` ✓ · `eslint src/scraper scripts/test-scraper-*.ts
+scripts/verifica-fonti-scraper.ts` ✓ 0 problemi · `npm run fonti:verifica` ✓ 43/43 ·
+`npm run scrape -- --dry-run` ✓.
+
+
+### 26.18 Bacheca senza mock: conteggio esatto, bacheca vuota dichiarata, nomi scuola veri
+
+**Richiesta (28/09/2026, dodicesimo intervento).** Quattro correzioni bloccanti sulla
+vetrina pubblica: (1) eliminazione di qualunque mock/fallback nella bacheca, contatore
+reale esatto (`{ count: 'exact' }`) e paginazione/etichette sulla scala effettiva dei
+dati; (2) restyling compatto dell'hero «Prova il Radar» con i pulsanti posizionati in
+modo pulito e conferma che nessuna identità di prova («Mario Rossi») esiste in navbar o
+placeholder; (3) offerta PRO con form di lead capture nativo (Nome, Cognome, Email
+obbligatori) e pulsante «ATTIVA IL TUO RADAR» che apre la configurazione del Radar a 4
+province; (4) verifica dei loghi su landing e dashboard.
+
+**1 · Bacheca «Radar Live» — zero mock, numeri reali.** `FlightBoardInterpelli`: stato
+iniziale **array vuoto** (nessun seed, nessun fallback) e flag `caricato` che tiene la
+sezione in attesa finché la prima lettura non è conclusa **senza errori** (mai «nessun
+bando» mentre la query è in volo o il database non risponde); a database raggiunto con
+zero righe presentabili si mostra «**Nessun bando attivo al momento**» al posto di
+qualunque riga di riempimento. La query delle righe usa ora **lo stesso predicato del
+conteggio** (`.gte('expiration_date', oggi)`): si scaricano solo gli avvisi che possono
+entrare in bacheca (prima erano 591 righe per mostrarne 17) e il badge alto —
+`{ count: 'exact', head: true }` — dichiara il totale REALE, con ripiego su «quanto è in
+bacheca» se il conteggio non arriva (mai un totale attribuito all'Italia senza prova).
+`LIMITE_RIGHE_BOARD` resta un **tetto di sicurezza sul payload**, non una scala da
+esibire: le pagine sono quelle delle righe presenti. (Superato da §26.25: il tetto è
+diventato `LIMITE_RIGHE_LETTE = 1.000` e la query usa il filtro `filtroAttivi`; anche quel
+numero è **superato** — da §26.34 la bacheca legge a pagine, non fino a un tetto.)
+**Misure reali (28/09/2026):** 591
+righe in `interpelli`, **61** avvisi attivi, **17** presentabili in vetrina → badge «61
+avvisi attivi in Italia», etichetta «Pagina X di 4+ - Aggiornamento automatico».
+
+**2 · Nomi scuola veri (fine dei codici in vetrina).** Il campo `school_name` scritto
+dallo scraper contiene a volte elenchi di codici classe («ADEE | EEEE», «BA02 | AR04»,
+«AAAA | BB02 |») o frammenti di procedura: in `lib/liveBoard.ts` `nomeScuolaRiga` e
+
+**3 · Hero compatto e pulsanti.** `SimulatorRadar`: provincia e pulsante «Cerca ora»
+sulla **stessa riga** da `sm` in su e margini interni ridotti (`mb-2`), quindi il box
+«Prova il Radar» è più basso e la colonna destra non lascia spazio bianco verticale;
+`LandingHero` porta il padding desktop a `pt-6` (resta `pb-8 pt-6`) e la sezione sotto
+l'hero (`LandingRegistrazioneRapida`) parte da `pt-6` invece di `py-8`. I due inviti
+all'azione restano sotto il box, allineati a destra (`mt-4 … lg:justify-end`).
+*(Layout poi reso simmetrico su due colonne e con ripartizione verticale `lg:items-center`: §26.19.)*
+
+**4 · Lead capture diretto dell'offerta PRO.** In `LandingOffertaPro` la copy
+autorizzata del primo mese PRO resta una sola frase pulita, **senza paragrafo
+ridondante** sotto il testo; `FormRegistrazioneRapida` ha i tre campi **nativi
+obbligatori** (`required` su Nome, Cognome, Email: validazione del browser attiva,
+niente `noValidate`) e il pulsante principale «ATTIVA IL TUO RADAR»; il submit scrive i
+dati nella **bozza** e apre la modale di configurazione del Radar (PRO, fino a 4
+province) già compilata.
+
+**5 · Identità visiva.** Nessun «Mario Rossi» in `src/**`: la guardia
+`test:copy:pubblico` compone il nome di prova a runtime e verifica che non compaia in
+sorgenti e script. Marchio: `Header` usa la **tessera ufficiale**
+(`@/assets/marchio-radar.png`, identica al favicon) + wordmark «ScuoleRadar.it» in
+testo — guardia `npm run test:favicon`. In landing e dashboard **non esiste alcun
+logo-immagine**: `src/assets/logo.png` sopravvive solo come anteprima del pannello
+admin (copy email) e `LOGO_URL` per le email transazionali.
+
+**Guardie aggiornate.** `scripts/test-copy-primo-schermo.ts`: **+5 controlli**
+(conteggio ESATTO, stato iniziale vuoto senza costanti di seed, messaggio della bacheca
+vuota, badge sul conteggio reale, attesa della prima lettura) — 108 righe.
+`scripts/test-copy-pubblico.ts`: i tre campi del form rapido devono essere `required` e
+il form non deve avere `noValidate` — 238 righe (sotto la soglia `W-DIM` di 250).
+`scripts/test-live-board.ts`: righe con `school_name` a codici classe e recupero del
+nome reale dal titolo — 147 righe. `flightBoard/__tests__/metricaBoard.test.ts`: caso
+sulla **scala misurata** (17 righe → 4 pagine, 61 attivi).
+
+**File toccati.** `src/departments/radar/{FlightBoardInterpelli.tsx,SimulatorRadar.tsx}`,
+`src/departments/radar/flightBoard/{metricaBoard.ts,__tests__/metricaBoard.test.ts}`,
+`src/lib/liveBoard.ts`,
+`src/components/landing/{LandingHero.tsx,LandingOffertaPro.tsx,LandingRegistrazioneRapida.tsx,FormRegistrazioneRapida.tsx}`,
+`scripts/{test-copy-primo-schermo.ts,test-copy-pubblico.ts,test-live-board.ts}`,
+`docs/{SYSTEM_HANDOVER.md,DEPARTMENT_MAP.md}`. Nessun file fuori dal perimetro
+Radar/landing: le sezioni di landing e `src/lib/liveBoard.ts` sono superfici pubbliche
+condivise citate nella richiesta.
+
+**Nota per il cliente (dato, non UI).** Restano avvisi attivi con `school_name` vuoto o
+sostituito da una materia: sono **dati** dello scraper e per questo non compaiono in
+vetrina (colonna «Scuola» mai con valori non veri). Una pulizia/backfill di
+`interpelli.school_name` farebbe risalire il numero di righe presentabili (oggi 17 su
+61 attive) senza toccare l'interfaccia.
+
+**Verifiche (28/09/2026).** `npm run typecheck` ✓ 0 errori · **`npm test` ✓ (catena
+completa: copy etico, copy pubblico, copy primo schermo, metriche del Radar Live, Radar
+Live)** · `npm run test:architettura` ✓ (143 violazioni in baseline: **nessuna nuova**) ·
+`npm run build` ✓ (10,20 s) · `eslint` **0 problemi** sui file toccati ·
+`npm run test:favicon` ✓. La misura dei dati (591 / 61 / 17) è stata presa con uno
+script di diagnostica temporaneo, **cancellato** a fine sessione.
+
+`scuolaDaTitolo` ora respingono quei testi (regex dei codici classe + azioni
+amministrative: interpello/avviso/bando/…/dal/fino/entro) e `scuolaDaTitolo` guarda
+**prima del separatore** quando dopo c'è l'azione («IX IC Ricci Curbastro — Interpello
+per la copertura…» → «IX IC Ricci Curbastro», nome reale recuperato dal titolo). Le
+righe senza scuola identificabile restano fuori dalla vetrina secondo la regola di
+prodotto: meglio una bacheca più corta che una colonna «Scuola» con codici.
+
+
+### 26.19 Hero simmetrico, copy PRO su una riga, CTA letterale «ATTIVA IL TUO RADAR»
+
+**Nota di sessione (28/09/2026, dodicesimo intervento)** — tre correzioni visive e di copy
+richieste dal cliente sulla landing pubblica: spazio bianco del box destro, testo del primo
+mese PRO e lead capture dell'offerta PRO.
+
+| # | Intervento | Dettaglio |
+|---|---|---|
+| 1 | **Hero senza spazio bianco sproporzionato** | `LandingHero`: il contenitore delle colonne diventa `grid items-start gap-6 lg:items-center lg:grid-cols-[minmax(0,1fr)_34rem]`. Il box «Prova il Radar» NON viene stirato (nessun `h-full`) e lo scarto verticale rispetto alla colonna del copy si **ripartisce** sopra e sotto invece di accumularsi come un vuoto sotto i pulsanti. `SimulatorRadar`: padding uniforme `p-5` (via `sm:p-6`), titolo `mb-1.5` e introduzione `mb-3` — il box è più basso e compatto |
+| 2 | **Pulsanti simmetrici sotto la prova** | «ATTIVA IL TUO RADAR» e «ACCEDI» stanno SUBITO sotto il box su **due colonne simmetriche** della stessa larghezza (`mt-3 grid w-full gap-3 sm:grid-cols-2`, entrambi i pulsanti `w-full`): fine dell'allineamento a destra con sbilanciamento |
+| 3 | **Copy PRO esatta e su una riga** | `LandingOffertaPro`: la frase autorizzata sta su **una sola riga di sorgente** (`<p>` a `text-lg`, `max-w-3xl`), quindi non esiste più alcun testo spezzato: «Siamo così sicuri che Scuole Radar ti piacerà che il primo mese PRO te lo offriamo noi. Se poi non vuoi abbonarti, passerai automaticamente a un account Base.» |
+| 4 | **Lead capture immediata e CTA letterale** | I tre campi **nativi obbligatori** (Nome, Cognome, Email, `required`) stanno **immediatamente sotto** la copy (`mt-4`, nessun paragrafo intermedio) e il pulsante principale — full width — dice `ATTIVA IL TUO RADAR` come **stringa letterale** (non più solo `uppercase` via CSS). Il submit scrive i dati nella **bozza** e apre la **modale di configurazione del Radar PRO (fino a 4 province)** già compilata: nessun passaggio intermedio |
+
+**Un solo percorso di registrazione.** L'etichetta `ATTIVA IL TUO RADAR` è ora la stessa
+dell'hero e della checklist di prodotto
+(`comunicazione/05_abbonamenti_pagamenti/checklist_pagamenti.md`): il default vive in
+`FormRegistrazioneRapida` e la chiusura PRO lo passa esplicitamente, così le due superfici
+dicono la stessa cosa. Per l'utente autenticato resta la CTA unica del Radar
+(`GESTISCI IL TUO RADAR` / `ATTIVA IL TUO RADAR`).
+
+**Guardie aggiornate.** `scripts/test-copy-primo-schermo.ts`: layout del box (aggiunto
+`lg:items-center`, riga dei pulsanti `mt-3 grid w-full gap-3 sm:grid-cols-2`) e verifica che
+**entrambi** i pulsanti siano `w-full`; `scripts/test-copy-pubblico.ts`: CTA esatta
+`ATTIVA IL TUO RADAR` nel form e nel montaggio PRO, più l'attacco diretto della lead capture
+alla copy (`passerai automaticamente a un account Base… <FormRegistrazioneRapida …
+etichetta="ATTIVA IL TUO RADAR"`); `scripts/test-copy-etico.ts`: la frase PRO è verificata come
+**stringa intera**, prova che sta su una riga sola.
+
+**File toccati.** `src/components/landing/{LandingHero.tsx,LandingOffertaPro.tsx,FormRegistrazioneRapida.tsx}`,
+`src/departments/radar/SimulatorRadar.tsx`,
+`scripts/{test-copy-primo-schermo.ts,test-copy-pubblico.ts,test-copy-etico.ts}`,
+`docs/SYSTEM_HANDOVER.md`. Nessun file fuori dal perimetro Radar/landing.
+
+**Verifiche (28/09/2026).** `npm run typecheck` ✓ 0 errori · `npm test` ✓ (catena completa) ·
+`npm run test:architettura` ✓ (143 violazioni in baseline: **nessuna nuova**) · `npm run build`
+✓ · `eslint` **0 problemi** sui file toccati · guardie di copy ✓ (`test:copy:etico`,
+`test:copy:pubblico`, `test:copy:schermo`) · `test:prova-radar` ✓.
+
+### 26.20 Pulizia assoluta dei nomi scuola in bacheca (mai codici, mai stringhe grezze)
+
+**Nota di sessione (28/09/2026, tredicesimo intervento)** — direttiva cliente bloccante:
+nella colonna «Scuola & Città» del Radar Live NON deve comparire alcun codice
+amministrativo o stringa grezza (esempi citati: `EEEE | A246`, `AAAA | A246`); il
+parser deve scartare o convertire subito e, se il nome non è risolvibile in chiaro,
+la riga NON entra nella vetrina pubblica. Verifica finale richiesta su localhost:
+tre campi visibili a colpo d'occhio nella sezione PRO e bacheca con soli istituti
+reali.
+
+| # | Intervento | Dettaglio |
+|---|---|---|
+| 1 | **GATE dei nomi in vetrina** | nuovo modulo **puro** `src/lib/nomeIstituto.ts`: `nomeIstitutoPresentabile(testo)` accetta una stringa solo se ha una **testa d'istituto** (`IC`, `I.I.S.`, `ITIS`, `IPSIA`, `CPIA`, `Liceo`, `Istituto`, `Convitto`, `Comprensivo`… — sigle anche puntate, ricomposte dai token) **e** una **denominazione** (nome proprio non generico) e non contiene **codici** (classe di concorso `A042`/`A-22`, sostegno `ADEE`/`ADSS`, sigla ripetuta `EEEE`/`AAAA`, meccanografico, qualunque token misto lettere+cifre tipo `A246`/`AA56`) né 3+ cifre consecutive. La **coda di procedura** viene tagliata al primo marcatore di posto/procedura/materia: «I.C. Ferruccio Ulivi – interpello preventivo primaria sostegno» → «I.C. Ferruccio Ulivi» |
+| 2 | **Bacheca: solo istituti reali** | `liveBoard.nomeScuolaRiga` (campo → registro per codice → titolo) passa OGNI fonte dal gate e l'**ente emittente non è più ammesso** in bacheca (USP/USR non è una scuola): se non resta un nome in chiaro la riga è scartata da `preparaRigheBoard`. `FlightBoardInterpelli`: il sottotitolo della colonna usa `titoloLeggibile` (titolo ripulito dai dump di codici via `pulisciTitoloAvviso`) e non viene renderizzato quando non resta nulla di leggibile — mai un elenco di codici sotto il nome |
+| 3 | **Prova del Radar allineata** | `ResponsoProva` non mostra più `school_name` grezzo (era la superficie da cui i codici finivano sotto gli occhi del cliente): usa `nomePresentabileRiga` (ultima risorsa legittima l'ente emittente) e `titoloLeggibile`; la città arriva dal catalogo province (`nomeProvincia`) al posto del codice; `SimulatorRadar` filtra il pool con `rigaPresentabileVetrina`, così i conteggi del responso restano onesti. Se non c'è nulla di presentabile resta la copy di scansione già prevista (mai una schermata vuota) |
+| 4 | **Guardie e dati reali** | `scripts/test-live-board.ts` (fixture con i valori REALI trovati in `interpelli`: «Conversazione in lingua straniera», «Scuola primaria posto Montessori», «Esiti assegnazione sede», «timbro_…», «PRIMARIA-signed» e i dump di classi) + nuovo `scripts/test-nome-istituto.ts` (`npm run test:nome-istituto`, dentro `npm test`) con gate, taglio della coda e superfici pubbliche |
+
+**Verifica sui dati di produzione (sola lettura).** Su 61 interpelli attivi: prima del
+filtro la bacheca mostrava 5 righe con nomi-JUNK («Conversazione in lingua straniera»,
+«Matematica e Fisica»); dopo il filtro mostra **10 righe con istituti REALI** («IX IC
+Ricci Curbastro», «IC SAONARA (PD)», «IC di Campodarsego», «V IC Donatello», «IC
+LOREGGIA VILLA DEL CONTE», «IC di CURTAROLO»…), tutte prive di codici. Il responso
+della prova scende a 17 righe presentabili sulle 61 attive: le restanti hanno titolo e
+`school_name` ridotti a dump di classi (dato a monte dello scraper) e restano fuori
+dalla vetrina, come richiesto.
+
+**Debito residuo dichiarato.** La causa a monte è nello **scraper**: molte righe
+salvano nel `title` l'elenco delle classi e in `school_name` l'etichetta del posto
+(«Conversazione in lingua straniera») invece del nome dell'istituto. Finché non si
+corregge l'ingestione, la bacheca resta corta: le righe senza nome reale non entrano
+(regola del cliente). Il registro scuole noto (`school-code` → denominazione) copre
+oggi 2 codici: allargarlo è il modo più diretto per recuperare righe senza toccare la
+vetrina.
+
+**File toccati.** `src/lib/{nomeIstituto.ts (nuovo),liveBoard.ts}`,
+`src/departments/radar/{FlightBoardInterpelli.tsx,SimulatorRadar.tsx,components/ResponsoProva.tsx}`,
+`scripts/{test-live-board.ts,test-nome-istituto.ts}`, `package.json`,
+`docs/{SYSTEM_HANDOVER.md,DEPARTMENT_MAP.md}`. Nessun file fuori dal perimetro
+Radar/landing: le superfici pubbliche citate nella richiesta.
+
+**Verifiche (28/09/2026).** `npm run typecheck` ✓ 0 errori · `npm test` ✓ (catena
+completa, con `test:board` e `test:nome-istituto` ora inclusi) ·
+`npm run test:architettura` ✓ (baseline 143: **nessuna nuova** — lo split del test in
+`test-nome-istituto.ts` è nato proprio dalla soglia delle 250 righe) · `npm run build`
+✓ · `eslint` **0 problemi** sui file toccati · prova sui dati reali in sola lettura ✓.
+
+### 26.21 Coda di scansione regionale (`scan_targets`): claim atomico, reaper e backoff
+
+**Nota di sessione (29/09/2026, quattordicesimo intervento)** — nasce la coda che
+distribuisce la scansione delle **21 città** (20 capoluoghi di regione + Asti) fra N
+worker concorrenti: due worker non devono mai scansionare la stessa città e una fonte
+morta non deve bloccare la coda.
+
+| # | Intervento | Dettaglio |
+|---|---|---|
+| 1 | **Migrazione** `supabase/migrations/20260929102443_create_scan_targets_queue.sql` (idempotente) | enum `scan_status` (`idle/queued/running/error/disabled`, creata con guardia sul catalogo `pg_type`), tabella `scan_targets` (`city` unica, `region`, `slug` generato `stored`, `priority`, `next_run_at`, `last_checked_at`, `last_success_at`, `last_error`, `consecutive_failures`, `total_runs`, `locked_at`, `locked_by`, `metadata`), 3 indici (claim parziale su `idle/queued`, reaper parziale su `running`, `region`), trigger `set_scan_targets_updated_at` → `handle_scan_targets_updated_at()` (convenzione delle altre tabelle), RLS attiva con policy `service_role_full_access`, seed `on conflict (city) do nothing` |
+| 2 | **3 RPC** (`security definer`, `set search_path = public`; `execute` revocato a `public, anon, authenticated` e concesso **al solo `service_role`**) | `claim_scan_target(p_worker, p_lock_seconds)` → 0/1 riga: prende in carico UN target dovuto; `finish_scan_target(p_id, p_success, p_error, p_base_interval_min, p_max_backoff_min)` → `idle` (fallimenti azzerati) oppure `error` con backoff; `reap_stuck_scans(p_stale_seconds)` → riporta a `queued` i `running` bloccati e ritorna quante righe ha liberato |
+| 3 | **Claim atomico in due passi** | `select … into v_target … for update skip locked` (take del lock sulla riga scelta) + `update … returning * into v_target` (marca `running` e rimanda al worker i valori aggiornati) + `return next v_target`. Mai `return query <update>`: in questo repo `return query` è **sempre e solo** su `select`; il pattern `returning … into` è quello di `consuma_credito_utente` (`20260826100000_add_rpc_consuma_credito.sql`). Coda vuota → `return` senza righe e il worker chiude il giro |
+| 4 | **Backoff in `numeric`** | `p_base_interval_min::numeric * (2::numeric ^ least(v_failures, 30))`, con tetto a `p_max_backoff_min`: in `int` l'esponente va in **overflow (ERROR 22003)** dal 31° fallimento, cioè proprio su una fonte morta da settimane — il caso che il backoff deve coprire |
+| 5 | **Wrapper TypeScript** `src/lib/queue.ts` (③) | `claimScanTarget`, `finishScanTarget`, `reapStuckScans` + costanti (`LEASE_CLAIM_SECONDI` 300, `SOGLIA_LOCK_MORTO_SECONDI` 900, `INTERVALLO_BASE_MIN` 360, `BACKOFF_MASSIMO_MIN` 1440) ed errore tipizzato `QueueRpcError`: le RPC di servizio vanno chiamate con un client `SUPABASE_SERVICE_ROLE_KEY` |
+| 6 | **Guardia di regressione** `scripts/test-coda-scansione.ts` (`npm run test:coda`) | 52 controlli **statici** sul file SQL (nessun database richiesto): idempotenza, indici, colonne di concorrenza, trigger, `security definer` + revoche/grant per ognuna delle 3 RPC, le 7 garanzie del claim (atomicità, filtro `idle/queued` + `next_run_at`, ordinamento per priorità, lock del worker, riga restituita, coda vuota, `total_runs`), backoff in `numeric` col tetto, reaper, RLS e allineamento nomi/parametri fra SQL e wrapper TypeScript |
+
+**Contratto per chi scrive il worker** (nessun consumer esiste ancora — vedi debito):
+`claimScanTarget(worker, lease)` in loop → scansione della città → `finishScanTarget({
+id, success, error })`; un job periodico separato chiama
+`reapStuckScans(SOGLIA_LOCK_MORTO_SECONDI)` per liberare i lock morti. `p_lock_seconds`
+è nel contratto ma **non** è applicato dentro la RPC: la scadenza reale la decide il reaper.
+
+**Stato: migrazione NON ancora applicata (verificato).** Il file è in `supabase/migrations/`,
+ma il progetto `gwdmsgsshvdnfrplbjiv` non ha ancora la tabella. Prova in sola lettura dello
+stesso giorno: lo spec OpenAPI di PostgREST (`GET /rest/v1/` con la service key) elenca
+`interpelli` e `profiles` ma **non** `scan_targets`. Sul perché: **nessun workflow applica
+migrazioni** (in `.github/workflows/` non esiste alcun `supabase db push`), quindi il push
+resta manuale.
+
+```bash
+cd ScuoleRadar_app/project
+supabase db push --project-ref gwdmsgsshvdnfrplbjiv   # chiede la password del DB
+```
+
+Verifica post-push (SQL editor): `select status, count(*) from public.scan_targets group
+by status;` → 21 `idle` · `select * from public.claim_scan_target('worker-1');` → la
+prima città passa a `running` · `select public.finish_scan_target('<id>', true);` → torna
+`idle` · `select public.reap_stuck_scans(900);` → 0 (nessun lock morto).
+
+**Debito residuo dichiarato.** La coda è pronta ma **orfana**: nessuno script la consuma
+(lo scraper interpelli resta guidato dalle province di `profiles.province_attive`). Il
+worker regionale va scritto in `src/scraper/**` — nessun `tsconfig` da toccare, perché
+`tsc` segue gli import e quindi `src/lib/queue.ts` entra da sé nel progetto scraper.
+Finché il worker non esiste, l'unico effetto in produzione è la tabella con 21 righe `idle`.
+
+**File toccati.** `supabase/migrations/20260929102443_create_scan_targets_queue.sql`
+(nuovo, 338 righe — gli `.sql` sono fuori dal gate strutturale), `src/lib/queue.ts`
+(nuovo, 165 righe), `scripts/test-coda-scansione.ts` (nuovo, 245 righe con la metrica del
+gate: 5 di margine sulle 250 — il prossimo controllo va in un file dedicato, come già
+fatto con `test-nome-istituto.ts`), `package.json` (script `test:coda`),
+`docs/{SYSTEM_HANDOVER.md,DEPARTMENT_MAP.md}`.
+Nessun file di dipartimento: la modifica vive nei condivisi essenziali (③ e migrazioni),
+quindi nessuna uscita di perimetro da dichiarare.
+
+**Verifiche (29/09/2026).** `npm run test:coda` ✓ (52 controlli, 0 errori) ·
+`npm run test:migrazioni` ✓ (57 migrazioni analizzate) · `npm run typecheck` ✓ 0 errori ·
+`npm run test:architettura` ✓ (518 file, 143 violazioni = baseline: **nessuna nuova** —
+il gate sorveglia i soli `.ts/.tsx`, quindi il `.sql` è fuori perimetro) · `eslint`
+**0 problemi** sui file toccati · `npm test` ✓ catena completa (1143 righe di log,
+nessun `npm error`) · `npm run build` ✓ 21,25 s. **Non verificato**: l'esecuzione reale
+delle 3 RPC, perché in questa sessione non c'erano né la password del database né Docker
+(quindi né `db push` né un Supabase locale); l'unico controllo live possibile è stato lo
+spec OpenAPI in sola lettura, che conferma l'assenza della tabella e quindi l'impossibilità
+di provare claim/finish/reap prima del push.
+
+> **Aggiornamento (29/09/2026, stesso giorno):** il push è stato eseguito — lo spec
+> PostgREST del progetto live elenca ora `scan_targets` e le tre RPC
+> (`claim_scan_target`, `finish_scan_target`, `reap_stuck_scans`). La coda è quindi
+> **applicata ma ancora orfana** (nessun worker la consuma): resta valido tutto il
+> resto della nota.
+
+### 26.22 Bande di urgenza del «Radar Live» (`lib/urgency.ts`) e stato della RPC `radar_live_page`
+
+**Nota di sessione (29/09/2026, quindicesimo intervento)** — la colonna «Scadenza» del
+tabellone pubblico passa dal semaforo a tre livelli (`scadenza.ts`) a una **scala a
+cinque bande** dedicata alla bacheca.
+
+| # | Banda | Colore | Etichetta | Quando |
+|---|---|---|---|---|
+| 1 | `concluso` | slate | «Concluso» | scadenza passata *(mai in tabellone: gli scaduti non entrano)* |
+| 2 | `oggi` | rosso + `animate-pulse` | «Scade oggi» | 0 giorni |
+| 3 | `ultime48` | rosso | «Ultime 48h» | 1–2 giorni |
+| 4 | `entro3` | arancio (`bg-orange-500`) | «Scade tra Xg» | 3 giorni |
+| 5 | `entro7` | giallo (`bg-amber-500`) | «Scade tra Xg» | 4–7 giorni |
+| 6 | `inCorso` | verde (`bg-emerald-600`) | «In corso» | oltre 7 giorni |
+| — | `sconosciuto` | slate chiaro | «Scadenza n/d» | data assente o non valida |
+
+**Perché un modulo nuovo e non `scadenza.ts`.** Il calcolo dei giorni **non** è
+duplicato: `urgency.ts` importa `giorniRimanenti` da `scadenza.ts` (confronto per
+GIORNO, indispensabile perché le scadenze reali arrivano a mezzanotte UTC e un
+conteggio a ore anticiperebbe di un giorno l'allarme). Il semaforo condiviso resta
+intatto per dashboard, scheda avviso, email e promemoria: **zero impatto fuori dal
+Radar**. Divergenza dichiarata: per 1–2 giorni la bacheca scrive «Ultime 48h» mentre le
+altre superfici scrivono «Ultimi N giorni» — stesso dato, due etichette.
+
+**La banda `concluso` è codice difensivo, non una superficie.** La regola di prodotto
+(§26.20, `comunicazione/04_canali_regionali`) è che gli interpelli scaduti non
+compaiono mai nelle liste attive: la banda esiste solo perché `calcolaUrgenza` è TOTALE
+(nessun input la rompe), non per essere mostrata.
+
+**Copy.** Le bande sono informazione di servizio: nessun conto alla rovescia, nessun
+invito a correre, nessuna frase di fretta — la regola immutabile `§2-bis` della
+checklist straordinaria resta rispettata (`test:copy:etico` ✓, `test:copy:schermo` ✓).
+
+**Misura sui dati reali (29/09/2026, sola lettura).** 58 avvisi attivi · 10 presentabili
+in vetrina (17%) · **tutte e dieci in banda `inCorso`** (scadenze 2026-12-23,
+2027-06-08, 2027-06-30). Cioè: con i dati di oggi il tabellone è **monocromatico
+verde** e le bande non producono alcun «mix». Il motivo è noto e dichiarato in §26.20:
+le righe con scadenza vicina sono quelle con `title`/`school_name` degradati dallo
+scraper, che il gate di vetrina scarta. **La varietà di colore dipende
+dall'ingestione, non dalla UI.**
+
+**RPC `radar_live_page`: esiste sul database, non esiste nel repo.** Verifica empirica
+(spec OpenAPI, sola lettura): la funzione è viva con firma
+`radar_live_page(p_page, p_page_size, p_window_days, p_max_per_city)` e restituisce
+`id, title, school_name, province, region, expiration_date, created_at, source_url,
+link_status, city_rank, total_count`. **Nessuna migrazione del repo la crea** — e anche
+la colonna `interpelli.link_status`, che la RPC espone, non è in nessuna migrazione:
+drift di schema. Conseguenza: un database ricostruito dalle migrazioni **non** avrebbe
+questa RPC (una migrazione di allineamento va scritta dal `pg_get_functiondef` live).
+Prova di commutazione del tabellone sulla RPC, misurata oggi:
+
+- righe presentabili **1 su 20** (5%) contro **10 su 58** (17%) della query attuale: la
+  RPC ordina per scadenza più vicina e restituisce soprattutto righe degradate, quindi
+  le pagine da 5 diventano quasi vuote (riempitivi trasparenti);
+- `total_count = 34` mentre gli avvisi attivi sono **58**: il badge «avvisi attivi in
+  Italia» diventerebbe **falso**, contro la regola del conteggio esatto;
+- la finestra `p_window_days = 14` agisce sulla **pubblicazione**, non sulla scadenza
+  (fra le righe restituite ci sono scadenze 2027-06-30);
+- la RPC non restituisce `class_codes`/`materia`/`school_code`, che sono le fonti della
+  colonna «Classe/Tipologia» e della risoluzione del nome istituto.
+
+Per questo il tabellone **continua a leggere `interpelli` direttamente** (`.gte` su
+`expiration_date`, ordine per `created_at`, conteggio esatto separato): il passaggio
+all'RPC resta **da decidere**, insieme alla migrazione che la renda riproducibile e a
+un `db push`.
+
+**Debito dichiarato.** (1) `interpelli.link_status` e la RPC `radar_live_page` vivono
+solo in produzione: da riportare in migrazione. (2) `LIMITE_RIGHE_BOARD = 10_000`
+(2.000 pagine da 5): valore trovato nel codice, non deciso in questa sessione — su una
+homepage pubblica sono fino a ~6 MB di payload nei casi estremi: da rivedere (il
+riferimento documentato nelle guardie erano 750 righe = 150 pagine).
+**CHIUSO il 30/09/2026 da §26.25**: la costante è diventata `LIMITE_RIGHE_LETTE =
+1.000` (unico tetto reale di PostgREST per richiesta) e il predicato `.gte` è stato
+sostituito dal filtro a doppio ramo `filtroAttivi`. (3) `estraiCitta` in
+`flightBoard/righeBoard.ts` è esportato ma non più usato da nessuno (l'import orfano è
+stato rimosso da `FlightBoardInterpelli`).
+
+**Guardie preesistenti trovate rosse e riallineate** (nessuna delle due causata da
+questo intervento): `test:copy:schermo` pretendeva `{metrica.etichettaTotale ??` mentre
+il tabellone usa `&&` (corretto: senza conteggio il badge non si disegna; ripristinato
+anche il marker `RIMOSSO (direttiva cliente)` nel docblock del componente) e
+`test:board:metriche` si aspettava 150 pagine con il tetto ora a 10.000.
+
+**File toccati.** `src/lib/urgency.ts` (nuovo, 84 righe), `scripts/test-urgenza.ts`
+(nuovo, 122 righe, script `test:urgenza` + inserito in `npm test`),
+`src/departments/radar/FlightBoardInterpelli.tsx` (342 righe: banda a 5 colori, import
+orfano rimosso), `src/departments/radar/flightBoard/__tests__/metricaBoard.test.ts`,
+`scripts/test-copy-primo-schermo.ts`, `package.json`,
+`docs/{SYSTEM_HANDOVER.md,DEPARTMENT_MAP.md}`,
+`comunicazione/04_canali_regionali/checklist_regionali.md`. Nessun file di altri
+dipartimenti.
+
+**Verifiche (29/09/2026).** `npm run typecheck` ✓ 0 errori · `npm run test:urgenza` ✓
+(bande, soglie, monotonia, pulsazione unica, mezzanotte UTC, date assenti) ·
+`npm run test:board` ✓ · `npm run test:board:metriche` ✓ ·
+`npm run test:interpello-scadenza` ✓ · `npm run test:copy:etico` ✓ ·
+`npm run test:copy:pubblico` ✓ · `npm run test:copy:schermo` ✓ ·
+`npm run test:architettura` ✓ (143 violazioni = baseline, nessuna nuova) ·
+`eslint` **0 problemi** sui file toccati · `npm run build` ✓ 12,01 s ·
+misura sui dati reali in sola lettura ✓ (gli script di diagnostica usati per la misura
+sono stati **cancellati** a fine sessione).
+
+### 26.23 Ingestione: il nome dell'istituto letto dalla FONTE (e il gate corretto su «ASTI»)
+
+**Nota di sessione (29/09/2026, sedicesimo intervento)** — la causa della bacheca
+corta e verde non era la UI: era l'ingestione. Qui si legge il nome della scuola dalla
+colonna della fonte, si impedisce che un'etichetta di materia finisca in `school_name`
+e si corregge un falso positivo del gate condiviso.
+
+**Diagnosi misurata (sola lettura, 29/09/2026).** 58 avvisi attivi · `school_name`
+presente in **5 righe**, tutte JUNK («Conversazione in lingua straniera») · **53 righe
+senza nome** · 13 righe con **codice meccanografico valido** · coppie codice→nome
+raccoglibili dal database: **0** (il registro non si allarga da sé) · righe
+presentabili in vetrina: 10, **tutte con scadenza oltre 14 giorni** → zero colori
+accesi. Le tabelle delle fonti però **contengono** il nome, in una colonna accanto al
+codice (`VCIC80500N | IC LIVORNO-TRONZANO | EEEE - PRIMARIA`): il dato c'era, non
+veniva letto.
+
+| # | Intervento | Dettaglio |
+|---|---|---|
+| 1 | **`src/scraper/scuolaDaRiga.ts`** (nuovo, puro) | Legge la finestra di testo che segue (o precede) il codice meccanografico, la taglia al primo confine di cella (stato della supplenza, date, codici) e tiene il candidato più lungo che supera `nomeIstitutoPresentabile`. `null` quando non c'è un nome vero |
+| 2 | **`parser.ts` ordine di priorità** | `input.schoolName` → **nome accanto al codice** → estrazioni dal testo libero **passate dal gate**: «Conversazione in lingua straniera» non entra più in `school_name` |
+| 3 | **Bug del gate: «ASTI»** | `RE_SIGLA_SOSTEGNO` era `/^A[DS][A-Z]{2}$/`: «ASTI» ha esattamente quella forma (A+S+2 lettere), quindi `I.C. VILLAFRANCA D'ASTI` e `IC Asti` venivano **scartati come sigle di sostegno**. Allineato alla regola di casa (`data/classiConcorso.ts`: «in Italia ogni classe di sostegno inizia per `AD`, quindi il pattern è chiuso») → `/^AD(?:[A-Z]{2,3}|\d{2})$/` |
+| 4 | **«corso» non è sempre procedura** | `I.C. CUNEO CORSO SOLERI` veniva troncato a `I.C. CUNEO` (una via scambiata per «corso di formazione»): ora `corso`/`corsi` tagliano **solo** nel sintagma di procedura |
+
+**Misura dell'effetto (righe reali delle pagine Piemonte, sola lettura).** Prima: 0 nomi
+letti. Dopo: **18 su 18 (100%)**, per esempio `ALIC81700X → «IC ALESSANDRIA SPINETTA
+MARENGO»`, `ALIC832002 → «ISTITUTO COMPRENSIVO CASALE 1»`, `ATIC810006 → «I.C.
+VILLAFRANCA D ASTI»`, `ATIC81800R → «ISTITUTO COMPRENSIVO 1 ASTI»`, `CNIC80200E →
+«ISTITUTO COMPRENSIVO DI SCUOLA MATERNA, ELEMENTARE E MEDIA DI MOROZZO»`,
+`CNIC85700P → «I.C. CUNEO CORSO SOLERI»`.
+
+**Effetto in bacheca.** Con il nome della scuola valorizzato, le righe passano il gate
+di vetrina: la bacheca si riempie e — con le scadenze entro pochi giorni, che oggi
+sono proprio quelle senza nome — si accendono anche le bande arancio/giallo/rosso di
+§26.22. **Le righe già in banca dati NON si aggiornano da sole**: l'upsert è
+`ignoreDuplicates` su `hash_id` (che è `provincia|titolo|scadenza`, **senza**
+`school_name`), quindi ogni run successivo salta le righe già presenti e un nuovo
+re-scrape non le arricchirebbe mai: serve un backfill dedicato, **eseguito** in §26.24.
+
+**Debito dichiarato.** (1) **Copertura**: 50 delle 58 righe attive non hanno nemmeno un
+codice meccanografico da cui leggere il nome (titoli = dump di codici dall'aggregatore),
+quindi restano fuori vetrina finché la fonte non pubblica il nome (§26.24). (2)
+**Apostrofo**: verificato che la pagina ufficiale pubblica proprio `I.C. VILLAFRANCA D
+ASTI` senza apostrofo — nessuna perdita in estrazione, il dato scritto è fedele alla
+fonte (§26.24). (3) **Fonti senza codice meccanografico**: senza codice non c'è nessuna
+colonna da cui leggere il nome (`scuolaDaRiga` restituisce `null`, come deve). (4)
+`scuolaDaRiga` è ancora **sconosciuto al gate strutturale** come ogni file del parser:
+`parser.ts` (1165 righe) e `index.ts` (1747) restano debito di split congelato.
+
+**File toccati.** `src/scraper/scuolaDaRiga.ts` (nuovo, 118 righe),
+`src/scraper/parser.ts` (import + priorità della scuola),
+`src/lib/nomeIstituto.ts` (due correzioni al gate: sigla sostegno, «corso»),
+`scripts/test-scuola-da-riga.ts` (nuovo, `test:scuola-riga`, in `npm test`),
+`scripts/test-nome-istituto.ts` (4 verifiche nuove, incluse le `codiciSostegno` del
+catalogo), `package.json`, `docs/{SYSTEM_HANDOVER.md,DEPARTMENT_MAP.md}`,
+`comunicazione/04_canali_regionali/checklist_regionali.md`. Nessun file di altri
+dipartimenti.
+
+**Verifiche (29/09/2026).** `npm run typecheck` ✓ 0 errori · `npm run test:scuola-riga`
+✓ (18 controlli: righe reali, mai indovinare, codice prima/dopo il nome) ·
+`npm run test:nome-istituto` ✓ · `npm run test:board` ✓ · `npm run test:board:metriche` ✓ ·
+`npm run test:scraper:domini|fonti|attivi` ✓ · `npm run test:parser` (+ `:tabelle`, `:date`,
+`:materia`, `:validazione`) ✓ ·
+`npm run test:qualita` ✓ · `npm run test:copy:etico|pubblico|schermo` ✓ ·
+`npm run test:urgenza` ✓ · `npm run test:architettura` ✓ (143 = baseline) ·
+`eslint` **0 problemi** sui file toccati · `npm run build` ✓ · `npm test` ✓ catena
+completa. Misure su dati reali in sola lettura ✓ (gli script di diagnostica usati per
+la misura sono stati **cancellati** a fine sessione).
+
+### 26.24 Backfill dei nomi istituto su `interpelli` (perché lo scraper NON basta)
+
+**Il problema strutturale.** L'upsert dello scraper è
+`.upsert(righe, { onConflict: 'hash_id', ignoreDuplicates: true })` e `hash_id` è
+`provincia|titolo|scadenza` (`generaHashId`, `parser.ts`): **il nome della scuola non
+fa parte dell'identità** della riga. In `index.ts` il gate di novità precede l'upsert
+(`if (hashEsistenti.has(u.hashId)) return false`), quindi un run successivo salta gli
+avvisi già presenti e **non li arricchisce mai**. Corollario operativo: per sanare i
+record esistenti serve un `UPDATE` per `id`, non un nuovo scrape.
+
+**Attrezzi aggiunti (29/09/2026).**
+- `scripts/lib/scuolaDaPagina.ts` (nuovo, 144 righe): factory `creaRisolutore({ maxFetch })`
+  con cache per URL e budget di rete; risolve il nome in ordine di affidabilità
+  **titolo** (`estraiScuola` dello scraper) → **fonte** (`scuolaDaRiga` sulla pagina
+  `source_url`: prima l'intera pagina, poi la finestra di ±600 caratteri attorno al
+  titolo, utile nelle pagine multi-riga) → **registro** (`nomeScuolaDaCodice`). Ogni
+  candidato passa il gate `nomeIstitutoPresentabile`; fonte non leggibile (403/timeout,
+  PDF) o nessun candidato ⇒ `null`, mai un nome inventato.
+- `scripts/backfill-nomi-istituto.ts` (nuovo, 193 righe) + `npm run dati:backfill-scuole`:
+  dry-run per default, `--apply` per scrivere (service role), `--max-fetch=N` per
+  limitare le richieste alle fonti. Lavora sulle sole righe con scadenza non passata
+  (quelle che possono entrare in bacheca), scrive **solo** `school_name` e — se mancava —
+  `school_code`, e non sovrascrive un nome già presentabile. A fine run stampa il report
+  con le bande di urgenza §26.22 e l'elenco delle righe che il tabellone mostra.
+
+**Risultato misurato (dati reali, 29/09/2026).** `interpelli`: 587 righe totali, 58 con
+scadenza non passata, **0 con un nome presentabile** prima del backfill. Dopo l'`--apply`
+(8/8 patch scritte, 0 errori): 8 righe arricchite **dalla fonte**, 0 dai titoli, 0 dal
+registro. Righe ora in vetrina, con la banda §26.22:
+
+| Prov | Scuola (scritta in `school_name`) | Codice | Banda |
+|---|---|---|---|
+| NO | I C DUCA D AOSTA | NOIC826004 | Ultime 48h |
+| VC | IC LIVORNO-TRONZANO | VCIC80500N | Ultime 48h |
+| CN | I.C. S.GRANDIS DI BORGO SAN DALMAZZO | CNIC80800D | Scade tra 3g |
+| AT | I.C. CANELLI | ATIC81300N | Scade tra 7g |
+| TO | IC BALANGERO | TOIC829003 | In corso |
+| VC | ISTITUTO COMPRENSIVO DON E. FERRARIS | VCIC80600D | In corso |
+| TO | I.C. SANTA MARIA | TOIC88500B | In corso |
+| AT | I.C. VILLAFRANCA D ASTI | ATIC810006 | In corso |
+
+Tre dei nomi scritti hanno **sostituito il valore errato** `Conversazione in lingua
+straniera` (etichetta di materia, ora respinta dal gate `nomeIstitutoPresentabile`): è la
+dimostrazione che il vecchio `school_name` non era «un dato da preservare».
+
+**Effetto sul prodotto.** Il tabellone «Radar Live» smette di essere verde mono-banda:
+4 bande accese (rosso ultime 48h, arancio entro 3 giorni, ambra entro 7 giorni, verde in
+corso) esattamente come previsto da §26.22, e le 5 righe con scadenza ravvicinata —
+prima invisibili perché senza nome — sono ora quelle che spingono il cambio colore.
+
+**Le 50 righe non risolte (debito di copertura).** Hanno titoli che sono dump di codici
+(`AAAA | BB02 | ADEE |`, `annotazione_INTERPELLO – Classe di concorso A042 …`), nessun
+codice meccanografico e `source_url` che punta all'indice dell'aggregatore: non esiste
+nessuna colonna da cui leggere il nome, quindi restano fuori vetrina. Non è un bug del
+backfill: è il limite della fonte. Per recuperarle serve che l'aggregatore esponga il
+nome per riga (o una mappatura provincia+classi, oggi inesistente: 0 coppie codice→nome
+nel registro per quelle righe).
+
+**Correzione a §26.23(2) — l'apostrofo non è un bug di estrazione.** Scaricando la pagina
+ufficiale (`servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_at.php`) e
+decodificando le entità HTML (`&rsquo;`, `&#39;`) la riga della fonte recita
+`ATIC810006 I.C. VILLAFRANCA D ASTI …`: **l'apostrofo non c'è nella fonte**. Il valore
+scritto è quindi fedele e verificabile; il «ripristino dell'apostrofo» che era in
+backlog è stato chiuso come **non applicabile** (mai correggere la fonte con una
+conoscenza esterna).
+
+**Il run completo dello scraper non è stato lanciato (scelta consapevole).**
+`npm run scrape` senza `--dry-run` avrebbe: (a) inserito solo avvisi NUOVI (le righe
+esistenti sarebbero state saltate, quindi **non** avrebbe risolto nulla di questo
+backfill) e (b) **pubblicato sui canali Telegram reali e inviato alert PRO agli utenti**
+(`pubblicaNuoviSuCanali`, `inviaAlertTelegramTempoReale` — `SCRAPER_TELEGRAM_REALTIME=0`
+disattiva solo gli alert PRO, non i canali): azione irreversibile e di prodotto, quindi
+lasciata alla decisione dell'utente. È stato invece eseguito `npm run scrape -- --dry-run`
+(sicuro: nessuna scrittura, nessun invio): **107 voci estratte, 97 uniche**, da 4 fonti
+(3 hub di USR Piemonte + aggregatore nazionale, 43 fonti attive, 19/20 regioni coperte);
+di queste, 9 scartate come già scadute e 91 scartate dal gate di link, segno che la
+maggior parte delle voci dell'aggregatore è di qualità bassa (titoli = codici, nessuna
+scadenza) — la stessa ragione per cui 50 righe restano fuori vetrina.
+
+**File toccati.** `scripts/backfill-nomi-istituto.ts` (nuovo, 193 righe),
+`scripts/lib/scuolaDaPagina.ts` (nuovo, 144 righe), `package.json` (script
+`dati:backfill-scuole`), `docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`.
+Dati (non codice): 8 righe di `interpelli` (`school_name`/`school_code`), via service
+role. Nessun file di altri dipartimenti: si resta nel perimetro Radar + condivisi
+essenziali (`src/lib/**`, `src/scraper/**`).
+
+**Verifiche (29/09/2026).** `npm run typecheck` ✓ 0 · `npm run test:architettura` ✓ 143
+(baseline, **nessuna violazione nuova**: il primo tentativo era `W-DIM 297 righe` e il
+file è stato diviso a 193 + 144) · `eslint` sui due file nuovi ✓ 0 · `npm test` ✓ catena
+completa · `npm run build` ✓ · sonda end-to-end del modulo (2 righe reali su pagine di
+USR Piemonte → `IC LIVORNO-TRONZANO`, `I.C. CANELLI`; riga senza codice → `null`;
+budget rispettato) poi **cancellata**. Verifica indipendente sull'effetto: nuovo run in
+dry-run con `--max-fetch=0` → 8 righe «nome già presentabile», 0 patch (il DB è
+coerente) — la scrittura non è «dichiarata», è riletta dal database.
+
+### 26.25 «Radar Live» su scala nazionale: filtro a doppio ramo, 1.000 righe, alternanza per provincia — *la scala “1.000 righe” è superata da §26.34 (lettura a pagine)*
+
+**Il problema.** La bacheca homepage leggeva `interpelli` con
+`.gte('expiration_date', oggi)`: una riga **senza scadenza** non soddisfa un `gte`
+(qualsiasi confronto con `NULL` è falso), quindi restava in tabella ma non
+arrivava mai alla pagina — e il fallback «senza scadenza ma pubblicato negli ultimi
+60 giorni», già scritto in `preparaRigheBoard`, era **codice morto**: il database
+scartava prima. Misurato il 30/09/2026: **58 righe** visibili su **623 candidate**,
+e in più il tabellone era già **troncato da un `.put()`**: `preparaRigheBoard`
+chiamava un metodo inesistente sull'array (nessun `push`), quindi `npm run
+typecheck` non passava (`TS2339: Property 'put' does not exist on type
+'RigaBoardCompleta<R>[]'`) e la funzione sarebbe esplosa al primo giro con una riga
+valida.
+
+**Fix 1 — filtro a doppio ramo (una regola, due implementazioni).**
+`filtroAttivi(oggi)` (`radar/flightBoard/filtroAttivi.ts`, puro) genera
+l'espressione PostgREST
+`expiration_date.gte.<oggi>,and(expiration_date.is.null,created_at.gte.<oggi−60g>)`,
+usata **sia** dalla lettura righe **sia** dal conteggio `head: true` (mai un totale
+che parla di avvisi diversi da quelli leggibili). La data è quella **locale**, mai
+`toISOString()`: alle 00:30 ora di Roma la data UTC è ancora ieri e gli avvisi che
+scadono oggi uscirebbero dal tabellone. Lo stesso significato è applicato in
+memoria da `preparaRigheBoard` (`GIORNI_FINESTRA_SENZA_SCADENZA = 60`, giorni di
+calendario — non «due mesi», che sono 59–62): doppia difesa, un solo significato.
+`RigaBoard.scadenza` → `string | null` con `senzaScadenza: boolean`, così la
+provenienza della riga è dichiarata e verificabile.
+
+**Fix 2 — mai una data inventata.** Prima il fallback scriveva
+`scadenza = created_at`, cioè la data di **pubblicazione** usata come scadenza: la
+colonna avrebbe mostrato una data finta e `calcolaUrgenza` avrebbe restituito la
+banda «Concluso» — banda che per contratto non deve mai comparire in bacheca. Ora
+la cella mostra la banda `sconosciuto` («Scadenza n/d») e, al posto della data, la
+**data di pubblicazione** (`Pubblicato 12 set`, `dataItBreve` nel componente): un
+fatto vero, chiaramente etichettato come pubblicazione.
+
+**Fix 3 — scala.** `LIMITE_RIGHE_LETTE = 1.000` al posto di
+`LIMITE_RIGHE_BOARD = 10.000` (fuorviante: PostgREST non restituisce più di 1.000
+righe per richiesta) e ordinamento `created_at DESC` + `expiration_date ASC` (a
+parità, scade prima). Il `+` dell'etichetta di pagina continua a dichiarare che il
+database ha altri avvisi.
+
+**Superato dal §26.34 (02/10/2026).** `LIMITE_RIGHE_LETTE` **non esiste più**: la
+bacheca legge a PAGINE (`flightBoard/letturaBoard.ts`) e il `+` resta solo per il caso
+«il database è cresciuto fra il conteggio e la lettura». Il tetto di PostgREST (1.000)
+non è una scala di prodotto: con l'ordinamento per pubblicazione decrescente tagliava in
+silenzio proprio le righe più vecchie.
+
+**Fix 4 — diversità geografica.** `diversificaProvince(righe)`
+(`lib/liveBoard.ts`, puro): round-robin deterministico per codice provincia
+(maiuscolo; righe senza provincia raggruppate insieme) che conserva l'ordine di
+arrivo dentro ogni provincia. Nessuna casualità: il tabellone non «balla» a ogni
+refetch. Effetto misurato sulle righe reali presentabili:
+
+| | prime 10 province |
+|---|---|
+| senza alternanza | `AT TO RI RI RI RI RI RI RI PD` (7/10 dalla stessa provincia) |
+| con alternanza | `AT TO RI PD VC NO CN AT TO RI` |
+
+prima pagina: **5/5 province diverse** (direttiva cliente: nessuna provincia
+monopolizza le prime pagine).
+
+**Misure reali (30/09/2026, sonda in sola lettura poi cancellata).** `interpelli`:
+**623 righe**, tutte dentro il nuovo filtro; **565 senza scadenza** = recuperate
+dalla finestra dei 60 giorni; **69 presentabili in vetrina** (erano 17: il tabellone
+passa da 4 a 14 pagine da 5). Bande sulle righe presentabili:
+`inCorso 14 · oggi 2 · ultime48 1 · entro7 1 · sconosciuto 51` — il multi-colore
+§26.22 regge, e la banda `sconosciuto` è la conseguenza dichiarata della direttiva
+«includi gli avvisi non datati». Esempio di prima pagina reale: `AT · I.C. CANELLI ·
+06 ott`, `TO · I.C. SANTA MARIA · 18 ott`, `RI · I.C. Ferruccio Ulivi · Pubblicato
+02 set`, `PD · IC di Campodarsego · 23 dic`, `VC · IC LIVORNO-TRONZANO · 30 set`.
+
+**Regole di prodotto aggiornate.** `comunicazione/04_canali_regionali/checklist_regionali.md`:
+§4 — la bacheca include gli avvisi **senza scadenza** pubblicati negli ultimi 60
+giorni (banda «Scadenza n/d» + data di pubblicazione) e alterna le righe per
+provincia; §5 — aggiunte le guardie `test:board:scala` e `test:board:filtro`.
+
+**File toccati.** `src/lib/liveBoard.ts` (209 righe: fix del `.put()`, finestra
+60 giorni, `senzaScadenza`, `diversificaProvince`),
+`src/departments/radar/flightBoard/filtroAttivi.ts` (nuovo, 49),
+`.../flightBoard/metricaBoard.ts` (`LIMITE_RIGHE_LETTE`),
+`.../radar/FlightBoardInterpelli.tsx` (filtro, ordinamento, alternanza, cella
+Scadenza), `.../flightBoard/__tests__/filtroAttivi.test.ts` (nuovo, 68),
+`.../__tests__/metricaBoard.test.ts`, `scripts/test-live-board.ts` (215),
+`scripts/test-live-board-scala.ts` (nuovo, 170), `package.json`,
+`docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`,
+`comunicazione/04_canali_regionali/checklist_regionali.md`. Nessun file di altri
+dipartimenti: perimetro Radar + condivisi essenziali (`src/lib/**`).
+
+**Verifiche (30/09/2026).** `npm run typecheck` ✓ 0 · `npm run test:architettura` ✓
+143 di baseline, **0 violazioni nuove** (primo tentativo: `E-DIM
+scripts/test-live-board.ts` a 360 righe → diviso in 215 + 170) · `npm test` ✓ catena
+completa · `npm run build` ✓ · `eslint` ✓ 0 sui file toccati · guardie mirate
+`test:board` ✓, `test:board:scala` ✓ (14 asserzioni), `test:board:filtro` ✓ (12),
+`test:board:metriche` ✓. Sonda live in sola lettura sui dati reali (numeri sopra)
+poi **cancellata**.
+
+### 26.26 Slogan della pagina Notizie: il contesto scolastico entra nella frase
+
+**La frase.** Lo slogan della testata editoriale (`SLOGAN_NOTIZIE`, dipartimento
+Notizie) era l'unico testo pubblico della pagina a omettere il contesto:
+«Quando vuoi sapere cosa succede di importante, vieni qui!». Ora dice
+**«Quando vuoi sapere cosa succede di importante nella scuola, vieni qui!»**,
+allineato alle CTA di Notizie già in uso nelle notifiche (email e Telegram:
+`CTA_NOTIZIE_TESTO` in `src/lib/alertInterpello.ts`, `CTA_NOTIZIE_TESTO_EMAIL`
+in `src/lib/resend.ts`), che citavano già la scuola.
+
+**Natura della modifica.** Solo copy: un **unico letterale** (riga 19 di
+`NotizieHero.tsx`), nessuna logica, nessuna prop, nessuna firma di componente.
+Le virgolette «…» restano aggiunte dal presentatore
+(`components/hero/TestataEditoriale.tsx`, `«{slogan}»`): il testo a schermo resta
+una riga sola, con il punto esclamativo finale.
+
+**File toccati.** `src/departments/notizie/components/NotizieHero.tsx` (il solo
+letterale), `docs/SYSTEM_HANDOVER.md`. Nessun file di altri dipartimenti
+(perimetro Notizie, nessun condiviso essenziale coinvolto); le CTA di notifica
+non sono state toccate perché già corrette.
+
+**Verifiche (29/09/2026).** `npm run typecheck` ✓ 0 errori · `npm run
+test:architettura` ✓ nessuna violazione nuova (529 file, 143 di baseline) ·
+`eslint src/departments/notizie/components/NotizieHero.tsx` ✓ 0 · `npm run build`
+✓ (1959 moduli) · guardie Notizie: `test:notizie-editoriale` ✓ e
+`test:notizie-nazionale` ✓; `test:notizie-feed` e `test:notizie-rate` falliscono
+sul criterio **«almeno 1 articolo negli ultimi 7 giorni»** (articolo più recente
+24/09/2026): fallimento **guidato dai dati**, indipendente dalla copy — i due
+script importano solo `data/**` e `types.ts`, non citano né lo slogan né il
+componente · occorrenza **unica** nel repo: nessun test o documento citava la
+vecchia formulazione (nessuna guardia di copy da aggiornare) · resa live
+verificata sul dev server (`localhost:5174`): modulo `NotizieHero.tsx` servito con
+**1** occorrenza della nuova frase e **0** della vecchia.
+
+### 26.27 DEV Toolbar — «Editor Testi Rapido»: modifica dei testi chiave al volo
+
+**Cosa fa.** Nuova sezione **collassabile** della DEV Toolbar (`EditorTestiRapido`,
+subito sopra «Reset»): elenca i testi del registro con una `<textarea>` per chiave;
+digitando, il testo cambia **all'istante** dove è usato e viene salvato in
+`localStorage: sr_simple_text_overrides`. Il pulsante «Reset testi (default)» riporta
+tutto ai default del codice e cancella la chiave salvata. Nessun builder visuale,
+nessuna modale, nessun wrapper: solo caselle di testo (richiesta dell'utente).
+
+**Come è fatto (4 file nuovi, tutti < 250 righe).**
+- `src/data/editableTexts.ts` (135) — registro PURO `chiave → testo di default`
+  (`TESTI_EDITABILI`, **30 chiavi**): 12 FAQ pubbliche (`faq.<slug>.domanda|risposta`,
+  slug = ancore pubbliche laddove esistono) + i 3 blocchi dell'offerta PRO della
+  vetrina di homepage (`prezzi.offerta.<blocco>.titolo|testo`). Espone `ChiaveTesto`,
+  `CHIAVI_TESTO`, `testoDiDefault`, `eChiaveTesto`, `gruppiTesti()`.
+- `src/lib/testiModificabili.ts` (137) — store senza React (stesso schema di
+  `src/config/features.ts`): snapshot stabile per `useSyncExternalStore`, letture
+  tolleranti (JSON corrotto / chiavi fuori registro / valori vuoti → default),
+  `impostaTesto` senza scritture inutili, `azzeraTesti`.
+- `src/hooks/useTestiEditabili.ts` (61) — `testo(chiave)`, `imposta`, `azzera`, `testi`,
+  `modificati`; gli override vengono applicati **solo** con `import.meta.env.DEV`:
+  in build di produzione la copy è sempre quella del registro.
+- `src/components/EditorTestiRapido.tsx` (101) — la sezione (raggruppata per prefisso,
+  contatore delle voci modificate, evidenziazione dei campi modificati, reset).
+
+**Superfici cablate (rendono per CHIAVE, nessuna copy duplicata nel JSX).**
+`src/pages/FAQPage.tsx` (le voci sono una lista `id` + chiavi in `data/faqPubbliche.ts`; i testi sono
+stati spostati **verbatim** nel registro — verifica a macchina: 12 voci, 0
+differenze rispetto a `HEAD`; dal 29/09/2026 le voci sono **8**, §26.29), la sezione «Domande frequenti» di `src/pages/PrezziPage.tsx` (stesse chiavi, 🔒: cablata il 29/09/2026) e `src/components/landing/LandingOffertaPro.tsx`
+(`PUNTI` con chiavi; restano inline la copy autorizzata dal cliente e
+`GIORNI_TRIAL_PRO`, sorvegliati dalle guardie). `src/components/DevToolbar.tsx` monta
+la sezione (due commenti e una riga di markup compattati per non superare le 250
+righe).
+
+**Vincolo 🔒 — sblocco mirato e ri-bloccato (29/09/2026).** `src/pages/PrezziPage.tsx` è registrato
+**BLOCCATO** in `LOCKED_MODULES.md`: del listino (piani, importi, vantaggi) **non**
+si tocca nulla; con autorizzazione esplicita dell'utente (la richiesta nominava pagina
+e FAQ) è stata sostituita e cablata la **sola sezione «Domande frequenti»**, che rende per
+chiave le stesse voci di `/faq` (`src/data/faqPubbliche.ts`) e viene ri-bloccata subito.
+
+**Guardie aggiornate (copy di prodotto intatta).** La copy della FAQ e i tre blocchi
+dell'offerta vivono ora nel registro: `test-copy-pubblico.ts` e `test-copy-etico.ts`
+la controllano **nel registro** e pretendono il **cablaggio** (import + render
+`testo(...)`), così né un doppione nel JSX né una pagina scollegata passano
+inosservati. Nuovo `scripts/test-editor-testi.ts` (`npm run test:editor-testi`,
+inserito in `npm test`): 36 asserzioni (§26.28) su registro, copy dell'offerta (nessuna cifra,
+nessuna parola di televendita), store (scrittura/rilettura della chiave, precedenza,
+reset, notifiche, tolleranza) e cablaggio (sezione nella DEV Toolbar, pagine per
+chiave, elenco condiviso `/faq` ↔ `/prezzi`).
+
+**File toccati.** Nuovi: `src/data/editableTexts.ts`, `src/lib/testiModificabili.ts`,
+`src/hooks/useTestiEditabili.ts`, `src/components/EditorTestiRapido.tsx`,
+`scripts/test-editor-testi.ts`. Modificati: `src/components/DevToolbar.tsx`,
+`src/pages/FAQPage.tsx`, `src/components/landing/LandingOffertaPro.tsx`,
+`scripts/test-copy-etico.ts`, `scripts/test-copy-pubblico.ts`, `package.json`,
+`docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`. **Nessun file di dipartimenti**
+(non è un lavoro di dipartimento: dev tooling condiviso + pagine pubbliche);
+`src/pages/PrezziPage.tsx` non toccato (era 🔒); l'intervento autorizzato del 29/09/2026
+(sola sezione FAQ) è documentato in §26.28.
+
+**Verifiche (29/09/2026).** `npm run typecheck` ✓ **0 errori** (primo giro: il
+sostituendo di `{f.q}` in `FAQPage` aveva rimosso la riga del `<span>`: errore di
+parsing JSX intercettato da `eslint`, ripristinato) · `eslint` ✓ 0 sui 10 file toccati
+· `npm run build` ✓ (1963 moduli, 43,17 s) · `npm run test:architettura` ✓ nessuna
+violazione nuova (534 file, 143 di baseline; primo giro: le due guardie di copy a
+252/257 righe → aggiunte compattate) · `npm run test:editor-testi` ✓ 31/31 (36/36 dopo §26.28) ·
+`test:copy:etico` ✓ · `test:copy:pubblico` ✓ · `test:checkout-promo` ✓ (controlla
+l'ancora `#animatore-digitale`, intatta) · dev server riavviato in background su
+`http://localhost:5174`.
+
+
+---
+
+### 26.28 FAQ pubbliche — 4 nuove voci su `/faq` e `/prezzi`: elenco unico condiviso
+
+**Richiesta (29/09/2026).** Sostituire le FAQ «ansiogene» con domande di posizionamento
+commerciale e istruzioni pratiche, **su entrambe le superfici** (pagina FAQ e pagina
+Prezzi).
+
+**Le 4 voci (copy del cliente, verbatim).**
+
+| # | Domanda | Chiave del registro | Cosa cambia |
+|---|---|---|---|
+| 1 | Posso pagare con la Carta del Docente? | `faq.carta-docente.risposta` | risposta riscritta: «stiamo valutando per il futuro» + invito a segnalarlo dal modulo contatti |
+| 2 | Qual è il piano più conveniente per accedere a tutto? | `faq.piano-conveniente.*` | **nuova**: PRO Annuale = massimo risparmio, accesso illimitato, PureFocus |
+| 3 | Come posso regalare un anno di Scuole Radar PRO a un collega? | `faq.regala-pro-collega.*` | **nuova** |
+| 4 | Non riesco a registrarmi con l'email scolastica (.edu.it), cosa devo fare? | `faq.accesso-google-edu.*` | domanda e risposta riscritte in chiave pratica: filtri della scuola → Animatore Digitale / Responsabile Informatico |
+
+**Voci uscite.** `faq.fine-prova.*` («Cosa succede quando finisce la prova inclusa?»):
+l'informazione resta sulla homepage nella vetrina PRO con la copy autorizzata («passerai
+automaticamente a un account Base», sorvegliata da `test:copy:etico`). La FAQ «Che
+differenza c'è tra il piano Base e il PRO?» di `/prezzi` (importi nel testo) è sostituita
+dalla nuova #2. Restano le voci di posizionamento e di strumento (Radar, Animatore
+Digitale, Invita un Collega, PureFocus, CV, Calcolatore CFU, Modulistica, Assistente
+Sindacalista).
+
+**Elenco unico, zero doppioni.** Nuovo `src/data/faqPubbliche.ts` (48 righe, modulo puro
+`{ id, q, a }`): le stesse 12 voci nello stesso ordine per `FAQPage` e `PrezziPage`. Prima
+le due pagine tenevano due liste di copy **divergenti** (stesse domande, risposte
+leggermente diverse): ora la copy vive **solo** nel registro `src/data/editableTexts.ts`
+(30 chiavi = 24 FAQ + 6 offerta) e le pagine rendono per chiave (`useTestiEditabili`).
+
+**Modulo 🔒 — sblocco mirato e ri-blocco.** `src/pages/PrezziPage.tsx` è BLOCCATO
+(`LOCKED_MODULES.md`): la richiesta nominava esplicitamente pagina Prezzi e FAQ, quindi è
+stata trattata come autorizzazione e l'intervento è stato **limitato alla sola sezione
+«Domande frequenti»** (import + hook + render per chiave; ~26 righe di copy in meno, file
+da 375 a 351). Piani, importi, vantaggi, PureFocus, checkout e CTA **non** toccati e
+nessuna chiave `prezzi.*` del listino nel registro: l'invariante è ora verificata a
+macchina. Il modulo è stato **ri-bloccato** aggiornando la sua riga nel registro.
+
+**Guardie aggiornate.** `test:editor-testi` (30 chiavi, 12 FAQ, presenza delle 4 voci e
+della copy richiesta, elenco condiviso su entrambe le pagine, ancore pubbliche
+nell'elenco, listino ancora nel file) · `test:copy:pubblico` (copy commerciale nel
+registro + elenco condiviso) · `test:checkout-promo` (l'ancora `#animatore-digitale` è ora
+nell'elenco condiviso). Nota di prodotto da decidere: la FAQ #2 dice «massimo risparmio
+equivalente a **mesi gratuiti**» — la checklist pagamenti (§4) vieta «gratuito» riferito a
+piani a pagamento e ammette per il mese incluso la forma «in omaggio». La copy è stata
+inserita **verbatim come richiesta**; la variante conforme («due mesi in omaggio») si
+applica in un istante dall'«Editor Testi Rapido».
+
+**File toccati.** Nuovo: `src/data/faqPubbliche.ts`. Modificati:
+`src/data/editableTexts.ts`, `src/pages/FAQPage.tsx`, `src/pages/PrezziPage.tsx` 🔒,
+`scripts/test-editor-testi.ts`, `scripts/test-copy-pubblico.ts`,
+`scripts/test-checkout-promo.ts`, `LOCKED_MODULES.md`, `docs/SYSTEM_HANDOVER.md`,
+`docs/DEPARTMENT_MAP.md`. Nessun file di dipartimenti (pagine pubbliche + dev tooling
+condiviso): nessuna lettura fuori perimetro.
+
+**Verifiche (29/09/2026).** `npm run typecheck` ✓ 0 errori · `npm run test:editor-testi`
+✓ 36/36 · `test:copy:etico` ✓ · `test:copy:pubblico` ✓ · `test:checkout-promo` ✓ ·
+`npm run test:architettura` ✓ nessuna violazione nuova (535 file, 143 di baseline) ·
+`eslint` ✓ 0 sui file toccati · `npm run build` ✓ (1964 moduli, 34,42 s) · dev server
+riavviato in background su `http://localhost:5174`.
+
+---
+
+### 26.29 FAQ pubbliche — selezione editoriale: da 12 a 8 voci, copy del cliente
+
+**Richiesta (29/09/2026, secondo intervento su `/faq` e `/prezzi`).** (1) togliere le domande
+ansiogene o difensive (disdette, sicurezza dei pagamenti); (2) togliere i rimandi a funzioni
+non attive (generatore CV, Archivista AI, Tabelle A/B del D.P.R. 19/2016); (3) riscrivere le
+voci restanti con la copy positiva fornita dal cliente.
+
+**Elenco risultante: 8 voci** (erano 12), stesso ordine su `/faq` e su `/prezzi`: la lista
+`id` + chiavi sta in `src/data/faqPubbliche.ts`, i testi nel registro `src/data/editableTexts.ts`.
+
+| # | Domanda (chiave) | Cosa cambia |
+|---|---|---|
+| 1 | Come funziona il Radar e cosa mi arriva? (`faq.radar-personalizzati.*`) | invariata |
+| 2 | Animatore Digitale / siti sicuri della scuola (`faq.animatore-digitale.*`) | invariata — `#animatore-digitale` è ancora PUBBLICA (`AuthModal` → `NotaAccessoScolastico`) |
+| 3 | Non riesco a registrarmi con l'email scolastica (.edu.it) (`faq.accesso-google-edu.*`) | invariata (già identica al brief) |
+| 4 | Come funziona «Invita un Collega»? (`faq.invita-un-collega.risposta`) | RISCRITTA: sezione nella BACHECA, **10 € di sconto** per chi si abbona e **buono Amazon da 10 Euro** per chi invita |
+| 5 | Posso pagare con la Carta del Docente? (`faq.carta-docente.risposta`) | invariata (valutazione futura + modulo contatti) |
+| 6 | Qual è il piano più conveniente per accedere a tutto? (`faq.piano-conveniente.*`) | invariata |
+| 7 | Come posso regalare un anno di Scuole Radar PRO a un collega? (`faq.regala-pro-collega.risposta`) | RISCRITTA: codice «Invita un collega» (10 Euro di sconto / 10 Euro di credito Amazon), regalo annuale **in valutazione**, risposta dal modulo contatti |
+| 8 | PureFocus richiede un account nuovo? Funziona con la mia Gmail? (`faq.purefocus-gmail.*`) | domanda e risposta RISCRITTE: cos'è PureFocus (YouTube senza distrazioni), incluso in Scuole Radar PRO con le **stesse credenziali**, meglio con un **account Gmail**, accesso da `scuoleradar.it` o `purefocus.one` |
+
+**Voci uscite (4) — e le loro ancore.** `faq.cv-non-pronto.*` (generatore CV),
+`faq.classi-di-concorso.*` (Tabelle A/B), `faq.modulo-introvabile.*` (Archivista AI),
+`faq.dubbio-norma.*` (annuncio «sta arrivando» dell'Assistente Sindacalista Virtuale: elencato
+come vantaggio PRO nel listino, ma non ancora attivo). Le ancore `#cv-non-pronto`,
+`#classi-di-concorso`, `#modulo-introvabile`, `#dubbio-norma` **non erano linkate da nessuna
+superficie** (verificato prima della rimozione): l'unica ancora pubblica resta
+`#animatore-digitale`.
+
+**Registro.** `src/data/editableTexts.ts`: 30 → **22 chiavi** (16 FAQ + 6 offerta), 135 → 126
+righe, con la REGOLA DI CONTENUTO delle FAQ nel commento di testa. `src/data/faqPubbliche.ts`:
+48 → 51 righe (commento di testa riscritto: ordine di lettura, voce editoriale, ancore uscite).
+
+**Guardie.** `test:editor-testi` ✓ 22 chiavi / 8 FAQ / 6 chiavi riscritte, cablaggio e store ·
+`test:copy:pubblico` ✓ frammenti approvati verificati **nel registro** (buono Amazon da 10 Euro,
+account Gmail, credito Amazon, Carta del Docente, Invita un Collega, piano conveniente) e
+**nuovo invariante** «nessun rimando a funzioni non attive (CV, Archivista AI, Tabelle A/B)»
+accanto a «nessuna domanda difensiva (cancellazione / sicurezza pagamenti)» · `test:copy:etico` ✓ ·
+`test:checkout-promo` ✓ (ancora `#animatore-digitale` integra).
+
+**Nota di processo.** La prima stesura portava `scripts/test-editor-testi.ts` a **260 righe**:
+`test:architettura` l'ha segnalata come violazione **nuova** (`W-DIM` > 250). Il file è stato
+ricompatto a **238 righe** spostando le asserzioni di CONTENUTO della copy nella guardia di copy
+(`test:copy-pubblico.ts`, che è la guardia della copy pubblica), lasciando all'editor-testi la
+sola struttura del registro. Nessuna duplicazione: struttura in un test, contenuto nell'altro.
+
+**File toccati.** `src/data/editableTexts.ts`, `src/data/faqPubbliche.ts`,
+`src/pages/FAQPage.tsx` (solo il commento di testa: la pagina rende per chiave),
+`scripts/test-editor-testi.ts`, `scripts/test-copy-pubblico.ts`,
+`comunicazione/05_abbonamenti_pagamenti/checklist_pagamenti.md` (la dichiarazione di
+rinnovo/disdetta non vive più nelle FAQ: colonne piani + `AbbonamentoModal`),
+`LOCKED_MODULES.md`, `docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`.
+**NON toccato:** `src/pages/PrezziPage.tsx` 🔒 — la sua sezione «Domande frequenti» legge
+l'elenco condiviso, quindi i contenuti cambiano senza aprire il modulo; nessun file di
+dipartimento (`src/departments/**`, `src/modules/**`): nessuna lettura fuori perimetro.
+
+**Verifiche (29/09/2026).** `npm run typecheck` ✓ 0 errori · `npm run test:editor-testi` ✓ nessun
+problema (22 chiavi, 8 FAQ, 6 voci riscritte, cablaggio e store) · `npm run test:copy:etico` ✓ ·
+`npm run test:copy:pubblico` ✓ · `npm run test:checkout-promo` ✓ (ancora `#animatore-digitale`
+integra) · `npm run test:architettura` ✓ nessuna violazione nuova (535 file, 143 = baseline) ·
+`eslint` ✓ 0 sui file toccati · `npm run build` ✓ (1964 moduli, 46,06 s) · dev server in background
+su `http://localhost:5174` (Vite ready in 896 ms): `/faq` e `/prezzi` → **HTTP 200**, e il registro
+servito da Vite contiene «buono Amazon» e «account Gmail» e **non** contiene più `Archivista` né
+`cv-non-pronto`.
+
+
+
+### 26.30 DEV Toolbar — «Editor Testi Rapido» CONTESTUALE: solo i testi della vista attiva
+
+**Cosa cambia.** La sezione dell'editor non elenca più TUTTI i testi del registro
+raggruppati per area — le fisarmoniche «FAQ pubbliche · /faq e /prezzi» e «Offerta PRO ·
+homepage», generate dal `gruppiTesti()` con etichette cablate — ma mostra **solo le chiavi
+che la pagina attiva sta rendendo in questo momento**. L'header dichiara la rotta
+(`useLocation().pathname`) e il numero di testi presenti qui; l'elenco è piatto (una
+`<textarea>` per chiave, etichetta umana + chiave tecnica), senza fisarmoniche né voci di
+pagine che l'utente non ha davanti. Se la vista non rende nessuna chiave del registro il
+pannello lo dichiara in una riga («Nessun testo modificabile in questa vista»), ad esempio
+su `/dashboard`, `/contatti` o dentro le pagine dei dipartimenti.
+
+**Contestualità senza nessuna mappa rotta → chiavi.** Le chiavi le iscrive CHI LE LEGGE:
+`useTestiEditabili()` (le pagine) aggiunge al registro `src/lib/testiInPagina.ts` ogni
+chiave passata a `testo(chiave)` e riallinea il registro dopo ogni render (così conta anche
+una chiave letta solo a dati caricati); lo smontaggio del componente — cambio rotta, modale
+chiusa, sezione non più resa — la toglie dal registro. Il pannello legge l'elenco con il
+nuovo `useTestiInPagina()`, il cui `testo()` NON registra nulla: altrimenti l'editor
+conterebbe se stesso come vista e mostrerebbe sempre tutto. Nessuna tabella di
+corrispondenze da aggiornare quando nasce una superficie nuova: si cabla una chiave per
+`testo(...)` e quella compare da sola nel pannello della sua pagina.
+
+**Contratto dello store di viste (identico agli override).** Snapshot a riferimento
+STABILE per `useSyncExternalStore`, notifica agli ascoltatori **solo** al cambiamento reale
+(ri-render con le stesse chiavi = nessun render inutile del pannello mentre si digita),
+unione delle viste riportata all'ordine di REGISTRO (`CHIAVI_TESTO`), quindi la lista non
+si rimescola navigando. Registrazione idempotente sullo stesso insieme: sopravvive al
+doppio mount di StrictMode.
+
+**Live sync invariato.** Digitando, `imposta(chiave, valore)` scrive
+`localStorage: sr_simple_text_overrides` e notifica lo store condiviso: il testo cambia
+SUBITO dove è usato, senza reload. Nessuna modifica al percorso dei dati (hook dei testi,
+store degli override e registro sono gli stessi del §26.27).
+
+**File toccati.** Nuovo: `src/lib/testiInPagina.ts` (93). Nuovo test:
+`scripts/test-editor-testi-vista.ts` (145). Modificati: `src/hooks/useTestiEditabili.ts`
+(61 → 128: due API + registrazione delle chiavi lette), `src/components/EditorTestiRapido.tsx`
+(101 → 133: rotta attiva, elenco contestuale, stato vuoto; via `<details>` e `gruppiTesti()`),
+`src/data/editableTexts.ts` (126 → 100: rimossi `gruppiTesti()`, `ETICHETTE_GRUPPI`,
+`GruppoTesti`), `src/components/DevToolbar.tsx` (solo il commento sopra la sezione),
+`scripts/test-editor-testi.ts` (240 → 242: asserzioni di contestualità, niente più
+raggruppamenti), `package.json` (catena `test` + `test:editor-testi` con il secondo script).
+**NON toccato:** `src/pages/PrezziPage.tsx` 🔒 — la sua sezione FAQ continua a leggere il
+registro tramite l'hook e la registrazione della vista è trasparente per il consumatore;
+nessun file di dipartimento (`src/departments/**`, `src/modules/**`): non è un lavoro di
+dipartimento ma di dev tooling condiviso + dati/pagine pubbliche.
+
+**Guardie.** `npm run test:editor-testi` (catena di due script) copre registro, store, copy
+e cablaggio; il nuovo `scripts/test-editor-testi-vista.ts` ESEGUE il registro delle viste in
+Node: vista singola = solo le sue chiavi in ordine di registro, due viste = unione,
+smontaggio = uscita delle chiavi, snapshot a riferimento stabile, notifiche solo al
+cambiamento reale, StrictMode senza duplicati; più le asserzioni di cablaggio (hook delle
+pagine che registra, hook dell'editor che NON registra, pannello senza `<details>`/elenchi
+di altre pagine, registro senza raggruppamenti cablati).
+
+**Nota di processo.** La prima stesura portava `scripts/test-editor-testi.ts` a **252
+righe**: `test:architettura` l'ha segnalata come violazione **nuova** (`W-DIM` > 250), come
+già successo in §26.29. Il file è stato ricompatto a **242 righe** e la verifica del
+registro delle viste è finita in un file suo (`test-editor-testi-vista.ts`, 145 righe),
+stessa policy: un test per responsabilità, nessuna duplicazione.
+
+**Verifiche (29/09/2026).** `npm run typecheck` ✓ 0 errori · `npm run test:editor-testi` ✓
+entrambi gli script (vecchio: nessun problema, 40 asserzioni; nuovo: 19 asserzioni, nessun
+problema) · `npm run test:copy:etico` ✓ · `npm run test:copy:pubblico` ✓ ·
+`npm run test:architettura` ✓ nessuna violazione nuova (537 file — due in più: il modulo e
+il test nuovi — 143 = baseline) · `eslint` ✓ 0 sui 7 file toccati · `npm run build` ✓
+(15,52 s) · dev server in background su `http://localhost:5174` (**Vite ready in 763 ms**):
+`/`, `/faq` e `/prezzi` → **HTTP 200**; i moduli serviti contengono `useTestiInPagina` e
+`chiavi.map` e **non** contengono `<details>` né `gruppiTesti` (pannello contestuale
+effettivamente servito). **Fallimenti pre-esistenti, fuori perimetro:** la catena `npm test`
+si ferma in `&&` a `test:copy:schermo` — «nessun riquadro ridondante fra il Radar Live e
+l'offerta PRO» pretende il commento `RIMOSSO (direttiva cliente)` in
+`src/departments/radar/FlightBoardInterpelli.tsx` (modificato dalle sessioni precedenti, mai
+toccato qui); eseguiti a parte, `test:live-board-scala` ✓ e `test:checkout-promo` ✓, mentre
+`test:live-board` (3), `test:nome-istituto` (2) e `test:urgenza` (1) falliscono su attese di
+board/nomi/scadenze mai sfiorate da questa modifica (debito del working tree).
+
+### 26.31 DEV Toolbar — «Editor Testi Rapido» UNIVERSALE: si scandisce il DOM, non si elencano chiavi
+
+**Cosa cambia.** L'editor non dipende più dal dizionario dei testi: **scandisce il DOM** della
+pagina attiva e mostra **una casella per ogni blocco di testo che c'è davvero** — titoli,
+paragrafi, voci di elenco, celle, pulsanti, didascalie — con l'etichetta umana del punto
+(«sezione · Paragrafo»), il tag, la rotta attiva e il numero di testi nell'header («N qui»).
+Nessun cablaggio nei componenti, nessuna chiave da aggiungere a `editableTexts.ts`, nessun
+elenco di pagine: cambiando rotta, aprendo una modale o arrivando i dati la lista si aggiorna
+da sé; se la vista non ha testi si legge una riga esplicita («Nessun testo rilevato in questa
+vista»). Il pannello non elenca più le chiavi del registro: le legge solo per **azzerarle**.
+
+**Scrittura immediata e persistente.** Digitando nella casella il testo cambia **subito** dove
+è usato e l'override va in `localStorage: sr_dom_text_overrides` (`chiave → { t, v }`: `t` =
+default del codice, conservato per il reset; `v` = testo scritto a mano). Svuotare la casella
+(o riscrivere il default) toglie l'override. La scansione gira **sempre** in DEV — la monta la
+DEV Toolbar (**non** il pannello, che può stare chiuso): dopo un reload (localStorage) e dopo
+ogni ri-renderizzazione di React (che rimette la copy del codice) il testo scritto a mano torna
+a schermo. L'osservatore è un `MutationObserver` sul `body` con attesa di 60 ms; le scritture
+dell'editor non riaprono il ciclo (la seconda scansione non cambia nulla ⇒ nessuna notifica).
+
+**Identità del testo, non posizione nel DOM.** `chiaveTestoDom(tag, testo, occorrenza)`
+(`p#1a2b3c#0`) nasce da tag + impronta del testo di default + numero di occorrenza: resta
+stabile fra una scansione, un reload e un ri-render, quindi l'override non si perde quando React
+ricrea i nodi; due testi identici restano occorrenze distinte (`#0`, `#1`) e si scrive solo
+quella scelta. Un `WeakMap` ricorda il testo ORIGINALE delle occorrenze toccate: al reset i nodi
+tornano alla copy del codice all'istante, senza reload.
+
+**Elenco pulito.** Si guardano solo i NODI DI TESTO con almeno 2 lettere (fuori numeri, «€ 9»,
+simboli e spazi) e si saltano i contenitori tecnici (`script`, `style`, `svg`, `code`,
+`textarea`…) e i pannelli DEV (`data-sr-dev-toolbar` o «DevToolbar» in `id`/`aria-label`):
+l'editor non elenca — e non riscrive — se stesso. La riscrittura conserva gli spazi di bordo del
+JSX, così i testi inline non attaccano le parole. «Reset testi (default)» azzera **due**
+livelli: gli override sul DOM (`sr_dom_text_overrides`) e quelli del registro
+(`sr_simple_text_overrides`, §26.27/§26.30), così non resta nessun testo modificato fuori vista.
+
+**File toccati.** Nuovi: `src/lib/testiDom.ts` (141 righe), `src/lib/testiDomNodi.ts` (95),
+`src/lib/testiDomRegole.ts` (69), `src/lib/testiDomOverride.ts` (115),
+`src/hooks/useTestiDom.ts` (100), `scripts/lib/dom-finto.ts` (94, DOM finto riutilizzabile dai
+test Node), `scripts/test-editor-testi-dom.ts` (191), `scripts/test-editor-testi-dom-cablaggio.ts`
+Riscritto: `src/components/EditorTestiRapido.tsx` (133 → 145: elenco dal DOM, badge «N qui»
+/ «N modificati», stato vuoto, reset a due livelli, marchio `data-sr-dev-toolbar`). Modificati:
+`src/components/DevToolbar.tsx` (248: monta `useScansioneTestiDom()` **sempre**, con due righe
+bianche in meno per non superare il limite), `scripts/test-editor-testi.ts` (242 → 243),
+`scripts/test-editor-testi-vista.ts` (145 → 152: pannello cablato su `useTestiDomInPagina`),
+`package.json` (`test:editor-testi` = quattro script). **NON toccati:** `src/pages/PrezziPage.tsx`
+🔒, nessun file di dipartimento (`src/departments/**`, `src/modules/**`): è dev tooling condiviso
+più `lib/` / `hooks/` / `components/` e i test.
+
+**Guardie.** `npm run test:editor-testi` = 4 script: registro/store/copy (invariato), vista attiva
+(invariato), **scansione del DOM** (27 asserzioni: rilevazione e rami ignorati, chiave stabile,
+occorrenze identiche, scrittura sul nodo + `{ t, v }` nello storage, spazi di bordo, re-render di
+React che non cancella l'override, ricarica che rilegge lo storage, reset che rimette i default e
+svuota lo store) e **cablaggio** (15 asserzioni: moduli puri senza React, hook con
+`MutationObserver` su `document.body`, DEV Toolbar che monta la scansione sempre, pannello con una
+casella per testo + Reset).
+
+**Verifiche (29/09/2026).** `npm run typecheck` ✓ 0 errori · `npm run test:editor-testi` ✓ quattro
+script, tutte le asserzioni ✓ · `npm run test:copy:etico` ✓ nessun problema ·
+`npm run test:architettura` ✓ nessuna violazione nuova (**545 file** analizzati, 143 = baseline; i
+moduli nuovi stanno fra 69 e 191 righe) · `npm run lint` ✓ 0 sui 12 file toccati · `npm run build`
+✓ (**28,95 s**, 1.970 moduli) · dev server in background su `http://localhost:5174` (**Vite ready
+in 595 ms**, PID 35796): `/`, `/faq` e `/prezzi` → **HTTP 200**; i moduli serviti contengono
+`useTestiDomInPagina` + `testi.map` e **non** contengono più `chiavi.map`, e `lib/testiDomNodi.ts`
+è servito con la regola dei pannelli DEV. **Debito pre-esistente, fuori perimetro:** `npm test` si
+ferma in `&&` a `test:copy:schermo` — 1 errore in «nessun riquadro ridondante fra il Radar Live e
+l'offerta PRO» (riguarda la landing + `src/departments/radar/`, mai toccati qui) — come già
+annotato in §26.30, insieme a `test:live-board` (3), `test:nome-istituto` (2) e `test:urgenza` (1).
+
+**Nota di processo (W-DIM, due volte).** La prima stesura di `src/lib/testiDom.ts` era di **294
+righe** e `scripts/test-editor-testi-dom.ts` di **267**: `test:architettura` le ha segnalate come
+violazioni **nuove** (`W-DIM` > 250), esattamente come in §26.29 e §26.30. La scansione è stata
+quindi divisa in **quattro** moduli per responsabilità (regole/nomi → lettura del DOM → elenco +
+override → store) e i costruttori del DOM finto sono finiti in `scripts/lib/dom-finto.ts`, riusabili
+da altri test. Nota operativa: una `Remove-Item` rimasta **in coda nella shell** ha cancellato il
+file appena riscritto — il contenuto è stato ricreato e riverificato per intero prima di chiudere.
+
+### 26.32 Tema autonomo «Intelligenza Artificiale» nel motore editoriale Notizie
+
+**Nota di sessione (01/10/2026).** L'intelligenza artificiale era una parola dentro
+*Innovazione Digitale*: una notizia sull'IA a scuola finiva nel calderone della innovazione
+digitale (PNSD, coding, robotica) e non aveva né badge, né peso, né copy propri. Ora è una
+**categoria autonoma** dell'allow-list. Integra §26.11 senza toccarne gli invarianti: nulla è
+stato rimosso dai temi storici, nessun peso esistente è cambiato.
+
+| # | Intervento | Dettaglio |
+|---|---|---|
+| 1 | **Nuovo blocco `standardTemiIA.ts`** | Tema `Intelligenza Artificiale`: `area: 'Innovazione didattica e strumenti'`, `autosufficiente: false` (serve un contesto di personale scolastico), `fattoConcreto: true`, `peso: 76`, `parole: PAROLE_IA`; riunito in `TEMI_OPERATIVI` da `editorialStandard.ts` |
+| 2 | **Lessico dedicato** | `lessicoScuola.ts`: nuovo blocco `PAROLE_IA` (17 voci: intelligenza artificiale, IA generativa, machine learning, deep learning, chatbot, LLM, ChatGPT…) e sigla `IA` in `GLOSSARIO_ACRONIMI` (spiegata alla prima menzione, anche nel titolo: «IA (Intelligenza Artificiale) generativa…»); le voci IA sono state **rimosse da `Innovazione Digitale`** |
+| 3 | **Ordine = priorità, senza regressioni** | `TEMI_OPERATIVI = [...TEMI_PERSONALE, ...TEMI_IA, ...TEMI_DIDATTICA]`: l'IA non ruba il match ai temi storici (una «Formazione sull'IA: corsi per i docenti» resta *Formazione*, un «entro il …» resta *Scadenze*, come prescrive `standardTemiPersonale.ts`) ma batte *Innovazione Digitale*, *Didattica* e *Pedagogia*, cioè i temi da cui si separa |
+| 4 | **Scoring e gate** | `PESI_CATEGORIA['Intelligenza Artificiale'] = 76` (sopra *Innovazione Digitale* = 72) e categoria in `CATEGORIE_CON_FATTO_CONCRETO`: senza **scadenza reale** o **canale ufficiale di domanda/candidatura** `valutaRilevanza` respinge con motivo «Tema Intelligenza Artificiale senza fatto concreto» (mai comunicati o convegni sull'IA) |
+| 5 | **Copy e prompt LLM** | `articoloCopy.ts` (all'epoca dentro `relevanceEngine.ts`): blocco `ARTICOLO_ALTRE['Intelligenza Artificiale']` (fatto/chi/pratica/come/portale) e liste `CATEGORIA`/`ZERO RUMORE` del `promptFiltroLLM` aggiornate col nuovo tema |
+
+**Guardie.** `scripts/test-notizie-editoriale.ts` ha una sezione nuova («TEMA AUTONOMO:
+intelligenza artificiale» + «COPY IA»): allow-list a **20 temi**, macro-area dichiarata,
+`autosufficiente: false`, `fattoConcreto: true`, peso 76, lessico IA riconosciuto dal tema,
+IA respinta senza scadenza né canale (con motivo tracciabile) e ammessa con scadenza
+(`2026-09-30`) o con canale `Unica`; più due casi di non-regressione (Formazione resta
+*Formazione*, «entro il» resta *Scadenze*) e il copy dedicato (sigla spiegata, nessun fluff,
+un solo URL).
+
+**Verifiche (01/10/2026).** `npm run typecheck` ✓ 0 errori · `npm run test:notizie-editoriale`
+✓ 161 asserzioni, 0 fallimenti · `npm run test:notizie-nazionale` ✓ · `npm run
+test:architettura` ✓ nessuna violazione nuova (**546 file**, 143 = baseline; `standardTemiIA`
+è di 36 righe, `lessicoScuola` sale a 243) · `npm run build` ✓ (**10,00 s**) · `npm run lint` ✓
+0 problemi sui 6 file toccati (`relevanceEngine`, `editorialStandard`, `lessicoScuola`,
+`standardTemiIA`, `standardTemiDidattica`, `scripts/test-notizie-editoriale`).
+
+**Debito pre-esistente, fuori perimetro.** `npm run test:notizie-rate` e `npm run
+test:notizie-feed` sono rossi per la **garanzia settimanale**: l'archivio non ha articoli
+negli ultimi 7 giorni (il più recente è del 24/09/2026, orologio al 01/10/2026). Non dipende
+da questa modifica — `data/notizieIngestite.ts` non è stato toccato (ultima scrittura
+28/09/2026) — e va chiuso con un giro di ingestione.
+
+### 26.33 Motore editoriale Notizie: sotto-moduli SRP + voce unica (`editorialVoice`)
+
+**Nota di sessione (01/10/2026, secondo intervento).** `relevanceEngine.ts` era arrivato a
+**1.723 righe**: gate anti-burocrazia, link, copy, cadenza, prompt LLM e generazione
+dell'articolo nello stesso file, e le regole di stile ridette a mano dentro il prompt di
+scrittura. Modificare una regola significava leggere mille righe di contesto estraneo.
+
+**1. Split del motore (nessun cambio di comportamento).** Il file scende a **815 righe** e
+diventa l'**orchestratore** (valutazione, categoria, titolo, formato editoriale, gate finale)
+che **ri-esporta** la superficie pubblica: chi importava da `relevanceEngine.ts` continua a
+farlo senza toccare una riga (`valutaRilevanza`, `titoloAzione`, `generaArticoloEditoriale`,
+`promptFiltroLLM`, `promptScritturaArticolo`, `classificaLink`, `espandiAcronimi`…). Nuovi
+sotto-moduli, tutti **sotto le 300 righe**:
+
+| Modulo | Righe | Ruolo |
+|---|---:|---|
+| `services/valutazioneTipi.ts` | 23 | Tipi della valutazione (`ValutazioneNotizia`, `VoceInValutazione`) |
+| `services/editorialVoice.ts` | 137 | **Voce unica** «colto ma sciolto» |
+| `services/cadenzaArticoli.ts` | 123 | Cadenza e tetti (lookback 15/60 gg, `MAX_ARTICOLI_SETTIMANA = 3`, `MAX_ARTICOLI_FINESTRA = 6`) |
+| `services/fontiUfficiali.ts` | 174 | `èFonteCanonica`, `èFonteMim`, `èFonteNazionale`, `èLinkPdf`, `validaUrlDeepLink` |
+| `services/articoloCopy.ts` | 184 | Copy per categoria (`ARTICOLO`, `IMPATTO_COPY`) |
+| `services/articoloEditoriale.ts` | 227 | `generaArticoloEditoriale`, `linkDomandaUfficiale`, `richiedePresentazioneDomanda` |
+| `services/linkUfficiale.ts` | 240 | `classificaLink`, `etichettaLinkFonte`, `linkDirettoUfficiale`, `linkNonValidiInHtml`, `linkVietatiInHtml` |
+| `services/promptEditoriale.ts` | 66 | `promptFiltroLLM`, `promptScritturaArticolo` |
+
+**2. Voce unica (`editorialVoice.ts`).** Un solo posto decide COME si scrive:
+`NOME_VOCE = 'colto ma sciolto'`; `REGOLE_VOCE` con 10 regole vincolanti (ognuna con `id`:
+`voce`, **`prima_menzione`**, `fatti`, `zero_burocratese`, `zero_press`, `zero_politica`,
+`pratico`, `zero_fluff`, `link_unico`, `nessuna_cta`); `bloccoVoceEditoriale()` (le stesse
+regole pronte per i prompt, una riga per regola); `APERTURE_VIETATE` /
+`apertureVietateTesto()`; `espandiAcronimi()`.
+La regola **prima menzione** è quella richiesta dal cliente ed è ora vincolante: ogni sigla,
+acronimo o termine tecnico è **spiegato tra parentesi alla PRIMA occorrenza** (es. «GPS
+(Graduatorie Provinciali per le Supplenze)», «SPID (Sistema Pubblico di Identità
+Digitale)»), poi si usa la sigla senza ripetere la spiegazione — glossario in
+`GLOSSARIO_ACRONIMI` (`lessicoScuola.ts`), applicato da `titoloAzione` e da
+`generaArticoloEditoriale`.
+`promptScritturaArticolo` NON ridetta più le regole di stile: le importa e le presenta come
+sezione `VOCE EDITORIALE (colto ma sciolto)`. Regole di prodotto aggiornate in
+`docs/BLOG_EDITORIAL_GUIDELINES.md` (nuovo **§4-bis** + tabella «Dove è implementato»).
+
+**3. Copy IA dedicato (contratto del test).** La sezione «COPY IA» della suite pretende che
+l'articolo di categoria *Intelligenza Artificiale* usi il **copy dedicato** e non il fallback
+generico *Scuole*. La voce esisteva già in `articoloCopy.ts`, ma il `fatto` non conteneva la
+frase contrattuale: è stato riscritto in «**L'intelligenza artificiale entra a scuola** con
+percorsi, strumenti e indicazioni per chi insegna: è online l'avviso». Nessun ramo speciale in
+`generaArticoloEditoriale`: il copy resta un dato del modulo di copy, così l'articolo continua a
+passare dai gate (link diretto, acronimi alla prima menzione, zero fluff, bullet «In sintesi»).
+
+**Guardie.** `scripts/test-notizie-editoriale.ts`, sezione nuova «VOCE EDITORIALE
+centralizzata» (9 asserzioni): voce dichiarata, `id` univoci, ogni regola testualmente
+presente nel blocco dei prompt, blocco dentro `promptScritturaArticolo`, aperture vietate
+citate, allow-list dei 20 temi integra nel filtro, nessuna regola di stile ridetta a mano.
+
+**Verifiche (01/10/2026).** `npm run typecheck` ✓ 0 errori · `npm run test:notizie-editoriale`
+✓ **tutto verde** (il debito dati di §26.32 è stato chiuso: vedi sotto) · `npm run
+test:notizie-nazionale` ✓ pulito · `npm run test:architettura` ✓ nessuna violazione nuova
+(**554 file**, 143 = baseline: `relevanceEngine.ts` resta in baseline perché ancora > 300
+righe, tutti i sotto-moduli nuovi sono sotto la soglia) · `npm run build` ✓ (**29,17 s**) ·
+`npm run lint` ✓ 0 problemi sui file toccati.
+
+**Debito dati: CHIUSO (01/10/2026).** Le due voci d'archivio senza link ufficiale di §26.32
+(percorso di formazione MIM, polizza sanitaria) sono state rigenerate in-place con
+`npm run notizie:ripara-archivio` (script **offline**, nessuna rete): 5 voci esaminate, **5
+pubblicabili, 0 rimosse**, copy e link riscritti con le regole correnti in
+`src/departments/notizie/data/notizieIngestite.ts`. `npm run test:notizie-editoriale` è ora
+**tutto verde (0 fallimenti)**.
+
+**Debito residuo, fuori perimetro (aggiornamento al 01/10/2026).** `npm run
+test:notizie-feed` e `npm run test:notizie-rate` restano rossi per la **garanzia
+settimanale**: nessun articolo negli ultimi 7 giorni — l'archivio non si aggiorna dal
+**21/09/2026** (orologio al 01/10/2026). Non dipende da questo intervento e si chiude con un
+giro di ingestione (`npm run scrape:notizie`), che richiede rete.
+
+**File toccati.** `src/departments/notizie/services/`: `editorialVoice.ts`,
+`promptEditoriale.ts`, `articoloEditoriale.ts`, `articoloCopy.ts`, `linkUfficiale.ts`,
+`fontiUfficiali.ts`, `cadenzaArticoli.ts`, `valutazioneTipi.ts` (nuovi) e
+`relevanceEngine.ts` (orchestratore + ri-esportazioni) e
+`src/departments/notizie/data/notizieIngestite.ts` (archivio rigenerato con
+`npm run notizie:ripara-archivio`: 5 voci, 0 rimosse);
+`scripts/test-notizie-editoriale.ts` (sezione «VOCE EDITORIALE centralizzata»);
+`docs/BLOG_EDITORIAL_GUIDELINES.md`, `docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`,
+`docs/STRUCTURAL_AUDIT.md`. Nessun file di altri dipartimenti: la modifica resta nel
+perimetro Notizie più gli artefatti di documentazione previsti dalla regola di isolamento.
+
+
+
+### 26.34 «Radar Live»: la bacheca legge a PAGINE, non fino al tetto di PostgREST
+
+**Il problema.** §26.25 (Fix 3) aveva messo un numero — `LIMITE_RIGHE_LETTE = 1.000` —
+dove serviva una lettura completa. Quel numero **non è una scala di prodotto**: è il
+`max-rows` con cui PostgREST chiude una singola risposta. Con l'ordinamento per
+pubblicazione decrescente il taglio cade sulle righe **più vecchie**, cioè proprio su
+quelle che il lettore non sospetta di perdere — il tabellone sembra pieno. Il 30/09 la
+misura (623 righe in tabella, 69 presentabili) stava sotto il tetto **per caso**: una
+sola ingestione di massa avrebbe troncato la bacheca senza un sintomo visibile.
+
+**Fix — lettura a pagine.** Nuovo modulo puro `radar/flightBoard/letturaBoard.ts`
+(`leggiTutteLePagine`, `intervalloPagina`; 138 righe): chiede pagine contigue di
+`RIGHE_PER_PAGINA_QUERY = 1.000` righe con `.range(da, a)` e continua finché il
+tabellone non copre tutto. Sei regole, tutte coperte dai test:
+
+1. la fetta la fa **PostgREST** (`.range`), mai un'affettatura lato client;
+2. l'offset avanza di quante righe il server ha **davvero consegnato**, non di quante
+   ne sono state chieste: con un `max-rows` server più basso (p.es. 500) avanzare di
+   1.000 salterebbe le righe in mezzo — di nuovo un taglio muto, solo più difficile da
+   vedere;
+3. la sentinella di fine è una pagina **vuota**, non una pagina «corta» (una pagina
+   corta è la normalità di un server che pagina meno di noi); quando il conteggio
+   esatto è noto (`attese`, dal `head: true`) la lettura si ferma appena lo raggiunge,
+   senza richieste di troppo;
+4. le righe già viste si scartano per `chiave` (`id`) e il numero dei doppioni è
+   dichiarato: un ordinamento non totalizzabile lato database può ripetere una riga, e
+   il tabellone non deve mostrarla due volte;
+5. `MAX_PAGINE_LETTURA = 50` è una **guardia anti-anello**, non un tetto di prodotto: se
+   scatta, la lettura restituisce ciò che ha e dichiara `esaustiva: false`;
+6. se una pagina non aggiunge righe nuove (server che ignora l'offset) ci si ferma e lo
+   si dichiara: mai un ciclo infinito per una risposta che non avanza.
+
+**Cablaggio (`FlightBoardInterpelli`, 224 righe).** Il componente conta gli avvisi
+attivi (`count: 'exact', head: true`) e passa il numero come `attese`; ogni pagina
+ordina `created_at DESC` → `expiration_date ASC` (`nullsFirst: false`) → **`id` per
+ultimo**: senza un criterio finale univoco l'ordinamento non è totalizzabile e la
+paginazione può ripetere o saltare righe (è la ragione dell'`.order('id')`, non un
+vezzo). Errori e letture parziali finiscono in `console.warn` (`[flight-board] …`), mai
+muti; se la prima lettura fallisce del tutto si resta sullo stato precedente (mai una
+vetrina vuota per un errore di rete). `metricaBoard.ts` (60 righe) **non contiene più un
+tetto**: le pagine si contano sulle righe davvero in bacheca e il `+` resta solo per il
+caso «il database è cresciuto fra il conteggio e la lettura».
+
+**Split del componente (limite delle 300 righe).** Il vecchio `flightBoard/rigaBoard.tsx`
+conteneva rendering **e** dati derivati: ora sono due file con un solo compito —
+`flightBoard/rigaBoardDati.ts` (87 righe: tipologia, urgenza, date brevi; funzioni pure)
+e `flightBoard/components/RigaBoard.tsx` (182 righe: `RigaBoard`, `RigheRiempimento`).
+Il rendering è rimasto **identico**: il confronto col JSX precedente è stato fatto
+**prima** di cancellare il vecchio file — nessuna modifica visiva, solo struttura.
+`diagnosticaBoard.ts` (sonda diagnostica, 242 righe) è ora tipizzato con
+`SupabaseClient`: sta nel perimetro `E-DOM` e non importa il client per conto suo.
+
+**Allineamento §26.22 (debito trovato per strada).** La banda `sconosciuto` di
+`src/lib/urgency.ts` rendeva `bg-amber-500 text-white`, mentre la tabella di §26.22 e la
+guardia `npm run test:urgenza` prescrivono **slate chiaro**: la guardia era rossa e
+fermava la catena. Ora `bg-slate-100 text-slate-600` — neutro, coerente col significato
+(«la data non c'è, il colore non deve allarmare»). Nessun'altra banda toccata, nessun
+effetto fuori dal Radar.
+
+
+
+**Guardie nuove.** `flightBoard/__tests__/letturaBoard.test.ts` (170 righe: lettore puro
+con client finto — pagina vuota = fine, pagina corta ≠ fine, offset che avanza di ciò che
+il server consegna, doppioni scartati, errore a metà che tiene il letto e dichiara la
+verità, guardia anti-anello) e `flightBoard/__tests__/letturaBoardCablaggio.test.ts` (102
+righe: il componente non contiene più `.limit(`, nessun riferimento a
+`LIMITE_RIGHE_LETTE` — una sola sorgente di verità —, `id` per ultimo nell'`.order()`,
+errori di lettura dichiarati in console, la metrica non ha più un tetto). Entrambe sono
+in `npm test`; `npm run test:board:lettura` le esegue da sole. Sonda di sola lettura sui
+dati reali: `npm run board:verifica` (`__tests__/letturaBoardLive.ts`, 162 righe). La
+diagnosi manuale — risponde a «perché la bacheca mostra quello che mostra» sul grezzo
+della tabella, legge a pagine come il prodotto — è `npm run board:diag`
+(`__tests__/diagnosticaBoard.ts`).
+
+**Verifiche (02/10/2026) — misurate, non dedotte.** `npm run typecheck` ✓ (uscita 0) ·
+`npm run test:architettura` ✓ (uscita 0, **0 violazioni nuove**: 560 file, 142 in
+baseline — l'entry `E-DIM` di `FlightBoardInterpelli.tsx` è uscita perché il file,
+spezzato, è sceso a 224 righe; resta il solo `E-ROOT`, il componente ancora nella radice
+del dipartimento) · `npm run build` ✓ (uscita 0) · `eslint` ✓ (uscita 0) sui 10 file
+toccati (componente, `letturaBoard`, `RigaBoard`, `rigaBoardDati`, `metricaBoard`,
+`diagnosticaBoard`, i tre test nuovi, `urgency`). La catena `npm test` (58 passi) è stata
+eseguita **passo per passo**, con l'uscita di ognuno: passi **1–55 ✓** — dentro, i passi
+che contano qui: 44 `metricaBoard`, 45 `letturaBoard`, 46 `letturaBoardCablaggio`,
+47 `filtroAttivi`, 48 `test-urgenza` (che **ora è verde**), 49–55 (`scuola-da-riga`,
+coupon, checkout, scraper) — e passo 57 `test-live-board-scala` ✓. Rossi **due** passi,
+fuori da questa modifica: 56 `scripts/test-live-board.ts` (3 assert) e 58
+`scripts/test-nome-istituto.ts` (2 assert). La catena `npm test` si ferma al primo rosso,
+quindi 57 e 58 sono stati verificati singolarmente. Le due sonde **live** (`npm run
+board:verifica`, `npm run board:diag`) restano fuori da questa verifica: leggono il
+database vero e chiedono le chiavi, quindi non entrano nella catena.
+
+**Debito dichiarato, fuori perimetro (non chiuso qui).** Restano rossi due script di un
+**cantiere diverso**: `scripts/test-live-board.ts` (3 asserzioni: quali righe sono
+presentabili, «nessuna etichetta di posto o codice in bacheca», elenchi di codici classe
+scartati) e `scripts/test-nome-istituto.ts` (2: titolo-dump fuori vetrina, ente emittente
+mai un codice di provincia). Esercitano `src/lib/liveBoard.ts` + `src/lib/nomeIstituto.ts`
+(quest'ultimo nuovo e non tracciato): è il cantiere «nomi istituto in vetrina», non il
+troncamento. **Prova dell'indipendenza (due lati).** (a) `git diff HEAD --
+scripts/test-live-board.ts` mostra le tre asserzioni rosse come righe **aggiunte** dalla
+stessa modifica in corso, insieme alle righe finte che le alimentano (`etichetta-posto`,
+`client-codici`, `posto-montessori`, `solo-codici`): il gate `nomeIstituto` è scritto ma
+non ancora cablato in `preparaRigheBoard` — si sta guardando un lavoro a metà di un altro
+cantiere, non una regressione. (b) Le due superfici non si toccano: nessun file di
+`src/lib/**` importa `letturaBoard`/`metricaBoard`/`rigaBoardDati`, e il grafo di
+`src/lib/liveBoard.ts` (`scadenza`, `matchingEngine`, `school-lookup`, `nomeIstituto`,
+`alertInterpello`) non contiene nulla di `flightBoard/`. Nota di metodo: il controllo va
+fatto sul filesystem (`Get-ChildItem | Select-String`), non con `git grep`, perché i file
+di questo cambiamento sono **non tracciati** e `git grep` non li vede. Osservato e non
+toccato perché su un'altra superficie: `src/contexts/app/useInterpelliFeed.ts` legge
+ancora con `.limit(100)` (feed dell'app, accesso da `AppContext`; non è il tabellone
+pubblico).
+
+**File toccati.** `src/departments/radar/flightBoard/`: `letturaBoard.ts` (nuovo),
+`components/RigaBoard.tsx` (nuovo), `rigaBoardDati.ts` (nuovo), `rigaBoard.tsx`
+(**cancellato**), `metricaBoard.ts`, `__tests__/letturaBoard.test.ts` (nuovo),
+`__tests__/letturaBoardCablaggio.test.ts` (nuovo), `__tests__/letturaBoardLive.ts`
+(nuovo), `__tests__/diagnosticaBoard.ts`; `src/departments/radar/FlightBoardInterpelli.tsx`;
+`src/lib/urgency.ts` (condiviso essenziale: allineamento §26.22); `package.json` (`test`,
+`test:board:lettura`, `board:diag`, `board:verifica`), `scripts/architettura-baseline.json`,
+`scripts/diag-flightboard.ts` (**cancellato**: replicava a mano la vecchia query con
+`.limit(500)`; la diagnosi vive ora in `__tests__/diagnosticaBoard.ts`, che legge a pagine
+e sta DENTRO il dipartimento, `npm run board:diag`),
+`docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`. Nessun file di altri dipartimenti:
+perimetro Radar più i condivisi essenziali (`src/lib/**`).

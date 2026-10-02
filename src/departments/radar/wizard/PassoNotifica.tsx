@@ -13,11 +13,17 @@
  * di personale prima che l'utente abbia visto il valore del Radar. I dati
  * viaggiano nella bozza di registrazione: al form finale non si riscrivono.
  *
+ * In testa al passo il blocco di TRASPARENZA (`SezioneTrasparenza`) dichiara, con
+ * i dati reali appena scelti, che cosa cerca il Radar e che cosa arriva: avviso
+ * Telegram immediato, una sola email al giorno, al massimo `MAX_INVII_OPPORTUNITA`
+ * volte la stessa opportunità e sempre con il link all'annuncio ufficiale.
+ *
  * Presentazione pura: valori e handler arrivano dal contenitore.
  */
 import { AlertTriangle, Check, Loader2, Mail, Send, Zap } from 'lucide-react';
 import { BloccoAnagrafica, type DatiAnagrafica } from '@/components/BloccoAnagrafica';
 import { IconaGoogle } from '@/components/auth/IconaGoogle';
+import { SezioneTrasparenza } from './components/SezioneTrasparenza';
 
 interface PassoNotificaProps {
   notifica: {
@@ -41,6 +47,20 @@ interface PassoNotificaProps {
     dati: DatiAnagrafica;
     onChange: (patch: Partial<DatiAnagrafica>) => void;
   };
+  /**
+   * Riepilogo di trasparenza: i dati REALI scelti nei passi precedenti (mai un
+   * esempio), per dichiarare in chiaro cosa cerca il Radar e cosa arriverà.
+   */
+  trasparenza: {
+    /** Codici provincia scelti al Passo 1. */
+    provinceCodici: string[];
+    /** Codici classe di concorso scelti al Passo 3. */
+    classiCodici: string[];
+    /** Competenze e laboratori extra scelti dai tag del Passo 3. */
+    materieId: string[];
+    /** Parole chiave libere scritte dall'utente nel Passo 3. */
+    materieCustom: string[];
+  };
   /** Registrazione rapida con Google: mostrata solo ai Guest (fine del wizard). */
   rapida?: {
     ospite: boolean;
@@ -49,7 +69,13 @@ interface PassoNotificaProps {
   };
 }
 
-export function PassoNotifica({ notifica, piano, anagrafica, rapida }: PassoNotificaProps) {
+export function PassoNotifica({
+  notifica,
+  piano,
+  anagrafica,
+  trasparenza,
+  rapida,
+}: PassoNotificaProps) {
   const {
     telegramCollegato,
     telegramDeepLink,
@@ -67,6 +93,9 @@ export function PassoNotifica({ notifica, piano, anagrafica, rapida }: PassoNoti
       <p className="mt-0.5 text-xs text-primary-600">
         Telegram consegna l&apos;avviso appena viene pubblicato; l&apos;email un riepilogo al giorno.
       </p>
+
+      {/* TRASPARENZA: cosa cerca il Radar e cosa arriva, con i dati REALI del profilo. */}
+      <SezioneTrasparenza selezione={trasparenza} />
 
       {/* TELEGRAM: canale immediato, il più potente che abbiamo. */}
       <div className="mt-2.5 rounded-xl border-2 border-primary-300 bg-primary-50 p-3">

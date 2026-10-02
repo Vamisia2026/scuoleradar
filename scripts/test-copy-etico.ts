@@ -8,6 +8,10 @@
  * (registrazione, onboarding, wizard, anagrafica) NON usino placeholder con esempi
  * fittizi o nomi di persona.
  *
+ * Le verifiche di LAYOUT del primo schermo (hero su due righe, box «Prova il Radar»
+ * allineato, niente riquadri ridondanti fra bacheca e offerta PRO) vivono in
+ * `test-copy-primo-schermo.ts`: questo gate resta sotto le 250 righe strutturali.
+ *
  * Uso: npm run test:copy:etico (incluso in `npm test`)
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -145,6 +149,8 @@ console.log('\n— Landing: Radar Live in testa, offerta PRO senza toni da telev
  */
 const superficiLanding = ['src/pages/LandingPage.tsx', ...sorgenti('src/components/landing')];
 const offertaPro = leggi('src/components/landing/LandingOffertaPro.tsx');
+/** Registro dei testi modificabili: la vetrina PRO rende i tre blocchi per chiave. */
+const registroTesti = leggi('src/data/editableTexts.ts');
 const heroLanding = leggi('src/components/landing/LandingHero.tsx');
 check(
   'landing: niente «gratis/gratuito» né parole di pagamento (televendita)',
@@ -161,22 +167,29 @@ check(
   [],
   [/rinnovo/i, /disdici/i, /torni su Base/i, /quota annuale/i, /€/, /PREZZO_PRO/].filter((r) => r.test(offertaPro)),
 );
+/**
+ * COPY AUTORIZZATA DAL CLIENTE (28/09/2026): la frase esatta e pulita richiesta —
+ * «Siamo così sicuri… passerai automaticamente a un account Base.» — sostituisce la
+ * vecchia formula difensiva. La guardia ora pretende **proprio quella** copy (e
+ * l'assenza delle vie d'uscita), non più l'assenza della formula.
+ */
 check(
-  'landing: offerta PRO diretta e sicura, senza copy difensivo e senza vie d’uscita',
+  'landing: offerta PRO con la copy esatta autorizzata e senza vie d’uscita',
   true,
-  offertaPro.includes('Un mese intero di PRO offerto da noi') &&
-    offertaPro.includes('Attiva il tuo Radar') &&
-    !/Siamo così sicuri|passi semplicemente a un account Base/i.test(offertaPro) &&
+  offertaPro.includes(
+    'Siamo così sicuri che Scuole Radar ti piacerà che il primo mese PRO te lo offriamo noi. Se poi non vuoi abbonarti, passerai automaticamente a un account Base.',
+  ) &&
+    offertaPro.includes('ATTIVA IL TUO RADAR') &&
     !/Confronta i piani|Scopri i piani|Vedi tutti i piani/i.test(offertaPro) &&
     !/countdown|prezzo che cambia/.test(offertaPro),
 );
 check(
   'landing: i TRE blocchi dell’offerta PRO sono esattamente quelli previsti',
   true,
-  offertaPro.includes('Avvisi Telegram in tempo reale') &&
-    offertaPro.includes('Email riepilogativa tutti i giorni alle 17.00') &&
-    offertaPro.includes('PureFocus incluso nel piano PRO') &&
-    (offertaPro.match(/titolo: '/g) ?? []).length === 3 &&
+  // Copy nel registro testi, blocchi resi per chiave: la vetrina ne dichiara TRE.
+  registroTesti.includes('Avvisi Telegram in tempo reale') && registroTesti.includes('Email riepilogativa tutti i giorni alle 17.00') &&
+    registroTesti.includes('PureFocus incluso nel piano PRO') &&
+    (offertaPro.match(/titolo: 'prezzi\.offerta\./g) ?? []).length === 3 &&
     !/<Link|to="\/prezzi"/.test(offertaPro),
 );
 check(

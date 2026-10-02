@@ -4,12 +4,14 @@
  *
  * Riferimento permanente: docs/BLOG_EDITORIAL_GUIDELINES.md
  *
- * Secondo blocco dell'allow-list: la scuola come dibattito culturale e
+ * Terzo blocco dell'allow-list: la scuola come dibattito culturale e
  * didattico, per ordine di scuola (infanzia/primaria, secondaria di I e II
- * grado). Sono gli unici temi con `fattoConcreto: true`: entrano nel feed SOLO
- * con una scadenza reale o un canale ufficiale di candidatura, mai come puro
- * comunicato, webinar o convegno.
- */
+ * grado). L'intelligenza artificiale ha un blocco AUTONOMO
+ * (`standardTemiIA.ts`): qui resta l'innovazione digitale "classica" (PNSD,
+ * coding, robotica educativa, didattica digitale). Questi temi hanno
+ * `fattoConcreto: true`: entrano nel feed SOLO con una scadenza reale o un
+ * canale ufficiale di candidatura, mai come puro comunicato, webinar o
+ * convegno. */
 import type { TemaOperativo } from './standardTemiPersonale';
 import { PAROLE_DIDATTICA_ORDINI, RIFERIMENTI_PEDAGOGICI } from './lessicoScuola';
 
@@ -24,8 +26,8 @@ export const TEMI_DIDATTICA: TemaOperativo[] = [
     parole: [
       'pnsd', 'piano nazionale scuola digitale', 'animatore digitale',
       'team digitale', 'coding', 'robotica educativa', 'steam', 'stem',
-      'intelligenza artificiale', 'ia generativa', 'didattica digitale',
-      'didattica digitale integrata', 'ambienti di apprendimento innovativi',
+      'didattica digitale', 'didattica digitale integrata',
+      'ambienti di apprendimento innovativi',
       'laboratori digitali', 'transizione digitale', 'piattaforme digitali',
     ],
   },

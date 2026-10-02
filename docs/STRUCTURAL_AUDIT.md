@@ -46,7 +46,7 @@ Legenda azione: ✅ fatto · ▶️ wave successiva · ⏸️ rinviato (motivazi
 | 3 | 1999 | `lib/notifier.ts` | Backend 🔒 | ⏸️ fuori bundle + governance checklist |
 | 4 | 282 | `contexts/AppContext.tsx` | Contesto | ✅ **wave 14+15**: 10 slice + split dei 2 hook di contesto (1634 → 282) |
 | 5 | 1515 | `scraper/index.ts` | Backend | ⏸️ fuori bundle |
-| 6 | 1396 | `notizie/services/relevanceEngine.ts` | Servizio | ▶️ wave 4: gate / link / copy |
+| 6 | 815 | `notizie/services/relevanceEngine.ts` | Servizio (orchestratore) | ✅ **wave 4**: gate / link / copy estratti in `notizie/services/` (1723 → 815: 7 sotto-moduli + `editorialVoice`, tutti < 300 righe) |
 | 7 | 1264 | `lib/telegram.ts` | Backend 🔒 | ⏸️ fuori bundle + governance |
 | 8 | 301 | `departments/admin/tabs/utenti/TabUtenti.tsx` | UI-contenitore | ✅ **wave 5** (623 → 301, 4 sotto-componenti + helper) |
 | 9 | 1161 | `scraper/parser.ts` | Backend | ⏸️ fuori bundle |

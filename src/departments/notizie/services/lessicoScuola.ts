@@ -43,6 +43,7 @@ export const GLOSSARIO_ACRONIMI: Record<string, string> = {
   TFA: 'Tirocinio Formativo Attivo (specializzazione per il sostegno)',
   CFU: 'Crediti Formativi Universitari',
   CPIA: 'Centro Provinciale per l\u2019Istruzione degli Adulti',
+  IA: 'Intelligenza Artificiale',
   PNSD: 'Piano Nazionale Scuola Digitale',
   PCTO: 'Percorsi per le Competenze Trasversali e per l\u2019Orientamento',
   BES: 'Bisogni Educativi Speciali',
@@ -208,4 +209,35 @@ export const RIFERIMENTI_PEDAGOGICI: string[] = [
 /** Parole della didattica riconoscibili (unione delle parole per ordine). */
 export const PAROLE_DIDATTICA_ORDINI: string[] = [
   ...new Set(PEDAGOGIA_PER_ORDINE.flatMap((o) => o.parole)),
+];
+
+/**
+ * LESSICO DELL'INTELLIGENZA ARTIFICIALE: le parole che rendono riconoscibile
+ * una notizia sull'IA a scuola. Alimenta il tema autonomo 'Intelligenza
+ * Artificiale' (`standardTemiIA.ts`), separato da 'Innovazione Digitale'
+ * (PNSD, coding, robotica educativa, didattica digitale): la categoria ha così
+ * badge, peso e copy propri.
+ *
+ * NOTA: come per ogni altro tema, il lessico NON basta a pubblicare: restano
+ * attivi il filtro anti-rumore e il gate del fatto concreto (scadenza reale o
+ * canale ufficiale di domanda/candidatura) dello standard editoriale.
+ */
+export const PAROLE_IA: string[] = [
+  'intelligenza artificiale',
+  'ia generativa',
+  'generative ai',
+  'machine learning',
+  'apprendimento automatico',
+  'deep learning',
+  'reti neurali',
+  'modelli linguistici',
+  'large language model',
+  'chatbot',
+  'chat bot',
+  'assistente virtuale',
+  'tutor virtuale',
+  'prompt',
+  'llm',
+  'chatgpt',
+  'copilot',
 ];

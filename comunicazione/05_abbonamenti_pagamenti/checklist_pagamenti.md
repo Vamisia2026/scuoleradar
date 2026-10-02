@@ -90,18 +90,42 @@
 - [ ] È sempre chiaro **se** e **quando** avviene un rinnovo automatico e come
       disdire; vietato far intendere rinnovi automatici nascosti. Nella **vetrina
       pubblica** della homepage la dichiarazione vive **fuori** dalla sezione
-      dell'offerta (`/prezzi`, FAQ e passo di pagamento), che resta solo-benefici
-      (bullet successivo).
-- [ ] **Vetrina PRO della homepage** (`LandingOffertaPro`): sezione **solo-benefici**.
-      Presenta i soli tre benefici del piano — avvisi **Telegram in tempo
-      reale**, **email riepilogativa tutti i giorni alle 17.00**, **PureFocus
-      incluso nel piano PRO** — con **una sola** CTA (`Attiva il tuo Radar`):
-      vietati i link verso altri piani (`Confronta i piani`) e le formule difensive
-      di ripiego («se poi non vuoi abbonarti, passi a un account Base»).
+      dell'offerta (`/prezzi`: colonne piani e passo di pagamento), che resta
+      solo-benefici (bullet successivo).
+- [ ] **Vetrina PRO della homepage** (`LandingOffertaPro`): presenta i soli tre benefici
+      del piano — avvisi **Telegram in tempo reale**, **email riepilogativa tutti i
+      giorni alle 17.00**, **PureFocus incluso nel piano PRO** — e la copy **diretta
+      autorizzata dal cliente** (28/09/2026, testo esatto): «Siamo così sicuri che
+      Scuole Radar ti piacerà che il primo mese PRO te lo offriamo noi. Se poi non vuoi
+      abbonarti, passerai automaticamente a un account Base.» Sotto la copy la
+      **lead capture** (Nome, Cognome, Email) col pulsante `ATTIVA IL TUO RADAR`, che
+      apre la configurazione del Radar con i dati già compilati (un solo passaggio).
+      Vietati i link verso altri piani (`Confronta i piani`).
       In questa sezione **non compaiono importi, rinnovi né disdette**: prezzo,
-      rinnovo automatico e modalità di disdetta vivono in `/prezzi` (colonne piani
-      e FAQ), nelle FAQ pubbliche e nel **passo di pagamento** (`AbbonamentoModal`),
-      dove l'utente decide davvero. Guardia: `npm run test:copy:etico`.
+      rinnovo automatico e modalità di disdetta vivono in `/prezzi` (colonne piani)
+      e nel **passo di pagamento** (`AbbonamentoModal`), dove l'utente decide davvero.
+      Le **FAQ pubbliche** (`/faq` e `/prezzi`, riallineate il 29/09/2026) restano copy
+      di **posizionamento**: nessuna domanda su disdette o sicurezza dei pagamenti e
+      nessun annuncio di funzioni non attive (§26.29 di `SYSTEM_HANDOVER.md`).
+      Guardia: `npm run test:copy:etico` (e `test:copy:schermo`, `test:copy:pubblico`).
+- [ ] **Offerta di continuazione dopo il mese in omaggio**: chi ha ricevuto il mese PRO in
+      regalo può proseguire con il **primo anno a `PREZZO_PRO_ANNO_DOPO_OMAGGIO_ETICHETTA`
+      (40 €) invece di `PREZZO_PRO_ANNUO_ETICHETTA` (49 €)**. L'importo si dichiara **nel
+      benvenuto di fine flusso** (`BenvenutoProRadar`, visibile con il mese in omaggio
+      attivo), **mai** nella vetrina della homepage; lo scorporo è dichiarato in chiaro (il
+      mese regalato «vale» `SCONTO_OMAGGIO_MESE_EUR` = 9 €) e per il periodo regalato non è
+      dovuto nulla.
+      ⚠️ **Requisito tecnico**: l'importo deve corrispondere a un coupon Stripe `amount_off`
+      di **900 centesimi** con durata **`once`** (sconto del solo PRIMO anno), applicato alla
+      sessione annuale via `discounts[0][coupon]` dal ramo `PROANNUALE40` della Edge
+      `checkout` (il frontend invia solo il codice, mai un prezzo) e mappato dal secret
+      `STRIPE_COUPON_PROANNUALE40`: finché il coupon non esiste, l'offerta **non va in
+      produzione** (senza secret il checkout risponde 500 esplicito, mai un addebito a
+      listino). Da decidere con il cliente il rapporto con `SCUOLERADAR50` (50% = 24,50 €,
+      sconto **maggiore**): due coupon attivi sullo stesso piano.
+      Ancoraggi: `src/lib/pricing.ts`, `src/lib/promo.ts`,
+      `src/departments/radar/components/CtaProAnnuale.tsx`, `BenvenutoProRadar.tsx`,
+      `RadarWizardModal.tsx`. Guardia: `npm run test:checkout:annuale`.
 - [ ] "Crediti" / "a consumo" sono spiegati in una riga (cosa sono, quando
       vengono usati, se scadono): nessun termine tecnico non spiegato.
 - [ ] Promo, referral e coupon sono descritti senza ambiguità (percentuale,

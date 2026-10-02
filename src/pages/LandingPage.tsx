@@ -9,7 +9,7 @@ import { LandingCta } from '@/components/landing/LandingCta';
 import { LandingHero } from '@/components/landing/LandingHero';
 import { LandingOffertaPro } from '@/components/landing/LandingOffertaPro';
 import { LandingPartnerPureFocus } from '@/components/landing/LandingPartnerPureFocus';
-import { LandingRegistrazioneRapida } from '@/components/landing/LandingRegistrazioneRapida';
+import { LandingRegistrazioneRapida, type DatiRegistrazioneRapida } from '@/components/landing/LandingRegistrazioneRapida';
 import { LandingStrumenti } from '@/components/landing/LandingStrumenti';
 import { Stat, StepCard, ValueCard } from '@/components/landing/LandingCards';
 import { useApp } from '@/contexts/AppContext';
@@ -83,13 +83,14 @@ export function LandingPage() {
   };
 
   /**
-   * Registrazione rapida (Nome, Cognome, Email sotto l'hero): i dati scritti qui
-   * finiscono nella BOZZA (`lib/bozzaRegistrazione.ts`) e si apre la modale di
+   * Registrazione rapida (Nome, Cognome, Email): la monta la sezione sotto l'hero
+   * e, per i visitatori, la chiusura dell'offerta PRO. I dati scritti qui finiscono
+   * nella BOZZA (`lib/bozzaRegistrazione.ts`) e si apre la modale di
    * onboarding/configurazione del Radar, che li trova già compilati — un solo
    * passaggio, nessun doppione di modali. Fuori dai campi compilati non si
    * sovrascrive nulla della bozza (patch solo sui valori presenti).
    */
-  const handleRegistrazioneRapida = (dati: { nome: string; cognome: string; email: string }) => {
+  const handleRegistrazioneRapida = (dati: DatiRegistrazioneRapida) => {
     if (user) {
       openRadarSetup();
       return;
@@ -128,8 +129,15 @@ export function LandingPage() {
       {/* Offerta PRO — 30 giorni di PRO con Telegram in tempo reale, email delle
           17.00 e PureFocus incluso; nessuna via d'uscita verso altri piani. È la
           leva di conversione principale: sta PRIMA di «Cosa riceverai».
-          Presentazione pura: la CTA riusa l'handler del Radar del contenitore. */}
-      <LandingOffertaPro handleRadarClick={handleRadarClick} radarPronto={radarPronto} />
+          Sotto le tre colonne, per i visitatori senza account, la sezione chiude
+          con la registrazione parziale (nome, cognome, email) che porta dritto
+          alla configurazione del Radar a 4 province; chi è già dentro vede la CTA
+          del proprio Radar. Il form è lo stesso dell'hero: un solo percorso. */}
+      <LandingOffertaPro
+        handleRadarClick={handleRadarClick}
+        radarPronto={radarPronto}
+        onRegistrazioneRapida={user ? undefined : handleRegistrazioneRapida}
+      />
 
       {/* Ecco cosa riceverai — cosa arriva all'utente quando il Radar è attivo. */}
       <LandingBenefici />

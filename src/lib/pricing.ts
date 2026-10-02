@@ -18,6 +18,28 @@ export const SCONTO_PRIMO_ANNO_PERCENTO = 50;
 /** Prezzo scontato primo anno (24,50 €) — rinnovo poi al prezzo pieno. */
 export const PREZZO_PRIMO_ANNO_SCONTATO_EUR = PREZZO_PRO_ANNUO_EUR * (1 - SCONTO_PRIMO_ANNO_PERCENTO / 100);
 
+/**
+ * OFFERTA DI CONTINUAZIONE DOPO IL MESE IN OMAGGIO (direttiva cliente).
+ *
+ * Il primo mese di PRO è un regalo di benvenuto: chi lo riceve non ha ancora
+ * pagato nulla. Alla scadenza l'utente può proseguire con l'abbonamento ANNUALE
+ * a `PREZZO_PRO_ANNO_DOPO_OMAGGIO_EUR` invece del prezzo di listino, perché dal
+ * totale viene **scorporato il valore del mese offerto** (prezzo mensile di
+ * listino): 49 € − 9 € = 40 €.
+ *
+ * L'importo NON è una percentuale: è ancorato al listino tramite lo scorporo,
+ * così ogni cifra mostrata in UI (`40 €` / `49 €`) resta una sola verità.
+ *
+ * ⚠️ Lato Stripe lo sconto deve esistere come coupon `amount_off` da
+ * `SCONTO_OMAGGIO_MESE_EUR` (900 centesimi) applicato alla sessione annuale:
+ * il frontend invia solo una stringa di codice, mai un prezzo.
+ */
+export const PREZZO_PRO_ANNO_DOPO_OMAGGIO_EUR = 40;
+/** Etichetta UI del prezzo annuale dopo il mese in omaggio. */
+export const PREZZO_PRO_ANNO_DOPO_OMAGGIO_ETICHETTA = '40 €';
+/** Valore del mese in omaggio scorporato dal listino (`49 € − 40 €`). */
+export const SCONTO_OMAGGIO_MESE_EUR = PREZZO_PRO_ANNUO_EUR - PREZZO_PRO_ANNO_DOPO_OMAGGIO_EUR;
+
 /** Piani disponibili (in ordine di presentazione). */
 export const PIANI: PianoId[] = ['pro_annuale', 'pro_mensile', 'a_consumo'];
 

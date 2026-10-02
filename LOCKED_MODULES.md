@@ -47,7 +47,7 @@ Procedi con la creazione del componente DevToolbar.tsx, integralo in App.tsx e a
 |---|--------|------|-------------|-------|
 | 1 | AuthModal | `src/components/AuthModal.tsx` | Gestione Google Login & Email — **intervento autorizzato (fix auth beta tester / utenti pre-approvati: login email reale via Supabase con toast errori chiari, 2026-09-03)** e ri-bloccato | 🔒 Bloccato |
 | 2 | Pagina Chi Siamo | `src/pages/ChiSiamoPage.tsx` | Pagina istituzionale / valori | 🔒 Bloccato |
-| 3 | Pagina Prezzi / Offerta | `src/pages/PrezziPage.tsx` | Piano Offerta, VIP e PureFocus — ri-bloccato il 2026-08-30 dopo rename copy "CV Builder"→"Crea CV"; **intervento autorizzato (restyling layout orizzontale psicologico: Mensile | PRO Annuale al centro "Più Scelto" | A Consumo)** e ri-bloccato | 🔒 Bloccato |
+| 3 | Pagina Prezzi / Offerta | `src/pages/PrezziPage.tsx` | Piano Offerta, VIP e PureFocus — ri-bloccato il 2026-08-30 dopo rename copy "CV Builder"→"Crea CV"; **intervento autorizzato (restyling layout orizzontale psicologico: Mensile | PRO Annuale al centro "Più Scelto" | A Consumo)** e ri-bloccato; **intervento autorizzato (29/09/2026: sezione «Domande frequenti» sostituita e cablata all'elenco condiviso `src/data/faqPubbliche.ts` + registro testi — piani, importi e vantaggi NON toccati; copy delle FAQ riallineata alle richieste del cliente il 29/09/2026 dall'elenco condiviso, con il file NON aperto: da 12 a 8 voci, §26.29 di `SYSTEM_HANDOVER.md`)** e ri-bloccato | 🔒 Bloccato |
 
 ## Prossimi blocchi (in lavorazione)
 
@@ -55,4 +55,4 @@ Procedi con la creazione del componente DevToolbar.tsx, integralo in App.tsx e a
 
 ---
 
-_Ultimo aggiornamento: 2026-09-03_
+_Ultimo aggiornamento: 2026-09-29_

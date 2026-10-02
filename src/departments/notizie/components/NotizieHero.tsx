@@ -16,7 +16,7 @@ export const SOTTOTITOLO_NOTIZIE =
  * di fiducia, in carattere display regolare (non corsivo).
  */
 export const SLOGAN_NOTIZIE =
-  'Quando vuoi sapere cosa succede di importante, vieni qui!';
+  'Quando vuoi sapere cosa succede di importante nella scuola, vieni qui!';
 
 /**
  * Hero editoriale del Dipartimento Notizie (stile "Daily Planet"):
