@@ -2,8 +2,8 @@
  * ScuoleRadar.it — URGENZA della scadenza per il «Radar Live» (modulo PURO).
  *
  * Traduce i giorni rimanenti in una BANDA cromata più fine del semaforo
- * condiviso di `scadenza.ts`, pensata per il tabellone pubblico (dove il
- * colore serve a distinguere a colpo d'occhio le opportunità più vicine):
+ * condiviso, pensata per il tabellone pubblico (dove il colore serve a
+ * distinguere a colpo d'occhio le opportunità più vicine):
  *
  *   🔴 rosso    → scade oggi (con `animate-pulse`)
  *   🔴 rosso    → entro 48 ore («Ultime 48h»)
@@ -23,13 +23,24 @@
  *     per essere mostrata in tabellone.
  */
 
-import { giorniRimanenti } from './scadenza';
+/** Calcola i giorni rimanenti rispetto a una data ISO e un riferimento temporale. */
+export function giorniRimanenti(iso?: string | null, oggi: Date = new Date()): number | null {
+  if (!iso) return null;
+  const dataScadenza = new Date(iso);
+  if (isNaN(dataScadenza.getTime())) return null;
+
+  const utcOggi = Date.UTC(oggi.getUTCFullYear(), oggi.getUTCMonth(), oggi.getUTCDate());
+  const utcScadenza = Date.UTC(dataScadenza.getUTCFullYear(), dataScadenza.getUTCMonth(), dataScadenza.getUTCDate());
+
+  const diffMs = utcScadenza - utcOggi;
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+}
 
 /** Soglie (in giorni) delle bande del tabellone. */
 export const SOGLIA_ULTIME_48H = 2; // 1–2 giorni → ROSSO (entro 48 ore)
 export const SOGLIA_ENTRO_3_GIORNI = 3; // 3 giorni    → ARANCIO
 export const SOGLIA_ENTRO_7_GIORNI = 7; // 4–7 giorni  → GIALLO
-//                                        > 7 giorni  → VERDE (in corso)
+//                                       > 7 giorni  → VERDE (in corso)
 
 export type BandaUrgenza =
   | 'concluso'

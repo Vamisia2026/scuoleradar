@@ -10,7 +10,7 @@
 
 /** Soglie (in giorni) del semaforo di scadenza. */
 export const SOGLIA_IMMINENTE = 2; // ≤ 2 giorni  → ROSSO (ultimi giorni / scade oggi)
-export const SOGLIA_VICINA = 7; //   3–7 giorni  → GIALLO (in avvicinamento)
+export const SOGLIA_VICINA = 7;    // 3–7 giorni  → GIALLO (in avvicinamento)
 //                                   > 7 giorni  → VERDE (lungo termine)
 
 export type LivelloScadenza = 'scaduto' | 'imminente' | 'vicino' | 'lungo' | 'sconosciuto';
