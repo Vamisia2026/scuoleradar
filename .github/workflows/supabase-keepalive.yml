@@ -1,0 +1,130 @@
+# ============================================================
+# Supabase Keep-Alive — mantiene ATTIVO il progetto ScuoleRadar
+#
+# Il piano gratuito di Supabase mette in pausa (sospende) i progetti
+# inattivi: senza richieste per più giorni il progetto viene congelato.
+# Questo workflow invia un ping HTTP leggero agli endpoint pubblici di
+# Supabase due volte a settimana, così il progetto resta considerato
+# "attivo" e NON viene sospeso per inattività.
+#
+# - Pianificazione: Lunedì e Giovedì alle 08:00 UTC (`0 8 * * 1,4`).
+# - Trigger manuale: workflow_dispatch (GitHub → Actions → Run workflow).
+# - Endpoint interrogati (SOLA LETTURA, nessuna scrittura):
+#     1. Auth health check:  GET {SUPABASE_URL}/auth/v1/health
+#     2. REST — lettura leggera sulle tabelle principali (`interpelli`,
+#        `notices`):  GET {SUPABASE_URL}/rest/v1/<tabella>?select=id&limit=1
+#     Per una richiesta la cui risposta è solo "il progetto è vivo",
+#     conta come OK qualunque risposta del server (2xx/3xx/4xx): anche un
+#     401/403 (RLS) dimostra che il backend ha risposto. Il job fallisce
+#     SOLO se l'endpoint è irraggiungibile (timeout/DNS → `000`) o se il
+#     server risponde 5xx.
+#
+# Chiave usata: l'ANON KEY (pubblica, sola lettura), con fallback.
+#   - Priorità 1: secret di repo `SUPABASE_ANON_KEY`
+#   - Priorità 2: variabile di repo/ambiente `SUPABASE_ANON_KEY` (fallback)
+#   In shell: `KEY="${SUPABASE_ANON_KEY:-}"`.
+# Secrets/variabili attese (repo Settings → Secrets and variables → Actions):
+#   - `SUPABASE_URL` (secret) — URL del progetto; fallback all'URL noto.
+#   - `SUPABASE_ANON_KEY` (secret oppure variabile) — chiave anon pubblica.
+# ============================================================
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    - cron: '0 8 * * 1,4'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-keep-alive
+  cancel-in-progress: false
+
+jobs:
+  keep-alive:
+    name: Ping Supabase (Auth health + lettura leggera)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Ping degli endpoint Supabase (Auth + REST)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          # Secret primario, con fallback sulla variabile di repo/ambiente.
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY }}
+        run: |
+          set -uo pipefail
+
+          URL="${SUPABASE_URL:-https://gwdmsgsshvdnfrplbjiv.supabase.co}"
+          KEY="${SUPABASE_ANON_KEY:-}"
+
+          if [ -z "$KEY" ]; then
+            echo "::error::Chiave anon assente: imposta il secret (o la variabile) SUPABASE_ANON_KEY."
+            exit 1
+          fi
+
+          URL="${URL%/}"
+
+          OK=0
+          KO=0
+
+          # ping <etichetta> <path> — conta OK se il server risponde
+          # (2xx/3xx/4xx), KO se irraggiungibile (000) o errore 5xx.
+          ping() {
+            local etichetta="$1"
+            local path="$2"
+            local codice
+            codice="$(curl -sS -o /dev/null -w '%{http_code}' \
+              --max-time 30 --retry 3 --retry-delay 5 \
+              -H "apikey: ${KEY}" \
+              -H "Authorization: Bearer ${KEY}" \
+              "${URL}${path}" 2>/dev/null || true)"
+            codice="${codice:-000}"
+
+            if [ "$codice" = "000" ]; then
+              echo "::warning::✗ ${etichetta} → non raggiungibile (timeout/DNS)"
+              KO=$((KO + 1))
+            elif [ "$codice" -ge 500 ]; then
+              echo "::warning::✗ ${etichetta} → HTTP ${codice} (errore server)"
+              KO=$((KO + 1))
+            else
+              echo "::notice::✓ ${etichetta} → HTTP ${codice} (progetto attivo)"
+              OK=$((OK + 1))
+            fi
+          }
+
+          echo "Supabase Keep-Alive — ping del progetto (mantiene il progetto attivo)"
+          echo "URL: ${URL}"
+          echo ""
+
+          # 1) Auth health check (endpoint pubblico, sempre 200 se il progetto è vivo).
+          ping "Auth health" "/auth/v1/health"
+
+          # 2) Lettura leggera sulle tabelle principali (nessuna scrittura).
+          for tabella in interpelli notices; do
+            ping "REST ${tabella}" "/rest/v1/${tabella}?select=id&limit=1"
+          done
+
+          echo ""
+          echo "Esiti: ${OK} OK · ${KO} KO"
+
+          if [ "$KO" -gt 0 ]; then
+            echo "::error::Keep-alive Supabase: ${KO} endpoint su $((OK + KO)) non hanno risposto correttamente."
+            exit 1
+          fi
+
+          echo "::notice::Keep-alive Supabase completato: progetto mantenuto attivo."
+
+      - name: Riepilogo esito (cron bi-settimanale)
+        if: always()
+        run: |
+          {
+            echo "## ♻️ Supabase Keep-Alive — esito"
+            echo ""
+            echo "- **Frequenza**: Lunedì e Giovedì alle 08:00 UTC (\`0 8 * * 1,4\`)."
+            echo "- **Scopo**: evitare la sospensione del progetto Supabase per inattività."
+            echo "- **Endpoint**: Auth health (\`/auth/v1/health\`) + lettura leggera su \`interpelli\` e \`notices\`."
+            echo "- **Chiave**: ANON KEY (secret/variabile \`SUPABASE_ANON_KEY\`, con fallback)."
+            echo "- **Verifica**: controllo lo step precedente — ogni endpoint deve rispondere (2xx/3xx/4xx)."
+          } >> "$GITHUB_STEP_SUMMARY"
