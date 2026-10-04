@@ -1,14 +1,18 @@
 /**
  * ScuoleRadar.it — Dipartimento Radar · Flight Board (Radar Live).
  * Etichette di riga della tavola aeroportuale: risoluzione best-effort di
- * città/scuola/link a partire dalla riga grezza della tabella interpelli.
+ * città/link a partire dalla riga grezza della tabella interpelli.
  * Funzioni PURE (nessun React, nessuna rete): l'unica dipendenza è il dataset
- * delle province. Regola di prodotto: se il nome dell'istituto manca o non è 
- * rilevabile con certezza, restituisce "Scuola non specificata / Più plessi" 
- * per garantire la massima copertura e visibilità dei risultati sul monitor.
+ * delle province.
+ *
+ * REGOLA (direttiva 04/10/2026, §26.47): la scelta del nome MOSTRATO e lo scarto
+ * delle righe vivono in `lib/liveBoard.ts` (`nomeScuolaBoard`/`preparaRigheBoard`) —
+ * un solo punto di verità. Qui restano solo le etichette di presentazione: le
+ * vecchie `risolviNomeScuola` (dicitura fissa "Scuola non specificata / Più
+ * plessi") ed `eInterpelloVisibile` erano codice MORTO e duplicavano la regola:
+ * rimosse, così non possono divergere.
  */
 import { province } from '@/data/province';
-import { nomeIstitutoPresentabile } from '@/lib/nomeIstituto';
 
 /** Riga reale della tabella interpelli (solo i campi serviti alla tavola). */
 export interface InterpelloLive {
@@ -24,6 +28,12 @@ export interface InterpelloLive {
   expiration_date: string | null;
   created_at: string | null;
   source_url?: string | null;
+  /**
+   * True quando l'anagrafica della riga è incompleta: la colonna «Scuola» mostra
+   * un nome di ripiego (grezzo del bando o dicitura gestita) — l'interfaccia lo
+   * dichiara senza mai nascondere l'avviso (direttiva 04/10/2026, §26.47).
+   */
+  anagrafica_parziale?: boolean;
 }
 
 /** Nome completo della provincia (es. MI → Milano) come fonte primaria della città. */
@@ -71,51 +81,6 @@ export function estraiScuolaDaTitolo(r: InterpelloLive): string | null {
     parte,
   );
   return generici ? null : parte;
-}
-
-/**
- * Nome della scuola mostrato in BACHECA con fallback robusto:
- * se manca un nome verificato, restituisce la dicitura standard per popolare il monitor.
- */
-export function risolviNomeScuola(r: InterpelloLive): string {
-  const nomePulito =
-    nomeIstitutoPresentabile(r.school_name) ??
-    estraiScuolaDaTitolo(r);
-
-  if (!nomePulito) {
-    return "Scuola non specificata / Più plessi";
-  }
-
-  return nomePulito;
-}
-
-/**
- * Filtro di validità per il tabellone: accetta scadenze valide future 
- * o avvisi pubblicati negli ultimi 60 giorni anche se privi di scadenza esatta.
- */
-export function eInterpelloVisibile(r: InterpelloLive, oggi: Date = new Date()): boolean {
-  const scadenza = (r.expiration_date ?? '').trim();
-  
-  if (scadenza) {
-    // Controllo base di attività sulla scadenza
-    const dataScad = new Date(scadenza);
-    if (!isNaN(dataScad.getTime()) && dataScad >= oggi) {
-      return true;
-    }
-  }
-
-  // Fallback 60 giorni sulla data di creazione se manca la scadenza
-  if (!scadenza && r.created_at) {
-    const dataCreazione = new Date(r.created_at);
-    const limiteDueMesi = new Date(oggi);
-    limiteDueMesi.setMonth(limiteDueMesi.getMonth() - 2);
-
-    if (!isNaN(dataCreazione.getTime()) && dataCreazione >= limiteDueMesi) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 /** URL http(s) assoluto e valido, altrimenti null. */

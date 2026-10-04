@@ -1,32 +1,66 @@
 /**
  * ScuoleRadar.it — Manutenzione DATI: arricchisce gli interpelli esistenti.
  *
- * Colma i buchi che rendono una riga poco professionale (school_code mancante,
- * email di candidatura assente, nome scuola ricostruibile dal registro):
+ * Colma i buchi che rendono una riga inutilizzabile in vetrina e nelle notifiche
+ * (nome scuola, codice meccanografico, email di candidatura, PEC):
+ *   0. ANAGRAFICA NAZIONALE (file SCUANAGRAFE, `lib/anagraficaScuole.ts`): dal
+ *      CODICE MECCANOGRAFICO della riga — o dal NOME, quando è univoco —
+ *      recupera denominazione reale dell'istituto, PEO e PEC. È la fonte più
+ *      autorevole: le successive coprono solo ciò che resta vuoto;
  *   1. codice meccanografico ricavato dal titolo/nome scuola quando assente;
  *   2. email UFFICIALE (PEO) ricostruita dalla convenzione MIM sul codice;
- *   3. nome reale della scuola dal registro per codice (solo nomi autentici).
+ *   3. nome reale della scuola dal registro minimo per codice.
  * Non sovrascrive MAI un dato già presente e non inventa nulla: se non c'è un
- * appiglio reale (codice o email in fonte) la riga resta com'è.
+ * appiglio reale (codice, nome o email in fonte) la riga resta com'è.
  *
  * Uso:
- *   npm run dati:arricchisci            # dry-run (mostra cosa cambierebbe)
- *   npm run dati:arricchisci -- --apply # applica le modifiche (service role)
+ *   npm run dati:arricchisci                     # dry-run (mostra cosa cambierebbe)
+ *   npm run dati:arricchisci -- --apply          # applica le modifiche (service role)
+ *   npm run dati:arricchisci -- --no-anagrafica  # solo inferenze dal testo
+ *
+ * Cartella dei file SCUANAGRAFE: `SCUOLERADAR_ANAGRAFICA_DIR` (default `~/Downloads`).
  */
 
 import process from 'node:process';
 import { createClient } from '@supabase/supabase-js';
 import {
+  arricchisciDaAnagrafica,
+  caricaAnagrafica,
+  type IndiceAnagrafica,
+} from '../src/lib/anagraficaScuole.ts';
+import {
   estraiCodiceMeccanograficoDaTesto,
   risolviEmailUfficialeScuola,
 } from '../src/lib/emailScuola.ts';
 import { nomeScuolaDaCodice } from '../src/lib/school-lookup.ts';
+import { statoArricchimento } from '../src/lib/statoArricchimento.ts';
 
 process.loadEnvFile?.();
 
 const apply = process.argv.includes('--apply');
-const url = process.env.SUPABASE_URL;
+/** Salta l'anagrafica nazionale (solo inferenze dal testo/convenzione MIM). */
+const senzaAnagrafica = process.argv.includes('--no-anagrafica');
+const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+/**
+ * Colonne necessarie all'arricchimento (comprese `school_pec`, `stato_arricchimento`
+ * e `province`). Tenute come LISTA perché le colonne "recenti" possono non esistere
+ * ancora: se una migrazione non è applicata la si toglie e si prosegue
+ * (`leggiTutte`/`aggiorna`) — l'arricchimento non si interrompe mai.
+ */
+const COLONNE: string[] = ['id', 'title', 'province', 'school_name', 'school_code', 'contact_email', 'school_pec', 'stato_arricchimento'];
+
+interface Riga {
+  id: string;
+  title: string | null;
+  province: string | null;
+  school_name: string | null;
+  school_code: string | null;
+  contact_email: string | null;
+  school_pec: string | null;
+  stato_arricchimento?: string | null;
+}
 
 if (!url || !key) {
   console.error('✗ Mancano SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY nel file .env');
@@ -34,56 +68,161 @@ if (!url || !key) {
 } else {
   const client = createClient(url, key, { auth: { persistSession: false } });
 
-  interface Riga {
-    id: string;
-    title: string;
-    school_name: string | null;
-    school_code: string | null;
-    contact_email: string | null;
+  // ANAGRAFICA NAZIONALE: caricata una volta sola (file SCUANAGRAFE locali).
+  const anagrafica: IndiceAnagrafica | null = senzaAnagrafica ? null : caricaAnagrafica();
+  if (anagrafica) {
+    console.log(
+      anagrafica.disponibile
+        ? `• Anagrafica scuole: ${anagrafica.totale} codici meccanografici da ${anagrafica.fileLetti.length} file.`
+        : '• Anagrafica scuole NON disponibile: imposta SCUOLERADAR_ANAGRAFICA_DIR (o scarica i file SCUANAGRAFE).',
+    );
   }
 
-  const { data, error } = (await client
-    .from('interpelli')
-    .select('id, title, school_name, school_code, contact_email')
-    .limit(5000)) as never as { data: Riga[] | null; error: { message: string } | null };
+  /** True finché la colonna `school_pec` è disponibile (migrazione applicata). */
+  let pecDisponibile = true;
+  /** True finché la colonna `stato_arricchimento` è disponibile (migrazione applicata). */
+  let statoDisponibile = true;
 
-  if (error) {
-    console.error(`✗ Lettura interpelli non riuscita: ${error.message}`);
-    process.exitCode = 1;
-  } else {
-    const righe = (data ?? []) as Riga[];
+  /**
+   * Legge TUTTE le righe a pagine (PostgREST non consegna più di 1.000 righe per
+   * richiesta). Una colonna "recente" assente (migrazione non applicata) viene
+   * tolta dall'elenco e la lettura riprova: l'arricchimento non si interrompe mai.
+   */
+  async function leggiTutte(): Promise<Riga[]> {
+    const tutte: Riga[] = [];
+    for (let da = 0; da < 100_000; da += 1000) {
+      const { data, error } = (await client
+        .from('interpelli')
+        .select(COLONNE.join(', '))
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(da, da + 999)) as never as { data: Riga[] | null; error: { message: string } | null };
+      if (error) {
+        const mancante = error.message.match(/Could not find the '([^']+)' column/i)?.[1];
+        if (mancante && COLONNE.includes(mancante)) {
+          console.warn(
+            `⚠ Colonna interpelli.${mancante} assente (migrazione non applicata): ` +
+              'l’arricchimento prosegue senza quella colonna.',
+          );
+          COLONNE.splice(COLONNE.indexOf(mancante), 1);
+          if (mancante === 'school_pec') pecDisponibile = false;
+          if (mancante === 'stato_arricchimento') statoDisponibile = false;
+          da -= 1000;
+          continue;
+        }
+        throw new Error(error.message);
+      }
+      const pagina = (data ?? []) as Riga[];
+      tutte.push(...pagina);
+      if (pagina.length < 1000) break;
+    }
+    return tutte;
+  }
+
+  /**
+   * Aggiorna una riga togliendo dal payload SOLO la colonna che il database non
+   * conosce: nessun aggiornamento si perde per intero a causa di un campo opzionale.
+   */
+  async function aggiorna(id: string, patch: Record<string, string>): Promise<string | null> {
+    let payload: Record<string, string> = { ...patch };
+    for (let tentativo = 0; tentativo <= Object.keys(patch).length; tentativo += 1) {
+      const { error } = (await client.from('interpelli').update(payload).eq('id', id)) as {
+        error: { message: string } | null;
+      };
+      if (!error) return null;
+      const colonna = error.message.match(/Could not find the '([^']+)' column/i)?.[1];
+      if (colonna && colonna in payload) {
+        const copia = { ...payload };
+        delete copia[colonna];
+        payload = copia;
+        continue;
+      }
+      return error.message;
+    }
+    return null;
+  }
+
+  try {
+    const righe = await leggiTutte();
     let daCodice = 0;
     let daEmail = 0;
     let daNome = 0;
+    let daPec = 0;
+    let daAnagraficaCodice = 0;
+    let daAnagraficaNome = 0;
+    let daStato = 0;
     let scritti = 0;
 
     for (const r of righe) {
       const patch: Record<string, string> = {};
       const testo = `${r.title ?? ''} ${r.school_name ?? ''}`;
-      const codice = r.school_code?.trim() || estraiCodiceMeccanograficoDaTesto(testo);
 
-      if (codice && !r.school_code?.trim()) {
+      // 0) ANAGRAFICA NAZIONALE: codice → nome/PEO/PEC, oppure nome univoco → codice/recapiti.
+      let viaAnagrafica: 'codice' | 'nome' | 'nessuna' = 'nessuna';
+      if (anagrafica?.disponibile) {
+        const esito = arricchisciDaAnagrafica(anagrafica, {
+          school_code: r.school_code,
+          school_name: r.school_name,
+          contact_email: r.contact_email,
+          school_pec: r.school_pec,
+          title: r.title,
+          province: r.province,
+        });
+        Object.assign(patch, esito.patch);
+        viaAnagrafica = esito.via;
+      }
+
+      // Senza la colonna `school_pec` (migrazione non applicata) la PEC non va scritta.
+      if (!pecDisponibile) delete patch.school_pec;
+
+      // 1) Codice meccanografico dal testo (se né la riga né l'anagrafica lo danno).
+      const codice =
+        patch.school_code ?? r.school_code?.trim() ?? estraiCodiceMeccanograficoDaTesto(testo) ?? null;
+      if (codice && !patch.school_code && !r.school_code?.trim()) {
         patch.school_code = codice;
         daCodice += 1;
       }
-      if (!r.contact_email?.trim()) {
+      // 2) Email ufficiale (PEO) dalla convenzione MIM sul codice.
+      if (!patch.contact_email && !r.contact_email?.trim()) {
         const email = risolviEmailUfficialeScuola({ schoolCode: codice, testo })?.email;
         if (email) {
           patch.contact_email = email;
           daEmail += 1;
         }
       }
-      const nomeRegistro = nomeScuolaDaCodice(codice);
-      if (nomeRegistro && !r.school_name?.trim()) {
-        patch.school_name = nomeRegistro;
-        daNome += 1;
+      // 3) Nome reale dal registro minimo per codice.
+      if (!patch.school_name && !r.school_name?.trim()) {
+        const nomeRegistro = nomeScuolaDaCodice(codice);
+        if (nomeRegistro) {
+          patch.school_name = nomeRegistro;
+          daNome += 1;
+        }
       }
+
+      // 4) STATO dell'anagrafica (`completo`/`parziale`): SEMPRE riconsiderato (una
+      //    riga che perde il recapito torna `parziale`). Mai un motivo di scarto.
+      if (statoDisponibile) {
+        const stato = statoArricchimento({
+          school_name: patch.school_name ?? r.school_name,
+          school_code: patch.school_code ?? r.school_code,
+          contact_email: patch.contact_email ?? r.contact_email,
+          school_pec: pecDisponibile ? patch.school_pec ?? r.school_pec : null,
+        });
+        if (stato !== r.stato_arricchimento) {
+          patch.stato_arricchimento = stato;
+          daStato += 1;
+        }
+      }
+
+      if (viaAnagrafica === 'codice') daAnagraficaCodice += 1;
+      if (viaAnagrafica === 'nome') daAnagraficaNome += 1;
+      if (patch.school_pec) daPec += 1;
 
       if (Object.keys(patch).length === 0) continue;
       if (apply) {
-        const { error: errUpd } = await client.from('interpelli').update(patch).eq('id', r.id);
-        if (errUpd) {
-          console.warn(`  ✗ ${r.id.slice(0, 8)}… ${errUpd.message}`);
+        const errore = await aggiorna(r.id, patch);
+        if (errore) {
+          console.warn(`  ✗ ${r.id.slice(0, 8)}… ${errore}`);
           continue;
         }
       }
@@ -91,13 +230,20 @@ if (!url || !key) {
     }
 
     console.log(`— Interpelli esaminati: ${righe.length} —`);
-    console.log(`  · codice meccanografico recuperato: ${daCodice}`);
-    console.log(`  · email ufficiale ricostruita (PEO): ${daEmail}`);
-    console.log(`  · nome scuola dal registro: ${daNome}`);
+    console.log(
+      `  · anagrafica: risolti per codice ${daAnagraficaCodice}, per nome ${daAnagraficaNome}, PEC aggiunte ${daPec}`,
+    );
+    console.log(`  · codice meccanografico dal testo: ${daCodice}`);
+    console.log(`  · email ufficiale ricostruita (PEO da convenzione MIM): ${daEmail}`);
+    console.log(`  · nome scuola dal registro minimo: ${daNome}`);
+    console.log(`  · stato anagrafica aggiornato (completo/parziale): ${daStato}`);
     console.log(
       apply
         ? `✓ Righe aggiornate: ${scritti}`
         : `(dry-run) righe da aggiornare: ${scritti} — usa -- --apply per applicare`,
     );
+  } catch (err) {
+    console.error(`✗ Lettura interpelli non riuscita: ${(err as Error).message}`);
+    process.exitCode = 1;
   }
 }

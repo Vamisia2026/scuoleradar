@@ -1,4 +1,4 @@
-# ScuoleRadar.it — Technical Knowledge Base & Handover Document (Ultimate Reference)
+OK guida-digest OK 6.4-query # ScuoleRadar.it — Technical Knowledge Base & Handover Document (Ultimate Reference)
 
 > **Scopo**: blueprint totale del sistema — ogni file, componente, struttura dati, RPC,
 > Edge Function, scraper, flusso di autenticazione, drip notifiche, schema DB e configurazione
@@ -9,7 +9,9 @@
 > **GitHub**: `Vamisia2026/scuoleradar` · **Branch prod**: `main` (Vercel auto-deploy)
 > **Ultimo aggiornamento**: 2026-09-21 (sincronizzazione: refactoring modulare,
 > contesti splittati, error boundary di dipartimento, standard editoriale stretto delle
-> notizie, gate `test:architettura`)
+> notizie, gate `test:architettura`); 2026-10-02: competenze e parole chiave nel ciclo
+> Radar — salvataggio `materie_id`/`materie_custom`, validazione, matching e digest
+> (§26.35)
 
 ---
 
@@ -245,7 +247,7 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `AbbonamentoModal.tsx` | 210 | Modal abbonamento: piano PRO annuale/mensile/crediti, promo, `avviaCheckout` |
 | `ContattiModal.tsx` | 18 | Wrapper `ContactForm` in modal |
 | `ContactForm.tsx` | 286 | Form contatti (dipartimento, oggetto, messaggio, allegato base64, honeypot) → Edge `contatto` |
-| `SostegnoToggle.tsx` | 99 | Interruttore condiviso «**Opportunità di sostegno**» (switch `role="switch"`): dal **27/09/2026 il sostegno è incluso di default** (`defaultPreferenze.sostegno = true`), quindi il controllo è l'**uscita esplicita** («Incluse» / «Escluse») — con la nota sull'adesione implicita via classe `AD*`. Usato dalle **Preferenze Radar** (il **wizard non lo chiede**: valore salvato preservato, si modifica solo da `/dashboard/radar`) |
+| ~~`SostegnoToggle.tsx`~~ | — | **RIMOSSO il 04/10/2026** (§26.45): il sostegno non è più una preferenza. *(§26.46)* Anche il blocco informativo «Opportunità di sostegno» è stato **rimosso** da `departments/radar/preferenze/PannelloClassi.tsx`: l'inclusione è ora **nativa e invisibile** nel backend — nessun interruttore, nessuna uscita, nessun testo in UI |
 | `modals/RadarPromoModal.tsx` | — | Promo del Radar (upsell PRO) |
 | `InterpelloCard.tsx` | 188 | Card singolo interpello: scadenza, provincia, classi, badge "Scuola Preferita", notifica, detail modal |
 | `ServiziPaywall.tsx` | — | Paywall condiviso (Base → invita a PRO/registrazione), icona Lock |
@@ -255,7 +257,7 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `GoogleOneTap.tsx` | 11 | Componente renderless → `useGoogleOneTap` |
 | `DatiProfiloModal.tsx` · `ForcePasswordModal.tsx` · `OAuthBounceModal.tsx` · `TelegramLoginButton.tsx` | — | Onboarding/profilo: completamento dati, cambio password forzato, bounce OAuth, login Telegram |
 | `SoftOnboardingModal.tsx` | — | Benvenuto PRO «**Buone notizie**»: regalo di benvenuto con **un solo pulsante d'azione** (nessuna voce di rinvio; si chiude con la X, non si apre mai da sola). Importa `GIORNI_TRIAL_PRO` da `lib/pricing` |
-| `DevToolbar.tsx` | 248 | Solo DEV: badge ⚡, switch stato (guest/base/pro via `simulaStato`), flag dei dipartimenti, **«Editor Testi Rapido» UNIVERSALE** (`EditorTestiRapido.tsx`, 145: i testi a schermo nella vista attiva, scanditi dal DOM — `lib/testiDom*.ts` — più il montaggio della scansione **sempre** attiva, anche a pannello chiuso: `useScansioneTestiDom`, §26.31), reset dati, porta, health check |
+| `DevToolbar.tsx` | 246 | Solo DEV: badge ⚡, switch stato (guest/base/pro via `simulaStato`), flag dei dipartimenti, reset dati, porta, health check. **Nessuna casella di testo**: il pannello «Editor Testi Rapido» è stato **rimosso** il 03/10/2026 (§26.38) e i testi si toccano col solo **«Visual Editor»** click-to-edit (§26.37 — badge in basso a sinistra, montato da `App.tsx`) |
 | `HealthCheckModal.tsx` | 287 | Modal diagnostica → `eseguiHealthCheck` |
 | `AppErrorBoundary.tsx` | — | Error boundary dell'**intera app** (fallback full-screen, reset) |
 | `DepartmentErrorBoundary.tsx` | — | Error boundary **per dipartimento**: isola il crash di un dominio (radar/notizie/modulistica/cfu) senza spegnere il resto della SPA |
@@ -308,10 +310,10 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `moduli.ts` | 298 | ⚠️ **Ereditato**: il catalogo è stato diviso in `moduliAltreAree.ts` (500), `moduliEntiAltro.ts` (487), `moduliOrdiniScuola.ts` (2710), `classiConcorso.ts` (944); `moduli.ts` conserva tipi, `macroAree`, `ordineMacroAree`, helper `conAggiuntaInCima`, `getModuliScaricati`, `macroAreaById` e il tipo `DocumentoModulistica` |
 | `interpelli.ts` | — | Tipo `Interpello` + feed mock (~12 voci demo) per modalità demo |
 | `classiConcorso.ts` | — | `ClasseConcorso[]` (A-XX, ADEE, ADSS…) con `ordine`, `materie[]`, `requisitiCfu[]`; helper `classeByCodice` |
-| `ordiniMaterie.ts` | ~160 | `OrdineScuola` (infanzia/primaria/secondaria1/secondaria2/cpia/serali/pon/ata), `ordiniScuola`, `materie`, **`MATERIE_GENERICHE`** + **`materieCompetenzeExtra()`** (esclude le discipline curricolari: Storia/Geografia non sono "competenze extra"), **`competenzeSuggerite`** (12 **tag popolari** PNRR/PON: AI nella didattica, robotica educativa, **Stop Motion**, coding, digital storytelling, CLIL, **Lingua inglese**, STEM, creatività digitale, educazione motoria, progettazione bandi, orientamento). Verificato da `npm run test:radar:preferenze` |
+| `ordiniMaterie.ts` | ~160 | `OrdineScuola` (infanzia/primaria/secondaria1/secondaria2/cpia/serali/pon/ata), `ordiniScuola`, `materie`, **`MATERIE_GENERICHE`** + **`materieCompetenzeExtra()`** (esclude le discipline curricolari: Storia/Geografia non sono "competenze extra"), **`competenzeSuggerite`** (12 **tag popolari** PNRR/PON: AI nella didattica, robotica educativa, **Stop Motion**, coding, digital storytelling, CLIL, **Lingua inglese**, STEM, creatività digitale, educazione motoria, progettazione bandi, orientamento), **`materieRicercabili()`** (le competenze extra PIÙ i tag popolari che sono discipline curricolari — «Lingua inglese», «Educazione motoria» — così anche loro si trovano dalla ricerca) e **`CORRELAZIONI_MATERIE`** (co-occorrenze curate termine → id di materie esistenti per la ricerca ESTESA: `inglese` → `clil`, `educazione_linguistica`…). Verificato da `npm run test:radar:preferenze` |
 | `province.ts` | 117 | `Provincia[]` (107 province: codice/nome/regione) + `regioni` |
 | `servizi.ts` | 99 | Vetrina servizi: `Servizio[]` (slug, emoji, titolo, caratteristiche, destinatari, dashboard, sperimentazione) + `servizioDaSlug` |
-| `editableTexts.ts` | 100 | **Registro dei testi modificabili «al volo» (DEV)**: `TESTI_EDITABILI` (`chiave → testo di default`, 22 voci = 8 FAQ pubbliche `faq.<slug>.domanda|risposta` + i 3 blocchi dell'offerta PRO `prezzi.offerta.<blocco>.titolo|testo`), `ChiaveTesto`/`CHIAVI_TESTO`, `testoDiDefault`, `eChiaveTesto`. **Nessun raggruppamento per pagina** (il `gruppiTesti()` con le etichette cablate è stato rimosso il 29/09/2026, §26.30): le pagine rendono per CHIAVE (`useTestiEditabili`), mai la stringa duplicata, e le chiavi lette alimentano da sole l'elenco contestuale dell'editor (`lib/testiInPagina.ts`). Il `localStorage: sr_simple_text_overrides` dell'editor DEV vale solo in sviluppo. Verificato da `npm run test:editor-testi` (§26.27; selezione delle FAQ in §26.29) |
+| `editableTexts.ts` | 100 | **Registro dei testi modificabili «al volo» (DEV)**: `TESTI_EDITABILI` (`chiave → testo di default`, 22 voci = 8 FAQ pubbliche `faq.<slug>.domanda|risposta` + i 3 blocchi dell'offerta PRO `prezzi.offerta.<blocco>.titolo|testo`), `ChiaveTesto`/`CHIAVI_TESTO`, `testoDiDefault`, `eChiaveTesto`. **Nessun raggruppamento per pagina** (il `gruppiTesti()` con le etichette cablate è stato rimosso il 29/09/2026, §26.30): le pagine rendono per CHIAVE (`useTestiEditabili`), mai la stringa duplicata, e il `localStorage: sr_simple_text_overrides` vale **solo** in sviluppo (nessuno lo scrive più da quando il pannello è stato rimosso, §26.38). Verificato da `npm run test:testi-chiave` (§26.27; selezione delle FAQ in §26.29) |
 | `faqPubbliche.ts` | 51 | **Elenco unico delle FAQ pubbliche** (`FAQ_PUBBLICHE`, `VoceFaq`): 8 voci `{ id, q, a }` = ancora HTML + chiavi del registro testi, nello stesso ordine su `/faq` (`FAQPage`) e su `/prezzi` (`PrezziPage`, 🔒: della pagina è cablata la sola sezione FAQ dal 29/09/2026). Solo copy di **posizionamento**: uscite le voci difensive (disdette, sicurezza dei pagamenti) e i rimandi a funzioni non attive (CV, Archivista AI, Tabelle A/B) — §26.29. L'ancora `#animatore-digitale` è pubblica (referenziata da `AuthModal`/`NotaAccessoScolastico`). Modulo puro: nessun React, nessuna copy |
 
 
@@ -321,34 +323,35 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | File | Righe | Responsabilità |
 |---|---|---|
 | `supabase.ts` | 20 | Client Supabase frontend (anon); `supabase === null` in demo; `isSupabaseConfigurato` |
-| `matchingEngine.ts` | ~330 | Matching Radar + utenti compatibili (§5.2); `searchInterpelli` esclude gli scaduti; **`elencaUtentiNotificabili`** → TUTTI i profili con canale valido e Radar attivo (`findUtentiCompatibili(..., { ignoraFiltri: true })`, così anche chi ha province/classi configurate riceve il riepilogo). **Normalizzazione CLASSI robusta**: `normalizzaClasse` (`A-18` ≡ `A18` ≡ `a 18` ≡ `A_18` ≡ `A-018` → `A-18`; i codici sostegno `ADEE`/`AD24` restano invariati), **`normalizzaClassi`** (dedup + formato canonico), **`contieneClasse`**/**`rimuoviClasse`** (confronto a prova di formato per le caselle UI). Verificato da `npm run test:matching` e `npm run test:radar:preferenze` |
+| `matchingEngine.ts` | ~700 | Matching Radar + utenti compatibili (§5.2); `searchInterpelli` esclude gli scaduti; **`elencaUtentiNotificabili`** → TUTTI i profili con canale valido e Radar attivo (`findUtentiCompatibili(..., { ignoraFiltri: true })`, così anche chi ha province/classi configurate riceve il riepilogo). **Normalizzazione CLASSI robusta**: `normalizzaClasse` (`A-18` ≡ `A18` ≡ `a 18` ≡ `A_18` ≡ `A-018` → `A-18`; i codici sostegno `ADEE`/`AD24` restano invariati), **`normalizzaClassi`** (dedup + formato canonico), **`contieneClasse`**/**`rimuoviClasse`** (confronto a prova di formato per le caselle UI). **COMPETENZE/PAROLE CHIAVE** (§26.35): `normalizzaCompetenza`, `tokenCompetenza`, `radiceCompetenza`, `etichetteCompetenzeProfilo`, `competenzaCompatibileConAvviso` (regola condivisa da motore, digest e feed), **`avvisoDiSostegno`** (l'area sostegno è a **inclusione permanente**: gli avvisi `AD*` non passano dal controllo di classe — §26.45). Verificato da `npm run test:matching` e `npm run test:radar:preferenze` |
 | `scadenza.ts` | ~90 | Helper scadenza (puro): `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `stileScadenza` (semaforo 🟢 lungo / 🟡 vicino / 🔴 imminente) |
-| `alertInterpello.ts` | ~480 | Costruttore dell'**avviso strutturato** (gerarchia obbligatorie/opzionali + campo `email` dell'avviso), `pulisciTitoloAvviso` (via i dump di codici classe), **`emailAvviso`** + costanti condivise `EMAIL_ICONA`/`EMAIL_ETICHETTA`/`EMAIL_ETICHETTA_WEB`, **`ISTRUZIONE_AVVISO_UFFICIALE`** (direttiva standard "clicca STAMPA") e **`suggerimentoRicercaAvviso({ compatto })`** (guida operativa per elenchi/"Stampa" o fonte mancante), **`emailAvviso`** ed **`etichettaFonteLink`/`classificaFonteLink`/`ePaginaRiepilogo`** (etichetta ONESTA del link: PDF / Albo Pretorio / **pagina di riepilogo "Stampa"** / avviso — mai "Candidati"), **GATE DI QUALITÀ**: `eUrlAvvisoDiretto` (link = avviso specifico, mai home/elenco/ricerca/archivio regionale), `motivoAvvisoNonInviabile` e `avvisoInviabile` (**link diretto AND email di candidatura**: altrimenti nessun invio). Verificato da `npm run test:qualita` |
+| `alertInterpello.ts` | ~480 | Costruttore dell'**avviso strutturato** (gerarchia obbligatorie/opzionali + campo `email` dell'avviso), `pulisciTitoloAvviso` (via i dump di codici classe), **`emailAvviso`** + costanti condivise `EMAIL_ICONA`/`EMAIL_ETICHETTA`/`EMAIL_ETICHETTA_WEB`, **`ISTRUZIONE_AVVISO_UFFICIALE`** (direttiva standard "clicca STAMPA") e **`suggerimentoRicercaAvviso({ compatto })`** (guida operativa per elenchi/"Stampa" o fonte mancante), **`emailAvviso`** ed **`etichettaFonteLink`/`classificaFonteLink`/`ePaginaRiepilogo`** (etichetta ONESTA del link: PDF / Albo Pretorio / **pagina di riepilogo "Stampa"** / avviso — mai "Candidati"), **GATE DI QUALITÀ**: `eUrlAvvisoDiretto` (link = avviso specifico, mai home/elenco/ricerca/archivio regionale), `motivoAvvisoNonInviabile` e `avvisoInviabile` (**link diretto AND email di candidatura**: altrimenti nessun invio), **PULIZIA DELL'URL**: `pulisciUrlEsterna` (entità `&amp;`, virgolette/angolari/caporalia di markdown, spazi e punteggiatura di contorno) e **`urlFonteAvviso`** = stringa pulita + UNICO gate `eUrlAvvisoDiretto` (il punto unico dell'`href` per Telegram, email e canali — §26.45). Verificato da `npm run test:qualita` |
 | `interpelloRouting.ts` | ~40 | Deep link LEGACY `/interpello/:id` (puro): `eUuid`, `chiaveInterpelloDaParam` (uuid → `id`, hash → `hash_id`). **Policy**: le notifiche non generano più link interni; la rotta resta solo per i deep link storici (che reindirizzano subito alla fonte esterna) |
 | `digest.ts` | ~130 | **Puro, senza import** — finestra del BATCH giornaliero: `oraLocaleItalia`/`dataLocaleItalia`/`etichettaDataItalia` (fuso `Europe/Rome`), `ORA_DIGEST` (**17:00**), `eOraDelDigest(istante, forzato)`, `descrizioneFinestraDigest`, `ordinaVociDigest` (scadenza più vicina in cima), `raggruppaPerProvincia` |
-| `resend.ts` | 1.153 | **Node-only** — email Resend: 8 `TipoMessaggio` (`welcome, prova1, prova2, prova3, extra, recap, welcome_pro, notifica_pro`), **OGGETTO STANDARD delle opportunità** `OGGETTO_OPPORTUNITA = 'Nuove opportunità per te!'` (`subjectDigest`/`subjectOpportunita`/`subjectPerNotifica`; gli oggetti di ciclo di vita restano specifici), **`vociAttive`** (il digest contiene SOLO opportunità non scadute), **`footerEmailHtml`** (footer unico crisp: firma → CTA Notizie email → link Radar **in piccolo** (12.5 px) → riga brand → avviso "non rispondere" in coda; niente "P.S.", niente grigio `#94a3b8`), `ctaNotizieHtml`/`URL_NOTIZIE_VISIBILE`/`CTA_NOTIZIE_TESTO_EMAIL`/`TESTO_NON_RISPOSTA`, `linkOpportunita` (solo link diretto, via `eUrlAvvisoDiretto`) e **`fonteInEvidenza`** (link ufficiale IN EVIDENZA nella card: scatola blu brand + etichetta standard; **nessun box giallo né guida operativa nelle email**), CORPO_MESSAGGI, `TIPI_CON_OPPORTUNITA`, `renderEmailHtml`, `inviaNotificaEmail`, `inviaNotificheInterpello`, `renderDigestEmailHtml`/`inviaDigestEmail`, **`renderPromemoriaEmailHtml`/`inviaPromemoriaEmail`**. Verificato da `npm run test:email`, `npm run test:digest`, `npm run test:promemoria`, `npm run test:link` |
-| `telegram.ts` | 1.286 | **Node-only** — messaggi Telegram. `formattaMessaggioTelegram`: ALERT di **solo testo** (nessuna foto/logo → niente anteprima gigante, nessun disclaimer operativo) con **testata brand cliccabile** (`📡 <a href="https://www.scuoleradar.it">Scuole Radar.it</a>`), apertura **`🎯 Abbiamo trovato una nuova opportunità per te` (+ contesto classe·provincia)**, riga `📧 Candidature`, **etichetta UNICA del link di fonte `🔗 Fonte Ufficiale`** (URL solo nell'`href`) e CTA finale `CTA_RADAR_INTERESSI` (ricalibra il Radar su `/dashboard/radar`, **solo nel ~20% dei messaggi**: `deveMostrareCtaRadar`/`FREQUENZA_CTA_RADAR`, forzabile con `{ mostraCtaRadar }`); i messaggi di ciclo di vita mantengono copy + `CTA_NOTIZIE_TELEGRAM`. Poi `formattaDigestTelegram` (BATCH BASE), **`formattaPostCanaleTelegram`** (post canali a 7 sezioni, testate tipografiche `📝 Interpello docenti`/`🗂️ Avviso ATA`/`📣 Bando / PNRR / Esperto`; brand in testa, **URL ufficiali mai in chiaro** — solo la riga iperlinkata `🔗 Fonte Ufficiale` — e link SOLO se diretto all'avviso, `eUrlAvvisoDiretto`), **`pubblicaInterpelloSuCanali`** con **gate di link safety** (`EsitoPubblicazioneCanali.saltato`: nessuna pubblicazione senza avviso specifico), `inviaNotificaTelegram`, `inviaMessaggioTelegram` (**`payloadMessaggioTesto`**: punto UNICO del payload `sendMessage` con `link_preview_options.is_disabled` + `disable_web_page_preview: true`; mai `sendPhoto`/`sendMediaGroup`), `rigaFonteUfficiale`/`rigaAvvisoUfficiale` (etichetta canonica + gate `eUrlAvvisoDiretto` interno), `getTelegramBotToken`, **`pulisciUrlTelegram`**. **Nessun prompt "Filtra per provincia e classi" nei messaggi personali**; verifica con `npm run test:telegram:canali` |
+| `resend.ts` | 1.153 | **Node-only** — email Resend: 8 `TipoMessaggio` (`welcome, prova1, prova2, prova3, extra, recap, welcome_pro, notifica_pro`), **OGGETTO STANDARD delle opportunità** `OGGETTO_OPPORTUNITA = 'Nuove opportunità per te!'` (`subjectDigest`/`subjectOpportunita`/`subjectPerNotifica`; gli oggetti di ciclo di vita restano specifici), **`vociAttive`** (il digest contiene SOLO opportunità non scadute), **`footerEmailHtml`** (footer unico crisp: firma → CTA Notizie email → link Radar **in piccolo** (12.5 px) → riga brand → avviso "non rispondere" in coda; niente "P.S.", niente grigio `#94a3b8`), `ctaNotizieHtml`/`URL_NOTIZIE_VISIBILE`/`CTA_NOTIZIE_TESTO_EMAIL`/`TESTO_NON_RISPOSTA`, `linkOpportunita` (solo link diretto, **URL già pulito** via `urlFonteAvviso`) e **`fonteInEvidenza`** (PULSANTE dell'avviso ufficiale: **UNICA azione di fonte per voce**, etichetta standard; **nessun box giallo né guida operativa nelle email**), **`intestazioneBrandHtml`/`URL_BRAND`** (header email **SOLO testuale**, cliccabile verso `scuoleradar.it`: **nessun logo-immagine**), CORPO_MESSAGGI, `TIPI_CON_OPPORTUNITA`, `renderEmailHtml`, `inviaNotificaEmail`, `inviaNotificheInterpello`, `renderDigestEmailHtml`/`inviaDigestEmail`, **`renderPromemoriaEmailHtml`/`inviaPromemoriaEmail`**. Verificato da `npm run test:email`, `npm run test:digest`, `npm run test:promemoria`, `npm run test:link` |
+| `telegram.ts` | 1.286 | **Node-only** — messaggi Telegram. `formattaMessaggioTelegram`: ALERT di **solo testo** (nessuna foto/logo → niente anteprima gigante, nessun disclaimer operativo) con **testata brand cliccabile** (`📡 <a href="https://www.scuoleradar.it">Scuole Radar.it</a>`), apertura **`🎯 Abbiamo trovato una nuova opportunità per te` (+ contesto classe·provincia)**, riga `📧 Candidature`, **riga UNICA del link di fonte** (`👉 Apri l'avviso ufficiale`: etichetta canonica dei messaggi PERSONALI, la stessa delle email) costruita sull'**URL grezzo** della voce, **pulito** (`urlFonteAvviso`: entità HTML, virgolette, spazi e punteggiatura di contorno) e passato dall'**unico gate** `eUrlAvvisoDiretto` dentro `rigaAvvisoUfficiale` (URL solo nell'`href`) e CTA finale `CTA_RADAR_INTERESSI` (ricalibra il Radar su `/dashboard/radar`, **solo nel ~20% dei messaggi**: `deveMostrareCtaRadar`/`FREQUENZA_CTA_RADAR`, forzabile con `{ mostraCtaRadar }`); i messaggi di ciclo di vita mantengono copy + `CTA_NOTIZIE_TELEGRAM`. Poi `formattaDigestTelegram` (BATCH BASE), **`formattaPostCanaleTelegram`** (post canali a 7 sezioni, testate tipografiche `📝 Interpello docenti`/`🗂️ Avviso ATA`/`📣 Bando / PNRR / Esperto`; brand in testa, **URL ufficiali mai in chiaro** — solo la riga iperlinkata `🔗 Fonte Ufficiale` — e link SOLO se diretto all'avviso, `eUrlAvvisoDiretto`), **`pubblicaInterpelloSuCanali`** con **gate di link safety** (`EsitoPubblicazioneCanali.saltato`: nessuna pubblicazione senza avviso specifico), `inviaNotificaTelegram`, `inviaMessaggioTelegram` (**`payloadMessaggioTesto`**: punto UNICO del payload `sendMessage` con `link_preview_options.is_disabled` + `disable_web_page_preview: true`; mai `sendPhoto`/`sendMediaGroup`), `rigaFonteUfficiale`/`rigaAvvisoUfficiale` (etichetta canonica + gate `eUrlAvvisoDiretto` interno), `getTelegramBotToken`, **`pulisciUrlTelegram`**. **Nessun prompt "Filtra per provincia e classi" nei messaggi personali**; verifica con `npm run test:telegram:canali` |
 | `dedupAvvisi.ts` | ~95 | **Puro** — `improntaAvviso` / `normalizzaPerImpronta` / `GIORNI_IMPRONTA`: identità STABILE dell'opportunità (provincia + scuola + **classi NORMALIZZATE `A-022` ≡ `A-22`** + titolo normalizzato senza date/numeri/riempitivi). Intercetta la stessa notizia ripubblicata con titolo/data diversi (hash nuovo) → nessuna notifica ripetuta a distanza di giorni. Usata dallo scraper (dedup in inserimento) e dal **frequency cap per utente** (§6.5.1). Verificata da `npm run test:dedup` e `npm run test:dedup:utente` |
 | `frequenzaNotifiche.ts` | ~140 | **Puro** — **FREQUENCY CAP** delle notifiche personali: `MAX_INVII_OPPORTUNITA` (2), `hashContenuto` (FNV-1a del contenuto normalizzato), **`identitaFrequenza`** (`scuola|classi|hashContenuto`, classi normalizzate `A-022` ≡ `A-22`), `giornoFrequenza` (fuso `Europe/Rome`), `valutaFrequenza` → `stesso-giorno` / `limite-raggiunto` / `ok`. Verificato da `npm run test:frequenza` |
-| `testiModificabili.ts` | 137 | **Puro e isomorfo** — store degli override dell'**Editor Testi Rapido** (`localStorage: sr_simple_text_overrides`): snapshot stabile `overrideTesti()`, `sottoscriviTesti`, `testoCorrente(chiave)` (`override → default`), `impostaTesto` (campo svuotato = ritorno al default, niente scritture se il valore non cambia), `azzeraTesti()` (cancella la chiave). Letture tolleranti: JSON corrotto, chiavi fuori registro e valori vuoti tornano ai default del codice. Verificato da `npm run test:editor-testi` (§26.27) |
-| `testiInPagina.ts` | 93 | **Puro e isomorfo** — REGISTRO DELLE VISTE dell'editor **contestuale** (§26.30): `registraTestiInPagina(chiavi)` (iscrive l'insieme di UN componente montato, ritorna lo smontaggio), `sincronizzaTestiInPagina()` (riallinea dopo ogni render), `testiInPagina()` (snapshot a riferimento **stabile** per `useSyncExternalStore`, unione delle viste in ordine di registro), `sottoscriviTestiInPagina`, `azzeraTestiInPagina` (reset/test). Nessuna mappa rotta → chiavi: l'iscrizione la fanno i componenti che LEGGONO i testi (`useTestiEditabili`). Verificato da `npm run test:editor-testi` (secondo script, `test-editor-testi-vista.ts`) |
-| `testiDomOverride.ts` | 115 | **Puro e isomorfo** — STORE degli override **sui testi del DOM** dell'editor universale (§26.31): `localStorage: sr_dom_text_overrides` (`chiave → { t, v }`: `t` = testo di default del codice conservato per il reset, `v` = testo scritto a mano), snapshot a riferimento **stabile** `overrideDom()`, `overrideDomSalvatiDaStorage()` (è ciò che vede una pagina RICARICATA), `impostaOverrideDom(chiave, voce \| null)` (ritorna `true` solo se lo store cambia: chi chiama salta la riscrittura inutile) e `azzeraOverrideDom()`. Letture tolleranti: storage bloccato, JSON corrotto o voci malformate → si torna alla copy del codice |
-| `testiDomNodi.ts` | 95 | **Puro e isomorfo** — LETTURA del DOM per l'editor universale (§26.31): tipo minimo **`NodoDom`** (permette di ESEGUIRE la scansione su un DOM finto negli script Node, senza jsdom), `raccogli(radice, out)` in ordine di lettura sui NODI DI TESTO con almeno 2 lettere, salto dei rami tecnici (`script`, `style`, `svg`, `code`…) e dei pannelli DEV (`data-sr-dev-toolbar` o «DevToolbar» in `id`/`aria-label`: l'editor non elenca se stesso), `etichettaDove` («sezione · Paragrafo») e `scriviTesto` (conserva gli spazi di bordo del JSX). Verificato da `npm run test:editor-testi` (terzo script, con `scripts/lib/dom-finto.ts`) |
-| `testiDomRegole.ts` | 69 | **Puro, senza dipendenze** — REGOLE e NOMI della scansione (§26.31): `normalizzaTesto`, `impronta` (djb2 in base 36), `chiaveTestoDom(tag, testo, occorrenza)` → `p#1a2b3c#0` (identità STABILE del testo: non dipende dalla posizione nel DOM, quindi l'override resta agganciato anche quando React ricrea i nodi e due testi identici restano occorrenze distinte), `TAG_IGNORATI` e `campoDi`/`contenitoreDi` per le etichette umane |
-| `testiDom.ts` | 141 | **Puro e isomorfo** — ELENCO dei testi a schermo dell'**Editor Testi Rapido UNIVERSALE** (§26.31): `scansionaTestiDom(radice)` attraversa la vista, **applica** gli override salvati e pubblica lo snapshot (riferimento **stabile**, notifiche solo al cambiamento reale: `sottoscriviTestiDom` / `testiDomInPagina`), `impostaTestoDom(chiave, valore)` (campo svuotato o valore = default ⇒ override tolto) e `azzeraTestiDom()`. Un `WeakMap` ricorda il testo ORIGINALE delle occorrenze toccate: al reset i nodi tornano alla copy del codice all'istante e l'identità non si perde quando `nodeValue` contiene già il testo scritto a mano |
+| `testiModificabili.ts` | 139 | **Puro e isomorfo** — store degli override dei **testi per chiave** (DEV, `localStorage: sr_simple_text_overrides`): snapshot stabile `overrideTesti()`, `sottoscriviTesti`, `testoCorrente(chiave)` (`override → default`), `impostaTesto` (campo svuotato = ritorno al default, niente scritture se il valore non cambia), `azzeraTesti()` (cancella la chiave). Letture tolleranti: JSON corrotto, chiavi fuori registro e valori vuoti tornano ai default del codice. Dalla rimozione del pannello (§26.38) **nessuno lo scrive più**: la lettura resta per non lasciare attivi, in sviluppo, i testi salvati prima. Verificato da `npm run test:testi-chiave` (§26.27) |
+| `testiDomNodi.ts` | 41 | **Puro e isomorfo** — LETTURA dei testi del DOM: era il secondo pezzo della scansione dell'«Editor Testi Rapido» (rimosso il 03/10/2026, §26.38), oggi serve al VISUAL EDITOR (§26.37) con il **tipo minimo `NodoDom`** (permette di ESEGUIRE i testi su un DOM finto negli script Node, senza jsdom) e `etichettaDove` («sezione · Paragrafo»). La scansione dei blocchi e la riscrittura stanno in `visualEditorRegole.ts`. Verificato da `npm run test:visual-editor` |
+| `testiDomRegole.ts` | 61 | **Puro, senza dipendenze** — REGOLE e NOMI dei testi del DOM (condivise col VISUAL EDITOR, §26.37): `normalizzaTesto`, `impronta` (djb2 in base 36), `chiaveTestoDom(tag, testo, occorrenza)` → `p#1a2b3c#0` (identità STABILE del testo: non dipende dalla posizione nel DOM, quindi l'override resta agganciato anche quando React ricrea i nodi e due testi identici restano occorrenze distinte) e `campoDi`/`contenitoreDi` per le etichette umane |
 | `emailScuola.ts` | ~110 | **Puro** — email UFFICIALE della scuola: `normalizzaCodiceMeccanografico`, `estraiCodiceMeccanograficoDaTesto`, `emailDaCodiceMeccanografico` (PEO `@istruzione.it` / PEC `@pec.istruzione.it`), `risolviEmailUfficialeScuola` (email di fonte → convenzione MIM; mai email inventate) |
-| `liveBoard.ts` | 209 | **Puro** — vetrina "Radar Live" (ogni nome passa dal GATE `nomeIstituto.ts`; `titoloLeggibile` per il sottotitolo, `rigaPresentabileVetrina` per la prova): `scuolaDaTitolo` (nome **prima del separatore** quando dopo c'è l'azione amministrativa; respinge frammenti di procedura, elenchi di codici classe e nomi generici), `nomeScuolaRiga` (campo → registro per codice → titolo: l'ente emittente NON è una scuola e non entra in bacheca; un `school_name` fatto solo di codici classe — «ADEE \| EEEE» — **non** è un nome), `nomePresentabileRiga` (per il responso della prova: ultima risorsa l'ENTE emittente, mai un codice), `preparaRigheBoard` (arricchisce e **scarta** le righe senza scuola o con un nome NON leggibile — mai "Scuola non indicata" né codici in vetrina — e tiene gli **avvisi senza scadenza** pubblicati negli ultimi `GIORNI_FINESTRA_SENZA_SCADENZA`=60 giorni con `scadenza: null` + `senzaScadenza`: mai una data inventata), `diversificaProvince` (round-robin deterministico per provincia: nessuna provincia monopolizza le prime pagine) |
+| `liveBoard.ts` | 238 | **Puro** — vetrina "Radar Live" (ogni nome passa dal GATE `nomeIstituto.ts`; `titoloLeggibile` per il sottotitolo, `rigaPresentabileVetrina` per la prova): `scuolaDaTitolo` (nome **prima del separatore** quando dopo c'è l'azione amministrativa; respinge frammenti di procedura, elenchi di codici classe e nomi generici), `nomeScuolaRiga` (campo → registro per codice → titolo: l'ente emittente NON è una scuola e non entra in bacheca; un `school_name` fatto solo di codici classe — «ADEE \| EEEE» — **non** è un nome), `nomePresentabileRiga` (per il responso della prova: ultima risorsa l'ENTE emittente, mai un codice), `preparaRigheBoard` (**NON scarta più NESSUNA riga per anagrafica** (il nome di ripiego è `nomeScuolaBoard`/`nomeGrezzoDaBando`, §26.47: nome reale → nome grezzo pubblicato dal bando, se leggibile → dicitura gestita «Anagrafica in aggiornamento»; la riga resta in bacheca e `anagraficaParziale` lo dichiara; resta fuori solo l'avviso non vivo). Il tabellone continua a non mostrare mai "Scuola non indicata" né codici in vetrina — e tiene gli **avvisi senza scadenza** pubblicati negli ultimi `GIORNI_FINESTRA_SENZA_SCADENZA`=60 giorni con `scadenza: null` + `senzaScadenza`: mai una data inventata), `diversificaProvince` (round-robin deterministico per provincia: nessuna provincia monopolizza le prime pagine) |
 | `nomeIstituto.ts` | 161 | **Puro, senza dipendenze** — GATE dei nomi in vetrina: `nomeIstitutoPresentabile` accetta una stringa solo se ha una **testa d'istituto** (`IC`, `I.I.S.`, `ITIS`, `Liceo`, `Istituto`, `Convitto`…) **e** una **denominazione** (un nome proprio), senza codici amministrativi (classe di concorso, sostegno, meccanografico, token misto lettere+cifre) e senza 3+ cifre consecutive; **taglia la coda di procedura** («IC ALBIGNASEGO Interpello per copertura posti» → «IC ALBIGNASEGO»). Verificato da `npm run test:nome-istituto` |
-| `school-lookup.ts` | ~50 | Registro scuole per codice meccanografico: `resolveSchoolByCode` (PEO/PEC) e **`nomeScuolaDaCodice`** (solo nomi REALI, mai "Istituto &lt;codice&gt;") |
+| `school-lookup.ts` | 67 | **Anti-mock** (§26.47) — registro MINIMO delle scuole, solo istituti REALI registrati a mano: **`nomeScuolaDaCodice`** (mai "Istituto &lt;codice&gt;") e `scuolaDaCodice` (`SchoolInfo` completo, `null` se non registrato). Il vecchio **`resolveSchoolByCode`** — che per QUALSIASI codice fabbricava un nome (`Istituto &lt;codice&gt;`) e la città `N/D` — è stato **rimosso**: il recapito ufficiale nasce solo dalla convenzione MIM (`emailScuola.ts`). Verificato da `npm run test:pipeline` |
+| `statoArricchimento.ts` | 84 | **Puro e isomorfo** — STATO dell'anagrafica di una riga (§26.47): `statoArricchimento` (`completo` = istituto identificato + recapito PEO/PEC, altrimenti `parziale`), `istitutoIdentificato`, `recapitoPresente`, `normalizzaStatoArricchimento`, `anagraficaInAggiornamento` (true solo per `parziale`: uno stato ignoto non afferma nulla) e la dicitura gestita `SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO`. `parziale` NON è mai un motivo di scarto. Verificato da `npm run test:pipeline` |
 | `provaRadarEngine.ts` | 117 | **Puro** — motore del **Radar di prova** pubblico (si prova con la **sola provincia**): `LIMITE_RISULTATI_PROVA`, `righeAttive` (senza scadenza = attiva), `selezionaRisultatiProva(provincia, nazionali, limite)` (tutte le opportunità ATTIVE della provincia + **completamento nazionale** senza duplicati) e la copy del responso (`messaggioConversione`, `messaggioRadarInScansione`, `CODA_CONVERSIONE_PROVA`); responso `{ gruppo: 'provincia'\|'nazionale'\|'vuoto', righe, daProvincia }`. Mai «zero risultati»: l'elenco resta pieno finché esiste un avviso vivo. Verificato da `npm run test:prova-radar` |
 | `provaRadar.ts` | 81 | **Memoria della provincia provata** (localStorage, tollerante agli errori): `salvaProvinciaProva`/`leggiProvinciaProva`/`svuotaProvinciaProva` + `provinceInizialiConProva` → la provincia del box «Prova il Radar» diventa la **provincia principale** del wizard/onboarding (validata sul catalogo `data/province`). Verificato da `npm run test:prova-radar` |
-| `notifier.ts` | 1.999 | **Node-only** — orchestratore notifiche: **`inviaAlertTelegramTempoReale`** (alert INDIVIDUALI Telegram per i **PRO**), **`inviaDigestGiornaliero`** (BATCH: email per tutti + Telegram solo per **BASE**; opzioni `forzato`, `soloUtente`, `soloRegistrare`/`finoA`, seam di test `inviaEmail`/`inviaTelegram`; guardia "una email al giorno" `chiaveDigestGiorno`) e **`inviaPromemoria24h`** (promemoria email ≥ 24h per scadenze entro 3 giorni). **REGISTRO INVII per utente** (§6.5.1): `avvisoGiaInviato` (**FREQUENCY CAP**: identità = scuola + classi + impronta del contenuto; **max 2 invii in 2 giorni diversi**, mai due volte nello stesso giorno, per canale di consegna, con marcatori storici pre-cap conservativi) e `registraInvioAvviso` (registra il **GIORNO** dell'invio su ledger file + `notifications_log` con canale `freq_email`/`freq_telegram`) → nessuno spam, e un contenuto aggiornato riparte come nuova opportunità. `recapitoNotifica` (PEO dal codice MIM), **GATE DI QUALITÀ STRICT** (`superaGateQualita`, da `avvisoInviabile`): nessun invio di avvisi senza **link diretto** o senza **recapito** — applicato a `notificaNuoviInterpelli`, `notificaInterpelliPerUtente`, `inviaAlertTelegramTempoReale`, `raccogliVociCanale` (digest) e `inviaPromemoria24h` |
+| `notifier.ts` | 1.999 | **Node-only** — orchestratore notifiche: **`inviaAlertTelegramTempoReale`** (alert INDIVIDUALI Telegram per i **PRO**), **`inviaDigestGiornaliero`** (BATCH: email per tutti + Telegram solo per **BASE**; opzioni `forzato`, `soloUtente`, `soloRegistrare`/`finoA`, seam di test `inviaEmail`/`inviaTelegram`; guardia "una email al giorno" `chiaveDigestGiorno`) e **`inviaPromemoria24h`** (promemoria email ≥ 24h per scadenze entro 3 giorni). **ACCUMULO EMAIL** (`accumulaVoceEmail`/`inviaEmailAccumulate`): i percorsi di dispatch/backfill (`notificaNuoviInterpelli`, `notificaInterpelliPerUtente`) **non inviano mai una email per opportunità** — le voci compatibili si accumulano e partono con **UN'UNICA email di riepilogo** (`inviaDigestEmail`, stesso renderer del digest); `EsitoDispatchUtente.emailVoci` conta le opportunità incluse nel riepilogo. **REGISTRO INVII per utente** (§6.5.1): `avvisoGiaInviato` (**FREQUENCY CAP**: identità = scuola + classi + impronta del contenuto; **max 2 invii in 2 giorni diversi**, mai due volte nello stesso giorno, per canale di consegna, con marcatori storici pre-cap conservativi) e `registraInvioAvviso` (registra il **GIORNO** dell'invio su ledger file + `notifications_log` con canale `freq_email`/`freq_telegram`) → nessuno spam, e un contenuto aggiornato riparte come nuova opportunità. `recapitoNotifica` (PEO dal codice MIM), **GATE DI QUALITÀ STRICT** (`superaGateQualita`, da `avvisoInviabile`): nessun invio di avvisi senza **link diretto** o senza **recapito** — applicato a `notificaNuoviInterpelli`, `notificaInterpelliPerUtente`, `inviaAlertTelegramTempoReale`, `raccogliVociCanale` (digest) e `inviaPromemoria24h` |
 | `promemoria.ts` | ~130 | **Puro** (nessun I/O) — regole del **PROMEMORIA 24h**: `ORE_PROMEMORIA` (24), `GIORNI_URGENZA_PROMEMORIA` (3), `CANALE_PROMEMORIA` (`promemoria`), `oreTrascorse`, `eVoceUrgente`, `motivoPromemoria` (`ok`/`inviata-da-meno-di-24h`/`gia-promemoria`/`scaduta`/`scadenza-non-urgente`/`mai-inviata`/`senza-id`), `ePromemoriaDovuto`, `chiavePromemoria` (chiave di deduplica per coppia utente×interpello). Verificato da `npm run test:promemoria` |
 | `ledgerLocale.ts` | ~110 | **Node-only** — ledger anti-duplicato su file (`.scuoleradar/notifiche-ledger.json`): `chiaveLedger`, `ledgerLocaleGia`, `ledgerLocaleChiaviConPrefisso` (conteggio frequenza per identità), `ledgerLocaleRegistra`, `ledgerLocaleSalva`, `percorsoLedgerLocale`. Rete di sicurezza quando le tabelle DB non sono ancora create; committato dai workflow. **Percorso sovrascrivibile con `SCUOLERADAR_LEDGER_PATH`** (usato dai test per NON sporcare il ledger reale). **Tolleranza BOM** in lettura e scrittura senza BOM; un file ILLEGGIBILE produce un warning esplicito (mai deduplica silenziosamente disattivata). Verificato da `npm run test:ledger` |
 | `pricing.ts` | 18 | Piani: `PianoId = 'pro_annuale'|'pro_mensile'|'a_consumo'`; localStorage `STORAGE_KEY_INTENDED_PLAN` |
 | `promo.ts` | 34 | `validaPromo(codice, userId)` via RPC `valida_codice_promo`; `SCONTO_PROMO_EUR = 10` |
 | `provinceRadar.ts` | 68 | **Puro** — PROVINCIA PRINCIPALE del Radar: `provinciaPrincipale` (la PRIMA selezionata), `eProvinciaPrincipale`, `provinceDiContorno` (tutte tranne la principale), `promuoviProvinciaPrincipale` (porta in testa = priorità, idempotente), **`limitaProvinceMantenendoPrincipale`** (troncamento dei downgrade che conserva SEMPRE la principale). L'ordine dell'array `provinceCodici` è la fonte di verità (persistito su `profiles.province`/`sr_preferenze`). Verificato da `npm run test:province` |
-| `ricercaSelezioniRadar.ts` | 157 | **Puro** — RICERCA UNIFICATA (wizard + Preferenze): `cercaSelezioniRadar` (classi + competenze + parola chiave in un solo risultato), `cercaClassiDiConcorso` (codice `a18` ≡ `A-18`, denominazione **o materia collegata**), `cercaCompetenzeExtra` (solo extra PNRR/PON: le discipline curricolari restano fuori), `normalizzaTestoRicerca`, `etichettaMateria`, `LIMITE_RISULTATI_GRUPPO`, `MIN_CARATTERI_RICERCA`. Verificato da `npm run test:ricerca` |
+| `ricercaSelezioniRadar.ts` | ~190 | **Puro** — RICERCA UNIFICATA (wizard + Preferenze): `cercaSelezioniRadar` (classi + competenze + parola chiave in un solo risultato), `cercaClassiDiConcorso` (codice `a18` ≡ `A-18`, denominazione **o materia collegata, anche CORRELATA**), `cercaCompetenzeExtra` (**materie ricercabili** + competenze CORRELATE: «Inglese» → CLIL, educazione linguistica; le altre disciplinari restano fuori), `materieCorrelate` (sinonimi da `CORRELAZIONI_MATERIE`), `normalizzaTestoRicerca`, `etichettaMateria`, **`classeRispondeAQuery`/`classeCorrispondeAQuery`** (tolleranza di scrittura del codice: `a19` ≡ `A19` ≡ `A-19` ≡ `A_19` ≡ `A-019` ≡ `  a 19  ` — §26.45), `LIMITE_RISULTATI_GRUPPO`, `MIN_CARATTERI_RICERCA`. La parola chiave libera non è riproposta se il catalogo offre già quella voce (per nome o id). Verificato da `npm run test:ricerca` |
+| `anagraficaCsv.ts` | ~200 | **Solo-Node** — ANAGRAFICA NAZIONALE delle scuole (file CSV SCUANAGRAFE del Ministero): `parseCsv` (RFC4180: campi quotati, `""` dentro il campo, a capo nei valori), `scuolaDaCampi` → `ScuolaAnagrafica` (codice scuola, istituto di riferimento, denominazioni, PEO, PEC, provincia/comune, tipologia, paritaria), chiavi di confronto `normalizzaNomeScuola`, **`chiaveCodiceScuola`** (permissiva 6–16 alfanumerici: i codici delle **paritarie** — `UD1A036009` — non passano la convenzione MIM statale), `chiaveProvincia` + `provinciaCodiceDaNome` («MONZA E BRIANZA» ≡ «Monza e della Brianza»). Email normalizzate in minuscolo. Verificato da `npm run test:anagrafica` (§26.41) |
+| `anagraficaIndice.ts` | ~160 | **Solo-Node** — indice dell'anagrafica: `cartellaAnagrafica` (`SCUOLERADAR_ANAGRAFICA_DIR`, default `~/Downloads`), `fileAnagrafici` (ricerca per PREFISSO `SCUANAGRAFESTAT`/`SCUANAGRAFEPAR`/`SCUANAAUT*`), `caricaAnagrafica` (`perCodice`, `perIstituto`, `perNome`, righe per file, **cache di processo**: ~13 MB mai ricaricati), `IndiceAnagrafica`/`FileAnagraficaLetto`. Cartella assente = `disponibile: false`, mai un errore (§26.41) |
+| `anagraficaScuole.ts` | ~175 | **Solo-Node, superficie pubblica** dell'anagrafica (ri-esporta i due moduli sopra): `scuolaDaCodice` (sede o istituto di riferimento), `scuolaDaNome` (**solo se univoco**, con provincia e ripetendo senza la sigla iniziale: «I.C. Ferruccio Ulivi» → «Ferruccio Ulivi»), `nomeDaAnagrafica` (denominazione dell'ISTITUTO passata dal gate §26.20) e **`arricchisciDaAnagrafica`** → patch `{ school_code, school_name, contact_email, school_pec }` **solo sui campi mancanti**. Usata da `scripts/arricchisci-interpelli.ts` e dallo scraper (`arricchisciConAnagrafica`, §26.41): Radar Pubblico, Personale e Regionale leggono le stesse righe arricchite. Verificato da `npm run test:anagrafica` |
 | `mieiDocumenti.ts` | 130 | **Storage personale** «I Miei Documenti» (localStorage, nessun upload): `MioDocumento`, `STORAGE_KEY_MIEI_DOCUMENTI`, limiti (`LIMITE_DOCUMENTI` 6 · `LIMITE_BYTE_DOCUMENTO` 1 MB · `LIMITE_BYTE_TOTALE` 3,5 MB · `TIPI_AMMESSI`), `validaNuovoDocumento` (esito ESPLICITO: mai un rifiuto silenzioso), `leggi`/`salva` (quota piena segnalata), `aggiungi`/`rimuovi`, `byteTotali`, `formattaDimensione`. Verificato da `npm run test:documenti` |
 
 ### 2.8 `src/hooks/`
@@ -358,8 +361,7 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `useLocalStorage.ts` | `useLocalStorage<T>(key, initial)` con gestione quota errors |
 | `useGoogleOneTap.ts` | Carica GSI su entry pages, `signInWithIdToken` con client ID Google; solo se non autenticato |
 | `useReferral.ts` | Referral: genera codice fallback client-side (stessa regola trigger), `ReferralStats`, `ReferralEntry`, link `?ref=` |
-| `useTestiEditabili.ts` | **Testi modificabili (DEV)**: il registro `src/data/editableTexts.ts` con due API — `useTestiEditabili()` per le PAGINE (`testo(chiave)`, `imposta(chiave, valore)`, `azzera()`, `testi`, `modificati`; le chiavi lette vengono iscritte nel registro delle viste `src/lib/testiInPagina.ts`, `useSyncExternalStore` + riallineamento a ogni render) e `useTestiInPagina()` per l'**editor contestuale** (stessi override + `chiavi` = i testi della vista attiva; questo `testo()` NON registra, altrimenti il pannello si alimenterebbe da sé). Override attivi **solo** con `import.meta.env.DEV` (§26.27, §26.30) |
-| `useTestiDom.ts` | **Editor Testi Rapido UNIVERSALE** (§26.31): `useScansioneTestiDom()` (da montare una volta sola — la monta la DEV Toolbar) scandisce il `body` appena compare la vista, **riapplica** gli override salvati dopo ogni ricarica e osserva il DOM con `MutationObserver` (attesa 60 ms per raggruppare le mutazioni di un render; le scritture dell'editor non riaprono il ciclo); `useTestiDomInPagina()` dà al pannello l'elenco a schermo (`useSyncExternalStore`, snapshot stabile) più `imposta(chiave, valore)` (scrive l'override **e** riscrive il DOM subito) e `azzera()`. Il pannello non elenca più le chiavi del registro: le legge solo per azzerarle nel Reset (`azzeraRegistro`, `sr_simple_text_overrides`). Override attivi **solo** in sviluppo: la scansione la monta la DEV Toolbar |
+| `useTestiEditabili.ts` | **Testi modificabili (DEV)**: il registro `src/data/editableTexts.ts` per le PAGINE che rendono per CHIAVE — `useTestiEditabili()` con `testo(chiave)` (override DEV → default del registro), `imposta(chiave, valore)`, `azzera()`, `testi`, `modificati` (`useSyncExternalStore` sullo store `@/lib/testiModificabili`). Override attivi **solo** con `import.meta.env.DEV` (§26.27). L'API `useTestiInPagina()` e il registro delle viste `src/lib/testiInPagina.ts` sono stati rimossi con il pannello che li usava (§26.38) |
 
 ### 2.9 `src/departments/` — 5 domini verticali isolati
 
@@ -561,8 +563,9 @@ del matching non toglie copertura a chi riceveva legittimamente gli avvisi di so
 **SOSTEGNO INCLUSO DI DEFAULT** (`...20260927120000_default_sostegno_incluso.sql`): la
 colonna `profiles.sostegno` passa a `not null default true` e il BACKFILL porta a `true`
 anche i profili esistenti — nessun avviso di sostegno (ADAA/ADEE/ADMM/ADSS) viene più
-filtrato via in silenzio. L'esclusione è una **scelta esplicita** dell'utente
-dall'interruttore «Opportunità di sostegno» delle Preferenze Radar (`SostegnoToggle`).
+filtrato via in silenzio. *(Dal **04/10/2026**, §26.45, la colonna è un valore STORICO: il
+sostegno è a **inclusione permanente**, non è più una preferenza e non ha alcuna uscita —
+la consegna non dipende più da `profiles.sostegno`.)*
 Guardie: `npm run test:sostegno`, `npm run test:migrazioni`, `npm run test:copy:pubblico`.
 
 ### 2.16 `.github/workflows/` (6), `docs/` (7), `scripts/` (71), `public/`
@@ -573,7 +576,7 @@ Guardie: `npm run test:sostegno`, `npm run test:migrazioni`, `npm run test:copy:
 | `.github/workflows/digest.yml` | **Riepilogo/BATCH giornaliero**: cron Lun-Ven `0 15,16 * * 1-5` (una delle due esecuzioni cade alle 17:00 italiane: lo script invia solo se `eOraDelDigest` lo conferma) + dispatch (`force: true`); `npm ci` → `scrape:check` → `test:digest` + `test:migrazioni` → **`db:verifica`** (sonda schema, warning non bloccante) → `npm run notifiche:digest` → **`npm run notifiche:promemoria`** (promemoria 24h sulle voci di ieri in scadenza vicina, `continue-on-error`, guardia nel ledger) → commit del ledger via `bash scripts/commit-ledger.sh`. **PRO**: già avvisati in tempo reale dallo scraper; **BASE**: batch Telegram + email |
 | `scripts/verifica-schema-notifiche.ts` | **`npm run db:verifica`** — sonda SENZA effetti collaterali dello schema notifiche: esistenza di `notifications_log`, risposta della RPC quota con un UUID inesistente (atteso `(false, 0)`) e presenza di `profiles.sostegno`. Exit 1 + remediation se manca una migrazione |
 | `scripts/test-migrazioni.ts` | **`npm run test:migrazioni`** — regression guard statico su `supabase/migrations`: ledger idempotente con PK/RLS/grants, ULTIMA definizione della RPC non ambigua (blocca il ritorno dell'errore 42702) e colonna+backfill della preferenza sostegno |
-| `scripts/test-sostegno-preferenza.ts` | **`npm run test:sostegno`** — guardia SOSTEGNO: riconoscimento codici `AD*`/titolo (`isCodiceSostegno`, `eAvvisoSostegno`), matrice `sostegnoAmmesso`, matching e digest in DRY-RUN con client stub (falso positivo A-22 tedesco → ADEE, DB non migrato) |
+| `scripts/test-sostegno-preferenza.ts` | **`npm run test:sostegno`** — AREA SOSTEGNO (§26.45): riconoscimento codici `AD*`/titolo (`isCodiceSostegno`, `eAvvisoSostegno` → `avvisoDiSostegno`), REGOLA UNICA (sostegno **sempre consegnato**, nessun opt-out, ma l'inclusione non supera la provincia) e matching, alert in tempo reale (PRO) e digest in DRY-RUN con client stub (docente di tedesco A-22 che riceve l'avviso ADEE, DB non migrato) |
 | `scripts/test-promemoria.ts` | **`npm run test:promemoria`** — oggetti branded (`Scuole Radar — Nuova opportunità per A-22 (Torino)`, digest, promemoria), guardia "una email al giorno" (`chiaveDigestGiorno`, con lancio forzato che la ignora) e **promemoria 24h** con client stub: filtra 24h/urgenza/provincia/scaduti, UNA email per utente e **anti-duplicato** (secondo giro → 0 invii; ledger DB assente → 0 invii) |
 | `scripts/test-dedup-utente.ts` | **`npm run test:dedup:utente`** — **registro invii per utente** (§6.5.1): identificatori stabili (hash/impronta/URL), guard PRIMA dell'invio e registrazione immediata dopo, **per canale** (email ≠ telegram) con compatibilità legacy; caso **Liceo Monti** end-to-end sul DIGEST con sender iniettati: hash diverso ⇒ 0 invii, avviso diverso ⇒ 1 invio; impronta `A-022 ≡ A-22 ≡ A042`; ledger DB assente ⇒ guard dal file |
 | `scripts/invia-promemoria.ts` | **`npm run notifiche:promemoria`** — runner del promemoria 24h (`--dry-run`, `--force`, `--ore`, `--giorni`, `<email\|uuid>`), eseguito dal workflow `digest.yml` dopo il digest |
@@ -588,7 +591,8 @@ Guardie: `npm run test:sostegno`, `npm run test:migrazioni`, `npm run test:copy:
 | `scripts/test-email-scuola.ts` | Regressione email (`npm run test:email-scuola`): de-offuscamento, correlazione con l'istituto, **PEO/PEC dalla convenzione MIM** e completamento automatico nel parser |
 | `scripts/test-email-template.ts` | Regressione template email (`npm run test:email`): **oggetto standard `Nuove opportunità per te!`** (digest/opportunità) e oggetti di ciclo di vita invariati, logo reale, titolo pulito dai dump di codici classe, **footer crisp** (link Radar visibile con URL in chiaro, CTA Notizie email a due righe `scuoleradar.it/notizie` + `… vieni qui!`, avviso "non rispondere" in ULTIMA riga, nessun "P.S.", nessun grigio `#94a3b8`) |
 | `scripts/test-radar-preferenze.ts` | **`npm run test:radar:preferenze`** — preferenze Radar: normalizzazione classi (`A-18` ≡ `A18` ≡ `a 18`), dedup/persistenza (load/save normalizzati in `contexts/app/*`), testo UI **"Dove vuoi lavorare?"**, etichetta **"Le tue competenze e laboratori extra da proporre:"**, 12 tag PNRR/PON, **persistenza ISTANTANEA** del wizard (ordini/province/classi/competenze/tag) e assenza di elenchi statici di materie |
-| `scripts/test-ricerca-unificata.ts` | **`npm run test:ricerca`** — ricerca UNIFICATA: normalizzazione query (accenti/spazi/trattino), classi per codice/denominazione/**materia collegata** («Pedagogia» → A-18), competenze extra, parola chiave proposta/dedup, marcature «già nel profilo» + cablaggio (un solo campo nel passo 3 e in «In cosa puoi lavorare») |
+| `scripts/test-ricerca-unificata.ts` + `scripts/test-ricerca-cablaggio.ts` | **`npm run test:ricerca`** — ricerca unificata: normalizzazione query (accenti/spazi/trattino), classi per codice/denominazione/**materia collegata** («Pedagogia» → A-18) e **ordine di scuola** («CPIA», «adulti», «primaria»), competenze extra, parola chiave proposta/dedup, marcature «già nel profilo», **separazione dei campi** (destra: nessuna classe — §26.46); guardie STATICHE di cablaggio nel file gemello (un solo campo nel passo 3, colonna di sinistra = classi, colonna di destra = competenze/parole chiave) |
+| `scripts/test-pipeline-tollerante.ts` + `scripts/test-match-rpc.ts` | **`npm run test:pipeline`** / **`npm run test:match-rpc`** — (1) PIPELINE TOLLERANTE (§26.47): nessun mock (feed di fallback vuoto, nessun nome-scuola sintetico nei moduli di produzione, nessuna fixture nello scraper), stato anagrafica `completo`/`parziale`, e **nessun avviso genuino scartato** per anagrafica (casi Padova: riga presente con nome grezzo del bando o dicitura gestita, marcatore `anagraficaParziale`, restano fuori solo scaduti e fuori finestra); (2) MATCHING NATIVO: contratto SQL della RPC `match_interpelli` (`security definer` + `search_path`, `stable`, overlap `&&` su GIN, forme tolleranti, ramo sostegno, «attivi», grants) e client `searchInterpelli` (RPC per prima con province deduplicate, varianti di formato e sostegno sempre incluso; fallback PostgREST equivalente se la migrazione non è applicata) |
 | `scripts/test-provincia-principale.ts` | **`npm run test:province`** — provincia PRINCIPALE (prima selezionata): badge/pill, promozione in testa, e **sopravvivenza al downgrade** (`limitaProvinceMantenendoPrincipale`: a Base resta la principale, mai una di contorno) + self-heal nel contesto |
 | `scripts/test-sessione-identita.ts` | **`npm run test:sessione`** — sessione/identità: `identitaDaSessione` (full_name, campi espliciti, mai sovrascritture), bootstrap che sincronizza l'identità dalla sessione trovata, listener su `TOKEN_REFRESHED`/`USER_UPDATED`, `AuthCallback` che attende la sessione, wizard che rilegge il piano appena arriva l'identità |
 | `scripts/test-copy-etico.ts` | **`npm run test:copy:etico`** — COPY ETICO: scansione di `src/**` per le frasi competitive («prima degli altri», «beccare»…) e delle superfici UI/marketing per quelle di fretta; verifica la copy del banner PRO («Un mese PRO, completamente gratis… puoi dedicarti alla tua vita»), il Passo 4 senza urgenza né formule debole, l'anagrafica a **fine percorso**, l'hero a due colonne col simulatore e l'offerta PRO senza toni da televendita |
@@ -736,22 +740,32 @@ Modulo puro (client passato come parametro → testabile frontend+Node):
   `.order('expiration_date')`, `.limit(100)`.
 - `getFeedInterpelli(...)`: mappa righe DB → `Interpello[]` (`mapInterpelloDBToInterpello`).
 - `findUtentiCompatibili(client, { province, classi, titolo?, materia? })`: legge **tutti** i `profiles`
-  (select dei campi notifica), filtra: email valida **o** Telegram, poi applica la **regola unica**
-  `avvisoCompatibileConProfilo` (vedi §6.5.1): provincia del profilo == provincia dell'avviso,
-  intersezione reale di classi (o materia coperta), guardia sostegno.
+  (select dei campi notifica + `sostegno`, `materie_id`, `materie_custom`), filtra: email valida **o**
+  Telegram, poi applica la **regola unica** `avvisoCompatibileConProfilo` (vedi §6.5.2): provincia del
+  profilo == provincia dell'avviso, intersezione reale di classi (o materia coperta), **competenze e
+  parole chiave** per i profili senza classi (§26.35), guardia sostegno.
   Restituisce `UtenteCompatibile[]` con flag `notificheBloccoInviato`/`notificheRecapInviato`.
-- **GUARDIA SOSTEGNO** (`sostegnoAmmesso` / `utenteAderisceSostegno`): il sostegno è
-  un'abilitazione SEPARATA dalle classi disciplinari. Un avviso è "di sostegno" quando ha
-  un codice `AD*` (`isCodiceSostegno` in `data/classiConcorso.ts`: ADAA/ADEE/ADMM/ADSS/AD24…)
-  oppure titolo/materia lo dichiarano (`eAvvisoSostegno`; "inclusione" è volutamente escluso
-  perché troppo generico). Tali avvisi vengono consegnati **solo** a chi ha aderito:
-  preferenza esplicita `profiles.sostegno = true` **oppure** una classe di sostegno tra le
-  preferenze (adesione implicita → nessun opt-out retroattivo). Risolve i falsi positivi
-  storici (docente di tedesco A-22/A-25 che riceveva interpelli ADEE). La stessa guardia è
-  applicata al digest (`notifier.ts` → `raccogliVociCanale`): una sola fonte di verità.
+- **AREA SOSTEGNO — INCLUSIONE PERMANENTE** (§26.45, 04/10/2026): il sostegno è
+  un'abilitazione SEPARATA dalle classi disciplinari, ma **non è più una preferenza**. Un
+  avviso è "di sostegno" quando ha un codice `AD*` (`isCodiceSostegno` in
+  `data/classiConcorso.ts`: ADAA/ADEE/ADMM/ADSS/AD24…) oppure titolo/materia lo dichiarano
+  (`eAvvisoSostegno`; "inclusione" è volutamente escluso perché troppo generico) →
+  `avvisoDiSostegno()` in `matchingEngine.ts`. Tali avvisi **non passano dal controllo di
+  classe**: vengono consegnati a TUTTI i profili configurati della provincia — nessun
+  interruttore, nessun opt-out (`profiles.sostegno` è ormai un valore storico) e nessuna
+  differenza tra canali. L'inclusione non è cieca: resta il vincolo di **provincia** e il
+  gate di qualità (link diretto + recapito di candidatura), e un profilo non configurato
+  resta fuori. Le funzioni storiche `sostegnoAmmesso`/`utenteAderisceSostegno` sono state
+  rimosse. La stessa regola è applicata al digest (`notifier.ts` → `raccogliVociCanale`):
+  una sola fonte di verità.
   Test: `npm run test:sostegno`.
-- `findUtentiCompatibili` legge `sostegno` in modo **tollerante** (DB non migrato → rilegge
-  senza la colonna: il matching degrada, non si svuota).
+- `findUtentiCompatibili` legge `sostegno`, `materie_id` e `materie_custom` in modo **tollerante**
+  (DB non migrato → rilegge senza le colonne: il matching degrada, non si svuota) — e la decisione
+  **non dipende più da `sostegno`**. La seconda lettura
+  tiene solo le colonne **storiche** più le competenze: `materie_id`/`materie_custom` esistono dalla
+  prima creazione di `profiles` (`20260822030000`, allineata in `20260825160000`), mentre `sostegno`
+  arriva con `20260914040000` (default `true` da `20260927120000`); se manca è `sostegno` a venire
+  omesso, mai le competenze (§26.35).
 
 ### 5.3 Scraper interpelli (`src/scraper/` — motore degli interpelli di lavoro)
 
@@ -1026,6 +1040,11 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
     identicamente in Telegram e nelle schede; nel digest **Telegram** si usa la variante
     `suggerimentoRicercaAvviso({ compatto: true })`, che non ripete l'email già mostrata
     sulla riga precedente. **Nelle email non c'è nessuna guida** (§4 checklist email).
+    Nella voce del digest Telegram la guida si calcola sull'**URL GREZZO** della voce
+    (`bloccoVoceTelegram`), non su quello mostrato: il riferimento *"cerca la riga con
+    «A-022»"* c'è anche quando la fonte non è mostrabile (elenco/«Stampa» filtrato); la
+    variante compatta conserva sempre verbo e riga da cercare. Senza alcun link resta
+    l'indicazione pulita (chiedi alla segreteria / scrivi al recapito).
   · **Quota**: UN credito al giorno e **solo per BASE** (PRO è illimitato, nessuna RPC)
     con la sequenza `prova1 → prova2 → prova3 → extra`; dopo `extra` il cron DB
     `step5-notifiche` invia il recap finale. Il ledger viene marcato per canale con le
@@ -1052,7 +1071,11 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
 - **Orchestrazione LEGACY** → `notificaNuoviInterpelli(client, nuovi, opts)` e
   `notificaInterpelliPerUtente(client, target, opts)` restano esportate per test,
   dry-run e backfill manuali, ma **non sono più usate dalla pipeline**; nessuna lancia
-  eccezioni (esito `{ inviate, fallite, telegramInviate, telegramFallite }`).
+  eccezioni (esito `{ inviate, fallite, telegramInviate, telegramFallite }`). Sul
+  canale EMAIL nessuna delle due invia più una email per opportunità: le voci si
+  accumulano e partono con **UNA sola** email di riepilogo (`inviaDigestEmail`) a
+  fine run; su `notificaInterpelliPerUtente` l'esito espone anche `emailVoci` (numero
+  di opportunità incluse nel riepilogo). Il Telegram resta individuale.
 
 ### 6.2 Sequenza drip account BASE (6 email)
 | # | Tipo | Quando | Canale d'invio |
@@ -1129,9 +1152,13 @@ con il titolo** (`scegliClasseRilevante`).
   CLIICCABILE** `📡 <a href="https://www.scuoleradar.it">Scuole Radar.it</a>`
   (`BRAND_RIGA_TELEGRAM`/`URL_HOME`, `alertInterpello.ts`; stessa stringa nella Edge):
   una sola riga, **tutto** il nome è un link alla home, nessun logo/foto allegata e
-  nessuna anteprima gigante. In **email** il brand è il logo **32 px**
-  (`intestazioneBrandHtml`) accanto al nome ufficiale `Scuole Radar.it`
-  (il vecchio logo da 200 px è stato rimosso: era "gigante"/deformato su mobile).
+  nessuna anteprima gigante. In **email** l'header è **SOLO TESTO**: la scritta
+  `Scuole Radar.it` su una riga centrata, cliccabile verso
+  `https://www.scuoleradar.it` (`intestazioneBrandHtml`/`URL_BRAND`). **Nessun
+  logo-immagine** nell'header di alcuna email (alert, digest, promemoria, drip
+  della Edge): il PNG arrivava compresso/sgranato nelle caselle di posta (il
+  vecchio logo da 200 px era stato rimosso perché "gigante"/deformato su mobile;
+  il successivo logo 32 px è stato rimosso il 04/10/2026 perché sgranato).
 - **Copy**: le opportunità si aprono con il **copy di brand COMPLETO**
   *"Abbiamo trovato una nuova opportunità per te"* — mai la versione abbreviata
   `🎯 Nuova opportunità: …`. Con il contesto del match diventa
@@ -1244,6 +1271,15 @@ con il titolo** (`scegliClasseRilevante`).
   ricerca (`?s=`, `?q=`), landing regionali (`/interpelli-lombardia/`) o URL della
   piattaforma: in quei casi la riga è omessa e l'avviso è escluso dal gate di
   qualità.
+- **Query string: quando la pagina tabellare è DAVVERO il singolo avviso.** Con una query
+  l'URL è diretto **solo** se contiene un parametro che **identifica** il documento
+  (`RE_QUERY_ID_AVVISO`: `cod`, `id`, `prot`, `atto`, `doc`, `file`, `allegato`…). Un
+  parametro di **ricerca/filtro** (`RE_QUERY_RICERCA`: `s`, `q`, `search`, `ricerca`,
+  `filtro`, `anno`, `mese`, `tag`, `category`, `archivio`, `page`, `offset`, `limit`,
+  `classe`, `provincia`, `data`, `dal`, `al`…) rende la pagina **NON diretta**, anche se
+  c'è un `id`; con un parametro **sconosciuto** si sceglie la prudenza (non diretta).
+  Così `/interpelli/stampa?cod=ASTF01000X` è diretta, `/albo/stampa?classe=A022` e
+  `?s=interpello` no. Guardie: `test:qualita`, `test:link-esterno`, `test:canali-telegram`.
 
 ### 6.5.1 Registro invii per utente — bug "notifiche ripetute" (RISOLTO)
 **Sintomo**: lo stesso alert (caso reale: gli avvisi del **Liceo Monti**) tornava
@@ -1299,9 +1335,16 @@ reale, digest e dispatch: nessun avviso fuori contesto.
 3. **Classe**: serve un'intersezione reale con le classi del profilo (formato normalizzato
    `A-022 ≡ A-22 ≡ A042`); se l'avviso non dichiara classi, la **materia** deve ricadere tra
    quelle delle classi utente (`materiaCompatibileConClassi`).
-4. Preferenze incomplete (senza province o senza classi) → **nessun invio**: meglio nessun
+4. **Competenze e parole chiave** (§26.35): per i profili **senza classi di concorso** i criteri «In
+   cosa puoi lavorare, anche oltre la tua classe di concorso?» *sono* la regola di match — un tag di
+   catalogo (`materie_id`, risolto nel suo nome) o una parola chiave libera (`materie_custom`) combacia
+   col testo dell'opportunità (titolo + materia), con accenti, punteggiatura e plurali normalizzati. I
+   profili **con** classi restano sulla regola storica (le competenze non allargano il match) e i token
+   generici («laboratorio», «attivita», «scuola»…) non producono match.
+5. Preferenze incomplete (senza province, né classi né competenze) → **nessun invio**: meglio nessun
    avviso che un avviso sbagliato. `ignoraFiltri` (enumerazione dei profili notificabili per il
-   digest) salta 2–3 ma **non** la guardia sostegno.
+   digest) salta 2–3; l'area sostegno, che non è più una condizione di esclusione, non entra in
+   gioco (§26.45).
 
 ### 6.6 Ciclo di vita abbonamento — trial PRO 1 mese + promemoria 3–5 giorni
 **Policy trial (1 mese).** Un nuovo utente nasce con `piano='pro'`,
@@ -2541,7 +2584,7 @@ Utilizzi diretti nel codice (`import.meta.env.*` verificati): `DEV`, `MODE`,
 
 | Gruppo | Script |
 |---|---|
-| Radar & matching | `test-matching-profilo` · `test-radar-validation` · `test-radar-preferenze` · `test-sostegno-preferenza` · `test-materia-classe` · `test-scadenza` · `test-scadenze` · `test-live-board` · `test-elenchi` · `test-traccia-fonte` · `test-dati-fallback` · **`test-prova-radar`** |
+| Radar & matching | `test-matching-profilo` · **`test-matching-competenze`** · `test-radar-validation` · `test-radar-preferenze` · `test-sostegno-preferenza` · `test-materia-classe` · `test-scadenza` · `test-scadenze` · `test-live-board` · `test-elenchi` · `test-traccia-fonte` · `test-dati-fallback` · **`test-prova-radar`** |
 | Parser & fonti | `test-parser-province` · `test-parser-date` · `test-parser-materia` · `test-parser-tabelle` · `test-parser-validazione` |
 | Link & routing | `test-link-fonte` · `test-link-esterno` · `test-alert-avviso` |
 | Notifiche & dedup | `test-notifiche` · `test-notifier-dry` · `test-dedup` · `test-dedup-utente` · `test-frequenza` · `test-qualita-invio` · `test-copy-notifiche` · `test-ledger-robustezza` · `test-migrazioni` |
@@ -3071,7 +3114,7 @@ Con `isSupabaseConfigurato() === false` (`supabase === null`):
 | Modulo | Righe | Superficie pubblica (principali) |
 |---|---|---|
 | `alertInterpello.ts` | 704 | `costruisciAvviso`, `avvisoInviabile`, `motivoAvvisoNonInviabile`, `eUrlAvvisoDiretto`, `classificaFonteLink`, `scegliClasseRilevante`, `pulisciTitoloAvviso`, `righeTestoAvviso`, `inferisciOrdineDaTesto`, `formatDataAvviso` |
-| `matchingEngine.ts` | 536 | `searchInterpelli`, `getFeedInterpelli`, `avvisoCompatibileConProfilo`, `utenteAderisceSostegno`, `findUtentiCompatibili`, `elencaUtentiNotificabili`, `normalizzaClasse`, `normalizzaProvincia` |
+| `matchingEngine.ts` | 536 | `searchInterpelli`, `getFeedInterpelli`, `avvisoCompatibileConProfilo`, `avvisoDiSostegno`, `findUtentiCompatibili`, `elencaUtentiNotificabili`, `normalizzaClasse`, `normalizzaProvincia` |
 | `notifier.ts` | 1.999 | `notificaNuoviInterpelli`, `notificaInterpelliPerUtente`, `inviaDigestGiornaliero`, `inviaPromemoria24h`, `inviaAlertTelegramTempoReale`, `avvisoGiaInviato`, `registraInvioAvviso` |
 | `telegram.ts` | 1.264 | `formattaMessaggioTelegram`, `formattaDigestTelegram`, `formattaPostCanaleTelegram`, `pubblicaInterpelloSuCanali`, `destinazioniPubblicazione`, `CANALI_TELEGRAM_REGIONALI`, `canaleAtaNazionale`, `deveMostrareCtaRadar` |
 | `resend.ts` | 1.145 | `renderEmailHtml`, `inviaNotificaEmail`, `inviaNotificheInterpello`, `renderDigestEmailHtml`, `inviaDigestEmail`, `renderPromemoriaEmailHtml`, `inviaPromemoriaEmail`, `footerEmailHtml`, `OGGETTO_OPPORTUNITA` |
@@ -3478,7 +3521,7 @@ alla homepage.
 | 1 | **Radar di prova a maglie larghe** | nuovo motore **puro** `src/lib/provaRadarEngine.ts`: pertinenti per classe (codice di concorso o materia citata nel titolo) → tutte le opportunità **ATTIVE** della provincia (supplenze, PON/POR, CPIA, ATA, date estese) → **pool nazionale** come ultimo ripiego; le scadute escono, le voci senza scadenza restano. Il responso non è mai vuoto se la provincia ha flusso (`{ gruppo: classe/provincia/nazionale/vuoto, righe }`) |
 | 2 | **Provincia provata = provincia principale** | nuovo `src/lib/provaRadar.ts` (localStorage, validato sul catalogo `data/province`): la provincia scelta nel box «Prova il Radar» arriva **pre-selezionata** come provincia principale nel wizard Radar e nell'onboarding post-registrazione (`provinceInizialiConProva`), senza richieste duplicate |
 | 3 | **Responso senza scroll** | `SimulatorRadar` più largo (`max-w-*` ottimizzato): il responso entra in una schermata a zoom 100% senza scroll verticale. Per il gate strutturale (≤ 300 righe) la query è in `departments/radar/services/provaRadarQuery.ts` (limiti 200 provincia / 60 nazionale, attesa scansione 900 ms) e il responso in `departments/radar/components/ResponsoProva.tsx` (presentazionale) |
-| 4 | **Sostegno incluso di default** | `defaultPreferenze.sostegno = true` + migrazione `20260927120000_default_sostegno_incluso.sql` (§2.15): nessun avviso AD… più filtrato in silenzio. `SostegnoToggle` («**Opportunità di sostegno**», Incluse/Escluse) resta l'**uscita esplicita** nelle Preferenze Radar, con la nota sull'adesione implicita via classe `AD*` |
+| 4 | **Sostegno incluso di default** | `defaultPreferenze.sostegno = true` + migrazione `20260927120000_default_sostegno_incluso.sql` (§2.15): nessun avviso AD… più filtrato in silenzio. `SostegnoToggle` («**Opportunità di sostegno**», Incluse/Escluse) resta l'**uscita esplicita** nelle Preferenze Radar, con la nota sull'adesione implicita via classe `AD*` *(superato il 04/10/2026 — §26.45: inclusione PERMANENTE, nessun interruttore né opt-out)* |
 | 5 | **Offerta PRO prima di «Cosa riceverai»** | `LandingOffertaPro` sale al 4° posto della homepage (subito dopo «Radar Live») con la formulazione diretta — «Siamo così sicuri che Scuole Radar ti piacerà che ti offriamo il primo mese PRO. E se poi non vuoi abbonarti, passi semplicemente a un account Base, senza costi» — e le cifre da `lib/pricing` (`GIORNI_TRIAL_PRO`, `PREZZO_PRO_ANNUO_ETICHETTA`) |
 | 6 | **Registrazione rapida sotto l'hero** | nuovo `src/components/landing/LandingRegistrazioneRapida.tsx` (Nome, Cognome, Email + CTA «Attiva il Radar»): i dati finiscono nella **bozza** di registrazione e la modale si apre precompilata — un solo passaggio, nessun doppione di modali (solo per i visitatori) |
 | 7 | **FAQ commerciali coerenti** | l'Assistente Sindacalista Virtuale è descritto per lo stato REALE (`AssistenteAIPage` = **accesso in anteprima**): non più «lo trovi dal primo giorno»; `/prezzi` e `/faq` dicono la stessa cosa («in anteprima, riservata agli abbonati PRO») |
@@ -3657,7 +3700,7 @@ verso il piano e un solo form di registrazione.
 |---|---|---|
 | 1 | **Hero su DUE righe** | `LandingHero`: il titolo è composto da due `span.block` — «Ogni giorno decine di opportunità.» + «Noi intercettiamo solo quelle per te.» (secondo rigo in `text-secondary-500`) — senza alcun tag di a-capo: la separazione è del layout, non del markup |
 | 2 | **Primo schermo allineato** | `LandingHero`: griglia `items-stretch` + colonna destra `flex flex-col` con `<SimulatorRadar className="h-full" />` e inviti all'azione ancorati in basso (`lg:mt-auto`); `SimulatorRadar`: il responso vive in un contenitore `max-h-[24rem] overflow-y-auto overscroll-contain`, quindi il box **non cambia dimensione** mentre si cerca |
-| 3 | **Metriche reali del Radar Live** | nuovo `radar/flightBoard/metricaBoard.ts` (modulo **puro**, testato in isolamento): `LIMITE_RIGHE_BOARD = 750` (150 pagine da 5 righe), `pagineBoard`, `etichettaPagina` («Pagina 7 di 150+ - Aggiornamento automatico»), `etichettaTotaleAvvisi`, `formattaNumeroIt` (migliaia deterministiche: `toLocaleString('it-IT')` restituisce `3412` dove l'ICU è ridotto). `FlightBoardInterpelli` carica 750 righe e chiede il **conteggio esatto** degli avvisi attivi (`{ count: 'exact', head: true }` su `expiration_date` non scaduta): se il conteggio non arriva, l'etichetta dichiara **solo** le righe in bacheca — mai un totale attribuito all'Italia senza prova |
+| 3 | **Metriche reali del Radar Live** | nuovo `radar/flightBoard/metricaBoard.ts` (modulo **puro**, testato in isolamento): `LIMITE_RIGHE_BOARD = 750` (150 pagine da 5 righe), `pagineBoard`, `etichettaPagina` («Schermata X di Y» — fino al 03/10/2026 «Pagina 7 di 150+ - Aggiornamento automatico», §26.42), `etichettaTotaleAvvisi`, `formattaNumeroIt` (migliaia deterministiche: `toLocaleString('it-IT')` restituisce `3412` dove l'ICU è ridotto). `FlightBoardInterpelli` carica 750 righe e chiede il **conteggio esatto** degli avvisi attivi (`{ count: 'exact', head: true }` su `expiration_date` non scaduta): se il conteggio non arriva, l'etichetta dichiara **solo** le righe in bacheca — mai un totale attribuito all'Italia senza prova |
 | 4 | **Un riquadro in meno** | rimossa la chiusura con la CTA «Attiva il mio Radar» dalla bacheca: fra il Radar Live e l'offerta PRO non c'è più nessun blocco che interrompa la discesa verso il piano (le porte d'ingresso restano hero, form rapido sotto l'hero e sezione PRO) |
 | 5 | **Un solo form di registrazione** | nuovo `src/components/landing/FormRegistrazioneRapida.tsx` (Nome, Cognome, Email) consumato **due volte**: dalla sezione sotto l'hero (`LandingRegistrazioneRapida`, ora solo la cornice della sezione) e dalla chiusura dell'offerta PRO (`LandingOffertaPro`, prop opzionale `onRegistrazioneRapida`, montata da `LandingPage` **solo** per i visitatori). Un solo stato, un solo percorso: i dati vanno nella bozza e aprono la configurazione del Radar già compilata |
 | 6 | **Offerta di continuazione (40 €)** | `lib/pricing.ts`: `PREZZO_PRO_ANNO_DOPO_OMAGGIO_EUR = 40`, `PREZZO_PRO_ANNO_DOPO_OMAGGIO_ETICHETTA`, `SCONTO_OMAGGIO_MESE_EUR` (valore del mese in omaggio scorporato dal listino: 49 − 9 = 40). La dichiarazione vive **solo** nel benvenuto di fine flusso (`BenvenutoProRadar`, blocco visibile con `trialAttivo`): la vetrina della homepage resta **senza importi** (§26.13) |
@@ -3876,7 +3919,7 @@ diventato `LIMITE_RIGHE_LETTE = 1.000` e la query usa il filtro `filtroAttivi`; 
 numero è **superato** — da §26.34 la bacheca legge a pagine, non fino a un tetto.)
 **Misure reali (28/09/2026):** 591
 righe in `interpelli`, **61** avvisi attivi, **17** presentabili in vetrina → badge «61
-avvisi attivi in Italia», etichetta «Pagina X di 4+ - Aggiornamento automatico».
+avvisi attivi in Italia», etichetta «Pagina X di 4+ - Aggiornamento automatico» *(etichetta superata il 03/10/2026: §26.42 — ora `Schermata X di Y`, contata sulle righe in vetrina e senza `+`)*.
 
 **2 · Nomi scuola veri (fine dei codici in vetrina).** Il campo `school_name` scritto
 dallo scraper contiene a volte elenchi di codici classe («ADEE | EEEE», «BA02 | AR04»,
@@ -4407,8 +4450,7 @@ parità, scade prima). Il `+` dell'etichetta di pagina continua a dichiarare che
 database ha altri avvisi.
 
 **Superato dal §26.34 (02/10/2026).** `LIMITE_RIGHE_LETTE` **non esiste più**: la
-bacheca legge a PAGINE (`flightBoard/letturaBoard.ts`) e il `+` resta solo per il caso
-«il database è cresciuto fra il conteggio e la lettura». Il tetto di PostgREST (1.000)
+bacheca legge a PAGINE (`flightBoard/letturaBoard.ts`). *(Il `+` di maggiorazione — pensato per il caso «il database è cresciuto fra il conteggio e la lettura» — è stato rimosso il 03/10/2026: §26.42, l'etichetta è `Schermata X di Y` contata sulle righe in vetrina.)* Il tetto di PostgREST (1.000)
 non è una scala di prodotto: con l'ordinamento per pubblicazione decrescente tagliava in
 silenzio proprio le righe più vecchie.
 
@@ -4776,6 +4818,14 @@ board/nomi/scadenze mai sfiorate da questa modifica (debito del working tree).
 
 ### 26.31 DEV Toolbar — «Editor Testi Rapido» UNIVERSALE: si scandisce il DOM, non si elencano chiavi
 
+> ⚠️ **RIMOSSO il 03/10/2026 → §26.38.** Il pannello e tutta la sua scansione del DOM
+> (`components/EditorTestiRapido.tsx`, `lib/testiDom.ts` + `testiDomOverride.ts`,
+> `hooks/useTestiDom.ts`, `lib/testiInPagina.ts`, guardie `test:editor-testi`) non esistono più:
+> l'unico strumento di editing testuale della DEV Toolbar è il **«Visual Editor»** click-to-edit
+> (§26.37). Questa sezione resta come storia del ciclo (§26.27–§26.31) e come riferimento delle
+> **identità dei testi** (`impronta` / `chiaveTestoDom` — `p#1a2b3c#0`), oggi usate dal Visual
+> Editor: sono le stesse chiavi, quindi gli override salvati allora restano comprensibili.
+
 **Cosa cambia.** L'editor non dipende più dal dizionario dei testi: **scandisce il DOM** della
 pagina attiva e mostra **una casella per ogni blocco di testo che c'è davvero** — titoli,
 paragrafi, voci di elenco, celle, pulsanti, didascalie — con l'etichetta umana del punto
@@ -5098,3 +5148,1044 @@ pubblico).
 e sta DENTRO il dipartimento, `npm run board:diag`),
 `docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`. Nessun file di altri dipartimenti:
 perimetro Radar più i condivisi essenziali (`src/lib/**`).
+
+### 26.35 Competenze e parole chiave (`materie_id`/`materie_custom`): il salvataggio che non c'era e il falso negativo dei profili solo-competenza
+
+**Il problema.** Il passo «In cosa puoi lavorare, anche oltre la tua classe di concorso?» produceva
+una configurazione VALIDA ma **mai salvata**: `salvaProfilo` non metteva `materie_id`/`materie_custom`
+nel payload su `profiles`, quindi le competenze vivevano solo nello stato locale del browser. Tre
+conseguenze a catena, tutte silenziose: (a) dopo un refresh o su un altro dispositivo il profilo
+risultava senza competenze; (b) `valutaConfigurazioneRadar` non trovava le due colonne nella SELECT
+del DB → «Profilo incompleto» pur con il Radar configurato; (c) `findUtentiCompatibili` non leggeva le
+competenze e la **regola unica** `avvisoCompatibileConProfilo` pretendeva classi di concorso: un
+profilo configurato solo a competenze/parole chiave non era compatibile con NULLA — zero
+opportunità, zero notifiche, digest vuoto, Radar acceso. Nessuna eccezione nei log: solo un servizio
+muto.
+
+**La correzione (ciclo completo: scrittura → idratazione → validazione → matching → consegna).**
+1. **Scrittura** (`useAnagraficaProfilo.salvaProfilo`): `materie_id: dati.materieId` e
+   `materie_custom: dati.materieCustom` entrano nel payload `profiles` (erano l'UNICO blocco di
+   preferenze assente dal salvataggio).
+2. **Idratazione** (`useProfileBootstrap`): le due colonne entrano nella SELECT e nel mapping
+   (`materieId`/`materieCustom`), con fallback sullo stato precedente quando il DB risponde `[]` —
+   un array vuoto non deve cancellare la scelta appena fatta.
+3. **Validazione** (`valutaConfigurazioneRadar`): `materie_id` **e** `materie_custom` nella SELECT
+   del DB, così la parola chiave libera vale come «cosa cerchi» esattamente come il tag di catalogo.
+4. **Matching** (`src/lib/matchingEngine.ts`): `ProfiloCompatibilita` porta `materieId`/
+   `materieCustom`, `findUtentiCompatibili` le legge e le propaga a `UtenteCompatibile` (così digest e
+   alert riapplicano la stessa regola per singola opportunità). Nuovi helper:
+   `normalizzaCompetenza`, `tokenCompetenza`, `radiceCompetenza`, `etichetteCompetenzeProfilo`,
+   `competenzaCompatibileConAvviso`, riusati dalla regola unica `avvisoCompatibileConProfilo`
+   (§6.5.2 punto 4).
+5. **Consegna** (`src/lib/notifier.ts`): il digest passa `titolo`/`materia` all'avviso e non perde le
+   competenze nel tragitto; il **feed dell'app** (`useInterpelliFeed`) riusa
+   `competenzaCompatibileConAvviso` — una sola regola, nessuna copia locale.
+
+**Semantica (decisione di prodotto).** Le competenze attivano il match **solo** per i profili SENZA
+classi di concorso (§6.5.2 punto 4): chi ha classi resta sulla regola storica, quindi nessun ritorno
+dei falsi positivi. Il confronto è per token radicizzati (`inglese`/`inglesi` → `ingles`), con
+accenti e punteggiatura normalizzati, e i token senza potere discriminante (`laboratorio`, `scuola`,
+`attivita`, `progetto`…) sono esclusi: un avviso che parla di «laboratorio» non riguarda chi ha
+scritto «laboratori». **Niente tavola di sinonimi**: le varianti semantiche (IA ↔ «Intelligenza
+Artificiale») sono un lavoro a sé, tracciato in `docs/RADAR_ROADMAP_V2.md` §4 («Mappa Sinonimi /
+Varianti per Keyword Personalizzate»); qui si confronta solo ciò che l'utente ha scritto davvero. Le
+province restano vincolanti come prima: le competenze non allargano mai il perimetro geografico.
+
+**Verifiche (comandi eseguiti, non assunti).**
+- `npm run test:matching` → ✅, exit 0: `FILTRO PROFILO` + il nuovo `COMPETENZE NEL MATCHING`
+  (`scripts/test-matching-competenze.ts`, agganciato in catena in `package.json`). Copre: tag di
+  catalogo risolto nel nome × titolo dell'avviso, parola chiave libera × materia, plurali/singolari,
+  accenti e punteggiatura, competenza NON pertinente scartata, profilo senza classi **e** senza
+  competenze (nessun invio casuale), provincia vincolante anche con le competenze, competenze che NON
+  allargano i profili con classi, token generico senza match, guardia sostegno invariata; e il
+  **digest end-to-end** su client Supabase stub (profilo solo-competenza → 1 voce; competenza assente →
+  0 invii, profilo saltato).
+- `npm run typecheck` → exit 0, nessun `error TS`.
+- `npm run build` → ✅ `built in 20.17s` (resta il warning noto sui chunk > 500 kB).
+- `npm run test:architettura` → ✅ «nessuna violazione nuova» (142 debiti = baseline)
+- `npm run test:radar:preferenze` → ✅ (il test ora verifica anche il ciclo completo delle competenze:
+  payload di `salvaProfilo`, SELECT/mapping del bootstrap, lettura in `valutaConfigurazioneRadar`,
+  presenza delle competenze nel motore).
+- `npm run test:sostegno` → ✅, `npm run test:copy:etico` → ✅ (dopo la correzione del placeholder in
+  `PannelloClassi`).
+- `npx eslint` sui 12 file toccati → **0 errori**; restano 4 warning storici
+  `react-hooks/exhaustive-deps` in `useAnagraficaProfilo`/`useProfileBootstrap` (dipendenza dai
+  setter dei context, non introdotta qui).
+
+**DB e invio (controlli fatti, non assunti).** `profiles.materie_id` / `materie_custom` esistono da
+`20260822030000_create_profiles.sql` e sono state riallineate in `20260825160000_align_profiles_schema.sql`:
+**nessuna migrazione nuova necessaria**. In `findUtentiCompatibili` la SELECT resta tollerante: la
+seconda lettura tiene le colonne storiche + le competenze, così se il DB non ha `profiles.sostegno`
+(migrazione `20260914040000`, default `true` da `20260927120000`) si perde la guardia sostegno — mai le
+competenze — e nessun utente resta senza notifiche. `supabase/functions/send-notification/index.ts` è
+un trasporto (recapito per `id=eq.<userId>` di `email,email_notifica,telegram_chat_id,nome,genere`): non
+fa matching, quindi non richiede le colonne delle competenze.
+
+**Nota su «Radar Live» (stato preesistente, NON introdotto qui).** La catena `npm test` si ferma sui
+**3 errori** di `scripts/test-live-board.ts` (righe `etichetta-posto`, `client-codici`,
+`posto-montessori` in vetrina; «ADEE | EEEE» interpretato come nome di scuola): è il cantiere «nomi
+istituto in vetrina» già descritto in §26.34. Prova dell'indipendenza: `git diff HEAD --
+scripts/test-live-board.ts` è **vuoto** (il file è identico a HEAD, quindi rosso da prima), le
+asserzioni riguardano `src/lib/nomeIstituto.ts` + `preparaRigheBoard` (`src/lib/liveBoard.ts`), file non
+toccati da questa modifica, e il diff di `matchingEngine.ts` non tocca `enteEmittenteDaTitolo`, l'unica
+funzione che `liveBoard.ts` importa dal motore.
+
+> **Risolto il 03/10/2026 → §26.39.** Il drift del commit `56c6d0d` («dicitura standard») è
+> stato rimosso: `preparaRigheBoard` scarta di nuovo le righe senza un nome d'istituto in
+> chiaro e `nomePresentabileRiga`/`rigaPresentabileVetrina` filtrano di nuovo il responso della
+> prova. `npm test` è verde per intero (59 comandi, exit 0).
+
+**File toccati.** `src/lib/matchingEngine.ts`, `src/lib/notifier.ts`,
+`src/contexts/app/useAnagraficaProfilo.ts`, `src/contexts/app/useProfileBootstrap.ts`,
+`src/contexts/app/useInterpelliFeed.ts` (condivisi essenziali: motore e contesti del profilo),
+`src/departments/radar/valutaConfigurazione.ts`,
+`src/departments/radar/preferenze/PannelloClassi.tsx` (placeholder: rimossi gli esempi di codici
+classe, resta «Cerca per parola chiave»),
+`src/departments/radar/wizard/components/SezioneClassiConcorso.tsx`,
+`scripts/test-radar-preferenze.ts`, `scripts/test-matching-competenze.ts` (**nuovo**), `package.json`
+(`test:matching` = `test-matching-profilo && test-matching-competenze`), `docs/SYSTEM_HANDOVER.md`.
+Nessun file di altri dipartimenti: perimetro Radar più i condivisi essenziali (`src/lib/**`,
+`src/contexts/app/**`).
+
+### 26.36 Landing pubblica: larghezze uniformi alla bacheca, un solo form di registrazione, monitor «Radar Live» non editabile
+
+**Nota di sessione (03/10/2026).** Tre correzioni sulla vetrina pubblica richieste dal cliente, tutte
+di presentazione (nessuna regola di prodotto cambiata, nessuna query toccata).
+
+**1. Larghezza uniforme alla bacheca.** Il tabellone `Radar Live` è il metro della pagina:
+`max-w-7xl` con padding `px-4 sm:px-6 lg:px-8`. Tutte le sezioni sotto la bacheca che erano ancora più
+strette sono state allineate a quella classe — `LandingOffertaPro`, `LandingBenefici` («Cosa
+riceverai»), «Come funziona», `LandingStrumenti` («I nostri strumenti»), `LandingPartnerPureFocus`
+(era `max-w-5xl`) e i due blocchi interni della pagina «Valori»/«Statistiche» (erano `max-w-6xl`).
+Risultato: dalla bacheca in giù nessun effetto di restringimento, un solo bordo sinistro/destro.
+La hero (prima della bacheca) e la CTA finale (blocco centrato, `max-w-3xl`) restano come sono: la
+prima precede il metro, la seconda è un blocco centrato per disegno.
+
+**2. Un solo form di registrazione.** La superficie di lead capture vive **unicamente** nel box PRO in
+basso (`LandingOffertaPro`, che monta il condiviso `FormRegistrazioneRapida`). È stato rimosso il
+blocco di registrazione rapida che stava **sopra** la bacheca: `LandingPage.tsx` non importa più
+`LandingRegistrazioneRapida` (componente eliminato) e il tipo `DatiRegistrazioneRapida` arriva da
+`FormRegistrazioneRapida`. Un solo percorso, una sola legenda, nessun carattere residuo sotto il
+pulsante.
+
+**3. Monitor «Radar Live» protetto da interazioni di text-editing.** La sezione a scorrimento
+(`FlightBoardInterpelli`) ora è blindata contro gli editor testuali: `contentEditable={false}` (fuori
+dalla modifica anche dentro un contenitore reso editabile), `translate="no"` + classe `notranslate`
+(la traduzione automatica del browser non avvolge più le celle in nodi estranei — nodi aggiunti
+farebbero fallire l'aggiornamento React delle righe, che cambiano da sole a ogni rotazione),
+`spellCheck={false}`, `select-none` e `suppressContentEditableWarning`. Le righe restano cliccabili:
+non è stato disabilitato il pointer, solo l'editing testuale.
+
+**Verifiche (comandi eseguiti, non assunti).**
+- `npm run typecheck` → exit 0, nessun `error TS`.
+- `npx tsx scripts/test-copy-primo-schermo.ts` → ✅: nuova asserzione «monitor LIVE protetto dalle
+  interazioni di text-editing» (`contentEditable={false}`, `translate="no"`, `notranslate`,
+  `spellCheck={false}`) accanto alle guardie storiche della bacheca.
+- `npx tsx scripts/test-copy-pubblico.ts` → ✅: `SEZIONI_BACHECA` (OffertaPro, Benefici, Strumenti,
+  PureFocus, LandingPage) tutte su `max-w-7xl` + `lg:px-8`.
+- `npm run build` → ✅; `npm run test:architettura` → ✅ nessuna violazione nuova;
+  `npx eslint` sui file toccati → 0 errori.
+
+**File toccati.** `src/pages/LandingPage.tsx`, `src/components/landing/LandingOffertaPro.tsx`,
+`src/components/landing/LandingBenefici.tsx`, `src/components/landing/LandingStrumenti.tsx`,
+`src/components/landing/LandingPartnerPureFocus.tsx` (vetrina pubblica — richiesta esplicita
+dell'utente, non è un dipartimento), `src/departments/radar/FlightBoardInterpelli.tsx` (dipartimento
+Radar), `scripts/test-copy-primo-schermo.ts`, `scripts/test-copy-pubblico.ts`, `package.json`,
+`docs/SYSTEM_HANDOVER.md`. La rimozione di `src/components/landing/LandingRegistrazioneRapida.tsx`
+riguarda lo stesso perimetro vetrina.
+
+### 26.37 DEV Toolbar — «Visual Editor» (CLICK-TO-EDIT): si clicca il testo sulla pagina e si riscrive lì
+
+**Nota di sessione (03/10/2026).** Secondo strumento di modifica dei testi in sviluppo, accanto
+all'«Editor Testi Rapido» (§26.27–§26.31): stesso intento (cambiare le copy senza toccare il codice),
+UX opposta. L'Editor Testi Rapido **elenca** i testi in una sezione della DEV Toolbar; il Visual
+Editor **non elenca nulla**: si accende, si passa il mouse sulla pagina (anello tratteggiato che
+segue il blocco sotto il puntatore) e si **clicca il testo** — si apre la casella e si scrive sul
+posto. Salvataggio immediato in `localStorage`, **una chiave per ROTTA**
+(`sr_visual_editor:/prezzi`, `sr_visual_editor:/faq`…), quindi la pagina modificata si ritrova
+intatta dopo un refresh; da lì si può ripristinare il singolo blocco, azzerare la pagina o tutte le
+pagine, ed **esportare** il testo («era»/«ora», pronto da riportare nei componenti) o il JSON
+completo. Vive **solo in sviluppo**: in build di produzione il provider restituisce l'albero intatto.
+
+**1. Che cosa è un blocco: il testo CONTIGUO.** L'unità di modifica non è il nodo di testo ma il
+testo contiguo: `<p>Vedi <strong>qui</strong> ora</p>` è **UNA** casella (non tre micro-pezzi),
+mentre `<div><p>a</p><p>b</p></div>` sono **DUE** (i figli di blocco spezzano la contiguità). Un
+elemento è un blocco quando il suo sottoalbero contiene solo testo e tag inline; fra due contigui
+vince il più esterno, così un `<strong>` dentro un `<p>` non diventa una casella a sé. Restano
+fuori i sottoalberi tecnici (script, style, svg, textarea…), i pannelli DEV
+(`data-sr-dev-toolbar`, `data-sr-visual-editor` — l'editor non elenca né riscrive se stesso) e
+tutto ciò che è `contenteditable="false"`: è la protezione del monitor «Radar Live» (§26.36), le
+cui celle ruotano da sole e non vanno toccate.
+`Regole`: `src/lib/visualEditorRegole.ts` (`TAG_TECNICI`, `TAG_NEUTRI`, `TAG_INLINE`, `TAG_BLOCCO`,
+`MARCHI_ESCLUSI`, `contiguo`, `eBlocco`, `raccogliBlocchi`, `antenatoBlocco`, `scriviBlocco`).
+
+**2. Chiave STABILE, calcolata sul testo di DEFAULT.** `tag#impronta(testo di default)#occorrenza`
+(es. `p#1qwwa4q#0`): l'impronta è quella dell'Editor Testi Rapido (djb2 in base 36, spazi inutili
+collassati) e l'occorrenza distingue due testi identici nella stessa pagina (`#0`, `#1`). Il punto
+delicato è che il testo a schermo può essere già modificato: la chiave viene quindi calcolata sul
+**default del codice**, letto la prima volta che il blocco compare e conservato in una `WeakMap`
+(`MemoriaTocchi`) — altrimenti una modifica cambierebbe la chiave di se stessa e sparirebbe al
+reload. Da qui la stabilità fra scansioni, ri-render e refresh.
+
+**3. Riscrittura che non litiga con React.** `scriviBlocco` sostituisce **solo il valore dei nodi di
+testo** del blocco (il testo nuovo nel primo nodo, gli altri svuotati): nessun nodo aggiunto o
+rimosso, nessun `innerHTML`, così una ri-renderizzazione di React non trova il DOM «sorpreso» e in
+sviluppo non nascono errori di riconciliazione. Gli spazi di bordo del JSX (`'  ciao  '`) restano
+dov'erano, e se il testo non cambia **non si scrive nulla**: l'osservatore delle mutazioni non
+entra in ciclo. Campo svuotato o testo identico al default = «torna come nel codice» (l'override
+viene tolto, non salvato vuoto: un blocco senza testo uscirebbe dalla scansione e non si potrebbe
+più riaprire).
+
+**4. Moduli e interfaccia (SRP, niente file monolitici).** Il sistema è diviso in cinque pezzi, come
+l'Editor Testi Rapido:
+`src/lib/visualEditorRegole.ts` (puro: che cos'è un blocco, lettura e riscrittura),
+`src/lib/visualEditorStore.ts` (puro: `sr_visual_editor:`, `sr_visual_editor:_rotte`,
+`sr_visual_editor_attivo`, con `chiaveStorageRotta`/`overrideRotta`/`overrideRottaSalvatiDaStorage`/
+`rotteSalvate`/`overrideTutteLeRotte`/`impostaOverrideRotta`/`azzeraOverrideRotta`/
+`azzeraTutteLeRotte`/`esportaTestoRotta`/`esportaJsonRotte`; lettura TOLLERANTE — storage bloccato,
+JSON corrotto o voci malformate → copy del codice, mai un crash — e notifica agli ascoltatori solo
+su cambiamento reale),
+`src/lib/visualEditorScansione.ts` (puro: `scansionaVista` riscrive i blocchi modificati e
+restituisce l'elenco per il pannello più i due indici — `WeakMap` elemento → blocco per il click,
+`Map` chiave → elemento per l'anello),
+`src/hooks/useVisualEditor.ts` (ponte React: `MutationObserver` con attesa di 60 ms — i testi che
+compaiono dopo, filtri, tab, modali, righe del Radar, entrano da soli —, click ascoltato in fase di
+**cattura** solo a editor acceso, API per il pannello, spezzato sotto le 250 righe) e
+`src/components/dev/VisualEditorProvider.tsx` + `VisualEditorPannello.tsx` +
+`VisualEditorCasella.tsx` + `visualEditorUi.ts` (badge in basso a sinistra con accensione/spegnimento
+e conteggio, guida, casella di scrittura, azzeramenti, esportazioni).
+Il provider è montato in `src/App.tsx` **dentro `BrowserRouter`** (segue la rotta corrente) e **in
+produzione non monta nulla** (`import.meta.env.DEV`); l'anello tratteggiato è posizionato scrivendo
+gli stili, senza re-render a ogni movimento del mouse. `Esc` chiude prima la casella aperta, poi
+spegne l'editor; l'accensione è ricordata fra i refresh (`sr_visual_editor_attivo`). Pannello e
+anello portano l'attributo `data-sr-visual-editor`, i click lì dentro non vengono intercettati: il
+sistema non modifica se stesso.
+
+**5. Azzeramenti ed esportazioni.** `Ripristina` = l'override del blocco viene tolto e torna il testo
+del codice; `Azzera pagina` = tutte le modifiche della rotta; `Azzera tutto` = tutte le rotte
+(l'indice `sr_visual_editor:_rotte` fa da elenco, senza scorrere tutto il `localStorage`).
+L'esportazione del testo produce un blocco pronto da incollare nei componenti (una riga per blocco,
+`era: «…»` / `ora: «…»`, in ordine di chiave, con il rimando a questa sezione); quella JSON scarica
+tutte le pagine, per passar le modifiche a un altro strumento. La data dell'esportazione la passa il
+chiamante: lo store resta puro, senza orologi nascosti.
+
+**Verifiche (comandi eseguiti, non assunti).**
+- `npx tsx scripts/test-visual-editor.ts` → ✅ **22 asserzioni** (contiguità ed esclusioni: il
+  paragrafo con il grassetto è una casella sola, il monitor «Radar Live» e il pannello dell'editor
+  restano fuori; riscrittura senza nodi aggiunti/rimossi, spazi di bordo conservati, nessuna
+  scrittura quando il testo non cambia; scansione: chiave `p#1qwwa4q#0`, due testi identici su `#0`
+  e `#1`, override riflesso al reload, modifica tolta → copy del codice, click su figlio inline →
+  blocco giusto, nessun blocco nel monitor Radar Live).
+- `npx tsx scripts/test-visual-editor-store.ts` → ✅ **26 asserzioni** (chiave per rotta + indice
+  delle rotte + flag di accensione, notifiche solo su cambiamento reale, letture tolleranti con JSON
+  corrotto e voci malformate, azzeramento di pagina e globale, esportazioni testo/JSON, cablaggio di
+  `App.tsx`, provider, hook e pannello).
+- Guardie nuove in `package.json`: `test:visual-editor` = i due script in catena, **incluso in
+  `npm test`** subito dopo `test-editor-testi-vista` (eseguito: entrambi ✅ dentro la catena).
+  > **Aggiornamento 03/10/2026 → §26.38:** il pannello «Editor Testi Rapido» è stato rimosso
+  > (§26.38) e in catena il Visual Editor sta ora subito dopo `test:testi-chiave` (l'ex
+  > `test-editor-testi`, il cui script è diventato `scripts/test-testi-chiave.ts`).
+- `npm run typecheck` → exit 0, nessun `error TS` · `npm run test:architettura` → ✅ nessuna
+  violazione nuova (570 file, 142 = baseline; i file nuovi sotto le 250 righe) · `npx eslint` sui
+  file toccati → 0 errori · `npm run build` → ✅ (6,25 s).
+- `npm test` → si ferma in `&&` a `test:live-board`: **3 errori** in `RADAR LIVE` (le stesse tre
+  attese annotate in §26.30/§26.31), debito **preesistente** del working tree — `scripts/test-live-board.ts`
+  importa solo `src/lib/liveBoard.ts`, mai toccato qui.
+
+**File toccati.** `src/lib/visualEditorRegole.ts` (**nuovo**), `src/lib/visualEditorStore.ts`
+(**nuovo**), `src/lib/visualEditorScansione.ts` (**nuovo**), `src/hooks/useVisualEditor.ts` (**nuovo**),
+`src/components/dev/VisualEditorProvider.tsx` (**nuovo**), `src/components/dev/VisualEditorPannello.tsx`
+(**nuovo**), `src/components/dev/VisualEditorCasella.tsx` (**nuovo**), `src/components/dev/visualEditorUi.ts`
+(**nuovo**), `src/App.tsx`, `scripts/test-visual-editor.ts` (**nuovo**),
+`scripts/test-visual-editor-store.ts` (**nuovo**), `package.json`, `docs/DEPARTMENT_MAP.md`,
+`docs/SYSTEM_HANDOVER.md`. Nessun file di dipartimento: tutto dentro i condivisi essenziali
+(`src/lib/**`, `src/hooks/**`) più il dev tooling (`src/components/dev/**`) e il montaggio in `App.tsx`.
+
+### 26.38 DEV Toolbar — rimosso il vecchio pannello «Editor Testi Rapido»: resta il solo «Visual Editor»
+
+**Cosa cambia.** In DEV la stessa toolbar offriva **due** strumenti di editing testuale: il
+«Visual Editor» click-to-edit (§26.37) e la sezione collassabile **«Editor Testi Rapido»**
+(`components/EditorTestiRapido.tsx`, §26.27–§26.31), che elencava i blocchi di testo del DOM
+con **una casella laterale per blocco**: dove la copy è spezzata in più elementi inline (es. la
+marca **PureFocus**, resa come «Pure» + «Focus») comparivano caselle separate per ogni
+frammento. Due UX, due store (`sr_dom_text_overrides` vs `sr_visual_editor:*`), due elenchi di
+testi in pagina: sovrapposizione e confusione. Il pannello è stato **rimosso**: ora l'unico
+editing testuale in sviluppo è il Visual Editor, che si accende dal badge in **basso a sinistra**
+(`App.tsx`).
+
+**Cosa è stato rimosso** (nessun file di dipartimento: tutto dev tooling condiviso):
+
+- `src/components/EditorTestiRapido.tsx` — il pannello, con il mount in
+  `src/components/DevToolbar.tsx` (import, `<EditorTestiRapido />`, chiamata
+  `useScansioneTestiDom()` e la sua nota: la toolbar non applica più nulla ai testi del DOM);
+- `src/lib/testiDom.ts` + `src/lib/testiDomOverride.ts` — la scansione del DOM e lo store
+  `localStorage: sr_dom_text_overrides` (§26.31);
+- `src/hooks/useTestiDom.ts` — `useScansioneTestiDom()` / `useTestiDomInPagina()`;
+- `src/lib/testiInPagina.ts` — il registro delle viste (§26.30) — e `useTestiInPagina()` in
+  `src/hooks/useTestiEditabili.ts`: esistevano **solo** per l'elenco contestuale del pannello,
+  quindi se ne sono andati con lui (l'hook resta con la sola `useTestiEditabili()` per le
+  pagine: niente più registrazioni di chiavi a ogni render);
+- `scripts/test-editor-testi-vista.ts`, `scripts/test-editor-testi-dom.ts`,
+  `scripts/test-editor-testi-dom-cablaggio.ts` e lo script npm `test:editor-testi`.
+
+**Cosa resta** (e perché non si è buttato tutto). Le **identità dei testi** sono le stesse che
+usa il Visual Editor, quindi i due moduli puri restano, potati del codice morto (che nessuno
+importava più): `src/lib/testiDomRegole.ts` (61 righe: `normalizzaTesto`, `impronta`,
+`chiaveTestoDom`, `campoDi`/`contenitoreDi`; via `TAG_IGNORATI` e `SELETTORI_TARGET`, mai usati
+altrove), `src/lib/testiDomNodi.ts` (41: `NodoDom`, `etichettaDove`; via `raccogli`,
+`scriviTesto`, `OccorrenzaDom`) e l'helper di test `scripts/lib/dom-finto.ts` (65: `el`, `con`,
+`testo`; via la pagina di prova del vecchio editor). Resta anche il **livello «con chiave»**
+delle pagine — `data/editableTexts.ts` + `lib/testiModificabili.ts` + `useTestiEditabili`
+(FAQ pubbliche, sezione «Domande frequenti» di `/prezzi`, vetrina PRO): gli override
+`sr_simple_text_overrides` valgono **solo** in sviluppo e da ora **nessuno li scrive** (la
+lettura resta per non lasciare attivi, in DEV, i testi salvati prima); «Reset dati /
+LocalStorage» della DEV Toolbar ora li **cancella davvero** — `resettaTutto`
+(`src/contexts/app/useStatoSimulato.ts`) ripulisce anche `sr_simple_text_overrides` e il
+residuo inerte `sr_dom_text_overrides`, così non resta nessun testo modificato invisibile.
+I commenti dei file coinvolti sono stati allineati: si modifica la copy col Visual Editor,
+non più dal pannello.
+
+**Guardia.** `scripts/test-editor-testi.ts` è stato **rinominato** `scripts/test-testi-chiave.ts`
+(`npm run test:testi-chiave`, nella catena `npm test` al posto di `test:editor-testi`): copre
+registro, copy dell'offerta, store DEV e pagine rese per chiave (§26.27–§26.31), e verifica **in
+negativo** che il pannello non sia tornato — nessun riferimento a `EditorTestiRapido`/`testiDom`/
+`useScansioneTestiDom`/`STORAGE_KEY_TESTI_DOM` in `DevToolbar.tsx`, nessun `export function
+useTestiInPagina` né import da `@/lib/testiInPagina` nell'hook.
+
+**Verifiche (03/10/2026).** `npm run typecheck` → exit 0, nessun `error TS` ·
+`npm run test:testi-chiave` → ✅ nessun problema · `npm run test:visual-editor` → ✅ exit 0
+(22 + 26 asserzioni) · `npm run test:architettura` → ✅ **nessuna violazione nuova** (562 file,
+142 = baseline: le righe tolte non erano in baseline) · `npx eslint` sugli 11 file toccati → ✅
+0 problemi · `npm run build` → ✅ 7,61 s · `npm test` → la catena esegue il nuovo script al posto
+dei due rimossi e si ferma, come prima, in `&&` a `test:live-board` (3 errori RADAR LIVE,
+debito **preesistente** §26.30/§26.31).
+
+**File toccati.** Rimossi: `src/components/EditorTestiRapido.tsx`, `src/hooks/useTestiDom.ts`,
+`src/lib/testiDom.ts`, `src/lib/testiDomOverride.ts`, `src/lib/testiInPagina.ts`,
+`scripts/test-editor-testi-vista.ts`, `scripts/test-editor-testi-dom.ts`,
+`scripts/test-editor-testi-dom-cablaggio.ts`. Modificati: `src/components/DevToolbar.tsx`,
+`src/hooks/useTestiEditabili.ts`, `src/lib/testiDomNodi.ts`, `src/lib/testiDomRegole.ts`,
+`scripts/lib/dom-finto.ts`, `package.json`, `src/contexts/app/useStatoSimulato.ts`
+(`resettaTutto` ripulisce anche le chiavi dei testi), i commenti di allineamento in
+`src/data/editableTexts.ts`, `src/data/faqPubbliche.ts`, `src/lib/testiModificabili.ts`,
+`src/pages/FAQPage.tsx`, `src/components/landing/LandingOffertaPro.tsx`,
+`docs/DEPARTMENT_MAP.md`, `docs/SYSTEM_HANDOVER.md`, e `scripts/test-editor-testi.ts` →
+**rinominato** `scripts/test-testi-chiave.ts`. Nessun file di dipartimento; nessuna rotta, nessun
+testo di prodotto e nessuna regola di copy cambiati.
+
+### 26.39 «Radar Live» — la vetrina torna alla direttiva di §26.20 (fine del drift della «dicitura standard»)
+
+**Nota di sessione (03/10/2026).** La catena `npm test` era rossa da prima (§26.30, §26.31,
+§26.37, §26.38) e il colpevole non erano le guardie: era **il codice**. Il commit
+`56c6d0d` («fix: public radar production sync», 02/10/2026) aveva sostituito la regola di
+vetrina della direttiva cliente di §26.20 — *«se il nome non è risolvibile in chiaro la riga
+NON entra nella vetrina pubblica»* — con una regola diversa e **non documentata**: la colonna
+«Scuola» mostra la dicitura di riempimento `Scuola non specificata / Più plessi` e
+`preparaRigheBoard` non scarta più nulla (via `if (!scuola) continue;`). Effetti misurati:
+
+1. `scripts/test-live-board.ts` (**3 errori**): `senza-scuola`, `solo-codici`,
+   `etichetta-posto`, `client-codici`, `posto-montessori` tornavano in vetrina con la dicitura
+   al posto dell'istituto; `«ADEE | EEEE»` non era più considerato un non-nome.
+2. `scripts/test-nome-istituto.ts` (**2 errori, invisibili dietro la `&&`**: la catena si
+   fermava a `test:live-board`, il comando #57 di 59): con `nomeScuolaRiga` che restituiva
+   *sempre* una stringa, l'ultima risorsa di `nomePresentabileRiga` — l'**ente emittente**
+   («USP Torino») — era **codice morto**, e `rigaPresentabileVetrina` tornava `true` su ogni
+   riga, disattivando in silenzio il filtro del responso della prova (`SimulatorRadar` ×2).
+
+**Ripristino (nessun test toccato: le guardie erano corrette).**
+
+| # | Intervento | Dettaglio |
+|---|---|---|
+| 1 | `nomeScuolaRiga` → `string \| null` | Torna il nome **reale** o `null`: `school_name` (dal gate) → registro per codice meccanografico → titolo (`scuolaDaTitolo`). L'ente emittente resta fuori dalla bacheca (§26.20, riga 2) |
+| 2 | `preparaRigheBoard` | Riapplicato `if (!scuola) continue;` prima del `push` (**NON più in vigore: revocato dalla §26.47 del 04/10/2026**): senza un nome in chiaro la riga **non entra**. Finestra dei 60 giorni e `senzaScadenza` invariati |
+| 3 | `nomePresentabileRiga` → `string \| null` | Ultima risorsa legittima l'**ente emittente** (prova del Radar), `null` quando non c'è nulla di presentabile: `rigaPresentabileVetrina` filtra di nuovo davvero |
+| 4 | JSDoc e commenti allineati | Header del modulo, `nomeScuolaRiga`, `nomePresentabileRiga`, `preparaRigheBoard`: la «dicitura standard» non è più descritta come regola di prodotto |
+
+**Verifiche (03/10/2026, da `project/`).** `npm run test:board` → ✅ **17/17** asserzioni
+(«RADAR LIVE: nessun problema») · `npm run test:nome-istituto` → ✅ **28/28** («NOMI ISTITUTO:
+nessun problema», incluse le due asserzioni del responso) · `npm run test:board:scala` → ✅ ·
+**`npm test` → exit 0: catena completa verde** (59 comandi, nessun arresto in `&&`) ·
+`npm run typecheck` → ✅ exit 0, nessun `error TS` · `npm run test:architettura` → ✅ **nessuna
+violazione nuova** (562 file, 142 = baseline) · `npx eslint src/lib/liveBoard.ts` → ✅ 0
+problemi (i 42 problemi di `npm run lint` sul repo sono il debito noto, `liveBoard.ts` non è fra
+i file segnalati) · `npm run build` → ✅ exit 0.
+
+**File toccati.** `src/lib/liveBoard.ts` (unico file di codice: 29 righe aggiunte, 18 tolte),
+`docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`. **Nessun test modificato** e nessun file di
+dipartimento: perlomeno nessuno *nuovo* — `liveBoard.ts` è uno dei condivisi essenziali
+(`src/lib/**`) già nel perimetro del Radar Live. Le note di §26.30, §26.31, §26.37, §26.38 e la
+«Nota su «Radar Live»» del §26.36 vanno lette come **storia**: quel debito è chiuso qui.
+
+**Residuo dichiarato (fuori da questa guardia).** `src/departments/radar/flightBoard/righeBoard.ts`
+contiene `risolviNomeScuola` (dicitura standard) ed `eInterpelloVisibile`: **codice morto**
+(nessun `import` in `src/**` né in `scripts/**`), duplicato non cablato della stessa regola. Non
+è stato toccato qui — la sua rimozione è una pulizia a sé, da fare col dipartimento Radar.
+
+### 26.40 Visual Editor senza pannello-guida · riepilogo profilo reale · ricerca estesa per sinonimi
+
+**Cosa cambia (tre interventi, tutti con guardie verdi).**
+
+1. **Visual Editor: via il pannello descrittivo.** Il badge in basso a sinistra resta l'unico
+   punto di comando e assorbe anche i due azzeramenti: conteggio (`N testi · M modificati`),
+   **Esporta**, **Azzera** (questa pagina), **Azzera tutte**, **Esci**. Il pannello flottante che
+   compariva a vuoto con «Modifica i testi della pagina / Clicca un testo: si apre la casella…»
+   è stato **eliminato**: nessun testo d'aiuto, solo i comandi (la casella di modifica e la
+   scheda di esportazione restano, con la loro X). Solo `src/components/dev/VisualEditorPannello.tsx`
+   (dev tooling condiviso: nessun file di dipartimento).
+2. **Profilo — «In cosa puoi lavorare» mostra i dati VERI.** La casella era una dicitura fissa
+   («Classi di Concorso Monitorate (A-22, A-11, ecc.)»), identica per tutti: sembrava vuota perché
+   non leggeva nulla. Ora la riempie `RiepilogoLavoro` (`src/departments/radar/components/`, nuovo,
+   esportato da `radar/index.ts`): legge `preferenze` dal contesto e mostra le **classi di concorso**
+   (codice + denominazione da `classeByCodice`), le **competenze di catalogo** (`materieId` → nome)
+   e le **parole chiave personali** (`materieCustom`); con il profilo vuoto dice cosa manca e porta
+   a `/dashboard/radar`. `src/pages/ProfiloPage.tsx` monta il componente al posto del markup statico.
+3. **Ricerca estesa: «Inglese» aggancia le materie correlate.** Due pezzi nuovi in
+   `src/data/ordiniMaterie.ts` — **`materieRicercabili()`** (le competenze extra PNRR/PON **più** i
+   tag popolari che sono discipline curricolari: «Lingua inglese» → `inglese`, «Educazione motoria»
+   → `ed_fisica`: prima non erano cercabili) e **`CORRELAZIONI_MATERIE`** (co-occorrenze curate
+   termine → id di materie esistenti: `inglese` → `clil`, `educazione_linguistica`, `mediazione`…;
+   `coding` → `robotica`, `digital_skills`; `ia`/`ai` → `intelligenza_artificiale`…). In
+   `src/lib/ricercaSelezioniRadar.ts` nascono `materieCorrelate()`/`materiaCorrelata()` e le usano
+   `cercaClassiDiConcorso` (una materia correlata vale come materia della classe) e
+   `cercaCompetenzeExtra`; la parola chiave libera non è più riproposta quando il catalogo offre già
+   quella voce (per **nome visibile** o per **id**). Misurato prima/dopo con una sonda read-only:
+   `«inglese»` → **4 classi, 0 competenze, 1 parola chiave** ⇒ ora **4 classi, competenze «Lingua
+   inglese» + CLIL + educazione linguistica + mediazione**, nessuna parola chiave ridondante.
+   `«pedagogia»` resta **senza competenze** (nessuna disciplina curricolare entra nell'elenco).
+
+**Diagnosi — perché NON partono notifiche Telegram/email (misure su dati reali, 03/10/2026).**
+
+Configurazione: **a posto**. `.env` ha `SUPABASE_URL`, `VITE_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+`RESEND_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`; i flag dei dipartimenti lasciano `radar`
+a `on` per default e il dirottamento admin vale solo in stato `test`. Il trigger orario esiste:
+`.github/workflows/digest.yml` gira `0 15,16 * * 1-5` (UTC) e lo script invia solo quando in Italia
+sono le 17:00 (`eOraDelDigest`, `ORA_DIGEST = 17`), con `workflow_dispatch` e `--force` per i lanci
+manuali; il promemoria 24h è lo step successivo.
+
+Il blocco è **a monte: i dati**. Misure (diagnostica read-only, script poi rimosso): `interpelli` =
+609 righe · `contact_email` presente **325/609 (53,4%)** · `school_code` presente **142/609
+(23,3%)** · `source_url` è un avviso **diretto** 433/609 (71,1%). Il **gate di qualità strict**
+degli invii (`motivoAvvisoNonInviabile`: servono link diretto *e* recapito di candidatura,
+`alertInterpello.ts`) scarta tutto ciò che non ha entrambi: il digest reale in `--dry-run --force`
+produce `1 profili notificabili · 0 inviati · 1 saltati`, con `⛔ Avviso escluso dall'invio
+(recapito di candidatura mancante)`. Intervallo di sicurezza: **49/609 righe (8%)** sono insieme in
+vetrina e inviabili. Due cause concorrenti, entrambe da risolvere in **ingestione**: il gate
+pretende un recapito che la pipeline non estrae (le PEC/PEO stanno nelle pagine sorgente, non in
+tabella — `dati:arricchisci` in dry-run recupera **0 codici, 0 email, 0 nomi**, perché i titoli non
+contengono un codice meccanografico) e non arrivano **righe nuove** (`created_at` massimo =
+`2026-09-29`: da giorni ciò che esiste è fermo, ed è la condizione che `npm run admin:health`
+segnala come «dispatch/scraper fermo»). Nota di contorno: `scripts/test-notifier-dry.ts` non chiama
+`process.loadEnvFile()`, quindi annuncia «notifiche email disattivate» anche con la chiave presente
+— lacuna della *diagnosi*, non dell'invio.
+
+**Diagnosi — «Radar Live» «da 625 a 10» annunci.** L'imbuto reale, misurato riga per riga sui dati
+veri, non lascia dubbi: **609 righe** in `interpelli` → il filtro temporale ne passa **609/609**
+(44 con scadenza futura, 565 senza scadenza ma pubblicate entro i 60 giorni: `filtroAttivi` non
+taglia nulla) → `urlValido(source_url)` **609/609** → `preparaRigheBoard` (vetrina §26.20) ne tiene
+**66 (10,8%)**. Il crollo non è del filtro di scadenza né della lettura a pagine: è la **fonte** che
+non porta il nome dell'istituto — `school_name` presente **70/609 (11,5%)** e *presentabile* appena
+**19/609 (3,1%)**, `school_code` assente nel 76,7% dei casi, e i titoli sono **dump di codici di
+classe** (`A041 | A020 | A033 | A040 | EEEE | ADEE`), da cui `scuolaDaTitolo` non ricava nulla. Le
+66 righe che restano hanno un nome vero nel titolo o nel campo (`I.C. Ferruccio Ulivi`,
+`I.C. Minervini Sisti`, …). Ricostruire i nomi dal registro è possibile solo col codice
+meccanografico (assente) e `dati:arricchisci` non recupera nulla: serve l'**ingestione**
+(`src/scraper/**`). L'alternativa — mostrare in vetrina l'**ente emittente** («USP Monza Brianza»
+per i 433 avvisi ufficiali) — **cambia la direttiva cliente di §26.20** («se il nome non è
+risolvibile in chiaro la riga NON entra»): è una decisione di prodotto, non un fix tecnico.
+
+**Verifiche (03/10/2026, da `project/`).** `npm run typecheck` → ✅ exit 0 · **`npm test` → ✅ exit 0:
+catena completa verde** (59 comandi, nessun arresto in `&&`) · `npm run test:architettura` → ✅
+nessuna violazione nuova (563 file, **142 = baseline**) · `npx eslint` sugli 8 file toccati → ✅ 0
+problemi · `npm run build` → ✅ · `test:ricerca` ✅ (con le nuove asserzioni estese) ·
+`test:radar:preferenze` ✅ (guardia allineata: `materieRicercabili()` al posto del vecchio
+controllo su `materieCompetenzeExtra()`) · `test:visual-editor` ✅ (entrambi gli script) ·
+`test:board` ✅ · `test:nome-istituto` ✅ · `test:matching` ✅.
+
+**File toccati.** `src/components/dev/VisualEditorPannello.tsx`,
+`src/departments/radar/components/RiepilogoLavoro.tsx` (**nuovo**), `src/departments/radar/index.ts`,
+`src/pages/ProfiloPage.tsx`, `src/data/ordiniMaterie.ts`, `src/lib/ricercaSelezioniRadar.ts`,
+`scripts/test-ricerca-unificata.ts`, `scripts/test-radar-preferenze.ts`, `docs/SYSTEM_HANDOVER.md`,
+`docs/DEPARTMENT_MAP.md`. **Fuori dal dipartimento Radar, per richiesta esplicita dell'utente:**
+`src/pages/ProfiloPage.tsx` (pagina condivisa: monta il componente del Radar al posto del markup
+statico) e `src/components/dev/VisualEditorPannello.tsx` (dev tooling condiviso). Nessun file dei
+dipartimenti `notizie`, `cfu`, `modulistica`. Gli script di diagnostica usati per le misure
+(`_funnel-radar.ts`, `_probe-ricerca.ts` e i relativi output) erano **temporanei** e sono stati
+rimossi: i numeri sono qui sopra.
+
+### 26.41 Anagrafica nazionale delle scuole (SCUANAGRAFE): nome, PEO e PEC reali su tutte le superfici
+
+**Cosa cambia (sblocco esplicito dell'utente: dati + `src/scraper/**`).** Le fonti degli interpelli
+pubblicano spesso **solo codici** (dump di classi, meccanografici) e la tabella `interpelli` non
+aveva né il nome dell'istituto né un recapito: la vetrina pubblica scartava quelle righe (§26.20) e
+il gate di qualità degli invii le escludeva («recapito di candidatura mancante», §26.40). Ora i
+quattro file ufficiali del Ministero — `SCUANAGRAFESTAT` (statali), `SCUANAGRAFEPAR` (paritarie),
+`SCUANAAUTSTAT` e `SCUANAAUTPAR` (autonomie di Trento/Bolzano) — alimentano un **indice per codice e
+per nome** che completa le righe alla fonte.
+
+**Moduli nuovi** (tutti **solo-Node**, mai nel bundle del browser):
+
+| Modulo | Cosa fa |
+|---|---|
+| `src/lib/anagraficaCsv.ts` | Parser CSV RFC4180 (campi quotati, `""`, a capo nei valori), mappa riga → scuola (`ScuolaAnagrafica`), chiavi: `normalizzaNomeScuola`, **`chiaveCodiceScuola`** (permissiva 6–16 alfanumerici: i codici delle **paritarie** — `UD1A036009` — non passano la convenzione MIM statale e sarebbero stati scartati in silenzio), `chiaveProvincia`/`provinciaCodiceDaNome` (i connettivi cadono: «MONZA E BRIANZA» ≡ «Monza e della Brianza»). PEO/PEC in **minuscolo** |
+| `src/lib/anagraficaIndice.ts` | Scoperta dei file per prefisso nella cartella `SCUOLERADAR_ANAGRAFICA_DIR` (default `~/Downloads`), costruzione dell'indice (`perCodice`, `perIstituto`, `perNome`) e **cache di processo** (i file pesano ~13 MB: mai ricaricati a riga) |
+| `src/lib/anagraficaScuole.ts` | Superficie pubblica (ri-esporta i due moduli sopra): `scuolaDaCodice`, `scuolaDaNome` (solo se **univoco**, con provincia; ripete togliendo una testa di 2–6 caratteri perché l'avviso scrive «I.C. Ferruccio Ulivi» e l'anagrafica «Ferruccio Ulivi»), `nomeDaAnagrafica` (denominazione dell'**istituto**, passata dal gate §26.20) e **`arricchisciDaAnagrafica(riga)`** → patch `{ school_code, school_name, contact_email, school_pec }` |
+| `src/scraper/anagraficaInterpelli.ts` | Ponte dello scraper: `arricchisciConAnagrafica(avviso)` completa la riga **all'inserimento** + `riepilogoAnagrafica()` per il log del run |
+
+**Regole di sicurezza dei dati.** L'arricchimento **non sovrascrive mai** un campo già presente e
+**non inventa nulla**: se il codice non è in anagrafica la riga resta com'è; un nome **ambiguo**
+(omonimie senza provincia) non produce nulla. La PEC finisce nella colonna dedicata
+`interpelli.school_pec` (migrazione nuova `20261003120000_add_interpelli_school_pec.sql`,
+**opzionale e tollerata**: scraper e script la tolgono dal payload se non è applicata; **applicata in produzione il 03/10/2026**, vedi l'aggiornamento in coda a questa nota).
+
+**Uniformità su Radar Pubblico, Personale e Regionale.** Tutte e tre le superfici leggono la stessa
+tabella `interpelli`: le righe vengono completate **una volta sola** (script di manutenzione sulle
+righe storiche + scraper per quelle nuove), quindi nessuna di esse ha logica duplicata né bisogno di
+conoscere l'anagrafica.
+
+**Misure sui dati reali (03/10/2026).** Anagrafica indicizzata: **62.850 codici** da 4 file
+(50.273 statali · 11.331 paritarie · 1.178 autonomie statali · 68 autonomie paritarie).
+`npm run dati:arricchisci -- --apply` su 609 righe: **142 risolte per codice**, **91 righe
+aggiornate** (nome reale dell'istituto + codice/recapito dove mancavano). Effetto sulla vetrina
+(§26.20): **da 66 a 157 righe** (`school_name` presentabile da 19 a 110 → tabellone dal 10,8% al
+**25,8%**), con nomi veri (`ISTITUTO COMPRENSIVO DOMO 2`, `I.I.S. "SANSI-LEONARDI-VOLTA"`, …). Il
+recupero **per nome** ha dato 0 su questi dati: i nomi negli avvisi non coincidono con le
+denominazioni del registro (il percorso efficace è il codice).
+
+**Guasto di produzione trovato e risolto (perché le notifiche non partivano).** `npm run scrape:check`
+**falliva** — `src/config/features.ts` usava `window`, che nel programma Node-only dello scraper
+(`tsconfig.scraper.json`, `lib` senza DOM) non compila. Il workflow `.github/workflows/scraper.yml`
+esegue la validazione **prima** dello scraping: usciva in errore e **non scrapava**, quindi nessun
+interpello nuovo entrava in tabella (ultimo `created_at`: 29/09) e non c'era nulla da notificare. Ora
+la sincronizzazione fra schede usa un `globalThis` tipizzato: `scrape:check` → **exit 0**.
+
+**Verifiche (03/10/2026, da `project/`).** `npm run typecheck` → ✅ exit 0 · `npm run scrape:check` →
+✅ exit 0 (prima **falliva**) · **`npm test` → ✅ exit 0: catena completa verde** (60 comandi, il
+nuovo `test:anagrafica` è l'ultimo) · `npm run test:anagrafica` → ✅ 25 asserzioni (parser CSV, indice,
+lookup per codice/istituto/nome, ambiguità, arricchimento senza sovrascritture, smoke sui file reali)
+· `npm run test:board` ✅ 17/17 · `npm run test:nome-istituto` ✅ · `npm run test:architettura` → ✅
+**nessuna violazione nuova** (568 file, 142 = baseline; i due moduli lunghi sono stati spezzati in
+`anagraficaCsv.ts` + `anagraficaIndice.ts` + `anagraficaScuole.ts` per restare sotto i limiti) ·
+`npx eslint` sugli 8 file toccati → ✅ 0 problemi · `npm run build` → ✅ exit 0.
+
+**File toccati.** `src/lib/anagraficaCsv.ts`, `src/lib/anagraficaIndice.ts`, `src/lib/anagraficaScuole.ts`
+(**nuovi**, condivisi essenziali), `src/scraper/anagraficaInterpelli.ts` (**nuovo**), `src/scraper/index.ts`,
+`src/scraper/parser.ts`, `src/config/features.ts`, `scripts/arricchisci-interpelli.ts`,
+`scripts/test-anagrafica-scuole.ts` (**nuovo**), `supabase/migrations/20261003120000_add_interpelli_school_pec.sql`
+(**nuova**, applicata in produzione il 03/10/2026), `package.json`, `docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`.
+Perimetro: sblocco esplicito dell'utente su `src/scraper/**` + i condivisi essenziali; nessun altro
+dipartimento toccato. **Dati**: 91 righe di `interpelli` aggiornate (solo campi vuoti) con il
+comando documentato `npm run dati:arricchisci -- --apply`.
+
+
+
+> **Aggiornamento (03/10/2026, stesso giorno) — migrazione applicata + PEC della fonte: esito reale.**
+> La migrazione `20261003120000_add_interpelli_school_pec.sql` è ora **applicata in produzione** con
+> `supabase db push --project-ref gwdmsgsshvdnfrplbjiv`. Prima del push, `supabase migration list
+> --linked` mostrava **una sola** migrazione pendente — proprio questa (tutte le altre 59 già `Remote`):
+> il push non ha toccato altro. Verifica in sola lettura via PostgREST: **prima** `select=school_pec` →
+> `42703 column interpelli.school_pec does not exist`; **dopo** → `200` con `school_pec: null`. Il
+> percorso di tolleranza di scraper e script (payload senza la colonna) non è più esercitato.
+>
+> `npm run dati:arricchisci -- --apply` sulle **609 righe** ha riportato **0 righe aggiornate**: non è un
+> guasto, è la conferma che il run precedente aveva già colmato tutto il colmabile (142 righe risolte per
+> codice, 91 scritte). Con la colonna presente `pecDisponibile` resta `true`: nessun fallback silenzioso,
+> nessuna PEC scartata dal payload.
+>
+> **Perché «PEC aggiunte 0» è il risultato CORRETTO (misurato sui file, non dedotto).** Il file delle
+> statali pubblica la PEC come **«Non Disponibile» in 50.271 righe su 50.273** (soltanto 2 caselle reali);
+> le autonomie statali 29 su 1.178; le **paritarie 7.048 su 11.331** — sono l'unica famiglia che pubblica
+> la PEC. In `interpelli` i codici distinti sono **76** e **nessuno** appartiene a una paritaria con PEC
+> (**intersezione = 0**): non c'era nulla da scrivere. `arricchisciDaAnagrafica` scrive `school_pec`
+> **solo** quando il file la pubblica (`scuola.pec`), in linea col vincolo «non inventare».
+>
+> **Decisione di prodotto (confermata, NON implementata): la PEC non si ricostruisce per convenzione.**
+> `comunicazione/01_email_riepilogo/checklist_email.md` §6 ammette `codice@pec.istruzione.it` **solo se
+> non esiste alcun recapito PEO utilizzabile** e vieta esplicitamente di «ricostruire la PEC quando
+> esiste la PEO»: qui la PEO c'è su tutte le righe arricchite, quindi `school_pec` **resta NULL per le
+> statali** ed è il comportamento conforme — non un debito aperto né un bug da «sistemare». Per gli usi
+> che richiedono la convenzione, `emailScuola.ts` continua a esporre
+> `emailDaCodiceMeccanografico().pec` (e `school-lookup.ts` il suo `pecEmail`).
+>
+> **Verifiche (03/10/2026, da `project/`).** `npm run typecheck` → ✅ exit 0 · **`npm test` → ✅ catena
+> completa verde** (60 comandi, fino a `test:anagrafica`; log del run: 1.566 righe, **0 marker di
+> errore**) · `npm run scrape:check` → ✅ exit 0 · `npm run test:architettura` → ✅ 568 file, 142 = baseline
+> (**nessuna violazione nuova**) · dati: 0 righe modificate da questo run, colonna `school_pec` presente e leggibile
+> (`select=school_pec`).
+>
+> **Ingestione ancora ferma al 29/09 (atteso).** Il `created_at` massimo in `interpelli` è il
+> **29/09/2026** e le righe con `school_pec` valorizzata sono **0**: lo scraper ricomincerà a inserire
+> quando la correzione di `scrape:check` (`src/config/features.ts`) sarà **committata e pushata** — il
+> workflow GitHub gira sui file del repository, non sul working tree. È il passo che riaccende davvero il
+> flusso delle notifiche; per avere l'arricchimento anche sul runner servono i file SCUANAGRAFE
+> (`SCUOLERADAR_ANAGRAFICA_DIR`, ~15 MB, non versionati: senza di essi le righe nuove nascono come prima).
+
+---
+
+### 26.42 «Radar Live»: schermate ESATTE nella bacheca pubblica — via il `+` e la dicitura fissa (03/10/2026)
+
+**Direttiva cliente (03/10/2026).** L'etichetta sotto il tabellone mostrava
+`Pagina 1 di 32+ - Aggiornamento automatico`: il `32` (righe in vetrina ÷ 5) e il `+` dicevano due
+cose diverse e il `+` sembrava un **tetto**, non un conteggio. Ora l'etichetta è **`Schermata X di
+Y`**: `Y` = elementi presenti in vetrina ÷ 5, arrotondati per eccesso. Nessun `+`, nessuna dicitura
+fissa — il numero cresce solo quando si apre davvero una schermata nuova.
+
+**Moduli toccati (dipartimento Radar).**
+- `radar/flightBoard/metricaBoard.ts` — `etichettaPagina(pagina, pagine)` → `` `Schermata X di Y` ``
+  (indici normalizzati: mai 0/`NaN`/decimali, `X` sempre compreso fra 1 e `Y`);
+  `MetricaBoard.oltreIlLimite` **rimosso** e `metricaBoard` non calcola più maggiorazioni.
+- `radar/FlightBoardInterpelli.tsx` — la scala arriva da `pagineBoard(totale, RIGHE_PER_PAGINA)`,
+  la **stessa** funzione che `metricaBoard` usa per l'etichetta: etichetta, rotazione automatica e
+  taglio delle righe mostrate parlano di un solo numero (prima il componente ricalcolava
+  `Math.ceil(totale / 5)` a mano, con il rischio di divergere).
+- `radar/flightBoard/__tests__/metricaBoard.test.ts` — attese aggiornate + guardie nuove
+  («nessun `+` e nessuna dicitura fissa», «schermata oltre il totale agganciata all'ultima»).
+
+**Misure reali (03/10/2026: `board:diag` + sonda di vetrina con la pipeline del componente).**
+`interpelli` = **609** righe, **tutte** con `source_url` valido e **nessuna** scaduta → il badge
+dichiara il conteggio esatto **«609 avvisi attivi in Italia»**; le righe **presentabili in vetrina**
+(§26.20: solo nomi d'istituto in chiaro, risolti anche per codice meccanografico) sono **157** →
+etichetta **«Schermata X di 32»**. Non «122» (609 ÷ 5): il tabellone mostra 157 avvisi e un numero
+più grande del contenuto sarebbe, di nuovo, un numero che non regge.
+
+**Regola di prodotto aggiornata.** `comunicazione/04_canali_regionali/checklist_regionali.md` §4:
+la voce della bacheca pubblica ora pretende il conto ESATTO («Schermata X di Y», senza `+` e senza
+dicitura fissa) sulle righe davvero presenti; il totale resta il **conteggio esatto** del database.
+
+**Test REALE di email, Telegram e dispatch (nessun mock, stesso giorno).**
+- `npm run test:notifiche` → **email Resend inviata** a `bartoloansaldi@gmail.com` (`✓ Inviata`) e
+  **Telegram inviato** alla chat configurata nell'ambiente (`✓ Inviato`, chat privata `8683710446`).
+  Connettività del canale verificata a monte con le API Telegram: `getMe` → bot **`ScuoleRadar_bot`**
+  (id 8894515872, `ok: true`), `getChat` → utente privato valido (`ok: true`).
+- `npx tsx scripts/admin-dispatch-user.ts bartoloansaldi@gmail.com` (dry-run) e
+  `npm run notifiche:digest -- --force --dry-run` → il motore `inviaDigestGiornaliero` elabora i
+  profili veri: **1 profilo notificabile su 8** in tabella (`free_forever`, province `AT`, classi
+  `A-22`/`A-24`, sostegno, Telegram collegato) e **1 opportunità compatibile scartata dal gate di
+  qualità** («recapito di candidatura mancante»: l'avviso non ha PEO/PEC risolvibile) → **0 invii,
+  0 errori**. È il comportamento voluto dal gate stretto (§26.40), non un guasto: quando una riga
+  compatibile avrà un recapito, il digest partirà con lo stesso motore.
+- Nessun invio a terzi e **nessuna quota consumata**: il contatore `incrementa_notifiche_utente`
+  viene toccato solo dopo il controllo `voci.length > 0` (e nel run reale solo se non si è in
+  dry-run), quindi un dry-run non «brucia» né crediti né voce di ledger.
+
+**Verifiche (03/10/2026, da `project/`).** `npm run typecheck` → ✅ exit 0 · **`npm test` → ✅ catena
+completa verde** (exit 0, log 1.523 righe, **0 marker di errore**) · `npm run test:board:metriche` →
+✅ 21/21 · `test:board:lettura` + `test:board:filtro` + `test:board` + `test:board:scala` → ✅ exit 0 ·
+`npm run test:architettura` → ✅ **568 file, 142 = baseline** (nessuna violazione nuova) ·
+`npx eslint` sui 3 file toccati → ✅ 0 problemi · `npm run build` → ✅ `built in 11,33s` (solo il
+warning preesistente sui chunk > 500 kB).
+
+**File toccati.** `src/departments/radar/flightBoard/metricaBoard.ts`,
+`src/departments/radar/FlightBoardInterpelli.tsx`,
+`src/departments/radar/flightBoard/__tests__/metricaBoard.test.ts`,
+`comunicazione/04_canali_regionali/checklist_regionali.md`, `docs/SYSTEM_HANDOVER.md`,
+`docs/DEPARTMENT_MAP.md`. Perimetro: **solo dipartimento Radar** + la checklist di prodotto della
+bacheca; nessun altro dipartimento toccato, nessuna migrazione, nessuna modifica a
+`src/lib/**` o `src/config/**`.
+
+### 26.43 Notifiche email/Telegram: `\vert{}` nel gate dei link, semantica della query string, guida del digest (04/10/2026)
+
+**Nota di sessione (04/10/2026).** Riparazione della catena di notifica (condivisi essenziali
+`src/lib/**`): tre difetti reali corretti e due conferme misurate a runtime. Il punto di partenza era
+di prodotto — la classificazione della **fonte ufficiale** («Apri l'avviso ufficiale») non si comportava
+più come previsto — e la causa vera era un **artefatto di escape JSON** finito dentro una regex.
+
+1. **Regex CORROTTA nel gate dei link** (`src/lib/alertInterpello.ts`, `RE_HOST_INTERNO`). L'alternanza
+   conteneva la sequenza `\vert{}` al posto della giunzione `$|(^|\.)`: la branca dei **host interni**
+   (`scuoleradar.it`/`scuoleradar.com`, `purefocus.one`, `localhost`, `127.0.0.1`, `0.0.0.0`) non
+   matchava più, quindi `eLinkEsterno()` non escludeva più gli URL della piattaforma e un URL di
+   ScuoleRadar poteva essere trattato come **fonte esterna** (mostrato come «Apri l'avviso ufficiale» e
+   ammesso dal gate dei canali). Ripristinata la giunzione con scrittura **byte-exact** (UTF-8 senza BOM,
+   **CRLF preservati**, emoji intatte). In `src/**` e `scripts/**` non resta **nessun** `\vert{}`
+   (verificato anche a livello di byte: nessun `0x0B` nei sorgenti).
+2. **Semantica della query string nel gate `eUrlAvvisoDiretto`** (§6.4, riga «LINK alla fonte»). Prima la
+   sola presenza di una query string rendeva l'URL non diretto, in blocco: anche la pagina tabellare
+   «Stampa» del singolo avviso (`?cod=…`) veniva scartata. Ora il verdetto passa da due elenchi
+   espliciti — **`RE_QUERY_ID_AVVISO`** (`cod`, `codice`, `id`, `uid`, `prot`, `protocollo`, `num`,
+   `numero`, `atto`, `pratica`, `doc`, `documento`, `file`, `allegato`) e **`RE_QUERY_RICERCA`** (`s`,
+   `q`, `query`, `search`, `ricerca`, `cerca`, `keyword`, `filtro`/`filtri`, `anno`, `mese`, `tag`,
+   `category`/`categoria`, `archivio`, `page`/`paged`, `offset`, `limit`, `classe`, `provincia`, `data`,
+   `dal`, `al`). Regola: un parametro di **ricerca/filtro** esclude il singolo avviso (anche se c'è un
+   `id`), un parametro **sconosciuto** è trattato con prudenza (non diretto), senza query restano le
+   regole su percorso (archivi/elenchi/tag, home con un solo segmento). Esiti: `/interpelli/stampa?cod=…`
+   → **diretta** (pagina tabellare del singolo avviso: checklist email §5), `/albo/stampa?classe=A022` e
+   `?s=interpello` → **non dirette**.
+3. **Guida del digest Telegram calcolata sull'URL GREZZO** (`src/lib/telegram.ts`, `bloccoVoceTelegram`).
+   `suggerimentoRicercaAvviso({ compatto: true })` era calcolata sull'URL *mostrato*: per una voce con
+   elenco/«Stampa» filtrato (fonte non mostrabile dal gate STRICT) la guida **spariva**, proprio nel caso
+   in cui serve. Ora si calcola su `v.link`: resta la riga *«cerca la riga con «A-022» e leggi lì date e
+   classi»*, mentre la riga `🔗 Fonte Ufficiale` continua a obbedire al gate. Corretta anche la variante
+   **compatta**, che perdeva verbo e riga da cercare. Le email restano **senza** guida (checklist email §4).
+
+**Conferme misurate a runtime (nessuna modifica necessaria).**
+- **Testata di brand su ogni superficie.** Telegram: prima riga di ogni messaggio =
+  `📡 <a href="https://www.scuoleradar.it">Scuole Radar.it</a>` (`BRAND_RIGA_TELEGRAM`, garantita in modo
+  idempotente nel layer di invio). Email: `intestazioneBrandHtml()` (logo + «Scuole Radar.it») in alert e
+  digest.
+- **Recapito della scuola nel corpo.** Il `mailto:` del recapito risolto è presente **sia** nell'email sia
+  nel messaggio Telegram (etichetta condivisa `📧 Candidature`). Il campo è **uno solo** (`contactEmail`) e
+  segue la gerarchia della checklist email §6 — PEO istituzionale, poi generica, poi segreteria, **poi** la
+  PEC: la PEC resta l'ultima risorsa e non si ricostruisce quando la PEO esiste (§26.41: `school_pec`
+  resta NULL per le statali). Nessuna riga PEC separata nei corpi: sarebbe una violazione della §6.
+
+**Verifiche (04/10/2026, da `project/`).** `npm run test:alert`, `test:email`, `test:link`,
+`test:email-alert`, `test:digest`, `test:qualita`, `test:promemoria`, `test:link-esterno`, `test:telegram`,
+`test:telegram:template`, `test:telegram:tier`, `test:email-scuola` → ✅ **tutte verdi** (nessun marker
+`✗`) · `npm run typecheck` → ✅ exit 0 · `npm run test:architettura` → ✅ **nessuna violazione nuova**
+(568 file, 142 = baseline) · `npm run build` → ✅ `built in 12,28s` (solo il warning preesistente sui
+chunk > 500 kB) · `npx eslint` sui file toccati → ✅ 0 problemi.
+
+**File toccati (tutti condivisi essenziali o guardie della modifica stessa).**
+`src/lib/alertInterpello.ts` (regex riparata, gate della query string, variante compatta della guida),
+`src/lib/telegram.ts` (guida del digest sull'URL grezzo), `scripts/test-alert-avviso.ts`,
+`scripts/test-link-fonte.ts`, `scripts/test-email-alert.ts`, `scripts/test-promemoria.ts` (fixture con
+date 2099 al posto di date costruite su un `ADESSO` congelato: il digest risultava vuoto; l'asserzione
+della guida punta al testo della guida e non a `STAMPA` dentro l'URL), `docs/SYSTEM_HANDOVER.md`.
+Nessun file di dipartimento, nessuna migrazione, nessun dato di produzione toccato.
+
+**Difetto FUORI PERIMETRO (solo segnalato, non toccato).** Lo stesso artefatto `\vert{}` è presente in
+`src/departments/notizie/services/promptEditoriale.ts:30`, come separatore dei titoli nel prompt
+editoriale del dipartimento **Notizie**: serve lo **sblocco congiunto** su quel dipartimento per
+correggerlo (qui ci si ferma, come impone l'isolamento dei dipartimenti).
+
+### 26.44 Notifiche: header email testuale, un solo pulsante di fonte, riga di fonte garantita su Telegram, email aggregate (04/10/2026)
+
+Quattro interventi correttivi sui **moduli di notifica** (Telegram + email), richiesti
+dopo l'analisi degli ultimi invii. Nessun file di dipartimento toccato: si opera sui
+condivisi essenziali (`src/lib/**`), sui moduli di notifica e sulle guardie.
+
+1. **Intestazione email SOLO testuale** (`src/lib/resend.ts`, `intestazioneBrandHtml`;
+   stessa resa nella Edge `supabase/functions/send-notification`). Rimosso
+   **definitivamente** il logo-immagine delle email (`LOGO_URL`/`logo.png`): i client
+   di posta lo rendevano compresso e sgranato e dominava il messaggio. Al suo posto la
+   scritta `Scuole Radar.it` su una riga centrata, **cliccabile** verso
+   `scuoleradar.it` (nuova costante `URL_BRAND`). Vale per alert, digest, promemoria e
+   per le email di ciclo di vita della Edge. Guardia statica in `npm run test:copy`
+   (nessun `<img>`/`logo.png` nei renderer email, `URL_BRAND` presente).
+2. **Un solo pulsante «Apri l'avviso ufficiale» per voce** (checklist email §5
+   aggiornata). `fonteInEvidenza()` non è più una scatola celeste che **duplicava** la
+   dicitura già presente sul bottone CTA: ora rende **un unico pulsante blu brand**.
+   Nella card dell'alert la riga di fonte è stata **rimossa** (la CTA primaria in
+   fondo è l'unica azione); nel digest e nel promemoria il pulsante è l'unica azione
+   della voce. La dicitura e l'URL dell'annuncio compaiono **una volta sola**
+   (asserzioni nuove in `test:email`, `test:link`, `test:email-alert`, `test:digest`).
+3. **Riga di fonte GARANTITA su Telegram** (`src/lib/telegram.ts`). La riga
+   `👉 Apri l'avviso ufficiale` era costruita sul link già filtrato
+   (`linkOpportunita`): un doppio gate a monte poteva farla **sparire** anche con una
+   fonte esterna valida. Ora si costruisce sull'**URL grezzo** della voce
+   (`interpello.link` / `v.link`) e il gate sulla destinazione resta **uno solo**
+   (`eUrlAvvisoDiretto`, dentro `rigaAvvisoUfficiale`): home, elenchi e pagine di
+   ricerca restano esclusi e non esiste alcun fallback alla home di ScuoleRadar.
+4. **Email AGGREGATE: mai una email per opportunità** (checklist email §1 aggiornata).
+   La pipeline già consegnava un solo digest (17:00); restavano due percorsi eseguibili
+   che potevano mandare **N email** (una per avviso): `notificaNuoviInterpelli` e
+   `notificaInterpelliPerUtente`. Ora entrambi **accumulano** le voci compatibili
+   (`accumulaVoceEmail`) e le consegnano con **UNA sola** email di riepilogo
+   (`inviaEmailAccumulate` → `inviaDigestEmail`, stesso renderer/oggetto del digest),
+   registrando la consegna per voce nel ledger (`registraInvioAvviso`). L'esito di
+   `notificaInterpelliPerUtente` espone il nuovo campo `EsitoDispatchUtente.emailVoci`.
+   Il canale **Telegram resta individuale** (alert PRO in tempo reale). Guardia statica
+   in `npm run test:copy`: in `src/lib/notifier.ts` non esiste più alcuna
+   `inviaNotificaEmail(` — le email di opportunità passano solo da `inviaDigestEmail`.
+
+**Conferme misurate a runtime.** Recapito della scuola: il `mailto:` della scuola
+(campo unico `contactEmail`, gerarchia checklist §6 con la **PEC come ultima risorsa**)
+è presente in **tutte** le email di opportunità e nei messaggi Telegram, con l'etichetta
+condivisa `📧 Candidature`; il gate di qualità STRICT esclude gli avvisi senza recapito,
+quindi la riga non manca mai quando il messaggio parte (nessuna riga PEC separata: la
+§6 la vieta). Le email restano **senza** guide operative (checklist §4).
+
+**Verifiche (04/10/2026, da `project/`).** `npm run test:copy`, `test:email`,
+`test:link`, `test:email-alert`, `test:digest`, `test:promemoria`, `test:alert`,
+`test:link-esterno`, `test:notifier-dry`, `test:telegram`, `test:telegram:template`,
+`test:telegram:tier`, `test:qualita`, `test:email-scuola` → ✅ tutte verdi ·
+`npm run typecheck` → ✅ exit 0 · `npm run test:architettura` → ✅ nessuna violazione
+nuova · `npm run build` → ✅ · `npm test` → ✅ catena completa verde.
+
+**File toccati.** `src/lib/resend.ts`, `src/lib/telegram.ts`, `src/lib/notifier.ts`,
+`supabase/functions/send-notification/index.ts` (**modulo di notifica**: header email
+testuale), `scripts/test-email-template.ts`, `scripts/test-link-fonte.ts`,
+`scripts/test-email-alert.ts`, `scripts/test-digest.ts`, `scripts/test-promemoria.ts`,
+`scripts/test-copy-notifiche.ts` (nuove guardie statiche),
+`comunicazione/01_email_riepilogo/checklist_email.md`, `comunicazione/README.md`,
+`docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`. Nessun file di dipartimento,
+nessuna migrazione, nessun dato di produzione.
+
+### 26.45 Notifiche: riga di fonte garantita su Telegram, sostegno a inclusione permanente, ricerca classi a prova di formato (04/10/2026)
+
+Tre interventi correttivi richiesti sul **modulo di notifica** e sulle **preferenze
+Radar**. Perimetro: condivisi essenziali (`src/lib/**`, `src/contexts/app/**`),
+dipartimento **Radar**, il modulo di notifica e le guardie. Nessuna migrazione, nessun
+dato di produzione.
+
+1. **Riga «👉 Apri l'avviso ufficiale» sempre presente e in formato pulito**
+   (`src/lib/alertInterpello.ts` + `src/lib/telegram.ts` + `src/lib/resend.ts`). La riga
+   poteva **sparire** quando l'URL della fonte arrivava con i caratteri di contorno della
+   pagina (entità HTML `&amp;`, virgolette/angolari/caporalia di markdown, puntini e
+   spazi della frase): il gate di qualità lo considerava «non diretto», quindi nessun link
+   usciva (e in email nessun pulsante di fonte). Ora esiste un **punto unico**:
+   `pulisciUrlEsterna()` (pulizia idempotente dell'URL) e **`urlFonteAvviso()`** =
+   stringa PULITA + UNICO gate `eUrlAvvisoDiretto`; `rigaAvvisoUfficiale`,
+   `rigaFonteUfficiale`, `linkOpportunita` e `fonteInEvidenza` passano tutti da lì (mai
+   home/elenchi/ricerche, mai un fallback alla home di ScuoleRadar). Il gate riconosce
+   anche i link a singolo avviso con parametri di identità tipici dei CMS
+   (`?p=`, `?news=`, `?nid=`, `?post=`, `?articolo=`). Nel digest la riga è costruita
+   sull'**URL della voce** (grezzo → pulito), negli alert su `interpello.link`.
+2. **Sostegno a INCLUSIONE PERMANENTE: via toggle e logica condizionale**
+   (`src/lib/matchingEngine.ts`, `src/lib/notifier.ts`, `src/departments/radar/**`,
+   `src/contexts/app/**`). Il sostegno non è più una preferenza: eliminate le funzioni
+   storiche `sostegnoAmmesso`/`utenteAderisceSostegno` e il gate condizionale; al loro
+   posto **`avvisoDiSostegno()`** e, nella REGOLA UNICA, un'**eccezione esplicita**: un
+   avviso dell'area sostegno (codici `ADAA/ADEE/ADMM/ADSS`, oppure titolo/materia che lo
+   dichiarano) **non passa dal controllo di classe** e viene consegnato a **tutti** i
+   profili configurati della provincia — nessun interruttore, nessun opt-out
+   (`profiles.sostegno` resta nel DB come valore storico, non decide più nulla). Vale
+   anche per l'**alternativa all'insegnamento della religione**: nessun filtro dedicato.
+   L'inclusione non è cieca: restano il vincolo di **provincia**, il gate di qualità
+   (link diretto + recapito di candidatura) e l'esclusione dei profili non configurati —
+   così il volume di opportunità utili aumenta senza invii a caso. UI: rimosso il
+   componente `src/components/SostegnoToggle.tsx` (nessun `role="switch"`, nessuna
+   uscita); nelle Preferenze Radar `PannelloClassi.tsx` mostra un blocco **informativo**
+   «Opportunità di sostegno — Incluse, sempre». Guardie statiche in
+   `npm run test:copy:pubblico` (nessun toggle, `inclusione permanente, non
+   disattivabile`, componente assente).
+3. **RICERCA CLASSI DI CONCORSO a prova di formato** (`src/lib/ricercaSelezioniRadar.ts`,
+   `src/departments/radar/PreferenzeRadar.tsx`, `src/departments/radar/RadarWizardModal.tsx`,
+   `src/pages/onboarding/OnboardingPage.tsx`). Il filtro delle classi nelle Preferenze
+   Radar (dashboard) e nell'onboarding confrontava le stringhe alla lettera: digitando
+   `a19` o `  a 19  ` la casella restava **vuota**. Ora la regola vive **una volta sola**
+   nel motore condiviso — `classeRispondeAQuery()` / `classeCorrispondeAQuery()` — e
+   riconosce ogni variante di scrittura del codice (`a19`, `A19`, `A-19`, `a-19`, `A_19`,
+   `A.19`, `A-019`, `A019`, `  a 19  `), oltre a denominazione e materia collegata; le
+   Preferenze e l'onboarding **usano la stessa funzione**, quindi i risultati coincidono
+   su tutte le superfici. Guardie in `npm run test:ricerca` (matrice delle varianti su
+   `A-19`, verifica su **tutte** le classi del catalogo, nessun confronto «fai-da-te» nei
+   file delle superfici).
+
+**Verifiche (04/10/2026, da `project/`).** `npm run typecheck` → ✅ exit 0 ·
+`npm test` → ✅ catena completa verde · `npm run test:architettura` → ✅ **nessuna
+violazione nuova** (file compattati per restare sotto le soglie 250/300) ·
+`npm run build` → ✅ · `npx eslint` sui file toccati → ✅ zero errori · suite mirate
+`test:ricerca`, `test:sostegno`, `test:matching`, `test:copy:pubblico`,
+`test:radar:preferenze`, `test:qualita`, `test:link`, `test:link-esterno`, `test:email`,
+`test:email-alert`, `test:email-scuola`, `test:digest`, `test:promemoria`,
+`test:telegram`, `test:telegram:template`, `test:telegram:tier`, `test:telegram:canali`,
+`test:notifiche`, `test:notifier-dry`, `test:alert`, `test:migrazioni`,
+`test:dedup:utente`, `test:copy:etico`, `test:copy:schermo`, `test:testi-chiave` → ✅
+tutte verdi.
+
+**File toccati.** `src/lib/alertInterpello.ts`, `src/lib/telegram.ts`,
+`src/lib/resend.ts`, `src/lib/matchingEngine.ts`, `src/lib/notifier.ts`,
+`src/lib/ricercaSelezioniRadar.ts`, `src/contexts/app/costanti.ts` (commento),
+**departimento Radar**: `src/departments/radar/preferenze/PannelloClassi.tsx`,
+`src/departments/radar/PreferenzeRadar.tsx`, `src/departments/radar/RadarWizardModal.tsx`
+· `src/pages/onboarding/OnboardingPage.tsx` (host del flusso Radar: stesso motore di
+ricerca) · `src/components/SostegnoToggle.tsx` **rimosso** · guardie:
+`scripts/test-ricerca-unificata.ts`, `scripts/test-sostegno-preferenza.ts`,
+`scripts/test-matching-profilo.ts`, `scripts/test-matching-competenze.ts`,
+`scripts/test-copy-pubblico.ts`, `scripts/test-radar-preferenze.ts` · documentazione:
+`docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`. Nessun altro dipartimento toccato,
+nessuna migrazione. Nota: eventuali righe del DB con `profiles.sostegno = false` restano
+tali ma **non hanno più alcun effetto** sulla consegna; il primo salvataggio delle
+Preferenze le riallinea a `true`.
+
+### 26.46 Radar Personale sui dati reali, sostegno invisibile, campi di ricerca separati, copy delle notifiche (04/10/2026)
+
+Quattro interventi richiesti dal prodotto su **Radar Personale** e **notifiche**.
+Perimetro: condivisi essenziali (`src/lib/**`, `src/contexts/app/**`, `src/config/**`),
+dipartimento **Radar** e il modulo di notifica (incluso l'Edge `send-notification`).
+Nessuna migrazione, nessun dato di produzione.
+
+1. **Radar Personale = DATI REALI, nessun mock** (`src/contexts/app/useInterpelliFeed.ts`).
+   Verificato il flusso: la bacheca personale legge la tabella `interpelli` via Matching
+   Engine (`getFeedInterpelli` → `searchInterpelli`: filtri PostgREST `in(province)` +
+   `overlaps(class_codes)` con varianti `A-22 ≡ A-022 ≡ A22` e finestra scadenze), con
+   fallback alla tabella legacy `notices` e, se non c'è nulla di attivo, **feed VUOTO**
+   (`src/data/interpelli.ts` è `[]` per policy: nessun dato dimostrativo — il «Liceo
+   Monti» ricorre solo nei commenti e nelle fixture dei test). Aggiunta l'**inclusione
+   forzata del sostegno** anche nel feed: gli avvisi `AD…` (o con titolo/materia che lo
+   dichiarano) entrano nella bacheca entro la provincia dell'utente con la **stessa
+   regola** del motore di notifica (`avvisoDiSostegno`): bacheca e notifiche non
+   divergono più.
+2. **Sostegno invisibile: rimosso il blocco visivo**
+   (`src/departments/radar/preferenze/PannelloClassi.tsx`). Non compare più alcun testo
+   «Opportunità di sostegno», nessun interruttore e nessuna nota: l'inclusione è
+   **nativa e permanente nel backend** (§26.45). Il pannello resta il solo selettore
+   delle classi di concorso. Guardia aggiornata in `npm run test:copy:pubblico` (assenza
+   del blocco + nessun `role="switch"`).
+3. **Campi di ricerca di nuovo SEPARATI e matcher tollerante su materia e ordine.**
+   Nuovo modulo condiviso `src/lib/ricercaTesto.ts` (normalizzazione, materie correlate,
+   ordine di scuola, parole chiave), ri-esportato da `src/lib/ricercaSelezioniRadar.ts`;
+   nuova `cercaCompetenzeParole()` usata dalle Preferenze, così la colonna di **destra**
+   (competenze/parole chiave) **non restituisce più classi di concorso** — niente
+   doppioni con il campo di **sinistra** («Classi di concorso»), che resta l'unico
+   selettore delle abilitazioni. Il wizard continua a usare la ricerca unificata
+   (`cercaSelezioniRadar`). Il filtro delle classi ora risponde anche al **nome
+   dell'ordine** («CPIA», «adulti», «primaria», «infanzia») oltre che a codice
+   (`a19` ≡ `A-19` ≡ `A_19`…), denominazione e materia («italiano»): nessun risultato
+   vuoto per una differenza di formato o di nome dell'area. Le guardie statiche di
+   cablaggio vivono in `scripts/test-ricerca-cablaggio.ts` (file sotto soglia), mentre
+   `test-ricerca-unificata.ts` copre il comportamento del motore.
+4. **Copy delle notifiche** (`src/lib/alertInterpello.ts`, `src/lib/telegram.ts`,
+   `src/lib/resend.ts`, `src/config/automazioniEmailCatalogo.ts`,
+   `supabase/functions/send-notification/index.ts`). La dicitura del link/pulsante di
+   fonte è ora **«Guarda la fonte ufficiale»** — unica stringa
+   (`ETICHETTA_AVVISO_UFFICIALE`) per email, Telegram, Edge e anteprima del pannello
+   Admin — e punta **solo** all'URL esterno dell'avviso specifico (punto unico
+   `urlFonteAvviso` → gate `eUrlAvvisoDiretto`, nessun fallback a home/elenchi). L'incipit
+   delle **email di opportunità** (alert e digest) è più caldo e personale —
+   `FRASE_OPPORTUNITA` in `resend.ts`: «Ciao <nome>, / Abbiamo trovato nuove opportunità
+   per te! Dai un'occhiata e, se ti interessa, applica al più presto!». **Email/PEC della
+   scuola sempre nel blocco di notifica**: il recapito è derivato (PEO/PEC dalla
+   convenzione MIM sul codice meccanografico via `recapitoNotifica` →
+   `risolviEmailUfficialeScuola`) e il gate di qualità blocca l'invio senza recapito:
+   ogni notifica che parte lo espone, e quando manca davvero nessun segnaposto viene
+   inventato.
+
+**Verifiche (04/10/2026, da `project/`).** `npm run typecheck` → ✅ exit 0 ·
+`npm test` → ✅ catena completa verde (include il nuovo `scripts/test-ricerca-cablaggio.ts`)
+· `npm run test:architettura` → ✅ **nessuna violazione nuova** (569 file · 142 violazioni
+= baseline) · `npm run build` → ✅ · `npx eslint` sui file toccati → ✅ zero errori (resta
+1 warning `react-hooks/exhaustive-deps` pre-esistente in `PreferenzeRadar.tsx`) · suite
+mirate `test:ricerca`, `test:copy`, `test:copy:pubblico`, `test:email`, `test:link`,
+`test:email-alert`, `test:digest`, `test:qualita`, `test:telegram:template`,
+`test:telegram:canali`, `test:telegram:tier`, `test:link-esterno`, `test:sostegno`,
+`test:matching`, `test:radar:preferenze`, `test:promemoria`, `test:notifier-dry`,
+`test:dedup`, `test:dedup:utente`, `test:frequenza`, `test:alert`, `test:trasparenza` →
+✅ tutte verdi.
+
+**File toccati.** `src/lib/ricercaSelezioniRadar.ts` · **nuovo** `src/lib/ricercaTesto.ts`
+· `src/lib/alertInterpello.ts`, `src/lib/telegram.ts`, `src/lib/resend.ts` ·
+`src/contexts/app/useInterpelliFeed.ts` · `src/config/automazioniEmailCatalogo.ts` ·
+**dipartimento Radar**: `src/departments/radar/preferenze/PannelloClassi.tsx`,
+`src/departments/radar/preferenze/PannelloMaterie.tsx`,
+`src/departments/radar/PreferenzeRadar.tsx` ·
+`supabase/functions/send-notification/index.ts` (etichetta allineata: fa parte della
+catena di notifica richiesta) · guardie: `scripts/test-ricerca-unificata.ts`,
+**nuovo** `scripts/test-ricerca-cablaggio.ts`, `scripts/test-copy-pubblico.ts`,
+`scripts/test-copy-notifiche.ts`, `scripts/test-link-fonte.ts`,
+`scripts/test-email-alert.ts`, `scripts/test-email-template.ts`,
+`scripts/test-digest.ts`, `scripts/test-telegram-template.ts`,
+`scripts/test-promemoria.ts`, `scripts/test-qualita-invio.ts` · `package.json` (catena
+`test:ricerca`) · documentazione: `docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`,
+`comunicazione/**` (etichette di fonte). **Non toccati**: `src/departments/notizie/**`
+(l'etichetta degli articoli «apri l'avviso ufficiale» è di quel dipartimento isolato) e
+`src/scraper/**` (solo commenti). Nessuna migrazione.
+
+### 26.47 Pipeline Radar tollerante e blindata: bonifica dei mock, anagrafica `completo`/`parziale`, matching RPC nativo (04/10/2026)
+
+Direttiva di prodotto del 04/10/2026 su **ingestione → database → matching**, con due
+correzioni dettate dal campo: (a) il «Liceo Augusto Monti» di **Asti è una scuola
+REALE** — si rimuovono solo i generatori di dati fittizi, mai i dati veri; (b) **un
+interpello genuino non si scarta MAI** per un'anagrafica incompleta (caso storico: i
+**10 annunci di Padova** spariti dalla bacheca perché l'istituto non era mappato).
+Perimetro: condivisi essenziali (`src/lib/**`, `src/data/**`, `src/scraper/**`),
+dipartimento **Radar** (`flightBoard/**`, `FlightBoardInterpelli.tsx`), migrazioni
+`supabase/migrations/**`, guardie e documentazione. Nessun dato di produzione toccato:
+le due migrazioni vanno applicate dal committente (nessuna scrittura sul DB in questa
+sessione).
+
+**1 · Bonifica dei mock (nessun dato inventato).** Il feed di fallback è `[]` (già da
+§26.46) e la vecchia `FIXTURE_HTML` era stata rimossa; restava UN generatore di dati
+fittizi in codice di PRODUZIONE: `resolveSchoolByCode` in `src/lib/school-lookup.ts`,
+che per **qualsiasi** codice meccanografico costruiva `name: 'Istituto <codice>'`,
+`city: 'N/D'`, PEO e PEC — ed era usato dallo scraper come ultima risorsa per
+l'email. Ora la funzione è **rimossa** (al suo posto `scuolaDaCodice`, che ritorna
+`null` quando l'istituto non è nel registro reale) e `emailIstituzionaleDaCodice` usa
+**solo** la convenzione ufficiale MIM (`emailDaCodiceMeccanografico` →
+`codice@istruzione.it`): per i codici validi produce la stessa casella di prima, per i
+codici malformati non produce più nulla (nessuna email inventata). Rimossa anche la
+dicitura fissa **«Scuola non specificata / Più plessi»** col suo codice morto in
+`radar/flightBoard/righeBoard.ts` (`risolviNomeScuola`, `eInterpelloVisibile`: erano un
+duplicato non cablato della regola di vetrina, §26.32). Lo scraper, quando non trova
+nulla, **logga e si ferma** (branch `unici.length === 0`): nessun seed, nessun
+inserimento di comodo.
+
+**2 · Arricchimento TOLLERANTE: nuovo stato `stato_arricchimento`.** Migrazione nuova
+`20261004100000_add_interpelli_stato_arricchimento.sql` (idempotente): colonna
+`stato_arricchimento text`, vincolo `check ('completo'|'parziale')`, **backfill** delle
+righe esistenti (legge `school_pec` solo se la migrazione precedente è applicata) e
+comment di colonna. La regola vive in UN solo modulo puro,
+`src/lib/statoArricchimento.ts` (`completo` = istituto identificato — denominazione
+presentabile o codice meccanografico valido — **e** recapito PEO/PEC; altrimenti
+`parziale`), usato da: scraper (`mappaRigaInterpelli` scrive la colonna su OGNI riga),
+manutenzione dati (`scripts/arricchisci-interpelli.ts`, che ora **ricalcola** lo stato
+e tollera QUALSIASI colonna mancante: lettura su un elenco ridotto di colonne e
+`update` che toglie dal payload solo il campo sconosciuto) e interfaccia. La colonna è
+in `COLONNE_OPZIONALI` dello scraper: se la migrazione non è applicata il payload la
+perde e **nessun inserimento si rompe**. `parziale` **non è un motivo di scarto**: è
+l'etichetta con cui la UI dichiara «anagrafica in aggiornamento».
+
+**3 · Vetrina: mai più uno scarto per anagrafica.** `src/lib/liveBoard.ts`: nuova
+catena `nomeScuolaBoard` → nome reale (gate `nomeIstituto`) → **nome grezzo pubblicato
+dal bando** (`nomeGrezzoDaBando`: si accetta solo se resta un nome leggibile — mai dump
+di codici `EEEE | A246`, `BA02 | AR04`, `ADEE`, date o protocolli) → **dicitura gestita
+«Anagrafica in aggiornamento»**; `preparaRigheBoard` **non scarta più** nessuna riga per
+il nome (restano fuori solo gli avvisi NON vivi: scaduti o fuori dalla finestra dei 60
+giorni) e restituisce `anagraficaParziale` (true quando il nome è di ripiego o lo stato
+è `parziale`). `FlightBoardInterpelli` propaga il marcatore e
+`components/RigaBoard.tsx` mostra un chip ambra «anagrafica in aggiornamento» (nessun
+chip quando la colonna mostra già la dicitura). La direttiva **§26.20 del 28/09/2026 è
+quindi CORRETTA**: quel gate è la causa esatta dei 10 annunci di Padova, e
+`comunicazione/04_canali_regionali/checklist_regionali.md` §4 è aggiornata di
+conseguenza (la colonna «Scuola» continua a non mostrare **mai** un codice al posto del
+nome).
+
+**4 · Matching Engine nativo (RPC `match_interpelli`).** Migrazione nuova
+`20261004110000_add_rpc_match_interpelli.sql`: `public.classe_chiave(text)` (forma
+canonica `A-022 ≡ A22 ≡ a 22 → A-22`, `immutable`, codici a 4 lettere invariati) e
+`public.match_interpelli(p_province text[], p_classi text[], p_sostegno boolean,
+p_limit integer)` — `security definer` con `search_path = public`, `stable`,
+`returns setof public.interpelli`. La query: province con `= any(array)` (nessun filtro
+se la selezione è vuota), classi con **`&&` sull'indice GIN**
+`interpelli_class_codes_idx` (varianti generate in SQL: `A-22`, `A22`, `A-022`, `A022`)
+**oppure** confronto TOLLERANTE `classe_chiave(cc) = any(...)` per qualunque formato non
+previsto — nessun falso negativo da rigidità di formato —, **ramo sostegno ESPLICITO**
+(`p_sostegno`: codici `AD…` o titolo/materia che lo dichiarano: l'inclusione permanente
+§26.45 ora è una condizione della QUERY e non più un filtro in memoria che il `limit`
+poteva tagliare), `attivo = expiration_date is null or >= current_date`, ordinamento per
+scadenza e `limit` sempre valido (1…5.000). Permessi `execute` ad `anon`,
+`authenticated` e `service_role` (i dati restano quelli pubblici della policy
+`read interpelli`). Lato client `searchInterpelli` (`src/lib/matchingEngine.ts`) prova
+la **RPC per prima** (province normalizzate e deduplicate, varianti di formato delle
+classi, `p_sostegno: true`, limite inoltrato) e — se la migrazione non è ancora
+applicata o la RPC risponde con errore — **ricade sulla query PostgREST equivalente**
+(`in(province)` + `overlaps(class_codes)` + finestra scadenze): un solo significato di
+«match» e nessun rilascio che si rompe. `InterpelloDB` e `Interpello` espongono
+`stato_arricchimento`/`statoArricchimento` (normalizzato), così anche feed e scheda
+possono dichiarare «anagrafica in aggiornamento».
+
+**Verifiche (04/10/2026, da `project/`).** `npm run typecheck` → ✅ exit 0 · `npm test` →
+✅ **exit 0, catena completa verde** (comprende le due guardie nuove: `test:pipeline` e
+`test:match-rpc`) · `npm run test:architettura` → ✅ **nessuna violazione nuova** (572
+file · 142 violazioni = baseline: `scripts/test-live-board.ts` e
+`scripts/arricchisci-interpelli.ts` riportati sotto le 250 righe con gli split/compattamenti
+della sessione) · `npm run build` → ✅ 11,08 s · `npx eslint` sui 13 file toccati → ✅ zero
+problemi · suite mirate `test:board`, `test:board:scala`, `test:board:metriche`,
+`test:nome-istituto`, `test:anagrafica`, `test:prova-radar`, `test:migrazioni`,
+`npx tsx scripts/test-scuola-da-riga.ts` → ✅ tutte verdi. **Debito pre-esistente
+dichiarato (NON introdotto qui)**: `npm run test:dati-fallback` segnala 2 controlli rossi
+su `src/data/editableTexts.ts` (URL `https://www.scuoleradar.it/contatti` respinto da
+`eSorgenteVerificata`); il file era già modificato nella sessione precedente e il comando
+non è nella catena `npm test`.
+
+**File toccati.** **Condivisi**: `src/lib/school-lookup.ts` (rimosso il generatore
+sintetico) · **nuovo** `src/lib/statoArricchimento.ts` · `src/lib/liveBoard.ts`
+(`nomeGrezzoDaBando`, `nomeScuolaBoard`, `anagraficaParziale`) ·
+`src/lib/matchingEngine.ts` (RPC-first + `stato_arricchimento`) · `src/data/interpelli.ts`
+(`statoArricchimento`) · **ingestione**: `src/scraper/index.ts` (colonna stato,
+`COLONNE_OPZIONALI`, email solo da convenzione MIM) ·
+`scripts/arricchisci-interpelli.ts` (ricalcolo dello stato + tolleranza GENERICA sulle
+colonne mancanti) · **dipartimento Radar**:
+`src/departments/radar/flightBoard/righeBoard.ts` (codice morto rimosso,
+`anagrafica_parziale`), `src/departments/radar/flightBoard/components/RigaBoard.tsx`
+(chip), `src/departments/radar/FlightBoardInterpelli.tsx` (propagazione del marcatore) ·
+**migrazioni nuove**: `supabase/migrations/20261004100000_add_interpelli_stato_arricchimento.sql`,
+`supabase/migrations/20261004110000_add_rpc_match_interpelli.sql` · **guardie**:
+**nuovi** `scripts/test-pipeline-tollerante.ts` (`npm run test:pipeline`) e
+`scripts/test-match-rpc.ts` (`npm run test:match-rpc`), aggiornata
+`scripts/test-live-board.ts` · `package.json` (due script + catena `npm test`) ·
+**documentazione**: `docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`,
+`comunicazione/04_canali_regionali/checklist_regionali.md`. **Non toccati**:
+`src/departments/notizie/**` (dipartimento isolato) e i **dati di produzione** (nessuna
+scrittura sul DB: le due migrazioni sono da applicare dal committente).
+

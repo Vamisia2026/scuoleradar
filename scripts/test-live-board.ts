@@ -1,20 +1,28 @@
 /**
- * Verifica il filtro di VETRINA del "Radar Live" (Flight Board):
- * le righe incomplete NON devono arrivare in pagina — niente "Scuola non
- * indicata" né "Scadenza n/d". Le righe vengono prima ARRICCHITE (nome scuola
- * dal campo, dal registro per codice meccanografico, dal titolo) e solo se resta
- * un buco vengono scartate. In più (direttiva cliente 28/09/2026): nella colonna
- * «Scuola & Città» non finisce MAI un codice amministrativo o una stringa grezza
- * («EEEE | A246», «AAAA | A246», «BA02 | AR04») né un'etichetta di posto/materia:
- * se il nome non è risolvibile in chiaro la riga non entra in vetrina.
+ * Verifica la VETRINA del "Radar Live" (Flight Board).
  *
- * La finestra dei 60 giorni per gli avvisi che la fonte non data e l'alternanza
- * per provincia (scala NAZIONALE del tabellone) sono verificati a parte da
- * `npm run test:board:scala` (`scripts/test-live-board-scala.ts`).
+ * DIREZIONE (direttiva cliente 04/10/2026, §26.47 — corregge la §26.20 del
+ * 28/09/2026): un avviso GENUINO non si scarta MAI per un'anagrafica incompleta
+ * (caso storico: i 10 annunci di Padova). Le righe incomplete restano in pagina —
+ * niente "Scuola non indicata" e niente "Scadenza n/d" — perché il nome viene
+ * risolto (campo → registro per codice → titolo) e, se resta un buco, si usa il
+ * nome GREZZO pubblicato dal bando oppure la dicitura GESTITA «Anagrafica in
+ * aggiornamento», marcando la riga (`anagraficaParziale`). Nella colonna «Scuola»
+ * non finisce MAI un codice amministrativo («EEEE | A246», «AAAA | A246»).
+ * Restano fuori solo le righe che non sono avvisi vivi: scadute, o senza data di
+ * pubblicazione utile per la finestra dei 60 giorni.
+ *
+ * La finestra dei 60 giorni e l'alternanza per provincia (scala NAZIONALE del
+ * tabellone) sono verificati a parte da `npm run test:board:scala`
+ * (`scripts/test-live-board-scala.ts`).
  *
  * Uso: npm run test:board
  */
-import { preparaRigheBoard, scuolaDaTitolo } from '../src/lib/liveBoard.ts';
+import {
+  SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO,
+  preparaRigheBoard,
+  scuolaDaTitolo,
+} from '../src/lib/liveBoard.ts';
 
 let errori = 0;
 function check(nome: string, atteso: unknown, ottenuto: unknown): void {
@@ -51,7 +59,8 @@ const righe = [
     province: 'RM',
     expiration_date: FUTURO,
   },
-  // 4) Nessuna scuola ricavabile: SCARTATA (mai "Scuola non indicata").
+  // 4) Nessuna scuola ricavabile: la riga RESTA con la dicitura gestita
+  //    (direttiva 04/10/2026, §26.47: mai uno scarto per anagrafica).
   {
     id: 'senza-scuola',
     title: 'Interpello supplenza posto comune',
@@ -84,7 +93,8 @@ const righe = [
     province: 'MB',
     expiration_date: FUTURO,
   },
-  // 8) Solo codici classe e nessuna alternativa: SCARTATA (mai un codice in vetrina).
+  // 8) Solo codici classe e nessuna alternativa: RESTA (mai un codice in vetrina:
+  //    la colonna mostra la dicitura gestita).
   {
     id: 'solo-codici',
     title: 'EEEE | AAAA | AL56 | A041 | A042 | ADEE',
@@ -93,7 +103,8 @@ const righe = [
     expiration_date: FUTURO,
   },
   // 9) `school_name` = etichetta di POSTO/MATERIA (dato reale dello scraper) e
-  //    titolo fatto di soli codici: nulla di leggibile → SCARTATA.
+  //    titolo fatto di soli codici: nessun istituto, ma il bando dichiara un nome
+  //    leggibile → RESTA con il nome grezzo.
   {
     id: 'etichetta-posto',
     title: 'ADEE | EEEE | A042',
@@ -109,7 +120,8 @@ const righe = [
     province: 'TO',
     expiration_date: FUTURO,
   },
-  // 11) Etichetta di posto + nessun istituto nel titolo: SCARTATA.
+  // 11) Etichetta di posto + nessun istituto nel titolo: RESTA con il nome grezzo
+  //     del bando.
   {
     id: 'posto-montessori',
     title: 'Albo pretorio — elenco avvisi',
@@ -129,20 +141,32 @@ const righe = [
 
 const pronte = preparaRigheBoard(righe);
 check(
-  'restano solo le righe presentabili',
-  ['ok', 'da-codice', 'da-titolo', 'codici-classe', 'nome-con-coda'],
+  'nessun avviso VIVO viene scartato per anagrafica',
+  ['ok', 'da-codice', 'da-titolo', 'senza-scuola', 'codici-classe', 'solo-codici', 'etichetta-posto', 'client-codici', 'posto-montessori', 'nome-con-coda'],
   pronte.map((p) => p.riga.id),
+);
+check(
+  'fuori restano SOLO gli avvisi non vivi (scaduto / fuori finestra)',
+  [],
+  pronte
+    .filter((p) => ['senza-scadenza', 'scaduto'].includes(p.riga.id))
+    .map((p) => p.riga.id),
 );
 check(
   'nome reale ripulito dalla coda di procedura',
   'I.C. Ferruccio Ulivi',
   pronte.find((p) => p.riga.id === 'nome-con-coda')?.scuola ?? null,
 );
+// La TOLLERANZA della vetrina (riga che resta, dicitura gestita, nome grezzo,
+// marcatore `anagraficaParziale`) è verificata da `npm run test:pipeline`
+// (`scripts/test-pipeline-tollerante.ts`), sui suoi casi Padova: qui si controlla
+// solo che nessuna di quelle righe porti un codice al posto del nome.
 check(
-  'nomi non risolvibili: NESSUNA etichetta di posto o codice in bacheca',
+  'nessuna riga di ripiego mostra un codice al posto del nome',
   [],
   pronte
     .filter((p) => ['etichetta-posto', 'client-codici', 'posto-montessori'].includes(p.riga.id))
+    .filter((p) => /\||\d[A-Za-zÀ-ÿ]|[A-Za-zÀ-ÿ]\d/.test(p.scuola))
     .map((p) => p.riga.id),
 );
 check(
@@ -199,9 +223,14 @@ check(
   scuolaDaTitolo('ADEE | EEEE'),
 );
 check(
-  'elenchi di codici classe («ADEE | EEEE») non sono nomi di scuola: riga scartata',
+  'elenchi di codici classe («ADEE | EEEE») non sono nomi di scuola: nome gestito, riga presente',
   true,
-  !pronte.some((p) => p.riga.id === 'solo-codici'),
+  pronte.some((p) => p.riga.id === 'solo-codici' && p.scuola === SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO),
+);
+check(
+  'la riga senza istituto resta marcata come anagrafica parziale',
+  true,
+  Boolean(pronte.find((p) => p.riga.id === 'senza-scuola')?.anagraficaParziale),
 );
 check(
   'nessun codice classe esposto come nome scuola',

@@ -1,17 +1,27 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Interpello } from '../data/interpelli';
-import { classeByCodice, eAvvisoSostegno, isCodiceSostegno } from '../data/classiConcorso';
+import { classeByCodice, eAvvisoSostegno } from '../data/classiConcorso';
 import { materie as catalogoMaterie } from '../data/ordiniMaterie';
 import { province } from '../data/province';
+import { normalizzaStatoArricchimento } from './statoArricchimento';
 
 /**
  * FASE 3 — Matching Engine.
- * Query sulla tabella `interpelli` di Supabase filtrando per le
- * province di interesse e le classi di concorso del profilo utente.
+ * Query sugli interpelli di Supabase filtrando per le province di interesse e le
+ * classi di concorso del profilo utente.
  *
- * Filtri:
- *  - province  → `in ('province', [...])`
- *  - classi    → `overlaps ('class_codes', [...])` (almeno una classe in comune)
+ * DUE strade, UNA semantica:
+ *  1. **RPC nativa** `public.match_interpelli` (migrazione
+ *     `20261004110000_add_rpc_match_interpelli.sql`): il filtro vive nel database
+ *     — province con `= any (array)`, classi con overlap `&&` sull'indice GIN
+ *     *più* un confronto tollerante delle forme (`A-22` ≡ `A-022` ≡ `A22`), ramo
+ *     sostegno ESPLICITO (inclusione permanente), «attivo» = senza scadenza o non
+ *     scaduto. Nessun falso negativo da rigidità di formato, nessun taglio del
+ *     `limit` prima del filtro in memoria;
+ *  2. **Fallback PostgREST** (`in('province')` + `overlaps('class_codes')`) quando
+ *     la RPC non è ancora applicata o risponde con errore: il feed non si rompe
+ *     mai per una migrazione mancante.
+ *
  * Ordinati per scadenza (più urgenti in cima).
  *
  * Tutte le funzioni ricevono il client Supabase come parametro (null =
@@ -35,6 +45,12 @@ export interface InterpelloDB {
   contact_email: string | null;
   /** Materia/settore inferito dallo scraper quando manca una classe esplicita. */
   materia: string | null;
+  /**
+   * Stato dell'anagrafica della riga (`completo` | `parziale`): `parziale` NON è
+   * un motivo di scarto — è solo l'etichetta onesta con cui l'interfaccia dichiara
+   * «anagrafica in aggiornamento» (direttiva 04/10/2026, §26.47).
+   */
+  stato_arricchimento?: string | null;
 }
 
 export interface MatchingCriteri {
@@ -94,6 +110,9 @@ export function mapInterpelloDBToInterpello(r: InterpelloDB): Interpello {
     descrizione: r.title ?? '',
     linkFonte: r.source_url ?? '',
     contactEmail: r.contact_email ?? null,
+    // Stato dell'anagrafica (`completo`/`parziale`/`null` per le righe storiche):
+    // l'app può dichiarare «anagrafica in aggiornamento» senza mai nascondere nulla.
+    statoArricchimento: normalizzaStatoArricchimento(r.stato_arricchimento),
     compatibilita: 100,
   };
 }
@@ -116,10 +135,21 @@ export function variantiClasseCodice(codice: string): string[] {
   return [...new Set([`${prefisso}-${numero}`, `${prefisso}-${d2}`, `${prefisso}-${d3}`, `${prefisso}${d2}`, `${prefisso}${d3}`])];
 }
 
+/** Nome della RPC nativa del Matching Engine (`..._add_rpc_match_interpelli.sql`). */
+export const RPC_MATCH_INTERPELLI = 'match_interpelli';
+
 /**
  * Query la tabella `interpelli` applicando i filtri del Matching Engine.
- * Restituisce `null` se Supabase non è configurato o in caso di errore
- * (il chiamante decide il fallback), altrimenti l'array di righe.
+ *
+ * Ordine: **RPC nativa** `match_interpelli` → **query PostgREST equivalente**. La
+ * RPC concentra la regola nel database (overlap `&&` sull'indice GIN, forme
+ * tolleranti, ramo sostegno esplicito, «attivo» = senza scadenza o non scaduto);
+ * la query PostgREST resta come rete di sicurezza per un ambiente in cui la
+ * migrazione non è ancora applicata — il feed non si svuota mai per una
+ * migrazione mancante.
+ *
+ * Restituisce `null` se Supabase non è configurato o se ANCHE il fallback
+ * fallisce (il chiamante decide cosa mostrare), altrimenti l'array di righe.
  */
 export async function searchInterpelli(
   client: SupabaseClient | null,
@@ -128,34 +158,47 @@ export async function searchInterpelli(
   if (!client) return null;
 
   const { province: provinceFiltro, classi, limit } = criteri;
-  let query = client.from('interpelli').select('*');
+  // Supporto MULTI-provincia (fino a 4 con PRO): codici normalizzati in maiuscolo
+  // per non perdere match per differenze di formato.
+  const provinceCercate = [
+    ...new Set((provinceFiltro ?? []).map((p) => (p ?? '').trim().toUpperCase()).filter(Boolean)),
+  ];
+  // TUTTE le varianti di formato delle classi del profilo (A-26 ≡ A-026 ≡ A26):
+  // senza di esse un avviso scritto in un formato diverso non arriverebbe mai.
+  const varianti =
+    classi && classi.length > 0 ? [...new Set(classi.flatMap(variantiClasseCodice))] : [];
 
-  if (provinceFiltro && provinceFiltro.length > 0) {
-    // Supporto MULTI-provincia (fino a 4 con PRO): filtro `in` su tutti i codici,
-    // normalizzati in maiuscolo per non perdere match per differenze di formato.
-    const province = [...new Set(provinceFiltro.map((p) => (p ?? '').trim().toUpperCase()).filter(Boolean))];
-    if (province.length > 0) query = query.in('province', province);
-  }
-  if (classi && classi.length > 0) {
-    // overlaps = almeno una classe in comune tra class_codes (DB) e le classi del
-    // profilo, confrontando TUTTE le varianti di formato (A-26 ≡ A-026 ≡ A26).
-    const varianti = [...new Set(classi.flatMap(variantiClasseCodice))];
-    if (varianti.length > 0) query = query.overlaps('class_codes', varianti);
-  }
+  // 1) RPC NATIVA: il filtro vive nel database (una sola regola, indicizzata).
+  const { data, error } = await client.rpc(RPC_MATCH_INTERPELLI, {
+    p_province: provinceCercate.length > 0 ? provinceCercate : null,
+    p_classi: varianti.length > 0 ? varianti : null,
+    p_sostegno: true,
+    p_limit: limit ?? 100,
+  });
+  if (!error) return (data ?? []) as InterpelloDB[];
+  console.warn(
+    `MatchingEngine — RPC ${RPC_MATCH_INTERPELLI} non utilizzabile (${error.message}): ` +
+      'uso la query PostgREST equivalente.',
+  );
+
+  // 2) FALLBACK PostgREST (migrazione non applicata): stessa semantica.
+  let query = client.from('interpelli').select('*');
+  if (provinceCercate.length > 0) query = query.in('province', provinceCercate);
+  if (varianti.length > 0) query = query.overlaps('class_codes', varianti);
 
   // Esclude gli interpelli SCADUTI dalle liste attive pubbliche
   // (senza scadenza → mantenuti: non dimostrabili come scaduti).
   const oggiIso = new Date().toISOString().slice(0, 10);
-  const { data, error } = await query
+  const { data: righe, error: erroreFallback } = await query
     .or(`expiration_date.is.null,expiration_date.gte.${oggiIso}`)
     .order('expiration_date', { ascending: true, nullsFirst: false })
     .limit(limit ?? 100);
 
-  if (error) {
-    console.warn('MatchingEngine — lettura tabella interpelli:', error.message);
+  if (erroreFallback) {
+    console.warn('MatchingEngine — lettura tabella interpelli:', erroreFallback.message);
     return null;
   }
-  return (data ?? []) as InterpelloDB[];
+  return (righe ?? []) as InterpelloDB[];
 }
 
 /** Feed già mappato nel tipo `Interpello` per la Dashboard / Radar Scuole. */
@@ -187,45 +230,46 @@ export interface UtenteCompatibile {
   /** True se la email riepilogativa del blocco definitivo è già stata inviata (una tantum). */
   notificheRecapInviato?: boolean;
   /**
-   * Preferenza SOSTEGNO (`profiles.sostegno`): true = l'utente vuole ricevere
-   * anche le opportunità di sostegno (ADAA/ADEE/ADMM/ADSS).
+   * `profiles.sostegno`: valore STORICO. Da questa versione NON è più un filtro
+   * (l'area sostegno è sempre inclusa, senza opt-out): resta nel tipo e nel DB
+   * solo per compatibilità delle righe già salvate.
    */
   sostegno?: boolean;
+  /**
+   * COMPETENZE EXTRA del catalogo (`profiles.materie_id`): «In cosa puoi
+   * lavorare, anche oltre la tua classe di concorso?». Servono alla regola unica
+   * per i profili configurati SOLO a competenze (nessuna classe di concorso).
+   */
+  materieId?: string[];
+  /** PAROLE CHIAVE libere del profilo (`profiles.materie_custom`). */
+  materieCustom?: string[];
 }
 
 /**
- * True se l'utente ha aderito all'area SOSTEGNO. L'adesione è ESPLICITA
- * (`profiles.sostegno`, preferenza chiesta nel wizard e nel profilo) oppure
- * IMPLICITA: chi ha selezionato una classe di sostegno (ADEE, ADMM…) tra le
- * proprie preferenze la vuole evidentemente ricevere — così la nuova preferenza
- * non toglie copertura a nessuno (nessun opt-out retroattivo).
+ * AREA SOSTEGNO — INCLUSIONE PERMANENTE (policy 04/10/2026).
+ *
+ * Gli avvisi di SOSTEGNO (ADAA/ADEE/ADMM/ADSS, riconosciuti da `eAvvisoSostegno`:
+ * codice `AD…` fra le classi oppure titolo/materia che lo dichiarano) sono SEMPRE
+ * consegnati. Non esiste più alcuna preferenza dell'utente, nessun interruttore e
+ * nessun opt-out: la consegna non dipende da `profiles.sostegno`.
+ *
+ * Vale allo stesso modo per l'**alternativa all'insegnamento della religione
+ * cattolica**: resta un'opportunità come le altre, senza filtri o preferenze
+ * dedicate.
+ *
+ * Perché: la vecchia guardia (`sostegnoAmmesso`/`utenteAderisceSostegno`) toglieva
+ * gli avvisi AD… a chi non aveva mai risposto alla domanda — un filtro applicato
+ * all'insaputa dell'utente — e riduceva il volume di opportunità utili. La
+ * consegna resta comunque geolocalizzata (provincia del profilo) e passa dal gate
+ * di qualità (link diretto all'avviso + recapito di candidatura): nessun invio a
+ * caso, solo l'area sostegno non è più una condizione di esclusione.
  */
-export function utenteAderisceSostegno(utente: {
-  sostegno?: boolean | null;
+export function avvisoDiSostegno(avviso: {
   classi?: readonly string[] | null;
+  titolo?: string | null;
+  materia?: string | null;
 }): boolean {
-  if (utente.sostegno === true) return true;
-  return (utente.classi ?? []).some((c) => isCodiceSostegno(c));
-}
-
-/**
- * GUARDIA SOSTEGNO del matching (fonte unica per matching real-time e digest).
- *
- * Regola: gli avvisi di SOSTEGNO (`classi` con AD… oppure titolo/materia che lo
- * dichiarano) vengono consegnati SOLO a chi ha aderito alla preferenza. Gli
- * avvisi disciplinari passano invece inalterati.
- *
- * Perché: il sostegno è un'abilitazione separata, ma le fonti lo pubblicano
- * spesso citando anche le classi disciplinari (o i titoli di studio richiesti).
- * Un docente di tedesco (A-22/A-25) riceveva così interpelli di sostegno: con
- * questa guardia il falso positivo non è più possibile per chi non aderisce.
- */
-export function sostegnoAmmesso(
-  utente: { sostegno?: boolean | null; classi?: readonly string[] | null },
-  avviso: { classi?: readonly string[] | null; titolo?: string | null; materia?: string | null },
-): boolean {
-  if (!eAvvisoSostegno(avviso.classi, avviso.titolo, avviso.materia)) return true;
-  return utenteAderisceSostegno(utente);
+  return eAvvisoSostegno(avviso.classi, avviso.titolo, avviso.materia);
 }
 
 /**
@@ -305,7 +349,6 @@ export function rimuoviClasse(
 
 /** Motivo dello scarto di un'opportunità rispetto a un profilo. */
 export type MotivoScarto =
-  | 'sostegno'
   | 'profilo-senza-province'
   | 'profilo-senza-classi'
   | 'provincia'
@@ -322,6 +365,10 @@ export interface ProfiloCompatibilita {
   province?: readonly string[] | null;
   classi?: readonly string[] | null;
   sostegno?: boolean | null;
+  /** Competenze/laboratori extra del catalogo (`profiles.materie_id`). */
+  materieId?: readonly string[] | null;
+  /** Parole chiave libere scritte dall'utente (`profiles.materie_custom`). */
+  materieCustom?: readonly string[] | null;
 }
 
 /** Avviso minimo richiesto dal confronto (riga `interpelli` o avviso parsato). */
@@ -376,26 +423,140 @@ export function materiaCompatibileConClassi(
 }
 
 /**
+ * Normalizza un'etichetta di competenza per il confronto testuale: minuscole,
+ * senza accenti/diacritici, solo lettere e numeri separati da spazio singolo.
+ * («Intelligenza Artificiale» → «intelligenza artificiale», «attività» →
+ * «attivita»). Unica normalizzazione per profilo e avviso: nessuna copia.
+ */
+export function normalizzaCompetenza(testo?: string | null): string {
+  return (testo ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/**
+ * Parole presenti nelle etichette delle competenze ma senza potere
+ * discriminante: da sole NON identificano una competenza (un avviso con
+ * «laboratorio» o «scuola» nel titolo non riguarda chi ha scritto «laboratori»).
+ */
+const TOKEN_COMPETENZA_GENERICI = new Set([
+  'degli',
+  'della',
+  'delle',
+  'dello',
+  'nella',
+  'nelle',
+  'negli',
+  'oltre',
+  'altro',
+  'altri',
+  'altre',
+  'attivita', // «attività» (già senza accenti dopo la normalizzazione)
+  'classi',
+  'classe',
+  'laboratori',
+  'laboratorio',
+  'materie',
+  'progetti',
+  'progetto',
+  'scuole',
+  'scuola',
+]);
+
+/** Sotto questa lunghezza un token è troppo corto per identificare qualcosa. */
+const MIN_CARATTERI_TOKEN_COMPETENZA = 4;
+
+/**
+ * Trasforma una parola nella sua RADICE grezza (vocale finale caduta): fa
+ * combaciare singolare e plurale senza una tavola di sinonimi — «inglese»/
+ * «inglesi» → «ingles», «motoria»/«motorie» → «motori», «digitale»/«digitali» →
+ * «digital». Le varianti semantiche (IA ↔ Intelligenza Artificiale) restano
+ * fuori: sono materia della roadmap V2 (`docs/RADAR_ROADMAP_V2.md` §4).
+ */
+function radiceCompetenza(token: string): string {
+  if (token.length < MIN_CARATTERI_TOKEN_COMPETENZA) return token;
+  return /[aeiou]$/.test(token) ? token.slice(0, -1) : token;
+}
+
+/** Token significativi e già radicizzati di un'etichetta di competenza. */
+export function tokenCompetenza(testo?: string | null): string[] {
+  return normalizzaCompetenza(testo)
+    .split(' ')
+    .map((t) => t.trim())
+    .filter((t) => t.length >= MIN_CARATTERI_TOKEN_COMPETENZA)
+    .filter((t) => !TOKEN_COMPETENZA_GENERICI.has(t))
+    .map(radiceCompetenza);
+}
+
+/**
+ * Etichette leggibili delle competenze extra del profilo: gli id del catalogo
+ * (`materie_id`) si risolvono nel nome della materia — così il confronto avviene
+ * su testo («Lingua inglese»), non su un id opaco — e le parole chiave libere
+ * (`materie_custom`) restano il testo scritto dall'utente.
+ */
+export function etichetteCompetenzeProfilo(profilo: ProfiloCompatibilita): string[] {
+  const daCatalogo = (profilo.materieId ?? [])
+    .filter(Boolean)
+    .map((id) => catalogoMaterie.find((m) => m.id === id)?.nome ?? String(id));
+  const libere = (profilo.materieCustom ?? []).filter(Boolean).map((k) => String(k));
+  return [...daCatalogo, ...libere].map((e) => e.trim()).filter(Boolean);
+}
+
+/**
+ * True se una COMPETENZA o PAROLA CHIAVE dichiarata dall'utente compare nel testo
+ * dell'avviso (materia inferita dallo scraper o titolo). Confronto per token
+ * radicizzati: «Lingua inglese» intercetta «Interpello di Inglese», «Intelligenza
+ * artificiale» intercetta «… e Intelligenza Artificiale». Vale SOLO per i profili
+ * senza classi di concorso (si veda `avvisoCompatibileConProfilo`).
+ */
+export function competenzaCompatibileConAvviso(
+  profilo: ProfiloCompatibilita,
+  avviso: AvvisoCompatibilita,
+): boolean {
+  const tokenProfilo = new Set(etichetteCompetenzeProfilo(profilo).flatMap(tokenCompetenza));
+  if (tokenProfilo.size === 0) return false;
+  const tokenAvviso = new Set(tokenCompetenza(`${avviso.materia ?? ''} ${avviso.titolo ?? ''}`));
+  if (tokenAvviso.size === 0) return false;
+  for (const token of tokenProfilo) {
+    if (tokenAvviso.has(token)) return true;
+  }
+  return false;
+}
+
+/**
  * REGOLA UNICA di compatibilità profilo ↔ opportunità (Radar e notifiche).
  *
  * STRICT: un'opportunità viene consegnata SOLO se
- *   1. l'avviso non è di sostegno oppure l'utente ha aderito al sostegno;
- *   2. il profilo ha almeno una PROVINCIA configurata e quella dell'avviso è tra
- *      esse (mai avvisi di un'altra provincia: era il bug "Torino/Piemonte →
- *      opportunità di Prato/Toscana" per i profili senza province salvate);
- *   3. il profilo ha almeno una CLASSE configurata e c'è intersezione con le
- *      classi dell'avviso (formato normalizzato A-022 ≡ A-22); se l'avviso non
- *      dichiara classi, la MATERIA deve ricadere tra quelle delle classi utente.
+ *   1. l'avviso APPARTIENE alla provincia del profilo (mai avvisi di un'altra
+ *      provincia: era il bug "Torino/Piemonte → opportunità di Prato/Toscana" per
+ *      i profili senza province salvate);
+ *   2. il profilo ha almeno un criterio tra CLASSI di concorso e
+ *      COMPETENZE/PAROLE CHIAVE (`materie_id` + `materie_custom`: è la stessa
+ *      validità di `validaConfigRadar`). Con le classi: intersezione con le
+ *      classi dell'avviso (formato normalizzato A-022 ≡ A-22) o, se l'avviso non
+ *      dichiara classi, materia coperta dalle classi utente. SENZA classi (profilo
+ *      configurato solo su «In cosa puoi lavorare, anche oltre la tua classe di
+ *      concorso?»): la competenza/parola chiave deve comparire nel testo
+ *      dell'avviso, altrimenti l'utente non riceverebbe MAI nulla pur avendo una
+ *      configurazione valida (era il falso negativo dei profili solo-competenza).
+ *      Per i profili CON classi la regola storica resta invariata: le competenze
+ *      non allargano la consegna, quindi nessun ritorno dei falsi positivi.
+ *   3. ECCEZIONE SOSTEGNO: gli avvisi dell'area sostegno (codici `AD…` oppure
+ *      titolo/materia che la dichiarano — `avvisoDiSostegno`) NON passano dal
+ *      controllo di classe: sono SEMPRE consegnati nella provincia del profilo
+ *      (policy di inclusione permanente, nessuna preferenza e nessun opt-out).
  *
  * `ignoraFiltri` serve SOLO a enumerare i profili notificabili (digest): salta i
- * controlli geografici/di classe, ma NON la guardia sostegno.
+ * controlli geografici/di classe (compreso quello del sostegno).
  */
 export function avvisoCompatibileConProfilo(
   profilo: ProfiloCompatibilita,
   avviso: AvvisoCompatibilita,
   opts: { ignoraFiltri?: boolean } = {},
 ): EsitoCompatibilita {
-  if (!sostegnoAmmesso(profilo, avviso)) return { ok: false, motivo: 'sostegno' };
   if (opts.ignoraFiltri === true) return { ok: true };
 
   const provinceProfilo = (profilo.province ?? []).map(normalizzaProvincia).filter(Boolean);
@@ -406,32 +567,52 @@ export function avvisoCompatibileConProfilo(
   }
 
   const classiProfilo = (profilo.classi ?? []).map(normalizzaClasse).filter(Boolean);
-  if (classiProfilo.length === 0) return { ok: false, motivo: 'profilo-senza-classi' };
+  const competenzeProfilo = etichetteCompetenzeProfilo(profilo);
+  if (classiProfilo.length === 0 && competenzeProfilo.length === 0) {
+    return { ok: false, motivo: 'profilo-senza-classi' };
+  }
+  // AREA SOSTEGNO (e alternativa all'IRC): inclusione PERMANENTE. Nella provincia
+  // dell'utente l'avviso di sostegno non viene mai scartato per assenza di classe
+  // in comune: nessuna preferenza, nessun opt-out, più opportunità utili.
+  if (avvisoDiSostegno(avviso)) return { ok: true };
   const classiAvviso = (avviso.classi ?? []).filter(Boolean);
-  if (classiAvviso.length > 0) {
-    const set = new Set(classiProfilo);
-    return classiAvviso.some((c) => set.has(normalizzaClasse(c)))
+  if (classiProfilo.length > 0) {
+    // Profilo con CLASSI: regola STORICA, invariata. Le competenze/parole chiave
+    // NON allargano la consegna dei profili che hanno già una classe — è la
+    // cautela che evita il ritorno dei falsi positivi.
+    if (classiAvviso.length > 0) {
+      const set = new Set(classiProfilo);
+      return classiAvviso.some((c) => set.has(normalizzaClasse(c)))
+        ? { ok: true }
+        : { ok: false, motivo: 'classe' };
+    }
+    return materiaCompatibileConClassi(avviso.materia, classiProfilo)
       ? { ok: true }
       : { ok: false, motivo: 'classe' };
   }
-  return materiaCompatibileConClassi(avviso.materia, classiProfilo)
+
+  // Profilo SENZA classi (configurato solo su competenze e parole chiave):
+  // l'unico criterio possibile è il testo dell'avviso. Se la competenza non
+  // compare, resta il motivo `classe` — meglio nessun invio che un invio a caso.
+  return competenzaCompatibileConAvviso(profilo, avviso)
     ? { ok: true }
     : { ok: false, motivo: 'classe' };
 }
 
 /**
  * FASE 4 — Trova nella tabella `profiles` gli utenti compatibili con un interpello:
- * email di notifica valida, provincia in comune e almeno una classe in comune
- * (più la GUARDIA SOSTEGNO: gli avvisi di sostegno solo a chi ha aderito).
+ * email di notifica valida, provincia in comune e almeno una classe in comune.
+ * Gli avvisi dell'AREA SOSTEGNO sono l'eccezione: vengono consegnati a tutti i
+ * profili della provincia (inclusione permanente, nessuna preferenza).
  */
 export async function findUtentiCompatibili(
   client: SupabaseClient | null,
   interpello: {
     province: string | null;
     classi: string[];
-    /** Titolo dell'avviso: serve alla guardia sostegno (parole chiave). */
+    /** Titolo dell'avviso: riconosce l'area sostegno (parole chiave). */
     titolo?: string | null;
-    /** Materia inferita dallo scraper (es. "Sostegno"): guardia sostegno. */
+    /** Materia inferita dallo scraper (es. "Sostegno"): area sostegno. */
     materia?: string | null;
   },
   opts: { ignoraFiltri?: boolean } = {},
@@ -443,19 +624,24 @@ export async function findUtentiCompatibili(
     'id, email, email_notifica, nome, province_interesse, province_attive, classi_concorso, telegram_chat_id, piano, radar_attivo, is_free_forever, notifiche_blocco_inviato, notifiche_recap_inviato';
 
   try {
-    // `sostegno` è la preferenza dell'area sostegno (migrazione
-    // `20260914040000_add_profiles_sostegno.sql`). Se il DB non è ancora migrato la
+    // Colonne opzionali: `sostegno` è un valore STORICO dell'area sostegno
+    // (migrazione `20260914040000_add_profiles_sostegno.sql`) — non è più un
+    // filtro, viene solo riletto per compatibilità — mentre
+    // `materie_id`/`materie_custom` sono le COMPETENZE/PAROLE CHIAVE del passo
+    // «In cosa puoi lavorare, anche oltre la tua classe di concorso?» (presenti
+    // fin dalla prima creazione di `profiles`). Se il DB non ha `sostegno` la
     // SELECT fallirebbe (42703/PGRST204) e NESSUN utente riceverebbe notifiche:
-    // si rilegge quindi senza la colonna, trattandola come non valorizzata (vale
-    // comunque l'adesione implicita via classe di sostegno).
+    // si rilegge quindi senza la colonna, senza alcun effetto sulla consegna.
     let { data, error } = await client
       .from('profiles')
-      .select(`${COLONNE_PROFILO}, sostegno`);
+      .select(`${COLONNE_PROFILO}, sostegno, materie_id, materie_custom`);
     if (error && /sostegno/i.test(error.message)) {
       console.warn(
         'MatchingEngine — colonna `profiles.sostegno` assente: applicare la migrazione 20260914040000_add_profiles_sostegno.sql.',
       );
-      ({ data, error } = await client.from('profiles').select(COLONNE_PROFILO));
+      ({ data, error } = await client
+        .from('profiles')
+        .select(`${COLONNE_PROFILO}, materie_id, materie_custom`));
     }
 
     if (error) {
@@ -480,13 +666,26 @@ export async function findUtentiCompatibili(
 
       const provinceProfilo: string[] = riga.province_interesse ?? riga.province_attive ?? [];
       const classiProfilo: string[] = riga.classi_concorso ?? [];
+      // COMPETENZE E PAROLE CHIAVE del profilo: senza queste due colonne il
+      // matching non aveva alcun criterio per i profili configurati solo su «In
+      // cosa puoi lavorare, anche oltre la tua classe di concorso?» (falso
+      // negativo silenzioso: Radar acceso, zero opportunità).
+      const competenzeCatalogo: string[] = riga.materie_id ?? [];
+      const competenzeLibere: string[] = riga.materie_custom ?? [];
 
       // REGOLA UNICA (profilo ↔ opportunità): provincia E classe devono
-      // combaciare davvero, con le classi normalizzate (A-026 ≡ A-26 ≡ A042) e la
-      // guardia sostegno. La logica sta in `avvisoCompatibileConProfilo`, la stessa
-      // usata dal digest e dal dispatch: nessuna copia divergente.
+      // combaciare davvero, con le classi normalizzate (A-026 ≡ A-26 ≡ A042) e
+      // l'area SOSTEGNO sempre inclusa. La logica sta in
+      // `avvisoCompatibileConProfilo`, la stessa usata dal digest e dal dispatch:
+      // nessuna copia divergente.
       const compatibilita = avvisoCompatibileConProfilo(
-        { province: provinceProfilo, classi: classiProfilo, sostegno: riga.sostegno === true },
+        {
+          province: provinceProfilo,
+          classi: classiProfilo,
+          sostegno: riga.sostegno === true,
+          materieId: competenzeCatalogo,
+          materieCustom: competenzeLibere,
+        },
         {
           province: interpello.province,
           classi: interpello.classi,
@@ -508,6 +707,10 @@ export async function findUtentiCompatibili(
         notificheBloccoInviato: Boolean(riga.notifiche_blocco_inviato),
         notificheRecapInviato: Boolean(riga.notifiche_recap_inviato),
         sostegno: riga.sostegno === true,
+        // Trasmesse al digest, che ri-applica la stessa regola opportunità per
+        // opportunità: senza di esse il filtro perdeva le competenze.
+        materieId: competenzeCatalogo,
+        materieCustom: competenzeLibere,
       });
     }
     return compatibili;

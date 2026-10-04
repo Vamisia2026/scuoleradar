@@ -21,7 +21,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { diversificaProvince, preparaRigheBoard } from '@/lib/liveBoard';
-import { metricaBoard } from './flightBoard/metricaBoard';
+import { metricaBoard, pagineBoard } from './flightBoard/metricaBoard';
 import { leggiTutteLePagine } from './flightBoard/letturaBoard';
 import { filtroAttivi } from './flightBoard/filtroAttivi';
 import { urlValido, type InterpelloLive } from './flightBoard/righeBoard';
@@ -104,6 +104,10 @@ export function FlightBoardInterpelli() {
         ...p.riga,
         school_name: p.scuola,
         expiration_date: p.scadenza,
+        // Marcatore di vetrina: il nome mostrato è un ripiego (nome grezzo del
+        // bando o «Anagrafica in aggiornamento») → la riga lo dichiara. La riga
+        // resta comunque in bacheca (direttiva 04/10/2026, §26.47).
+        anagrafica_parziale: p.anagraficaParziale,
       }));
 
       setRighe((prev) => {
@@ -123,7 +127,11 @@ export function FlightBoardInterpelli() {
   }, []);
 
   const totale = righe.length;
-  const pagine = Math.max(1, Math.ceil(totale / RIGHE_PER_PAGINA));
+  // UNICA fonte della scala: le schermate contano le righe DAVVERO in vetrina
+  // (`RIGHE_PER_PAGINA` righe ciascuna). La stessa `pagine` governa l'etichetta,
+  // la rotazione automatica e il taglio delle righe mostrate: mai un conteggio
+  // diverso da quello che il tabellone può davvero mostrare.
+  const pagine = pagineBoard(totale, RIGHE_PER_PAGINA);
   const paginaSicura = pagina < pagine ? pagina : 0;
   const metrica = metricaBoard({
     righeCaricate: totale,
@@ -149,7 +157,22 @@ export function FlightBoardInterpelli() {
   );
 
   return (
-    <section aria-label="Radar Live — interpelli in tempo reale" className="bg-white py-8">
+    /* Monitor a scorrimento con gli avvisi di lavoro in tempo reale: PROTETTO da
+       qualsiasi editor testuale. `contentEditable={false}` lo esclude dalla
+       modifica anche quando un contenitore esterno viene reso editabile;
+       `translate="no"` + la classe `notranslate` impediscono alla traduzione
+       automatica del browser di avvolgere le celle in nodi estranei (le righe
+       cambiano da sole a ogni rotazione: nodi aggiunti dall'editor farebbero
+       fallire l'aggiornamento di React); `spellCheck={false}` e `select-none`
+       chiudono le altre vie di editing/selezione. Le righe restano cliccabili. */
+    <section
+      aria-label="Radar Live — interpelli in tempo reale"
+      className="notranslate select-none bg-white py-8"
+      contentEditable={false}
+      spellCheck={false}
+      suppressContentEditableWarning
+      translate="no"
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-6">
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">

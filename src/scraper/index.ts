@@ -43,6 +43,7 @@ import process from 'node:process';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { arricchisciConAnagrafica, riepilogoAnagrafica } from './anagraficaInterpelli.ts';
 import {
   parseInterpello,
   estraiDataPubblicazione,
@@ -69,7 +70,7 @@ import { MAX_FONTI_PER_RUN, fontiPerRun, type FonteInterpelli } from './fonti.ts
 import { sintesiCopertura } from './fontiCopertura.ts';
 import { MAX_SEZIONI_HUB, eTitoloNavigazione, scopriSezioniReclutamento } from './hub.ts';
 import { motivoScartoOpportunita, valutaGateLink, eRecordStrutturato } from './qualitaOpportunita.ts';
-import { resolveSchoolByCode } from '../lib/school-lookup.ts';
+import { statoArricchimento } from '../lib/statoArricchimento.ts';
 import { inviaAlertTelegramTempoReale } from '../lib/notifier.ts';
 import {
   emailDaCodiceMeccanografico,
@@ -840,13 +841,17 @@ async function cercaEmailNelleFonti(
   };
 }
 
-/** Email istituzionale derivata dal codice meccanografico (convenzione MIM). */
+/**
+ * Email istituzionale derivata dal codice meccanografico.
+ *
+ * SOLO la convenzione UFFICIALE del Ministero (`codice@istruzione.it`,
+ * `emailDaCodiceMeccanografico`): nessuna email costruita su un codice
+ * malformato e nessun nome di scuola inventato per giustificarla (direttiva
+ * 04/10/2026, §26.47 — bonifica dei mock: il vecchio `resolveSchoolByCode`
+ * fabbricava «Istituto &lt;codice&gt;» e un recapito anche per codici non validi).
+ */
 function emailIstituzionaleDaCodice(schoolCode?: string | null): string | null {
-  return (
-    emailDaCodiceMeccanografico(schoolCode ?? '')?.peo ??
-    resolveSchoolByCode(schoolCode ?? null)?.peoEmail ??
-    null
-  );
+  return emailDaCodiceMeccanografico(schoolCode ?? '')?.peo ?? null;
 }
 
 /** Sotto questa soglia l'email è considerata debole → vale la pena approfondire. */
@@ -940,20 +945,39 @@ function clientSupabase(url: string, key: string): SupabaseClient {
   return createClient(url, key);
 }
 
-/** Mappa un avviso parsato sulle colonne della tabella `interpelli` (FASE 2 schema). */
+/**
+ * Mappa un avviso parsato sulle colonne della tabella `interpelli` (FASE 2 schema).
+ * L'avviso passa prima dall'ANAGRAFICA NAZIONALE (`arricchisciConAnagrafica`):
+ * nome reale dell'istituto, codice meccanografico, email PEO e PEC vengono
+ * completati qui una volta sola, così bacheca pubblica, feed personale e Radar di
+ * prova ricevono la stessa riga completa (nessuna logica duplicata a valle).
+ */
 function mappaRigaInterpelli(a: InterpelloParsato) {
+  const avviso = arricchisciConAnagrafica(a);
   return {
-    hash_id: a.hashId,
-    title: a.title,
-    province: a.province,
-    class_codes: a.classCodes,
-    school_name: a.schoolName,
-    school_code: a.schoolCode,
-    source_url: a.link,
-    published_at: a.publishedAt,
-    expiration_date: a.expirationDate,
-    materia: a.materia,
-    contact_email: a.contactEmail,
+    hash_id: avviso.hashId,
+    title: avviso.title,
+    province: avviso.province,
+    class_codes: avviso.classCodes,
+    school_name: avviso.schoolName,
+    school_code: avviso.schoolCode,
+    school_pec: avviso.schoolPec ?? null,
+    source_url: avviso.link,
+    published_at: avviso.publishedAt,
+    expiration_date: avviso.expirationDate,
+    materia: avviso.materia,
+    contact_email: avviso.contactEmail,
+    // STATO dell'anagrafica: la riga entra SEMPRE. Questa colonna dice soltanto
+    // se l'istituto è identificato e c'è un recapito (`completo`) oppure se la
+    // riga vive dei dati grezzi del bando (`parziale`) — l'interfaccia lo dichiara
+    // con «anagrafica in aggiornamento», senza mai scartare o nascondere l'avviso
+    // (direttiva 04/10/2026, §26.47: caso Padova).
+    stato_arricchimento: statoArricchimento({
+      school_name: avviso.schoolName,
+      school_code: avviso.schoolCode,
+      contact_email: avviso.contactEmail,
+      school_pec: avviso.schoolPec ?? null,
+    }),
   };
 }
 
@@ -989,7 +1013,13 @@ function eUrlSpecifico(url?: string | null): url is string {
 /* ------------------------ Upsert resiliente interpelli ------------------------ */
 
 /** Colonne "recenti" che possono non esistere ancora se le migrazioni non sono applicate. */
-const COLONNE_OPZIONALI = ['published_at', 'materia', 'contact_email'];
+const COLONNE_OPZIONALI = [
+  'published_at',
+  'materia',
+  'contact_email',
+  'stato_arricchimento',
+  'school_pec',
+];
 
 /**
  * Upsert resiliente su `interpelli`: se il DB non ha ancora le colonne OPZIONALI
@@ -1599,6 +1629,15 @@ async function main() {
   if (rimosse.length > 0) {
     console.warn(
       `⚠ Colonne non presenti in 'interpelli' (migrazioni non applicate?) → rimosse dall'upsert: ${rimosse.join(', ')}`,
+    );
+  }
+  // ANAGRAFICA NAZIONALE: quante righe sono state completate (nome/codice/email/PEC).
+  // Dichiararlo rende visibile l'effetto dell'arricchimento sul run, senza silenzi.
+  const anagrafica = riepilogoAnagrafica();
+  if (anagrafica.disponibile) {
+    console.log(
+      `• Anagrafica scuole: ${anagrafica.arricchiti} avvisi arricchiti su ${unici.length} ` +
+        `(${anagrafica.codici} codici meccanografici da ${anagrafica.file} file SCUANAGRAFE).`,
     );
   }
 

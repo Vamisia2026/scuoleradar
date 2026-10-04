@@ -1,3 +1,20 @@
+/**
+ * ScuoleRadar.it — Registro MINIMO delle scuole per codice meccanografico.
+ *
+ * Contiene SOLO istituti reali registrati a mano (con denominazione, provincia,
+ * città, PEO e PEC): serve alle viste pubbliche che non possono mostrare
+ * placeholder e — per il codice meccanografico — a `nomeScuolaDaCodice`.
+ *
+ * ⚠️ POLICY DATI (direttiva 04/10/2026, §26.47 — bonifica dei mock): qui NON si
+ * inventa nulla. Un codice meccanografico SCONOSCIUTO non produce un nome
+ * sintetico («Istituto <codice>») né una città segnaposto («N/D»): `null` è la
+ * risposta corretta e chi chiama prosegue con il dato grezzo della fonte o con la
+ * dicitura gestita della vetrina. Il recapito ufficiale, quando serve, nasce
+ * dalla convenzione MIM su codice (`risolviEmailUfficialeScuola` in
+ * `lib/emailScuola.ts`), MAI da un nome costruito.
+ *
+ * Verificato da `npm run test:pipeline` (`scripts/test-pipeline-tollerante.ts`).
+ */
 export interface SchoolInfo {
   code: string;
   name: string;
@@ -7,10 +24,7 @@ export interface SchoolInfo {
   pecEmail?: string;
 }
 
-/**
- * Fallback and primary dictionary for known mechanical codes.
- * Can be dynamically extended or queried from DB.
- */
+/** Istituti REALI verificati a mano (denominazione, recapiti ufficiali). */
 const KNOWN_SCHOOLS: Record<string, SchoolInfo> = {
   'BSIS02900X': {
     code: 'BSIS02900X',
@@ -41,25 +55,13 @@ export function nomeScuolaDaCodice(code?: string | null): string | null {
 }
 
 /**
- * Resolves full school information using the mechanical code (Codice Meccanografico).
- * If unknown, generates standard institutional email fallback (code@istruzione.it).
+ * Istituto registrato a mano per codice meccanografico, altrimenti `null`.
+ * Sostituisce il vecchio `resolveSchoolByCode`, che per QUALSIASI codice
+ * costruiva un nome fittizio («Istituto <codice>») e una città «N/D»: dati
+ * inventati, esattamente ciò che la direttiva 04/10/2026 vieta.
  */
-export function resolveSchoolByCode(code: string | null): SchoolInfo | null {
-  if (!code) return null;
-  const cleanCode = code.toUpperCase().trim();
-
-  // 1. Match from dictionary if registered
-  if (KNOWN_SCHOOLS[cleanCode]) {
-    return KNOWN_SCHOOLS[cleanCode];
-  }
-
-  // 2. Standard MIM convention fallback for all valid mechanical codes
-  return {
-    code: cleanCode,
-    name: `Istituto ${cleanCode}`,
-    province: cleanCode.substring(0, 2),
-    city: 'N/D',
-    peoEmail: `${cleanCode.toLowerCase()}@istruzione.it`,
-    pecEmail: `${cleanCode.toLowerCase()}@pec.istruzione.it`,
-  };
+export function scuolaDaCodice(code?: string | null): SchoolInfo | null {
+  const clean = (code ?? '').toUpperCase().trim();
+  if (!clean) return null;
+  return KNOWN_SCHOOLS[clean] ?? null;
 }

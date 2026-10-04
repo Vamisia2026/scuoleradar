@@ -18,7 +18,7 @@
  * set») — mai una data inventata.
  */
 import { ExternalLink } from 'lucide-react';
-import { titoloLeggibile } from '@/lib/liveBoard';
+import { titoloLeggibile, SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO } from '@/lib/liveBoard';
 import { ePdf, hostDi, urlValido, type InterpelloLive } from '../righeBoard';
 import { dataItBreve, inferisciTipologia, ottieniUrgenzaOAnzianita } from '../rigaBoardDati';
 
@@ -51,6 +51,18 @@ export function RigaBoard({ riga: r, indice }: RigaBoardProps) {
     : "Apri l'avviso ufficiale";
   const nomeScuola = r.school_name?.trim() || '';
   const sottotitolo = titoloLeggibile(r.title);
+  // MARCATORE DI VETRINA (direttiva 04/10/2026, §26.47): la riga ha un'anagrafica
+  // incompleta (il nome mostrato è un ripiego) ma resta VISIBILE — qui lo dichiara.
+  // Quando la colonna mostra già la dicitura gestita il marcatore è ridondante.
+  const marcatoreAnagrafica =
+    r.anagrafica_parziale && nomeScuola !== SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO ? (
+      <span
+        className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-700"
+        title="Anagrafica in aggiornamento: l'istituto non è ancora mappato"
+      >
+        anagrafica in aggiornamento
+      </span>
+    ) : null;
   const apriFonte = (): void => {
     if (urlFonte) window.open(urlFonte, '_blank', 'noopener,noreferrer');
   };
@@ -107,11 +119,15 @@ export function RigaBoard({ riga: r, indice }: RigaBoardProps) {
                   PDF
                 </span>
               )}
+              {marcatoreAnagrafica}
               <ExternalLink className="h-3.5 w-3.5 shrink-0 text-primary-400 transition group-hover:text-accent-500" />
             </span>
           </a>
         ) : (
-          <span className="block font-semibold truncate">{nomeScuola}</span>
+          <span className="flex items-center gap-1.5 truncate">
+            <span className="truncate font-semibold">{nomeScuola}</span>
+            {marcatoreAnagrafica}
+          </span>
         )}
       </td>
 

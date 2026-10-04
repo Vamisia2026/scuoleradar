@@ -83,15 +83,23 @@
       esperti esterni). I **contenuti editoriali** del MIM (comunicati stampa,
       dichiarazioni, interviste, rassegne, eventi) e gli **atti informativi**
       (esiti, graduatorie, revoche) restano nel dominio Notizie: mai un post.
-- [ ] **Bacheca pubblica «Radar Live» (lato UI)**: nessuna riga di riempimento e
-      nessun mock, mai. Il totale mostrato è il **conteggio esatto** del database
-      e le pagine si contano sulle righe davvero presenti (con `+` se il DB ne ha
-      altre); a database vuoto/nessuna riga presentabile la sezione dice
-      **«Nessun bando attivo al momento»**. La colonna «Scuola» non mostra mai un
-      elenco di codici classe al posto del nome dell'istituto
-      (`src/lib/liveBoard.ts`).
-- [ ] **Copertura nazionale della bacheca**: il tabellone legge fino a **1.000
-      righe in una sola query** con il filtro a doppio ramo
+- [ ] **Bacheca pubblica «Radar Live» (lato UI)**: nessun mock, mai. Il totale
+      mostrato è il **conteggio esatto** del database e le schermate si contano
+      sulle righe davvero presenti: **«Schermata X di Y»**, con `Y` = elementi in
+      vetrina ÷ 5 arrotondato per eccesso — nessun `+` di maggiorazione e nessuna
+      dicitura fissa (direttiva cliente 03/10/2026); a database vuoto la sezione
+      dice **«Nessun bando attivo al momento»**.
+- [ ] **Nessun avviso genuino scartato per anagrafica** (direttiva cliente
+      04/10/2026): una riga senza nome d'istituto risolvibile **resta in bacheca**,
+      con il nome grezzo pubblicato dal bando oppure con la dicitura gestita
+      **«Anagrafica in aggiornamento»**, e viene marcata per l'interfaccia
+      (`anagraficaParziale` — `src/lib/liveBoard.ts`, `src/lib/statoArricchimento.ts`).
+      Restano fuori solo gli avvisi **non vivi** (scaduti o fuori dalla finestra dei
+      60 giorni). La colonna «Scuola» non mostra **mai** un elenco di codici classe
+      al posto del nome dell'istituto.
+- [ ] **Copertura nazionale della bacheca**: il tabellone legge a **pagine**
+      (`.range`, mai una richiesta sola: PostgREST non consegna più di 1.000 righe —
+      `radar/flightBoard/letturaBoard.ts`, §26.34) con il filtro a doppio ramo
       `radar/flightBoard/filtroAttivi.ts` — «scadenza non ancora passata» **oppure**
       «nessuna scadenza ma pubblicato negli ultimi 60 giorni»
       (`GIORNI_FINESTRA_SENZA_SCADENZA`) — e usa lo **stesso** filtro per il

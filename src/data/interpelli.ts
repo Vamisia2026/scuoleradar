@@ -34,6 +34,12 @@ export interface Interpello {
   linkFonte: string;
   /** Email di candidatura della scuola (PEC/istituzionale), se disponibile. */
   contactEmail?: string | null;
+  /**
+   * Stato dell'anagrafica della scuola (`completo` | `parziale`): quando è
+   * `parziale` (o assente) l'interfaccia dichiara gentilmente «anagrafica in
+   * aggiornamento» — l'avviso resta comunque SEMPRE visibile e notificabile.
+   */
+  statoArricchimento?: 'completo' | 'parziale' | null;
   compatibilita: number; // 0-100
 }
 
