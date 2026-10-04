@@ -24,10 +24,14 @@ export type StatoArricchimento = 'completo' | 'parziale';
 
 /**
  * Dicitura GESTITA della vetrina quando l'istituto non è risolvibile in chiaro:
- * dice la verità (l'anagrafica è in lavorazione) senza inventare un nome e senza
- * scartare l'avviso.
+ * il segnaposto NEUTRO «Scuola non specificata / Più plessi» dichiara che il nome
+ * dell'istituto non è ancora associato — nessun messaggio tecnico, nessun nome
+ * inventato e nessuno scarto dell'avviso (direttiva cliente 04/10/2026).
+ *
+ * La vetrina pubblica resta pulita e professionale: il lavoro di arricchimento
+ * anagrafico prosegue in background SOLO per l'invio delle notifiche puntuali.
  */
-export const SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO = 'Anagrafica in aggiornamento';
+export const SCUOLA_NON_SPECIFICATA = 'Scuola non specificata / Più plessi';
 
 /** Vista minima di una riga per il calcolo dello stato. */
 export interface RigaArricchibile {

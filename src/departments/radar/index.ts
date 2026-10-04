@@ -8,6 +8,7 @@
  *  - `RadarWizardModal`         → wizard di configurazione a 4 passi (modale globale)
  *  - `PreferenzeRadar`          → bacheca preferenze (dashboard)
  *  - `RadarStatusToggle`        → stato/pausa del Radar + CTA PRO
+ *  - `RiepilogoLavoro`          → riepilogo «In cosa puoi lavorare» (pagina Profilo)
  *  - `FlightBoardInterpelli`    → «Radar Live» della homepage (tavola aeroporto)
  *  - `SimulatorRadar`           → simulatore pubblico provincia + classe
  *  - `BenvenutoProRadar`        → benvenuto/congratulazioni al primo accesso PRO
@@ -18,6 +19,7 @@
 export { RadarWizardModal } from './RadarWizardModal';
 export { PreferenzeRadar } from './PreferenzeRadar';
 export { RadarStatusToggle } from './RadarStatusToggle';
+export { RiepilogoLavoro } from './components/RiepilogoLavoro';
 export { FlightBoardInterpelli } from './FlightBoardInterpelli';
 export { SimulatorRadar } from './SimulatorRadar';
 export { BenvenutoProRadar } from './components/BenvenutoProRadar';

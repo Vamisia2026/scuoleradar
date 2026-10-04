@@ -120,8 +120,12 @@ export const CTA_NOTIZIE_TELEGRAM = `${CTA_NOTIZIE_RIGA}\n${CTA_NOTIZIE_TESTO}`;
 /**
  * Etichetta UNICA e onesta del link alla fonte ufficiale dell'avviso: descrive
  * l'azione senza promettere una candidatura che il link non garantisce.
+ *
+ * Testo richiesto dal prodotto (04/10/2026): «Guarda la fonte ufficiale» — UNA
+ * sola stringa per TUTTE le superfici di notifica (email, Telegram, Edge) e per
+ * OGNI tipo di messaggio (alert PRO, digest, promemoria).
  */
-export const ETICHETTA_AVVISO_UFFICIALE = "👉 Apri l'avviso ufficiale";
+export const ETICHETTA_AVVISO_UFFICIALE = 'Guarda la fonte ufficiale';
 
 /**
  * Normalizza il recapito di candidatura della scuola: trim + minuscolo e
@@ -338,11 +342,33 @@ export function pulisciTitoloAvviso(titolo?: string | null, fallback?: string | 
 
 export type DestinazioneFonte = 'pdf' | 'albo' | 'stampa' | 'avviso';
 
-const RE_HOST_INTERNO = /(^|\.)scuoleradar\.(it|com)$\vert{}(^\vert{}\.)purefocus\.one$|localhost|127\.0\.0\.1|0\.0\.0\.0/i;
+const RE_HOST_INTERNO = /(^|\.)scuoleradar\.(it|com)$|(^|\.)purefocus\.one$|localhost|127\.0\.0\.1|0\.0\.0\.0/i;
 const RE_URL_SEGNAPOSTO = /(example\.(com|org|net|it)|localhost|127\.0\.0\.1|0\.0\.0\.0|:5173|:3000|:8080|mockup|\bmock\b|\bsample\b|\bdummy\b|placeholder|\bfixture\b|esempio)/i;
 
+/**
+ * PULIZIA dell'URL PRIMA di ogni controllo e di ogni formattazione.
+ *
+ * Le fonti pubblicano i link dentro celle di tabella o paragrafi: capita di
+ * trovarli con entità HTML (`&amp;`), racchiusi fra virgolette/angolari/caporalia
+ * di markdown, o seguiti dalla punteggiatura della frase (`…avviso.pdf.`). Senza
+ * questa pulizia un link perfettamente valido veniva RIFIUTATO dal gate (e la
+ * riga della fonte spariva dai messaggi) o spedito con caratteri di troppo
+ * (link rotto). La funzione è pura e idempotente: si può applicare più volte.
+ */
+export function pulisciUrlEsterna(url?: string | null): string {
+  let u = (url ?? '').replace(/&amp;/gi, '&').replace(/&#0*38;/g, '&').trim();
+  // Rimozione ITERATIVA dei contorni (`<…>.`, «…», "…", spazi): un solo passaggio
+  // non basta quando i caratteri si alternano (`<url>.`).
+  let precedente = '';
+  while (u !== precedente) {
+    precedente = u;
+    u = u.replace(/^[<([{'"`«»\s]+/, '').replace(/[>)\]}'"`«»\s.,;:]+$/, '');
+  }
+  return u.replace(/\s+/g, '');
+}
+
 export function eLinkEsterno(url?: string | null): boolean {
-  const u = (url ?? '').trim();
+  const u = pulisciUrlEsterna(url);
   if (!/^https?:\/\//i.test(u)) return false;
   if (RE_URL_SEGNAPOSTO.test(u)) return false;
   try {
@@ -355,7 +381,8 @@ export function eLinkEsterno(url?: string | null): boolean {
 }
 
 export function urlEsterna(url?: string | null): string | null {
-  return eLinkEsterno(url) ? (url ?? '').trim() : null;
+  const pulito = pulisciUrlEsterna(url);
+  return eLinkEsterno(pulito) ? pulito : null;
 }
 
 export function ePaginaRiepilogo(url?: string | null): boolean {
@@ -366,9 +393,15 @@ export function ePaginaRiepilogo(url?: string | null): boolean {
 
 const RE_URL_ARCHIVIO = /(?:^|\/)(?:tag|tags|category|categorie|search|ricerca|cerca|elenco|elenchi|lista|liste|indice|archivio|archive|pagin(?:a|e)|page|feed)(?:\/|$)/i;
 
+/** Parametri di query che indicano una RICERCA/FILTRO: mai il singolo avviso (checklist email §5). */
+const RE_QUERY_RICERCA = /[?&](?:s|q|query|search|ricerca|cerca|keyword|filtro|filtri|anno|mese|tag|category|categoria|archivio|page|paged|offset|limit|classe|provincia|data|dal|al)=/i;
+
+/** Parametri che IDENTIFICANO il singolo avviso: pagina tabellare «Stampa» del singolo avviso. */
+const RE_QUERY_ID_AVVISO = /[?&](?:cod|codice|id|uid|prot|protocollo|num|numero|atto|pratica|doc|documento|file|allegato|news|nid|post|articolo|p)=/i;
+
 export function eUrlAvvisoDiretto(url?: string | null): boolean {
   if (!eLinkEsterno(url)) return false;
-  const u = (url ?? '').trim();
+  const u = pulisciUrlEsterna(url);
   let percorso = '';
   let query = '';
   try {
@@ -378,14 +411,39 @@ export function eUrlAvvisoDiretto(url?: string | null): boolean {
   } catch {
     return false;
   }
-  if (!percorso) return false;
+  // Percorso vuoto = home dell'ente: esclusa, a MENO che la query identifichi il
+  // singolo avviso (`https://www.scuola.it/?p=1234` è l'avviso, non la home);
+  // una ricerca/filtro resta comunque fuori.
+  if (!percorso) {
+    return Boolean(query) && RE_QUERY_ID_AVVISO.test(query) && !RE_QUERY_RICERCA.test(query);
+  }
   if (RE_URL_ARCHIVIO.test(percorso)) return false;
   const segmenti = percorso.split('/').filter(Boolean);
   if (segmenti.length === 1 && /^(?:interpelli|avvisi|bandi|supplenze|opportunita)/.test(segmenti[0])) {
     return false;
   }
-  if (/[?&].*=/i.test(query)) return false;
+  // Query string: una RICERCA/FILTRO (`?s=`, `?q=`, `?classe=`…) non è mai il
+  // singolo avviso; ogni altro parametro deve IDENTIFICARLO (`?cod=`, `?id=`):
+  // la pagina tabellare «Stampa» del singolo avviso è una destinazione AMMESSA.
+  if (query && (RE_QUERY_RICERCA.test(query) || !RE_QUERY_ID_AVVISO.test(query))) return false;
   return true;
+}
+
+/**
+ * URL PULITO della FONTE UFFICIALE: la stringa da mettere in un `href`.
+ *
+ * Punto unico per ogni superficie (Telegram, email, canali): il link viene prima
+ * PULITO (`pulisciUrlEsterna`) e poi passato dall'UNICO gate sulla destinazione
+ * (`eUrlAvvisoDiretto`). Ritorna `''` quando non esiste un avviso specifico e
+ * diretto: mai home/elenchi/ricerche, mai un fallback alla piattaforma.
+ *
+ * Perché il gate si applica alla stringa PULITA: un URL corretto ma incollato
+ * con punteggiatura o entità HTML (`&amp;`) risultava "non diretto" e la riga
+ * della fonte spariva dal messaggio — ora entra in formato pulito e cliccabile.
+ */
+export function urlFonteAvviso(url?: string | null): string {
+  const pulito = pulisciUrlEsterna(url);
+  return eUrlAvvisoDiretto(pulito) ? pulito : '';
 }
 
 export interface DatiQualitaAvviso {
@@ -436,7 +494,7 @@ export interface DatiSuggerimento {
   compatto?: boolean;
 }
 
-export const ISTRUZIONE_AVVISO_UFFICIALE = "Apri l'avviso ufficiale (clicca STAMPA dove possibile, per candidarti)";
+export const ISTRUZIONE_AVVISO_UFFICIALE = "Guarda la fonte ufficiale (clicca STAMPA dove possibile, per candidarti)";
 
 export function suggerimentoRicercaAvviso(dati: DatiSuggerimento = {}): string | null {
   const email = emailAvviso(dati.email);
@@ -451,7 +509,12 @@ export function suggerimentoRicercaAvviso(dati: DatiSuggerimento = {}): string |
 
   if (esterna) {
     const cerca = `Cerca la riga con ${dove} e leggi lì date e classi.`;
-    if (dati.compatto) return ISTRUZIONE_AVVISO_UFFICIALE;
+    // Anche la versione COMPATTA (digest Telegram) tiene la direttiva standard
+    // E la riga da cercare: senza il riferimento alla riga l'utente non saprebbe
+    // cosa cercare nell'elenco (test: test-digest, test-link-esterno).
+    // La riga da cercare entra in MINUSCOLO dopo i due punti: è la forma attesa da
+    // test-digest e test-link-esterno (match case-sensitive su «cerca la riga»).
+    if (dati.compatto) return `${ISTRUZIONE_AVVISO_UFFICIALE}: cerca la riga con ${dove} e leggi lì date e classi.`;
     const testo = [
       'Nel link la scuola pubblica un elenco, non la scheda del singolo avviso.',
       `${ISTRUZIONE_AVVISO_UFFICIALE}.`,

@@ -83,7 +83,7 @@ export function useProfileBootstrap({
         // errore 42703 che bloccava il piano su 'base'). Il piano si ricava da
         // piano/subscription_tier tramite pianoDaProfilo.
         const COLONNE_PROFILO =
-          'province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, subscription_tier, abbonamento_scade_il, subscription_status, crediti, notifiche_usate, radar_attivo, favorite_schools, ignored_schools';
+          'province_attive, province_interesse, classi_concorso, ordini_scuola, telegram_chat_id, piano, subscription_tier, abbonamento_scade_il, subscription_status, crediti, notifiche_usate, radar_attivo, favorite_schools, ignored_schools, materie_id, materie_custom';
         const risposta = await supabase
           .from('profiles')
           .select(COLONNE_PROFILO)
@@ -161,6 +161,18 @@ export function useProfileBootstrap({
               data.classi_concorso && data.classi_concorso.length > 0
                 ? normalizzaClassi(data.classi_concorso)
                 : prev.classiCodici,
+            // COMPETENZE E PAROLE CHIAVE (`materie_id` / `materie_custom`):
+            // senza questa rilettura le competenze salvate si vedevano solo sul
+            // browser che le aveva scritte (localStorage) e sparivano al primo
+            // accesso da un altro dispositivo, pur essendo nel DB. Come per le
+            // classi il DB vince solo se ha davvero qualcosa: un array vuoto non
+            // deve cancellare la scelta appena fatta prima del salvataggio.
+            materieId:
+              data.materie_id && data.materie_id.length > 0 ? data.materie_id : prev.materieId,
+            materieCustom:
+              data.materie_custom && data.materie_custom.length > 0
+                ? data.materie_custom
+                : prev.materieCustom,
             telegramChatId: data.telegram_chat_id ? String(data.telegram_chat_id) : prev.telegramChatId,
             favoriteSchools:
               data.favorite_schools && data.favorite_schools.length > 0

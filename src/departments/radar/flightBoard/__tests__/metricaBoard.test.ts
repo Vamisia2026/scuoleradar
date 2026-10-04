@@ -5,10 +5,11 @@
  * le etichette delle pagine e degli avvisi attivi si calcolano su numeri REALI.
  * Qui si fissano le regole di quella traduzione (`flightBoard/metricaBoard.ts`):
  *
- *   1. le pagine mostrate sono quelle delle righe DAVVERO in tabellone: nessun
- *      tetto di lettura da esibire (la bacheca legge a pagine TUTTI gli avvisi
- *      attivi — vedi `letturaBoard.test.ts`). Il `+` compare solo quando il
- *      database ha più avvisi attivi di quelli letti (`Pagina 7 di 150+`);
+ *   1. le schermate sono quelle delle righe DAVVERO in tabellone: elementi
+ *      presenti ÷ righe per schermata, arrotondati per eccesso — un conto ESATTO
+ *      e dinamico. Nessun `+` di maggiorazione («32+») e nessuna dicitura fissa
+ *      (direttiva cliente 03/10/2026): l'etichetta è «Schermata X di Y», con X
+ *      sempre compreso fra 1 e Y;
  *   2. conteggio esatto formattato `it-IT` (`3.412 avvisi attivi in Italia`),
  *      singolare compreso;
  *   3. quando il conteggio NON arriva si dichiara solo la scala caricata, senza
@@ -36,37 +37,29 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
   console.log(`${ok ? '✓' : '✗'} ${nome}: atteso=${JSON.stringify(atteso)} ottenuto=${JSON.stringify(ottenuto)}`);
 }
 
-console.log('— 1. Pagine sulle righe presenti (nessun tetto da esibire) —');
-check('1.000 avvisi in tabellone = 200 pagine da 5 righe', 200, pagineBoard(1_000, 5));
+console.log('— 1. Schermate sulle righe presenti: conto esatto, nessuna maggiorazione —');
+check('1.000 avvisi in tabellone = 200 schermate da 5 righe', 200, pagineBoard(1_000, 5));
 const pieno = metricaBoard({ righeCaricate: 750, totaleReale: 3412, righePerPagina: 5, pagina: 7 });
-check('150 pagine oltre il limite: «150+»', true, pieno.oltreIlLimite);
-check(
-  'etichetta di pagina con il `+`',
-  'Pagina 7 di 150+ - Aggiornamento automatico',
-  pieno.etichettaPagine,
-);
+check('scala sulle righe presenti: 750 righe = 150 schermate', 150, pieno.pagine);
+check('etichetta della schermata corrente', 'Schermata 7 di 150', pieno.etichettaPagine);
+check('nessun `+` e nessuna dicitura fissa', false, /\+|Aggiornamento/.test(pieno.etichettaPagine));
 check('totale reale in migliaia, formattato it-IT', '3.412 avvisi attivi in Italia', pieno.etichettaTotale);
-check('totale minore del caricato: nessun `+`', false, metricaBoard({ righeCaricate: 40, totaleReale: 40, righePerPagina: 5 }).oltreIlLimite);
 check(
-  'etichetta senza `+` quando il tabellone copre tutto',
-  'Pagina 1 di 8 - Aggiornamento automatico',
+  'etichetta quando il tabellone copre tutto',
+  'Schermata 1 di 8',
   metricaBoard({ righeCaricate: 40, totaleReale: 40, righePerPagina: 5 }).etichettaPagine,
 );
 /**
- * Scala REALE misurata sulla banca dati (28/09/2026): 61 avvisi attivi con
- * scadenza non passata, 17 dei quali presentabili in tabellone (gli altri sono
- * avvisi senza scuola identificabile). L'etichetta deve parlare di 4 pagine (le
- * righe che ci sono) e il `+` deve ricordare che il database ne ha altre: mai un
- * «150 pagine» che non esiste nei dati.
+ * Scala REALE misurata sulla banca dati (03/10/2026): 609 avvisi attivi in
+ * Italia, **157** dei quali presentabili in vetrina (gli altri non hanno un nome
+ * d'istituto in chiaro: direttiva §26.20). Le schermate sono quindi 32 esatte
+ * (157 ÷ 5): un «122» (609 ÷ 5) sarebbe un numero che il tabellone non mostra,
+ * e il vecchio `+` («32+») non aggiungeva informazione.
  */
-const reale = metricaBoard({ righeCaricate: 17, totaleReale: 61, righePerPagina: 5 });
-check('scala reale: 17 righe in bacheca = 4 pagine', 4, reale.pagine);
-check(
-  'etichetta sulle righe presenti, con `+` perché il DB ne ha altre',
-  'Pagina 1 di 4+ - Aggiornamento automatico',
-  reale.etichettaPagine,
-);
-check('conteggio esatto mostrato così com’è', '61 avvisi attivi in Italia', reale.etichettaTotale);
+const reale = metricaBoard({ righeCaricate: 157, totaleReale: 609, righePerPagina: 5 });
+check('scala reale: 157 righe in bacheca = 32 schermate', 32, reale.pagine);
+check('etichetta esatta sulle righe presenti', 'Schermata 1 di 32', reale.etichettaPagine);
+check('conteggio esatto mostrato così com’è', '609 avvisi attivi in Italia', reale.etichettaTotale);
 
 console.log('\n— 2. Contatore degli avvisi attivi: singolare, plurale, formattazione —');
 check('singolare', '1 avviso attivo in Italia', etichettaTotaleAvvisi(1, 1));
@@ -80,11 +73,12 @@ check('nessun «Italia» senza conteggio esatto', false, /Italia/.test(String(se
 check('nessuna etichetta vuota (−)', null, etichettaTotaleAvvisi(0, 0));
 check('righe caricate a zero → nessuna etichetta', null, etichettaTotaleAvvisi(null, 0));
 
-console.log('\n— 4. Robustezza: liste vuote, pagine non valide, pagina fuori scala —');
-check('zero righe = 1 pagina (nessuna divisione per zero)', 1, pagineBoard(0, 5));
-check('righe/pagina non valide = 1 pagina', 1, pagineBoard(750, 0));
-check('pagina fuori scala riportata a 1', 'Pagina 1 di 150 - Aggiornamento automatico', etichettaPagina(0, 150, false));
-check('pagine non valide riportate a 1', 'Pagina 3 di 1 - Aggiornamento automatico', etichettaPagina(3, 0, false));
+console.log('\n— 4. Robustezza: liste vuote, schermate non valide, schermata fuori scala —');
+check('zero righe = 1 schermata (nessuna divisione per zero)', 1, pagineBoard(0, 5));
+check('righe/pagina non valide = 1 schermata', 1, pagineBoard(750, 0));
+check('schermata fuori scala riportata a 1', 'Schermata 1 di 150', etichettaPagina(0, 150));
+check('schermata oltre il totale agganciata all’ultima', 'Schermata 32 di 32', etichettaPagina(99, 32));
+check('schermate non valide riportate a 1', 'Schermata 1 di 1', etichettaPagina(3, 0));
 
 process.exitCode = errori === 0 ? 0 : 1;
 console.log(

@@ -1,9 +1,9 @@
 /**
  * Landing — FORM di REGISTRAZIONE PARZIALE (nome, cognome, email).
  *
- * UNICO form di registrazione parziale della homepage: lo monta la sezione sotto
- * l'hero (`LandingRegistrazioneRapida`) e la chiusura commerciale dell'offerta PRO
- * (`LandingOffertaPro`). I tre campi sono input nativi OBBLIGATORI (`required`:
+ * UNICO form di registrazione parziale della homepage: lo monta la chiusura
+ * commerciale dell'offerta PRO (`LandingOffertaPro`), unica superficie del flusso.
+ * I tre campi sono input nativi OBBLIGATORI (`required`:
  * nome, cognome, email) e il submit NON apre una seconda schermata: il contenitore
  * scrive i tre dati nella BOZZA (`lib/bozzaRegistrazione.ts`) e avvia la modale di
  * configurazione del Radar, che li trova già compilati (nome, cognome ed email di

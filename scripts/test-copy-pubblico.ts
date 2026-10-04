@@ -16,16 +16,18 @@
  *      `/prezzi` (i testi vivono nel registro `src/data/editableTexts.ts`);
  *   5. pagina Prezzi: le FAQ arrivano dall’elenco condiviso (niente domande difensive) e la
  *      vetrina PureFocus ha la larghezza delle colonne dei piani;
- *   6. form rapido (condiviso tra la sezione sotto l'hero e la chiusura PRO):
+ *   6. form rapido (nella chiusura PRO, unica superficie del flusso):
  *      nome, cognome ed email finiscono nella bozza e si apre la modale di
  *      configurazione del Radar, già compilata (un solo passaggio, un solo
  *      percorso: nessun doppione di modali);
- *   7. sostegno INCLUSO di default (nessun filtro silenzioso) e nessuna identità
- *      demo di fantasia nei sorgenti.
+ *   7. sostegno INCLUSO in modo PERMANENTE (nessun filtro silenzioso, nessun
+ *      interruttore) e nessuna identità
+ *      demo di fantasia nei sorgenti; larghezza uniforme delle sezioni principali,
+ *      allineate alla bacheca centrale «Radar Live» (`max-w-7xl` + `lg:px-8`).
  *
  * Uso: npm run test:copy:pubblico (incluso in `npm test`)
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 let errori = 0;
@@ -120,21 +122,20 @@ check(
   /<div className="mx-auto max-w-5xl px-4 sm:px-6">\s*<PureFocusCard/.test(prezzi),
 );
 check(
-  'fascia PureFocus della homepage alla stessa larghezza',
+  'fascia PureFocus della homepage larga come la bacheca «Radar Live»',
   true,
-  /max-w-5xl/.test(leggi('src/components/landing/LandingPartnerPureFocus.tsx')),
+  /max-w-7xl/.test(leggi('src/components/landing/LandingPartnerPureFocus.tsx')),
 );
 check('wordmark PureFocus in sans-serif black', true, /font-black/.test(purefocus));
 
 console.log('\n— Form rapido: un solo passaggio verso la configurazione del Radar —');
 /**
- * La registrazione parziale è UN solo form condiviso (`FormRegistrazioneRapida`),
- * montato da DUE superfici: la sezione sotto l'hero e la chiusura della sezione
- * PRO. Due punti di ingresso visivi, un unico percorso di prefill: il gate
+ * La registrazione parziale ha UN solo form condiviso (`FormRegistrazioneRapida`)
+ * e UNA sola superficie: la chiusura commerciale della sezione PRO (il vecchio
+ * box sotto l'hero è stato rimosso). Un unico percorso di prefill: il gate
  * verifica il form condiviso e delega, non la copia.
  */
 const formRapido = leggi('src/components/landing/FormRegistrazioneRapida.tsx');
-const sezioneRapida = leggi('src/components/landing/LandingRegistrazioneRapida.tsx');
 const offertaPro = leggi('src/components/landing/LandingOffertaPro.tsx');
 const landingPage = leggi('src/pages/LandingPage.tsx');
 check(
@@ -158,20 +159,16 @@ check(
     !/handleRegistrazioneRapida[\s\S]{0,700}openAuthModal\('registrazione'\)/.test(landingPage),
 );
 check(
-  'sezione resa subito sotto l\'hero, per i visitatori',
+  'un solo form nel flusso: la chiusura PRO (nessun box sotto l\'hero, nessuna modale propria)',
   true,
-  /<LandingHero[\s\S]{0,700}LandingRegistrazioneRapida/.test(landingPage),
-);
-check(
-  'nessuna superficie del form rapido apre modali proprie (prefill, non doppioni)',
-  true,
-  !/openAuthModal|Modal/.test(formRapido) && !/openAuthModal|Modal/.test(sezioneRapida),
+  !/LandingRegistrazioneRapida/.test(landingPage) &&
+    offertaPro.includes('<FormRegistrazioneRapida') &&
+    !/openAuthModal|Modal/.test(formRapido),
 );
 check(
   'un solo form condiviso, attaccato alla copy PRO con la CTA esatta «ATTIVA IL TUO RADAR»',
   true,
-  sezioneRapida.includes('<FormRegistrazioneRapida') &&
-    /passerai automaticamente a un account Base[\s\S]{0,900}<FormRegistrazioneRapida[\s\S]{0,200}etichetta="ATTIVA IL TUO RADAR"/.test(offertaPro),
+  /passerai automaticamente a un account Base[\s\S]{0,900}<FormRegistrazioneRapida[\s\S]{0,200}etichetta="ATTIVA IL TUO RADAR"/.test(offertaPro),
 );
 
 console.log('\n— Homepage: etichette e sezioni allineate al prodotto —');
@@ -200,31 +197,27 @@ check(
   /justify-center/.test(strumenti) && !/lg:grid-cols-3/.test(strumenti),
 );
 
+/** Larghezza uniforme: le sezioni della homepage seguono la bacheca «Radar Live». */
+const SEZIONI_BACHECA = ['src/components/landing/LandingOffertaPro.tsx', 'src/components/landing/LandingBenefici.tsx', 'src/components/landing/LandingStrumenti.tsx', 'src/components/landing/LandingPartnerPureFocus.tsx', 'src/pages/LandingPage.tsx'];
+check('sezioni larghe come la bacheca «Radar Live» (max-w-7xl)', [], SEZIONI_BACHECA.filter((p) => !/max-w-7xl/.test(leggi(p)) || !/lg:px-8/.test(leggi(p))));
+
 console.log('\n— Sostegno incluso di default, nessuna identità demo inventata —');
 /**
- * Il sostegno non si chiede più e non si esclude di default: `sostegno: true` in
- * `defaultPreferenze` + colonna DB con default `true` (migrazione
- * `20260927120000_default_sostegno_incluso.sql`). L'uscita resta esplicita
- * (`SostegnoToggle` nelle Preferenze Radar).
+ * Il sostegno non si chiede più, non si esclude di default e NON si può più
+ * spegnere: `sostegno: true` in `defaultPreferenze` + colonna DB con default
+ * `true` (migrazione `20260927120000_default_sostegno_incluso.sql`). Nelle
+ * Preferenze Radar NON compare più alcun blocco visibile: l'inclusione è
+ * PERMANENTE e INVISIBILE nel backend (nessun interruttore, nessuna uscita,
+ * nessun `role="switch"`, nessun testo «Opportunità di sostegno» — §26.45/§26.46).
  */
 const preferenzeDefault = leggi('src/contexts/app/costanti.ts');
 const migrazioneSostegno = leggi('supabase/migrations/20260927120000_default_sostegno_incluso.sql');
-check(
-  'preferenze di default: sostegno incluso',
-  true,
-  /sostegno: true/.test(preferenzeDefault) && !/sostegno: false/.test(preferenzeDefault),
-);
-check(
-  'DB: default true e allineamento delle righe esistenti',
-  true,
-  /alter column sostegno set default true/i.test(migrazioneSostegno) &&
-    /set sostegno = true/i.test(migrazioneSostegno),
-);
-check(
-  'uscita esplicita disponibile (Preferenze Radar)',
-  true,
-  /<SostegnoToggle/.test(leggi('src/departments/radar/preferenze/PannelloClassi.tsx')),
-);
+const pannelloClassi = leggi('src/departments/radar/preferenze/PannelloClassi.tsx');
+check('preferenze di default: sostegno incluso', true, /sostegno: true/.test(preferenzeDefault) && !/sostegno: false/.test(preferenzeDefault));
+check('DB: default true e allineamento delle righe esistenti', true, /alter column sostegno set default true/i.test(migrazioneSostegno) && /set sostegno = true/i.test(migrazioneSostegno));
+check('sostegno SEMPRE incluso, non disattivabile e SENZA blocco visibile', true, !/Opportunità di sostegno/.test(pannelloClassi) && !/<SostegnoToggle/.test(pannelloClassi) && !/role="switch"/.test(pannelloClassi));
+check('il sostegno resta un\'unica regola nel motore (`avvisoDiSostegno`)', true, /avvisoDiSostegno/.test(leggi('src/lib/matchingEngine.ts')));
+check('il vecchio componente-interruttore non esiste più', false, existsSync('src/components/SostegnoToggle.tsx'));
 /** Elenco ricorsivo dei sorgenti `.ts/.tsx` di una cartella. */
 function sorgenti(cartella: string, acc: string[] = []): string[] {
   for (const voce of readdirSync(cartella)) {

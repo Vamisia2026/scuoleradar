@@ -1,14 +1,12 @@
 /**
  * Wizard Radar — PASSO 3 · colonna «Classi di concorso».
- *
  * Presentazione pura: la selezione (e la ricerca unificata) vivono nel
- * contenitore `RadarWizardModal`. Qui restano i chip delle classi scelte e
+ * contenitore RadarWizardModal. Qui restano i chip delle classi scelte e
  * l'elenco FILTRATO dalla ricerca unificata: nessun elenco statico separato,
  * nessuna seconda casella di ricerca.
- *
  * Nessuna domanda sul sostegno: nel wizard rallentava e rischiava di far
  * escludere opportunità. La preferenza resta fra le impostazioni del Radar
- * (`PreferenzeRadar` → «Classi di concorso») e il wizard non la tocca.
+ * (PreferenzeRadar → «Classi di concorso») e il wizard non la tocca.
  */
 import { AlertCircle, Check } from 'lucide-react';
 import { Pill } from '@/components/Pill';
@@ -32,10 +30,10 @@ export function SezioneClassiConcorso({
   const { classiCodici, classiFiltrate, classiWarning, maxClassiConcorso, toggleClasse } = selezione;
 
   return (
-    <div className="rounded-xl border border-primary-100 p-2.5">
-      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-bold text-primary-700">Classi di concorso</h3>
-        <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-semibold text-primary-600">
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <h4 className="text-sm font-bold text-primary-900">Classi di concorso</h4>
+        <span className="text-xs font-semibold text-primary-500">
           {classiCodici.length}/{maxClassiConcorso} selezionate
         </span>
       </div>
@@ -45,6 +43,7 @@ export function SezioneClassiConcorso({
           Piano Base: fino a 2 classi di concorso. Con PRO arrivi a 4.
         </p>
       )}
+
       {(classiWarning || classiCodici.length >= maxClassiConcorso) && (
         <p className="mb-1.5 flex items-start gap-1.5 rounded-lg border border-secondary-200 bg-secondary-50 px-2.5 py-1.5 text-[11px] text-secondary-800">
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />

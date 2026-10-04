@@ -6,6 +6,11 @@
  *  3. sezione COMPETENZE: etichetta corretta + competenze PNRR/PON suggerite
  *     (AI nella didattica, robotica educativa, digital storytelling, CLIL,
  *     creatività digitale) e NIENTE discipline curricolari generiche.
+ *  4. ciclo COMPLETO delle competenze/parole chiave: scritte su `profiles`
+ *     (`materie_id` + `materie_custom`), rilette al bootstrap e usate dalla
+ *     validazione Radar e dalla regola unica di matching. Prima erano salvate
+ *     solo in locale: nel backend il riepilogo mostrava «—» e il motore non
+ *     aveva nulla da confrontare (Radar acceso, zero opportunità).
  *
  * Uso: npm run test:radar:preferenze
  */
@@ -15,6 +20,7 @@ import {
   competenzeSuggerite,
   materie,
   materieCompetenzeExtra,
+  materieRicercabili,
 } from '../src/data/ordiniMaterie.ts';
 import { normalizzaClasse, normalizzaClassi } from '../src/lib/matchingEngine.ts';
 
@@ -125,9 +131,20 @@ check('liste competenze: storytelling presente', true, extra.includes('digital_s
 check('liste competenze: CLIL presente', true, extra.includes('clil'));
 check('liste competenze: creatività digitale presente', true, extra.includes('creativita_digitale'));
 check(
-  'lista nuove competenze usata dal MOTORE di ricerca condiviso',
+  'lista competenze del catalogo usata dal MOTORE di ricerca condiviso',
   true,
-  readFileSync('src/lib/ricercaSelezioniRadar.ts', 'utf8').includes('materieCompetenzeExtra()'),
+  readFileSync('src/lib/ricercaSelezioniRadar.ts', 'utf8').includes('materieRicercabili()') &&
+    readFileSync('src/data/ordiniMaterie.ts', 'utf8').includes('materieCompetenzeExtra()'),
+);
+// MATERIE RICERCABILI: le competenze extra PIÙ i tag PNRR/PON che sono discipline
+// curricolari («Lingua inglese», «Educazione motoria»): prima non erano cercabili.
+const ricercabili = materieRicercabili().map((m) => m.id);
+check('ricercabili: le competenze extra ci sono', true, ricercabili.includes('clil'));
+check('ricercabili: «Lingua inglese» è cercabile (tag PNRR/PON)', true, ricercabili.includes('inglese'));
+check(
+  'ricercabili: le altre discipline curricolari restano fuori',
+  [false, false],
+  [ricercabili.includes('storia'), ricercabili.includes('italiano')],
 );
 check('MATERIE_GENERICHE include le discipline curricolari', true, MATERIE_GENERICHE.has('storia') && MATERIE_GENERICHE.has('geografia'));
 
@@ -136,6 +153,8 @@ console.log('\n— Persistenza: normalizzazione in lettura e scrittura —');
 const bootstrap = readFileSync('src/contexts/app/useProfileBootstrap.ts', 'utf8');
 const anagrafica = readFileSync('src/contexts/app/useAnagraficaProfilo.ts', 'utf8');
 const preferenzeUtente = readFileSync('src/contexts/app/usePreferenzeUtente.ts', 'utf8');
+const valutaConfigurazione = readFileSync('src/departments/radar/valutaConfigurazione.ts', 'utf8');
+const matchingEngine = readFileSync('src/lib/matchingEngine.ts', 'utf8');
 check('load: classi normalizzate dal DB', true, /normalizzaClassi\(data\.classi_concorso\)/.test(bootstrap));
 check('save: classi normalizzate su DB', true, /classi_concorso: normalizzaClassi\(dati\.classiCodici\)/.test(anagrafica));
 check('setPreferenze: normalizza sempre le classi', true, /normalizzaClassi\(p\.classiCodici\)/.test(preferenzeUtente));
@@ -143,6 +162,37 @@ check(
   'UI: selezione comparata sul formato canonico',
   true,
   pannelloClassi.includes('contieneClasse(classiCodici') && wizardClassi.includes('contieneClasse(classiCodici'),
+);
+
+console.log('\n— Ciclo completo delle competenze («in cosa puoi lavorare») —');
+check(
+  'save: `materie_id` e `materie_custom` sono nel payload di `profiles`',
+  true,
+  /materie_id: dati\.materieId/.test(anagrafica) &&
+    /materie_custom: dati\.materieCustom/.test(anagrafica),
+);
+check(
+  'load: le due colonne sono nella SELECT del bootstrap',
+  true,
+  /materie_id, materie_custom/.test(bootstrap),
+);
+check(
+  'load: idratazione delle competenze (un array vuoto NON cancella la scelta locale)',
+  true,
+  /materieId:[\s\S]{0,220}prev\.materieId/.test(bootstrap) &&
+    /materieCustom:[\s\S]{0,260}prev\.materieCustom/.test(bootstrap),
+);
+check(
+  'radar: la validazione legge le competenze dal DB, non solo dalla memoria locale',
+  true,
+  /materie_id, materie_custom/.test(valutaConfigurazione) &&
+    /materieId: nonVuoto\(data\.materie_id/.test(valutaConfigurazione) &&
+    /materieCustom: nonVuoto\(data\.materie_custom/.test(valutaConfigurazione),
+);
+check(
+  'matching: le competenze entrano nella regola unica di compatibilità',
+  true,
+  /materieId:/.test(matchingEngine) && /materieCustom:/.test(matchingEngine),
 );
 
 console.log('\n— Wizard: PERSISTENZA ISTANTANEA di ogni selezione —');

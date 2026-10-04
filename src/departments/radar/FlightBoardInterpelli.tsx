@@ -105,8 +105,8 @@ export function FlightBoardInterpelli() {
         school_name: p.scuola,
         expiration_date: p.scadenza,
         // Marcatore di vetrina: il nome mostrato è un ripiego (nome grezzo del
-        // bando o «Anagrafica in aggiornamento») → la riga lo dichiara. La riga
-        // resta comunque in bacheca (direttiva 04/10/2026, §26.47).
+        // bando o «Scuola non specificata / Più plessi») → la riga lo dichiara. La
+        // riga resta comunque in bacheca (direttiva 04/10/2026).
         anagrafica_parziale: p.anagraficaParziale,
       }));
 

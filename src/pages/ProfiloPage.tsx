@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Loader2, Trash2, User } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Modal } from '@/components/Modal';
 import { Accordion } from '@/components/Accordion';
 import { DocumentiProfilo } from '@/components/profile/DocumentiProfilo';
-import { RadarStatusToggle } from '@/departments/radar';
+import { RadarStatusToggle, RiepilogoLavoro } from '@/departments/radar';
 
 export function ProfiloPage() {
   // Tendina "Sicurezza e Account" + modale di cancellazione account.
@@ -44,16 +44,38 @@ export function ProfiloPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-primary-800">Il mio profilo</h2>
+    <div className="space-y-6 pb-12">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-bold tracking-tight text-primary-900">Il mio profilo</h1>
+        <p className="text-sm text-primary-600">Gestisci i tuoi dati personali, le classi di concorso e le preferenze del Radar.</p>
+      </div>
+
+      {/* Box riepilogo "In cosa puoi lavorare" & Anagrafica */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="rounded-2xl border border-primary-200 bg-white p-6 shadow-soft">
+          <RiepilogoLavoro />
+        </div>
+
+        <div className="rounded-2xl border border-primary-200 bg-white p-6 shadow-soft">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-50 text-accent-600">
+              <User className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-primary-900">Preferenze Operative</h3>
+              <p className="text-xs text-primary-500">Radar Interpelli e notifiche</p>
+            </div>
+          </div>
+          <p className="mt-4 text-xs leading-relaxed text-primary-600">
+            Il tuo Radar analizza costantemente gli interpelli scolastici in base alle materie e alle province configurate.
+          </p>
+        </div>
       </div>
 
       {/* Stato Radar: Attivo / In Pausa (preferenze conservate quando in pausa) */}
       <RadarStatusToggle />
 
-      {/* Documenti — archivio dei Moduli scaricati + «I Miei Documenti» (storage
-          personale con disclaimer). Accessibile anche dal menu utente → Documenti. */}
+      {/* Documenti — archivio dei Moduli scaricati + «I Miei Documenti» */}
       <DocumentiProfilo />
 
       {/* Sicurezza e Account */}
@@ -69,6 +91,7 @@ export function ProfiloPage() {
           la cancellazione dell&apos;account è irreversibile e comporta la perdita di profilo,
           preferenze, moduli scaricati e accesso a PureFocus.
         </p>
+
         <div className="mt-5 border-t border-primary-100 pt-4">
           <h4 className="flex items-center gap-1.5 text-sm font-bold text-primary-800">
             <Trash2 className="h-4 w-4 text-primary-400" />
@@ -104,6 +127,7 @@ export function ProfiloPage() {
               <li>L&apos;abbonamento attivo verrà disdetto.</li>
             </ul>
           </div>
+
           <div>
             <label htmlFor="conferma-delete" className="mb-1.5 block text-sm font-medium text-primary-700">
               Digita <strong>DELETE</strong> per confermare
@@ -117,7 +141,9 @@ export function ProfiloPage() {
               className="input font-mono"
             />
           </div>
+
           {erroreElimina && <p className="text-xs text-error-600">{erroreElimina}</p>}
+
           <div className="flex flex-col gap-2 sm:flex-row-reverse">
             <button
               onClick={() => void handleEliminaAccount()}

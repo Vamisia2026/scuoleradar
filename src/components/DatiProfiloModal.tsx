@@ -1,6 +1,6 @@
 /**
  * Mini-onboarding anagrafico (guardia profilo): se l'utente autenticato ha
- * `nome` o `cognome` vuoti in `public.profiles`, gli viene chiesto di
+ * nome o cognome vuoti in public.profiles, gli viene chiesto di
  * completare i dati (Nome, Cognome, Genere, Età) prima di usare la dashboard.
  * Leggero e chiudibile: non blocca mai il sito pubblico.
  */
@@ -11,8 +11,7 @@ import { useApp } from '@/contexts/AppContext';
 import { CampoProvincia } from '@/components/auth/CampoProvincia';
 import { useToast } from './Toast';
 
-const campoInput =
-  'mt-1 w-full rounded-lg border border-primary-200 px-3 py-2 text-sm text-primary-800 focus:border-primary-400 focus:outline-none';
+const campoInput = 'mt-1 w-full rounded-lg border border-primary-200 px-3 py-2 text-sm text-primary-800 focus:border-primary-400 focus:outline-none';
 
 export function DatiProfiloModal() {
   const { mostraToast } = useToast();
@@ -77,20 +76,19 @@ export function DatiProfiloModal() {
   };
 
   if (!aperto) return null;
+
   return (
-    <div className="fixed inset-0 z-[96] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Completa il tuo profilo">
-      <div className="absolute inset-0 bg-primary-900/50 backdrop-blur-sm" />
-      <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-card animate-pop">
-        <div className="flex items-start gap-3">
-          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-600">
-            <UserRound className="h-5 w-5" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-bold text-primary-800">Completa il tuo profilo</h2>
-            <p className="mt-1 text-xs leading-relaxed text-primary-500">
-              Ci mancano un paio di dati per personalizzare Radar Scuole e le nostre email.
-              Bastano pochi secondi.
-            </p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-50 text-accent-600">
+              <UserRound className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-primary-900">Completa il tuo profilo</h3>
+              <p className="text-xs text-primary-500">Ci mancano un paio di dati per personalizzare Radar Scuole.</p>
+            </div>
           </div>
           <button
             type="button"
@@ -98,7 +96,7 @@ export function DatiProfiloModal() {
             aria-label="Chiudi (potrai completare più tardi)"
             className="rounded-full p-1.5 text-primary-400 transition hover:bg-primary-50 hover:text-primary-600"
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
@@ -179,4 +177,3 @@ export function DatiProfiloModal() {
     </div>
   );
 }
-

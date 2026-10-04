@@ -55,14 +55,24 @@ interface PureFocusCardProps {
   hasProAccess: boolean;
   /** Titolo di contesto sopra la descrizione. */
   titolo?: string;
+  /**
+   * Descrizione mostrata sotto il titolo. Il default è la presentazione condivisa
+   * del partner; la homepage la sostituisce senza toccare le altre superfici.
+   */
+  descrizione?: string;
   /** Mostra la CTA «Passa a PRO» quando il piano non è attivo. */
   mostraUpsell?: boolean;
 }
+
+/** Descrizione condivisa del partner (default della vetrina). */
+const DESCRIZIONE_PARTNER =
+  'La piattaforma che trasforma YouTube in un ambiente di studio e lavoro: elimina distrazioni, suggerimenti e contenuti irrilevanti, lasciandoti solo ciò che ti serve per ottimizzare il tuo tempo.';
 
 /** Vetrina PureFocus pulita e coordinata fra le superfici pubbliche. */
 export function PureFocusCard({
   hasProAccess,
   titolo = 'Studio e lavoro su YouTube senza distrazioni',
+  descrizione = DESCRIZIONE_PARTNER,
   mostraUpsell = true,
 }: PureFocusCardProps) {
   return (
@@ -77,11 +87,7 @@ export function PureFocusCard({
       <div className="p-5 sm:p-6">
         <PureFocusWordmark className="text-2xl sm:text-3xl" />
         <h3 className="mt-2 text-base font-bold text-primary-800">{titolo}</h3>
-        <p className="mt-1.5 leading-relaxed text-primary-600">
-          La piattaforma che trasforma YouTube in un ambiente di studio e lavoro: elimina
-          distrazioni, suggerimenti e contenuti irrilevanti, lasciandoti solo ciò che ti serve per
-          ottimizzare il tuo tempo.
-        </p>
+        <p className="mt-1.5 leading-relaxed text-primary-600">{descrizione}</p>
 
         <a
           href="https://purefocus.one"

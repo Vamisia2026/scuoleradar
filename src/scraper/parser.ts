@@ -75,6 +75,8 @@ export interface InterpelloParsato {
   materia: string | null;
   /** Email di candidatura trovata nel testo o nel link (`mailto:`), se presente. */
   contactEmail: string | null;
+  /** PEC dell'istituto dall'anagrafica nazionale, quando disponibile (colonna `interpelli.school_pec`). */
+  schoolPec?: string | null;
   /** Link candidati della voce (dettaglio + allegati) usati per l'arricchimento contatti. */
   linkCandidati?: string[];
 }

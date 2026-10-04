@@ -14,10 +14,13 @@ import { PureFocusCard } from '@/components/PureFocusCard';
 export function LandingPartnerPureFocus({ hasProAccess }: { hasProAccess: boolean }) {
   return (
     <section className="bg-primary-50 py-10" aria-label="Partner ufficiale PureFocus">
-      {/* Stessa larghezza delle colonne dei piani di prezzo: il box del partner
-          non è più una fascia stretta ma una vetrina alla pari dell'offerta. */}
-      <div className="mx-auto max-w-5xl px-4 sm:px-6">
-        <PureFocusCard hasProAccess={hasProAccess} />
+      {/* Stessa larghezza della bacheca centrale «Radar Live»: il box del partner
+          è una vetrina alla pari delle altre sezioni della homepage. */}
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <PureFocusCard
+          hasProAccess={hasProAccess}
+          descrizione="PureFocus è incluso nel piano annuale. Entrate con le stesse credenziali di Scuole Radar!"
+        />
       </div>
     </section>
   );

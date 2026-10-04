@@ -49,7 +49,7 @@ interface PuntoOfferta {
  *
  * I TESTI vivono nel registro modificabile `src/data/editableTexts.ts`
  * (`prezzi.offerta.*`) e la vetrina li rende PER CHIAVE: una sola verità,
- * modificabile al volo dall'«Editor Testi Rapido» della DEV Toolbar.
+ * modificabile al volo col VISUAL EDITOR della DEV Toolbar (in sviluppo, §26.37).
  */
 const PUNTI: readonly PuntoOfferta[] = [
   { titolo: 'prezzi.offerta.telegram.titolo', testo: 'prezzi.offerta.telegram.testo' },
@@ -66,7 +66,7 @@ export function LandingOffertaPro({
   const { testo } = useTestiEditabili();
   return (
     <section className="bg-white py-10" aria-label="Offerta PRO">
-      <div className="mx-auto max-w-5xl px-4 sm:px-6">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="overflow-hidden rounded-2xl border border-primary-100 bg-primary-50/70 shadow-card">
           <div className="border-b border-primary-100 bg-white px-6 py-6 text-center sm:px-8">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-accent-700 ring-1 ring-inset ring-accent-200">

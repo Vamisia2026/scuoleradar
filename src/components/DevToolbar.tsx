@@ -4,9 +4,7 @@ import { useApp, type RuoloSimulato } from '@/contexts/AppContext';
 import { HealthCheckModal } from '@/components/HealthCheckModal';
 import { FlagDipartimentiPanel } from '@/components/FlagDipartimentiPanel';
 import { FlagDipartimentiProva } from '@/components/FlagDipartimentiProva';
-import { EditorTestiRapido } from '@/components/EditorTestiRapido';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
-import { useScansioneTestiDom } from '@/hooks/useTestiDom';
 import { DIPARTIMENTI } from '@/config/features';
 
 const ruoli: { id: RuoloSimulato; label: string; desc: string; icon: React.ReactNode }[] = [
@@ -33,8 +31,6 @@ const ruoli: { id: RuoloSimulato; label: string; desc: string; icon: React.React
 export function DevToolbar() {
   const { user, abbonato, simulaStato, resettaTutto } = useApp();
   const flags = useFeatureFlags();
-  // Editor Testi Rapido: applica (e riapplica a ogni render) i testi scritti a mano nel DOM.
-  useScansioneTestiDom();
   const [open, setOpen] = useState(false);
   const [checkupOpen, setCheckupOpen] = useState(false);
 
@@ -199,8 +195,11 @@ export function DevToolbar() {
                   </button>
                 </div>
               </section>
-              {/* Editor Testi Rapido: i testi a schermo nella vista attiva (scansione DOM in DEV). */}
-              <EditorTestiRapido />
+              {/*
+                I testi si modificano col «Visual Editor» click-to-edit (§26.37): badge in
+                basso a sinistra, montato da `App.tsx`. Il vecchio pannello «Editor Testi
+                Rapido» è stato rimosso (§26.38): qui non c'è più alcuna casella di testo.
+              */}
               {/* Reset dati */}
               <section>
                 <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary-400">

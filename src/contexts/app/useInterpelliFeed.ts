@@ -4,7 +4,8 @@
  * Estratto da `AppContext.tsx` (FASE 3 — Matching Engine): carica gli avvisi dal
  * DB (tabella `interpelli`, fallback legacy `notices`, altrimenti feed VUOTO —
  * nessun dato dimostrativo) e applica i filtri del profilo (province, ordini,
- * classi/materie normalizzate, scuole ignorate, scadenze attive).
+ * classi/materie normalizzate, competenze e parole chiave, scuole ignorate,
+ * scadenze attive) + l'AREA SOSTEGNO sempre inclusa entro la provincia.
  *
  * `loading` resta nel provider: lo usano gli effetti di bootstrap del profilo.
  */
@@ -12,7 +13,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { classeByCodice } from '@/data/classiConcorso';
 import { interpelli, type Interpello } from '@/data/interpelli';
 import { limitaSelezione } from '@/lib/planLimits';
-import { getFeedInterpelli, normalizzaClasse } from '@/lib/matchingEngine';
+import {
+  avvisoDiSostegno,
+  competenzaCompatibileConAvviso,
+  getFeedInterpelli,
+  normalizzaClasse,
+} from '@/lib/matchingEngine';
 import { eInterpelloAttivo } from '@/lib/scadenza';
 import { supabase } from '@/lib/supabase';
 import { mapNoticiaToInterpello } from './helpers';
@@ -142,6 +148,26 @@ export function useInterpelliFeed(
       const matchMaterieDelleClassi =
         materieDelleClassi.size === 0 ||
         (classe ? classe.materie.some((m) => materieDelleClassi.has(m)) : false);
+      // COMPETENZE E PAROLE CHIAVE (testo libero): la parola scritta dall'utente
+      // («Lingua inglese», «Intelligenza artificiale») non è un id di catalogo,
+      // quindi il confronto con `classe.materie` non poteva mai combaciare e la
+      // sezione restava vuota. Il testo dell'avviso si confronta con la STESSA
+      // funzione del motore di notifica: una sola regola, nessuna copia.
+      const matchCompetenze = competenzaCompatibileConAvviso(
+        { materieId: preferenze.materieId, materieCustom: preferenze.materieCustom },
+        { materia: i.materia, titolo: i.titolo, classi: i.classiCodes },
+      );
+      // AREA SOSTEGNO: INCLUSIONE PERMANENTE (policy 04/10/2026). Gli avvisi di
+      // sostegno (ADAA/ADEE/ADMM/ADSS — o titolo/materia che lo dichiarano) sono
+      // sempre compatibili entro la provincia, esattamente come nel motore di
+      // notifica (`avvisoDiSostegno`): stessa regola, un solo punto di verità.
+      // Nessun opt-out e nessuna preferenza: la bacheca mostra le stesse
+      // opportunità che il Radar consegna.
+      const matchSostegno = avvisoDiSostegno({
+        classi: i.classiCodes,
+        titolo: i.titolo,
+        materia: i.materia,
+      });
       // Filtri Avanzati Scuole: nascondi gli avvisi delle scuole in ignoredSchools.
       // Il match considera istituto + titolo (i dati reali di notices non hanno un campo scuola).
       const scuolaTesto = `${i.istituto} ${i.titolo}`.toLowerCase();
@@ -153,7 +179,7 @@ export function useInterpelliFeed(
       return (
         matchProvincia &&
         matchOrdine &&
-        (matchClasse || matchMateria || matchMaterieDelleClassi) &&
+        (matchClasse || matchMateria || matchMaterieDelleClassi || matchCompetenze || matchSostegno) &&
         matchScuolaNonEsclusa &&
         nonScaduto
       );

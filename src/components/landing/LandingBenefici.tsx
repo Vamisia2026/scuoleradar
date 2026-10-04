@@ -10,7 +10,7 @@ import { VetrinaCard } from './LandingCards';
 export function LandingBenefici() {
   return (
       <section className="bg-primary-50 py-10">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-6 text-center">
             <h2 className="text-3xl font-bold text-primary-900">Cosa riceverai</h2>
             <p className="mt-3 text-primary-600">

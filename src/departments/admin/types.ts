@@ -24,6 +24,8 @@ export interface AdminUtente {
   province_attive?: string[] | null;
   classi_concorso?: string[] | null;
   materie_id?: string[] | null;
+  /** Parole chiave / tag personalizzati scritti dall'utente (`profiles.materie_custom`). */
+  materie_custom?: string[] | null;
   ordini_scuola?: string[] | null;
   favorite_schools?: string[] | null;
   ignored_schools?: string[] | null;

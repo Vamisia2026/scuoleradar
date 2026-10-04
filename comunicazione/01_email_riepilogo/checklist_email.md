@@ -7,8 +7,9 @@
 > `00_regole_generali/checklist_straordinaria.md`.
 >
 > **Ancoraggi nel codice**: `src/lib/resend.ts`
-> (`LOGO_URL`, `BRAND_EMAIL`, `renderDigestEmailHtml`, `renderEmailHtml`,
-> `footerEmailHtml`, `ctaNotizieHtml`, `vociAttive`, `linkOpportunita`);
+> (`URL_BRAND`, `intestazioneBrandHtml`, `footerEmailHtml`, `ctaNotizieHtml`,
+> `renderDigestEmailHtml`, `renderEmailHtml`, `fonteInEvidenza`, `vociAttive`,
+> `linkOpportunita`);
 > `src/lib/notifier.ts` (`inviaDigestGiornaliero`, chiave "una email al giorno");
 > `supabase/functions/send-notification/index.ts` (`DISCLAIMER_EMAIL`);
 > `src/lib/emailScuola.ts` (gerarchia recapiti).
@@ -18,6 +19,11 @@
 - [ ] **Esattamente una** email di riepilogo al giorno per utente: mai N email
       per N opportunità (`inviaDigestGiornaliero`, chiave idempotente
       "una email al giorno").
+- [ ] **Nessun percorso del codice** invia una email per singola opportunità:
+      anche i dispatch/backfill (`notificaInterpelliPerUtente`,
+      `notificaNuoviInterpelli`) accumulano le voci e consegnano **una sola**
+      email di riepilogo con lo stesso renderer del digest (`inviaDigestEmail`);
+      guardia statica in `npm run test:copy`.
 - [ ] L'email parte **solo se esistono opportunità attive** (`vociAttive`:
       scadenza non passata). Nessuna opportunità → **nessun invio**, nessuna
       email "di cortesia".
@@ -31,14 +37,17 @@
       e **mai due volte nello stesso giorno** (`src/lib/frequenzaNotifiche.ts`,
       `npm run test:frequenza`). Un contenuto aggiornato riparte da capo.
 
-## 2. Logo e link testuale — sempre presenti
+## 2. Intestazione testuale — nessun logo-immagine
 
-- [ ] **Logo reale** della piattaforma nell'intestazione: `src` =
-      `https://www.scuoleradar.it/logo.png`, dimensione compatta **32×32 px**
-      (mai un logo gigante che domina l'email), `alt="Scuole Radar"`.
+- [ ] L'intestazione è **SOLO TESTO**, una riga centrata ed elegante:
+      **`Scuole Radar.it`** cliccabile verso `https://www.scuoleradar.it`
+      (`URL_BRAND` / `intestazioneBrandHtml` in `resend.ts`).
+- [ ] **Nessun logo-immagine** nell'header: i client di posta rendevano il PNG
+      compresso e sgranato e dominava il messaggio. Vale per **tutte** le email
+      (alert, digest, promemoria, benvenuto/drip della Edge `send-notification`).
 - [ ] **Link testuale** al brand: `ScuoleRadar.it` / `https://www.scuoleradar.it`,
       cliccabile, ben visibile, colore leggibile.
-- [ ] Mai header solo testuale (`📡 ScuoleRadar`) al posto del logo.
+- [ ] Mai header solo testuale (`📡 ScuoleRadar`) al posto del brand ufficiale.
 - [ ] Mai testo grigio chiaro `#94a3b8` e mai blocco `P.S.`.
 
 ## 3. Saluto obbligatorio
@@ -75,10 +84,13 @@
 
 - [ ] Il **bottone/CTA primario** di ogni voce punta **direttamente**
       all'**annuncio ufficiale** (`eUrlAvvisoDiretto` / `linkOpportunita`).
-- [ ] Il link ufficiale è anche **IN EVIDENZA nella card** della voce: scatola blu
-      brand con il link in grassetto (`fonteInEvidenza` in `resend.ts`). Due anchor
-      verso lo **stesso** annuncio (evidenza + bottone), mai un secondo URL diverso.
-- [ ] Etichetta unica e standard: **`👉 Apri l'avviso ufficiale`**
+- [ ] Il link ufficiale è **UNICO e ben visibile** in ogni voce: la dicitura
+      **`Guarda la fonte ufficiale`** e l'URL compaiono **una sola volta**
+      (`fonteInEvidenza` in `resend.ts` → pulsante blu brand nel digest e nel
+      promemoria, bottone CTA primario nell'alert).
+- [ ] **Vietato il doppione**: nessun testo di fonte sopra il bottone che ripeta
+      la dicitura o l'URL dello stesso annuncio.
+- [ ] Etichetta unica e standard: **`Guarda la fonte ufficiale`**
       (`ETICHETTA_AVVISO_UFFICIALE`).
 - [ ] Il link deve essere l'URL **specifico** dell'avviso (pagina dell'ente, PDF
       o pagina tabellare/"Stampa" del singolo avviso). **Mai**: home dell'ente,
@@ -116,9 +128,9 @@ se il precedente non esiste:
 
 ## 7. Verifica prima del merge
 
-- [ ] `npm run test:email` — logo 32 px, oggetto standard, footer (link Radar in
-      piccolo), assenza di header testuale, **link ufficiale in evidenza** e
-      **nessun disclaimer giallo**.
+- [ ] `npm run test:email` — header **testuale cliccabile** (nessun logo-immagine),
+      oggetto standard, footer (link Radar in piccolo), **un solo pulsante per
+      l'annuncio** con la dicitura non duplicata e **nessun disclaimer giallo**.
 - [ ] `npm run test:digest` — una sola email, solo voci attive, ordinamento,
       **nessun box giallo e nessun bottone al Radar**.
 - [ ] `npm run test:link` — link in evidenza + CTA sullo stesso annuncio, etichette

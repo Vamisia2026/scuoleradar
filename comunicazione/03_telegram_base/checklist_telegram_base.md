@@ -64,7 +64,7 @@
 ## 4. Link, contatti e stile
 
 - [ ] Link ufficiale per voce: **solo** se diretto all'avviso
-      (`eUrlAvvisoDiretto`), etichetta `👉 Apri l'avviso ufficiale`.
+      (`eUrlAvvisoDiretto`), etichetta `Guarda la fonte ufficiale`.
 - [ ] Nessun URL ufficiale in chiaro nel testo (solo il link ipertestuale);
       anteprime dei link disattivate.
 - [ ] Recapito di candidatura come `📧 Candidature: <mailto:…>` **solo se

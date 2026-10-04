@@ -91,12 +91,17 @@
       dice **«Nessun bando attivo al momento»**.
 - [ ] **Nessun avviso genuino scartato per anagrafica** (direttiva cliente
       04/10/2026): una riga senza nome d'istituto risolvibile **resta in bacheca**,
-      con il nome grezzo pubblicato dal bando oppure con la dicitura gestita
-      **«Anagrafica in aggiornamento»**, e viene marcata per l'interfaccia
+      con il nome grezzo pubblicato dal bando oppure con il segnaposto neutro
+      **«Scuola non specificata / Più plessi»**, e viene marcata per l'interfaccia
       (`anagraficaParziale` — `src/lib/liveBoard.ts`, `src/lib/statoArricchimento.ts`).
       Restano fuori solo gli avvisi **non vivi** (scaduti o fuori dalla finestra dei
       60 giorni). La colonna «Scuola» non mostra **mai** un elenco di codici classe
       al posto del nome dell'istituto.
+- [ ] **Vetrina pubblica pulita**: la colonna «Scuola» non mostra **mai** messaggi
+      tecnici o di errore all'utente — quando l'istituto non è risolvibile in chiaro
+      compare il segnaposto neutro **«Scuola non specificata / Più plessi»**.
+      L'arricchimento anagrafico prosegue in background ma serve **solo** all'invio
+      delle notifiche puntuali (direttiva cliente 04/10/2026).
 - [ ] **Copertura nazionale della bacheca**: il tabellone legge a **pagine**
       (`.range`, mai una richiesta sola: PostgREST non consegna più di 1.000 righe —
       `radar/flightBoard/letturaBoard.ts`, §26.34) con il filtro a doppio ramo

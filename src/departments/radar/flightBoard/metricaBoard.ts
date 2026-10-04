@@ -3,11 +3,13 @@
  */
 
 /**
- * La scala del tabellone non ha tetti: le pagine si contano sulle righe DAVVERO
- * presenti in bacheca, e in bacheca ci finiscono tutti gli avvisi attivi (la
- * lettura li prende a pagine: `letturaBoard.ts`). Il `+` dell'etichetta di pagina
- * resta per il caso in cui il database cresca fra il conteggio e la lettura:
- * mai un numero che dica più di quanto sappiamo.
+ * La scala del tabellone non ha tetti: le schermate si contano sulle righe
+ * DAVVERO presenti in vetrina — elementi presenti diviso `righePerPagina`,
+ * arrotondati per eccesso — quindi il conto è ESATTO e DINAMICO, mai un numero
+ * fisso. Il `+` di maggiorazione («32+») e la dicitura fissa
+ * « - Aggiornamento automatico» sono stati rimossi il 03/10/2026 su direttiva
+ * cliente: se le righe in bacheca aumentano, l'etichetta cresce di una schermata
+ * solo quando se ne apre davvero una nuova.
  */
 
 export function formattaNumeroIt(numero: number): string {
@@ -17,8 +19,8 @@ export function formattaNumeroIt(numero: number): string {
 }
 
 export interface MetricaBoard {
+  /** Numero ESATTO di schermate: righe in vetrina / `righePerPagina`. */
   pagine: number;
-  oltreIlLimite: boolean;
   etichettaPagine: string;
   etichettaTotale: string | null;
 }
@@ -26,6 +28,23 @@ export interface MetricaBoard {
 export function pagineBoard(caricate: number, righePerPagina: number): number {
   if (righePerPagina <= 0) return 1;
   return Math.max(1, Math.ceil(Math.max(0, caricate) / righePerPagina));
+}
+
+/** Indice di schermata normalizzato: mai 0, mai `NaN`, mai decimali. */
+function indiceSchermata(valore: number): number {
+  return Number.isFinite(valore) ? Math.max(1, Math.trunc(valore)) : 1;
+}
+
+/**
+ * Etichetta delle schermate: «Schermata X di Y». `Y` è il numero esatto di
+ * schermate delle righe in vetrina (`pagineBoard`) e `X` è sempre compreso fra 1
+ * e `Y`: nessuna dicitura fissa, nessun «+», nessun valore che dica più di
+ * quanto il tabellone mostra davvero.
+ */
+export function etichettaPagina(pagina: number, pagine: number): string {
+  const totale = indiceSchermata(pagine);
+  const corrente = Math.min(indiceSchermata(pagina), totale);
+  return `Schermata ${corrente} di ${totale}`;
 }
 
 export function etichettaTotaleAvvisi(totaleReale: number | null, caricate: number): string | null {
@@ -38,10 +57,6 @@ export function etichettaTotaleAvvisi(totaleReale: number | null, caricate: numb
   return `${formattaNumeroIt(caricate)} ${caricate === 1 ? 'avviso' : 'avvisi'} in bacheca`;
 }
 
-export function etichettaPagina(pagina: number, pagine: number, oltreIlLimite: boolean): string {
-  return `Pagina ${Math.max(1, pagina)} di ${Math.max(1, pagine)}${oltreIlLimite ? '+' : ''} - Aggiornamento automatico`;
-}
-
 export function metricaBoard(dati: {
   righeCaricate: number;
   totaleReale: number | null;
@@ -50,11 +65,9 @@ export function metricaBoard(dati: {
 }): MetricaBoard {
   const { righeCaricate, totaleReale, righePerPagina } = dati;
   const pagine = pagineBoard(righeCaricate, righePerPagina);
-  const oltreIlLimite = typeof totaleReale === 'number' && totaleReale > righeCaricate;
   return {
     pagine,
-    oltreIlLimite,
-    etichettaPagine: etichettaPagina(dati.pagina ?? 1, pagine, oltreIlLimite),
+    etichettaPagine: etichettaPagina(dati.pagina ?? 1, pagine),
     etichettaTotale: etichettaTotaleAvvisi(totaleReale, righeCaricate),
   };
 }

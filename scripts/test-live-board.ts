@@ -6,8 +6,8 @@
  * (caso storico: i 10 annunci di Padova). Le righe incomplete restano in pagina —
  * niente "Scuola non indicata" e niente "Scadenza n/d" — perché il nome viene
  * risolto (campo → registro per codice → titolo) e, se resta un buco, si usa il
- * nome GREZZO pubblicato dal bando oppure la dicitura GESTITA «Anagrafica in
- * aggiornamento», marcando la riga (`anagraficaParziale`). Nella colonna «Scuola»
+ * nome GREZZO pubblicato dal bando oppure il segnaposto GESTITO «Scuola non
+ * specificata / Più plessi», marcando la riga (`anagraficaParziale`). Nella colonna «Scuola»
  * non finisce MAI un codice amministrativo («EEEE | A246», «AAAA | A246»).
  * Restano fuori solo le righe che non sono avvisi vivi: scadute, o senza data di
  * pubblicazione utile per la finestra dei 60 giorni.
@@ -19,7 +19,7 @@
  * Uso: npm run test:board
  */
 import {
-  SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO,
+  SCUOLA_NON_SPECIFICATA,
   preparaRigheBoard,
   scuolaDaTitolo,
 } from '../src/lib/liveBoard.ts';
@@ -225,7 +225,7 @@ check(
 check(
   'elenchi di codici classe («ADEE | EEEE») non sono nomi di scuola: nome gestito, riga presente',
   true,
-  pronte.some((p) => p.riga.id === 'solo-codici' && p.scuola === SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO),
+  pronte.some((p) => p.riga.id === 'solo-codici' && p.scuola === SCUOLA_NON_SPECIFICATA),
 );
 check(
   'la riga senza istituto resta marcata come anagrafica parziale',

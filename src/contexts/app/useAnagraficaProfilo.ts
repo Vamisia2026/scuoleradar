@@ -93,6 +93,14 @@ export function useAnagraficaProfilo({
         // canonico del catalogo evita che, al ricaricamento, una classe scelta
         // risulti non selezionata (casella deselezionata) o duplicata.
         classi_concorso: normalizzaClassi(dati.classiCodici),
+        // COMPETENZE E PAROLE CHIAVE («In cosa puoi lavorare, anche oltre la tua
+        // classe di concorso?»): `materie_id` = tag del catalogo (competenze
+        // PNRR/PON), `materie_custom` = parole chiave libere. Erano l'unico
+        // blocco delle preferenze MAI incluso nel payload: le colonne restavano
+        // vuote su `profiles`, così il riepilogo del backend mostrava «—» e il
+        // matching non poteva usare nulla di ciò che l'utente aveva scritto.
+        materie_id: dati.materieId,
+        materie_custom: dati.materieCustom,
         ordini_scuola: dati.ordini,
         moduli_scaricati: getModuliScaricati().map((m) => m.id),
         telegram_chat_id: dati.telegramChatId || null,

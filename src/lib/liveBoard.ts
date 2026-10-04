@@ -12,7 +12,7 @@
  *      `nomeIstituto.ts`);
  *   2. il nome GREZZO pubblicato dal bando (`nomeGrezzoDaBando`), quando è un nome
  *      leggibile e non un dump di codici;
- *   3. la dicitura GESTITA «Anagrafica in aggiornamento» (`statoArricchimento.ts`).
+ *   3. il segnaposto GESTITO «Scuola non specificata / Più plessi» (`statoArricchimento.ts`).
  * I codici amministrativi restano FUORI dalla colonna (mai uno pseudo-nome), ma la
  * riga ENTRA comunque e viene marcata (`anagraficaParziale`), così l'interfaccia
  * può dichiarare gentilmente che l'anagrafica è in via di aggiornamento.
@@ -24,13 +24,13 @@ import { nomeScuolaDaCodice } from './school-lookup';
 import { nomeIstitutoPresentabile } from './nomeIstituto';
 import { pulisciTitoloAvviso } from './alertInterpello';
 import {
-  SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO,
+  SCUOLA_NON_SPECIFICATA,
   anagraficaInAggiornamento,
 } from './statoArricchimento';
 
 // La dicitura gestita appartiene a `statoArricchimento.ts` (un solo punto di
 // verità): qui si ri-esporta perché la vetrina sia importabile da un solo modulo.
-export { SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO };
+export { SCUOLA_NON_SPECIFICATA };
 
 /**
  * Finestra (in giorni) entro cui un avviso SENZA scadenza resta in bacheca.
@@ -62,8 +62,9 @@ export interface RigaBoardCompleta<R extends RigaBoard = RigaBoard> {
   senzaScadenza: boolean;
   /**
    * True quando l'anagrafica NON è completa: il nome mostrato è di ripiego (nome
-   * grezzo del bando o dicitura gestita) oppure la riga è marcata `parziale`.
-   * L'interfaccia lo dichiara con «anagrafica in aggiornamento» — e la riga resta.
+   * grezzo del bando o segnaposto) oppure la riga è marcata `parziale`.
+   * L'interfaccia dichiara il ripiego con «Scuola non specificata / Più plessi» —
+   * e la riga resta.
    */
   anagraficaParziale: boolean;
 }
@@ -137,8 +138,8 @@ export interface NomeScuolaBoard {
 /**
  * Nome per la colonna «Scuola» della BACHECA: non restituisce MAI `null`, perché
  * un avviso genuino non si scarta per un'anagrafica incompleta (direttiva
- * 04/10/2026, §26.47). Catena: nome reale → nome grezzo del bando → dicitura
- * gestita «Anagrafica in aggiornamento»; `approssimativo` dice all'interfaccia
+ * 04/10/2026). Catena: nome reale → nome grezzo del bando → segnaposto gestito
+ * «Scuola non specificata / Più plessi»; `approssimativo` dice all'interfaccia
  * quando deve dichiararlo.
  */
 export function nomeScuolaBoard(r: RigaBoard): NomeScuolaBoard {
@@ -146,7 +147,7 @@ export function nomeScuolaBoard(r: RigaBoard): NomeScuolaBoard {
   if (reale) return { nome: reale, approssimativo: false };
   const grezzo = nomeGrezzoDaBando(r.school_name);
   if (grezzo) return { nome: grezzo, approssimativo: true };
-  return { nome: SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO, approssimativo: true };
+  return { nome: SCUOLA_NON_SPECIFICATA, approssimativo: true };
 }
 
 /**

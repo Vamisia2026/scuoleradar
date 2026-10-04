@@ -14,10 +14,11 @@ import { province } from '@/data/province';
 import { pianoLimits } from '@/lib/planLimits';
 import { normalizzaClasse, normalizzaClassi } from '@/lib/matchingEngine';
 import { promuoviProvinciaPrincipale } from '@/lib/provinceRadar';
-import { 
-  cercaSelezioniRadar, 
-  separaParoleChiave, 
-  type SuggerimentoSelezione 
+import {
+  cercaCompetenzeParole,
+  classeCorrispondeAQuery,
+  separaParoleChiave,
+  type SuggerimentoSelezione
 } from '@/lib/ricercaSelezioniRadar';
 import { PannelloCanali } from './preferenze/PannelloCanali';
 import { PannelloClassi } from './preferenze/PannelloClassi';
@@ -41,6 +42,9 @@ export function PreferenzeRadar() {
   const [materieId, setMaterieId] = useState<string[]>(preferenze.materieId);
   const [materieCustom, setMaterieCustom] = useState<string[]>(preferenze.materieCustom);
   
+  // AREA SOSTEGNO: SEMPRE inclusa — non è più una preferenza dell'utente e non
+  // esiste alcuna uscita. Il valore è costante e viene riallineato a `true` a
+  // ogni salvataggio (guarigione delle righe storiche con `sostegno = false`).
   const sostegno = true;
   const [provinceCodici, setProvinceCodici] = useState<string[]>(preferenze.provinceCodici);
   const [telegramUsername, setTelegramUsername] = useState(preferenze.telegramUsername);
@@ -95,10 +99,9 @@ export function PreferenzeRadar() {
     let list = classiConcorso;
     if (materiaFilter) list = list.filter((c) => c.materie.includes(materiaFilter));
     if (queryClasse.trim()) {
-      const q = queryClasse.toLowerCase();
-      list = list.filter(
-        (c) => c.codice.toLowerCase().includes(q) || c.denominazione.toLowerCase().includes(q),
-      );
+      // TOLLERANZA DI FORMATO: `a19` ≡ `A19` ≡ `A-19` ≡ `a-19` ≡ `  a 19  `
+      // (una sola regola, condivisa con wizard e onboarding).
+      list = list.filter((c) => classeCorrispondeAQuery(c, queryClasse));
     }
     return list;
   }, [queryClasse, materiaFilter]);
@@ -130,8 +133,12 @@ export function PreferenzeRadar() {
   const aggiungiCompetenzaSuggerita = (materiaId: string) => 
     setMaterieId((prev) => (prev.includes(materiaId) ? prev : [...prev, materiaId]));
 
+  // COLONNA DI DESTRA (competenze e parole chiave): NESSUNA classe di concorso
+  // negli esiti — le classi si scelgono nel campo dedicato a sinistra («Classi di
+  // concorso»), così i due campi restano nettamente separati e non mostrano gli
+  // stessi risultati. Stesso motore del wizard, un solo punto di verità.
   const gruppiSelezioni = useMemo(
-    () => cercaSelezioniRadar(querySelezioni, { classiCodici, materieId, materieCustom }),
+    () => cercaCompetenzeParole(querySelezioni, { classiCodici, materieId, materieCustom }),
     [querySelezioni, classiCodici, materieId, materieCustom],
   );
 
@@ -301,7 +308,6 @@ export function PreferenzeRadar() {
           toggleProvincia={toggleProvincia}
           onPromuoviPrincipale={promuoviPrincipale}
           maxProvince={maxProvince}
-          limitiPiano={limitiPiano}
         />
 
         <PannelloFiltriScuole

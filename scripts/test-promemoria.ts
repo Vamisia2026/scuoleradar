@@ -27,6 +27,7 @@ import {
   oreTrascorse,
 } from '../src/lib/promemoria.ts';
 import { chiaveDigestGiorno, dataLocaleItalia } from '../src/lib/digest.ts';
+import { RPC_MATCH_INTERPELLI } from '../src/lib/matchingEngine.ts';
 import { chiaveLedger, ledgerLocaleRegistra, ledgerLocaleSalva } from '../src/lib/ledgerLocale.ts';
 import {
   BRAND_OGGETTO,
@@ -221,12 +222,18 @@ const htmlPromemoria = renderPromemoriaEmailHtml([voceEmail], destinatario, 'htt
   giorni: 3,
 });
 check('oggetto nel titolo HTML', true, htmlPromemoria.includes('Scuole Radar — Scadenza vicina: A-022 (Torino)'));
-check('logo compatto (32 px)', true, htmlPromemoria.includes('width="32" height="32"'));
-check('brand testuale', true, htmlPromemoria.includes('Scuole Radar.it'));
+// INTESTAZIONE email: SOLO testo, cliccabile — nessun logo-immagine.
+check("nessun logo-immagine nell'header", false, /<img\b/.test(htmlPromemoria));
+check(
+  'brand testuale cliccabile verso Scuole Radar.it',
+  true,
+  htmlPromemoria.includes('href="https://www.scuoleradar.it"') &&
+    htmlPromemoria.includes('>Scuole Radar.it</a>'),
+);
 check('spiega la scadenza vicina', true, htmlPromemoria.includes('Scadenza vicina'));
 check('promessa anti-spam dichiarata', true, htmlPromemoria.includes('Un solo promemoria per avviso'));
 check('voce numerata', true, />1\.<\/span>\s*Interpello/.test(htmlPromemoria));
-check('link ufficiale standard', true, /👉 Apri l(&#39;|')avviso ufficiale/.test(htmlPromemoria));
+check('link ufficiale standard', true, /Guarda la fonte ufficiale/.test(htmlPromemoria));
 // CTA = link ufficiale della voce (in evidenza): nessun bottone gigante al Radar,
 // le preferenze restano nel footer in piccolo.
 check('nessun bottone verso il Radar', false, htmlPromemoria.includes('Apri il tuo Radar Scuole'));
@@ -342,7 +349,15 @@ function clientStub(): unknown {
   };
   return {
     from: (tabella: string) => thenable(tabella),
-    rpc: async () => ({ data: [{ consentito: true, notifiche_usate: 1 }], error: null }),
+    // RPC DISTINTE per nome: `match_interpelli` (Matching Engine nativo) serve le
+    // righe di `interpelli` del DB simulato — il filtro provincia/classe/competenze
+    // resta alla REGOLA UNICA in JS — mentre le altre RPC (contatore notifiche)
+    // rispondono col loro esito. Un esito unico per TUTTE le RPC faceva tornare al
+    // digest righe senza i campi di `interpelli`: 0 voci, tutti i profili saltati.
+    rpc: async (nome: string) =>
+      nome === RPC_MATCH_INTERPELLI
+        ? { data: INTERPELLI_STUB, error: null }
+        : { data: [{ consentito: true, notifiche_usate: 1 }], error: null },
   };
 }
 
@@ -413,7 +428,10 @@ async function scenariPromemoria(): Promise<void> {
   erroreLog = null;
 
   console.log('\n— DIGEST: una sola email al giorno per utente —');
-  INTERPELLI_STUB = [rigaInterpello('h-urgent', 'TO', fraGiorni(1)), rigaInterpello('h-nuovo', 'TO', fraGiorni(5))];
+  // Scadenze LONTANE (2099): il digest confronta con l'orologio REALE (non
+  // accetta un "adesso" iniettabile), quindi fraGiorni calcolato su ADESSO
+  // (2026-09-17) renderebbe la fixture già scaduta: zero voci, nessun invio.
+  INTERPELLI_STUB = [rigaInterpello('h-urgent', 'TO', '2099-09-30'), rigaInterpello('h-nuovo', 'TO', '2099-10-05')];
   LOG_STUB = [];
   // 1) DRY-RUN: passa e non registra nulla (nessun invio reale).
   const dry = await inviaDigestGiornaliero(client, { dryRun: true });

@@ -10,7 +10,6 @@ import type { InterpelloParsato } from '../scraper/parser.ts';
 import {
   getResendClient,
   inviaDigestEmail,
-  inviaNotificaEmail,
   inviaPromemoriaEmail,
   type DettagliNotifica,
   type DestinatarioNotifica,
@@ -677,12 +676,101 @@ async function registraNotifica(
   }
 }
 
+/* ------------------- Accumulo EMAIL: N opportunità → UNA email ------------------- */
+
+/** Voce in attesa di consegna dentro l'UNICA email di riepilogo del destinatario. */
+interface VoceEmailAccumulata {
+  /** Dettagli dell'opportunità resa nel riepilogo. */
+  dettagli: DettagliNotifica;
+  /** `hash_id` dell'interpello: serve al registro invii per voce. */
+  hashId: string;
+  /** Tipologia (serve solo ai percorsi legacy per i flag di sequenza). */
+  tipo: TipoMessaggio;
+}
+
+/** Riepilogo in costruzione per un destinatario. */
+interface AccumuloEmail {
+  destinatario: DestinatarioNotifica;
+  voci: VoceEmailAccumulata[];
+}
+
+/**
+ * ACCUMULO EMAIL — il sistema NON invia una email per singola opportunità.
+ *
+ * Le voci compatibili si raccolgono qui durante il run e vengono consegnate con
+ * UN'UNICA email di riepilogo (`inviaDigestEmail`, lo stesso renderer del digest
+ * giornaliero delle 17:00): è la regola di prodotto «esattamente una email al
+ * giorno per utente, mai N email per N opportunità» (checklist email §1).
+ *
+ * I percorsi di dispatch/backfill mantengono così la stessa cadenza della
+ * pipeline: nessun percorso del codice può produrre una email per avviso.
+ */
+function accumulaVoceEmail(
+  accumulo: Map<string, AccumuloEmail>,
+  chiave: string,
+  destinatario: DestinatarioNotifica,
+  dettagli: DettagliNotifica,
+  hashId: string,
+  tipo: TipoMessaggio,
+): void {
+  const voce: VoceEmailAccumulata = { dettagli, hashId, tipo };
+  const esistente = accumulo.get(chiave);
+  if (esistente) {
+    esistente.voci.push(voce);
+    return;
+  }
+  accumulo.set(chiave, { destinatario, voci: [voce] });
+}
+
+/**
+ * Invia UN'email di riepilogo per ogni destinatario accumulato e ritorna i
+ * gruppi effettivamente consegnati (per il registro invii e per i flag di
+ * sequenza). `voci` vuote → `inviaDigestEmail` non invia nulla.
+ * Non lancia eccezioni: ogni errore è loggato e contato nell'esito.
+ */
+async function inviaEmailAccumulate(
+  accumulo: Map<string, AccumuloEmail>,
+  resend: ReturnType<typeof getResendClient>,
+  opts: NotificheOptions,
+  esito: EsitoNotifiche,
+): Promise<Array<{ chiave: string; voci: VoceEmailAccumulata[] }>> {
+  const consegnate: Array<{ chiave: string; voci: VoceEmailAccumulata[] }> = [];
+  if (accumulo.size === 0) return consegnate;
+  // Nessun client Resend: nessun invio (stesso comportamento dei percorsi
+  // originali, che saltavano il canale email in assenza di chiave API).
+  if (!resend) return consegnate;
+
+  for (const [chiave, gruppo] of accumulo) {
+    const e = await inviaDigestEmail(
+      resend,
+      gruppo.voci.map((v) => v.dettagli),
+      gruppo.destinatario,
+      { dryRun: opts.dryRun, dashboardUrl: opts.dashboardUrl },
+    );
+    if (e.inviata) {
+      esito.inviate += 1;
+      consegnate.push({ chiave, voci: gruppo.voci });
+    } else {
+      esito.fallite += 1;
+      console.warn(
+        `  ✗ Riepilogo email a ${gruppo.destinatario.email} fallito: ${e.error ?? 'errore sconosciuto'}`,
+      );
+    }
+  }
+  return consegnate;
+}
+
 /**
  * LEGACY (non più usata dalla pipeline): notifica IMMEDIATA per singolo
  * interpello. La pipeline di ingestione non invia più N email al giorno: accumula
  * le opportunità e le consegna con UN SOLO digest alle 18:00
  * (`inviaDigestGiornaliero`). La funzione resta per test/dry-run e per i
  * backfill manuali.
+ *
+ * Emails: anche QUI non parte mai una email per opportunità. Le voci compatibili
+ * di ogni utente si accumulano e vengono consegnate con UN'UNICA email di
+ * riepilogo a fine run (`inviaEmailAccumulate`); il messaggio Telegram resta
+ * individuale e mantiene il proprio copy di tipologia.
  */
 export async function notificaNuoviInterpelli(
   client: SupabaseClient | null,
@@ -708,6 +796,9 @@ export async function notificaNuoviInterpelli(
   // memoria resta `false` anche dopo l'update su DB → loop sullo stesso record.
   const utentiBloccoGiaAvvisati = new Set<string>();
   const utentiEsauriti = new Set<string>();
+  // UNA sola email di riepilogo per utente: le voci si accumulano qui durante il
+  // run e partono TUTTE INSIEME alla fine (mai una email per opportunità).
+  const accumuloEmail = new Map<string, AccumuloEmail>();
 
   for (const interpello of nuovi) {
     const dettagli: DettagliNotifica = {
@@ -733,8 +824,8 @@ export async function notificaNuoviInterpelli(
     // nessuno — inutile calcolare gli utenti compatibili.
     if (!superaGateQualita(dettagli, 'notifica nuovi')) continue;
 
-    // Matching Engine: utenti con provincia e almeno una classe in comune
-    // (titolo + materia servono alla guardia SOSTEGNO: si veda `sostegnoAmmesso`).
+    // Matching Engine: utenti con provincia e almeno una classe in comune.
+    // Gli avvisi dell'area sostegno sono sempre consegnati (nessuna preferenza).
     const utenti = await findUtentiCompatibili(client, {
       province: interpello.province,
       classi: interpello.classCodes,
@@ -821,30 +912,25 @@ export async function notificaNuoviInterpelli(
 
         if (skip) return [];
 
-        const jobs: Array<{ tipo: 'email' | 'telegram'; promessa: Promise<EsitoJob> }> = [];
+        const jobs: Array<{ tipo: 'telegram'; promessa: Promise<EsitoJob> }> = [];
 
-        // Canale EMAIL (Resend): tentato per OGNI notifica; l'errore API esatto
-        // viene loggato integralmente.
+        // Canale EMAIL: NESSUNA email immediata. La voce entra nell'UNICO
+        // riepilogo dell'utente (una sola email, consegnata a fine run) con gli
+        // stessi requisiti di qualità e deduplica già verificati qui sopra.
         if (utente.email && resend) {
-          const destinatario: DestinatarioNotifica = {
-            email: utente.email,
-            nome: utente.nome,
-            province: utente.province,
-            classi: utente.classi,
-          };
-          jobs.push({
-            tipo: 'email',
-            promessa: inviaNotificaEmail(resend, dettagli, destinatario, {
-              dryRun,
-              dashboardUrl,
-              tipo,
-            }).then((e) => {
-              if (!e.inviata) {
-                console.warn(`  ✗ Email a ${utente.email} fallita: ${e.error ?? 'errore sconosciuto'}`);
-              }
-              return { ok: e.inviata };
-            }),
-          });
+          accumulaVoceEmail(
+            accumuloEmail,
+            utente.id,
+            {
+              email: utente.email,
+              nome: utente.nome,
+              province: utente.province,
+              classi: utente.classi,
+            },
+            dettagli,
+            interpello.hashId,
+            tipo,
+          );
         }
 
         // Canale TELEGRAM: tentato per OGNI notifica se il bot è collegato.
@@ -904,20 +990,38 @@ export async function notificaNuoviInterpelli(
 
     for (const gruppo of risultati) {
       for (const r of gruppo) {
-        if (r.valore.ok) {
-          if (r.tipo === 'email') esito.inviate += 1;
-          else esito.telegramInviate += 1;
-        } else if (r.tipo === 'email') {
-          esito.fallite += 1;
-        } else {
-          esito.telegramFallite += 1;
+        if (r.valore.ok) esito.telegramInviate += 1;
+        else esito.telegramFallite += 1;
+      }
+    }
+  }
+
+  // EMAIL — UN'UNICA email di riepilogo per utente (mai N email per opportunità):
+  // le voci accumulate nel run partono adesso, con lo stesso renderer del digest
+  // giornaliero, e ogni voce consegnata entra nel registro invii.
+  const consegnate = await inviaEmailAccumulate(accumuloEmail, resend, { dryRun, dashboardUrl }, esito);
+  for (const gruppo of consegnate) {
+    for (const voce of gruppo.voci) {
+      registraNotificaLocale(gruppo.chiave, voce.hashId);
+      await registraInvioAvviso(client, gruppo.chiave, avvisoDaDettagli(voce.dettagli), 'email');
+      // Email 5 (extra) consegnata col riepilogo: l'istante di invio e il flag
+      // una tantum vengono segnati anche su questo canale (idempotente).
+      if (client && voce.tipo === 'extra') {
+        const { error: errFlag } = await client
+          .from('profiles')
+          .update({ notifiche_blocco_inviato: true, step4_inviata_at: new Date().toISOString() })
+          .eq('id', gruppo.chiave);
+        if (errFlag) {
+          console.warn(
+            `  ⚠ flag sequenza post-prova non aggiornato per ${gruppo.chiave.slice(0, 8)}… (${errFlag.message})`,
+          );
         }
       }
     }
   }
 
   console.log(
-    `✓ Notifiche elaborate: ${esito.inviate} email inviate · ${esito.fallite} email fallite · ` +
+    `✓ Notifiche elaborate: ${esito.inviate} email di riepilogo inviate · ${esito.fallite} email fallite · ` +
       `${esito.telegramInviate} Telegram inviati · ${esito.telegramFallite} Telegram falliti.`,
   );
   return esito;
@@ -930,6 +1034,11 @@ export interface EsitoDispatchUtente extends EsitoNotifiche {
   interpelli: number;
   /** Interpelli saltati perché già notificati (ledger). */
   saltati: number;
+  /**
+   * Opportunità incluse nell'UNICA email di riepilogo consegnata (0 se il
+   * canale email non era disponibile o il riepilogo non è partito).
+   */
+  emailVoci: number;
 }
 
 /**
@@ -937,7 +1046,11 @@ export interface EsitoDispatchUtente extends EsitoNotifiche {
  * con il suo profilo (province + classi), anche se già presente in DB — colma il
  * caso in cui un'opportunità è in bacheca ma non è mai stata notificata (perché
  * l'utente non era matchato al momento dell'inserimento, o il matching era
- * disallineato). Ogni notifica include l'EMAIL DI CANDIDATURA dell'avviso.
+ * disallineato). Ogni voce include l'EMAIL DI CANDIDATURA dell'avviso.
+ *
+ * CANALI: il canale EMAIL consegna UN'UNICA email di riepilogo con TUTTE le
+ * voci compatibili (mai una email per opportunità); il canale Telegram resta
+ * invece individuale, come negli alert in tempo reale.
  *
  * Dedupe tramite `notifications_log` (best-effort se la tabella non esiste):
  * una seconda esecuzione NON rispedisce gli stessi interpelli.
@@ -955,6 +1068,7 @@ export async function notificaInterpelliPerUtente(
     telegramFallite: 0,
     interpelli: 0,
     saltati: 0,
+    emailVoci: 0,
   };
   if (!client) {
     console.warn('⚠ dispatch: client Supabase mancante.');
@@ -965,7 +1079,7 @@ export async function notificaInterpelliPerUtente(
   let q = client
     .from('profiles')
     .select(
-      'id,email,email_notifica,nome,province_interesse,province_attive,classi_concorso,telegram_chat_id,piano,is_free_forever,radar_attivo',
+      'id,email,email_notifica,nome,province_interesse,province_attive,classi_concorso,telegram_chat_id,piano,is_free_forever,radar_attivo,sostegno,materie_id,materie_custom',
     );
   q = target.userId
     ? q.eq('id', target.userId)
@@ -984,6 +1098,11 @@ export async function notificaInterpelliPerUtente(
   const chatId = prof.telegram_chat_id ? String(prof.telegram_chat_id).trim() : '';
   const province = (prof.province_interesse ?? prof.province_attive ?? []) as string[];
   const classiProfilo = (prof.classi_concorso ?? []) as string[];
+  // Competenze/parole chiave del profilo: servono alla regola unica quando il
+  // profilo non ha classi di concorso (l'alert manuale usava la stessa regola
+  // del digest, ma senza gli stessi dati in ingresso).
+  const competenzeCatalogo = (prof.materie_id ?? []) as string[];
+  const competenzeLibere = (prof.materie_custom ?? []) as string[];
   const piano = prof.is_free_forever === true ? 'free_forever' : String(prof.piano ?? 'base');
   const resend = getResendClient();
 
@@ -998,12 +1117,29 @@ export async function notificaInterpelliPerUtente(
   const righe = (await searchInterpelli(client, { province })) ?? [];
   const oggi = Date.now();
 
+  // EMAIL — NIENTE email per opportunità: le voci compatibili si accumulano qui
+  // e vengono consegnate con UN'UNICA email di riepilogo a fine run
+  // (`inviaEmailAccumulate`, stesso renderer del digest giornaliero).
+  const accumuloEmail = new Map<string, AccumuloEmail>();
+  const destinatarioEmail: DestinatarioNotifica = {
+    email,
+    nome: prof.nome ? String(prof.nome) : undefined,
+    province,
+    classi: classiProfilo,
+  };
+
   for (const r of righe) {
     if (r.expiration_date && new Date(r.expiration_date).getTime() < oggi) continue;
     const classiInterpello = (r.class_codes ?? []).filter(Boolean);
     if (
       !avvisoCompatibileConProfilo(
-        { province, classi: classiProfilo },
+        {
+          province,
+          classi: classiProfilo,
+          sostegno: prof.sostegno === true,
+          materieId: competenzeCatalogo,
+          materieCustom: competenzeLibere,
+        },
         { province: r.province, classi: classiInterpello, materia: r.materia, titolo: r.title },
       ).ok
     ) {
@@ -1046,29 +1182,15 @@ export async function notificaInterpelliPerUtente(
       continue;
     }
 
-    let okAny = false;
-    if (email && resend) {
-      const destinatario: DestinatarioNotifica = {
-        email,
-        nome: prof.nome ? String(prof.nome) : undefined,
-        province,
-        classi: classiProfilo,
-      };
-      const e = await inviaNotificaEmail(resend, dettagli, destinatario, {
-        dryRun: opts.dryRun,
-        dashboardUrl: opts.dashboardUrl,
-        tipo,
-      });
-      if (e.inviata) {
-        esito.inviate += 1;
-        okAny = true;
-        if (!opts.dryRun) await registraNotifica(client, String(prof.id), r.hash_id, 'email');
-      } else {
-        esito.fallite += 1;
-        console.warn(`  ✗ Email a ${email} fallita: ${e.error ?? 'errore sconosciuto'}`);
-      }
+    // EMAIL: la voce entra nell'UNICO riepilogo dell'utente (nessuna email
+    // immediata). La consegna — e quindi il registro invii per questa voce — è
+    // verificata a fine run dal flush.
+    const inCodaEmail = Boolean(email && resend);
+    if (inCodaEmail) {
+      accumulaVoceEmail(accumuloEmail, String(prof.id), destinatarioEmail, dettagli, r.hash_id, tipo);
     }
 
+    let okAny = false;
     if (chatId) {
       if (opts.dryRun) {
         console.log(`  ✈ [DRY-RUN] Telegram ${chatId} ← ${r.title.slice(0, 60)}`);
@@ -1091,18 +1213,37 @@ export async function notificaInterpelliPerUtente(
       }
     }
 
-    if (!okAny) console.warn(`  ⚠ Nessun canale disponibile per "${r.title.slice(0, 60)}".`);
-    else {
+    if (!okAny && !inCodaEmail) {
+      console.warn(`  ⚠ Nessun canale disponibile per "${r.title.slice(0, 60)}".`);
+    } else if (okAny) {
       // Il frequency cap conta i GIORNI per identità: nessuna chiave legacy su
       // file (sarebbe un blocco permanente e romperebbe il cap a 2 giorni).
-      await registraInvioAvviso(client, String(prof.id), avvisoDispatch, 'email');
+      // Il canale `email` viene registrato al flush, solo se il riepilogo parte.
       await registraInvioAvviso(client, String(prof.id), avvisoDispatch, 'telegram');
+    }
+  }
+
+  // UN'UNICA email di riepilogo per l'utente: tutte le voci attive compatibili
+  // raccolte nel run, con lo stesso layout del digest giornaliero.
+  const consegnate = await inviaEmailAccumulate(
+    accumuloEmail,
+    resend,
+    { dryRun: opts.dryRun, dashboardUrl: opts.dashboardUrl },
+    esito,
+  );
+  for (const gruppo of consegnate) {
+    for (const voce of gruppo.voci) {
+      esito.emailVoci += 1;
+      if (opts.dryRun) continue;
+      await registraNotifica(client, gruppo.chiave, voce.hashId, 'email');
+      await registraInvioAvviso(client, gruppo.chiave, avvisoDaDettagli(voce.dettagli), 'email');
     }
   }
 
   console.log(
     `✓ Dispatch ${prof.email}: ${esito.interpelli} interpelli compatibili · ${esito.saltati} già notificati · ` +
-      `${esito.inviate} email · ${esito.telegramInviate} Telegram.`,
+      `${esito.inviate} email di riepilogo · ${esito.emailVoci} opportunità notificate · ` +
+      `${esito.telegramInviate} Telegram.`,
   );
   return esito;
 }
@@ -1159,9 +1300,10 @@ async function utentiSingoli(
  * CANALE (ledger per canale).
  *
  * STRICT: ogni avviso passa dalla REGOLA UNICA `avvisoCompatibileConProfilo`
- * (provincia del profilo + classe/materia in comune + guardia sostegno) — così
- * nel riepilogo non entrano MAI avvisi di un'altra provincia o di classi che
- * l'utente non ha scelto. Il match classe usa la normalizzazione A-26 ≡ A-026.
+ * (provincia del profilo + classe/materia in comune; l'area SOSTEGNO è invece
+ * sempre inclusa) — così nel riepilogo non entrano MAI avvisi di un'altra
+ * provincia o di classi che l'utente non ha scelto. Il match classe usa la
+ * normalizzazione A-26 ≡ A-026.
  */
 async function raccogliVociCanale(
   client: SupabaseClient,
@@ -1183,12 +1325,22 @@ async function raccogliVociCanale(
       if (!Number.isNaN(creato) && creato > tetto) continue;
     }
     const classiInterpello = (r.class_codes ?? []).filter(Boolean);
-    // REGOLA UNICA profilo ↔ opportunità (provincia + classe, guardia sostegno):
-    // esclude gli avvisi di un'altra provincia e quelli senza classe/materia in
-    // comune. Il match usa la normalizzazione A-26 ≡ A-026.
+    // REGOLA UNICA profilo ↔ opportunità (provincia + classe + competenze;
+    // l'area sostegno è sempre inclusa): esclude gli avvisi di un'altra provincia
+    // e quelli senza classe/materia in comune. Il match usa la
+    // normalizzazione A-26 ≡ A-026.
     if (
       !avvisoCompatibileConProfilo(
-        { province: utente.province, classi: utente.classi, sostegno: utente.sostegno },
+        {
+          province: utente.province,
+          classi: utente.classi,
+          sostegno: utente.sostegno,
+          // Competenze/parole chiave: indispensabili ai profili configurati
+          // SOLO su «In cosa puoi lavorare, anche oltre la tua classe di
+          // concorso?» (per i profili con classi non cambiano la consegna).
+          materieId: utente.materieId,
+          materieCustom: utente.materieCustom,
+        },
         {
           province: r.province,
           classi: classiInterpello,
@@ -1772,11 +1924,17 @@ export async function inviaPromemoria24h(
     const voci: DettagliNotifica[] = [];
     for (const r of righe) {
       const classiInterpello = (r.class_codes ?? []).filter(Boolean);
-      // REGOLA UNICA profilo ↔ opportunità (provincia/classe/sostegno): mai un
-      // promemoria su un avviso che non riguarda l'utente.
+      // REGOLA UNICA profilo ↔ opportunità (provincia/classe/competenze/sostegno):
+      // mai un promemoria su un avviso che non riguarda l'utente.
       if (
         !avvisoCompatibileConProfilo(
-          { province: utente.province, classi: utente.classi, sostegno: utente.sostegno },
+          {
+            province: utente.province,
+            classi: utente.classi,
+            sostegno: utente.sostegno,
+            materieId: utente.materieId,
+            materieCustom: utente.materieCustom,
+          },
           {
             province: r.province,
             classi: classiInterpello,

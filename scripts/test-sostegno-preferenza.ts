@@ -1,16 +1,18 @@
 /**
- * TEST — PREFERENZA SOSTEGNO (special education) nel Radar.
+ * TEST — AREA SOSTEGNO (special education) nel Radar.
  * -----------------------------------------------------------------
- * Verifica la regola di servizio:
- *   · il SOSTEGNO è un'abilitazione SEPARATA dalle classi disciplinari;
- *   · gli avvisi di sostegno (ADAA/ADEE/ADMM/ADSS) vengono consegnati SOLO a chi
- *     ha aderito alla preferenza (esplicita) o ha una classe di sostegno tra le
- *     proprie preferenze (adesione implicita);
- *   · i falsi positivi storici (docente di tedesco A-22/A-25 che riceveva
- *     interpelli ADEE) non si ripresentano — né in tempo reale né nel digest;
+ * Verifica la regola di servizio (policy 04/10/2026):
+ *   · il SOSTEGNO è un'abilitazione SEPARATA dalle classi disciplinari, ma è
+ *     SEMPRE INCLUSA: nessuna preferenza dell'utente, nessun interruttore e
+ *     nessun opt-out (`profiles.sostegno` non è più un filtro);
+ *   · gli avvisi di sostegno (ADAA/ADEE/ADMM/ADSS — o titolo/materia che lo
+ *     dichiarano) vengono consegnati a TUTTI i profili della provincia, anche a
+ *     chi non ha una classe AD… tra le proprie preferenze;
+ *   · l'inclusione è permanente ma NON cieca: resta il vincolo di provincia e il
+ *     gate di qualità (link diretto all'avviso + recapito di candidatura);
  *   · gli avvisi DISCIPLINARI restano invariati (nessuna regressione);
  *   · con la colonna `profiles.sostegno` assente (DB non migrato) il matching
- *     continua a funzionare (degrada, non si rompe).
+ *     continua a funzionare identico (degrada, non si rompe).
  *
  * Tutto in DRY-RUN con un client Supabase STUB: nessun invio reale, nessuna rete.
  *
@@ -22,9 +24,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { codiciSostegno, eAvvisoSostegno, isCodiceSostegno } from '../src/data/classiConcorso.ts';
 import {
+  RPC_MATCH_INTERPELLI,
+  avvisoCompatibileConProfilo,
+  avvisoDiSostegno,
   findUtentiCompatibili,
-  sostegnoAmmesso,
-  utenteAderisceSostegno,
 } from '../src/lib/matchingEngine.ts';
 import { inviaAlertTelegramTempoReale, inviaDigestGiornaliero } from '../src/lib/notifier.ts';
 
@@ -35,6 +38,15 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
   const ok = JSON.stringify(atteso) === JSON.stringify(ottenuto);
   if (!ok) errori += 1;
   console.log(`${ok ? '✓' : '✗'} ${nome}: atteso=${JSON.stringify(atteso)} ottenuto=${JSON.stringify(ottenuto)}`);
+}
+
+/** Motivo di scarto della REGOLA UNICA profilo ↔ opportunità (`null` = compatibile). */
+function motivo(
+  profilo: Parameters<typeof avvisoCompatibileConProfilo>[0],
+  avviso: Parameters<typeof avvisoCompatibileConProfilo>[1],
+): string | null {
+  const esito = avvisoCompatibileConProfilo(profilo, avviso);
+  return esito.ok ? null : (esito.motivo ?? 'sconosciuto');
 }
 
 // LEDGER ISOLATO: il test non deve toccare il ledger reale del workspace.
@@ -71,49 +83,65 @@ check('avviso disciplinare A-22 tedesco', false, eAvvisoSostegno(['A-022'], 'Int
 check('avviso PNRR con "inclusione" (NON è sostegno)', false, eAvvisoSostegno([], 'Avviso PNRR inclusione e laboratori'));
 check('nessun dato', false, eAvvisoSostegno([], null, null));
 
-/* --------------------------- 2) UNITÀ: la guardia --------------------------- */
+/* ---------------- 2) UNITÀ: area sostegno SEMPRE inclusa ------------------- */
 
-console.log('\n— Adesione al sostegno —');
-check('preferenza esplicita', true, utenteAderisceSostegno({ sostegno: true, classi: ['A-22'] }));
-check('adesione implicita (classe ADEE)', true, utenteAderisceSostegno({ sostegno: false, classi: ['ADEE'] }));
-check('docente di tedesco senza preferenza', false, utenteAderisceSostegno({ sostegno: false, classi: ['A-22', 'A-25'] }));
-check('profilo legacy (nessun campo)', false, utenteAderisceSostegno({ classi: ['A-022'] }));
+console.log("\n— avvisoDiSostegno: riconoscimento dell'area —");
+check(
+  'avviso sostegno (codice ADEE + titolo)',
+  true,
+  avvisoDiSostegno({
+    classi: ['ADEE', 'A-022'],
+    titolo: 'Interpello sostegno scuola primaria — IC De Amicis',
+  }),
+);
+check(
+  'avviso sostegno dal solo titolo (nessun codice AD…)',
+  true,
+  avvisoDiSostegno({ classi: ['A-22'], titolo: 'Interpello sostegno' }),
+);
+check(
+  'avviso DISCIPLINARE di tedesco',
+  false,
+  avvisoDiSostegno({
+    classi: ['A-022'],
+    titolo: 'Interpello supplenza A-022 Tedesco — Liceo Monti',
+    materia: 'Lingue straniere',
+  }),
+);
 
-console.log('\n— sostegnoAmmesso: matrice avviso × adesione —');
-const avvisoSostegno = {
-  classi: ['ADEE', 'A-022'],
-  titolo: 'Interpello sostegno scuola primaria — IC De Amicis',
-  materia: null,
-};
-const avvisoDisciplinare = {
-  classi: ['A-022'],
-  titolo: 'Interpello supplenza A-022 Tedesco — Liceo Monti',
-  materia: 'Lingue straniere',
-};
+console.log('\n— REGOLA UNICA: sostegno sempre consegnato (nessun opt-out) —');
 check(
-  'avviso sostegno + NON aderente → escluso',
-  false,
-  sostegnoAmmesso({ sostegno: false, classi: ['A-22'] }, avvisoSostegno),
+  "profilo A-22 (tedesco) riceve l'avviso di sostegno",
+  null,
+  motivo({ province: ['AT'], classi: ['A-22'] }, { province: 'AT', classi: ['ADEE'], materia: 'Sostegno' }),
 );
 check(
-  'avviso sostegno + aderente esplicito → ammesso',
-  true,
-  sostegnoAmmesso({ sostegno: true, classi: ['A-22'] }, avvisoSostegno),
+  'preferenza storica `sostegno: false` NON esclude più nulla',
+  null,
+  motivo(
+    { province: ['AT'], classi: ['A-22'], sostegno: false },
+    { province: 'AT', classi: ['ADEE', 'A-022'], materia: 'Sostegno' },
+  ),
 );
 check(
-  'avviso sostegno + aderente implicito (ADEE) → ammesso',
-  true,
-  sostegnoAmmesso({ sostegno: false, classi: ['ADEE'] }, avvisoSostegno),
+  'avviso di sostegno senza classi in comune: comunque consegnato',
+  null,
+  motivo({ province: ['AT'], classi: ['A-26'] }, { province: 'AT', classi: [], materia: 'Sostegno' }),
 );
 check(
-  'avviso disciplinare + NON aderente → ammesso (nessuna regressione)',
-  true,
-  sostegnoAmmesso({ sostegno: false, classi: ['A-22'] }, avvisoDisciplinare),
+  "l'inclusione NON supera la PROVINCIA: avviso di un'altra provincia → scartato",
+  'provincia',
+  motivo({ province: ['TO'], classi: ['A-22'] }, { province: 'AT', classi: ['ADEE'], materia: 'Sostegno' }),
 );
 check(
-  'titolo sostegno senza codice + NON aderente → escluso',
-  false,
-  sostegnoAmmesso({ sostegno: false, classi: ['A-22'] }, { classi: ['A-22'], titolo: 'Interpello sostegno' }),
+  'avviso DISCIPLINARE: la regola di classe resta invariata',
+  'classe',
+  motivo({ province: ['AT'], classi: ['A-22'] }, { province: 'AT', classi: ['A-025'] }),
+);
+check(
+  'profilo non configurato (nessuna classe/competenza) resta fuori',
+  'profilo-senza-classi',
+  motivo({ province: ['AT'], classi: [] }, { province: 'AT', classi: ['ADEE'], materia: 'Sostegno' }),
 );
 
 
@@ -219,7 +247,15 @@ function clientStub(): unknown {
   };
   return {
     from: (tabella: string) => thenable(tabella),
-    rpc: async () => ({ data: [{ consentito: true, notifiche_usate: 1 }], error: null }),
+    // RPC DISTINTE per nome: `match_interpelli` (Matching Engine nativo) serve le
+    // righe di `interpelli` del DB simulato — il filtro provincia/classe/competenze
+    // resta alla REGOLA UNICA in JS — mentre le altre RPC (contatore notifiche)
+    // rispondono col loro esito. Un esito unico per TUTTE le RPC faceva tornare al
+    // digest righe senza i campi di `interpelli`: 0 voci, tutti i profili saltati.
+    rpc: async (nome: string) =>
+      nome === RPC_MATCH_INTERPELLI
+        ? { data: INTERPELLI, error: null }
+        : { data: [{ consentito: true, notifiche_usate: 1 }], error: null },
   };
 }
 
@@ -273,13 +309,13 @@ async function main(): Promise<void> {
     materia: 'Sostegno',
   });
   check(
-    'solo aderenti (espliciti o con classe di sostegno)',
-    [ID_BASE_ADEE, ID_PRO_TEDESCO_SOSTEGNO].sort(),
+    'TUTTI i profili della provincia (sostegno sempre incluso, anche senza AD…)',
+    [ID_BASE_ADEE, ID_PRO_TEDESCO, ID_PRO_TEDESCO_SOSTEGNO].sort(),
     utenti.map((u) => u.id).sort(),
   );
   check(
-    'docente di tedesco senza adesione ESCLUSO (falso positivo risolto)',
-    false,
+    "il docente di tedesco senza classe AD… è incluso (nessun opt-out)",
+    true,
     utenti.some((u) => u.id === ID_PRO_TEDESCO),
   );
 
@@ -301,7 +337,7 @@ async function main(): Promise<void> {
     rigaInterpello(AVVISO_SOSTEGNO.hashId, AVVISO_SOSTEGNO.title, ['ADEE', 'A-022'], 'Sostegno'),
   ];
   const sostegnoRt = await inviaAlertTelegramTempoReale(client, [AVVISO_SOSTEGNO], { dryRun: true });
-  check('avviso di sostegno → 1 solo alert (l\'aderente PRO)', 1, sostegnoRt.telegramInviate);
+  check('avviso di sostegno → 2 alert (entrambi i PRO)', 2, sostegnoRt.telegramInviate);
 
   INTERPELLI = [
     rigaInterpello(AVVISO_TEDESCO.hashId, AVVISO_TEDESCO.title, ['A-022'], 'Lingue straniere'),
@@ -315,9 +351,9 @@ async function main(): Promise<void> {
   ];
   const digestSostegno = await inviaDigestGiornaliero(client, { dryRun: true, forzato: true });
   check('utenti esaminati', 3, digestSostegno.utenti);
-  check('email inviate (aderenti: PRO + BASE ADEE)', 2, digestSostegno.inviate);
-  check('batch Telegram BASE (solo l\'aderente ADEE)', 1, digestSostegno.telegramInviate);
-  check('docente di tedesco senza adesione → nessuna voce (saltato)', 1, digestSostegno.saltati);
+  check('email inviate (tutti: sostegno sempre incluso)', 3, digestSostegno.inviate);
+  check('batch Telegram BASE (il solo profilo Base)', 1, digestSostegno.telegramInviate);
+  check('nessun profilo saltato', 0, digestSostegno.saltati);
 
   INTERPELLI = [
     rigaInterpello(AVVISO_TEDESCO.hashId, AVVISO_TEDESCO.title, ['A-022'], 'Lingue straniere'),
@@ -340,18 +376,18 @@ async function main(): Promise<void> {
     materia: 'Sostegno',
   });
   check(
-    'matching ancora funzionante (adesione IMPLICITA via classe ADEE)',
-    [ID_BASE_ADEE],
+    'matching ancora funzionante (colonna `sostegno` NON letta dalla decisione)',
+    [ID_BASE_ADEE, ID_PRO_TEDESCO, ID_PRO_TEDESCO_SOSTEGNO].sort(),
     utenti.map((u) => u.id).sort(),
   );
   const digestNonMigrato = await inviaDigestGiornaliero(client, { dryRun: true, forzato: true });
-  check('nessun crash: 1 email (solo adesione implicita)', 1, digestNonMigrato.inviate);
-  check('i due profili senza classe di sostegno restano esclusi', 2, digestNonMigrato.saltati);
+  check('nessun crash: 3 email (inclusione indipendente dal DB)', 3, digestNonMigrato.inviate);
+  check('nessun profilo saltato', 0, digestNonMigrato.saltati);
 
   console.log(
     errori === 0
-      ? '\n✅ PREFERENZA SOSTEGNO: nessun problema'
-      : `\n❌ PREFERENZA SOSTEGNO: ${errori} errore/i`,
+      ? '\n✅ AREA SOSTEGNO: nessun problema'
+      : `\n❌ AREA SOSTEGNO: ${errori} errore/i`,
   );
   process.exitCode = errori === 0 ? 0 : 1;
 }

@@ -1,24 +1,22 @@
 /**
- * Test — «EDITOR TESTI RAPIDO» (DEV Toolbar) e REGISTRO dei testi modificabili.
+ * Test — TESTI PER CHIAVE: registro, copy, store DEV e pagine che li rendono.
  *
- * Verifica:
+ * È la guardia del livello «con chiave» (§26.27–§26.31) che RESTA dopo la rimozione del
+ * pannello «Editor Testi Rapido» (03/10/2026, §26.38): il pannello non c'è più, la copy per
+ * chiave sì (FAQ, /prezzi, vetrina PRO) e si modifica col VISUAL EDITOR (§26.37). Verifica:
+ *
  *  1. REGISTRO (`src/data/editableTexts.ts`): chiavi uniche e ben formate, valori non
  *     vuoti, 8 FAQ pubbliche (domanda + risposta) e i 3 blocchi dell'offerta PRO;
- *  2. COPY trasferita nel registro: i testi dell'offerta restano senza prezzi e senza
- *     parole di televendita (la guardia `test:copy:etico` ora li legge nel registro);
+ *  2. COPY del registro: i testi dell'offerta restano senza prezzi e senza parole di
+ *     televendita (la guardia `test:copy:etico` ora li legge nel registro);
  *  3. STORE (`src/lib/testiModificabili.ts`): scrittura/rilettura in
  *     `localStorage: sr_simple_text_overrides`, precedenza override → default, reset,
  *     notifica agli ascoltatori, tolleranza al JSON corrotto e chiavi fuori registro;
- *  4. CABLAGGIO: sezione UNIVERSALE nella DEV Toolbar (i testi che la pagina ha DAVVERO a
- *     schermo, scanditi dal DOM: `src/lib/testiDom.ts`), FAQ e vetrina PRO rese PER CHIAVE
- *     (nessuna copy duplicata nel JSX), override attivi solo in sviluppo, elenco condiviso con
- *     /prezzi (sblocco esplicito del 29/09/2026: della pagina Prezzi è cablata la sola sezione FAQ).
+ *  4. PAGINE: FAQ e vetrina PRO rese PER CHIAVE (nessuna copy duplicata nel JSX), override
+ *     attivi solo in sviluppo, elenco condiviso con /prezzi (sblocco esplicito del
+ *     29/09/2026: della pagina Prezzi è cablata la sola sezione FAQ).
  *
- * Il REGISTRO DELLE VISTE ha la sua guardia (`scripts/test-editor-testi-vista.ts`) e la
- * SCANSIONE DEL DOM pure (`scripts/test-editor-testi-dom.ts` + `…-cablaggio.ts`): qui resta la
- * struttura del registro e dello store.
- *
- * Uso: npm run test:editor-testi (entrambi gli script; inclusi in `npm test`)
+ * Uso: npm run test:testi-chiave (incluso in `npm test`)
  */
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
@@ -148,7 +146,6 @@ check('reset: copy di nuovo quella del codice', TESTI_EDITABILI['faq.piano-conve
 
 console.log('\n— 5. Cablaggio: DEV Toolbar, FAQ, vetrina PRO —');
 const devToolbar = leggi('src/components/DevToolbar.tsx');
-const pannello = leggi('src/components/EditorTestiRapido.tsx');
 const hook = leggi('src/hooks/useTestiEditabili.ts');
 const faq = leggi('src/pages/FAQPage.tsx');
 const vetrinaPro = leggi('src/components/landing/LandingOffertaPro.tsx');
@@ -160,33 +157,21 @@ const campioniOfferta = ['prezzi.offerta.telegram.titolo', 'prezzi.offerta.email
 /** La copy non deve stare nel CODICE: i commenti (che citano i testi) non contano. */
 const senzaCommenti = (s: string): string => s.replace(/\/\*[\s\S]*?\*\//g, '');
 
-check(
-  'DEV Toolbar: sezione importata e montata nel pannello',
-  true,
-  /import \{ EditorTestiRapido \} from '@\/components\/EditorTestiRapido'/.test(devToolbar) &&
-    /<EditorTestiRapido \/>/.test(devToolbar),
-);
 check('DEV Toolbar: continua a vivere solo in sviluppo', true, /if \(!import\.meta\.env\.DEV\) return null/.test(devToolbar));
-check('hook: gli override valgono SOLO in sviluppo', true, /import\.meta\.env\.DEV === true/.test(hook));
-check('sezione: nome «Editor Testi Rapido»', true, pannello.includes('Editor Testi Rapido'));
 check(
-  'sezione UNIVERSALE: una textarea per ogni testo rilevato nel DOM, nessun raggruppamento',
-  [true, false],
+  'DEV Toolbar: nessun residuo del vecchio pannello di editing testuale (§26.38)',
+  [false, false],
   [
-    pannello.includes('<textarea') &&
-      pannello.includes('testi.map') &&
-      pannello.includes('useTestiDomInPagina') &&
-      pannello.includes('imposta('),
-    /gruppiTesti|<details|\bsummary\b/.test(pannello),
+    /EditorTestiRapido/.test(devToolbar),
+    /testiDom|useScansioneTestiDom|STORAGE_KEY_TESTI_DOM/.test(devToolbar),
   ],
 );
+check('hook: gli override valgono SOLO in sviluppo', true, /import\.meta\.env\.DEV === true/.test(hook));
 check(
-  'sezione: rotta attiva e stato vuoto espliciti',
-  [true, true],
-  [/useLocation/.test(pannello) && /pathname/.test(pannello), /Nessun testo rilevato/.test(pannello)],
+  'hook: nessuna API del pannello rimosso — né registro delle viste (§26.38)',
+  [false, false],
+  [/export function useTestiInPagina/.test(hook), /from '@\/lib\/testiInPagina'/.test(hook)],
 );
-check('sezione: pulsante di reset ai default', true, pannello.includes('Reset testi') && pannello.includes('azzera'));
-check('sezione: dichiara la chiave localStorage', true, pannello.includes('STORAGE_KEY_TESTI_DOM'));
 check(
   'FAQ: resa per chiave (nessuna copy duplicata nel JSX)',
   [true, []],
@@ -238,5 +223,5 @@ check(
   ],
 );
 
-console.log(errori === 0 ? '\n✅ EDITOR TESTI: nessun problema' : `\n❌ EDITOR TESTI: ${errori} errore/i`);
+console.log(errori === 0 ? '\n✅ TESTI PER CHIAVE: nessun problema' : `\n❌ TESTI PER CHIAVE: ${errori} errore/i`);
 process.exitCode = errori === 0 ? 0 : 1;

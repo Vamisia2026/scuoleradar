@@ -2,7 +2,7 @@
  * Verifica il GATE DI QUALITÀ STRICT dell'invio e l'INTEGRITÀ delle fonti:
  *  1. BRAND in testa a ogni messaggio Telegram (riga compatta cliccabile) e
  *     anteprime/immagini SEMPRE disattivate (nessun riquadro "gigante");
- *  2. LINK DIRETTO: "👉 Apri l'avviso ufficiale" punta all'URL esatto dell'avviso,
+ *  2. LINK DIRETTO: "Guarda la fonte ufficiale" punta all'URL esatto dell'avviso,
  *     mai a una home, a una pagina di ricerca/elenco o a un archivio regionale;
  *  3. GATE: gli avvisi senza link diretto o senza recapito di candidatura vengono
  *     SCARTATI dal dispatch (nessun avviso incompleto parte);

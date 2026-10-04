@@ -16,6 +16,7 @@
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { RPC_MATCH_INTERPELLI } from '../src/lib/matchingEngine.ts';
 import { inviaAlertTelegramTempoReale, inviaDigestGiornaliero } from '../src/lib/notifier.ts';
 
 declare const process: { exitCode?: number; env: Record<string, string | undefined>; pid: number };
@@ -111,7 +112,15 @@ function clientStub(): unknown {
     // deduplica dipende SOLO dal ledger su file che il test controlla.
     from: (tabella: string) =>
       thenable(tabella === 'profiles' ? PROFILI : tabella === 'interpelli' ? [interpello()] : []),
-    rpc: async () => ({ data: [{ consentito: true, notifiche_usate: 1 }], error: null }),
+    // RPC DISTINTE per nome: `match_interpelli` (Matching Engine nativo) serve le
+    // righe di `interpelli` del DB simulato — il filtro provincia/classe/competenze
+    // resta alla REGOLA UNICA in JS — mentre le altre RPC (contatore notifiche)
+    // rispondono col loro esito. Un esito unico per TUTTE le RPC faceva tornare al
+    // digest righe senza i campi di `interpelli`: 0 voci, tutti i profili saltati.
+    rpc: async (nome: string) =>
+      nome === RPC_MATCH_INTERPELLI
+        ? { data: [interpello()], error: null }
+        : { data: [{ consentito: true, notifiche_usate: 1 }], error: null },
   };
 }
 

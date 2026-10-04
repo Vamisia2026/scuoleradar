@@ -9,7 +9,7 @@ import { LandingCta } from '@/components/landing/LandingCta';
 import { LandingHero } from '@/components/landing/LandingHero';
 import { LandingOffertaPro } from '@/components/landing/LandingOffertaPro';
 import { LandingPartnerPureFocus } from '@/components/landing/LandingPartnerPureFocus';
-import { LandingRegistrazioneRapida, type DatiRegistrazioneRapida } from '@/components/landing/LandingRegistrazioneRapida';
+import type { DatiRegistrazioneRapida } from '@/components/landing/FormRegistrazioneRapida';
 import { LandingStrumenti } from '@/components/landing/LandingStrumenti';
 import { Stat, StepCard, ValueCard } from '@/components/landing/LandingCards';
 import { useApp } from '@/contexts/AppContext';
@@ -83,8 +83,8 @@ export function LandingPage() {
   };
 
   /**
-   * Registrazione rapida (Nome, Cognome, Email): la monta la sezione sotto l'hero
-   * e, per i visitatori, la chiusura dell'offerta PRO. I dati scritti qui finiscono
+   * Registrazione rapida (Nome, Cognome, Email): la monta la chiusura, per i
+   * visitatori, dell'offerta PRO — unica superficie del flusso. I dati vanno
    * nella BOZZA (`lib/bozzaRegistrazione.ts`) e si apre la modale di
    * onboarding/configurazione del Radar, che li trova già compilati — un solo
    * passaggio, nessun doppione di modali. Fuori dai campi compilati non si
@@ -115,11 +115,6 @@ export function LandingPage() {
         radarPronto={radarPronto}
       />
 
-      {/* Form rapido — solo per i visitatori: nome, cognome ed email dei tre campi
-          vanno nella bozza e si apre la modale di onboarding/configurazione del
-          Radar, che li trova già compilati (un solo passaggio). */}
-      {!user && <LandingRegistrazioneRapida onSubmit={handleRegistrazioneRapida} />}
-
       {/* Radar Live — flight board interpelli: primo contenuto sotto l'hero e
           protagonista visivo della pagina (nel primo schermo vive il box «Prova il
           Radar»). Visibile SOLO con il dipartimento Radar attivo: mai la bacheca
@@ -132,7 +127,7 @@ export function LandingPage() {
           Sotto le tre colonne, per i visitatori senza account, la sezione chiude
           con la registrazione parziale (nome, cognome, email) che porta dritto
           alla configurazione del Radar a 4 province; chi è già dentro vede la CTA
-          del proprio Radar. Il form è lo stesso dell'hero: un solo percorso. */}
+          del proprio Radar. Il form è quello condiviso: un solo percorso. */}
       <LandingOffertaPro
         handleRadarClick={handleRadarClick}
         radarPronto={radarPronto}
@@ -144,7 +139,7 @@ export function LandingPage() {
 
       {/* Plan explanation */}
       <section className="bg-white py-8">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-6 text-center">
             <h2 className="text-3xl font-bold text-primary-900">Come funziona</h2>
             <p className="mt-3 text-primary-600">Tre passaggi, poi ci pensa il Radar a cercare per te.</p>
@@ -174,7 +169,7 @@ export function LandingPage() {
 
       {/* Values */}
       <section className="bg-primary-50 py-8">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid gap-8 md:grid-cols-3">
             <ValueCard
               icon={<BellRing className="h-6 w-6" />}
@@ -203,7 +198,7 @@ export function LandingPage() {
 
       {/* Stats / social proof */}
       <section className="bg-primary-900 py-10">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid gap-6 text-center md:grid-cols-4">
             <Stat numero="8.000+" label="Scuole e istituti monitorati ogni giorno" />
             <Stat numero="500+" label="Nuove opportunità settimanali tra Docenti e ATA" />

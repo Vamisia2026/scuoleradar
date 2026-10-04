@@ -123,7 +123,7 @@ export const AUTOMAZIONI_EMAIL: readonly AutomazioneEmail[] = [
     oggettoBloccato: true,
     oggetto: 'Nuove opportunità per te!',
     anteprima:
-      '🎯 Abbiamo trovato una nuova opportunità per te\n🏫 {{scuola}} · 📚 {{classe}} · 📍 {{provincia}}\n⏳ Scadenza: {{scadenza}}\n📧 Candidature: {{email}}\n👉 Apri l’avviso ufficiale',
+      '🎯 Abbiamo trovato una nuova opportunità per te\n🏫 {{scuola}} · 📚 {{classe}} · 📍 {{provincia}}\n⏳ Scadenza: {{scadenza}}\n📧 Candidature: {{email}}\nGuarda la fonte ufficiale',
     nota: 'Messaggio strutturato (Telegram + email): si modifica l’oggetto.',
   },
   {

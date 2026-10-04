@@ -158,3 +158,63 @@ export const competenzeSuggerite: CompetenzaSuggerita[] = [
   { nome: 'Orientamento scolastico', materiaId: 'orientamento' },
 ];
 
+/**
+ * MATERIE RICERCABILI come competenza nei campi di RICERCA UNIFICATA.
+ *
+ * Sono le competenze extra PNRR/PON PIÙ le discipline curricolari che i bandi
+ * chiedono comunque come «competenza da esperto» (`competenzeSuggerite`:
+ * «Lingua inglese», «Educazione motoria e sportiva»). Prima queste due — pur
+ * essendo chip a un click — non erano ricercabili: digitando «Inglese» non
+ * comparivano tra le competenze. Il resto delle discipline curricolari resta
+ * fuori: la cattedra si intercetta con le classi di concorso.
+ */
+export function materieRicercabili(): Materia[] {
+  const extra = materieCompetenzeExtra();
+  const presenti = new Set(extra.map((m) => m.id));
+  const aggiunte = competenzeSuggerite
+    .map((c) => c.materiaId)
+    .filter((id) => !presenti.has(id))
+    .map((id) => materie.find((m) => m.id === id))
+    .filter((m): m is Materia => Boolean(m));
+  return [...extra, ...aggiunte];
+}
+
+/**
+ * CO-OCCORRENZE CURATE per la ricerca ESTESA (`lib/ricercaSelezioniRadar.ts`).
+ *
+ * La chiave è il termine digitato NORMALIZZATO (minuscolo, senza accenti, spazi e
+ * trattini: «Educazione fisica» → `educazionefisica`); il valore sono gli id di
+ * materie di catalogo che rispondono a quel termine. Serve a far agganciare a
+ * «Inglese» anche CLIL ed educazione linguistica, a «coding» anche robotica e
+ * competenze digitali: l'utente cerca un concetto, non un id.
+ *
+ * Regola: si puntano SOLO id esistenti in `materie` (nessuna competenza
+ * inventata) e l'elenco resta volutamente corto e ispezionabile — sono
+ * co-occorrenze di dominio, non un motore semantico (`docs/RADAR_ROADMAP_V2.md` §4).
+ */
+export const CORRELAZIONI_MATERIE: Readonly<Record<string, readonly string[]>> = {
+  inglese: ['inglese', 'clil', 'educazione_linguistica', 'mediazione', 'alfabetizzazione', 'italiano_l2'],
+  lingue: ['inglese', 'clil', 'educazione_linguistica', 'mediazione'],
+  clil: ['clil', 'inglese', 'educazione_linguistica'],
+  matematica: ['matematica', 'fisica', 'stem', 'informatica'],
+  fisica: ['fisica', 'matematica', 'stem'],
+  scienze: ['scienze', 'biologia', 'chimica', 'scienze_terra', 'stem'],
+  tecnologia: ['tecnologia', 'robotica', 'coding_robotica', 'digital_skills', 'stem'],
+  informatica: ['informatica', 'coding_robotica', 'digital_skills', 'robotica', 'intelligenza_artificiale'],
+  coding: ['coding_robotica', 'robotica', 'digital_skills', 'informatica'],
+  robotica: ['robotica', 'coding_robotica'],
+  ia: ['intelligenza_artificiale', 'didattica_digitale', 'digital_skills'],
+  ai: ['intelligenza_artificiale', 'didattica_digitale', 'digital_skills'],
+  intelligenzaartificiale: ['intelligenza_artificiale', 'didattica_digitale', 'digital_skills'],
+  storytelling: ['digital_storytelling', 'stop_motion'],
+  creativita: ['creativita_digitale', 'digital_storytelling', 'stop_motion'],
+  arte: ['arte', 'creativita_digitale', 'beni_culturali', 'digital_storytelling'],
+  musica: ['musica', 'digital_storytelling', 'stop_motion'],
+  motoria: ['ed_fisica'],
+  educazionefisica: ['ed_fisica'],
+  edfisica: ['ed_fisica'],
+  stem: ['stem', 'robotica', 'coding_robotica', 'intelligenza_artificiale'],
+  bandi: ['progettazione'],
+  orientamento: ['orientamento'],
+};
+

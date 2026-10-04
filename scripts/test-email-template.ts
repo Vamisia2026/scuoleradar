@@ -1,7 +1,8 @@
 /**
  * Verifica il REDESIGN del template email/Telegram:
  *  - niente frase ridondante "Ci è sembrata interessante…";
- *  - header con il LOGO reale della piattaforma (non testo generico);
+ *  - header testuale pulito e CLICCABILE verso ScuoleRadar.it (nessun logo-immagine:
+ *    arriva compresso/sgranato nelle caselle di posta);
  *  - titolo pulito dai "dump" di codici classe ("ADEE | A042 | …");
  *  - footer CRISP: link Radar visibile, CTA Notizie a due righe esatte,
  *    avviso "non rispondere" in ULTIMA riga, nessun blocco "P.S.";
@@ -32,6 +33,10 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
   const ok = JSON.stringify(atteso) === JSON.stringify(ottenuto);
   if (!ok) errori += 1;
   console.log(`${ok ? '✓' : '✗'} ${nome}: atteso=${JSON.stringify(atteso)} ottenuto=${JSON.stringify(ottenuto)}`);
+}
+/** Conteggio delle occorrenze (non sovrapposte) di una sottostringa. */
+function occorrenze(testo: string, ago: string): number {
+  return testo.split(ago).length - 1;
 }
 
 const destinatario: DestinatarioNotifica = {
@@ -148,9 +153,14 @@ check('niente "valesse la pena"', false, html.includes('valesse la pena'));
 check('niente frase generica "Abbiamo trovato una nuova opportunità"', false, html.includes('Abbiamo trovato una nuova opportunità'));
 check('niente dump di codici classe', false, html.includes('ADEE | A042 | AAAA'));
 check('titolo pulito nel corpo', true, html.includes('Interpello A-041 — Torino'));
-check('logo reale (img logo.png)', true, html.includes('src="https://www.scuoleradar.it/logo.png"'));
-check('logo COMPATTO (32 px, nessun 200 px)', true, html.includes('width="32" height="32"') && !html.includes('width="200"'));
-check('brand testuale accanto al logo', true, html.includes('Scuole Radar.it'));
+// INTESTAZIONE email: SOLO testo, cliccabile — nessun logo-immagine (arrivava
+// compresso/sgranato nelle caselle di posta e dominava il messaggio).
+check("nessun logo-immagine nell'header", false, /<img\b/.test(html));
+check(
+  'brand testuale cliccabile verso Scuole Radar.it',
+  true,
+  html.includes('href="https://www.scuoleradar.it"') && html.includes('>Scuole Radar.it</a>'),
+);
 check('niente header testuale "📡 ScuoleRadar"', false, html.includes('📡 ScuoleRadar'));
 check('niente vecchio disclaimer "non desideri ricevere"', false, html.includes('Se non desideri ricevere'));
 
@@ -184,20 +194,22 @@ check('avviso "non rispondere" presente', true, html.includes(TESTO_NON_RISPOSTA
   check('avviso "non rispondere" in ULTIMA riga (nessun testo dopo)', '', dopoSenzaTag);
 }
 check(
-  "bottone di fonte standard '👉 Apri l'avviso ufficiale'",
+  "bottone di fonte standard 'Guarda la fonte ufficiale'",
   true,
-  html.includes("👉 Apri l'avviso ufficiale"),
+  html.includes('Guarda la fonte ufficiale'),
 );
-// Checklist email §4/§5: nessun box giallo, link ufficiale IN EVIDENZA nella card e
-// CTA primaria che porta allo STESSO annuncio (dato dello scraper).
+// UNICA azione per l'annuncio: la dicitura non è ripetuta (card + bottone) e
+// l'URL della fonte compare una volta sola.
+check("dicitura 'Guarda la fonte ufficiale' UNA sola volta", 1, occorrenze(html, 'Guarda la fonte ufficiale'));
+// Checklist email §4/§5: nessun box giallo, un solo bottone verso l'annuncio.
 check('nessun riquadro giallo di avviso (checklist §4)', false, html.includes('#fffbeb'));
 check(
-  'link ufficiale IN EVIDENZA nella card (scatola blu brand)',
-  true,
-  html.includes('background:#f2f9fd') && html.includes(`href="${interpello.link}"`),
+  'unico link all\'annuncio ufficiale (URL dello scraper, una sola volta)',
+  1,
+  occorrenze(html, `href="${interpello.link}"`),
 );
 check(
-  'CTA primaria = annuncio ufficiale (stesso URL del link in evidenza)',
+  'CTA primaria = annuncio ufficiale (bottone in fondo)',
   true,
   html.includes(`<a href="${interpello.link}" class="cta"`),
 );

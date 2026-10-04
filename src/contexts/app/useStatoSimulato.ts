@@ -85,9 +85,13 @@ export function useStatoSimulato({
   );
 
   const resettaTutto = useCallback(() => {
-    ['sr_user', 'sr_preferenze', 'sr_esami', 'sr_notificati', 'sr_radar_wizard_step'].forEach((k) =>
-      localStorage.removeItem(k),
-    );
+    [
+      'sr_user', 'sr_preferenze', 'sr_esami', 'sr_notificati', 'sr_radar_wizard_step',
+      // Override dei TESTI scritti in DEV: il pannello «Editor Testi Rapido» è stato rimosso
+      // (§26.38), quindi il reset ripulisce anche i testi rimasti da allora («sr_simple_» è
+      // ancora letto in sviluppo, «sr_dom_» è inerte: il suo store non esiste più).
+      'sr_simple_text_overrides', 'sr_dom_text_overrides',
+    ].forEach((k) => localStorage.removeItem(k));
     setUser(null);
     setPref(defaultPreferenze);
     setNotificheUsate(0);

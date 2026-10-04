@@ -2,9 +2,13 @@
  * TEST — DATI STATICI DI FALLBACK UI (anti-mock / anti-segnaposto)
  * ---------------------------------------------------------------
  * Garantisce che i dati statici in `src/data/` non contengano URL segnaposto o
- * di prova: ogni URL presente deve superare `eSorgenteVerificata()` (la stessa
- * regola della pipeline di ingestione). Verifica inoltre che il feed di
- * fallback degli interpelli sia VUOTO: nessun avviso dimostrativo nella UI.
+ * di prova: ogni URL presente passa il filtro anti-segnaposto e — quando è una
+ * fonte ESTERNA — deve superare `eSorgenteVerificata()` (la stessa regola della
+ * pipeline di ingestione). I link al NOSTRO dominio (`scuoleradar.it`, es. il
+ * modulo contatti citato nel copy delle FAQ) NON sono fonti e non possono essere
+ * un mock: la regola di ingestione li respinge di proposito, quindi per quelli
+ * si pretende solo il deep-link. Verifica inoltre che il feed di fallback degli
+ * interpelli sia VUOTO: nessun avviso dimostrativo nella UI.
  *
  * Esecuzione: npm run test:dati-fallback
  */
@@ -32,6 +36,32 @@ const RE_URL = /https?:\/\/[^\s"'`)\]<>]+/g;
 const RE_SEGNAPOSTO =
   /(esempio|example\.(com|org|net)|localhost|127\.0\.0\.1|0\.0\.0\.0|:5173|:3000|:8080|mockup|\bmock\b|\bsample\b|\bdummy\b|placeholder|\bfixture\b)/i;
 
+/**
+ * Host del PROPRIO sito (`scuoleradar.it` e sottodomini). Un link al nostro sito
+ * NON è una «fonte esterna»: `eSorgenteVerificata` lo respinge di proposito (una
+ * fonte di avviso non sta mai su una piattaforma nostra/proprietaria), quindi la
+ * verifica di fonte non ha senso per questi URL. Restano comunque URL VERI: sono
+ * soggetti al filtro anti-segnaposto e devono puntare a una pagina, mai alla root.
+ */
+const RE_HOST_PROPRIO = /(^|\.)scuoleradar\.it$/i;
+
+function linkProprio(url: string): boolean {
+  try {
+    return RE_HOST_PROPRIO.test(new URL(url).host);
+  } catch {
+    return false;
+  }
+}
+
+function eDeepLink(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.pathname !== '/' || Boolean(u.search);
+  } catch {
+    return false;
+  }
+}
+
 const fileDati = readdirSync(CARTELLA_DATI).filter((f) => /\.(ts|json)$/i.test(f));
 
 console.log('──────────────────────────────────────────────────────────');
@@ -50,7 +80,13 @@ for (const file of fileDati) {
 }
 for (const { file, url } of urlTrovati) {
   check(`${file}: URL senza segnaposto (${url})`, false, RE_SEGNAPOSTO.test(url));
-  check(`${file}: fonte verificata (${url})`, true, eSorgenteVerificata(url));
+  if (linkProprio(url)) {
+    // Link al NOSTRO sito (es. modulo contatti nel copy): nessuna «fonte» da
+    // verificare — mai un falso positivo — ma nemmeno la root nuda.
+    check(`${file}: link al sito proprio — deep-link (${url})`, true, eDeepLink(url));
+  } else {
+    check(`${file}: fonte verificata (${url})`, true, eSorgenteVerificata(url));
+  }
 }
 console.log(`  · ${urlTrovati.length} URL in ${fileDati.length} file di dati statici`);
 
@@ -59,6 +95,13 @@ check('"esempio-N" → rifiutato', false, eSorgenteVerificata('https://www.istru
 check('example.com → rifiutato', false, eSorgenteVerificata('https://example.com/interpello'));
 check('localhost → rifiutato', false, eSorgenteVerificata('http://localhost:5173/avviso'));
 check('deep-link ufficiale → accettato', true, eSorgenteVerificata('https://www.mim.gov.it/web/bergamo/-/interpelli-supplenza'));
+
+console.log('\n— Link al proprio sito: classificati, mai «fonti» —');
+check('scuoleradar.it/contatti → sito proprio', true, linkProprio('https://www.scuoleradar.it/contatti'));
+check('scuoleradar.it/contatti → deep-link', true, eDeepLink('https://www.scuoleradar.it/contatti'));
+check('scuoleradar.it (root) → non deep-link', false, eDeepLink('https://www.scuoleradar.it/'));
+check('dominio «simile» → non sito proprio', false, linkProprio('https://www.notscuoleradar.it/avviso'));
+check('dominio di terzi → non sito proprio', false, linkProprio('https://www.mim.gov.it/web/bergamo/-/interpelli-supplenza'));
 
 console.log('\n──────────────────────────────────────────────────────────');
 if (falliti === 0) {

@@ -156,15 +156,15 @@ check('un solo link etichettato (la fonte)', [secondaria.link], linkEtichettati(
 check('URL della fonte presente nel link', true, msg.includes(secondaria.link as string));
 // Riga canonica della superficie PERSONALE (email/alert PRO/digest): l'etichetta
 // è quella condivisa con le email, `ETICHETTA_AVVISO_UFFICIALE`
-// ("👉 Apri l'avviso ufficiale"); i post dei CANALI PUBBLICI usano invece
+// ("Guarda la fonte ufficiale"); i post dei CANALI PUBBLICI usano invece
 // `ETICHETTA_FONTE_UFFICIALE` ("🔗 Leggi la Fonte Ufficiale"). L'href punta
 // all'URL ESATTO dell'avviso e l'URL non compare MAI in chiaro nel testo.
 check(
-  "riga personale '👉 Apri l'avviso ufficiale' con href corretto",
+  "riga personale 'Guarda la fonte ufficiale' con href corretto",
   true,
   msg.includes(`<a href="${secondaria.link}"><b>${ETICHETTA_AVVISO_UFFICIALE}</b></a>`),
 );
-check('etichetta del modulo personale', "👉 Apri l'avviso ufficiale", ETICHETTA_AVVISO_UFFICIALE);
+check('etichetta del modulo personale', 'Guarda la fonte ufficiale', ETICHETTA_AVVISO_UFFICIALE);
 check('etichetta dei post dei canali pubblici', '🔗 Leggi la Fonte Ufficiale', ETICHETTA_FONTE_UFFICIALE);
 check(
   'URL della fonte MAI in chiaro (solo nell’href)',

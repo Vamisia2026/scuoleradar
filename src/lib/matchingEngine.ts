@@ -48,7 +48,7 @@ export interface InterpelloDB {
   /**
    * Stato dell'anagrafica della riga (`completo` | `parziale`): `parziale` NON è
    * un motivo di scarto — è solo l'etichetta onesta con cui l'interfaccia dichiara
-   * «anagrafica in aggiornamento» (direttiva 04/10/2026, §26.47).
+   * il ripiego «Scuola non specificata / Più plessi» (direttiva 04/10/2026).
    */
   stato_arricchimento?: string | null;
 }
@@ -111,7 +111,8 @@ export function mapInterpelloDBToInterpello(r: InterpelloDB): Interpello {
     linkFonte: r.source_url ?? '',
     contactEmail: r.contact_email ?? null,
     // Stato dell'anagrafica (`completo`/`parziale`/`null` per le righe storiche):
-    // l'app può dichiarare «anagrafica in aggiornamento» senza mai nascondere nulla.
+    // l'app dichiara il ripiego «Scuola non specificata / Più plessi» senza mai
+    // nascondere nulla.
     statoArricchimento: normalizzaStatoArricchimento(r.stato_arricchimento),
     compatibilita: 100,
   };

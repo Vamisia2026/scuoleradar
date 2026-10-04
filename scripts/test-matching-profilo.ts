@@ -9,7 +9,8 @@
  *   · profilo con classi configurate che riceveva avvisi di classi NON sue;
  *   · profilo SENZA province o SENZA classi (preferenze incomplete): nessuna
  *     notifica "a caso" — meglio nessun avviso che un avviso sbagliato;
- *   · guardia SOSTEGNO invariata (avvisi AD… solo a chi ha aderito);
+ *   · area SOSTEGNO SEMPRE inclusa (gli avvisi AD… arrivano a tutti i profili
+ *     della provincia: nessuna preferenza, nessun opt-out);
  *   · avvisi senza codice classe: ammessi SOLO se la materia è coperta dalle
  *     classi del profilo (mai a tutti).
  *
@@ -22,6 +23,7 @@ import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  RPC_MATCH_INTERPELLI,
   avvisoCompatibileConProfilo,
   contieneClasse,
   materiaCompatibileConClassi,
@@ -101,8 +103,8 @@ check(
   motivo({ province: ['AT'], classi: ['A-26'] }, { province: 'AT', classi: ['A-050', 'A-026'] }),
 );
 check(
-  "avviso che cita una classe di sostegno (ADEE) → guardia sostegno",
-  'sostegno',
+  "avviso che cita una classe di sostegno (ADEE) → SEMPRE compatibile",
+  null,
   motivo({ province: ['AT'], classi: ['A-26'] }, { province: 'AT', classi: ['ADEE', 'A-026'] }),
 );
 check(
@@ -157,39 +159,22 @@ check(
   motivo({ province: ['AT'], classi: ['A-26'] }, { province: 'AT', classi: [] }),
 );
 
-/* ============================ 4) GUARDIA SOSTEGNO ============================ */
+/* ==================== 4) AREA SOSTEGNO: SEMPRE INCLUSA ===================== */
 
-console.log('\n— Guardia SOSTEGNO: gli avvisi AD… solo a chi aderisce —');
-check(
-  'profilo disciplinare (A-22) × avviso ADEE → scartato per sostegno',
-  'sostegno',
-  motivo({ province: ['AT'], classi: ['A-22'] }, { province: 'AT', classi: ['ADEE'], materia: 'Sostegno' }),
-);
-check(
-  "l'adesione al sostegno NON inventa una classe: serve la classe AD… tra le proprie",
-  'classe',
-  motivo(
-    { province: ['AT'], classi: ['A-22'], sostegno: true },
-    { province: 'AT', classi: ['ADEE'], materia: 'Sostegno' },
-  ),
-);
-check(
-  'profilo con classe di sostegno (adesione implicita) → compatibile',
-  null,
-  motivo({ province: ['AT'], classi: ['ADEE'] }, { province: 'AT', classi: ['ADEE'], materia: 'Sostegno' }),
-);
-check(
-  'enumerazione profili notificabili (ignoraFiltri) NON salta la guardia sostegno',
-  'sostegno',
-  (() => {
-    const e = avvisoCompatibileConProfilo(
-      { province: [], classi: [], sostegno: false },
-      { province: 'AT', classi: ['ADEE'], materia: 'Sostegno' },
-      { ignoraFiltri: true },
-    );
-    return e.ok ? null : (e.motivo ?? 'sconosciuto');
-  })(),
-);
+console.log('\n— Area SOSTEGNO: nessun filtro, nessun opt-out —');
+const avvisoAd = { province: 'AT', classi: ['ADEE'], materia: 'Sostegno' };
+check('profilo disciplinare (A-22) × avviso ADEE → SEMPRE consegnato', null, motivo({ province: ['AT'], classi: ['A-22'] }, avvisoAd));
+check('preferenza storica `sostegno: false` → nessun effetto', null, motivo({ province: ['AT'], classi: ['A-22'], sostegno: false }, avvisoAd));
+check('profilo con classe di sostegno → compatibile', null, motivo({ province: ['AT'], classi: ['ADEE'] }, avvisoAd));
+check("l'inclusione resta legata alla PROVINCIA", 'provincia', motivo({ province: ['TO'], classi: ['A-22'] }, avvisoAd));
+check('enumerazione profili notificabili (ignoraFiltri) → compatibile', null, (() => {
+  const e = avvisoCompatibileConProfilo(
+    { province: [], classi: [], sostegno: false },
+    avvisoAd,
+    { ignoraFiltri: true },
+  );
+  return e.ok ? null : (e.motivo ?? 'sconosciuto');
+})());
 
 
 /* ==================== 5) DIGEST: dispatch senza avvisi a caso ==================== */
@@ -254,7 +239,15 @@ function clientStub(): unknown {
   };
   return {
     from: (tabella: string) => thenable(tabella),
-    rpc: async () => ({ data: [{ consentito: true, notifiche_usate: 1 }], error: null }),
+    // RPC DISTINTE per nome: `match_interpelli` (Matching Engine nativo) serve le
+    // righe di `interpelli` del DB simulato — il filtro provincia/classe/competenze
+    // resta alla REGOLA UNICA in JS — mentre le altre RPC (contatore notifiche)
+    // rispondono col loro esito. Un esito unico per TUTTE le RPC faceva tornare al
+    // digest righe senza i campi di `interpelli`: 0 voci, tutti i profili saltati.
+    rpc: async (nome: string) =>
+      nome === RPC_MATCH_INTERPELLI
+        ? { data: INTERPELLI, error: null }
+        : { data: [{ consentito: true, notifiche_usate: 1 }], error: null },
   };
 }
 

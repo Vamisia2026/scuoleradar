@@ -25,7 +25,7 @@ const completo = costruisciAvviso({
   provincia: 'Torino (TO)',
   classCode: 'A-41',
   materia: null,
-  scadenza: '2026-09-30',
+  scadenza: '2099-09-30',
   schoolName: 'ITIS A. Artom di Asti',
   pubblicazione: '2026-09-01',
 });
@@ -33,7 +33,7 @@ check('completo', true, completo.completo);
 check('mancanti', [], completo.mancanti);
 check('obbligatorie (etichette)', ['Provincia', 'Ordine di scuola', 'Classe / Materia', 'Scadenza'], completo.obbligatorie.map((r) => r.etichetta));
 check('ordine dedotto da A-41', 'Secondaria di II grado', completo.obbligatorie.find((r) => r.etichetta === 'Ordine di scuola')?.valore);
-check('scadenza formattata', '30 set 2026', completo.obbligatorie.find((r) => r.etichetta === 'Scadenza')?.valore);
+check('scadenza formattata', '30 set 2099', completo.obbligatorie.find((r) => r.etichetta === 'Scadenza')?.valore);
 check('opzionali', ['Scuola', 'Pubblicato'], completo.opzionali.map((r) => r.etichetta));
 
 console.log('\n— Avviso SENZA scadenza: opzionali assenti omessi —');
@@ -50,11 +50,11 @@ check('opzionali omessi', [], senzaScadenza.opzionali);
 check('notificabile', false, avvisoNotificabile({ provincia: 'Milano', classCode: 'ADEE', scadenza: null }));
 
 console.log('\n— Ordine ATA dai codici abbreviati —');
-const ata = costruisciAvviso({ provincia: 'Roma', classCode: 'AA', scadenza: '2026-09-20' });
+const ata = costruisciAvviso({ provincia: 'Roma', classCode: 'AA', scadenza: '2099-09-20' });
 check('ordine ATA', 'Personale ATA', ata.obbligatorie.find((r) => r.etichetta === 'Ordine di scuola')?.valore);
 
 console.log('\n— Classi mancanti → obbligatorio assente —');
-const senzaClasse = costruisciAvviso({ provincia: 'Napoli', classCode: '', materia: null, scadenza: '2026-09-20' });
+const senzaClasse = costruisciAvviso({ provincia: 'Napoli', classCode: '', materia: null, scadenza: '2099-09-20' });
 check('mancanti', ['Ordine di scuola', 'Classe / Materia'], senzaClasse.mancanti);
 
 console.log('\n— Righe di testo (gerarchia + omissione scadenza) —');

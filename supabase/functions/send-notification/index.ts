@@ -66,17 +66,20 @@ const BRAND_TELEGRAM = '📡 <a href="https://www.scuoleradar.it">Scuole Radar.i
 /** Testo della testata di opportunità (copy di brand completo). */
 const TESTO_OPPORTUNITA = '🎯 <b>Abbiamo trovato una nuova opportunità per te</b>';
 
-/** Intestazione brand COMPATTA delle email (logo 32 px + nome ufficiale). */
+/**
+ * Intestazione brand delle EMAIL: SOLO testo, cliccabile verso scuoleradar.it.
+ * Nessun `<img>`: il logo-immagine arrivava compresso/sgranato nelle caselle di
+ * posta (stessa regola dell'header di `src/lib/resend.ts`).
+ */
 const BRAND_EMAIL =
   '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 18px;">' +
-  '<tr><td style="vertical-align:middle;padding-right:8px;">' +
-  '<img src="https://www.scuoleradar.it/logo.png" alt="Scuole Radar" width="32" height="32" ' +
-  'style="display:block;width:32px;height:32px;border:0;" /></td>' +
-  '<td style="vertical-align:middle;font-size:15px;font-weight:700;color:#14354e;">Scuole Radar.it</td>' +
-  '</tr></table>';
+  '<tr><td align="center" style="font-size:18px;font-weight:800;letter-spacing:.01em;">' +
+  '<a href="https://www.scuoleradar.it" target="_blank" rel="noopener" ' +
+  'style="color:#14354e;text-decoration:none;">Scuole Radar.it</a>' +
+  '</td></tr></table>';
 
 /** Etichetta UNICA del link alla fonte ufficiale dell'avviso. */
-const ETICHETTA_AVVISO = "👉 Apri l'avviso ufficiale";
+const ETICHETTA_AVVISO = 'Guarda la fonte ufficiale';
 
 /**
  * Tipi il cui messaggio È un'opportunità: soggetti al GATE DI QUALITÀ STRICT
@@ -106,7 +109,7 @@ function emailValida(email?: string | null): boolean {
 /**
  * True se l'URL è un avviso SPECIFICO e DIRETTO: mai la home dell'ente, mai una
  * pagina di ricerca/elenco/archivio regionale (es. `/interpelli-lombardia/`,
- * `/tag/interpelli-scuola-piemonte/`). Il link "👉 Apri l'avviso ufficiale" deve
+ * `/tag/interpelli-scuola-piemonte/`). Il link "Guarda la fonte ufficiale" deve
  * portare all'URL esatto dell'avviso, non a un archivio di ricerca.
  */
 function eUrlAvvisoDiretto(link?: string | null): boolean {
@@ -246,7 +249,7 @@ function scadenzaValida(valore: string): boolean {
 
 /**
  * Blocco opportunità standard: titolo + dettagli + fonte ufficiale verificata.
- * Il link di fonte usa l'etichetta UNICA ("👉 Apri l'avviso ufficiale") e punta
+ * Il link di fonte usa l'etichetta UNICA ("Guarda la fonte ufficiale") e punta
  * SEMPRE all'URL ricevuto (nessuna pagina di ricerca di un'altra provincia).
  */
 function conOpportunita(o: Opportunita, testo: string): string {

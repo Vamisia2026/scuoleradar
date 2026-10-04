@@ -18,7 +18,7 @@
  * set») — mai una data inventata.
  */
 import { ExternalLink } from 'lucide-react';
-import { titoloLeggibile, SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO } from '@/lib/liveBoard';
+import { titoloLeggibile, SCUOLA_NON_SPECIFICATA } from '@/lib/liveBoard';
 import { ePdf, hostDi, urlValido, type InterpelloLive } from '../righeBoard';
 import { dataItBreve, inferisciTipologia, ottieniUrgenzaOAnzianita } from '../rigaBoardDati';
 
@@ -51,16 +51,17 @@ export function RigaBoard({ riga: r, indice }: RigaBoardProps) {
     : "Apri l'avviso ufficiale";
   const nomeScuola = r.school_name?.trim() || '';
   const sottotitolo = titoloLeggibile(r.title);
-  // MARCATORE DI VETRINA (direttiva 04/10/2026, §26.47): la riga ha un'anagrafica
-  // incompleta (il nome mostrato è un ripiego) ma resta VISIBILE — qui lo dichiara.
-  // Quando la colonna mostra già la dicitura gestita il marcatore è ridondante.
+  // MARCATORE DI VETRINA (direttiva 04/10/2026): la riga ha un'anagrafica
+  // incompleta (il nome mostrato è un ripiego) ma resta VISIBILE — qui lo dichiara
+  // col segnaposto neutro «Scuola non specificata / Più plessi». Quando la colonna
+  // mostra già lo stesso segnaposto il marcatore è ridondante.
   const marcatoreAnagrafica =
-    r.anagrafica_parziale && nomeScuola !== SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO ? (
+    r.anagrafica_parziale && nomeScuola !== SCUOLA_NON_SPECIFICATA ? (
       <span
         className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-700"
-        title="Anagrafica in aggiornamento: l'istituto non è ancora mappato"
+        title="Scuola non specificata / Più plessi: l'istituto non è ancora associato"
       >
-        anagrafica in aggiornamento
+        Scuola non specificata / Più plessi
       </span>
     ) : null;
   const apriFonte = (): void => {

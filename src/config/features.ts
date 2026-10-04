@@ -206,9 +206,14 @@ function avvisaAscoltatori(): void {
 let ascoltoStorageAttivo = false;
 function attivaAscoltoStorage(): void {
   if (ascoltoStorageAttivo) return;
-  if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+  // `globalThis` tipizzato invece di `window`: il file è compilato anche nel
+  // programma Node-only dello scraper (lib senza DOM), dove `window` non compila.
+  const host = globalThis as unknown as {
+    addEventListener?: (tipo: string, gestore: (evento: { key?: string | null }) => void) => void;
+  };
+  if (typeof host.addEventListener !== 'function') return;
   ascoltoStorageAttivo = true;
-  window.addEventListener('storage', (evento) => {
+  host.addEventListener('storage', (evento) => {
     // `key === null` = svuotamento completo dello storage: in entrambi i casi si
     // rilegge la chiave e si avvisano i componenti.
     if (evento.key && evento.key !== STORAGE_KEY_FLAG_DIPARTIMENTI) return;

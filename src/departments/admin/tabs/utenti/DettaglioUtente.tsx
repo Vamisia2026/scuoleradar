@@ -4,9 +4,18 @@
  * Modale in sola lettura: identità, recapiti, piano, stato Radar, preferenze e
  * date. Componente autosufficiente (riceve solo `utente` e `onChiudi`), estratto
  * da `AdminTabs.tsx` con markup invariato.
+ *
+ * I campi del Radar sono mostrati in CHIARO e allineati alla vista utente:
+ * gli ORDINI di scuola si risolvono nel nome leggibile (`ordiniScuola`), le
+ * competenze di catalogo (`materie_id`) nel nome della materia e i TAG
+ * personalizzati (`materie_custom`) restano il testo scritto dall'utente —
+ * la stessa regola del riepilogo «In cosa puoi lavorare» e del motore
+ * (`etichetteCompetenzeProfilo`).
  */
 import type { ReactNode } from 'react';
 import { ShieldCheck, X } from 'lucide-react';
+import { ordiniScuola } from '@/data/ordiniMaterie';
+import { etichetteCompetenzeProfilo } from '@/lib/matchingEngine';
 import { BadgePiano, Chips, StatoRadarBadge, nomeCognome } from '../../adminUi';
 import { dataItaliana, type AdminUtente } from '../../types';
 import { loginType, telefono } from './utentiHelpers';
@@ -19,6 +28,13 @@ export function DettaglioUtente({ utente, onChiudi }: { utente: AdminUtente; onC
     </div>
   );
   const radarAttivo = utente.radar_attivo !== undefined ? Boolean(utente.radar_attivo) : Boolean(utente.onboarded);
+  // Preferenze Radar mostrate in CHIARO (stessa risoluzione della vista utente):
+  // gli ordini nel loro nome leggibile e le competenze di catalogo nel nome della
+  // materia; i TAG personalizzati restano il testo scritto dall'utente.
+  const ordiniEtichette = (utente.ordini_scuola ?? []).map(
+    (id) => ordiniScuola.find((o) => o.id === id)?.nome ?? id,
+  );
+  const materieEtichette = etichetteCompetenzeProfilo({ materieId: utente.materie_id });
   return (
     <div className="fixed inset-0 z-[80] flex justify-end" role="dialog" aria-modal="true" aria-label="Scheda utente">
       <div className="absolute inset-0 bg-primary-900/40 backdrop-blur-sm" onClick={onChiudi} />
@@ -57,13 +73,16 @@ export function DettaglioUtente({ utente, onChiudi }: { utente: AdminUtente; onC
                 <b>Classi di concorso:</b> <Chips valori={utente.classi_concorso} />
               </p>
               <p>
-                <b>Materie:</b> <Chips valori={utente.materie_id} />
+                <b>Materie e competenze extra:</b> <Chips valori={materieEtichette} />
+              </p>
+              <p>
+                <b>Tag personalizzati:</b> <Chips valori={utente.materie_custom} />
               </p>
               <p>
                 <b>Province:</b> <Chips valori={utente.province_interesse ?? utente.province_attive} />
               </p>
               <p>
-                <b>Ordini scuola:</b> <Chips valori={utente.ordini_scuola} />
+                <b>Ordini scuola:</b> <Chips valori={ordiniEtichette} />
               </p>
               <p>
                 <b>Scuole preferite:</b> <Chips valori={utente.favorite_schools} />

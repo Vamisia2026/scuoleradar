@@ -71,7 +71,7 @@
       `href` esattamente sull'URL dell'avviso. Mai home di ente, elenchi,
       archivi, pagine di ricerca, landing regionali o URL della piattaforma.
 - [ ] Etichette di fonte (uniche, mai varianti):
-      · messaggi **personali** (email/Telegram/alert) → `👉 Apri l'avviso ufficiale`;
+      · messaggi **personali** (email/Telegram/alert) → `Guarda la fonte ufficiale`;
       · post dei **canali pubblici** → `🔗 Leggi la Fonte Ufficiale` (mai URL in chiaro).
 - [ ] La parola **"candidati"** è vietata come etichetta/CTA.
 

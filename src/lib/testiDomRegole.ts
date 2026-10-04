@@ -1,23 +1,16 @@
 /**
- * ScuoleRadar.it — «EDITOR TESTI RAPIDO» (DEV Toolbar): REGOLE e NOMI della scansione.
+ * ScuoleRadar.it — TESTI DEL DOM: REGOLE e NOMI (modulo condiviso).
  *
- * Primo pezzo della scansione universale (`src/lib/testiDomNodi.ts` legge il DOM,
- * `src/lib/testiDom.ts` tiene l'elenco dell'editor). Qui si stabilisce COSA è un testo
- * modificabile e COME si chiama/identifica, senza toccare il DOM:
+ * Era il primo pezzo della scansione dell'«Editor Testi Rapido» (rimosso il 03/10/2026,
+ * §26.38); oggi serve al VISUAL EDITOR click-to-edit (§26.37), con le stesse identità dei
+ * testi — senza toccare il DOM:
  *
  *   · `normalizzaTesto` → confronti a prova di spazi inutili;
  *   · `impronta` / `chiaveTestoDom` → identità STABILE di un'occorrenza di testo;
- *   · `TAG_IGNORATI` → contenitori tecnici (script, style, svg, codice…) fuori dall'editor;
- *   · `campoDi` / `contenitoreDi` → nomi leggibili («sezione · Paragrafo») per il pannello.
+ *   · `campoDi` / `contenitoreDi` → nomi leggibili («sezione · Paragrafo»).
  *
  * Modulo PURO e isomorfo: nessun React, nessun DOM, nessuna dipendenza.
  */
-
-/** Contenitori tecnici: dentro non c'è copy da mostrare all'editor. */
-export const TAG_IGNORATI = new Set([
-  'SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'TITLE', 'OPTION',
-  'SVG', 'CANVAS', 'IFRAME', 'CODE', 'PRE',
-]);
 
 /** Contenitori della pagina, in parole (per l'etichetta «contenitore · campo»). */
 const CONTENITORI: Record<string, string> = {
@@ -25,16 +18,6 @@ const CONTENITORI: Record<string, string> = {
   FOOTER: 'piede', ASIDE: 'pannello', FORM: 'modulo', DIALOG: 'finestra', TABLE: 'tabella',
   UL: 'elenco', OL: 'elenco', LI: 'elenco',
 };
-
-/** Mappatura estesa dei selettori e dei tag per includere card, articoli e sezioni di Chi Siamo / Notizie. */
-export const SELETTORI_TARGET = [
-  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'strong', 'em', 'b', 'small',
-  'li', 'td', 'th', 'caption', 'dd', 'dt', 'button', 'a', 'label', 'blockquote',
-  'figcaption', 'summary', 'legend', 'div',
-  // Selettori strutturali specifici per card e sezioni testuali complesse
-  'article p', 'article h2', 'article h3', 'section p', 'section h2',
-  '.notizia-card-content', '.chi-siamo-text'
-];
 
 /** Nome leggibile del campo, dedotto dal tag che contiene il testo. */
 const CAMPI: Record<string, string> = {

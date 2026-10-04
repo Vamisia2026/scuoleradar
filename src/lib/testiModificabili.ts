@@ -1,5 +1,5 @@
 /**
- * ScuoleRadar.it — STORE degli override dell'«Editor Testi Rapido» (DEV).
+ * ScuoleRadar.it — STORE degli override dei testi per chiave (DEV).
  *
  * Seconda metà del sistema: il DIZIONARIO dei testi vive in
  * `src/data/editableTexts.ts`, qui c'è la sola parte mutabile —
@@ -12,7 +12,10 @@
  *   · notifica agli ascoltatori: chi rende un testo si aggiorna nello stesso render.
  *
  * L'attivazione è responsabilità dell'hook (`src/hooks/useTestiEditabili.ts`): gli
- * override valgono SOLO in ambiente di sviluppo.
+ * override valgono SOLO in ambiente di sviluppo. Nessuno scrive più qui da quando il
+ * pannello «Editor Testi Rapido» è stato rimosso (§26.38): la lettura resta per non
+ * lasciare attivi in sviluppo i testi eventualmente salvati prima di quella rimozione,
+ * e «Reset dati / LocalStorage» della DEV Toolbar cancella la chiave.
  *
  * Modulo PURO e isomorfo: nessun import di React, nessun accesso a DOM/storage
  * al caricamento → importabile da frontend, script Node e test.

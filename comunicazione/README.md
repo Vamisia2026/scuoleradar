@@ -34,8 +34,8 @@ restrittiva**.
 
 | Area | File / costanti |
 |---|---|
-| Email (render, footer, oggetto, digest) | `src/lib/resend.ts` (`LOGO_URL`, `footerEmailHtml`, `OGGETTO_OPPORTUNITA`, `vociAttive`, `renderDigestEmailHtml`), `supabase/functions/send-notification/index.ts` (`DISCLAIMER_EMAIL`, `TESTI`) |
-| Telegram (alert, digest, canali) | `src/lib/telegram.ts` (`formattaMessaggioTelegram`, `formattaDigestTelegram`, `formattaPostCanaleTelegram`, `TESTO_OPPORTUNITA`) |
+| Email (render, footer, oggetto, digest) | `src/lib/resend.ts` (`URL_BRAND`, `intestazioneBrandHtml`, `fonteInEvidenza`, `footerEmailHtml`, `OGGETTO_OPPORTUNITA`, `vociAttive`, `renderDigestEmailHtml`), `supabase/functions/send-notification/index.ts` (`BRAND_EMAIL`, `DISCLAIMER_EMAIL`, `TESTI`) |
+| Telegram (alert, digest, canali) | `src/lib/telegram.ts` (`formattaMessaggioTelegram`, `formattaDigestTelegram`, `formattaPostCanaleTelegram`, `TESTO_OPPORTUNITA`, `rigaAvvisoUfficiale`/`rigaFonteUfficiale` via `src/lib/alertInterpello.ts` → `pulisciUrlEsterna`/`urlFonteAvviso`) |
 | Orchestrazione e dedup | `src/lib/notifier.ts` (`inviaAlertTelegramTempoReale`, `inviaDigestGiornaliero`), `src/lib/dedupAvvisi.ts` |
 | Finestra 17:00 | `src/lib/digest.ts` (`ORA_DIGEST`), `.github/workflows/digest.yml` |
 | Recapiti scuola | `src/lib/emailScuola.ts` (`risolviEmailUfficialeScuola`) |

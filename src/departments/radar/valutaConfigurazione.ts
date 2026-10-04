@@ -41,7 +41,9 @@ export async function valutaConfigurazioneRadar(
 
   const { data } = await supabase
     .from('profiles')
-    .select('ordini_scuola, province_interesse, province_attive, classi_concorso, materie_id')
+    .select(
+      'ordini_scuola, province_interesse, province_attive, classi_concorso, materie_id, materie_custom',
+    )
     .eq('id', userId)
     .maybeSingle();
   if (!data) return locale;
@@ -50,7 +52,11 @@ export async function valutaConfigurazioneRadar(
     ordini: nonVuoto(data.ordini_scuola, preferenze.ordini),
     provinceCodici: nonVuoto(data.province_interesse, nonVuoto(data.province_attive, preferenze.provinceCodici)),
     classiCodici: nonVuoto(data.classi_concorso, preferenze.classiCodici),
+    // Entrambe le colonne delle competenze concorrono alla validità: la parola
+    // chiave libera vale come «cosa cerchi» esattamente come il tag di catalogo.
+    // La lettura dal DB era parziale (`materie_custom` assente dalla select):
+    // un profilo configurato SOLO con parole chiave risultava incompleto.
     materieId: nonVuoto(data.materie_id, preferenze.materieId),
-    materieCustom: preferenze.materieCustom,
+    materieCustom: nonVuoto(data.materie_custom, preferenze.materieCustom),
   });
 }

@@ -14,7 +14,7 @@
 import { readFileSync } from 'node:fs';
 import { interpelli } from '../src/data/interpelli.ts';
 import {
-  SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO,
+  SCUOLA_NON_SPECIFICATA,
   anagraficaInAggiornamento,
   normalizzaStatoArricchimento,
   statoArricchimento,
@@ -175,12 +175,12 @@ check(
 );
 check(
   'dump di codici → dicitura gestita (mai codici in vetrina)',
-  SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO,
+  SCUOLA_NON_SPECIFICATA,
   pronte.find((p) => p.riga.id === 'padova-2')?.scuola,
 );
 check(
   'nessun nome risolvibile → dicitura gestita, riga presente',
-  SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO,
+  SCUOLA_NON_SPECIFICATA,
   pronte.find((p) => p.riga.id === 'padova-1')?.scuola,
 );
 check(

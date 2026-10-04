@@ -6,7 +6,7 @@
  * le due superfici non possono divergere. I TESTI stanno nel registro
  * `src/data/editableTexts.ts` (chiavi `faq.<slug>.domanda` / `faq.<slug>.risposta`) e la
  * pagina li rende PER CHIAVE con `useTestiEditabili()` — una sola fonte di verità, zero
- * doppioni. L'«Editor Testi Rapido» della DEV Toolbar li modifica al volo in sviluppo.
+ * doppioni. In sviluppo si modificano al volo col VISUAL EDITOR della DEV Toolbar (§26.37).
  *
  * Copy di POSIZIONAMENTO: ogni risposta è un punto di forza commerciale o una
  * istruzione operativa (inserire ScuoleRadar tra le app attendibili della scuola,
@@ -29,7 +29,7 @@ import { useTestiEditabili } from '@/hooks/useTestiEditabili';
  * Elenco delle voci (ancora HTML + chiavi del registro testi) in `@/data/faqPubbliche`:
  * lo stesso elenco alimenta la sezione FAQ di `/prezzi`, quindi le due superfici non
  * possono divergere. Niente copy nel markup: si cambia nel registro
- * (`src/data/editableTexts.ts`) o dall'«Editor Testi Rapido» della DEV Toolbar.
+ * (`src/data/editableTexts.ts`) o, in sviluppo, col VISUAL EDITOR della DEV Toolbar (§26.37).
  */
 
 /** Pagina Domande Frequenti (FAQ) — pubblica, raggiungibile da /faq. */

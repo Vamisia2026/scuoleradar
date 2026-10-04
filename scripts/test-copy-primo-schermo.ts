@@ -17,7 +17,11 @@
  *      chiude senza interrompere la discesa verso il piano;
  *   4. Radar Live senza mock: stato iniziale vuoto, nessun array di seed, totale
  *      dal conteggio ESATTO del database e messaggio onesto («Nessun bando
- *      attivo al momento») quando la bacheca è vuota.
+ *      attivo al momento») quando la bacheca è vuota;
+ *   5. il monitor LIVE che ruota è PROTETTO da qualsiasi editor testuale
+ *      (`contentEditable={false}`, `translate="no"` + classe `notranslate`,
+ *      `spellCheck={false}`): nessun aggancio di nodi estranei alle celle che
+ *      cambiano a ogni rotazione.
  *
  * Uso: npm run test:copy:schermo (incluso in `npm test`)
  */
@@ -110,6 +114,14 @@ check(
   'Radar Live: in attesa finché la prima lettura non è conclusa (nessun messaggio prematuro)',
   true,
   /if \(!caricato\) return null;/.test(boardRadar) && /setCaricato\(true\)/.test(boardRadar),
+);
+check(
+  'Radar Live: monitor LIVE protetto dalle interazioni di text-editing',
+  true,
+  /contentEditable=\{false\}/.test(boardRadar) &&
+    /translate="no"/.test(boardRadar) &&
+    /notranslate/.test(boardRadar) &&
+    /spellCheck=\{false\}/.test(boardRadar),
 );
 
 console.log(errori === 0 ? '\n✅ COPY PRIMO SCHERMO: nessun problema' : `\n❌ COPY PRIMO SCHERMO: ${errori} errore/i`);

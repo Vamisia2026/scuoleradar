@@ -136,7 +136,16 @@ check('nessun blocco "P.S."', false, /\bP\.S\./.test(html));
 check('intro: una sola email al giorno', true, html.includes('Una sola email, come promesso'));
 check('nessuna nota grigia sbiadita (#94a3b8)', false, html.includes('#94a3b8'));
 check('nessun bottone verso il Radar', false, html.includes('Apri il tuo Radar Scuole'));
-check('link ufficiale IN EVIDENZA in ogni voce', true, /👉 Apri l(&#39;|')avviso ufficiale/.test(html));
+check('link ufficiale IN EVIDENZA in ogni voce', true, html.includes('Guarda la fonte ufficiale'));
+// INTESTAZIONE email: SOLO testo, cliccabile — nessun logo-immagine.
+check('header email: nessun logo-immagine', false, /<img\b/.test(html));
+// UN SOLO pulsante di fonte per voce: la dicitura compare una volta per ogni voce
+// con fonte DIRETTA (qui una sola: la seconda voce è un elenco filtrato).
+check(
+  'un pulsante di fonte per ogni voce con fonte diretta',
+  voci.filter((v) => v.link === ESTERNO).length,
+  html.split('Guarda la fonte ufficiale').length - 1,
+);
 check(
   'preferenze del Radar nel footer, in PICCOLO',
   true,
@@ -244,7 +253,7 @@ check('alert senza la frase "non indica la pagina ufficiale"', false, /non indic
 // Link UFFICIALE con etichetta canonica e href verso l'URL dell'avviso (nessuna
 // pagina di ricerca di un'altra provincia).
 check(
-  "alert con etichetta personale '👉 Apri l'avviso ufficiale'",
+  "alert con etichetta personale 'Guarda la fonte ufficiale'",
   true,
   alertPro.includes(`<b>${ETICHETTA_AVVISO_UFFICIALE}</b></a>`),
 );

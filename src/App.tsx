@@ -9,6 +9,7 @@ import {
   RouteTracker,
 } from '@/components/app/GuardieApp';
 import { DevToolbar } from '@/components/DevToolbar';
+import { VisualEditorProvider } from '@/components/dev/VisualEditorProvider';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { ToastProvider } from '@/components/Toast';
 import { GoogleOneTap } from '@/components/GoogleOneTap';
@@ -192,6 +193,9 @@ export default function App() {
           <DatiProfiloModal />
           <OAuthBounceModal />
           <DevToolbar />
+          {/* Visual Editor dei testi (click-to-edit, solo sviluppo): badge in basso a sinistra.
+              Dentro il router perché segue la rotta corrente; in produzione non monta nulla. */}
+          <VisualEditorProvider />
         </BrowserRouter>
       </ToastProvider>
     </AppProvider>

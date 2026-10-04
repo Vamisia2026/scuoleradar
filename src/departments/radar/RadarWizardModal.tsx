@@ -25,6 +25,7 @@ import { provinceInizialiConProva } from '@/lib/provaRadar';
 import {
   cercaClassiDiConcorso,
   cercaSelezioniRadar,
+  normalizzaTestoRicerca,
   separaParoleChiave,
   type SuggerimentoSelezione,
 } from '@/lib/ricercaSelezioniRadar';
@@ -240,8 +241,9 @@ export function RadarWizardModal() {
    */
   const classiFiltrate = useMemo(() => {
     const trovate = cercaClassiDiConcorso(querySelezioni, 200);
-    const qNorm = querySelezioni.toLowerCase().replace(/[\s-]/g, '').trim();
-    const alias = ALIAS_LAUREA_CLASSI[qNorm] ?? [];
+    // Alias laurea→classe (LM): la chiave si normalizza come le classi
+    // (`LM-85` ≡ `LM85` ≡ `  lm 85  `), così la ricerca è tollerante anche qui.
+    const alias = ALIAS_LAUREA_CLASSI[normalizzaTestoRicerca(querySelezioni)] ?? [];
     if (alias.length === 0) return trovate;
     const extra = classiConcorso.filter(
       (c) => alias.includes(c.codice) && !trovate.some((t) => t.codice === c.codice),

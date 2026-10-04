@@ -65,9 +65,10 @@ export function PannelloMaterie({
       onToggle={() => toggleAccordion('materie')}
     >
       <p className="mt-0.5 text-xs leading-relaxed text-primary-500">
-        Un solo campo di ricerca: le classi di concorso rispondono per codice, denominazione e
-        materia collegata (es. «Pedagogia»); le competenze per laboratorio e bando PNRR/PON. Se non
-        trovi qualcosa, la stessa ricerca te lo fa aggiungere come parola chiave.
+        Qui cerchi <strong>competenze e parole chiave</strong> (laboratori, bandi PNRR/PON, progetti
+        da esperto): le classi di concorso si scelgono nel pannello «Classi di concorso», a
+        sinistra. Se una voce non è nel catalogo, questa stessa ricerca te la fa aggiungere come
+        parola chiave.
       </p>
 
       <div className="mt-2">
@@ -77,8 +78,8 @@ export function PannelloMaterie({
           gruppi={gruppiSelezioni}
           onScegli={onScegliSelezione}
           onParolaChiave={onParolaChiave}
-          placeholder="Cerca una classe di concorso o una competenza"
-          helper="Classi di concorso e competenze PNRR/PON in un unico elenco di risultati."
+          placeholder="Cerca una competenza o una parola chiave"
+          helper="Competenze e laboratori PNRR/PON, più la tua parola chiave personale: le classi di concorso restano nel pannello a sinistra."
         />
       </div>
 

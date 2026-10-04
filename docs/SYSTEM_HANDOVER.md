@@ -336,10 +336,10 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `testiDomNodi.ts` | 41 | **Puro e isomorfo** — LETTURA dei testi del DOM: era il secondo pezzo della scansione dell'«Editor Testi Rapido» (rimosso il 03/10/2026, §26.38), oggi serve al VISUAL EDITOR (§26.37) con il **tipo minimo `NodoDom`** (permette di ESEGUIRE i testi su un DOM finto negli script Node, senza jsdom) e `etichettaDove` («sezione · Paragrafo»). La scansione dei blocchi e la riscrittura stanno in `visualEditorRegole.ts`. Verificato da `npm run test:visual-editor` |
 | `testiDomRegole.ts` | 61 | **Puro, senza dipendenze** — REGOLE e NOMI dei testi del DOM (condivise col VISUAL EDITOR, §26.37): `normalizzaTesto`, `impronta` (djb2 in base 36), `chiaveTestoDom(tag, testo, occorrenza)` → `p#1a2b3c#0` (identità STABILE del testo: non dipende dalla posizione nel DOM, quindi l'override resta agganciato anche quando React ricrea i nodi e due testi identici restano occorrenze distinte) e `campoDi`/`contenitoreDi` per le etichette umane |
 | `emailScuola.ts` | ~110 | **Puro** — email UFFICIALE della scuola: `normalizzaCodiceMeccanografico`, `estraiCodiceMeccanograficoDaTesto`, `emailDaCodiceMeccanografico` (PEO `@istruzione.it` / PEC `@pec.istruzione.it`), `risolviEmailUfficialeScuola` (email di fonte → convenzione MIM; mai email inventate) |
-| `liveBoard.ts` | 238 | **Puro** — vetrina "Radar Live" (ogni nome passa dal GATE `nomeIstituto.ts`; `titoloLeggibile` per il sottotitolo, `rigaPresentabileVetrina` per la prova): `scuolaDaTitolo` (nome **prima del separatore** quando dopo c'è l'azione amministrativa; respinge frammenti di procedura, elenchi di codici classe e nomi generici), `nomeScuolaRiga` (campo → registro per codice → titolo: l'ente emittente NON è una scuola e non entra in bacheca; un `school_name` fatto solo di codici classe — «ADEE \| EEEE» — **non** è un nome), `nomePresentabileRiga` (per il responso della prova: ultima risorsa l'ENTE emittente, mai un codice), `preparaRigheBoard` (**NON scarta più NESSUNA riga per anagrafica** (il nome di ripiego è `nomeScuolaBoard`/`nomeGrezzoDaBando`, §26.47: nome reale → nome grezzo pubblicato dal bando, se leggibile → dicitura gestita «Anagrafica in aggiornamento»; la riga resta in bacheca e `anagraficaParziale` lo dichiara; resta fuori solo l'avviso non vivo). Il tabellone continua a non mostrare mai "Scuola non indicata" né codici in vetrina — e tiene gli **avvisi senza scadenza** pubblicati negli ultimi `GIORNI_FINESTRA_SENZA_SCADENZA`=60 giorni con `scadenza: null` + `senzaScadenza`: mai una data inventata), `diversificaProvince` (round-robin deterministico per provincia: nessuna provincia monopolizza le prime pagine) |
+| `liveBoard.ts` | 238 | **Puro** — vetrina "Radar Live" (ogni nome passa dal GATE `nomeIstituto.ts`; `titoloLeggibile` per il sottotitolo, `rigaPresentabileVetrina` per la prova): `scuolaDaTitolo` (nome **prima del separatore** quando dopo c'è l'azione amministrativa; respinge frammenti di procedura, elenchi di codici classe e nomi generici), `nomeScuolaRiga` (campo → registro per codice → titolo: l'ente emittente NON è una scuola e non entra in bacheca; un `school_name` fatto solo di codici classe — «ADEE \| EEEE» — **non** è un nome), `nomePresentabileRiga` (per il responso della prova: ultima risorsa l'ENTE emittente, mai un codice), `preparaRigheBoard` (**NON scarta più NESSUNA riga per anagrafica** (il nome di ripiego è `nomeScuolaBoard`/`nomeGrezzoDaBando`, §26.47: nome reale → nome grezzo pubblicato dal bando, se leggibile → segnaposto gestito «Scuola non specificata / Più plessi» (§26.48); la riga resta in bacheca e `anagraficaParziale` lo dichiara; resta fuori solo l'avviso non vivo). Il tabellone continua a non mostrare mai "Scuola non indicata" né codici in vetrina — e tiene gli **avvisi senza scadenza** pubblicati negli ultimi `GIORNI_FINESTRA_SENZA_SCADENZA`=60 giorni con `scadenza: null` + `senzaScadenza`: mai una data inventata), `diversificaProvince` (round-robin deterministico per provincia: nessuna provincia monopolizza le prime pagine) |
 | `nomeIstituto.ts` | 161 | **Puro, senza dipendenze** — GATE dei nomi in vetrina: `nomeIstitutoPresentabile` accetta una stringa solo se ha una **testa d'istituto** (`IC`, `I.I.S.`, `ITIS`, `Liceo`, `Istituto`, `Convitto`…) **e** una **denominazione** (un nome proprio), senza codici amministrativi (classe di concorso, sostegno, meccanografico, token misto lettere+cifre) e senza 3+ cifre consecutive; **taglia la coda di procedura** («IC ALBIGNASEGO Interpello per copertura posti» → «IC ALBIGNASEGO»). Verificato da `npm run test:nome-istituto` |
 | `school-lookup.ts` | 67 | **Anti-mock** (§26.47) — registro MINIMO delle scuole, solo istituti REALI registrati a mano: **`nomeScuolaDaCodice`** (mai "Istituto &lt;codice&gt;") e `scuolaDaCodice` (`SchoolInfo` completo, `null` se non registrato). Il vecchio **`resolveSchoolByCode`** — che per QUALSIASI codice fabbricava un nome (`Istituto &lt;codice&gt;`) e la città `N/D` — è stato **rimosso**: il recapito ufficiale nasce solo dalla convenzione MIM (`emailScuola.ts`). Verificato da `npm run test:pipeline` |
-| `statoArricchimento.ts` | 84 | **Puro e isomorfo** — STATO dell'anagrafica di una riga (§26.47): `statoArricchimento` (`completo` = istituto identificato + recapito PEO/PEC, altrimenti `parziale`), `istitutoIdentificato`, `recapitoPresente`, `normalizzaStatoArricchimento`, `anagraficaInAggiornamento` (true solo per `parziale`: uno stato ignoto non afferma nulla) e la dicitura gestita `SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO`. `parziale` NON è mai un motivo di scarto. Verificato da `npm run test:pipeline` |
+| `statoArricchimento.ts` | 84 | **Puro e isomorfo** — STATO dell'anagrafica di una riga (§26.47): `statoArricchimento` (`completo` = istituto identificato + recapito PEO/PEC, altrimenti `parziale`), `istitutoIdentificato`, `recapitoPresente`, `normalizzaStatoArricchimento`, `anagraficaInAggiornamento` (true solo per `parziale`: uno stato ignoto non afferma nulla) e il segnaposto gestito `SCUOLA_NON_SPECIFICATA` («Scuola non specificata / Più plessi», §26.48). `parziale` NON è mai un motivo di scarto. Verificato da `npm run test:pipeline` |
 | `provaRadarEngine.ts` | 117 | **Puro** — motore del **Radar di prova** pubblico (si prova con la **sola provincia**): `LIMITE_RISULTATI_PROVA`, `righeAttive` (senza scadenza = attiva), `selezionaRisultatiProva(provincia, nazionali, limite)` (tutte le opportunità ATTIVE della provincia + **completamento nazionale** senza duplicati) e la copy del responso (`messaggioConversione`, `messaggioRadarInScansione`, `CODA_CONVERSIONE_PROVA`); responso `{ gruppo: 'provincia'\|'nazionale'\|'vuoto', righe, daProvincia }`. Mai «zero risultati»: l'elenco resta pieno finché esiste un avviso vivo. Verificato da `npm run test:prova-radar` |
 | `provaRadar.ts` | 81 | **Memoria della provincia provata** (localStorage, tollerante agli errori): `salvaProvinciaProva`/`leggiProvinciaProva`/`svuotaProvinciaProva` + `provinceInizialiConProva` → la provincia del box «Prova il Radar» diventa la **provincia principale** del wizard/onboarding (validata sul catalogo `data/province`). Verificato da `npm run test:prova-radar` |
 | `notifier.ts` | 1.999 | **Node-only** — orchestratore notifiche: **`inviaAlertTelegramTempoReale`** (alert INDIVIDUALI Telegram per i **PRO**), **`inviaDigestGiornaliero`** (BATCH: email per tutti + Telegram solo per **BASE**; opzioni `forzato`, `soloUtente`, `soloRegistrare`/`finoA`, seam di test `inviaEmail`/`inviaTelegram`; guardia "una email al giorno" `chiaveDigestGiorno`) e **`inviaPromemoria24h`** (promemoria email ≥ 24h per scadenze entro 3 giorni). **ACCUMULO EMAIL** (`accumulaVoceEmail`/`inviaEmailAccumulate`): i percorsi di dispatch/backfill (`notificaNuoviInterpelli`, `notificaInterpelliPerUtente`) **non inviano mai una email per opportunità** — le voci compatibili si accumulano e partono con **UN'UNICA email di riepilogo** (`inviaDigestEmail`, stesso renderer del digest); `EsitoDispatchUtente.emailVoci` conta le opportunità incluse nel riepilogo. **REGISTRO INVII per utente** (§6.5.1): `avvisoGiaInviato` (**FREQUENCY CAP**: identità = scuola + classi + impronta del contenuto; **max 2 invii in 2 giorni diversi**, mai due volte nello stesso giorno, per canale di consegna, con marcatori storici pre-cap conservativi) e `registraInvioAvviso` (registra il **GIORNO** dell'invio su ledger file + `notifications_log` con canale `freq_email`/`freq_telegram`) → nessuno spam, e un contenuto aggiornato riparte come nuova opportunità. `recapitoNotifica` (PEO dal codice MIM), **GATE DI QUALITÀ STRICT** (`superaGateQualita`, da `avvisoInviabile`): nessun invio di avvisi senza **link diretto** o senza **recapito** — applicato a `notificaNuoviInterpelli`, `notificaInterpelliPerUtente`, `inviaAlertTelegramTempoReale`, `raccogliVociCanale` (digest) e `inviaPromemoria24h` |
@@ -6073,6 +6073,11 @@ catena di notifica richiesta) · guardie: `scripts/test-ricerca-unificata.ts`,
 
 ### 26.47 Pipeline Radar tollerante e blindata: bonifica dei mock, anagrafica `completo`/`parziale`, matching RPC nativo (04/10/2026)
 
+> **⚠️ Dicitura superata (04/10/2026).** La dicitura di vetrina introdotta in questa direttiva —
+> «Anagrafica in aggiornamento» — è **superata dalla §26.48**: la colonna «Scuola» mostra ora il
+> segnaposto neutro **«Scuola non specificata / Più plessi»**. Restano validi il resto della
+> direttiva (arricchimento `completo`/`parziale`, nessuno scarto per anagrafica, matching RPC).
+
 Direttiva di prodotto del 04/10/2026 su **ingestione → database → matching**, con due
 correzioni dettate dal campo: (a) il «Liceo Augusto Monti» di **Asti è una scuola
 REALE** — si rimuovono solo i generatori di dati fittizi, mai i dati veri; (b) **un
@@ -6163,7 +6168,7 @@ della sessione) · `npm run build` → ✅ 11,08 s · `npx eslint` sui 13 file t
 problemi · suite mirate `test:board`, `test:board:scala`, `test:board:metriche`,
 `test:nome-istituto`, `test:anagrafica`, `test:prova-radar`, `test:migrazioni`,
 `npx tsx scripts/test-scuola-da-riga.ts` → ✅ tutte verdi. **Debito pre-esistente
-dichiarato (NON introdotto qui)**: `npm run test:dati-fallback` segnala 2 controlli rossi
+dichiarato (NON introdotto qui — chiuso nella §26.51)**: `npm run test:dati-fallback` segnala 2 controlli rossi
 su `src/data/editableTexts.ts` (URL `https://www.scuoleradar.it/contatti` respinto da
 `eSorgenteVerificata`); il file era già modificato nella sessione precedente e il comando
 non è nella catena `npm test`.
@@ -6188,4 +6193,176 @@ colonne mancanti) · **dipartimento Radar**:
 `comunicazione/04_canali_regionali/checklist_regionali.md`. **Non toccati**:
 `src/departments/notizie/**` (dipartimento isolato) e i **dati di produzione** (nessuna
 scrittura sul DB: le due migrazioni sono da applicare dal committente).
+
+### 26.48 «Radar Live» — etichetta anagrafica della vetrina: «Scuola non specificata / Più plessi» (04/10/2026)
+
+**Nota di sessione (04/10/2026).** Nuova direttiva di prodotto sulla **vetrina pubblica** della
+bacheca «Radar Live»: la colonna «Scuola» mostra, quando l'istituto non è risolvibile in chiaro,
+il segnaposto **«Scuola non specificata / Più plessi»** al posto della dicitura tecnica
+«Anagrafica in aggiornamento» (§26.47, **superata**). La vetrina resta pulita e professionale:
+**nessun messaggio tecnico o di errore** verso i visitatori. Il lavoro di arricchimento
+anagrafico **continua in background invariato** (`stato_arricchimento` `completo`/`parziale`,
+`nomeScuolaRiga`/`nomeScuolaBoard`), ma serve ormai SOLO all'invio delle notifiche puntuali.
+
+**Intervento.** In `src/lib/statoArricchimento.ts` la costante della dicitura gestita è
+**rinominata** `SCUOLA_ANAGRAFICA_IN_AGGIORNAMENTO` → `SCUOLA_NON_SPECIFICATA` con valore
+`'Scuola non specificata / Più plessi'` (un solo punto di verità, ri-esportata da
+`src/lib/liveBoard.ts`). `nomeScuolaBoard` (`liveBoard.ts`) usa il nuovo segnaposto come ultima
+risorsa della catena (nome reale → nome grezzo del bando → segnaposto). Il chip ambra di
+`src/departments/radar/flightBoard/components/RigaBoard.tsx` dichiara ora il ripiego con la stessa
+dicitura (testo **e** tooltip), restando nascosto quando la colonna mostra già il segnaposto.
+Commenti allineati in `src/lib/matchingEngine.ts` e `src/departments/radar/FlightBoardInterpelli.tsx`.
+
+**Verifiche (04/10/2026, da `project/`).** `npm run typecheck` → ✅ exit 0, nessun `error TS` ·
+`npm run test:board` → ✅ («RADAR LIVE: nessun problema») · `npm run test:pipeline` → ✅ («PIPELINE
+TOLLERANTE: tutti i controlli superati»). Le due guardie confrontano la **costante** (non un
+letterale), quindi seguono automaticamente il nuovo valore.
+
+**File toccati.** **Condivisi**: `src/lib/statoArricchimento.ts` (costante rinominata + valore),
+`src/lib/liveBoard.ts` (import/re-export/uso + JSDoc), `src/lib/matchingEngine.ts` (commenti) ·
+**dipartimento Radar**: `src/departments/radar/flightBoard/components/RigaBoard.tsx` (chip testo +
+tooltip), `src/departments/radar/FlightBoardInterpelli.tsx` (commento) · **guardie**:
+`scripts/test-live-board.ts`, `scripts/test-pipeline-tollerante.ts` (import/uso della costante
+rinominata) · **documentazione**: `docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`,
+`comunicazione/04_canali_regionali/checklist_regionali.md`. **Non toccati**: `src/departments/notizie/**` (dipartimento isolato), `src/scraper/**`
+(fuori perimetro: resta **un commento** alla riga ~973 che cita la vecchia dicitura
+«anagrafica in aggiornamento» — nessun effetto sul comportamento; per allinearlo serve
+uno sblocco esplicito) e i **dati di produzione** (nessuna scrittura sul DB).
+
+### 26.49 Radar Utente/Admin allineati: provincia asciutta, scheda Admin con ordini e competenze extra (04/10/2026)
+
+**Nota di sessione (04/10/2026).** Direttiva di prodotto su **Radar Personale** e **pannello Admin**:
+pulizia delle superfici del dashboard utente, allineamento della scheda utente Admin alla vista
+utente e verifica del motore di matching sulle «Opportunità mappate». Perimetro: dipartimento
+**Radar** (`src/departments/radar/**`), dipartimento **Admin** (`src/departments/admin/**`, richiesto
+esplicitamente dalla direttiva), condivisi essenziali (`src/lib/**`, `src/data/**`) e guardie.
+Nessuna migrazione, nessun dato di produzione.
+
+1. **Box sostegno: già rimosso** (§26.45/§26.46). Verificato che nelle Preferenze Radar non esiste più
+   alcun blocco «Opportunità di sostegno», nessun interruttore e nessun `role="switch"`
+   (`PannelloClassi.tsx`); l'inclusione ADAA/ADEE/ADMM/ADSS resta **nativa e permanente** nel backend
+   (`avvisoDiSostegno`), presidiata da `npm run test:copy:pubblico`.
+2. **Pannello «Dove vuoi cercare?» ripulito** (`radar/preferenze/PannelloProvince.tsx`): rimossi i
+   testi descrittivi sotto al selettore — il box «PRO: puoi monitorare fino a 4 province» / «Piano
+   Base…», la nota sulla **provincia principale**, la nota condizionale sulle province marcate PRO e la
+   riga di chiusura. Rimossa anche la prop `limitiPiano` (non più usata) e il passaggio in
+   `PreferenzeRadar.tsx`: il pannello resta asciutto, con «Limite province raggiunto» nel `<select>` e
+   la pill «principale» come unici segnali. Il tetto continua a limitare la selezione.
+3. **Scheda utente Admin allineata alla vista utente** (`admin/tabs/utenti/DettaglioUtente.tsx`,
+   `admin/types.ts`): gli **ordini di scuola** si mostrano nel nome leggibile (`ordiniScuola`), le
+   **materie/competenze extra** nel nome della materia (`etichetteCompetenzeProfilo`, da `materie_id`)
+   e i **tag personalizzati** (`materie_custom`) restano il testo scritto dall'utente. Il tipo
+   `AdminUtente` dichiara `materie_custom` (la SELECT dell'Edge `admin` è `select('*')`, quindi il dato
+   era già disponibile ma non mostrato). Lo schema di salvataggio del Radar
+   (`useAnagraficaProfilo.salvaProfilo` → `profiles`) scriveva già `ordini_scuola`, `materie_id` e
+   `materie_custom`: nessuna modifica al DB.
+4. **Ricerca classi di concorso e matching: verificati, nessuna correzione necessaria.** La barra delle
+   classi filtra già per **codice** (`A19` ≡ `A-19` ≡ `A_19`) e per **nome/materia/ordine** («Italiano»,
+   «CPIA», «adulti», «primaria») in Preferenze, wizard e onboarding (`classeCorrispondeAQuery` /
+   `cercaClassiDiConcorso`): coperta da `npm run test:ricerca`. Il motore (`searchInterpelli`: RPC
+   `match_interpelli` + fallback PostgREST, varianti `A-22 ≡ A-022 ≡ A22`, ramo sostegno esplicito) e il
+   filtro della bacheca non scartano gli avvisi reali della provincia con classe, sostegno o
+   competenza/parola chiave in comune: coperto da `npm run test:matching`, `test:match-rpc`,
+   `test:sostegno`.
+
+**Verifiche (04/10/2026, da `project/`).** `npm run typecheck` → ✅ exit 0 · `npm test` → ✅ catena
+completa verde (include la nuova guardia `test:admin:utente`) · `npm run test:architettura` → ✅ nessuna
+violazione nuova (573 file · 142 = baseline) · `npm run build` → ✅ · `npx eslint` sui file toccati → ✅
+zero errori (resta il warning `react-hooks/exhaustive-deps` **pre-esistente** in `PreferenzeRadar.tsx`) ·
+suite mirate `test:province`, `test:ricerca`, `test:radar:preferenze`, `test:copy:pubblico`,
+`test:matching`, `test:match-rpc`, `test:board` → ✅ verdi.
+
+**Osservazione fuori perimetro — CHIUSA il 04/10/2026.** `npm run test:sostegno` era **rosso** nel
+working tree (7 errori, tutti nel percorso DIGEST: `inviaDigestGiornaliero` saltava i 3 profili con un
+avviso di sostegno). La causa **non era nel notificatore**: i client STUB delle guardie rispondevano
+alla RPC `match_interpelli` con l'esito del contatore notifiche. Risolta in **§26.50** (sessione
+dedicata al modulo di notifica), che ha riportato **verdi** tutte le guardie del digest.
+
+**File toccati.** **Radar**: `src/departments/radar/preferenze/PannelloProvince.tsx` (testi rimossi +
+prop `limitiPiano` eliminata), `src/departments/radar/PreferenzeRadar.tsx` (passaggio prop rimosso) ·
+**Admin** (dipartimento richiesto dalla direttiva): `src/departments/admin/tabs/utenti/DettaglioUtente.tsx`
+(ordini + competenze extra/tag risolti), `src/departments/admin/types.ts` (`materie_custom`) ·
+**guardie**: **nuovo** `scripts/test-admin-dettaglio-radar.ts` (`test:admin:utente`, in `npm test`) ·
+`package.json` (script + catena) · **documentazione**: `docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`.
+**Non toccati**: `src/departments/notizie/**`, `src/departments/cfu/**`, `src/departments/modulistica/**`
+e la logica di matching (verificata, non modificata).
+
+### 26.50 Guardie del DIGEST: la RPC `match_interpelli` nei client STUB (04/10/2026)
+
+**Nota di sessione (04/10/2026).** Chiude la **nota di attenzione** aperta in §26.49 (`npm run
+test:sostegno` rosso nel working tree). Nessun file di **produzione** è stato modificato.
+
+**DIAGNOSI (la causa NON era nel notificatore).** Dal §26.47 `searchInterpelli` interroga **prima** la
+RPC nativa `match_interpelli` e considera valido **qualunque** esito senza errore
+(`if (!error) return (data ?? []) as InterpelloDB[]`). I client **STUB** delle guardie di notifica
+rispondevano a **TUTTE** le RPC con l'esito del contatore
+(`[{ consentito: true, notifiche_usate: 1 }]`): `raccogliVociCanale` riceveva quindi righe **senza i
+campi di `interpelli`** → **0 voci compatibili** per ogni profilo → digest vuoto e `saltati` = tutti i
+profili (nei test: 3 su 3). Il digest in **produzione** non era coinvolto: con la migrazione applicata
+la RPC restituisce le righe reali, senza migrazione l'errore fa scattare il fallback PostgREST
+(comportamento presidiato da `npm run test:match-rpc`).
+
+**INTERVENTO (solo guardie).** In **sei** client STUB la RPC è ora **distinta per nome**: a
+`match_interpelli` (costante `RPC_MATCH_INTERPELLI` importata da `src/lib/matchingEngine.ts`, nessuna
+stringa duplicata) si risponde con le righe di `interpelli` del DB simulato — il filtro
+provincia/classe/competenze/sostegno resta alla **REGOLA UNICA in JS** — mentre le altre RPC
+(`incrementa_notifiche_utente`) rispondono col loro esito. File:
+`scripts/test-sostegno-preferenza.ts`, `scripts/test-promemoria.ts`, `scripts/test-dedup-utente.ts`,
+`scripts/test-telegram-tier.ts`, `scripts/test-matching-profilo.ts`,
+`scripts/test-matching-competenze.ts`. **Nessuna modifica** a `src/lib/notifier.ts` o a
+`src/lib/matchingEngine.ts`: il codice di prodotto era corretto.
+
+**Guardie prima rosse → ora verdi (04/10/2026, da `project/`).** `test:sostegno` (7 errori → 0) ·
+`test:promemoria` (2 → 0) · `test:dedup:utente` (6 → 0) · `test:telegram:tier` (4 → 0) ·
+`test:matching` (3 → 0). Suite di notifica ricontrollate verdi: `test:notifier-dry`, `test:digest`,
+`test:dedup`, `test:frequenza`, `test:alert`, `test:email`, `test:email-scuola`, `test:email-alert`,
+`test:link`, `test:link-esterno`, `test:ledger`, `test:qualita`, `test:copy`, `test:telegram`,
+`test:telegram:template`, `test:telegram:canali`, `test:match-rpc`, `test:radar:preferenze`,
+`test:automazioni`, `test:migrazioni`.
+
+**Verifiche.** `npm run typecheck` → ✅ exit 0 · `npm test` → ✅ exit 0 (catena completa) ·
+`npm run test:architettura` → ✅ nessuna violazione nuova (573 file · 142 = baseline) · `npx eslint`
+sui 6 file toccati → ✅ zero problemi · `npm run build` → ✅.
+
+**File toccati.** Solo guardie (`scripts/**`): i sei client STUB elencati · **documentazione**:
+`docs/SYSTEM_HANDOVER.md` (§26.49 aggiornata + questa §26.50), `docs/DEPARTMENT_MAP.md`.
+**Non toccati**: `src/**` (in particolare `src/lib/notifier.ts`, `src/lib/matchingEngine.ts`),
+`comunicazione/**` e gli altri dipartimenti (notizie, cfu, modulistica, admin).
+
+### 26.51 Guardia `test:dati-fallback`: il link al proprio sito non è una «fonte» (04/10/2026)
+
+**Nota di sessione (04/10/2026).** Chiude il **debito pre-esistente dichiarato** in §26.47
+(`npm run test:dati-fallback` con 2 controlli rossi su `src/data/editableTexts.ts`). Nessuna riga
+di **produzione** modificata: il difetto era nella **guardia**, non nei dati.
+
+**DIAGNOSI (falso positivo).** La guardia pretendeva da **ogni** URL in `src/data/**` il
+superamento di `eSorgenteVerificata()` — la regola anti-mock della **pipeline di ingestione** — che
+respinge per progetto gli host `scuoleradar`/`purefocus` (`RE_HOST_NON_ISTITUZIONALE` in
+`src/scraper/parser.ts`: una fonte di avviso non sta mai su una piattaforma nostra/proprietaria).
+I due URL segnalati sono però **copy reale delle FAQ** — `faq.carta-docente.risposta` e
+`faq.regala-pro-collega.risposta` — che rimandano al modulo contatti del nostro sito
+(`https://www.scuoleradar.it/contatti`): un link **al** nostro sito, non una fonte **di** avvisi, e
+per costruzione **non può** essere un mock. Applicare la regola di ingestione a un self-link era un
+errore di categoria.
+
+**INTERVENTO (solo la guardia, `scripts/test-dati-fallback.ts`).** Due sole funzioni nuove:
+`linkProprio` (host `scuoleradar.it` o sottodominio, `RE_HOST_PROPRIO = /(^|\.)scuoleradar\.it$/i`)
+ed `eDeepLink` (pathname ≠ `/` oppure query). Nel ciclo sugli URL il filtro anti-segnaposto resta
+per **tutti** gli URL; poi il ramo — **link al sito proprio** → si pretende il **deep-link** (mai
+la root nuda) · **fonte esterna** → `eSorgenteVerificata()` come prima. Nessun allentamento:
+`eSorgenteVerificata` e `verificaAvviso` (regole di prodotto) **non sono state toccate** e i
+self-link restano soggetti al filtro anti-segnaposto. Aggiunti 5 controlli-guardia nuovi: sito
+proprio riconosciuto, deep-link, root nuda rifiutata, dominio «simile» (`notscuoleradar.it`) **non**
+scambiato per proprio, dominio di terzi non classificato come proprio.
+
+**Verifiche (04/10/2026, da `project/`).** `npm run test:dati-fallback` → ✅ **exit 0, tutti i
+controlli verdi (15/15)** — prima 2 rossi · `npx eslint scripts/test-dati-fallback.ts` → ✅ zero
+problemi. Il comando **non è nella catena `npm test`** (§26.47): non è stato aggiunto qui per non
+cambiare l'insieme dei test di prodotto senza richiesta.
+
+**File toccati.** Guardia: `scripts/test-dati-fallback.ts` · **documentazione**:
+`docs/SYSTEM_HANDOVER.md` (§26.47 aggiornata + questa §26.51), `docs/DEPARTMENT_MAP.md`.
+**Non toccati**: `src/**` (in particolare `src/data/editableTexts.ts` — il copy è corretto e resta
+intatto), `comunicazione/**` e gli altri dipartimenti.
+
 

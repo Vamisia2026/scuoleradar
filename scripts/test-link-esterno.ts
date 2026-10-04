@@ -19,10 +19,13 @@ import {
   ISTRUZIONE_AVVISO_UFFICIALE,
   eLinkEsterno,
   ePaginaRiepilogo,
+  eUrlAvvisoDiretto,
   etichettaFonteLink,
   suggerimentoRicercaAvviso,
   urlEsterna,
+  urlFonteAvviso,
 } from '../src/lib/alertInterpello.ts';
+import { rigaAvvisoUfficiale } from '../src/lib/telegram.ts';
 
 declare const process: { exitCode?: number };
 
@@ -104,6 +107,23 @@ check(
   false,
   /STAMPA/.test(guidaSenzaFonte ?? ''),
 );
+
+console.log('\n— URL PULITO prima del gate: la riga di fonte non sparisce mai —');
+const AVVISO_PDF = 'https://www.istituto.edu.it/wp-content/uploads/2026/09/avviso-a022.pdf';
+check('virgolette di contorno: URL riconosciuto e ripulito', AVVISO_PDF, urlFonteAvviso(`"${AVVISO_PDF}"`));
+check('angolari + punto di fine frase: URL ripulito', AVVISO_PDF, urlFonteAvviso(`<${AVVISO_PDF}>.`));
+check('spazi di contorno: URL ripulito', AVVISO_PDF, urlFonteAvviso(`  ${AVVISO_PDF}  `));
+check('entità HTML nell\'URL: decodificata', `${AVVISO_PDF}?id=42&t=pdf`, urlFonteAvviso(`${AVVISO_PDF}?id=42&amp;t=pdf`));
+check('query di sola ricerca: nessuna fonte (mai un elenco)', '', urlFonteAvviso(`${AVVISO_PDF}?s=interpello`));
+check('link a singolo avviso con ?p= (WordPress) accettato', true, eUrlAvvisoDiretto('https://www.icx.edu.it/?p=1234'));
+check('link a singolo avviso con ?news= (CMS) accettato', true, eUrlAvvisoDiretto('https://www.icx.edu.it/news?news=456'));
+check('home/elenco resta esclusa (nessun fallback)', '', urlFonteAvviso('https://www.icx.edu.it/avvisi/'));
+check(
+  'riga di fonte Telegram presente con URL incollato e sporco',
+  true,
+  rigaAvvisoUfficiale(`"${AVVISO_PDF}." `).includes(`<a href="${AVVISO_PDF}">`),
+);
+check('nessun link ufficiale in chiaro nel testo', false, rigaAvvisoUfficiale(AVVISO_PDF).includes(`>${AVVISO_PDF}<`));
 
 console.log(errori === 0 ? '\n✅ LINK ESTERNO: nessun problema' : `\n❌ LINK ESTERNO: ${errori} errore/i`);
 process.exitCode = errori === 0 ? 0 : 1;

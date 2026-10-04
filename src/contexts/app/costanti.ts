@@ -21,7 +21,8 @@ export const defaultPreferenze: Preferenze = {
   onboarded: false,
   favoriteSchools: [],
   ignoredSchools: [],
-  // Sostegno: INCLUSO di default (nessun filtro silenzioso sugli avvisi AD…).
-  // Chi non lo vuole lo spegne dalle Preferenze Radar (`SostegnoToggle`).
+  // Sostegno: INCLUSO in modo PERMANENTE (nessun filtro silenzioso sugli avvisi
+  // AD…). Non è più una preferenza: non esiste alcun interruttore né un'uscita,
+  // e la consegna non dipende da questo valore (resta solo per compatibilità).
   sostegno: true,
 };

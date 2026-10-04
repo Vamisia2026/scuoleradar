@@ -109,12 +109,12 @@ check(
   ),
 );
 check(
-  "etichetta condivisa (email) invariata: 'Apri l'avviso ufficiale'",
-  "👉 Apri l'avviso ufficiale",
+  "etichetta condivisa (email): 'Guarda la fonte ufficiale'",
+  'Guarda la fonte ufficiale',
   ETICHETTA_AVVISO_UFFICIALE,
 );
 // TELEGRAM: UNA etichetta per SUPERFICIE (`checklist_straordinaria.md` §3):
-//   · messaggi PERSONALI (alert PRO, digest) → `👉 Apri l'avviso ufficiale`, la
+//   · messaggi PERSONALI (alert PRO, digest) → `Guarda la fonte ufficiale`, la
 //     stessa etichetta condivisa con le email, applicata da `rigaAvvisoUfficiale`;
 //   · POST dei CANALI PUBBLICI → `🔗 Leggi la Fonte Ufficiale`, applicata da
 //     `rigaFonteUfficiale`.
@@ -140,9 +140,9 @@ const telegramCodiceSenzaCommenti = telegramCodice
 // costante CONDIVISA con le email (`alertInterpello.ts`), quella dei canali
 // pubblici è definita UNA volta sola in `telegram.ts`.
 check(
-  "Telegram: nessun letterale 'Apri l'avviso ufficiale' nel modulo (arriva dalla costante condivisa)",
+  "Telegram: nessun letterale 'Guarda la fonte ufficiale' nel modulo (arriva dalla costante condivisa)",
   false,
-  telegramCodiceSenzaCommenti.includes("Apri l'avviso ufficiale"),
+  telegramCodiceSenzaCommenti.includes('Guarda la fonte ufficiale'),
 );
 check(
   'Telegram: etichetta dei canali pubblici definita una sola volta',
@@ -218,6 +218,24 @@ check(
   /BRAND_TELEGRAM/.test(senzaCommenti(edge)) &&
     /Quando vuoi sapere cosa succede di importante nella scuola, vieni qui/.test(senzaCommenti(edge)),
 );
+
+console.log('\n— Email: header testuale · un solo riepilogo (mai una email per avviso) —');
+/**
+ * Guardie STATICHE sui renderer email (Node + Edge) e sul notifier:
+ *  · intestazione SOLO testuale (nessun logo-immagine: arrivava compresso/sgranato);
+ *  · nessun percorso invia una email per singola opportunità (solo il riepilogo
+ *    `inviaDigestEmail`, come il digest giornaliero — checklist email §1).
+ */
+const notifier = senzaCommenti(readFileSync('src/lib/notifier.ts', 'utf8'));
+check('resend.ts: nessun logo-immagine nelle email', false, /<img\b|logo\.png/.test(senzaCommenti(resend)));
+check(
+  'resend.ts: brand testuale cliccabile (URL_BRAND)',
+  true,
+  /URL_BRAND = 'https:\/\/www\.scuoleradar\.it'/.test(resend) && /href="\$\{URL_BRAND\}"/.test(resend),
+);
+check('Edge send-notification: nessun logo-immagine nelle email', false, /<img\b|logo\.png/.test(senzaCommenti(edge)));
+check('notifier: nessuna email per singola opportunità', false, /inviaNotificaEmail\(/.test(notifier));
+check('notifier: le opportunità passano dal riepilogo', true, /inviaDigestEmail\(/.test(notifier));
 
 console.log(errori === 0 ? '\n✅ COPY NOTIFICHE: nessun problema' : `\n❌ COPY NOTIFICHE: ${errori} errore/i`);
 process.exitCode = errori === 0 ? 0 : 1;

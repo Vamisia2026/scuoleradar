@@ -67,7 +67,7 @@ check(
 );
 
 // Scheda strutturata: deve esistere e non introdurre placeholder grezzi.
-const avviso = costruisciAvviso({ provincia: 'Torino', classCode: 'A-041', scadenza: '2026-09-30' });
+const avviso = costruisciAvviso({ provincia: 'Torino', classCode: 'A-041', scadenza: '2099-09-30' });
 check('avviso completo', true, avviso.completo);
 
 const destinatario: DestinatarioNotifica = {
@@ -83,22 +83,22 @@ const interpello: DettagliNotifica = {
   province: 'Torino',
   classi: ['A-041'],
   materia: 'Matematica',
-  scadenza: '2026-09-30',
+  scadenza: '2099-09-30',
   link: ALBO,
   contactEmail: 'segreteria@liceoaugustomonti.edu.it',
 };
 
-console.log('\n— Email: link in evidenza + CTA primaria + etichetta standard —');
+console.log('\n— Email: UN SOLO bottone verso la fonte + etichetta standard —');
 const html = renderEmailHtml(interpello, destinatario, 'https://www.scuoleradar.it/dashboard', 'notifica_pro');
-// DUE anchor verso lo stesso annuncio, entrambi voluti: la riga IN EVIDENZA dentro
-// la card (azione immediata) e il bottone CTA primario in fondo (checklist §5).
-check('due anchor verso la fonte (link in evidenza + CTA)', 2, occorrenze(html, ALBO));
+// UN SOLO anchor verso l'annuncio: il bottone CTA primario in fondo. La card non
+// ripete più la dicitura «Guarda la fonte ufficiale» (checklist §5: un'unica azione).
+check('un solo anchor verso la fonte (bottone CTA)', 1, occorrenze(html, ALBO));
 // "Candidature:" è l'etichetta dell'email della scuola (legittima): il divieto
 // riguarda i BOTTONI/link, non l'etichetta del contatto.
 check('nessun bottone "candidati"', false, /candidat/i.test(html.replace(/Candidature:/g, '')));
-// Etichetta del link di fonte nelle EMAIL: descrittiva per tipo di destinazione
-// (`etichettaFonteLink`), distinta da quella dei messaggi Telegram che è canonica.
-check("CTA email '👉 Apri l'avviso ufficiale'", true, html.includes("👉 Apri l'avviso ufficiale"));
+// Etichetta del link di fonte nelle EMAIL: canonica e identica a Telegram
+// (`ETICHETTA_AVVISO_UFFICIALE`), distinta dalle etichette descrittive della UI web.
+check("CTA email 'Guarda la fonte ufficiale'", true, html.includes('Guarda la fonte ufficiale'));
 check('niente etichette di fonte alternative', false, /Apri il bando ufficiale|Apri la scheda dell'avviso|Apri l'avviso sull'Albo Pretorio/.test(html));
 check('niente vecchia dicitura Albo+candidati', false, html.includes('Fonte ufficiale verificata (Albo Pretorio)'));
 check('email candidature presente (mailto)', true, html.includes('mailto:segreteria@liceoaugustomonti.edu.it'));
@@ -108,11 +108,11 @@ const tg = formattaMessaggioTelegram(interpello, 'A-041', 'https://www.scuolerad
 check('un solo link alla fonte', 1, occorrenze(tg, ALBO));
 check('nessun link "candidati"', false, /candidat/i.test(tg.replace(/Candidature:/g, '')));
 // `checklist_straordinaria.md` §3: UNA etichetta per superficie. I messaggi
-// PERSONALI (alert PRO, digest, email) usano `👉 Apri l'avviso ufficiale`
+// PERSONALI (alert PRO, digest, email) usano `Guarda la fonte ufficiale`
 // (`ETICHETTA_AVVISO_UFFICIALE`); i POST dei canali pubblici usano
 // `🔗 Leggi la Fonte Ufficiale` (`ETICHETTA_FONTE_UFFICIALE`, vedi test:telegram:canali).
 check(
-  "etichetta personale nel link: '👉 Apri l'avviso ufficiale'",
+  "etichetta personale nel link: 'Guarda la fonte ufficiale'",
   true,
   tg.includes(`<b>${ETICHETTA_AVVISO_UFFICIALE}</b></a>`),
 );
@@ -139,7 +139,7 @@ check('email senza fonte: email della scuola presente', true, emailSenzaFonte.in
 check('email senza fonte: nessun riquadro giallo', false, emailSenzaFonte.includes('#fffbeb'));
 
 // Pagina di «Stampa» del SINGOLO avviso: destinazione AMMESSA dal prodotto → il
-// link è in evidenza e il vecchio box giallo di istruzioni non esiste più.
+// bottone ufficiale porta all'URL esatto del documento, una volta sola.
 const emailStampa = renderEmailHtml(
   { ...interpello, link: 'https://www.liceo.edu.it/albo/stampa.php?id=12' },
   destinatario,
@@ -147,9 +147,10 @@ const emailStampa = renderEmailHtml(
   'notifica_pro',
 );
 check(
-  'pagina STAMPA del singolo avviso: link in evidenza',
+  'pagina STAMPA del singolo avviso: unico bottone alla fonte',
   true,
-  emailStampa.includes('background:#f2f9fd') && emailStampa.includes('👉 Apri l&#39;avviso ufficiale'),
+  occorrenze(emailStampa, 'https://www.liceo.edu.it/albo/stampa.php?id=12') === 1 &&
+    occorrenze(emailStampa, 'Guarda la fonte ufficiale') === 1,
 );
 check('pagina STAMPA: nessun box giallo di istruzioni', false, emailStampa.includes('#fffbeb'));
 
@@ -160,7 +161,7 @@ const emailElenco = renderEmailHtml(
   DASH_URL,
   'notifica_pro',
 );
-check('elenco: nessun link generico in evidenza', false, emailElenco.includes('background:#f2f9fd'));
+check('elenco: nessun link all\'elenco nel corpo (mai una fonte generica)', false, emailElenco.includes('https://www.usp.it/interpelli/elenco'));
 check('elenco: nessun riquadro giallo', false, emailElenco.includes('#fffbeb'));
 // Con la fonte assente la CTA di ricalibrazione del Radar è l'unica indicazione
 // utile: qui viene FORZATA (di norma compare nel ~20% dei messaggi).

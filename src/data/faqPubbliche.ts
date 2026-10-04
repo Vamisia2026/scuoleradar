@@ -3,7 +3,7 @@
  *
  * Le DOMANDE e le RISPOSTE non vivono qui: stanno nel registro modificabile
  * `src/data/editableTexts.ts` (chiavi `faq.<slug>.domanda` / `faq.<slug>.risposta`),
- * così l'«Editor Testi Rapido» della DEV Toolbar (solo sviluppo) le cambia al volo.
+ * così il VISUAL EDITOR della DEV Toolbar (solo sviluppo, §26.37) le cambia al volo.
  * Qui c'è l'ELENCO: quale voce, con quale ancora HTML, in quale ordine.
  *
  * Superfici cablate — STESSO elenco, STESSO testo, zero doppioni:

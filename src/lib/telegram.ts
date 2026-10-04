@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ScuoleRadar.it — Notifiche Telegram (FASE 5)
  *
  * Messaggi HTML (parse_mode) coerenti con la sequenza di copy di Bartolo:
@@ -32,6 +32,7 @@ import {
   pulisciTitoloAvviso,
   scegliClasseRilevante,
   suggerimentoRicercaAvviso,
+  urlFonteAvviso,
 } from './alertInterpello';
 import { gateTelegram } from '../config/gateNotifiche';
 
@@ -325,7 +326,7 @@ export function formattaMessaggioTelegram(
   }
 
   // UNA SOLA CTA cliccabile per l'opportunità: il link di fonte è il bottone in
-  // fondo, con l'etichetta dei messaggi PERSONALI `👉 Apri l'avviso ufficiale`
+  // fondo, con l'etichetta dei messaggi PERSONALI `Guarda la fonte ufficiale`
   // (URL solo nell'href). La vecchia riga duplicata "Fonte ufficiale verificata …
   // apri e candidati" è stata rimossa: puntava allo stesso URL del bottone.
   const etichettaOpp = ETICHETTA_AVVISO_UFFICIALE;
@@ -340,7 +341,7 @@ export function formattaMessaggioTelegram(
       : '';
 
   // LAYOUT degli ALERT (testo pulito, niente immagini e niente marchio ripetuto):
-  //   brand · apertura · titolo · dettagli · 📧 candidature · 👉 avviso ufficiale · CTA radar
+  //   brand · apertura · titolo · dettagli · 📧 candidature · Guarda la fonte ufficiale · CTA radar
   // I messaggi di CICLO DI VITA mantengono il loro copy + la CTA Notizie.
   // TESTATA BRAND: UNA sola riga compatta (icona + nome ufficiale) in cima a
   // OGNI messaggio: nessun logo grande, nessuna anteprima a occupare lo schermo.
@@ -361,12 +362,18 @@ export function formattaMessaggioTelegram(
 
   if (conOpportunita) {
     // LINK alla pubblicazione ufficiale: etichetta dei messaggi PERSONALI
-    // `👉 Apri l'avviso ufficiale` (l'anteprima del link è disattivata a monte:
-    // nessun riquadro con loghi o immagini). La riga compare SOLO con un avviso
-    // diretto (`eUrlAvvisoDiretto` dentro `rigaAvvisoUfficiale`): con una home, un
-    // elenco o una pagina di ricerca il messaggio resta senza riga di fonte — mai
-    // un fallback generico.
-    const rigaLink = rigaAvvisoUfficiale(linkOpp);
+    // `Guarda la fonte ufficiale` (l'anteprima del link è disattivata a monte:
+    // nessun riquadro con loghi o immagini).
+    //
+    // La riga si costruisce sull'URL GREZZO dell'avviso (`interpello.link`) e non
+    // sul link già filtrato (`linkOpp`, che ora è già pulito): c'è UN SOLO punto
+    // di verità — `urlFonteAvviso` DENTRO `rigaAvvisoUfficiale`, che PULISCE la
+    // stringa (entità HTML, virgolette, spazi, punteggiatura di contorno) e poi
+    // applica il gate `eUrlAvvisoDiretto` — così nessun doppio controllo a monte
+    // può far sparire la riga quando l'avviso ha una fonte esterna valida
+    // (home, elenchi e pagine di ricerca restano esclusi: mai un fallback
+    // generico, mai la home di ScuoleRadar).
+    const rigaLink = rigaAvvisoUfficiale(interpello?.link ?? linkOpp);
     if (rigaLink) parti.push(rigaLink);
     // CTA UNICA: ricalibrare il Radar. Sostituisce il vecchio footer promozionale
     // e la guida operativa ("Questo avviso non indica la pagina ufficiale…"),
@@ -444,10 +451,11 @@ export function deveMostrareCtaRadar(seme?: string | null): boolean {
 }
 
 /**
- * Etichetta CONDIVISA storica del link alla fonte (definita in `alertInterpello.ts`
- * e usata dalle EMAIL): resta esportata per parità con gli altri canali, ma nei
- * messaggi Telegram la riga della fonte usa l'etichetta canonica
- * `ETICHETTA_FONTE_UFFICIALE` (sotto).
+ * Etichetta CONDIVISA del link alla fonte (definita in `alertInterpello.ts` e
+ * usata dalle EMAIL): «Guarda la fonte ufficiale». È l'etichetta canonica delle
+ * superfici PERSONALI (email, alert PRO, digest) e viene applicata in Telegram da
+ * `rigaAvvisoUfficiale`; i POST dei canali pubblici usano quella sotto
+ * (`ETICHETTA_FONTE_UFFICIALE`). Resta esportata per parità con gli altri canali.
  */
 export const ETICHETTA_AVVISO_UFFICIALE = ETICHETTA_AVVISO_UFFICIALE_SHARED;
 
@@ -457,7 +465,7 @@ export const ETICHETTA_AVVISO_UFFICIALE = ETICHETTA_AVVISO_UFFICIALE_SHARED;
  *
  * `checklist_straordinaria.md` §3 e `checklist_regionali.md` §2 — due etichette
  * di fonte, UNA per superficie, mai varianti:
- *   · messaggi PERSONALI (email, alert PRO, digest) → `👉 Apri l'avviso ufficiale`
+ *   · messaggi PERSONALI (email, alert PRO, digest) → `Guarda la fonte ufficiale`
  *     (`ETICHETTA_AVVISO_UFFICIALE`, condivisa con le email);
  *   · post dei CANALI PUBBLICI → `🔗 Leggi la Fonte Ufficiale` (questa costante).
  *
@@ -481,8 +489,10 @@ export const ETICHETTA_FONTE_UFFICIALE = '🔗 Leggi la Fonte Ufficiale';
  * (`link_preview_options.is_disabled`): nessun riquadro con loghi/immagini.
  */
 export function rigaFonteUfficiale(link?: string | null): string {
-  if (!eUrlAvvisoDiretto(link)) return '';
-  const url = urlAssolutaValida(link);
+  // UNICA fonte di verità sull'URL: stringa PULITA (`urlFonteAvviso` → entità
+  // HTML, virgolette, spazi e punteggiatura di contorno via) + gate sulla
+  // destinazione. Nessun controllo duplicato a monte può far sparire la riga.
+  const url = urlFonteAvviso(link);
   if (!url) return '';
   return `<a href="${escapeHtml(pulisciUrlTelegram(url))}"><b>${escapeHtml(
     ETICHETTA_FONTE_UFFICIALE,
@@ -497,14 +507,14 @@ export const FOOTER_NOTIZIE = CTA_NOTIZIE_TELEGRAM;
 
 /**
  * Riga dell'avviso ufficiale negli ALERT personali e nel DIGEST — superficie
- * PERSONALE: etichetta canonica `👉 Apri l'avviso ufficiale`, la stessa delle
+ * PERSONALE: etichetta canonica `Guarda la fonte ufficiale`, la stessa delle
  * email (`ETICHETTA_AVVISO_UFFICIALE`). Il gate sui link diretti è identico a
  * quello dei canali (`eUrlAvvisoDiretto`): le due superfici cambiano solo
  * l'etichetta, mai il controllo sulla destinazione.
  */
 export function rigaAvvisoUfficiale(link?: string | null): string {
-  if (!eUrlAvvisoDiretto(link)) return '';
-  const url = urlAssolutaValida(link);
+  // Stesso punto unico delle altre superfici: URL PULITO + gate sul link diretto.
+  const url = urlFonteAvviso(link);
   if (!url) return '';
   return `<a href="${escapeHtml(pulisciUrlTelegram(url))}"><b>${escapeHtml(
     ETICHETTA_AVVISO_UFFICIALE,
@@ -1031,7 +1041,7 @@ export function formattaPostCanaleTelegram(interpello: InterpelloCanale): string
   // mai mostrato in chiaro: il post espone solo la riga iperlinkata
   // "🔗 Fonte Ufficiale" con l'URL nell'`href`. Nessuna anteprima nativa
   // (disattivata a monte in `inviaMessaggioTelegram`).
-  const linkFonte = eUrlAvvisoDiretto(interpello.link) ? (interpello.link ?? '').trim() : null;
+  const linkFonte = urlFonteAvviso(interpello.link);
   const linkRiga = linkFonte ? rigaFonteUfficiale(linkFonte) : '';
 
   // Email di candidatura: OMESSA se non estratta (mai "Email non disponibile":
@@ -1216,19 +1226,24 @@ function bloccoVoceTelegram(
 
   // Fonte ufficiale nel digest personale: stessa regola dei canali — SOLO un
   // avviso specifico (mai home/elenchi/ricerche), con l'etichetta canonica
-  // `🔗 Fonte Ufficiale` e l'URL nascosto nell'href.
-  const fonte = eUrlAvvisoDiretto(v.link) ? (v.link ?? '').trim() : null;
-  if (fonte) righe.push(rigaAvvisoUfficiale(fonte));
+  // `Guarda la fonte ufficiale` e l'URL nascosto nell'href. Il gate è UNO SOLO,
+  // dentro `rigaAvvisoUfficiale`, applicato all'URL della voce DOPO la pulizia
+  // (`urlFonteAvviso`: entità HTML, virgolette, spazi e punteggiatura di
+  // contorno non fanno più sparire la riga).
+  // La riga è sempre presente quando l'avviso ha una fonte esterna valida: il
+  // messaggio non resta mai senza il link alla pubblicazione ufficiale.
+  const rigaFonte = rigaAvvisoUfficiale(v.link);
+  if (rigaFonte) righe.push(rigaFonte);
   const email = avviso.email ?? emailAvviso(v.contactEmail);
   if (email) {
     righe.push(`${EMAIL_ICONA} ${EMAIL_ETICHETTA}: <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`);
   }
-  // Guida operativa: si calcola sull'URL EFFETTIVAMENTE mostrato (`fonte`), non
-  // su quello grezzo. Con un link non diretto la riga "nel link la scuola
-  // pubblica un elenco…" sarebbe senza riferimento: in quel caso resta la sola
+  // Guida operativa: si calcola sull'URL GREZZO della voce (`v.link`), perché
+  // anche un elenco/"Stampa" filtrato (non mostrabile come fonte) richiede la
+  // riga da cercare («cerca la riga con …»). Con un link ASSENTE resta la sola
   // indicazione pulita (chiedi alla segreteria / scrivi al recapito).
   const guida = suggerimentoRicercaAvviso({
-    url: fonte,
+    url: v.link,
     classe: cl,
     provincia,
     schoolName: v.schoolName,

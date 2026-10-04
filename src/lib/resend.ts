@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ScuoleRadar.it — Sistema di notifiche email via Resend
  *
  * Implementa la sequenza di messaggi definita da Bartolo (8 tipologie):
@@ -24,9 +24,9 @@ import {
   ICONA_RIGA,
   URL_NOTIZIE,
   costruisciAvviso,
-  eUrlAvvisoDiretto,
   pulisciTitoloAvviso,
   scegliClasseRilevante,
+  urlFonteAvviso,
 } from './alertInterpello';
 import { normalizzaClasse } from './matchingEngine';
 
@@ -142,25 +142,30 @@ function nomeProvincia(codice?: string | null): string | null {
 
 /* ------------------------- Brand e CTA informative ------------------------- */
 
-/** URL del logo ufficiale: unico asset grafico delle email. */
-export const LOGO_URL = 'https://www.scuoleradar.it/logo.png';
+/**
+ * URL del SITO del brand: unico link dell'INTESTAZIONE delle email.
+ *
+ * NIENTE asset grafici nell'header: il logo-immagine arrivava compresso e
+ * sgranato nelle caselle di posta e dominava il messaggio. L'intestazione è
+ * SOLO testo, cliccabile verso `scuoleradar.it`.
+ */
+export const URL_BRAND = 'https://www.scuoleradar.it';
 
 /**
- * INTESTAZIONE BRAND COMPATTA: logo PICCOLO (32 px, mai allargato oltre la sua
- * dimensione naturale) accanto al nome ufficiale `Scuole Radar.it`, sulla stessa
- * riga. Sostituisce il vecchio logo da 200 px che dominava l'email e risultava
- * "gigante"/deformato sugli schermi piccoli.
+ * INTESTAZIONE BRAND delle email: scritta testuale pulita ed elegante, su una
+ * riga centrata, CLICCABILE verso `ScuoleRadar.it` (`URL_BRAND`).
+ *
+ * Sostituisce il logo-immagine (che i client di posta mostravano compresso e
+ * sgranato): nessun `<img>` in testa a alert, digest e promemoria, nessuna
+ * richiesta di risorse esterne per rendere il brand.
  */
 export function intestazioneBrandHtml(): string {
   return `
                 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 18px;">
                   <tr>
-                    <td style="vertical-align:middle; padding-right:8px;">
-                      <img src="${LOGO_URL}" alt="Scuole Radar" width="32" height="32"
-                           style="display:block; width:32px; height:32px; border:0; outline:none; text-decoration:none;" />
-                    </td>
-                    <td style="vertical-align:middle; font-size:15px; font-weight:700; color:#14354e;">
-                      ${BRAND_NOME}
+                    <td align="center" style="font-size:18px; font-weight:800; letter-spacing:.01em;">
+                      <a href="${URL_BRAND}" target="_blank" rel="noopener"
+                         style="color:#14354e; text-decoration:none;">${BRAND_NOME}</a>
                     </td>
                   </tr>
                 </table>`;
@@ -281,29 +286,36 @@ function proUrl(dashboardUrl: string): string {
  */
 export function linkOpportunita(interpello: DettagliNotifica | null): string {
   if (!interpello) return '';
-  return eUrlAvvisoDiretto(interpello.link) ? (interpello.link ?? '').trim() : '';
+  return urlFonteAvviso(interpello.link);
 }
 
 /**
- * Riga "IN EVIDENZA" del link ufficiale dell'avviso — unica resa per alert,
- * digest e promemoria.
+ * BOTTONE dell'avviso ufficiale — UNICA azione di fonte per voce (alert, digest
+ * e promemoria).
  *
- * Mostra l'URL ESATTO dell'annuncio/bando pubblicato dalla scuola (dato dello
- * scraper) dentro una scatola blu brand, con il link in grassetto: è l'azione
- * principale del messaggio. Sostituisce il vecchio riquadro GIALLO di avvertenza
- * (checklist email §4: «zero riquadri/disclaimer gialli») e le diciture
- * restrittive del tipo «nel link la scuola pubblica un elenco…».
+ * Rende l'URL ESATTO dell'annuncio/bando pubblicato dalla scuola (dato dello
+ * scraper) come pulsante blu brand ben visibile, con l'etichetta canonica
+ * `Guarda la fonte ufficiale`. Sostituisce la vecchia scatola celeste che
+ * RIPETEVA la dicitura già presente sul bottone CTA della card: ora dicitura e
+ * link compaiono UNA SOLA VOLTA per voce (checklist email §5).
  *
  * Mostra SOLO avvisi SPECIFICI (`eUrlAvvisoDiretto`: pagina/PDF/tabella «Stampa»
- * del singolo avviso), con l'etichetta UNICA e standard
- * (`👉 Apri l'avviso ufficiale`). Quando la fonte è una home, un elenco, un archivio
- * o un URL interno la riga NON compare: la checklist vieta di sostituirla con un
- * link generico (e il gate di qualità blocca comunque l'invio). Mai «Candidati».
+ * del singolo avviso). Quando la fonte è una home, un elenco, un archivio o un
+ * URL interno non rende nulla: la checklist vieta di sostituirla con un link
+ * generico (e il gate di qualità blocca comunque l'invio). Mai «Candidati».
  */
 export function fonteInEvidenza(url?: string | null): string {
-  const diretta = eUrlAvvisoDiretto(url) ? (url ?? '').trim() : '';
+  const diretta = urlFonteAvviso(url);
   if (!diretta) return '';
-  return `<p style="margin:12px 0 0; padding:10px 12px; border:1px solid #cfe3f2; background:#f2f9fd; border-radius:8px; font-size:13.5px; line-height:1.5;"><a href="${escapeHtml(diretta)}" target="_blank" rel="noopener" style="color:#2B6F9E; font-weight:700; text-decoration:underline;">${escapeHtml(ETICHETTA_AVVISO_UFFICIALE)}</a></p>`;
+  return (
+    '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:12px 0 0;">' +
+    '<tr><td>' +
+    `<a href="${escapeHtml(diretta)}" target="_blank" rel="noopener" ` +
+    'style="display:inline-block; padding:11px 22px; border-radius:10px; background-color:#2B6F9E; ' +
+    'color:#ffffff; font-size:14px; font-weight:700; text-decoration:none;">' +
+    `${escapeHtml(ETICHETTA_AVVISO_UFFICIALE)}</a>` +
+    '</td></tr></table>'
+  );
 }
 
 /**
@@ -437,6 +449,15 @@ export const TIPI_CON_OPPORTUNITA: ReadonlySet<TipoMessaggio> = new Set([
 ]);
 
 /**
+ * INCIPIT CALDO delle email di opportunità: va subito dopo il saluto
+ * («Ciao <nome>,», aggiunto dal renderer) e dà il tono personale e diretto del
+ * messaggio. Testo richiesto dal prodotto (04/10/2026), identico per ogni utente
+ * e per ogni tipo di opportunità (alert/digest).
+ */
+export const FRASE_OPPORTUNITA =
+  "Abbiamo trovato nuove opportunità per te! Dai un'occhiata e, se ti interessa, applica al più presto!";
+
+/**
  * Copy esatto della sequenza di Bartolo.
  * Il saluto "Ciao, ..." viene aggiunto dal renderer con il nome del destinatario.
  */
@@ -452,19 +473,20 @@ const CORPO_MESSAGGI: Record<TipoMessaggio, ContenutoMessaggio> = {
     ],
     cta: { label: 'Vai a ScuoleRadar →', destinazione: 'dashboard' },
   },
-  // Alert di opportunità: NESSUNA frase generica di apertura. Il contenuto è la
-  // card dell'avviso (titolo + dettagli + fonte + recapito) e il bottone standard
-  // "👉 Apri l'avviso ufficiale": struttura identica per prova1/2/3 e notifica_pro.
+  // Alert di opportunità: incipit CALDO e personale (dopo il saluto «Ciao <nome>,»),
+  // poi la card dell'avviso (titolo + dettagli + fonte + recapito) e il bottone
+  // standard «Guarda la fonte ufficiale»: struttura identica per prova1/2/3 e
+  // notifica_pro.
   prova1: {
-    paragrafi: [],
+    paragrafi: [FRASE_OPPORTUNITA],
     cta: { label: ETICHETTA_AVVISO_UFFICIALE, destinazione: 'opportunita' },
   },
   prova2: {
-    paragrafi: [],
+    paragrafi: [FRASE_OPPORTUNITA],
     cta: { label: ETICHETTA_AVVISO_UFFICIALE, destinazione: 'opportunita' },
   },
   prova3: {
-    paragrafi: [],
+    paragrafi: [FRASE_OPPORTUNITA],
     cta: { label: ETICHETTA_AVVISO_UFFICIALE, destinazione: 'opportunita' },
   },
   extra: {
@@ -505,7 +527,7 @@ const CORPO_MESSAGGI: Record<TipoMessaggio, ContenutoMessaggio> = {
     cta: { label: 'Vai a ScuoleRadar →', destinazione: 'dashboard' },
   },
   notifica_pro: {
-    paragrafi: [],
+    paragrafi: [FRASE_OPPORTUNITA],
     cta: { label: ETICHETTA_AVVISO_UFFICIALE, destinazione: 'opportunita' },
   },
   // Usato solo dal renderer di fallback: il digest reale viene composto da
@@ -542,7 +564,7 @@ export function renderEmailHtml(
           ? dashboardUrl
           : urlOpportunita || dashboardUrl;
     // Etichetta STANDARD del link di fonte: UNA sola stringa in ogni superficie
-    // ("👉 Apri l'avviso ufficiale"), identica a Telegram. Mai "Candidati": il
+    // («Guarda la fonte ufficiale»), identica a Telegram. Mai "Candidati": il
     // link porta a un Albo Pretorio o a una pagina di avviso, non a un form.
     ctaLabel = versoOpportunita
       ? urlOpportunita
@@ -551,10 +573,11 @@ export function renderEmailHtml(
       : contenuto.cta.label;
   }
 
-  // NOTA UX: il blocco opportunità mostra il link ufficiale IN EVIDENZA (scatola
-  // blu brand, URL esatto dallo scraper) e il bottone CTA primario punta allo
-  // STESSO URL con l'etichetta standard. Nessun riquadro giallo e nessuna dicitura
-  // restrittiva sull'elenco: l'azione utile è il link stesso.
+  // NOTA UX: il blocco opportunità mostra titolo, dettagli essenziali, scadenza
+  // e recapito della scuola. Il LINK ufficiale NON è ripetuto qui: compare UNA
+  // sola volta, nel bottone CTA primario in fondo all'email (etichetta standard
+  // `Guarda la fonte ufficiale`). Così la dicitura non è duplicata e il
+  // destinatario ha un'unica azione chiara.
   const bloccoOpportunita =
     interpello && TIPI_CON_OPPORTUNITA.has(tipo)
       ? (() => {
@@ -594,11 +617,8 @@ export function renderEmailHtml(
           const emailRiga = avviso.email
             ? `<p style="margin:8px 0 0; font-size:13px; color:#64748b;">${EMAIL_ICONA} ${EMAIL_ETICHETTA}: <a href="mailto:${escapeHtml(avviso.email)}" style="color:#2B6F9E;font-weight:600;">${escapeHtml(avviso.email)}</a></p>`
             : '';
-          // LINK UFFICIALE IN EVIDENZA: l'annuncio/bando pubblicato dalla scuola
-          // (URL dello scraper) dentro la scatola blu brand, con etichetta standard
-          // o onesta. Nessun riquadro giallo e nessuna istruzione restrittiva
-          // sull'elenco: l'azione utile è il link stesso (checklist email §4/§5).
-          const fonteRiga = fonteInEvidenza(interpello.link);
+          // Voci EMAIL: niente secondo link alla fonte dentro la card — l'unica
+          // azione è il bottone CTA primario in fondo (checklist email §5).
           return `
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px; border:1px solid #e2e8f0; border-radius:12px; background:#f8fafc;">
                   <tr>
@@ -606,7 +626,6 @@ export function renderEmailHtml(
                       <h2 style="margin:0 0 8px; font-size:18px; font-weight:800; line-height:1.35; color:#14354e;"><b>${escapeHtml(pulisciTitoloAvviso(interpello.title, `Interpello ${[classe, interpello.province].filter(Boolean).join(' — ')}`))}</b></h2>
                       <p style="margin:0; font-size:14px; line-height:1.6; color:#475569;">${dettagli.join(' · ')}</p>
                       ${scadenzaRiga}
-                      ${fonteRiga}
                       ${emailRiga}
                     </td>
                   </tr>
@@ -858,9 +877,9 @@ function bloccoVoceDigest(
     ? `<p style="margin:6px 0 0; font-size:13px; color:#475569;"><b>Scadenza:</b> ${escapeHtml(formatDataScadenza(v.scadenza))}</p>`
     : '';
 
-  // Link ufficiale in evidenza: STESSA resa dell'alert (scatola blu brand) e
-  // nessun riquadro giallo di istruzioni. Se la fonte è una pagina di riepilogo
-  // l'etichetta resta onesta (`etichettaFonteLink`).
+  // Pulsante dell'avviso ufficiale: UNICA azione della voce (stessa resa
+  // dell'alert), nessun riquadro giallo di istruzioni e nessuna dicitura
+  // duplicata. Se la fonte non è diretta il pulsante non compare.
   const fonteRiga = fonteInEvidenza(v.link);
 
   const emailRiga = avviso.email
@@ -970,6 +989,7 @@ export function renderDigestEmailHtml(
 
   const introHtml =
     `<p style="margin:0 0 14px; font-size:15px; line-height:1.6; color:#14354e;">${saluto}</p>` +
+    `<p style="margin:0 0 10px; font-size:15px; line-height:1.6; color:#14354e;">${FRASE_OPPORTUNITA}</p>` +
     `<p style="margin:0 0 18px; font-size:15px; line-height:1.6; color:#14354e;">Ecco il <strong>riepilogo${quando}</strong>: ${conteggio} ${
       raggruppato ? 'raggruppate per urgenza di scadenza' : 'in ordine di scadenza'
     }. Una sola email, come promesso.</p>`;
@@ -1084,8 +1104,8 @@ export function renderPromemoriaEmailHtml(
 
   const elencoHtml = voci.map((v, i) => bloccoVoceDigest(v, destinatario, i + 1)).join('\n');
 
-  // NIENTE bottone verso il Radar: la CTA primaria è il link ufficiale di ogni voce
-  // (in evidenza nella card). Le preferenze del Radar stanno nel footer, in piccolo.
+  // NIENTE bottone verso il Radar: la CTA primaria è il pulsante dell'avviso
+  // ufficiale di ogni voce. Le preferenze del Radar stanno nel footer, in piccolo.
   const codaHtml = footerEmailHtml(dashboardUrl);
 
   return involucroDigest(

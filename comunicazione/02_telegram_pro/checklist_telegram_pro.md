@@ -53,8 +53,10 @@
       (`link_preview_options.is_disabled` + `disable_web_page_preview`) per non
       generare il riquadro gigante che copre il contenuto.
 - [ ] **Link ufficiale diretto** con etichetta standard
-      `👉 Apri l'avviso ufficiale` (`rigaAvvisoUfficiale`), `href` esattamente
-      sull'URL dell'avviso.
+      `Guarda la fonte ufficiale` (`rigaAvvisoUfficiale`), `href` esattamente
+      sull'URL dell'avviso. L'URL viene **pulito prima del gate**
+      (`pulisciUrlEsterna` → `urlFonteAvviso`): entità HTML, virgolette, spazi e
+      punteggiatura di contorno non possono più far sparire la riga.
 - [ ] **Contatti ufficiali** della scuola (`📧 Candidature: <mailto:…>`), così il
       messaggio è **pronto da inoltrare** a chi può candidarsi.
 - [ ] Riga brand in testa, `📡 Scuole Radar.it` cliccabile su

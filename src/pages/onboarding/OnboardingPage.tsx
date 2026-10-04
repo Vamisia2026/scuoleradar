@@ -7,7 +7,11 @@ import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { materie, type OrdineScuola } from '@/data/ordiniMaterie';
 import { classiConcorso } from '@/data/classiConcorso';
 import { province } from '@/data/province';
-import { separaParoleChiave } from '@/lib/ricercaSelezioniRadar';
+import {
+  classeCorrispondeAQuery,
+  normalizzaTestoRicerca,
+  separaParoleChiave,
+} from '@/lib/ricercaSelezioniRadar';
 import { provinceInizialiConProva } from '@/lib/provaRadar';
 import { NavigazioneOnboarding } from './components/NavigazioneOnboarding';
 import { PassoOrdiniOnboarding } from './components/PassoOrdiniOnboarding';
@@ -112,15 +116,12 @@ export function OnboardingPage() {
     let list = classiConcorso;
     if (materiaFilter) list = list.filter((c) => c.materie.includes(materiaFilter));
     if (queryClasse.trim()) {
-      const q = queryClasse.toLowerCase();
-      // Normalizza "LM-85"/"LM85" → "lm85" per il match sugli alias di laurea.
-      const qAlias = q.replace(/[\s-]/g, '');
-      const classiDaAlias = ALIAS_LAUREA_CLASSI[qAlias] ?? [];
+      // TOLLERANZA DI FORMATO (`a19` ≡ `A19` ≡ `A-19` ≡ `a-19` ≡ `  a 19  `) con
+      // la STESSA regola delle Preferenze Radar e del wizard; in più gli alias
+      // codice di laurea (LM-85 ≡ lm85) restano agganciati alla loro classe.
+      const classiDaAlias = ALIAS_LAUREA_CLASSI[normalizzaTestoRicerca(queryClasse)] ?? [];
       list = list.filter(
-        (c) =>
-          c.codice.toLowerCase().includes(q) ||
-          c.denominazione.toLowerCase().includes(q) ||
-          classiDaAlias.includes(c.codice),
+        (c) => classeCorrispondeAQuery(c, queryClasse) || classiDaAlias.includes(c.codice),
       );
     }
     return list;

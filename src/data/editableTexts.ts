@@ -1,21 +1,21 @@
 /**
  * ScuoleRadar.it — REGISTRO DEI TESTI MODIFICABILI «AL VOLO» (DEV).
  *
- * Unico dizionario `chiave → testo di default` delle superfici cablate all'editor
- * rapido della DEV Toolbar (`src/components/EditorTestiRapido.tsx`): si scrive nel
- * `<textarea>` di una chiave e quel testo cambia SUBITO in tutta l'app, senza
- * reload e senza ricostruire nulla. L'editor è CONTESTUALE: mostra solo le chiavi
- * che la vista attiva sta rendendo (registro `src/lib/testiInPagina.ts`) — qui non
+ * Unico dizionario `chiave → testo di default` delle superfici cablate ai testi per
+ * chiave: si modifica un testo e cambia SUBITO in tutta l'app, senza reload e senza
+ * ricostruire nulla. Lo strumento per farlo è il VISUAL EDITOR click-to-edit della DEV
+ * Toolbar (badge in basso a sinistra, §26.37): si clicca il testo in pagina. Qui non
  * esiste nessun raggruppamento per pagina da tenere allineato.
  *
  * Tre passaggi, nessuna astrazione:
  *   1. il testo di DEFAULT vive QUI (fonte di verità: se cambia la copy si cambia qui);
  *   2. le pagine rendono per CHIAVE (`useTestiEditabili().testo(chiave)`), mai la
- *      stringa duplicata nel JSX — niente doppioni da tenere allineati, e ogni
- *      chiave letta entra da sé nell'elenco «a schermo» dell'editor;
- *   3. l'override scritto nell'editor finisce in `localStorage: sr_simple_text_overrides`
- *      (`src/lib/testiModificabili.ts`) e vale SOLO in sviluppo: in build di produzione
- *      gli override sono ignorati e si usa sempre il default di questo file.
+ *      stringa duplicata nel JSX — niente doppioni da tenere allineati;
+ *   3. l'override eventualmente rimasto in `localStorage: sr_simple_text_overrides`
+ *      (`src/lib/testiModificabili.ts`) vale SOLO in sviluppo: in build di produzione
+ *      si usa sempre il default di questo file. Da quando il vecchio pannello «Editor
+ *      Testi Rapido» è stato rimosso (§26.38) nessuno scrive più lì: «Reset dati /
+ *      LocalStorage» della DEV Toolbar ripulisce l'eventuale testo vecchio.
  *
  * Convenzione delle chiavi (`<area>.<soggetto>.<campo>`):
  *   · `faq.<slug>.domanda` / `faq.<slug>.risposta` → FAQ PUBBLICHE: le stesse voci su
@@ -26,7 +26,7 @@
  * REGOLA DI CONTENUTO delle FAQ (29/09/2026): solo copy **di posizionamento** —
  * domanda pratica, risposta positiva. Vietate le domande difensive (disdette,
  * sicurezza dei pagamenti) e i rimandi a strumenti non ancora attivi: guardie
- * `test:editor-testi` e `test:copy:pubblico`.
+ * `test:testi-chiave` e `test:copy:pubblico`.
  *
  * FUORI DAL REGISTRO, deliberatamente:
  *   · il LISTINO della pagina Prezzi (piani, importi, vantaggi, CIFRE) resta in
@@ -85,8 +85,8 @@ export const TESTI_EDITABILI = {
 /** Chiave di una voce modificabile (`faq.<slug>.domanda`, …). */
 export type ChiaveTesto = keyof typeof TESTI_EDITABILI;
 
-/** Tutte le chiavi, in ordine di REGISTRO: è anche l'ordine dell'editor DEV
- *  (il registro delle viste `@/lib/testiInPagina` filtra questo elenco). */
+/** Tutte le chiavi, in ordine di REGISTRO. Da quando il pannello «Editor Testi Rapido»
+ *  è stato rimosso (§26.38) nessuna vista le filtra più: l'elenco è quello del dizionario. */
 export const CHIAVI_TESTO = Object.keys(TESTI_EDITABILI) as ChiaveTesto[];
 
 /** Testo di DEFAULT (codice) di una chiave: è ciò che il reset ripristina. */

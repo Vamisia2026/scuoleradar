@@ -38,6 +38,10 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
   if (!ok) errori += 1;
   console.log(`${ok ? '✓' : '✗'} ${nome}: atteso=${JSON.stringify(atteso)} ottenuto=${JSON.stringify(ottenuto)}`);
 }
+/** Conteggio delle occorrenze (non sovrapposte) di una sottostringa. */
+function occorrenze(testo: string, ago: string): number {
+  return testo.split(ago).length - 1;
+}
 
 console.log('— Riconoscimento pagine di RIEPILOGO / "Stampa" —');
 check('pagina di stampa riconosciuta', true, ePaginaRiepilogo('https://www.liceo.edu.it/albo/stampa.php?id=12'));
@@ -72,7 +76,7 @@ check(
 const avvisoRiepilogo = costruisciAvviso({
   provincia: 'Asti (AT)',
   classCode: 'A-022',
-  scadenza: '2026-09-30',
+  scadenza: '2099-09-30',
   schoolName: conCodice.schoolName,
   email: conCodice.contactEmail,
   titolo: conCodice.title,
@@ -140,11 +144,19 @@ const html = renderEmailHtml(
 );
 check('email cliccabile (mailto)', true, html.includes('mailto:astf01000x@istruzione.it'));
 check('etichetta email nei messaggi', true, html.includes(`${EMAIL_ICONA} ${EMAIL_ETICHETTA}:`));
-// Il bottone di fonte usa l'etichetta STANDARD ("👉 Apri l'avviso ufficiale"),
-// identica in tutte le superfici; la pagina di riepilogo resta spiegata dalla
-// guida operativa del blocco opportunità.
-check("etichetta standard del link di fonte", true, html.includes("👉 Apri l'avviso ufficiale"));
-check('guida per la pagina di riepilogo presente', true, /elenco|STAMPA/i.test(html));
+// Il bottone di fonte usa l'etichetta STANDARD ("Guarda la fonte ufficiale"),
+// identica in tutte le superfici. Nel corpo email NIENTE guida operativa:
+// l'azione è il link stesso (checklist email §4).
+check('etichetta standard del link di fonte', true, html.includes('Guarda la fonte ufficiale'));
+// UNICA azione per l'annuncio: la dicitura e l'URL della fonte compaiono una
+// volta sola — niente testo sopra il bottone che ripete «Guarda la fonte ufficiale».
+check('dicitura di fonte UNA sola volta', 1, occorrenze(html, 'Guarda la fonte ufficiale'));
+check(
+  "unico link all'avviso (pagina «Stampa» del singolo avviso)",
+  1,
+  occorrenze(html, 'https://www.usp-asti.gov.it/interpelli/stampa?cod=ASTF01000X'),
+);
+check('nessuna guida operativa nel corpo email', false, /clicca STAMPA dove possibile|Cerca la riga|chiedi alla segreteria/i.test(html));
 check('niente "Email non disponibile"', false, html.includes('Email non disponibile'));
 
 const htmlSenza = renderEmailHtml(
