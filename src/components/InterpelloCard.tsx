@@ -24,7 +24,8 @@ import {
   suggerimentoRicercaAvviso,
   urlEsterna,
 } from '@/lib/alertInterpello';
-import { bandaCompatibilita } from '@/lib/compatibilita';
+import { bandaCompatibilita, descrizioneScuolaPreferita, ETICHETTA_SCUOLA_PREFERITA } from '@/lib/compatibilita';
+import { scuolaPreferita } from '@/lib/filtriScuole';
 import { giorniRimanenti, stileScadenza } from '@/lib/scadenza';
 import { InterpelloDettaglioModal } from './InterpelloDettaglioModal';
 import { IstitutoEmittente } from './IstitutoEmittente';
@@ -65,12 +66,16 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
     `Interpello ${etichettaClasse || interpello.provinciaNome || interpello.provinciaCodice}`,
   );
   const giaNotificato = interpelliNotificati.includes(interpello.id);
-  const isPreferita = preferenze.favoriteSchools.some((s) =>
-    s && `${interpello.istituto} ${interpello.titolo}`.toLowerCase().includes(s.toLowerCase()),
-  );
+  // SCUOLA PREFERITA (Modalità 5 — whitelist): l'inclusione è d'ufficio anche
+  // quando il punteggio è insufficiente. Il flag arriva dalla bacheca
+  // (`scuolaPreferita`); il confronto testuale è lo stesso helper puro, così card
+  // e feed non possono divergere.
+  const preferita = interpello.scuolaPreferita ?? scuolaPreferita(preferenze.favoriteSchools, interpello);
   // COMPATIBILITÀ: banda cromatica UNICA (`src/lib/compatibilita.ts`) — verde ≥ 80,
   // arancio ≥ 70, rosso ≥ 60 (suggerimento extra). Sotto soglia: nessun badge.
-  const banda = bandaCompatibilita(interpello.compatibilita);
+  // Il MOTIVO dello scostamento (lingua affine, area affine, provincia limitrofa)
+  // arriva dal feed e finisce nel tooltip: si dichiara, non si nasconde.
+  const banda = bandaCompatibilita(interpello.compatibilita, interpello.motivoCompatibilita);
   // ROUTING: la card espone SOLO la fonte ESTERNA originale (mai un link interno
   // della piattaforma spacciato per "fonte").
   const linkEsterno = urlEsterna(interpello.linkFonte);
@@ -98,20 +103,32 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
                 gestita quando il bando non la pubblica) — mai una riga vuota. */}
             <IstitutoEmittente istituto={interpello.istituto} className="mt-1" />
           </div>
-          {isPreferita && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-accent-500 px-2.5 py-1 text-xs font-semibold text-white shadow-soft">
-              <Star className="h-3.5 w-3.5" />
-              Scuola Preferita
-            </span>
-          )}
-          {banda.visibile && (
+          {/* Modalità 5: punteggio basso MA scuola preferita → etichetta dedicata
+              (mai un voto insufficiente); punteggio buono → l'etichetta resta
+              accanto al match, per dire DA DOVE arriva l'opportunità. */}
+          {preferita ? (
             <span
-              title={banda.descrizione}
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${banda.className}`}
+              title={descrizioneScuolaPreferita(banda.punteggio)}
+              className="inline-flex items-center gap-1 rounded-full bg-accent-500 px-2.5 py-1 text-xs font-semibold text-white shadow-soft"
             >
-              <BadgeCheck className="h-3.5 w-3.5" />
-              {banda.etichetta}
+              <Star className="h-3.5 w-3.5" />
+              {ETICHETTA_SCUOLA_PREFERITA}
+              {banda.visibile && (
+                <span className="ml-1 rounded-full bg-white/25 px-1.5 font-bold">
+                  {banda.punteggio}%
+                </span>
+              )}
             </span>
+          ) : (
+            banda.visibile && (
+              <span
+                title={banda.descrizione}
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${banda.className}`}
+              >
+                <BadgeCheck className="h-3.5 w-3.5" />
+                {banda.etichetta}
+              </span>
+            )
           )}
         </div>
 

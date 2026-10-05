@@ -1,26 +1,25 @@
 /**
- * Contesto App · feed degli interpelli (stato, fetch e filtro del profilo).
+ * Contesto App · feed degli interpelli (stato, fetch e bacheca del profilo).
  *
- * Estratto da `AppContext.tsx` (FASE 3 — Matching Engine): carica gli avvisi dal
- * DB (tabella `interpelli`, fallback legacy `notices`, altrimenti feed VUOTO —
- * nessun dato dimostrativo) e applica i filtri del profilo (province, ordini,
- * classi/materie normalizzate, competenze e parole chiave, scuole ignorate,
- * scadenze attive) + l'AREA SOSTEGNO sempre inclusa entro la provincia.
+ * Carica gli avvisi dal DB (tabella `interpelli`, fallback legacy `notices`,
+ * altrimenti feed VUOTO — nessun dato dimostrativo) e lascia alla bacheca pura
+ * (`src/lib/bachecaInterpelli.ts`) il filtro del profilo e il punteggio.
+ *
+ * LE 5 MODALI DEL RADAR (§26.56): ordine di scuola, classi di concorso, parole
+ * chiave, provincia (raggio 60 km) e filtri scuole. La ricerca allarga le province
+ * al raggio (`provinceDiRicerca`), il punteggio è la media delle modali applicabili
+ * con il jolly del 3% (`valutaCompatibilita`) e le scuole preferite entrano
+ * d'ufficio. La CONSEGNA non passa di qui: notifiche e digest restano strict
+ * (§26.45).
  *
  * `loading` resta nel provider: lo usano gli effetti di bootstrap del profilo.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { classeByCodice } from '@/data/classiConcorso';
 import { interpelli, type Interpello } from '@/data/interpelli';
+import { bachecaInterpelli } from '@/lib/bachecaInterpelli';
 import { limitaSelezione } from '@/lib/planLimits';
-import {
-  avvisoDiSostegno,
-  competenzaCompatibileConAvviso,
-  getFeedInterpelli,
-  normalizzaClasse,
-  punteggioCompatibilita,
-} from '@/lib/matchingEngine';
-import { eAvvisoVivo } from '@/lib/scadenza';
+import { getFeedInterpelli } from '@/lib/matchingEngine';
+import { provinceDiRicerca } from '@/lib/prossimitaGeografica';
 import { supabase } from '@/lib/supabase';
 import { mapNoticiaToInterpello } from './helpers';
 import type { Preferenze } from './types';
@@ -31,7 +30,7 @@ export interface FeedInterpelli {
   fontiInterpelli: Interpello[];
   /** Origine degli avvisi mostrati. */
   origineDati: 'vuoto' | 'supabase';
-  /** Avvisi del feed filtrati con le regole del profilo. */
+  /** Avvisi del feed filtrati con le regole del profilo e delle 5 modali. */
   interpelliFiltrati: Interpello[];
 }
 
@@ -66,14 +65,21 @@ export function useInterpelliFeed(
     [preferenze.classiCodici, tetti?.classi],
   );
 
+  /**
+   * Province da CERCARE: le proprie + quelle entro il raggio dei 60 km
+   * (Modalità 4). La consegna (notifiche/digest) resta strict sulle province
+   * scelte.
+   */
+  const provinceRicerca = useMemo(() => provinceDiRicerca(provinceAttive), [provinceAttive]);
+
   useEffect(() => {
     if (!supabase) return;
     let attivo = true;
     (async () => {
       try {
-        // Matching Engine: query `interpelli` per le province e le classi del profilo
+        // Matching Engine: province (proprie + entro il raggio) e classi del profilo
         const feed = await getFeedInterpelli(supabase, {
-          province: provinceAttive,
+          province: provinceRicerca,
           classi: classiAttive,
         });
         if (!attivo) return;
@@ -116,102 +122,21 @@ export function useInterpelliFeed(
     return () => {
       attivo = false;
     };
-  }, [provinceAttive, classiAttive]);
+  }, [provinceRicerca, classiAttive]);
 
   const interpelliFiltrati = useMemo<Interpello[]>(() => {
     if (!preferenze.onboarded) return [];
-    // Normalizzazione classi (A-026 ≡ A-26 ≡ A042): senza di essa il feed
-    // dell'utente può risultare VUOTO pur avendo interpelli compatibili.
-    const classiSelezionateNorm = new Set(classiAttive.map(normalizzaClasse));
-    const classiSelezionate = classiAttive
-      .map((cod) => classeByCodice(cod))
-      .filter(Boolean);
-    const materieDelleClassi = new Set(classiSelezionate.flatMap((c) => c!.materie));
-    const tutteLeMaterie = new Set([
-      ...preferenze.materieId,
-      ...preferenze.materieCustom.map((m) => m.toLowerCase()),
-    ]);
-    // PROFILO per il PUNTEGGIO di compatibilità (0-100): stessa regola della
-    // consegna (`avvisoCompatibileConProfilo`), una sola implementazione nel motore.
-    // La colonna `profiles.sostegno` NON entra qui: da §26.45 non è più una scelta
-    // dell'utente (l'unica scelta verificabile è una classe AD… tra le proprie).
-    const profiloFeed = {
-      province: provinceAttive,
+    // BACHECA (pura): pertinenza, punteggio delle 5 modali, whitelist/blacklist
+    // scuole e cap dinamico dei riempitivi vivono in un solo modulo testabile.
+    return bachecaInterpelli(fontiInterpelli, {
+      ordini: preferenze.ordini,
       classi: classiAttive,
       materieId: preferenze.materieId,
       materieCustom: preferenze.materieCustom,
-    };
-    return fontiInterpelli.filter((i) => {
-      const matchProvincia =
-        provinceAttive.length === 0 || provinceAttive.includes(i.provinciaCodice);
-      const matchOrdine =
-        preferenze.ordini.length === 0 || preferenze.ordini.includes(i.ordine);
-      const classe = classeByCodice(i.classeCodice);
-      // Match per tutte le classi rilevate (i dati reali di notices hanno class_codes[]),
-      // con confronto NORMALIZZATO dei codici (A-026 ≡ A-26 ≡ A042).
-      const matchClasse =
-        classiAttive.length === 0 ||
-        (i.classiCodes?.some((c) => classiSelezionateNorm.has(normalizzaClasse(c))) ?? false) ||
-        classiSelezionateNorm.has(normalizzaClasse(i.classeCodice));
-      const matchMateria =
-        tutteLeMaterie.size === 0 ||
-        (classe ? classe.materie.some((m) => tutteLeMaterie.has(m)) : false);
-      const matchMaterieDelleClassi =
-        materieDelleClassi.size === 0 ||
-        (classe ? classe.materie.some((m) => materieDelleClassi.has(m)) : false);
-      // COMPETENZE E PAROLE CHIAVE (testo libero): la parola scritta dall'utente
-      // («Lingua inglese», «Intelligenza artificiale») non è un id di catalogo,
-      // quindi il confronto con `classe.materie` non poteva mai combaciare e la
-      // sezione restava vuota. Il testo dell'avviso si confronta con la STESSA
-      // funzione del motore di notifica: una sola regola, nessuna copia.
-      const matchCompetenze = competenzaCompatibileConAvviso(
-        { materieId: preferenze.materieId, materieCustom: preferenze.materieCustom },
-        { materia: i.materia, titolo: i.titolo, classi: i.classiCodes },
-      );
-      // AREA SOSTEGNO: INCLUSIONE PERMANENTE (policy 04/10/2026). Gli avvisi di
-      // sostegno (ADAA/ADEE/ADMM/ADSS — o titolo/materia che lo dichiarano) sono
-      // sempre compatibili entro la provincia, esattamente come nel motore di
-      // notifica (`avvisoDiSostegno`): stessa regola, un solo punto di verità.
-      // Nessun opt-out e nessuna preferenza: la bacheca mostra le stesse
-      // opportunità che il Radar consegna.
-      const matchSostegno = avvisoDiSostegno({
-        classi: i.classiCodes,
-        titolo: i.titolo,
-        materia: i.materia,
-      });
-      // Filtri Avanzati Scuole: nascondi gli avvisi delle scuole in ignoredSchools.
-      // Il match considera istituto + titolo (i dati reali di notices non hanno un campo scuola).
-      const scuolaTesto = `${i.istituto} ${i.titolo}`.toLowerCase();
-      const matchScuolaNonEsclusa =
-        preferenze.ignoredSchools.length === 0 ||
-        !preferenze.ignoredSchools.some((s) => s && scuolaTesto.includes(s.toLowerCase()));
-      // Esclude gli interpelli NON VIVI dalle liste attive pubbliche: con scadenza
-      // → non scaduti; senza scadenza → pubblicati entro la finestra dei 60 giorni
-      // (`eAvvisoVivo`: la stessa regola della bacheca «Radar Live» e del matching).
-      const nonScaduto = eAvvisoVivo(i.dataScadenza, i.dataPubblicazione);
-      return (
-        matchProvincia &&
-        matchOrdine &&
-        (matchClasse || matchMateria || matchMaterieDelleClassi || matchCompetenze || matchSostegno) &&
-        matchScuolaNonEsclusa &&
-        nonScaduto
-      );
-    })
-      // PUNTEGGIO di compatibilità (0-100): vive nel motore
-      // (`punteggioCompatibilita`), una sola regola per banda cromatica e ordine.
-      // Gli avvisi di SOSTEGNO senza una classe AD… propria escono a 60 (banda
-      // rossa): restano in bacheca (§26.45) ma NON scalano le priorità.
-      .map((i) => {
-        const punteggio = punteggioCompatibilita(profiloFeed, {
-          province: i.provinciaCodice,
-          classi: i.classiCodes,
-          materia: i.materia,
-          titolo: i.titolo,
-        });
-        // `0` = il motore non conferma la compatibilità: si conserva il valore
-        // già mappato dal DB (mai un badge fuori scala inventato qui).
-        return punteggio > 0 ? { ...i, compatibilita: punteggio } : i;
-      });
+      province: provinceAttive,
+      favoriteSchools: preferenze.favoriteSchools,
+      ignoredSchools: preferenze.ignoredSchools,
+    }).lista;
   }, [preferenze, fontiInterpelli, provinceAttive, classiAttive]);
 
   return { fontiInterpelli, origineDati, interpelliFiltrati };

@@ -3,6 +3,7 @@ import type { Interpello } from '../data/interpelli';
 import { classeByCodice, eAvvisoSostegno, isCodiceSostegno } from '../data/classiConcorso';
 import { materie as catalogoMaterie } from '../data/ordiniMaterie';
 import { province } from '../data/province';
+import { normalizzaProvincia, provinciaCompatibile } from './prossimitaGeografica';
 import { dataIsoLocale, dataLimiteFinestraSenzaScadenza } from './scadenza';
 import { normalizzaStatoArricchimento } from './statoArricchimento';
 
@@ -390,10 +391,12 @@ export interface AvvisoCompatibilita {
   titolo?: string | null;
 }
 
-/** Normalizza un codice provincia per il confronto (maiuscolo, senza spazi). */
-export function normalizzaProvincia(codice?: string | null): string {
-  return (codice ?? '').trim().toUpperCase();
-}
+/**
+ * Normalizzazione dei codici provincia (maiuscolo, senza spazi). L'implementazione
+ * vive in `src/lib/prossimitaGeografica.ts` — insieme alla regola di prossimità —
+ * ed è riesportata qui per non rompere il contratto pubblico del motore.
+ */
+export { normalizzaProvincia };
 
 /** Nomi/etichette delle materie coperte da una classe di concorso del catalogo. */
 export function etichetteMaterieClasse(codice?: string | null): string[] {
@@ -562,20 +565,41 @@ export function competenzaCompatibileConAvviso(
  *
  * `ignoraFiltri` serve SOLO a enumerare i profili notificabili (digest): salta i
  * controlli geografici/di classe (compreso quello del sostegno).
+ *
+ * `provinceLimitrofe` (default `false` = STRICT) ammette anche le province
+ * LIMITROFE — provincia ENTRO IL RAGGIO di 60 km (distanza fra capoluoghi, `src/lib/prossimitaGeografica.ts`) — al posto del
+ * blocco rigido: la bacheca le mostra poi con la penalità di distanza
+ * (`penalitaDistanza`). Le province OLTRE IL RAGGIO restano escluse anche
+ * con l'opzione attiva, e la consegna (email/Telegram, digest) non passa mai
+ * l'opzione: cosa arriva all'utente non cambia.
  */
+export interface OpzioniCompatibilita {
+  /** true = salta i filtri (enumerazione dei profili notificabili, digest). */
+  ignoraFiltri?: boolean;
+  /**
+   * true = le province entro il raggio di 60 km sono AMMESSE e pesate, non
+   * escluse. Opzione della sola BACHECA: default `false` (consegna invariata).
+   */
+  provinceLimitrofe?: boolean;
+}
+
 export function avvisoCompatibileConProfilo(
   profilo: ProfiloCompatibilita,
   avviso: AvvisoCompatibilita,
-  opts: { ignoraFiltri?: boolean } = {},
+  opts: OpzioniCompatibilita = {},
 ): EsitoCompatibilita {
   if (opts.ignoraFiltri === true) return { ok: true };
 
   const provinceProfilo = (profilo.province ?? []).map(normalizzaProvincia).filter(Boolean);
   if (provinceProfilo.length === 0) return { ok: false, motivo: 'profilo-senza-province' };
   const provinciaAvviso = normalizzaProvincia(avviso.province);
-  if (!provinciaAvviso || !provinceProfilo.includes(provinciaAvviso)) {
-    return { ok: false, motivo: 'provincia' };
-  }
+  // PROVINCIA: stessa provincia sempre ammessa; limitrofa (ENTRO il raggio di 60 km
+  // fra capoluoghi) solo con `provinceLimitrofe` (bacheca); oltre il raggio sempre
+  // esclusa — un avviso di Milano non arriva a chi cerca Asti senza averla selezionata.
+  const provinciaAmmessa = provinciaCompatibile(provinceProfilo, provinciaAvviso, {
+    limitrofe: opts.provinceLimitrofe === true,
+  });
+  if (!provinciaAmmessa) return { ok: false, motivo: 'provincia' };
 
   const classiProfilo = (profilo.classi ?? []).map(normalizzaClasse).filter(Boolean);
   const competenzeProfilo = etichetteCompetenzeProfilo(profilo);
@@ -656,11 +680,16 @@ export function profiloAderisceSostegno(profilo: ProfiloCompatibilita): boolean 
  *
  * È la STESSA regola della consegna: prima `avvisoCompatibileConProfilo` decide
  * `ok`/motivo, poi il punteggio gradua. Nessuna seconda copia dei criteri.
+ *
+ * Questo è il punteggio BASE (0/60/70/80/100). Il punteggio MOSTRATO in bacheca è
+ * `valutaCompatibilita` (`src/lib/compatibilitaGraduata.ts`), che parte da qui e
+ * applica le 5 MODALI (media + jolly: ordine, classi, parole chiave, provincia entro il raggio con `opts.provinceLimitrofe`): consegna e notifiche continuano a usare
+ * il base — invariato per costruzione.
  */
 export function punteggioCompatibilita(
   profilo: ProfiloCompatibilita,
   avviso: AvvisoCompatibilita,
-  opts: { ignoraFiltri?: boolean } = {},
+  opts: OpzioniCompatibilita = {},
 ): number {
   if (opts.ignoraFiltri === true) return PUNTEGGIO_MATCH_ESATTO;
   if (!avvisoCompatibileConProfilo(profilo, avviso, opts).ok) return PUNTEGGIO_MATCH_NESSUNO;

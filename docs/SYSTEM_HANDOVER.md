@@ -308,10 +308,11 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | File | Righe | Contenuto |
 |---|---|---|
 | `moduli.ts` | 298 | ⚠️ **Ereditato**: il catalogo è stato diviso in `moduliAltreAree.ts` (500), `moduliEntiAltro.ts` (487), `moduliOrdiniScuola.ts` (2710), `classiConcorso.ts` (944); `moduli.ts` conserva tipi, `macroAree`, `ordineMacroAree`, helper `conAggiuntaInCima`, `getModuliScaricati`, `macroAreaById` e il tipo `DocumentoModulistica` |
-| `interpelli.ts` | — | Tipo `Interpello` + feed mock (~12 voci demo) per modalità demo |
+| `interpelli.ts` | 82 | Tipo `Interpello` + fallback **VUOTO** (`interpelli = []`: nessuna voce dimostrativa — policy dati) + i campi della compatibilità: `compatibilita`, `motivoCompatibilita` e **`scuolaPreferita`** (inclusione d'ufficio della whitelist scuole, §26.56) |
 | `classiConcorso.ts` | — | `ClasseConcorso[]` (A-XX, ADEE, ADSS…) con `ordine`, `materie[]`, `requisitiCfu[]`; helper `classeByCodice` |
 | `ordiniMaterie.ts` | ~160 | `OrdineScuola` (infanzia/primaria/secondaria1/secondaria2/cpia/serali/pon/ata), `ordiniScuola`, `materie`, **`MATERIE_GENERICHE`** + **`materieCompetenzeExtra()`** (esclude le discipline curricolari: Storia/Geografia non sono "competenze extra"), **`competenzeSuggerite`** (12 **tag popolari** PNRR/PON: AI nella didattica, robotica educativa, **Stop Motion**, coding, digital storytelling, CLIL, **Lingua inglese**, STEM, creatività digitale, educazione motoria, progettazione bandi, orientamento), **`materieRicercabili()`** (le competenze extra PIÙ i tag popolari che sono discipline curricolari — «Lingua inglese», «Educazione motoria» — così anche loro si trovano dalla ricerca) e **`CORRELAZIONI_MATERIE`** (co-occorrenze curate termine → id di materie esistenti per la ricerca ESTESA: `inglese` → `clil`, `educazione_linguistica`…). Verificato da `npm run test:radar:preferenze` |
 | `province.ts` | 117 | `Provincia[]` (107 province: codice/nome/regione) + `regioni` |
+| `provinceCoordinate.ts` | 132 | **Dati** (§26.56) — coordinate dei capoluoghi (2 decimali) per la distanza fra province: `coordinateProvince` (106 codici), consumate solo da `prossimitaGeografica.ts` (`distanzaKm`, raggio dei 60 km) |
 | `servizi.ts` | 99 | Vetrina servizi: `Servizio[]` (slug, emoji, titolo, caratteristiche, destinatari, dashboard, sperimentazione) + `servizioDaSlug` |
 | `editableTexts.ts` | 100 | **Registro dei testi modificabili «al volo» (DEV)**: `TESTI_EDITABILI` (`chiave → testo di default`, 22 voci = 8 FAQ pubbliche `faq.<slug>.domanda|risposta` + i 3 blocchi dell'offerta PRO `prezzi.offerta.<blocco>.titolo|testo`), `ChiaveTesto`/`CHIAVI_TESTO`, `testoDiDefault`, `eChiaveTesto`. **Nessun raggruppamento per pagina** (il `gruppiTesti()` con le etichette cablate è stato rimosso il 29/09/2026, §26.30): le pagine rendono per CHIAVE (`useTestiEditabili`), mai la stringa duplicata, e il `localStorage: sr_simple_text_overrides` vale **solo** in sviluppo (nessuno lo scrive più da quando il pannello è stato rimosso, §26.38). Verificato da `npm run test:testi-chiave` (§26.27; selezione delle FAQ in §26.29) |
 | `faqPubbliche.ts` | 51 | **Elenco unico delle FAQ pubbliche** (`FAQ_PUBBLICHE`, `VoceFaq`): 8 voci `{ id, q, a }` = ancora HTML + chiavi del registro testi, nello stesso ordine su `/faq` (`FAQPage`) e su `/prezzi` (`PrezziPage`, 🔒: della pagina è cablata la sola sezione FAQ dal 29/09/2026). Solo copy di **posizionamento**: uscite le voci difensive (disdette, sicurezza dei pagamenti) e i rimandi a funzioni non attive (CV, Archivista AI, Tabelle A/B) — §26.29. L'ancora `#animatore-digitale` è pubblica (referenziata da `AuthModal`/`NotaAccessoScolastico`). Modulo puro: nessun React, nessuna copy |
@@ -323,7 +324,17 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | File | Righe | Responsabilità |
 |---|---|---|
 | `supabase.ts` | 20 | Client Supabase frontend (anon); `supabase === null` in demo; `isSupabaseConfigurato` |
-| `matchingEngine.ts` | ~700 | Matching Radar + utenti compatibili (§5.2); `searchInterpelli` esclude gli scaduti; **`elencaUtentiNotificabili`** → TUTTI i profili con canale valido e Radar attivo (`findUtentiCompatibili(..., { ignoraFiltri: true })`, così anche chi ha province/classi configurate riceve il riepilogo). **Normalizzazione CLASSI robusta**: `normalizzaClasse` (`A-18` ≡ `A18` ≡ `a 18` ≡ `A_18` ≡ `A-018` → `A-18`; i codici sostegno `ADEE`/`AD24` restano invariati), **`normalizzaClassi`** (dedup + formato canonico), **`contieneClasse`**/**`rimuoviClasse`** (confronto a prova di formato per le caselle UI). **COMPETENZE/PAROLE CHIAVE** (§26.35): `normalizzaCompetenza`, `tokenCompetenza`, `radiceCompetenza`, `etichetteCompetenzeProfilo`, `competenzaCompatibileConAvviso` (regola condivisa da motore, digest e feed), **`avvisoDiSostegno`** (l'area sostegno è a **inclusione permanente**: gli avvisi `AD*` non passano dal controllo di classe — §26.45). Verificato da `npm run test:matching` e `npm run test:radar:preferenze` |
+| `matchingEngine.ts` | ~700 | Matching Radar + utenti compatibili (§5.2); `searchInterpelli` esclude gli scaduti; **`elencaUtentiNotificabili`** → TUTTI i profili con canale valido e Radar attivo (`findUtentiCompatibili(..., { ignoraFiltri: true })`, così anche chi ha province/classi configurate riceve il riepilogo). **Normalizzazione CLASSI robusta**: `normalizzaClasse` (`A-18` ≡ `A18` ≡ `a 18` ≡ `A_18` ≡ `A-018` → `A-18`; i codici sostegno `ADEE`/`AD24` restano invariati), **`normalizzaClassi`** (dedup + formato canonico), **`contieneClasse`**/**`rimuoviClasse`** (confronto a prova di formato per le caselle UI). **COMPETENZE/PAROLE CHIAVE** (§26.35): `normalizzaCompetenza`, `tokenCompetenza`, `radiceCompetenza`, `etichetteCompetenzeProfilo`, `competenzaCompatibileConAvviso` (regola condivisa da motore, digest e feed), **`avvisoDiSostegno`** (l'area sostegno è a **inclusione permanente**: gli avvisi `AD*` non passano dal controllo di classe — §26.45). Verificato da `npm run test:matching` e `npm run test:radar:preferenze`. **PROSSIMITÀ GEOGRAFICA (§26.55)**: `avvisoCompatibileConProfilo`/`punteggioCompatibilita` accettano `OpzioniCompatibilita` (`ignoraFiltri`, **`provinceLimitrofe`** — default `false`, la attiva solo la bacheca: la consegna resta strict); `normalizzaProvincia` vive in `prossimitaGeografica.ts` (§26.56: raggio di 60 km) ed è qui **riesportata** | 
+| `compatibilita.ts` | 125 | **Puro** — SOGLIE (🟢 ≥ 80 · 🟠 ≥ 70 · 🔴 ≥ 60), `normalizzaPunteggioCompatibilita`, `livelloCompatibilita`, `etichettaCompatibilita`, `bandaCompatibilita(punteggio, motivo?)` (livello + etichetta + descrizione/tooltip + classi Tailwind), **`ETICHETTA_SCUOLA_PREFERITA`** («Scuola preferita nel radar») e `descrizioneScuolaPreferita`. **§26.56:** le PENALITÀ cumulate sono state sostituite dalla MEDIA PONDERATA delle 5 MODALI (`PESI_MODALI`, §26.57), che vivono nei moduli dedicati (`punteggioOrdine`/`punteggioClasse`/`punteggioCompetenze`/`prossimitaGeografica`) (§26.54, §26.55, §26.56) |
+| `compatibilitaGraduata.ts` | 237 | **Puro** — livello di BACHECA della compatibilità (§26.56, **media ponderata** dalla §26.57): `valutaCompatibilita(profilo, avviso, opts)` = **media PONDERATA delle modali applicabili** (ordine · classi · parole chiave · provincia — le non applicabili escono dalla media e i pesi si rinormalizzano) **+ incrementi jolly del 3%**, con i **motivi leggibili** per il tooltip (compresa la composizione «media ponderata di N modali») e il dettaglio per modale (`modali` + `pesoTotale`). Decisione di prodotto in una riga: **`PESI_MODALI`** (classe **2** = requisito abilitante · ordine/competenze/provincia 1) e primitiva pura **`mediaPonderata(contributi)`** = `Σ(punteggio × peso) / Σpesi`. Invarianti: nessun peso raggiunge la metà dei pesi totali, il sostegno extra resta 60, oltre il raggio si è esclusi (salvo whitelist) e la consegna non passa di qui |
+| `areeDisciplinari.ts` (`affinitaDisciplinare.ts` fino alla §26.56) | 189 | **Puro** — AREE E PONTI DISCIPLINARI, base condivisa delle Modali 2 e 3: `areeDi(testo)` (radici curate ≥ 5 caratteri usate anche come PREFISSO: `teatr` → «teatrale»), `lingueDi`, `etichetteAree`, `areeInComune`, `ponteTraAree` (ponti affini: Digitale ↔ IA, Arte ↔ Digitale, Scientifico ↔ Digitale; contaminato: Letteratura ↔ Teatro). Sigle solo in maiuscolo («IA», mai «ai») |
+| `prossimitaGeografica.ts` | 185 | **Puro** — GEOGRAFIA delle province (§26.56, **Modalità 4**): `normalizzaProvincia` (fonte unica), `coordinateProvincia`, **`distanzaKm`** (Haversine fra capoluoghi), `provinceEntroRaggio`, `provinceDiRicerca` (proprie + entro il raggio di 60 km), `punteggioProvincia` (propria 100 · vicina con penalità 25/40/55 → 75/60/45 · **oltre il raggio = esclusione**), `provinciaCompatibile`. La consegna resta STRICT: senza `limitrofe` vale solo la provincia selezionata |
+| `riempitivi.ts` | 105 | **Puro** — CAP DINAMICO: `limitaRiempitivi(lista, opts)` con `MAX_RIEMPITIVI_BACHECA = 5` (sotto il 70%), `MINIMO_MATCH_QUALITA = 10` e **`proteggi`** (§26.56: le scuole preferite non sono riempitivi e non si nascondono); punteggi assenti neutri, ordine invariato, esito con conto e motivo (`sotto-tetto`/`tetto-raggiunto`) |
+| `punteggioOrdine.ts` | 76 | **Puro** — **Modalità 1** «Dove vuoi lavorare» (§26.56): `punteggioOrdine(ordini, ordineAvviso)` → 100 selezionato · 90 adiacente (infanzia↔primaria↔secondaria I↔secondaria II) · 70 salto/altra tipologia · `null` = modale fuori dalla media. `ordiniAdiacenti`, `etichettaOrdine` |
+| `punteggioClasse.ts` | 198 | **Puro** — **Modalità 2** «Classi di concorso» (§26.56): `punteggioClasse` → 100 esatta · 95 affine (una materia del catalogo in comune: A-22 ↔ A-24) · 90 competenza dichiarata dentro la classe dell'avviso / materia coperta · 85 stessa area · 75 ponte affine · 65 area contaminata · 55 classe estranea; `classeVicina` (soglia 85) apre la bacheca, `materieInComune`, `etichettaClasse` |
+| `punteggioCompetenze.ts` | 135 | **Puro** — **Modalità 3** «Oltre la classe» con **ruolo JOLLY** (§26.56): parola chiave 90, match vicino 85, `null` = modale esclusa dalla media, `incrementi` = +3% per ogni corrispondenza parziale o riconducibile (tetto `JOLLY_MASSIMO = 3` → +9%) |
+| `filtriScuole.ts` | 70 | **Puro** — **Modalità 5** «Filtri Avanzati Scuole» (§26.56): `testoScuola` (istituto + titolo, minuscolo), `scuolaInElenco`, `scuolaEsclusa` (blacklist), `scuolaPreferita` (whitelist), `giudizioScuole` (la blacklist vince sulla whitelist) |
+| `bachecaInterpelli.ts` | 127 | **Puro** (§26.56) — PIPELINE della bacheca, un solo punto: avviso vivo → filtri scuole (blacklist fuori, whitelist dentro d'ufficio) → pertinenza (motore o classe/parola chiave «vicina») → punteggio delle modali → cap dei riempitivi con protezione delle preferite. `bachecaInterpelli(fonti, profilo)` restituisce lista + conti (`esclusiBlacklist`, `forzate`, `riempitiviNascosti`), così `useInterpelliFeed` resta un contenitore di stato |
 | `scadenza.ts` | ~90 | Helper scadenza (puro): `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `stileScadenza` (semaforo 🟢 lungo / 🟡 vicino / 🔴 imminente) |
 | `alertInterpello.ts` | ~480 | Costruttore dell'**avviso strutturato** (gerarchia obbligatorie/opzionali + campo `email` dell'avviso), `pulisciTitoloAvviso` (via i dump di codici classe), **`emailAvviso`** + costanti condivise `EMAIL_ICONA`/`EMAIL_ETICHETTA`/`EMAIL_ETICHETTA_WEB`, **`ISTRUZIONE_AVVISO_UFFICIALE`** (direttiva standard "clicca STAMPA") e **`suggerimentoRicercaAvviso({ compatto })`** (guida operativa per elenchi/"Stampa" o fonte mancante), **`emailAvviso`** ed **`etichettaFonteLink`/`classificaFonteLink`/`ePaginaRiepilogo`** (etichetta ONESTA del link: PDF / Albo Pretorio / **pagina di riepilogo "Stampa"** / avviso — mai "Candidati"), **GATE DI QUALITÀ**: `eUrlAvvisoDiretto` (link = avviso specifico, mai home/elenco/ricerca/archivio regionale), `motivoAvvisoNonInviabile` e `avvisoInviabile` (**link diretto AND email di candidatura**: altrimenti nessun invio), **PULIZIA DELL'URL**: `pulisciUrlEsterna` (entità `&amp;`, virgolette/angolari/caporalia di markdown, spazi e punteggiatura di contorno) e **`urlFonteAvviso`** = stringa pulita + UNICO gate `eUrlAvvisoDiretto` (il punto unico dell'`href` per Telegram, email e canali — §26.45). Verificato da `npm run test:qualita` |
 | `interpelloRouting.ts` | ~40 | Deep link LEGACY `/interpello/:id` (puro): `eUuid`, `chiaveInterpelloDaParam` (uuid → `id`, hash → `hash_id`). **Policy**: le notifiche non generano più link interni; la rotta resta solo per i deep link storici (che reindirizzano subito alla fonte esterna) |
@@ -656,7 +667,11 @@ Funzioni esposte (tutte nel `AppContextValue`):
 **Filtro feed Radar** (`interpelliFiltrati`): match per provincia (`provinceCodici`),
 ordine (`ordini`), classe (`classiCodici` su `classiCodes` o `classeCodice`), materia
 (da `materieId` + `materieCustom` vs `classe.materie`), e **blacklist scuole**
-(`ignoredSchools` applicato su `istituto + titolo`).
+(`ignoredSchools` applicato su `istituto + titolo`). Dal **§26.55** la provincia è
+ammessa anche entro il raggio di 60 km (`provinciaCompatibile`, §26.56) e ogni
+avviso superstite passa da `valutaCompatibilita` (penalità di scostamento + motivo)
+per chiudere con `limitaRiempitivi` (max 5 sotto il 70%, nessuno con 10 match di
+qualità): la bacheca è graduata, la consegna resta strict.
 
 ### 3.2 Altri data models principali
 
@@ -667,6 +682,7 @@ interface Interpello {
   provinciaCodice: string; provinciaNome: string; classeCodice: string;
   classiCodes?: string[]; ordine: OrdineScuola; dataScadenza: string;
   descrizione: string; linkFonte: string; compatibilita: number;
+  motivoCompatibilita?: string | null; // sintesi delle modali (punteggio, §26.56)
 }
 // src/lib/matchingEngine.ts
 interface InterpelloDB { id; hash_id; title; province; class_codes: string[]|null;
@@ -6554,4 +6570,219 @@ Admin (richiesta esplicita dell'utente)**: `src/departments/admin/components/Pre
 §26.54), `docs/DEPARTMENT_MAP.md`. **Non toccati**: `comunicazione/**` (il badge di compatibilità è una
 superficie della dashboard, non un canale: le checklist restano valide), `src/departments/notizie/**`,
 `src/departments/cfu/**`, `src/modules/**` e la pipeline di consegna (`src/lib/notifier.ts`).
+
+### 26.55 Compatibilità graduata: affinità disciplinare, prossimità geografica e cap dei riempitivi (05/10/2026)
+
+**Perché.** Tre richieste di prodotto sull'**intelligenza semantica della bacheca**: **(1)** le materie
+vicine non vanno escluse a priori — «Inglese» cercato con «Tedesco» offerto è una competenza
+metodologica reale con uno scostamento da DICHIARARE; **(2)** la provincia limitrofa/secondaria non è un
+blocco rigido ma una distanza da ponderare (fuoriluogo resta fuori); **(3)** gli avvisi di basso valore
+vanno limitati: massimo 5 sotto il 70%, e nessuno se la bacheca ha già 10 opportunità di qualità.
+
+**Cosa è cambiato.**
+
+- **Penalità calibrate, una sola fonte** (`src/lib/compatibilita.ts`): `PENALITA_LINGUA_AFFINE = 25`,
+  `PENALITA_AREA_AFFINE = 10`, `PENALITA_AREA_CONTAMINATA = 15`, `PENALITA_PROVINCIA_LIMITROFA = 10`,
+  tetto `PENALITA_MASSIMA = 35`, `applicaPenalita(punteggio, punti)` e
+  `bandaCompatibilita(punteggio, motivo?)`: il MOTIVO dello scostamento entra nella descrizione del
+  badge (tooltip di card e modale) — un match parziale si dichiara, non si lascia intuire.
+- **Matrice di affinità disciplinare** (`src/lib/affinitaDisciplinare.ts`, nuovo, puro): lingue affini
+  («Inglese» vs «Tedesco» → −25%, **solo su scelta ESPLICITA** dell'utente: una classe multi-lingua
+  A-22/A-24/A-25 non è una scelta) e ponti tematici CURATI (Digitale ↔ Intelligenza artificiale −10%,
+  Letteratura ↔ Teatro −15%, Arte ↔ Digitale, Scientifico ↔ Digitale). Una sola penalità disciplinare
+  per avviso (mai cumuli); le sigle valgono solo in maiuscolo (`IA`/`AI`, mai la preposizione «ai»).
+- **Prossimità geografica** (`src/lib/prossimitaGeografica.ts`, nuovo, puro): `normalizzaProvincia`
+  (spostata qui dal motore, che la **riesporta**), `regioneProvincia`, `sonoProvinceLimitrofe` (stessa
+  REGIONE), `provinciaCompatibile`, `penalitaGeografica`, `provinceDiRicerca`. Tre livelli: provincia
+  selezionata → nessuna penalità; limitrofa → −10% e resta visibile; **fuoriluogo → esclusa** (Milano
+  per chi cerca Asti non passa, nemmeno con l'opzione attiva).
+- **Cap dinamico dei riempitivi** (`src/lib/riempitivi.ts`, nuovo, puro): `limitaRiempitivi` con
+  `MAX_RIEMPITIVI_BACHECA = 5` e `MINIMO_MATCH_QUALITA = 10`. Il 70% esatto è qualità, un punteggio
+  assente resta neutro (mai classificato a caso), l'ordine della bacheca non cambia.
+- **Un solo punto di valutazione** (`src/lib/compatibilitaGraduata.ts`, nuovo, puro):
+  `valutaCompatibilita(profilo, avviso, opts)` = punteggio del motore + penalità + motivi leggibili.
+  Invarianti: il pavimento del **sostegno EXTRA** resta 60 (l'inclusione permanente di §26.45 non si
+  sconta) e il punteggio base del motore (`punteggioCompatibilita`) non cambia di una virgola.
+- **Bacheca** (`src/contexts/app/useInterpelliFeed.ts`): cerca anche le province limitrofe
+  (`provinceDiRicerca`), filtra con `provinciaCompatibile(..., { limitrofe: true })`, valuta con
+  `valutaCompatibilita(..., { provinceLimitrofe: true })` e chiude con `limitaRiempitivi`. Card
+  (`InterpelloCard`) e modale (`InterpelloDettaglioModal`) passano il motivo alla banda, che viaggia
+  sull'`Interpello` (`motivoCompatibilita`, `src/data/interpelli.ts`) — `DashboardPage` non cambia:
+  ordina ancora per compatibilità e poi per scadenza.
+- **CONSEGNA INVARIATA (nessuna regressione):** `avvisoCompatibileConProfilo` accetta la nuova opzione
+  `OpzioniCompatibilita.provinceLimitrofe` con default **`false`**; notifier, digest e `scripts/invia-*`
+  non la passano (guardia dedicata) — email/Telegram continuano a consegnare SOLO le province scelte,
+  quindi `comunicazione/**` resta valido così com'è (perimetro dei canali e del digest Base invariato).
+
+**Verifiche (05/10/2026, da `project/`).** `npm run typecheck` → ✅ exit 0 · **`npm test` (catena
+completa) → ✅ exit 0** · `npm run test:architettura` → ✅ nessuna violazione nuova (588 file · **141** =
+baseline) · `npx eslint` sui file toccati → ✅ zero problemi · `npm run build` → ✅ exit 0.
+Guardie nuove `npm run test:compatibilita:graduata` (penalità, affinità, prossimità, integrazione di
+`valutaCompatibilita`) e `npm run test:riempitivi` (cap + cablaggio + consegna invariata);
+`test:compatibilita` e `test:opportunita` allineati al nuovo punto di valutazione del feed. Le guardie
+hanno trovato e fatto correggere un bug reale (nome dell'opzione geo non propagato) prima del commit.
+
+**File toccati.** **Condivisi essenziali**: `src/lib/compatibilita.ts`,
+`src/lib/affinitaDisciplinare.ts` (nuovo), `src/lib/prossimitaGeografica.ts` (nuovo),
+`src/lib/riempitivi.ts` (nuovo), `src/lib/compatibilitaGraduata.ts` (nuovo),
+`src/lib/matchingEngine.ts`, `src/data/interpelli.ts`, `src/contexts/app/useInterpelliFeed.ts` ·
+**viste condivise (fuori dal dipartimento, richiesta esplicita dell'utente)**:
+`src/components/InterpelloCard.tsx`, `src/components/InterpelloDettaglioModal.tsx` · **guardie**:
+`scripts/test-compatibilita-graduata.ts` (nuova), `scripts/test-riempitivi-bacheca.ts` (nuova),
+`scripts/test-compatibilita-punteggio.ts`, `scripts/test-opportunita-vive.ts`, `package.json`
+(`test:compatibilita:graduata`, `test:riempitivi` + ingresso in `npm test`) · **documentazione**:
+`docs/SYSTEM_HANDOVER.md` (questa §26.55). **Non toccati**: `comunicazione/**`, `src/departments/**`,
+`src/modules/**` e la pipeline di consegna (`src/lib/notifier.ts`, `src/lib/digest.ts`).
+
+### 26.56 Le 5 MODALI del Radar: media del punteggio, raggio dei 60 km e scuole preferite (05/10/2026)
+
+**Perché.** Richiesta di prodotto: il punteggio di bacheca non è più una serie di sconti cumulati
+(§26.54/§26.55) ma la **media delle 5 MODALI** delle preferenze dell'utente, con i numeri decisi dal
+prodotto e i **filtri avanzati scuole** (whitelist/blacklist) come giudizio che vince sul punteggio.
+
+**Le 5 modali (numeri di prodotto).**
+
+| Modale (finestra preferenze) | Punteggi | Note |
+|---|---|---|
+| 1 · «Dove vuoi lavorare» (ordine) | 100 selezionato · **90 subito prima/dopo** (infanzia↔primaria↔secondaria I↔secondaria II) · **70 salto** (es. primaria per chi cerca la secondaria) | tipologie fuori sequenza (CPIA, serali, PON, ATA): 100 solo se selezionate, altrimenti 70 |
+| 2 · «Classi di concorso» | 100 esatta (A-022 ≡ A-22) · **95 affine** (una materia del catalogo in comune: A-22 ↔ A-24) · 90 competenza dichiarata dentro la classe dell'avviso / materia coperta · **85 stessa area** · 75 ponte affine · 65 area contaminata · **55 estranea** | «penalità crescente in base alla distanza disciplinare»: quattro gradini misurati dalla matrice di `areeDisciplinari.ts` |
+| 3 · «In cosa puoi lavorare oltre la classe» | **90 parola chiave trovata** (a qualunque ordine di scuola) · **85 match vicino** (token parziali) | **RUOLO JOLLY**: senza corrispondenze la modale **esce dalla media** (non azzera l'offerta); ogni corrispondenza parziale/riconducibile vale **+3%** sul totale (tetto +9% → 93%, 87%…) |
+| 4 · «Provincia» | 100 provincia selezionata · **grossa penalità entro il raggio di 60 km**: −25 (≤ 20 km) / −40 (≤ 40 km) / −55 (≤ 60 km) → **75 / 60 / 45** · **oltre i 60 km: esclusione d'ufficio** | distanza in linea d'aria fra **capoluoghi** (Haversine) e ricerca allargata alle province entro il raggio |
+| 5 · «Filtri Avanzati Scuole» | **blacklist → avviso oscurato e scartato** a prescindere dal punteggio · **whitelist → inclusione d'ufficio** a prescindere dal punteggio | la blacklist VINCE sulla whitelist; se il punteggio è insufficiente la card mostra l'etichetta dedicata **«Scuola preferita nel radar»** al posto del voto basso, se è buono lo mette accanto al match |
+
+**Come si compone il punteggio.** `valutaCompatibilita` (bacheca) calcola i punteggi delle modali
+**applicabili** — una modale senza dati dell'utente (nessun ordine, nessuna classe, nessuna parola
+chiave trovata, nessuna provincia) NON entra nella media: non azzera l'opportunità per un dato che
+l'utente non ha dichiarato — ne fa la media e vi somma gli **incrementi jolly del 3%**. Dalla
+**§26.57** quella media è **PONDERATA**: i pesi delle modali vivono nell'unico punto `PESI_MODALI`
+(`src/lib/compatibilitaGraduata.ts`).
+Il numero resta dentro le bande di §26.54 (🟢 ≥ 80 · 🟠 ≥ 70 · 🔴 ≥ 60) e nello stesso ordine di
+bacheca (`DashboardPage`: compatibilità → scadenza).
+
+**Cosa è cambiato (moduli).** Nuovi moduli PURI, uno per modale: `punteggioOrdine.ts` (Modalità 1),
+`punteggioClasse.ts` (2), `punteggioCompetenze.ts` (3), `prossimitaGeografica.ts` riscritto intorno
+alla distanza (4), `filtriScuole.ts` (5), `areeDisciplinari.ts` (matrice di aree e ponti, che
+**sostituisce** `affinitaDisciplinare.ts`), `bachecaInterpelli.ts` (la pipeline della bacheca, prima
+dentro l'hook) e i **dati** `src/data/provinceCoordinate.ts` (coordinate dei capoluoghi, 106 province).
+`compatibilitaGraduata.ts` diventa l'aggregatore (media + jolly + invarianti); `compatibilita.ts`
+**perde le penalità cumulate** (`applicaPenalita`, `PENALITA_*`) e conserva soglie, banda cromatica,
+`descrizioneScuolaPreferita` e `ETICHETTA_SCUOLA_PREFERITA`; `riempitivi.ts` guadagna `proteggi` (le
+scuole preferite non sono riempitivi); `Interpello` guadagna **`scuolaPreferita`** e card e modale
+mostrano l'etichetta dedicata.
+
+**Invarianti (nessuna regressione).** Il **sostegno fuori dalle proprie classi resta 60** (§26.45: non
+si sconta); la **CONSEGNA è intatta** — `provinceLimitrofe` è un'opzione della sola bacheca e notifier,
+digest e `scripts/invia-*` non la passano (guardia), quindi email/Telegram continuano a consegnare SOLO
+le province scelte e `comunicazione/**` resta valido così com'è; la pertinenza resta un gate (senza
+aggancio del motore o di una vicinanza ≥ 85 il ponte tematico NON crea l'opportunità: niente card a
+caso); `DashboardPage` non cambia (ordina ancora compatibilità → scadenza) e il cap dei riempitivi resta
+5 sotto il 70% con la nuova protezione delle preferite.
+
+**Scostamenti dichiarati (cambi di comportamento voluti dalla richiesta).** (1) L'**ordine di scuola non
+è più un filtro rigido**: un avviso adiacente o distante entra con 90/70 (il cap dei riempitivi evita il
+rumore); (2) la provincia non è più «stessa regione»: si misura la **distanza fra capoluoghi** e oltre i
+60 km l'avviso è escluso; (3) una **classe affine (95) o della stessa area (85)** può far entrare un
+avviso che il motore strict non agganciava (prima 0); (4) i valori assoluti cambiano (es. «materia
+coperta» 80 → 90; «profilo solo competenze» 70 → media delle modali applicabili).
+
+**Limiti dichiarati (onestà, non silenzi).** Le coordinate sono quelle dei **capoluoghi**, arrotondate a
+2 decimali (fonte: coordinate pubbliche delle voci Wikipedia dei comuni capoluogo): la soglia dei 60 km
+è una distanza fra capoluoghi, non la geometria del confine amministrativo — per un dataset ISTAT/IGM si
+sostituisce un solo file (`provinceCoordinate.ts`). La **whitelist** può pescare solo gli avvisi delle
+province che il feed interroga (proprie + entro il raggio): per seguire una scuola di un'altra regione
+l'utente aggiunge la sua provincia. La sfumatura del **3% è deterministica** (dipende dalle
+corrispondenze trovate, non dal caso): un punteggio casuale non sarebbe né spiegabile all'utente né
+verificabile da una guardia.
+
+**Verifiche (05/10/2026, da `project/`).** `npm run typecheck` → ✅ exit 0 · **`npm test` (catena
+completa) → ✅ exit 0** · `npm run test:architettura` → ✅ nessuna violazione nuova (597 file · **141** =
+baseline) · `npx eslint` sui 23 file toccati → ✅ zero problemi · `npm run build` → ✅ exit 0 ·
+`test:radar:preferenze`, `test:match-rpc`, `test:digest`, `test:qualita`, `test:admin:utente`,
+`test-provincia-principale`, `test-sostegno-preferenza` → ✅ exit 0. Guardie: **nuove**
+`npm run test:modali` (Modali 1-2-3 + media e jolly), `test:prossimita` (distanze reali, raggio, fasce,
+esclusione, strict della consegna), `test:filtri-scuole` (blacklist/whitelist + etichetta dedicata +
+cablaggio grafico); **riscritta** `test:compatibilita:graduata` (invarianti, media, cablaggio feed →
+bacheca → card); **estese** `test:riempitivi` (`proteggi`), `test:opportunita` e `test:compatibilita`
+(cablaggio spostato nella bacheca pura).
+
+**File toccati.** **Condivisi essenziali**: `src/lib/punteggioOrdine.ts`, `src/lib/punteggioClasse.ts`,
+`src/lib/punteggioCompetenze.ts`, `src/lib/areeDisciplinari.ts`, `src/lib/filtriScuole.ts`,
+`src/lib/bachecaInterpelli.ts` (nuovi), `src/lib/prossimitaGeografica.ts` (riscritto),
+`src/lib/compatibilitaGraduata.ts` (riscritto), `src/lib/compatibilita.ts`, `src/lib/riempitivi.ts`,
+`src/lib/matchingEngine.ts` (solo commenti), `src/data/interpelli.ts`, `src/data/provinceCoordinate.ts`
+(nuovo), `src/contexts/app/useInterpelliFeed.ts` (**da 247 a 143 righe**: la pipeline è nel modulo
+puro) · **viste condivise (fuori dal dipartimento, richiesta esplicita dell'utente)**:
+`src/components/InterpelloCard.tsx`, `src/components/InterpelloDettaglioModal.tsx` · **guardie**:
+`scripts/test-modali-radar.ts`, `scripts/test-prossimita-60km.ts`, `scripts/test-filtri-scuole.ts`
+(nuove), `scripts/test-compatibilita-graduata.ts` (riscritta), `scripts/test-riempitivi-bacheca.ts`,
+`scripts/test-opportunita-vive.ts`, `scripts/test-compatibilita-punteggio.ts`, `package.json`
+(`test:modali`, `test:prossimita`, `test:filtri-scuole` + ingresso in `npm test`) ·
+**documentazione**: `docs/SYSTEM_HANDOVER.md` (questa §26.56 + mappa moduli),
+`docs/DEPARTMENT_MAP.md`. **File rimosso**: `src/lib/affinitaDisciplinare.ts` (assorbito in
+`areeDisciplinari.ts`; nessun altro file lo importava). **Non toccati**: `comunicazione/**` (la consegna
+non cambia), `src/departments/**`, `src/modules/**` e la pipeline di consegna (`src/lib/notifier.ts`,
+`src/lib/digest.ts`).
+
+### 26.57 La MEDIA PONDERATA delle modali: i pesi del voto finale (05/10/2026)
+
+**Perché.** Richiesta di prodotto sulla §26.56: il voto finale della bacheca non è la media
+aritmetica delle modali, ma una **media PONDERATA** in cui ogni modale porta il suo **contributo**;
+le modali senza dati dell'utente restano fuori dal calcolo e i pesi si **rinormalizzano** su ciò che
+c'è davvero (una modale non configurata non abbassa il voto, ma non lo alza nemmeno).
+
+**I pesi, decisione di prodotto in una riga di codice.** `PESI_MODALI`
+(`src/lib/compatibilitaGraduata.ts`):
+
+| Modale | Peso | Perché quel peso |
+|---|---|---|
+| 2 · Classi di concorso | **2** | è il requisito **ABILITANTE**: senza una classe compatibile quella materia non si insegna, quindi il suo scostamento deve incidere il doppio — è la stessa gerarchia del motore §26.54 (100 classe in comune · 80 materia coperta · 70 competenze · 60 sostegno extra) |
+| 1 · Ordine di scuola | 1 | preferenza di **contesto**: dice dove, non se sei abilitato |
+| 3 · Parole chiave (jolly) | 1 | preferenza di contesto, con gli incrementi del 3% già chiusi a +9% |
+| 4 · Provincia | 1 | **perimetro** geografico, non abilitazione: da sola non «promuove» un avviso della classe sbagliata |
+
+**La formula.** `punteggio = Σ(punteggio_modale × peso) / Σpesi(applicabili) + incrementi jolly`,
+arrotondata; se nessuna modale è applicabile il voto resta `PUNTEGGIO_MATCH_NESSUNO` (0). La
+primitiva pura è **`mediaPonderata(contributi)`** (con `ContributoModale = { punteggio, peso }`):
+sostituisce la media aritmetica `mediaModali`, che **non esiste più**. Il dettaglio per modale
+(`valutazione.modali`) dichiara anche **`pesoTotale`**, il denominatore usato: è ciò che rende il
+numero spiegabile a una guardia (e al tooltip).
+
+**Invariante strutturale.** Nessun peso raggiunge la metà dei pesi totali (2 su 5): il voto **non
+può derivare da una sola modale**. La verifica sta in `npm run test:modali`
+(`Math.max(pesi) * 2 < Σpesi`).
+
+**Effetti sui numeri (dichiarati, non silenziosi).** Dove la classe è debole il voto scende, dove
+la classe è giusta e la geografia è vicina sale:
+
+| Caso (ordine · classe · provincia) | §26.56 (media semplice) | §26.57 (media ponderata) |
+|---|---|---|
+| 100 · 100 (esatta) · 60 (provincia vicina) | 87 | **90** |
+| 100 · 55 (estranea) · 100 (propria) | 85 | **78** |
+| 100 · 95 (affine) · 90 (parola chiave) · 100 | 96 | **96** (invariato) |
+| 100 · 95 (affine) · 90 · 100 **+ jolly 3%** | 99 | **99** (invariato) |
+
+**Tutto il resto della §26.56 resta intatto.** Sostegno extra a **60** (§26.45), esclusione oltre i
+60 km salvo whitelist, blacklist che vince sulla whitelist, jolly del 3% **deterministico**,
+consegna STRICT (`provinceLimitrofe` è un'opzione della sola bacheca: `notifier`, `digest` e
+`invia-*` non la passano). Il tooltip di card e modale aggiunge una riga di composizione —
+«media ponderata di N modali» (+ «jolly 3%» quando scatta) — così il numero non arriva mai da solo.
+
+**Verifiche (05/10/2026, da `project/`).** `npm run typecheck` → ✅ exit 0 · **`npm test` (catena
+completa) → ✅ exit 0** · `npm run test:architettura` → ✅ nessuna violazione nuova (597 file ·
+**141** = baseline; `compatibilitaGraduata.ts` = **237 righe**, sotto la soglia di attenzione di
+250) · `npx eslint` sui file toccati → ✅ zero problemi · `npm run build` → ✅ exit 0 ·
+`test:modali`, `test:prossimita`, `test:filtri-scuole`, `test:compatibilita:graduata`,
+`test:riempitivi`, `test:opportunita`, `test:compatibilita` → ✅ exit 0.
+
+**File toccati.** **Condivisi essenziali**: `src/lib/compatibilitaGraduata.ts` (pesi, media
+ponderata, `pesoTotale`, riga di composizione nel motivo), `src/lib/compatibilita.ts` (solo
+commento: «media ponderata»). **Guardie**: `scripts/test-modali-radar.ts` (pesi, media ponderata,
+rinormalizzazione, denominatore), `scripts/test-compatibilita-graduata.ts` (media 90, penalità 10,
+peso doppio della classe). **Documentazione**: `docs/SYSTEM_HANDOVER.md` (questa §26.57 + mappa
+moduli), `docs/DEPARTMENT_MAP.md`. **Non toccati**: `comunicazione/**` (nessuna regola di prodotto
+cambia: la consegna e i numeri delle singole modali restano quelli della §26.56), `src/departments/**`
+e la pipeline di consegna.
+
+
+
 

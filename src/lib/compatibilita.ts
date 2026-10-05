@@ -1,11 +1,13 @@
 /**
- * ScuoleRadar.it — COMPATIBILITÀ profilo ↔ opportunità: SOGLIE e BANDA CROMATICA
- * (modulo PURO, una sola fonte di verità).
+ * ScuoleRadar.it — COMPATIBILITÀ profilo ↔ opportunità: SOGLIE, BANDA CROMATICA e
+ * etichette di servizio (modulo PURO, una sola fonte di verità).
  *
- * Il PUNTEGGIO (0-100) lo produce il motore di matching
- * (`punteggioCompatibilita`, `src/lib/matchingEngine.ts`); qui vivono SOLO le
- * soglie con cui card, modale e qualunque altra superficie traducono quel numero
- * in colore e in etichetta: nessuna copia delle soglie nei componenti.
+ * Il PUNTEGGIO (0-100) nasce dalla media PONDERATA delle 5 MODALI del Radar — dove vuoi
+ * lavorare (ordine), classi di concorso, parole chiave, provincia, filtri scuole
+ * (`valutaCompatibilita`, `src/lib/compatibilitaGraduata.ts`) — e qui vivono SOLO
+ * le soglie e il modo in cui card, modale e qualunque altra superficie traducono
+ * quel numero in colore, etichetta e motivo: nessuna copia delle soglie nei
+ * componenti.
  *
  *   🟢 verde    → ≥ 80  match forte col profilo
  *   🟠 arancio  → ≥ 70  match parziale (competenza/parola chiave o materia coperta)
@@ -23,6 +25,14 @@ export const SOGLIA_COMPATIBILITA_ROSSO = 60;
 export const SOGLIA_COMPATIBILITA_ARANCIO = 70;
 /** Soglia (in %) da cui il badge è VERDE: match forte. */
 export const SOGLIA_COMPATIBILITA_VERDE = 80;
+
+/**
+ * Etichetta dedicata delle SCUOLE PREFERITE (Modalità 5, whitelist): quando il
+ * punteggio è insufficiente la card NON mostra un voto basso, dichiara
+ * l'inclusione d'ufficio; quando il punteggio è buono, resta accanto al badge per
+ * dire che quell'opportunità viene dalla scuola preferita dell'utente.
+ */
+export const ETICHETTA_SCUOLA_PREFERITA = 'Scuola preferita nel radar';
 
 export type LivelloCompatibilita = 'verde' | 'arancio' | 'rosso' | 'sotto-soglia';
 
@@ -79,16 +89,37 @@ export function etichettaCompatibilita(punteggio: number): string {
   return livelloCompatibilita(p) === 'rosso' ? `${p}% · extra` : `${p}% Compatibile`;
 }
 
-/** Banda completa (livello + etichetta + stile) di un punteggio. */
-export function bandaCompatibilita(punteggio: number): BandaCompatibilita {
+/**
+ * Banda completa (livello + etichetta + stile + descrizione) di un punteggio.
+ *
+ * `motivo` (facoltativo) è la sintesi delle MODALI che hanno prodotto quel
+ * punteggio — ordine, classe, parole chiave, provincia — misurata da
+ * `valutaCompatibilita` (`src/lib/compatibilitaGraduata.ts`) e mostrata nel
+ * tooltip della card. Serve a «evidenziare lo scostamento», non a nasconderlo: il
+ * numero da solo non direbbe PERCHÉ il match è parziale.
+ */
+export function bandaCompatibilita(punteggio: number, motivo?: string | null): BandaCompatibilita {
   const p = normalizzaPunteggioCompatibilita(punteggio);
   const livello = livelloCompatibilita(p);
+  const scostamento = (motivo ?? '').trim();
   return {
     livello,
     punteggio: p,
     visibile: livello !== 'sotto-soglia',
     etichetta: etichettaCompatibilita(p),
-    descrizione: DESCRIZIONI[livello],
+    descrizione: scostamento ? `${DESCRIZIONI[livello]} — ${scostamento}` : DESCRIZIONI[livello],
     className: CLASSI[livello],
   };
+}
+
+/**
+ * Tooltip dell'etichetta «Scuola preferita nel radar»: dichiara che l'inclusione
+ * è d'ufficio (whitelist) e, se il punteggio è sufficiente, che il match c'è.
+ */
+export function descrizioneScuolaPreferita(punteggio: number): string {
+  const p = normalizzaPunteggioCompatibilita(punteggio);
+  if (p >= SOGLIA_COMPATIBILITA_ROSSO) {
+    return `Scuola che tieni d'occhio: match col profilo ${p}% (${DESCRIZIONI[livelloCompatibilita(p)].toLowerCase()})`;
+  }
+  return `Scuola che tieni d'occhio: inclusa d'ufficio anche se il match col profilo è ${p}%`;
 }

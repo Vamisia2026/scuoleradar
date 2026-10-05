@@ -9,7 +9,7 @@
  * Classe/Materia · Scadenza), opzionali + recapito di candidatura, guida operativa
  * e UN SOLO **link diretto alla fonte ufficiale**, con etichetta onesta.
  */
-import { AlertTriangle, ArrowRight, BadgeCheck, BellRing } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BadgeCheck, BellRing, Star } from 'lucide-react';
 import type { Interpello } from '@/data/interpelli';
 import { LIMITE_NOTIFICHE_PROVA, useApp } from '@/contexts/AppContext';
 import {
@@ -19,7 +19,8 @@ import {
   formatDataAvvisoLunga,
   type AvvisoStrutturato,
 } from '@/lib/alertInterpello';
-import { bandaCompatibilita } from '@/lib/compatibilita';
+import { bandaCompatibilita, descrizioneScuolaPreferita, ETICHETTA_SCUOLA_PREFERITA } from '@/lib/compatibilita';
+import { scuolaPreferita } from '@/lib/filtriScuole';
 import { IstitutoEmittente } from './IstitutoEmittente';
 import { Modal } from './Modal';
 
@@ -49,12 +50,16 @@ export function InterpelloDettaglioModal({
   guida,
   inScadenza,
 }: InterpelloDettaglioModalProps) {
-  const { abbonato, interpelliNotificati, notificheUsate } = useApp();
+  const { abbonato, interpelliNotificati, notificheUsate, preferenze } = useApp();
   const giaNotificato = interpelliNotificati.includes(interpello.id);
   const notificheRimanenti = Math.max(LIMITE_NOTIFICHE_PROVA - notificheUsate, 0);
   // COMPATIBILITÀ: stessa banda cromatica della card (verde ≥ 80 · arancio ≥ 70 ·
-  // rosso ≥ 60 «extra»): una sola regola, card e dettaglio non possono divergere.
-  const banda = bandaCompatibilita(interpello.compatibilita);
+  // rosso ≥ 60 «extra») e stesso motivo dichiarato: una sola regola, card e
+  // dettaglio non possono divergere.
+  const banda = bandaCompatibilita(interpello.compatibilita, interpello.motivoCompatibilita);
+  // Modalità 5: la scuola preferita ha l'etichetta dedicata anche qui.
+  const preferita =
+    interpello.scuolaPreferita ?? scuolaPreferita(preferenze.favoriteSchools, interpello);
 
   return (
     <Modal open={open} onClose={onClose} title={titolo} size="lg">
@@ -62,14 +67,31 @@ export function InterpelloDettaglioModal({
         {/* SCUOLA EMITTENTE anche nel dettaglio: mai un buco di contesto. */}
         <IstitutoEmittente istituto={interpello.istituto} />
 
-        {banda.visibile && (
+        {/* Modalità 5: scuola preferita → etichetta dedicata (inclusione
+            d'ufficio), con il match accanto quando il punteggio è sufficiente. */}
+        {preferita ? (
           <span
-            title={banda.descrizione}
-            className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold ${banda.className}`}
+            title={descrizioneScuolaPreferita(banda.punteggio)}
+            className="inline-flex items-center gap-1 rounded-full bg-accent-500 px-3 py-1 text-sm font-semibold text-white shadow-soft"
           >
-            <BadgeCheck className="h-4 w-4" />
-            {banda.etichetta}
+            <Star className="h-4 w-4" />
+            {ETICHETTA_SCUOLA_PREFERITA}
+            {banda.visibile && (
+              <span className="ml-1 rounded-full bg-white/25 px-1.5 font-bold">
+                {banda.punteggio}%
+              </span>
+            )}
           </span>
+        ) : (
+          banda.visibile && (
+            <span
+              title={banda.descrizione}
+              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold ${banda.className}`}
+            >
+              <BadgeCheck className="h-4 w-4" />
+              {banda.etichetta}
+            </span>
+          )
         )}
 
         {/* OBBLIGATORIE — sempre presenti: Provincia · Ordine · Classe/Materia · Scadenza. */}

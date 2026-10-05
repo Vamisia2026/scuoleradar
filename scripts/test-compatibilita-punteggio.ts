@@ -142,6 +142,7 @@ console.log('\n— Cablaggio: card/modale, feed, ordine della bacheca —');
 const card = leggi('src/components/InterpelloCard.tsx');
 const modale = leggi('src/components/InterpelloDettaglioModal.tsx');
 const feed = leggi('src/contexts/app/useInterpelliFeed.ts');
+const bacheca = leggi('src/lib/bachecaInterpelli.ts');
 const dashboard = leggi('src/pages/DashboardPage.tsx');
 const motore = leggi('src/lib/matchingEngine.ts');
 check('card: usa la banda condivisa', true, /bandaCompatibilita\(/.test(card) && /banda\.visibile/.test(card));
@@ -151,7 +152,8 @@ check(
   false,
   /compatibilita === 100/.test(card) || /compatibilita === 100/.test(modale),
 );
-check('feed: applica il punteggio del motore', true, /punteggioCompatibilita\(/.test(feed));
+check('feed: delega alla bacheca pura', true, /bachecaInterpelli\(/.test(feed));
+check('bacheca: applica il punteggio delle modali', true, /valutaCompatibilita\(/.test(bacheca));
 check('bacheca: prima la compatibilità, poi la scadenza', true, /const ca = a\.compatibilita \?\? 100;/.test(dashboard));
 check('il punteggio vive nel motore', true, /export function punteggioCompatibilita\(/.test(motore));
 check('le soglie vivono solo nel modulo condiviso', true, /SOGLIA_COMPATIBILITA_ROSSO = 60/.test(leggi('src/lib/compatibilita.ts')));

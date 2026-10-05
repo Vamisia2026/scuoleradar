@@ -34,6 +34,7 @@ const modale = leggi('src/components/InterpelloDettaglioModal.tsx');
 const istituto = leggi('src/components/IstitutoEmittente.tsx');
 const scheda = leggi('src/pages/interpello/components/SchedaAvviso.tsx');
 const feed = leggi('src/contexts/app/useInterpelliFeed.ts');
+const bachecaFeed = leggi('src/lib/bachecaInterpelli.ts');
 const motore = leggi('src/lib/matchingEngine.ts');
 const bacheca = leggi('src/departments/radar/flightBoard/filtroAttivi.ts');
 const pulizia = leggi('scripts/pulisci-scaduti.ts');
@@ -71,7 +72,7 @@ check(
 );
 
 console.log('\n— 2. Finestra dei 60 giorni: una sola regola, tutte le superfici pubbliche —');
-check('feed dashboard: usa eAvvisoVivo', true, /eAvvisoVivo\(/.test(feed));
+check('feed dashboard: usa eAvvisoVivo (via bacheca pura)', true, /eAvvisoVivo\(/.test(bachecaFeed));
 check(
   'il feed non usa più la vecchia regola “solo scadenza”',
   false,
@@ -109,6 +110,7 @@ check(
 
 console.log('\n— 4. Compatibilità: banda condivisa (60/70/80) e sostegno EXTRA —');
 const compat = leggi('src/lib/compatibilita.ts');
+const graduata = leggi('src/lib/compatibilitaGraduata.ts');
 const dashboard = leggi('src/pages/DashboardPage.tsx');
 check('card: badge dalla banda condivisa', true, /bandaCompatibilita\(/.test(card) && /banda\.visibile/.test(card));
 check('modale: stessa banda della card', true, /bandaCompatibilita\(/.test(modale) && /banda\.visibile/.test(modale));
@@ -125,7 +127,11 @@ check(
     /SOGLIA_COMPATIBILITA_VERDE = 80/.test(compat),
 );
 check('motore: il sostegno senza classe AD… vale 60 (extra)', true, /PUNTEGGIO_EXTRA_SOSTEGNO = 60/.test(motore));
-check('feed della dashboard: applica il punteggio del motore', true, /punteggioCompatibilita\(/.test(feed));
+check(
+  'feed della dashboard: delega il punteggio alle modali di bacheca',
+  true,
+  /bachecaInterpelli\(/.test(feed) && /valutaCompatibilita\(/.test(bachecaFeed) && /punteggioCompatibilita\(/.test(graduata),
+);
 check(
   'bacheca: i match forti prima, il sostegno extra in coda',
   true,

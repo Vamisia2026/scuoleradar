@@ -54,6 +54,21 @@ export interface Interpello {
    * `100` come valore neutro, poi il feed lo sostituisce con quello reale.
    */
   compatibilita: number;
+  /**
+   * SCOSTAMENTO riconosciuto dalla bacheca (`valutaCompatibilita`,
+   * `src/lib/compatibilitaGraduata.ts`): lingua affine, area affine, provincia
+   * limitrofa. È il PERCHÉ del punteggio, mostrato nel tooltip del badge
+   * (`bandaCompatibilita(punteggio, motivo)`): un match parziale va dichiarato, mai
+   * lasciato intuire. Assente = match pieno.
+   */
+  motivoCompatibilita?: string | null;
+  /**
+   * true = inclusa D'UFFICIO perché la scuola è nella whitelist dell'utente
+   * (Modalità 5 «Filtri Avanzati Scuole»): la card mostra l'etichetta dedicata
+   * (`ETICHETTA_SCUOLA_PREFERITA`, `src/lib/compatibilita.ts`) al posto di un voto
+   * insufficiente e il cap dei riempitivi non può nasconderla.
+   */
+  scuolaPreferita?: boolean;
 }
 
 /**
