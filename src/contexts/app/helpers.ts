@@ -19,6 +19,8 @@ export function mapNoticiaToInterpello(r: {
   province: string | null;
   class_codes: string[] | null;
   expiration_date: string | null;
+  /** Data di pubblicazione (`created_at`): serve alla finestra dei 60 giorni. */
+  created_at?: string | null;
 }): Interpello {
   const codici = (r.class_codes ?? []).filter(Boolean);
   const primaClasse = codici[0] ?? '';
@@ -34,6 +36,7 @@ export function mapNoticiaToInterpello(r: {
     classiCodes: codici,
     ordine: classe?.ordine ?? 'secondaria2',
     dataScadenza: r.expiration_date ?? '',
+    dataPubblicazione: r.created_at ?? null,
     descrizione: r.title ?? '',
     linkFonte: r.source_url ?? '',
     compatibilita: 100,

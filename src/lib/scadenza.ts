@@ -5,6 +5,9 @@
  *   · `giorniRimanenti(iso)`   → giorni (data-only) alla scadenza, `null` se assente;
  *   · `eScaduto(iso)`          → true se la scadenza è passata;
  *   · `eInterpelloAttivo(iso)` → filtro per ESCLUDERE gli scaduti dalle liste pubbliche;
+ *   · `eAvvisoVivo(scadenza, pubblicazione)` → regola UNICA di vetrina pubblica:
+ *     con scadenza → non ancora passata; senza scadenza → pubblicato entro la
+ *     finestra dei `GIORNI_FINESTRA_SENZA_SCADENZA` (60 giorni);
  *   · `stileScadenza(giorni)`  → semaforo del badge: 🟢 lungo · 🟡 vicino · 🔴 imminente.
  */
 
@@ -58,6 +61,62 @@ export function eScaduto(iso?: string | null, oggi: Date = new Date()): boolean 
  */
 export function eInterpelloAttivo(iso?: string | null, oggi: Date = new Date()): boolean {
   return !eScaduto(iso, oggi);
+}
+
+/* ------------------------------------------------------------------ */
+/* Finestra di validità degli avvisi che la fonte NON data (60 giorni) */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Finestra (in GIORNI di calendario, non «due mesi» che sarebbero 59–62) entro cui
+ * un avviso SENZA scadenza esplicita resta pubblico. Regola di prodotto: una fonte
+ * che non pubblica la scadenza non può tenere l'opportunità in vetrina per sempre —
+ * dopo 60 giorni esce dalle liste pubbliche.
+ */
+export const GIORNI_FINESTRA_SENZA_SCADENZA = 60;
+
+/**
+ * Data LOCALE in formato ISO `YYYY-MM-DD`.
+ * Mai `toISOString()`: alle 00:30 ora di Roma (UTC+2) la data UTC è ancora IERI e
+ * gli avvisi che scadono oggi sparirebbero dalle liste.
+ */
+export function dataIsoLocale(data: Date): string {
+  const mese = String(data.getMonth() + 1).padStart(2, '0');
+  const giorno = String(data.getDate()).padStart(2, '0');
+  return `${data.getFullYear()}-${mese}-${giorno}`;
+}
+
+/** Primo giorno della finestra (estremo incluso) per gli avvisi senza scadenza. */
+export function dataLimiteFinestraSenzaScadenza(oggi: Date = new Date()): string {
+  const limite = new Date(oggi);
+  limite.setDate(limite.getDate() - GIORNI_FINESTRA_SENZA_SCADENZA);
+  return dataIsoLocale(limite);
+}
+
+/**
+ * Regola UNICA di vetrina pubblica (card, bacheca «Radar Live», feed):
+ *   · con scadenza   → la scadenza non è ancora passata;
+ *   · senza scadenza → pubblicato negli ultimi `GIORNI_FINESTRA_SENZA_SCADENZA`
+ *                      giorni (`created_at`).
+ * Senza scadenza E senza una data di pubblicazione utilizzabile → NON è vivo: un
+ * avviso non databile non può restare pubblico per sempre.
+ */
+export function eAvvisoVivo(
+  scadenza?: string | null,
+  pubblicazione?: string | null,
+  oggi: Date = new Date(),
+): boolean {
+  if ((scadenza ?? '').trim()) return eInterpelloAttivo(scadenza, oggi);
+  const dataPub = new Date(String(pubblicazione ?? '').trim());
+  if (Number.isNaN(dataPub.getTime())) return false;
+  // Confronto per GIORNO (come il filtro PostgREST `created_at.gte.<YYYY-MM-DD>`):
+  // un avviso pubblicato esattamente 60 giorni fa è ancora nella finestra.
+  const limite = new Date(oggi);
+  limite.setHours(0, 0, 0, 0);
+  limite.setDate(limite.getDate() - GIORNI_FINESTRA_SENZA_SCADENZA);
+  const giornoPub = new Date(dataPub);
+  giornoPub.setHours(0, 0, 0, 0);
+  return giornoPub.getTime() >= limite.getTime();
 }
 
 /**

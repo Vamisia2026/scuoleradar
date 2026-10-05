@@ -199,7 +199,13 @@ check(
 check(
   'il fallback tiene solo gli avvisi attivi (senza scadenza o non scaduti)',
   true,
-  senzaRpc.chiamate.filtri.some((f) => f.startsWith('or:expiration_date.is.null,expiration_date.gte.')),
+  // Dal §26.53 il ramo «senza scadenza» porta anche la FINESTRA dei 60 giorni
+  // sulla pubblicazione (`created_at`): la stessa regola di `eAvvisoVivo`.
+  senzaRpc.chiamate.filtri.some(
+    (f) =>
+      f.startsWith('or:expiration_date.gte.') &&
+      f.includes(',and(expiration_date.is.null,created_at.gte.'),
+  ),
 );
 check('righe servite dal fallback (il feed non si svuota)', 1, esitoFallback?.length ?? 0);
 

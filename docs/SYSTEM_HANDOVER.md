@@ -3401,8 +3401,23 @@ classi salvate durante la prova PRO:
   restano **visibili** e marcate `PRO` in `ProvinciaPill` / `PannelloProvince` /
   `PassoProvince` («restano salvate: si attivano con il piano PRO»).
 
+La stessa regola vale per **caricamenti, refresh e profilo in ritardo** (niente
+default vuoto scritto sopra le preferenze):
+
+- ogni azione dell'utente nel pannello `PreferenzeRadar` **marca il campo che
+  modifica** (`segnaToccato('classiCodici' | 'provinceCodici' | …)`), e l'autosave
+  salva **solo i campi toccati** (`modificheDaSalvare` in
+  `src/lib/preferenzeGuardia.ts`): aprire la pagina, un refresh o il bootstrap del
+  profilo non possono più svuotare classi, province, competenze, tag o scuole;
+- l'idratazione dal DB è **per campo** e salta quelli già toccati
+  (`idrataDaProfilo`: il DB vince solo se ha davvero un valore; `[]`/`null` non
+  azzerano la scelta locale);
+- le preferenze non toccate restano quelle del contesto (nessuna scrittura
+  ridondante: se il campo toccato è identico al salvato, l'autosave non parte).
+
 Reintegrato il PRO, l'intera selezione torna attiva senza reinserimenti.
-Guardia: `npm run test:province`.
+Guardie: `npm run test:province` · `npm run test:persistenza:preferenze` ·
+`npm run test:radar:preferenze`.
 
 ### 26.6 Cambio account Google e sincronizzazione sessione/anagrafica
 
@@ -6365,4 +6380,178 @@ cambiare l'insieme dei test di prodotto senza richiesta.
 **Non toccati**: `src/**` (in particolare `src/data/editableTexts.ts` — il copy è corretto e resta
 intatto), `comunicazione/**` e gli altri dipartimenti.
 
+### 26.52 Preferenze Radar: si scrivono solo per azione esplicita (05/10/2026)
+
+**Nota di sessione (05/10/2026).** Chiude il difetto per cui classi di concorso, province,
+competenze, tag e scuole preferite potevano **sparire** senza che l'utente toccasse nulla: bastava
+aprire il Radar dopo un caricamento lento del profilo (o fare un refresh) perché il pannello
+riscrivesse valori vuoti sopra la selezione salvata.
+
+**Causa.** La scrittura era **dedotta per differenza** fra due fotografie dello stesso stato, invece
+di dipendere dall'**azione** dell'utente: un profilo che arriva in ritardo, un refresh o un default
+`[]` finivano nello stesso calcolo di una modifica reale, e il campo non toccato veniva sovrascritto
+con il default della pagina appena aperta (i campi mai toccati non erano distinguibili da quelli
+riportati a vuoto apposta).
+
+**Intervento (regola unica, in un solo posto).**
+`src/lib/preferenzeGuardia.ts` espone la guardia condivisa:
+
+- `modificheDaSalvare<P extends object>(toccati, locale, salvate) → Partial<P>`: restituisce **solo**
+  i campi marcati come toccati **e** diversi dal valore già salvato (`{}` quando non c'è nulla da
+  salvare);
+- `idrataDaProfilo` / `haContenuto`: lato **lettura**, il DB vince solo se ha un valore vero
+  (`[]`/`null`/`''` non azzerano la scelta locale).
+
+`src/departments/radar/PreferenzeRadar.tsx`: **ogni** handler dell'utente marca il proprio campo
+(`toggleOrdine`, `toggleClasse`, `toggleMateria`, `aggiungiCompetenzaSuggerita`, `aggiungiParolaChiave`,
+`removeCustomMateria`, `toggleProvincia`, `promuoviPrincipale`, scuole preferite/ignorate, più i nuovi
+`cambiaTelegramUsername`/`cambiaTelegramChatId`/`cambiaEmailNotifica` per le tendine di Telegram ed
+email, che ora passano da un handler che marca il campo). L'autosave usa
+`modificheDaSalvare<Preferenze>(toccatiRef.current, locale, preferenze)`, **non parte** quando è vuoto
+e sparge le modifiche nel contesto reale; l'idratazione è **per campo** e salta quelli già toccati;
+rimosso il troncamento automatico di classi/province in schermata (regola §26.5: i tetti limitano
+l'**uso**, non i dati). `src/contexts/app/useProfileBootstrap.ts` legge tutte le colonne delle
+preferenze con `idrataDaProfilo` (nessun `length > 0` scritto a mano) e il commento della prop `tetti`
+di `usePreferenzeUtente` è allineato al comportamento reale (solo avviso, nessuna riscrittura).
+
+**Guardie.** Nuova `npm run test:persistenza:preferenze` (`scripts/test-persistenza-preferenze.ts`):
+esegue le funzioni **reali** della guardia sui casi che facevano sparire i dati — primo avvio/refresh
+senza campi toccati ⇒ nessuna scrittura · azione esplicita ⇒ nel payload solo quel campo · campo
+toccato ma identico ⇒ nessun ciclo di autosave · svuotamento **voluto** ⇒ si salva il vuoto · profilo
+vuoto/`null` ⇒ il valore locale resta — e verifica il cablaggio su `PreferenzeRadar.tsx` e
+`useProfileBootstrap.ts` (marcatura di ogni campo, idratazione selettiva, nessun troncamento, nessuna
+API di salvataggio dedotta a posteriori). Estese `test:radar:preferenze`, `test:province` e `test:piano`
+con gli stessi presidi; il comando nuovo entra nella catena `npm test`.
+
+**Verifiche (05/10/2026, da `project/`).** `npm run typecheck` → ✅ exit 0 ·
+`npm run test:persistenza:preferenze`, `npm run test:radar:preferenze`, `npm run test:province`,
+`npm run test:piano` → ✅ tutte verdi · **`npm test` (catena completa, con la guardia nuova dentro) →
+✅ exit 0** · `npm run test:architettura` → ✅ nessuna violazione nuova (575 file · 142 = baseline) ·
+`npx eslint` sui file toccati → ✅ zero problemi · `npm run build` → ✅ exit 0.
+
+**File toccati.** Dipartimento **Radar**: `src/departments/radar/PreferenzeRadar.tsx` · **condivisi
+essenziali**: `src/lib/preferenzeGuardia.ts`, `src/contexts/app/usePreferenzeUtente.ts` (solo
+commento) · **guardie/script**: `scripts/test-persistenza-preferenze.ts` (nuova),
+`scripts/test-radar-preferenze.ts`, `scripts/test-provincia-principale.ts`, `scripts/test-piano-sync.ts`,
+`package.json` (comando dedicato + ingresso in `npm test`) · **documentazione**:
+`docs/SYSTEM_HANDOVER.md` (§26.5 estesa + questa §26.52), `docs/DEPARTMENT_MAP.md`.
+**Non toccati**: `comunicazione/**` (nessuna regola di prodotto nuova: la §26.5 era già la specifica,
+qui è resa effettiva) e gli altri dipartimenti (notizie, cfu, modulistica, admin).
+
+
+
+### 26.53 Opportunità: scuola + fonte sempre visibili; gli avvisi senza scadenza escono dopo 60 giorni
+
+**Perché.** Due requisiti di prodotto sulla scheda dell'opportunità (card della dashboard **e**
+modale di dettaglio): **(1)** la **scuola emittente** e un **link diretto alla fonte ufficiale**
+devono essere visibili e cliccabili in **entrambe** le viste (prima il link esisteva solo dentro
+l'aperto del dettaglio); **(2)** un avviso che la fonte pubblica **senza scadenza esplicita** non
+può restare pubblico per sempre: dopo **60 giorni** (2 mesi) dalla pubblicazione esce dalle liste
+pubbliche.
+
+**Cosa è cambiato.**
+
+- **Regola unica della finestra** (`src/lib/scadenza.ts`, modulo puro): `GIORNI_FINESTRA_SENZA_SCADENZA = 60`,
+  `dataIsoLocale`, `dataLimiteFinestraSenzaScadenza` e **`eAvvisoVivo(scadenza, pubblicazione, oggi)`** —
+  con scadenza → non ancora passata; senza scadenza → pubblicato entro la finestra (confronto per
+  **giorno** di calendario, come il filtro PostgREST); senza scadenza **né** pubblicazione → NON vivo.
+  `src/lib/liveBoard.ts` e `radar/flightBoard/filtroAttivi.ts` ora **delegano** a questo modulo invece
+  di tenere copie locali (la soglia e la data locale restano ri-esportate, così i test esistenti non
+  cambiano). `preparaRigheBoard` usa `eAvvisoVivo`: identico comportamento, una sola regola.
+- **Tutte le superfici pubbliche allineate**: `useInterpelliFeed` (feed della dashboard) filtra con
+  `eAvvisoVivo` grazie al nuovo campo `dataPubblicazione` di `Interpello` (dal `created_at`);
+  `searchInterpelli` (fallback PostgREST) usa
+  `expiration_date.gte.<oggi>,and(expiration_date.is.null,created_at.gte.<limite>)`;
+  la **RPC nativa** applica la finestra nel database (migrazione nuova
+  `20261005120000_match_interpelli_finestra_senza_scadenza.sql`); la **pulizia automatica**
+  (`scripts/pulisci-scaduti.ts`) rimuove ora anche le righe senza scadenza fuori finestra, oltre alle
+  scadute.
+- **Card e modale** (`src/components/InterpelloCard.tsx`, spezzata per restare sotto le 300 righe del
+  gate: il dettaglio vive in `src/components/InterpelloDettaglioModal.tsx`): la card espone il
+  **link diretto alla fonte** accanto a «Vedi dettaglio» (etichetta onesta `etichettaFonteLink`, nuova
+  scheda con `rel="noopener noreferrer"`), e la **scuola emittente** è resa dallo stesso componente
+  `src/components/IstitutoEmittente.tsx` in card, modale e scheda pubblica `/interpello/:id`
+  (`SchedaAvviso.tsx`) — mai una riga vuota: se il bando non pubblica un nome presentabile si mostra la
+  dicitura gestita `SCUOLA_NON_SPECIFICATA` con la nota «anagrafica in aggiornamento».
+
+**Verifiche (05/10/2026, da `project/`).** `npm run typecheck` → ✅ exit 0 · guardie dedicate
+(`test:interpello-scadenza` estesa con `eAvvisoVivo`, **`test:opportunita` nuova**, `test:board`,
+`test:board:filtro`, `test:board:scala`) → ✅ tutte verdi · **`npm test` (catena completa, con le due
+guardie dentro) → ✅ exit 0** · `npm run test:architettura` → ✅ nessuna violazione nuova (578 file ·
+**141** = baseline, dopo la rimozione dell'eccezione ormai inutile
+`W-DIM:src/components/InterpelloCard.tsx`) · `npx eslint` sui file toccati → ✅ zero problemi ·
+`npm run build` → ✅ exit 0.
+
+**File toccati.** **Dipartimento Radar**: `src/departments/radar/flightBoard/filtroAttivi.ts` ·
+**condivisi essenziali**: `src/lib/scadenza.ts`, `src/lib/liveBoard.ts`, `src/lib/matchingEngine.ts`,
+`src/data/interpelli.ts`, `src/contexts/app/helpers.ts`, `src/contexts/app/useInterpelliFeed.ts` ·
+**viste condivise (fuori dal dipartimento, richiesta esplicita dell'utente)**: `src/components/InterpelloCard.tsx`,
+`src/components/InterpelloDettaglioModal.tsx` (nuovo), `src/components/IstitutoEmittente.tsx` (nuovo),
+`src/pages/interpello/components/SchedaAvviso.tsx` · **dati e pipeline**:
+`supabase/migrations/20261005120000_match_interpelli_finestra_senza_scadenza.sql` (nuova),
+`scripts/pulisci-scaduti.ts` · **guardie**: `scripts/test-opportunita-vive.ts` (nuova),
+`scripts/test-scadenza.ts` (estesa), `package.json` (comando `test:opportunita` + ingresso in `npm test`),
+`scripts/architettura-baseline.json` (eccezione `W-DIM` rimossa) · **documentazione**:
+`docs/SYSTEM_HANDOVER.md` (questa §26.53), `docs/DEPARTMENT_MAP.md`,
+`comunicazione/04_canali_regionali/checklist_regionali.md` (§4 e §5). **Nessun altro dipartimento
+toccato** (notizie, cfu, modulistica, admin).
+
+
+### 26.54 Punteggio di compatibilità: soglie 60/70/80, sostegno EXTRA e preferenze Admin complete (05/10/2026)
+
+**Perché.** Tre richieste di prodotto: **(1)** la compatibilità dell'opportunità deve avere soglie
+cromatiche chiare (🔴 ≥ 60 · 🟠 ≥ 70 · 🟢 ≥ 80); **(2)** le opportunità di **sostegno** che arrivano a
+chi non ha scelto il sostegno valgono **~60** e restano consigli **secondari** in bacheca, mai priorità;
+**(3)** le viste utente del **pannello Admin** devono mostrare tutti i parametri del profilo — ordini di
+scuola, classi, materie, tag personalizzati — senza buchi rispetto alla dashboard dell'utente.
+
+**Cosa è cambiato.**
+
+- **Soglie e banda, una sola fonte** (`src/lib/compatibilita.ts`, modulo puro nuovo):
+  `SOGLIA_COMPATIBILITA_ROSSO = 60`, `…_ARANCIO = 70`, `…_VERDE = 80`, `livelloCompatibilita`,
+  `etichettaCompatibilita` («80% Compatibile», «60% · extra») e `bandaCompatibilita(punteggio)` con
+  livello, etichetta, descrizione (tooltip) e classi Tailwind (verde `accent` · arancio `warning` ·
+  rosso `error`). Sotto 60 il badge **non** compare: qualche colore in meno, mai uno in più.
+- **Punteggio nel motore** (`src/lib/matchingEngine.ts`): `punteggioCompatibilita(profilo, avviso)` —
+  **100** provincia + classe in comune · **80** avviso senza codice classe ma materia coperta dalle
+  proprie classi · **70** profilo configurato solo su competenze/parole chiave · **60** area SOSTEGNO
+  senza una classe AD… propria · **0** non compatibile. Prima passa sempre `avvisoCompatibileConProfilo`
+  (ok/motivo): il punteggio **gradua**, non decide una seconda volta. Nuovo `profiloAderisceSostegno`:
+  la scelta volontaria dell'utente è una **classe AD… tra le proprie** — `profiles.sostegno` resta una
+  colonna di compatibilità (default `true`) e non è più un segnale di scelta (§26.45).
+- **Bacheca e superfici utente**: `useInterpelliFeed` calcola il punteggio per ogni opportunità (una sola
+  regola, nessuna copia dei criteri) e `DashboardPage` ordina **prima per compatibilità, poi per
+  scadenza** — i match forti in testa, il sostegno extra in coda; card (`InterpelloCard`) e modale
+  (`InterpelloDettaglioModal`) colorano con la banda condivisa (via il vecchio badge cablato al 100%).
+  **Nessun cambio di consegna**: notifiche, digest e dispatch restano quelli di prima (§26.45: il
+  sostegno continua ad arrivare a tutti; cambia solo *come* si presenta).
+- **Pannello Admin**: blocco condiviso nuovo `src/departments/admin/components/PreferenzeUtente.tsx`
+  su derivazione pura `derivaPreferenzeUtente.ts` (`preferenzeUtenteAdmin`), montato in **due** punti —
+  la scheda di dettaglio del tab «Utenti» e la **card utente del tab «Radar»**, che prima mostrava solo
+  classi/materie/province (nessun ordine di scuola, nessun tag, e le materie come id opachi). Ordini nel
+  nome leggibile (`ordiniScuola`), competenze di catalogo nel nome della materia
+  (`etichetteCompetenzeProfilo`), tag nel testo scritto dall'utente.
+
+**Verifiche (05/10/2026, da `project/`).** `npm run typecheck` → ✅ exit 0 · **`npm test` (catena
+completa) → ✅ exit 0** · `npm run test:architettura` → ✅ nessuna violazione nuova (582 file · **141** =
+baseline) · `npx eslint` sui 13 file toccati → ✅ zero problemi · `npm run build` → ✅ exit 0.
+Guardia nuova `npm run test:compatibilita` (soglie, punteggi, sostegno extra, cablaggio
+card/modale/feed/ordine bacheca, blocco Admin); `test:opportunita` e `test:admin:utente` estese;
+allineata anche l'aspettativa ormai superata di `test:match-rpc` sul ramo «senza scadenza» (la finestra
+dei 60 giorni di §26.53 non era ancora riflessa in quella guardia: era un rosso già presente prima di
+questa sessione).
+
+**File toccati.** **Condivisi essenziali**: `src/lib/compatibilita.ts` (nuovo),
+`src/lib/matchingEngine.ts`, `src/contexts/app/useInterpelliFeed.ts` · **viste condivise (fuori dal
+dipartimento, richiesta esplicita dell'utente)**: `src/pages/DashboardPage.tsx`,
+`src/components/InterpelloCard.tsx`, `src/components/InterpelloDettaglioModal.tsx` · **dipartimento
+Admin (richiesta esplicita dell'utente)**: `src/departments/admin/components/PreferenzeUtente.tsx`
+(nuovo), `src/departments/admin/components/derivaPreferenzeUtente.ts` (nuovo),
+`src/departments/admin/tabs/utenti/DettaglioUtente.tsx`, `src/departments/admin/tabs/TabRadar.tsx` ·
+**guardie**: `scripts/test-compatibilita-punteggio.ts` (nuova), `scripts/test-opportunita-vive.ts`,
+`scripts/test-admin-dettaglio-radar.ts`, `scripts/test-match-rpc.ts`, `package.json` (comando
+`test:compatibilita` + ingresso in `npm test`) · **documentazione**: `docs/SYSTEM_HANDOVER.md` (questa
+§26.54), `docs/DEPARTMENT_MAP.md`. **Non toccati**: `comunicazione/**` (il badge di compatibilità è una
+superficie della dashboard, non un canale: le checklist restano valide), `src/departments/notizie/**`,
+`src/departments/cfu/**`, `src/modules/**` e la pipeline di consegna (`src/lib/notifier.ts`).
 

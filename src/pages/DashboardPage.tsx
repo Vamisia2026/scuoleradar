@@ -35,7 +35,7 @@ export function DashboardPage() {
   const feedBloccatoBase =
     Boolean(user) && Boolean(preferenze.onboarded) && pianoStato === 'pronto' && !hasProAccess;
 
-  // Opportunità attive: pulite dalle scadute e ordinate per scadenza (più prossime prima).
+  // Opportunità attive: pulite dalle scadute, poi ordinate per compatibilità e scadenza.
   const oraAttuale = Date.now();
   const opportunitaAttive = interpelliFiltrati
     .filter((i) => !i.dataScadenza || new Date(i.dataScadenza).getTime() > oraAttuale)
@@ -58,8 +58,13 @@ export function DashboardPage() {
         !mancanti.includes('Classe / Materia')
       );
     })
-    // Scadenze reali in cima; gli avvisi senza scadenza in coda.
+    // PRIORITÀ: prima i match più forti col profilo (verde → arancio → rosso), poi
+    // la scadenza più vicina. I suggerimenti EXTRA (60%, es. area sostegno fuori
+    // dalle proprie classi) restano in bacheca ma finiscono in coda, mai in testa.
     .sort((a, b) => {
+      const ca = a.compatibilita ?? 100;
+      const cb = b.compatibilita ?? 100;
+      if (cb !== ca) return cb - ca;
       const ta = a.dataScadenza ? new Date(a.dataScadenza).getTime() : Number.POSITIVE_INFINITY;
       const tb = b.dataScadenza ? new Date(b.dataScadenza).getTime() : Number.POSITIVE_INFINITY;
       return ta - tb;

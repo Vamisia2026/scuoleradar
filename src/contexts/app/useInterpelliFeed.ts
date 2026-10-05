@@ -18,8 +18,9 @@ import {
   competenzaCompatibileConAvviso,
   getFeedInterpelli,
   normalizzaClasse,
+  punteggioCompatibilita,
 } from '@/lib/matchingEngine';
-import { eInterpelloAttivo } from '@/lib/scadenza';
+import { eAvvisoVivo } from '@/lib/scadenza';
 import { supabase } from '@/lib/supabase';
 import { mapNoticiaToInterpello } from './helpers';
 import type { Preferenze } from './types';
@@ -130,6 +131,16 @@ export function useInterpelliFeed(
       ...preferenze.materieId,
       ...preferenze.materieCustom.map((m) => m.toLowerCase()),
     ]);
+    // PROFILO per il PUNTEGGIO di compatibilità (0-100): stessa regola della
+    // consegna (`avvisoCompatibileConProfilo`), una sola implementazione nel motore.
+    // La colonna `profiles.sostegno` NON entra qui: da §26.45 non è più una scelta
+    // dell'utente (l'unica scelta verificabile è una classe AD… tra le proprie).
+    const profiloFeed = {
+      province: provinceAttive,
+      classi: classiAttive,
+      materieId: preferenze.materieId,
+      materieCustom: preferenze.materieCustom,
+    };
     return fontiInterpelli.filter((i) => {
       const matchProvincia =
         provinceAttive.length === 0 || provinceAttive.includes(i.provinciaCodice);
@@ -174,8 +185,10 @@ export function useInterpelliFeed(
       const matchScuolaNonEsclusa =
         preferenze.ignoredSchools.length === 0 ||
         !preferenze.ignoredSchools.some((s) => s && scuolaTesto.includes(s.toLowerCase()));
-      // Esclude gli interpelli SCADUTI dalle liste attive pubbliche.
-      const nonScaduto = eInterpelloAttivo(i.dataScadenza);
+      // Esclude gli interpelli NON VIVI dalle liste attive pubbliche: con scadenza
+      // → non scaduti; senza scadenza → pubblicati entro la finestra dei 60 giorni
+      // (`eAvvisoVivo`: la stessa regola della bacheca «Radar Live» e del matching).
+      const nonScaduto = eAvvisoVivo(i.dataScadenza, i.dataPubblicazione);
       return (
         matchProvincia &&
         matchOrdine &&
@@ -183,7 +196,22 @@ export function useInterpelliFeed(
         matchScuolaNonEsclusa &&
         nonScaduto
       );
-    });
+    })
+      // PUNTEGGIO di compatibilità (0-100): vive nel motore
+      // (`punteggioCompatibilita`), una sola regola per banda cromatica e ordine.
+      // Gli avvisi di SOSTEGNO senza una classe AD… propria escono a 60 (banda
+      // rossa): restano in bacheca (§26.45) ma NON scalano le priorità.
+      .map((i) => {
+        const punteggio = punteggioCompatibilita(profiloFeed, {
+          province: i.provinciaCodice,
+          classi: i.classiCodes,
+          materia: i.materia,
+          titolo: i.titolo,
+        });
+        // `0` = il motore non conferma la compatibilità: si conserva il valore
+        // già mappato dal DB (mai un badge fuori scala inventato qui).
+        return punteggio > 0 ? { ...i, compatibilita: punteggio } : i;
+      });
   }, [preferenze, fontiInterpelli, provinceAttive, classiAttive]);
 
   return { fontiInterpelli, origineDati, interpelliFiltrati };

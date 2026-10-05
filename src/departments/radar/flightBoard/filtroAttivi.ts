@@ -4,7 +4,7 @@
  * La bacheca non deve più dipendere da un `.gte('expiration_date', oggi)` che
  * scarta in silenzio tutto ciò che la fonte non data: la regola di prodotto è
  * **«attivo se ha una scadenza non ancora passata OPPURE se è stato pubblicato
- * negli ultimi 60 giorni»** (`GIORNI_FINESTRA_SENZA_SCADENZA`, `lib/liveBoard.ts`).
+ * negli ultimi 60 giorni»** (`GIORNI_FINESTRA_SENZA_SCADENZA`, `lib/scadenza.ts`).
  *
  * L'espressione è in sintassi PostgREST (`client.from('interpelli').or(...)`):
  *
@@ -18,25 +18,16 @@
  * data si passa): la sintassi del filtro e le due soglie sono verificabili senza
  * toccare i dati reali — `npm run test:board:filtro`.
  */
-import { GIORNI_FINESTRA_SENZA_SCADENZA } from '@/lib/liveBoard';
+import {
+  GIORNI_FINESTRA_SENZA_SCADENZA,
+  dataIsoLocale,
+  dataLimiteFinestraSenzaScadenza,
+} from '@/lib/scadenza';
 
-/**
- * Data locale in formato PostgREST `YYYY-MM-DD`.
- * Mai `toISOString()`: alle 00:30 ora di Roma (UTC+2) la data UTC è ancora IERI,
- * e gli avvisi che scadono oggi sparirebbero dal tabellone.
- */
-export function dataIsoLocale(data: Date): string {
-  const mese = String(data.getMonth() + 1).padStart(2, '0');
-  const giorno = String(data.getDate()).padStart(2, '0');
-  return `${data.getFullYear()}-${mese}-${giorno}`;
-}
-
-/** Primo giorno della finestra (estremo incluso) per gli avvisi senza scadenza. */
-export function dataLimiteFinestraSenzaScadenza(oggi: Date = new Date()): string {
-  const limite = new Date(oggi);
-  limite.setDate(limite.getDate() - GIORNI_FINESTRA_SENZA_SCADENZA);
-  return dataIsoLocale(limite);
-}
+// La finestra di prodotto e la data LOCALE vivono in un solo posto (`src/lib/scadenza.ts`,
+// regola condivisa da bacheca, feed e migrazioni): qui si ri-esportano perché il
+// tabellone e la sua guardia le importino dallo stesso modulo.
+export { GIORNI_FINESTRA_SENZA_SCADENZA, dataIsoLocale, dataLimiteFinestraSenzaScadenza };
 
 /**
  * Filtro della bacheca: scadenza non ancora passata OPPURE senza scadenza ma

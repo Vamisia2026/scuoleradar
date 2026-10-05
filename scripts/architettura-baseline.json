@@ -4,7 +4,6 @@
     "E-DIM:src/components/AuthModal.tsx": "400 righe (> 300): dividere in sotto-moduli (SRP)",
     "W-DIM:src/components/ContactForm.tsx": "286 righe (> 250): pianificare lo split",
     "W-DIM:src/components/HealthCheckModal.tsx": "287 righe (> 250): pianificare lo split",
-    "W-DIM:src/components/InterpelloCard.tsx": "271 righe (> 250): pianificare lo split",
     "W-DIM:src/components/profile/ReferralSection.tsx": "276 righe (> 250): pianificare lo split",
     "W-DIM:src/contexts/app/useAzioniAccount.ts": "256 righe (> 250): pianificare lo split",
     "W-DIM:src/contexts/AppContext.tsx": "283 righe (> 250): pianificare lo split",

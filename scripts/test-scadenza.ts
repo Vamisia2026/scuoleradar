@@ -4,6 +4,8 @@
  */
 
 import {
+  GIORNI_FINESTRA_SENZA_SCADENZA,
+  eAvvisoVivo,
   eInterpelloAttivo,
   eScaduto,
   giorniRimanenti,
@@ -47,6 +49,32 @@ check('attivo: futuro → true', true, eInterpelloAttivo('2026-09-30', OGGI));
 check('attivo: oggi → true', true, eInterpelloAttivo('2026-09-10', OGGI));
 check('attivo: scaduto → false', false, eInterpelloAttivo('2026-08-01', OGGI));
 check('attivo: senza data → true', true, eInterpelloAttivo(null, OGGI));
+
+console.log('\n— eAvvisoVivo: finestra dei 60 giorni per chi non data la scadenza —');
+check('finestra dichiarata: 60 giorni', 60, GIORNI_FINESTRA_SENZA_SCADENZA);
+check('con scadenza futura → vivo', true, eAvvisoVivo('2026-09-30', null, OGGI));
+check('con scadenza oggi → vivo', true, eAvvisoVivo('2026-09-10', null, OGGI));
+check('con scadenza passata → NON vivo', false, eAvvisoVivo('2026-08-01', null, OGGI));
+check(
+  'con scadenza futura la pubblicazione non conta → vivo',
+  true,
+  eAvvisoVivo('2026-09-30', '2020-01-01', OGGI),
+);
+check('senza scadenza, pubblicato 10 giorni fa → vivo', true, eAvvisoVivo(null, '2026-08-31', OGGI));
+check('senza scadenza, al limite (60 giorni) → vivo', true, eAvvisoVivo(null, '2026-07-12', OGGI));
+check(
+  'senza scadenza, 61 giorni fa → NON vivo (fuori finestra)',
+  false,
+  eAvvisoVivo(null, '2026-07-11', OGGI),
+);
+check(
+  'la finestra è per GIORNO (pubblicato a fine giornata del limite → vivo)',
+  true,
+  eAvvisoVivo(null, '2026-07-12T23:30:00Z', OGGI),
+);
+check('senza scadenza né pubblicazione → NON vivo', false, eAvvisoVivo(null, null, OGGI));
+check('pubblicazione illeggibile → NON vivo', false, eAvvisoVivo(null, 'non-una-data', OGGI));
+check('senza scadenza e stringa vuota → NON vivo', false, eAvvisoVivo('', '', OGGI));
 
 console.log('\n— Semaforo (colori) —');
 check('lungo (10gg) → verde', 'lungo', stileScadenza(10).livello);

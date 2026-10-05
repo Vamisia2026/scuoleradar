@@ -4,19 +4,18 @@
  * Elenco scuole con ricerca, stato del Radar per scuola e interruttore di
  * attivazione (scrittura su Supabase tramite `adminService`). Componente
  * autosufficiente: nessuna prop, nessuna dipendenza dai fratelli.
+ *
+ * Le preferenze di ogni utente arrivano dal blocco CONDIVISO `PreferenzeUtente`
+ * (`components/PreferenzeUtente.tsx`, variante `compatto`): la stessa resa della
+ * scheda di dettaglio, con ordini di scuola, classi, materie e tag personalizzati
+ * — nessun buco rispetto alla dashboard dell'utente.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Radar as RadarIcon, RefreshCw, Search } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import { AdminApiError, DEV, aggiornaUtente, caricaUtenti } from '../adminService';
-import {
-  Chips,
-  StatoRadarBadge,
-  btnAdmin,
-  btnGhost,
-  inputAdmin,
-  nomeCognome,
-} from '../adminUi';
+import { StatoRadarBadge, btnAdmin, btnGhost, inputAdmin, nomeCognome } from '../adminUi';
+import { PreferenzeUtente } from '../components/PreferenzeUtente';
 import type { AdminUtente } from '../types';
 
 export function TabRadar() {
@@ -95,26 +94,10 @@ export function TabRadar() {
                   <StatoRadarBadge attivo={attivo} />
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-primary-700">
-                  <div>
-                    <div className="text-[10px] font-bold uppercase text-primary-400">Classi</div>
-                    <Chips valori={u.classi_concorso} />
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-bold uppercase text-primary-400">Materie</div>
-                    <Chips valori={u.materie_id} />
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-bold uppercase text-primary-400">Province</div>
-                    <Chips valori={u.province_interesse ?? u.province_attive} />
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-bold uppercase text-primary-400">Preferite / Escluse</div>
-                    <span className="text-xs">
-                      {u.favorite_schools?.length ?? 0} / {u.ignored_schools?.length ?? 0}
-                    </span>
-                  </div>
-                </div>
+                {/* Preferenze COMPLETE (stesso blocco della scheda di dettaglio):
+                    ordini di scuola, classi, materie, tag personalizzati, province e
+                    scuole — nessun buco rispetto alla dashboard dell'utente. */}
+                <PreferenzeUtente utente={u} variante="compatto" />
 
                 <div className="mt-3 flex items-center gap-2 border-t border-primary-100 pt-3">
                   <button

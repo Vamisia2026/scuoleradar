@@ -1,26 +1,37 @@
+/**
+ * Interpello · CARD dell'opportunità (vetrina della dashboard).
+ *
+ * La card mostra SUBITO ciò che serve per decidere: titolo, **scuola emittente**
+ * (`IstitutoEmittente`), pill di provincia/ordine/classe/scadenza e — accanto a
+ * «Vedi dettaglio» — il **link DIRETTO alla fonte ufficiale** (`etichettaFonteLink`,
+ * etichetta onesta: PDF / Albo Pretorio / riepilogo «Stampa» / avviso).
+ *
+ * Il dettaglio vive in `InterpelloDettaglioModal` (estratto per rispettare il limite
+ * di 300 righe per file del gate strutturale): stessa scuola in evidenza e stesso
+ * link, una sola derivazione dei dati.
+ */
 import { useState } from 'react';
-import { Clock, MapPin, GraduationCap, ArrowRight, AlertTriangle, BadgeCheck, BellRing, Star } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Clock, GraduationCap, MapPin, Star } from 'lucide-react';
 import type { Interpello } from '@/data/interpelli';
-import { Modal } from './Modal';
-import { useApp, LIMITE_NOTIFICHE_PROVA } from '@/contexts/AppContext';
+import { useApp } from '@/contexts/AppContext';
 import { etichettaClasseMateria } from '@/data/classiConcorso';
 import {
-  EMAIL_ETICHETTA_WEB,
-  EMAIL_ICONA,
   costruisciAvviso,
   etichettaFonteLink,
   formatDataAvviso,
-  formatDataAvvisoLunga,
   pulisciTitoloAvviso,
   scegliClasseRilevante,
   suggerimentoRicercaAvviso,
   urlEsterna,
 } from '@/lib/alertInterpello';
+import { bandaCompatibilita } from '@/lib/compatibilita';
 import { giorniRimanenti, stileScadenza } from '@/lib/scadenza';
+import { InterpelloDettaglioModal } from './InterpelloDettaglioModal';
+import { IstitutoEmittente } from './IstitutoEmittente';
 
 export function InterpelloCard({ interpello }: { interpello: Interpello }) {
   const [open, setOpen] = useState(false);
-  const { incrementaNotifica, notificheUsate, abbonato, interpelliNotificati, preferenze } = useApp();
+  const { incrementaNotifica, interpelliNotificati, preferenze } = useApp();
   const giorni = giorniRimanenti(interpello.dataScadenza);
   const stile = stileScadenza(giorni);
   const inScadenza = stile.livello === 'imminente' || stile.livello === 'scaduto';
@@ -54,12 +65,14 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
     `Interpello ${etichettaClasse || interpello.provinciaNome || interpello.provinciaCodice}`,
   );
   const giaNotificato = interpelliNotificati.includes(interpello.id);
-  const notificheRimanenti = Math.max(LIMITE_NOTIFICHE_PROVA - notificheUsate, 0);
   const isPreferita = preferenze.favoriteSchools.some((s) =>
     s && `${interpello.istituto} ${interpello.titolo}`.toLowerCase().includes(s.toLowerCase()),
   );
-  // ROUTING: la scheda espone SOLO la fonte ESTERNA originale (mai un link
-  // interno della piattaforma spacciato per "fonte").
+  // COMPATIBILITÀ: banda cromatica UNICA (`src/lib/compatibilita.ts`) — verde ≥ 80,
+  // arancio ≥ 70, rosso ≥ 60 (suggerimento extra). Sotto soglia: nessun badge.
+  const banda = bandaCompatibilita(interpello.compatibilita);
+  // ROUTING: la card espone SOLO la fonte ESTERNA originale (mai un link interno
+  // della piattaforma spacciato per "fonte").
   const linkEsterno = urlEsterna(interpello.linkFonte);
   // GUIDA OPERATIVA: pagina tabellare/"Stampa" o fonte ufficiale mancante.
   const guida = suggerimentoRicercaAvviso({
@@ -81,10 +94,9 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex-1">
             <h3 className="text-base font-bold text-primary-800">{titoloPulito}</h3>
-            <p className="mt-1 flex items-center gap-1.5 text-sm text-primary-600">
-              <GraduationCap className="h-4 w-4" />
-              {interpello.istituto}
-            </p>
+            {/* SCUOLA EMITTENTE: sempre visibile (nome reale, oppure la dicitura
+                gestita quando il bando non la pubblica) — mai una riga vuota. */}
+            <IstitutoEmittente istituto={interpello.istituto} className="mt-1" />
           </div>
           {isPreferita && (
             <span className="inline-flex items-center gap-1 rounded-full bg-accent-500 px-2.5 py-1 text-xs font-semibold text-white shadow-soft">
@@ -92,10 +104,13 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
               Scuola Preferita
             </span>
           )}
-          {interpello.compatibilita === 100 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-2.5 py-1 text-xs font-semibold text-accent-700">
+          {banda.visibile && (
+            <span
+              title={banda.descrizione}
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${banda.className}`}
+            >
               <BadgeCheck className="h-3.5 w-3.5" />
-              100% Compatibile
+              {banda.etichetta}
             </span>
           )}
         </div>
@@ -133,138 +148,43 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
           )}
         </div>
 
-        <button
-          onClick={handleVediDettaglio}
-          className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-primary-600 transition hover:text-primary-800"
-        >
-          Vedi dettaglio
-          <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-        </button>
-      </article>
-
-      <Modal open={open} onClose={() => setOpen(false)} title={titoloPulito} size="lg">
-        <div className="space-y-4">
-          {interpello.compatibilita === 100 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-3 py-1 text-sm font-semibold text-accent-700">
-              <BadgeCheck className="h-4 w-4" />
-              100% Compatibile
-            </span>
-          )}
-
-          {/* OBBLIGATORIE — sempre presenti: Provincia · Ordine · Classe/Materia · Scadenza. */}
-          <dl className="grid gap-3 sm:grid-cols-2">
-            {avviso.obbligatorie.map((r) => (
-              <div key={r.etichetta} className="rounded-xl bg-slate-50 p-4">
-                <dt className="text-sm font-semibold text-primary-700">{r.etichetta}</dt>
-                <dd className="text-sm text-primary-800">
-                  {r.etichetta === 'Scadenza' ? formatDataAvvisoLunga(interpello.dataScadenza) : r.valore}
-                  {r.etichetta === 'Scadenza' && inScadenza && (
-                    <span className="ml-2 inline-flex items-center gap-1 font-semibold text-error-600">
-                      <AlertTriangle className="h-4 w-4" /> In scadenza
-                    </span>
-                  )}
-                </dd>
-              </div>
-            ))}
-          </dl>
-
-          {/* Scadenza assente: gestita con garbo (niente blocchi grezzi "Non indicata"). */}
-          {!scadenzaOk && (
-            <p className="rounded-xl bg-primary-50 px-4 py-3 text-sm text-primary-600">
-              La scadenza non è indicata nella fonte: la trovi nell’avviso originale.
-            </p>
-          )}
-
-          {/* OPZIONALI + EMAIL — mostrate SOLO se presenti (nessun placeholder). */}
-          <dl className="grid gap-3 sm:grid-cols-2">
-            {avviso.opzionali.map((r) => (
-              <div key={r.etichetta} className="rounded-xl bg-slate-50 p-4">
-                <dt className="text-sm font-semibold text-primary-700">{r.etichetta}</dt>
-                <dd className="text-sm text-primary-800">{r.valore}</dd>
-              </div>
-            ))}
-            {/* Email candidature: blocco presente SOLO se l'indirizzo è stato
-                estratto (mai uno stato negativo tipo "Non indicata"). Etichetta
-                e icona sono le stesse di email e Telegram. */}
-            {avviso.email && (
-              <div className="rounded-xl bg-slate-50 p-4">
-                <dt className="text-sm font-semibold text-primary-700">
-                  {EMAIL_ICONA} {EMAIL_ETICHETTA_WEB}
-                </dt>
-                <dd className="text-sm text-primary-800">
-                  <a
-                    href={`mailto:${avviso.email}`}
-                    className="break-all text-primary-600 underline transition hover:text-primary-800"
-                  >
-                    {avviso.email}
-                  </a>
-                </dd>
-              </div>
-            )}
-          </dl>
-
-          {interpello.descrizione && interpello.descrizione.trim() !== interpello.titolo.trim() && (
-            <div>
-              <p className="mb-1 text-sm font-semibold text-primary-700">Dettagli dall’avviso</p>
-              <p className="text-sm leading-relaxed text-primary-800">{interpello.descrizione}</p>
-            </div>
-          )}
-
-          {/* GUIDA OPERATIVA: come trovare la riga e candidarsi quando la fonte è
-              un elenco/"Stampa" o non è disponibile. */}
-          {guida && (
-            <p className="rounded-xl border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-900">
-              ℹ️ {guida}
-            </p>
-          )}
-
-          {/* UN SOLO link verso la FONTE ESTERNA (se disponibile). */}
+        {/* AZIONI: link DIRETTO alla fonte ufficiale + dettaglio. */}
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
           {linkEsterno ? (
             <a
               href={linkEsterno}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-600 transition hover:text-primary-800"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-700"
             >
               {etichettaFonteLink(linkEsterno)}
               <ArrowRight className="h-4 w-4" />
             </a>
           ) : (
             <span className="text-sm text-primary-500">
-              La fonte ufficiale non è indicata: usa i recapiti qui sopra.
+              Fonte ufficiale non indicata: usa i recapiti dell&apos;avviso.
             </span>
           )}
-
-          {giaNotificato && (
-            <div className="flex items-center gap-2 rounded-xl bg-accent-50 px-4 py-3 text-sm text-accent-700">
-              <BellRing className="h-4 w-4" />
-              Notifica inviata per questo interpello.
-            </div>
-          )}
-
-          {!abbonato && !giaNotificato && (
-            <div
-              className={`rounded-xl border px-4 py-3 text-sm ${
-                notificheRimanenti > 0
-                  ? 'border-primary-100 bg-primary-50 text-primary-700'
-                  : 'border-secondary-200 bg-secondary-50 text-secondary-800'
-              }`}
-            >
-              {notificheRimanenti > 0 ? (
-                <>
-                  Ti restano <strong>{notificheRimanenti}</strong> di {LIMITE_NOTIFICHE_PROVA}{' '}
-                  notifiche per quest&apos;anno. Passa a PRO per notifiche illimitate.
-                </>
-              ) : (
-                <>
-                  Hai usato le tue {LIMITE_NOTIFICHE_PROVA} notifiche per quest&apos;anno. Attiva il
-                  piano PRO per continuare a ricevere nuove notifiche senza limiti.
-                </>
-              )}
-            </div>
-          )}
+          <button
+            onClick={handleVediDettaglio}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-600 transition hover:text-primary-800"
+          >
+            Vedi dettaglio
+            <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+          </button>
         </div>
-      </Modal>
+      </article>
+
+      <InterpelloDettaglioModal
+        interpello={interpello}
+        open={open}
+        onClose={() => setOpen(false)}
+        avviso={avviso}
+        titolo={titoloPulito}
+        linkEsterno={linkEsterno}
+        guida={guida}
+        inScadenza={inScadenza}
+      />
     </>
   );
 }

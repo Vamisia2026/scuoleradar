@@ -4,10 +4,15 @@
  * Estratto da `useBootstrapProfilo.ts` (a sua volta da `AppContext.tsx`):
  * primo effetto di avvio — sessione Supabase, preferenze salvate, piano e
  * contatori, self-heal della prova PRO scaduta e verifica dell'anagrafica.
+ *
+ * Le preferenze si applicano con la guardia `idrataDaProfilo`
+ * (`@/lib/preferenzeGuardia`): il DB vince solo se ha davvero un valore, così
+ * questo stesso avvio non può mai azzerare le preferenze già presenti.
  */
 import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import { identify } from '@/lib/analytics';
 import { normalizzaClassi } from '@/lib/matchingEngine';
+import { idrataDaProfilo } from '@/lib/preferenzeGuardia';
 import { supabase } from '@/lib/supabase';
 import { identitaDaSessione, pianoDaProfilo, provaProScaduta } from './helpers';
 import type { Preferenze, User } from './types';
@@ -147,41 +152,36 @@ export function useProfileBootstrap({
               }
             }
           }
+          /**
+           * IDRATAZIONE DELLE PREFERENZE — guardia di persistenza, lato LETTURA.
+           *
+           * `idrataDaProfilo` (@/lib/preferenzeGuardia) applica la regola unica:
+           * il DB vince SOLO se ha davvero un valore; `null`/`[]` significano
+           * «nessun dato nel DB» e non devono mai cancellare la scelta locale
+           * (appena fatta, non ancora salvata, o scritta su un altro dispositivo).
+           * Un avvio con profilo vuoto non può quindi azzerare classi, province,
+           * tag, scuole o ordini già presenti: le preferenze cambiano solo per
+           * un'azione esplicita dell'utente (o dell'admin).
+           */
           setPref((prev) => ({
             ...prev,
-            ordini:
-              data.ordini_scuola && data.ordini_scuola.length > 0 ? data.ordini_scuola : prev.ordini,
-            provinceCodici:
-              data.province_interesse && data.province_interesse.length > 0
-                ? data.province_interesse
-                : data.province_attive && data.province_attive.length > 0
-                  ? data.province_attive
-                  : prev.provinceCodici,
-            classiCodici:
-              data.classi_concorso && data.classi_concorso.length > 0
-                ? normalizzaClassi(data.classi_concorso)
-                : prev.classiCodici,
+            ordini: idrataDaProfilo(data.ordini_scuola, prev.ordini),
+            provinceCodici: idrataDaProfilo(
+              data.province_interesse,
+              idrataDaProfilo(data.province_attive, prev.provinceCodici),
+            ),
+            classiCodici: idrataDaProfilo(normalizzaClassi(data.classi_concorso), prev.classiCodici),
             // COMPETENZE E PAROLE CHIAVE (`materie_id` / `materie_custom`):
             // senza questa rilettura le competenze salvate si vedevano solo sul
             // browser che le aveva scritte (localStorage) e sparivano al primo
             // accesso da un altro dispositivo, pur essendo nel DB. Come per le
             // classi il DB vince solo se ha davvero qualcosa: un array vuoto non
             // deve cancellare la scelta appena fatta prima del salvataggio.
-            materieId:
-              data.materie_id && data.materie_id.length > 0 ? data.materie_id : prev.materieId,
-            materieCustom:
-              data.materie_custom && data.materie_custom.length > 0
-                ? data.materie_custom
-                : prev.materieCustom,
+            materieId: idrataDaProfilo(data.materie_id, prev.materieId),
+            materieCustom: idrataDaProfilo(data.materie_custom, prev.materieCustom),
             telegramChatId: data.telegram_chat_id ? String(data.telegram_chat_id) : prev.telegramChatId,
-            favoriteSchools:
-              data.favorite_schools && data.favorite_schools.length > 0
-                ? data.favorite_schools
-                : prev.favoriteSchools,
-            ignoredSchools:
-              data.ignored_schools && data.ignored_schools.length > 0
-                ? data.ignored_schools
-                : prev.ignoredSchools,
+            favoriteSchools: idrataDaProfilo(data.favorite_schools, prev.favoriteSchools),
+            ignoredSchools: idrataDaProfilo(data.ignored_schools, prev.ignoredSchools),
             // Preferenza SOSTEGNO: si applica solo se la colonna esiste davvero
             // (boolean); senza migrazione resta il valore locale.
             sostegno: sostegnoDb ?? prev.sostegno,

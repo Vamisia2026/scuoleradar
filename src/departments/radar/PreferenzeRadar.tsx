@@ -14,6 +14,7 @@ import { province } from '@/data/province';
 import { pianoLimits } from '@/lib/planLimits';
 import { normalizzaClasse, normalizzaClassi } from '@/lib/matchingEngine';
 import { promuoviProvinciaPrincipale } from '@/lib/provinceRadar';
+import { modificheDaSalvare } from '@/lib/preferenzeGuardia';
 import {
   cercaCompetenzeParole,
   classeCorrispondeAQuery,
@@ -26,6 +27,54 @@ import { PannelloFiltriScuole } from './preferenze/PannelloFiltriScuole';
 import { PannelloMaterie } from './preferenze/PannelloMaterie';
 import { PannelloOrdini } from './preferenze/PannelloOrdini';
 import { PannelloProvince } from './preferenze/PannelloProvince';
+
+/**
+ * Campi del pannello in forma CONFRONTABILE (guardia di persistenza).
+ * È il sottoinsieme di `Preferenze` che l'utente modifica da qui: gli altri
+ * (genere, età, provincia di residenza, `onboarded`) non hanno controlli in
+ * questa schermata e non devono mai entrare in un payload di autosave.
+ */
+interface FotoCampi {
+  ordini: OrdineScuola[];
+  classiCodici: string[];
+  materieId: string[];
+  materieCustom: string[];
+  provinceCodici: string[];
+  telegramUsername: string;
+  telegramChatId: string;
+  emailNotifica: string;
+  favoriteSchools: string[];
+  ignoredSchools: string[];
+}
+
+/**
+ * Campo del pannello che l'utente può modificare: sono le chiavi della guardia
+ * di persistenza (`toccatiRef`), quindi l'unico insieme di nomi ammesso nel
+ * salvataggio.
+ */
+type CampoToccabile = keyof FotoCampi;
+
+/**
+ * Fotografia confrontabile dei campi del pannello: la usano sia l'idratazione
+ * dal profilo (lato lettura) sia la costruzione del payload di autosave (lato
+ * scrittura). Filtra il rumore di formato (classi nel formato canonico, `trim`
+ * dei testi), così il confronto tra «ciò che l'utente ha scelto» e «ciò che è
+ * già salvato» (`modificheDaSalvare`) non produce differenze inesistenti.
+ */
+function fotoCampi(f: FotoCampi): FotoCampi {
+  return {
+    ordini: f.ordini,
+    classiCodici: normalizzaClassi(f.classiCodici),
+    materieId: f.materieId,
+    materieCustom: f.materieCustom,
+    provinceCodici: f.provinceCodici,
+    telegramUsername: (f.telegramUsername ?? '').trim(),
+    telegramChatId: (f.telegramChatId ?? '').trim(),
+    emailNotifica: (f.emailNotifica ?? '').trim(),
+    favoriteSchools: f.favoriteSchools,
+    ignoredSchools: f.ignoredSchools,
+  };
+}
 
 export function PreferenzeRadar() {
   const { preferenze, setPreferenze, salvaProfilo, piano, hasProAccess, pianoStato, interpelliFiltrati } = useApp();
@@ -77,7 +126,26 @@ export function PreferenzeRadar() {
   const [materiaFilter, setMateriaFilter] = useState('');
   const [querySelezioni, setQuerySelezioni] = useState('');
   const [statoSalvataggio, setStatoSalvataggio] = useState<'idle' | 'salvataggio' | 'salvato'>('idle');
-  const primaEsecuzione = useRef(true);
+
+  /**
+   * GUARDIA DI PERSISTENZA (stato): `toccatiRef` elenca i campi su cui l'utente è
+   * intervenuto da QUESTA schermata. È una registrazione ESPLICITA — fatta
+   * dall'handler nell'istante del tocco (`segnaToccato`), non dedotta a
+   * posteriori confrontando fotografie prese in passaggi diversi — così
+   * l'arrivo del profilo (o di un refresh) non può mai essere scambiato per una
+   * modifica dell'utente.
+   *
+   * Solo i campi elencati qui entrano nell'autosave: classi, province,
+   * competenze/parole chiave e scuole restano quelle già salvate finché l'utente
+   * non le cambia davvero. Cambiano quindi SOLO per un'azione esplicita
+   * dell'utente (o dell'admin), mai per un caricamento o un default.
+   */
+  const toccatiRef = useRef<Set<CampoToccabile>>(new Set());
+
+  /** Registra che l'utente ha modificato `campo`: senza questo, nulla da salvare. */
+  const segnaToccato = (campo: CampoToccabile) => {
+    toccatiRef.current.add(campo);
+  };
 
   const [accordionAperti, setAccordionAperti] = useState<Record<string, boolean>>({
     ordini: false,
@@ -112,26 +180,38 @@ export function PreferenzeRadar() {
     return d ? `${canonico} · ${d.length > 44 ? `${d.slice(0, 42)}…` : d}` : canonico;
   };
 
-  const toggleOrdine = (id: OrdineScuola) => 
+  // Ogni handler dell'utente marca il proprio campo (`segnaToccato`) insieme alla
+  // modifica: è il permesso di scrittura per l'autosave. Le uscite anticipate
+  // (tetto raggiunto, testo vuoto, valore già presente) non cambiano nulla,
+  // quindi non marcano e non producono alcun salvataggio.
+  const toggleOrdine = (id: OrdineScuola) => {
+    segnaToccato('ordini');
     setOrdini((prev) => (prev.includes(id) ? prev.filter((o) => o !== id) : [...prev, id]));
+  };
 
   const toggleClasse = (codice: string) => {
     const canonico = normalizzaClasse(codice);
     if (!canonico) return;
     const attuale = normalizzaClassi(classiCodici);
     if (attuale.includes(canonico)) {
+      segnaToccato('classiCodici');
       setClassiCodici(attuale.filter((c) => c !== canonico));
       return;
     }
     if (attuale.length >= maxClassiConcorso) return;
+    segnaToccato('classiCodici');
     setClassiCodici([...attuale, canonico]);
   };
 
-  const toggleMateria = (id: string) => 
+  const toggleMateria = (id: string) => {
+    segnaToccato('materieId');
     setMaterieId((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
+  };
 
-  const aggiungiCompetenzaSuggerita = (materiaId: string) => 
+  const aggiungiCompetenzaSuggerita = (materiaId: string) => {
+    segnaToccato('materieId');
     setMaterieId((prev) => (prev.includes(materiaId) ? prev : [...prev, materiaId]));
+  };
 
   // COLONNA DI DESTRA (competenze e parole chiave): NESSUNA classe di concorso
   // negli esiti — le classi si scelgono nel campo dedicato a sinistra («Classi di
@@ -160,74 +240,169 @@ export function PreferenzeRadar() {
       (voce) => !materieCustom.some((m) => m.toLowerCase() === voce.toLowerCase()),
     );
     if (nuove.length === 0) return;
+    segnaToccato('materieCustom');
     setMaterieCustom((prev) => [...prev, ...nuove]);
   };
 
-  const removeCustomMateria = (m: string) => setMaterieCustom((prev) => prev.filter((x) => x !== m));
+  const removeCustomMateria = (m: string) => {
+    segnaToccato('materieCustom');
+    setMaterieCustom((prev) => prev.filter((x) => x !== m));
+  };
 
   const toggleProvincia = (codice: string) => {
     if (provinceCodici.includes(codice)) {
+      segnaToccato('provinceCodici');
       setProvinceCodici((prev) => prev.filter((c) => c !== codice));
       return;
     }
     if (provinceCodici.length >= maxProvince) return;
+    segnaToccato('provinceCodici');
     setProvinceCodici((prev) => [...prev, codice]);
   };
 
-  const promuoviPrincipale = (codice: string) => 
+  const promuoviPrincipale = (codice: string) => {
+    segnaToccato('provinceCodici');
     setProvinceCodici((prev) => promuoviProvinciaPrincipale(prev, codice));
+  };
 
   const addFavoriteScuola = () => {
     const val = favoriteScuolaInput.trim();
     if (!val) return;
     if (!favoriteSchools.some((s) => s.toLowerCase() === val.toLowerCase())) {
+      segnaToccato('favoriteSchools');
       setFavoriteSchools((prev) => [...prev, val]);
     }
     setFavoriteScuolaInput('');
   };
 
-  const removeFavoriteScuola = (s: string) => setFavoriteSchools((prev) => prev.filter((x) => x !== s));
+  const removeFavoriteScuola = (s: string) => {
+    segnaToccato('favoriteSchools');
+    setFavoriteSchools((prev) => prev.filter((x) => x !== s));
+  };
 
   const addIgnoredScuola = () => {
     const val = ignoredScuolaInput.trim();
     if (!val) return;
     if (!ignoredSchools.some((s) => s.toLowerCase() === val.toLowerCase())) {
+      segnaToccato('ignoredSchools');
       setIgnoredSchools((prev) => [...prev, val]);
     }
     setIgnoredScuolaInput('');
   };
 
-  const removeIgnoredScuola = (s: string) => setIgnoredSchools((prev) => prev.filter((x) => x !== s));
+  const removeIgnoredScuola = (s: string) => {
+    segnaToccato('ignoredSchools');
+    setIgnoredSchools((prev) => prev.filter((x) => x !== s));
+  };
+
+  /**
+   * CANALI DI NOTIFICA — stesse regole del resto del pannello: passare da questi
+   * setter è ciò che rende il campo scrivibile dall'autosave. Il testo che
+   * l'utente svuota resta un azzeramento VOLUTO (il campo è marcato al primo
+   * carattere digitato), mentre un valore vuoto mai toccato non cancella nulla.
+   */
+  const cambiaTelegramUsername = (valore: string) => {
+    segnaToccato('telegramUsername');
+    setTelegramUsername(valore);
+  };
+
+  const cambiaTelegramChatId = (valore: string) => {
+    segnaToccato('telegramChatId');
+    setTelegramChatIdInput(valore);
+  };
+
+  const cambiaEmailNotifica = (valore: string) => {
+    segnaToccato('emailNotifica');
+    setEmailNotifica(valore);
+  };
+
+  /**
+   * IDRATAZIONE DEL PROFILO — guardia di persistenza, lato LETTURA.
+   *
+   * Il profilo non è disponibile al primo render: `preferenze` di contesto è la
+   * fonte della verità (localStorage all'avvio, poi la riga `profiles` quando la
+   * risposta arriva). Ogni nuovo arrivo riallinea i campi locali che l'utente NON
+   * ha ancora toccato: i pannelli mostrano i dati veri e nessun campo resta
+   * fermo su un valore vecchio.
+   *
+   * I campi GIÀ TOCCATI (`toccatiRef`, registrati dall'handler dell'utente) sono
+   * esclusi: nessun caricamento, refresh o risposta in ritardo può sovrascrivere
+   * o svuotare una scelta appena fatta. Questa è l'unica scrittura automatica
+   * dello stato locale della schermata.
+   */
+  useEffect(() => {
+    const idratate = fotoCampi(preferenze);
+    const toccati = toccatiRef.current;
+    if (!toccati.has('ordini')) setOrdini(idratate.ordini);
+    if (!toccati.has('classiCodici')) setClassiCodici(idratate.classiCodici);
+    if (!toccati.has('materieId')) setMaterieId(idratate.materieId);
+    if (!toccati.has('materieCustom')) setMaterieCustom(idratate.materieCustom);
+    if (!toccati.has('provinceCodici')) setProvinceCodici(idratate.provinceCodici);
+    if (!toccati.has('telegramUsername')) setTelegramUsername(idratate.telegramUsername);
+    if (!toccati.has('telegramChatId')) setTelegramChatIdInput(idratate.telegramChatId);
+    if (!toccati.has('emailNotifica')) setEmailNotifica(idratate.emailNotifica);
+    if (!toccati.has('favoriteSchools')) setFavoriteSchools(idratate.favoriteSchools);
+    if (!toccati.has('ignoredSchools')) setIgnoredSchools(idratate.ignoredSchools);
+  }, [preferenze]);
+
+  /**
+   * TETTI DEL PIANO — qui NON si tronca nulla (regola di prodotto §26.5 di
+   * `docs/SYSTEM_HANDOVER.md`: «i tetti limitano l'USO, non distruggono i dati»).
+   * Una selezione oltre il tetto resta SALVATA e viene segnalata «oltre il piano»
+   * nel pannello; i tetti del piano confermato si applicano al momento dell'uso
+   * (`limitaSelezione` nel feed del Radar) e l'avviso all'utente vive in
+   * `usePreferenzeUtente`. Troncare qui sarebbe un azzeramento AUTOMATICO delle
+   * preferenze: un downgrade a Base deve produrre avvisi in meno, non distruggere
+   * le classi e le province scelte durante la prova PRO.
+   */
 
   useEffect(() => {
+    /**
+     * GUARDIA DI PERSISTENZA, lato SCRITTURA: nel payload entrano SOLO i campi
+     * elencati in `toccatiRef` (quelli su cui l'utente è intervenuto in questa
+     * sessione) e solo se il valore locale differisce da quello già salvato
+     * (`modificheDaSalvare`).
+     *
+     * Il resto del payload è il contesto così com'è: `salvaProfilo` riscrive
+     * l'intera riga `profiles`, quindi ogni campo NON toccato viene riscritto con
+     * il suo valore reale — mai con un default vuoto. Un secondo avvio, un refresh
+     * o un profilo non ancora arrivato non possono più cancellare classi,
+     * province, competenze/parole chiave o scuole: senza campi toccati non parte
+     * alcun salvataggio. Una preferenza cambia solo per un'azione esplicita
+     * dell'utente (o dell'admin).
+     */
+    // Il profilo deve essere stato LETTO (dal DB o dalla modalità demo): finché
+    // `pianoStato` è 'loading' lo stato locale non è ancora idratato, quindi
+    // nessuna scrittura. La guardia (`useGuardiaPiano`) esce dal caricamento al
+    // massimo dopo 10 s, così nessuno resta senza salvataggio.
     if (pianoStato !== 'pronto') return;
-    setClassiCodici((prev) => prev.length > maxClassiConcorso ? prev.slice(0, maxClassiConcorso) : prev);
-    setProvinceCodici((prev) => prev.length > maxProvince ? prev.slice(0, maxProvince) : prev);
-  }, [pianoStato, maxProvince, maxClassiConcorso]);
-
-  useEffect(() => {
-    if (primaEsecuzione.current) {
-      primaEsecuzione.current = false;
-      return;
-    }
-    const modifiche: Preferenze = {
+    const locale = fotoCampi({
       ordini,
       classiCodici,
       materieId,
       materieCustom,
       provinceCodici,
-      telegramUsername: telegramUsername.trim(),
-      telegramChatId: telegramChatIdInput.trim(),
-      emailNotifica: emailNotifica.trim(),
-      onboarded: preferenze.onboarded,
+      telegramUsername,
+      telegramChatId: telegramChatIdInput,
+      emailNotifica,
       favoriteSchools,
       ignoredSchools,
+    });
+    const modifiche = modificheDaSalvare<Preferenze>(toccatiRef.current, locale, preferenze);
+    // Niente campi toccati (o valori identici a quelli già salvati) → nessuna
+    // scrittura: il profilo e i refresh non scrivono nulla e le preferenze
+    // salvate restano intatte, senza alcun ciclo di autosave.
+    if (Object.keys(modifiche).length === 0) return;
+    const daSalvare: Preferenze = {
+      ...preferenze,
+      ...modifiche,
+      onboarded: preferenze.onboarded,
       sostegno,
     };
     setStatoSalvataggio('salvataggio');
     const timeout = setTimeout(() => {
-      setPreferenze(modifiche);
-      void salvaProfilo(modifiche).then(() => {
+      setPreferenze(daSalvare);
+      void salvaProfilo(daSalvare).then(() => {
         setStatoSalvataggio('salvato');
         setTimeout(() => setStatoSalvataggio('idle'), 2500);
       });
@@ -245,6 +420,10 @@ export function PreferenzeRadar() {
     favoriteSchools,
     ignoredSchools,
     sostegno,
+    pianoStato,
+    preferenze,
+    setPreferenze,
+    salvaProfilo,
   ]);
 
   return (
@@ -332,11 +511,11 @@ export function PreferenzeRadar() {
           preferenze={preferenze}
           telegramDeepLink={telegramDeepLink}
           telegramUsername={telegramUsername}
-          setTelegramUsername={setTelegramUsername}
+          setTelegramUsername={cambiaTelegramUsername}
           telegramChatIdInput={telegramChatIdInput}
-          setTelegramChatIdInput={setTelegramChatIdInput}
+          setTelegramChatIdInput={cambiaTelegramChatId}
           emailNotifica={emailNotifica}
-          setEmailNotifica={setEmailNotifica}
+          setEmailNotifica={cambiaEmailNotifica}
         />
       </div>
     </div>

@@ -124,8 +124,26 @@
       pubblicato dall'ente accanto al codice meccanografico (`scraper/scuolaDaRiga.ts`).
       Se la fonte non lo pubblica, la riga non entra: mai un'etichetta di materia o un
       dump di codici al posto dell'istituto.
+- [ ] **Scheda dell'opportunità (card + modale di dettaglio): scuola e fonte sempre in chiaro** —
+      la card e la modale mostrano SEMPRE la **scuola emittente**
+      (`src/components/IstitutoEmittente.tsx`: nome reale, oppure la dicitura gestita «Scuola non
+      specificata / Più plessi» quando il bando non la pubblica) e un **link diretto alla fonte
+      ufficiale** con etichetta onesta (`etichettaFonteLink`, nuova scheda
+      `target="_blank" rel="noopener noreferrer"`): nessuna vista senza contesto, mai un link interno
+      spacciato per fonte.
+- [ ] **Finestra dei 60 giorni in TUTTE le superfici pubbliche** — lo **stesso** numero e la stessa
+      data **locale** vivono in `src/lib/scadenza.ts` (`GIORNI_FINESTRA_SENZA_SCADENZA`,
+      `eAvvisoVivo(scadenza, pubblicazione)`) e valgono per bacheca, **feed della dashboard**,
+      matching (fallback PostgREST + RPC nativa, migrazione `20261005120000_...`) e **pulizia
+      automatica** (`scripts/pulisci-scaduti.ts` rimuove anche le righe senza scadenza fuori
+      finestra): un avviso che la fonte non data non resta pubblico per sempre.
+
 
 ## 5. Verifica prima del merge
+- [ ] `npm run test:opportunita` + `npm run test:interpello-scadenza` — la scuola emittente e la
+      fonte ufficiale sono visibili su card e modale, e la finestra dei 60 giorni vale in tutte le
+      superfici pubbliche (feed, matching, bacheca, pulizia automatica).
+
 
 - [ ] `npm run test:telegram:canali` — formato a 7 sezioni, testate, assenza di
       "candidati", assenza di "Email non disponibile", link safety.

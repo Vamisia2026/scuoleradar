@@ -30,6 +30,12 @@ export interface Interpello {
   materia?: string | null;
   ordine: OrdineScuola;
   dataScadenza: string; // ISO date
+  /**
+   * Data di PUBBLICAZIONE dichiarata dalla fonte/`created_at` (ISO). Serve alla
+   * finestra dei 60 giorni: un avviso che la fonte NON data resta pubblico solo se
+   * pubblicato di recente (`eAvvisoVivo`, `src/lib/scadenza.ts`).
+   */
+  dataPubblicazione?: string | null;
   descrizione: string;
   linkFonte: string;
   /** Email di candidatura della scuola (PEC/istituzionale), se disponibile. */
@@ -40,7 +46,14 @@ export interface Interpello {
    * aggiornamento» — l'avviso resta comunque SEMPRE visibile e notificabile.
    */
   statoArricchimento?: 'completo' | 'parziale' | null;
-  compatibilita: number; // 0-100
+  /**
+   * PUNTEGGIO di compatibilità col profilo (0-100): le soglie della banda
+   * cromatica vivono in `src/lib/compatibilita.ts` (🟢 ≥ 80 · 🟠 ≥ 70 · 🔴 ≥ 60),
+   * il numero lo produce `punteggioCompatibilita` (matching engine) e lo applica
+   * il feed della dashboard (`useInterpelliFeed`). Dal mapper del DB arriva a
+   * `100` come valore neutro, poi il feed lo sostituisce con quello reale.
+   */
+  compatibilita: number;
 }
 
 /**

@@ -5,18 +5,16 @@
  * date. Componente autosufficiente (riceve solo `utente` e `onChiudi`), estratto
  * da `AdminTabs.tsx` con markup invariato.
  *
- * I campi del Radar sono mostrati in CHIARO e allineati alla vista utente:
- * gli ORDINI di scuola si risolvono nel nome leggibile (`ordiniScuola`), le
- * competenze di catalogo (`materie_id`) nel nome della materia e i TAG
- * personalizzati (`materie_custom`) restano il testo scritto dall'utente —
- * la stessa regola del riepilogo «In cosa puoi lavorare» e del motore
- * (`etichetteCompetenzeProfilo`).
+ * I campi del Radar arrivano dal blocco CONDIVISO `PreferenzeUtente`
+ * (`components/PreferenzeUtente.tsx`), lo stesso montato dalla card utente del tab
+ * «Radar»: ordini di scuola nel nome leggibile, competenze di catalogo nel nome
+ * della materia, tag personalizzati nel testo scritto dall'utente — così la scheda
+ * NON ha buchi rispetto alla vista utente e le due viste Admin non possono divergere.
  */
 import type { ReactNode } from 'react';
 import { ShieldCheck, X } from 'lucide-react';
-import { ordiniScuola } from '@/data/ordiniMaterie';
-import { etichetteCompetenzeProfilo } from '@/lib/matchingEngine';
-import { BadgePiano, Chips, StatoRadarBadge, nomeCognome } from '../../adminUi';
+import { BadgePiano, StatoRadarBadge, nomeCognome } from '../../adminUi';
+import { PreferenzeUtente } from '../../components/PreferenzeUtente';
 import { dataItaliana, type AdminUtente } from '../../types';
 import { loginType, telefono } from './utentiHelpers';
 
@@ -28,13 +26,6 @@ export function DettaglioUtente({ utente, onChiudi }: { utente: AdminUtente; onC
     </div>
   );
   const radarAttivo = utente.radar_attivo !== undefined ? Boolean(utente.radar_attivo) : Boolean(utente.onboarded);
-  // Preferenze Radar mostrate in CHIARO (stessa risoluzione della vista utente):
-  // gli ordini nel loro nome leggibile e le competenze di catalogo nel nome della
-  // materia; i TAG personalizzati restano il testo scritto dall'utente.
-  const ordiniEtichette = (utente.ordini_scuola ?? []).map(
-    (id) => ordiniScuola.find((o) => o.id === id)?.nome ?? id,
-  );
-  const materieEtichette = etichetteCompetenzeProfilo({ materieId: utente.materie_id });
   return (
     <div className="fixed inset-0 z-[80] flex justify-end" role="dialog" aria-modal="true" aria-label="Scheda utente">
       <div className="absolute inset-0 bg-primary-900/40 backdrop-blur-sm" onClick={onChiudi} />
@@ -68,29 +59,10 @@ export function DettaglioUtente({ utente, onChiudi }: { utente: AdminUtente; onC
 
           <section className="rounded-xl border border-primary-100 p-3">
             <h3 className="text-[11px] font-bold uppercase tracking-wider text-primary-500">Profilo utente &amp; filtri radar</h3>
-            <div className="mt-2 space-y-2 text-xs text-primary-700">
-              <p>
-                <b>Classi di concorso:</b> <Chips valori={utente.classi_concorso} />
-              </p>
-              <p>
-                <b>Materie e competenze extra:</b> <Chips valori={materieEtichette} />
-              </p>
-              <p>
-                <b>Tag personalizzati:</b> <Chips valori={utente.materie_custom} />
-              </p>
-              <p>
-                <b>Province:</b> <Chips valori={utente.province_interesse ?? utente.province_attive} />
-              </p>
-              <p>
-                <b>Ordini scuola:</b> <Chips valori={ordiniEtichette} />
-              </p>
-              <p>
-                <b>Scuole preferite:</b> <Chips valori={utente.favorite_schools} />
-              </p>
-              <p>
-                <b>Scuole escluse (blacklist):</b> <Chips valori={utente.ignored_schools} />
-              </p>
-            </div>
+            {/* Preferenze COMPLETE (ordini, classi, materie, tag, province, scuole):
+                blocco CONDIVISO con la card del tab «Radar», così nessuna vista
+                Admin ha buchi rispetto alla dashboard dell'utente. */}
+            <PreferenzeUtente utente={utente} />
           </section>
 
           <section className="rounded-xl border border-primary-100 p-3">

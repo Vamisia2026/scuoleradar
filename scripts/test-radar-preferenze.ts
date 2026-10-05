@@ -209,6 +209,25 @@ check('province: salvataggio immediato', true, /const toggleProvincia[\s\S]{0,60
 check('competenze/keyword: salvataggio immediato', true, /toggleMateria[\s\S]{0,300}persistiSelezione\(\{ materieId: prossime \}\)/.test(wizardModal));
 check('tag scritti a mano: salvataggio immediato', true, /persistiSelezione\(\{ materieCustom: next \}\)/.test(wizardModal));
 
+console.log('\n— Pannello preferenze: nessun azzeramento da caricamento o refresh —');
+// La schermata registra i campi toccati (`segnaToccato`) e salva SOLO quelli:
+// aprire la pagina, un refresh o un profilo che arriva in ritardo non possono più
+// scrivere un default vuoto sopra classi, province, competenze o scuole.
+// Verifica end-to-end dedicata: npm run test:persistenza:preferenze
+const schermata = readFileSync('src/departments/radar/PreferenzeRadar.tsx', 'utf8');
+const campiPannello = [
+  'ordini', 'classiCodici', 'materieId', 'materieCustom', 'provinceCodici',
+  'telegramUsername', 'telegramChatId', 'emailNotifica', 'favoriteSchools', 'ignoredSchools',
+];
+check('autosave: nel payload solo i campi toccati', true, /modificheDaSalvare<Preferenze>\(toccatiRef\.current, locale, preferenze\)/.test(schermata));
+check('autosave: nessuna scrittura se non c’è nulla da salvare', true, /Object\.keys\(modifiche\)\.length === 0\) return;/.test(schermata));
+check('idratazione selettiva: i campi già toccati non si riallineano', true, campiPannello.every((c) => schermata.includes(`!toccati.has('${c}')`)));
+check('ogni handler del pannello marca il proprio campo', true, campiPannello.every((c) => schermata.includes(`segnaToccato('${c}')`)));
+check('le preferenze non toccate restano quelle del contesto', true, /\.\.\.preferenze,[\s\S]{0,40}\.\.\.modifiche,/.test(schermata));
+check('nessun troncamento automatico in schermata', false, /slice\(0, max(?:Province|ClassiConcorso)\)/.test(schermata));
+check('guardia: nessun salvataggio dedotto da fotografie diverse', false, /payloadSalvataggio|campiToccati|fondiCampiToccati|idratateRef|toccatoDallUtente/.test(schermata));
+check('profilo: le colonne delle preferenze passano tutte da `idrataDaProfilo`', true, (bootstrap.match(/idrataDaProfilo\(/g) ?? []).length >= 7);
+
 // Provincia principale/promozione e ricerca unificata hanno una verifica DEDICATA:
 //   npm run test:province · npm run test:ricerca
 

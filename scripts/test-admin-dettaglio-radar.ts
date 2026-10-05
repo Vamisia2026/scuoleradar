@@ -1,14 +1,20 @@
 /**
- * Dipartimento Admin + Radar — GUARDIA della scheda utente.
+ * Dipartimento Admin + Radar — GUARDIA delle viste utente Admin.
  *
- * La card utente del pannello Admin deve rispecchiare la vista utente:
- *   · gli ORDINI di scuola scelti (nomi leggibili, non id opachi);
- *   · le MATERIE/COMPETENZE extra (catalogo `materie_id`, risolte nel nome);
- *   · i TAG personalizzati (`materie_custom`, il testo scritto dall'utente).
+ * Scheda di dettaglio (tab «Utenti») e card utente (tab «Radar») devono
+ * rispecchiare la vista utente e non avere buchi: gli ORDINI di scuola scelti
+ * (nomi leggibili, non id opachi), le CLASSI di concorso, le MATERIE/COMPETENZE
+ * extra (catalogo `materie_id`, risolte nel nome), i TAG personalizzati
+ * (`materie_custom`), le province e le scuole preferite/escluse.
  *
- * Lo schema di salvataggio del Radar (`profiles`) scrive già le tre colonne:
- * la guardia verifica che il payload le contenga e che la scheda le mostri,
- * così la corrispondenza vista utente ↔ vista admin non può regredire.
+ * Le due superfici montano lo STESSO blocco condiviso
+ * (`components/PreferenzeUtente.tsx`, con la derivazione pura in
+ * `components/preferenzeUtente.ts`): la guardia verifica che il blocco esista,
+ * che entrambe lo usino e che mostri tutti i parametri.
+ *
+ * Lo schema di salvataggio del Radar (`profiles`) scrive già le colonne: la
+ * guardia verifica che il payload le contenga, così la corrispondenza
+ * vista utente ↔ vista admin non può regredire.
  *
  * Uso: npm run test:admin:utente (incluso in `npm test`)
  */
@@ -26,6 +32,9 @@ const leggi = (p: string): string => readFileSync(p, 'utf8');
 
 const tipi = leggi('src/departments/admin/types.ts');
 const dettaglio = leggi('src/departments/admin/tabs/utenti/DettaglioUtente.tsx');
+const tabRadar = leggi('src/departments/admin/tabs/TabRadar.tsx');
+const blocco = leggi('src/departments/admin/components/PreferenzeUtente.tsx');
+const pure = leggi('src/departments/admin/components/derivaPreferenzeUtente.ts');
 const anagrafica = leggi('src/contexts/app/useAnagraficaProfilo.ts');
 
 console.log('— Schema di salvataggio del Radar (`profiles`) —');
@@ -33,19 +42,30 @@ check('save: `ordini_scuola` nel payload', true, /ordini_scuola: dati\.ordini/.t
 check('save: `materie_id` nel payload', true, /materie_id: dati\.materieId/.test(anagrafica));
 check('save: `materie_custom` nel payload', true, /materie_custom: dati\.materieCustom/.test(anagrafica));
 
-console.log('\n— Scheda utente Admin: ordini + competenze extra/tag —');
+console.log('\n— Preferenze Radar: blocco CONDIVISO tra scheda e card utente —');
 check('tipi: `ordini_scuola` dichiarato', true, /ordini_scuola\??:\s*string\[\]/.test(tipi));
 check('tipi: `materie_id` dichiarato', true, /materie_id\??:\s*string\[\]/.test(tipi));
 check('tipi: `materie_custom` dichiarato', true, /materie_custom\??:\s*string\[\]/.test(tipi));
-check('scheda: mostra gli Ordini di scuola', true, /Ordini scuola/.test(dettaglio));
-check('scheda: risolve i nomi degli ordini (`ordiniScuola`)', true, /ordiniScuola/.test(dettaglio));
-check('scheda: mostra le materie/competenze extra', true, /Materie e competenze extra/.test(dettaglio));
-check('scheda: risolve i nomi del catalogo (`etichetteCompetenzeProfilo`)', true, /etichetteCompetenzeProfilo/.test(dettaglio));
+check('blocco condiviso: esiste', true, /export function PreferenzeUtente/.test(blocco));
+check('scheda di dettaglio: monta il blocco', true, /<PreferenzeUtente\b/.test(dettaglio));
+check('card del tab «Radar»: monta lo STESSO blocco', true, /<PreferenzeUtente\b/.test(tabRadar));
+check('card: variante compatta', true, /variante="compatto"/.test(tabRadar));
+check('blocco: mostra gli Ordini di scuola', true, /Ordini di scuola/.test(blocco));
+check('blocco: mostra le Classi di concorso', true, /Classi di concorso/.test(blocco));
+check('blocco: mostra le Materie e competenze extra', true, /Materie e competenze extra/.test(blocco));
+check('blocco: mostra i TAG personalizzati (`materie_custom`)', true, /Tag personalizzati/.test(blocco));
 check(
-  'scheda: mostra i TAG personalizzati (`materie_custom`)',
+  'blocco: mostra province e scuole (nessun buco)',
   true,
-  /Tag personalizzati/.test(dettaglio) && /materie_custom/.test(dettaglio),
+  /Province/.test(blocco) && /Scuole preferite/.test(blocco) && /Scuole escluse/.test(blocco),
 );
+check('derivazione: ordini risolti nel nome (`ordiniScuola`)', true, /ordiniScuola/.test(pure));
+check(
+  'derivazione: competenze di catalogo risolte nel nome (`etichetteCompetenzeProfilo`)',
+  true,
+  /etichetteCompetenzeProfilo/.test(pure),
+);
+check('derivazione: i tag restano il testo dell’utente (`materie_custom`)', true, /tag: u\.materie_custom/.test(pure));
 
 console.log('\n— Risoluzione dei nomi (logica pura: vista utente ≡ vista admin) —');
 check(

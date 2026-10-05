@@ -18,7 +18,7 @@
  * può dichiarare gentilmente che l'anagrafica è in via di aggiornamento.
  */
 
-import { eInterpelloAttivo } from './scadenza';
+import { eAvvisoVivo, GIORNI_FINESTRA_SENZA_SCADENZA } from './scadenza';
 import { enteEmittenteDaTitolo } from './matchingEngine';
 import { nomeScuolaDaCodice } from './school-lookup';
 import { nomeIstitutoPresentabile } from './nomeIstituto';
@@ -34,8 +34,10 @@ export { SCUOLA_NON_SPECIFICATA };
 
 /**
  * Finestra (in giorni) entro cui un avviso SENZA scadenza resta in bacheca.
+ * Il numero vive in `scadenza.ts` (regola condivisa con feed e migrazioni): qui si
+ * ri-esporta perché il tabellone e i suoi test lo importino un solo significato.
  */
-export const GIORNI_FINESTRA_SENZA_SCADENZA = 60;
+export { GIORNI_FINESTRA_SENZA_SCADENZA };
 
 /** Sottoinsieme di interpelli necessario al tabellone. */
 export interface RigaBoard {
@@ -179,20 +181,20 @@ export function preparaRigheBoard<R extends RigaBoard>(
 ): RigaBoardCompleta<R>[] {
   const pronte: RigaBoardCompleta<R>[] = [];
   const adesso = new Date();
-  const limiteFinestra = new Date(adesso);
-  limiteFinestra.setDate(limiteFinestra.getDate() - GIORNI_FINESTRA_SENZA_SCADENZA);
 
   for (const riga of righe ?? []) {
     const scadenza = (riga.expiration_date ?? '').trim();
     let scadenzaValida: string | null = null;
     let senzaScadenza = false;
 
+    // Regola UNICA di vetrina pubblica (`eAvvisoVivo`): con scadenza → non ancora
+    // passata; senza scadenza → pubblicato entro la finestra dei 60 giorni. Una
+    // riga senza scadenza E senza data di pubblicazione utile non è viva → fuori.
     if (scadenza) {
-      if (!eInterpelloAttivo(scadenza, adesso)) continue;
+      if (!eAvvisoVivo(scadenza, null, adesso)) continue;
       scadenzaValida = scadenza;
     } else {
-      const pubblicata = new Date(riga.created_at ?? '');
-      if (Number.isNaN(pubblicata.getTime()) || pubblicata < limiteFinestra) continue;
+      if (!eAvvisoVivo(null, riga.created_at, adesso)) continue;
       senzaScadenza = true;
     }
 

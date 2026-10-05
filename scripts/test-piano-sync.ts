@@ -161,6 +161,13 @@ check('feature flags: visibilità reattiva allo snapshot', true, /dipartimentoVi
 check('wizard: tetti PRO finché il piano non è confermato', true, /pianoLimits\(piano, hasProAccess, pianoStato === 'pronto'\)/.test(wizard));
 check('preferenze: stessi tetti condizionati', true, /pianoLimits\(piano, hasProAccess, pianoStato === 'pronto'\)/.test(preferenze));
 check('riallineamento ai tetti quando il piano è confermato', true, /if \(!tetti \|\| !preferenze\.onboarded\) return;/.test(preferenzeUtente));
+// Tetti del piano = AVVISO, mai troncamento: province, classi e tag restano
+// salvati anche dopo un downgrade (i limiti si applicano al momento dell'uso del
+// feed). Nessun effetto può riscrivere le preferenze salvate.
+check('tetti del piano: nessun troncamento delle preferenze salvate', false, /slice\(0, (?:maxProvince|maxClassiConcorso|tetti\.province|tetti\.classi)\)/.test(preferenze));
+check('tetti del piano: avviso esplicito con dati conservati', true, /dati conservati/.test(preferenzeUtente));
+check('preferenze: autosave dai soli campi toccati', true, /modificheDaSalvare<Preferenze>\(toccatiRef\.current, locale, preferenze\)/.test(preferenze));
+check('preferenze: nessuna scrittura senza campi toccati', true, /Object\.keys\(modifiche\)\.length === 0\) return;/.test(preferenze));
 check('salvaProfilo scrive nome/cognome (mai azzerandoli)', true, /payload\.nome = nomeFinale/.test(anagrafica) && /payload\.cognome = cognomeFinale/.test(anagrafica));
 
 console.log('\n— 6. Funnel Guest → registrazione (nessun dato richiesto due volte) —');

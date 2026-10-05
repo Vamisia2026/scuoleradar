@@ -26,9 +26,10 @@ export interface OpzioniPreferenzeUtente {
   /** Contatore notifiche usate: stato del provider (azzerato al logout). */
   setNotificheUsate: Dispatch<SetStateAction<number>>;
   /**
-   * Tetti del piano CONFERMATO (`null` = piano ancora in lettura dal DB): mentre il
-   * piano è incerto non si tronca nulla. Quando arriva, una selezione che supera i
-   * tetti Base (es. ex PRO tornato Base) viene riallineata e persistita.
+   * Tetti del piano CONFERMATO (`null` = piano ancora in lettura dal DB): servono
+   * solo a SEGNALARE una selezione più ampia del piano (es. ex PRO tornato Base).
+   * La selezione resta salvata — niente troncamenti in memoria né riscritture sul
+   * profilo: i limiti si applicano al MOMENTO DELL'USO (feed del Radar).
    */
   tetti: { province: number; classi: number } | null;
 }

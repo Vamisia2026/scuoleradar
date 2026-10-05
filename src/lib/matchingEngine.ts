@@ -1,8 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Interpello } from '../data/interpelli';
-import { classeByCodice, eAvvisoSostegno } from '../data/classiConcorso';
+import { classeByCodice, eAvvisoSostegno, isCodiceSostegno } from '../data/classiConcorso';
 import { materie as catalogoMaterie } from '../data/ordiniMaterie';
 import { province } from '../data/province';
+import { dataIsoLocale, dataLimiteFinestraSenzaScadenza } from './scadenza';
 import { normalizzaStatoArricchimento } from './statoArricchimento';
 
 /**
@@ -107,6 +108,7 @@ export function mapInterpelloDBToInterpello(r: InterpelloDB): Interpello {
     materia: r.materia ?? null,
     ordine: classe?.ordine ?? 'secondaria2',
     dataScadenza: r.expiration_date ?? '',
+    dataPubblicazione: r.created_at ?? null,
     descrizione: r.title ?? '',
     linkFonte: r.source_url ?? '',
     contactEmail: r.contact_email ?? null,
@@ -114,6 +116,8 @@ export function mapInterpelloDBToInterpello(r: InterpelloDB): Interpello {
     // l'app dichiara il ripiego «Scuola non specificata / Più plessi» senza mai
     // nascondere nulla.
     statoArricchimento: normalizzaStatoArricchimento(r.stato_arricchimento),
+    // Punteggio neutro: il valore REALE lo applica il feed della dashboard
+    // (`useInterpelliFeed` → `punteggioCompatibilita`), che conosce il profilo.
     compatibilita: 100,
   };
 }
@@ -187,11 +191,17 @@ export async function searchInterpelli(
   if (provinceCercate.length > 0) query = query.in('province', provinceCercate);
   if (varianti.length > 0) query = query.overlaps('class_codes', varianti);
 
-  // Esclude gli interpelli SCADUTI dalle liste attive pubbliche
-  // (senza scadenza → mantenuti: non dimostrabili come scaduti).
-  const oggiIso = new Date().toISOString().slice(0, 10);
+  // Esclude gli interpelli NON VIVI dalle liste attive pubbliche: con scadenza →
+  // non scaduti; senza scadenza → pubblicati entro la finestra dei 60 giorni
+  // (`eAvvisoVivo` / `GIORNI_FINESTRA_SENZA_SCADENZA`). Stessa semantica del filtro
+  // della bacheca (`radar/flightBoard/filtroAttivi.ts`) e della RPC `match_interpelli`.
+  const adesso = new Date();
+  const oggiIso = dataIsoLocale(adesso);
+  const limiteFinestra = dataLimiteFinestraSenzaScadenza(adesso);
   const { data: righe, error: erroreFallback } = await query
-    .or(`expiration_date.is.null,expiration_date.gte.${oggiIso}`)
+    .or(
+      `expiration_date.gte.${oggiIso},and(expiration_date.is.null,created_at.gte.${limiteFinestra})`,
+    )
     .order('expiration_date', { ascending: true, nullsFirst: false })
     .limit(limit ?? 100);
 
@@ -599,6 +609,75 @@ export function avvisoCompatibileConProfilo(
     ? { ok: true }
     : { ok: false, motivo: 'classe' };
 }
+
+/* -------- Punteggio di compatibilità (banda cromatica + ordine bacheca) -------- */
+
+/**
+ * PUNTEGGI di compatibilità prodotti dal motore (0-100).
+ *
+ * Il punteggio NON è una graduatoria di merito: misura **quanto** l'opportunità
+ * somiglia al profilo e serve a due cose sole — la banda cromatica della card
+ * (`src/lib/compatibilita.ts`) e l'ORDINE della bacheca (i match forti in testa, i
+ * suggerimenti extra in coda). La CONSEGNA resta invariata: cambia come si presenta
+ * un avviso, non se arriva.
+ */
+export const PUNTEGGIO_MATCH_NESSUNO = 0;
+/** Area SOSTEGNO senza una classe AD… tra le proprie: suggerimento EXTRA (banda rossa). */
+export const PUNTEGGIO_EXTRA_SOSTEGNO = 60;
+/** Profilo configurato solo su competenze/parole chiave (nessuna classe di concorso). */
+export const PUNTEGGIO_MATCH_POSSIBILE = 70;
+/** Avviso senza codice classe, ma con la materia coperta dalle classi del profilo. */
+export const PUNTEGGIO_MATCH_PROBABILE = 80;
+/** Provincia + classe di concorso in comune (o competenza dichiarata nel testo). */
+export const PUNTEGGIO_MATCH_ESATTO = 100;
+
+/**
+ * True se l'utente ha SCELTO il sostegno: ha almeno una classe di sostegno
+ * (ADAA/ADEE/ADMM/ADSS, o varianti delle fonti) tra le proprie.
+ *
+ * Da §26.45 il sostegno è a INCLUSIONE PERMANENTE e non esiste più un interruttore:
+ * `profiles.sostegno` resta una colonna di compatibilità (default `true`) e NON è più
+ * un segnale di scelta. L'unica scelta volontaria e verificabile è una classe AD…
+ * tra le proprie: chi non l'ha scelta riceve comunque gli avvisi di sostegno (la
+ * consegna non cambia), ma come suggerimento extra — mai tra le priorità.
+ */
+export function profiloAderisceSostegno(profilo: ProfiloCompatibilita): boolean {
+  return (profilo.classi ?? []).some((c) => isCodiceSostegno(c));
+}
+
+/**
+ * PUNTEGGIO di compatibilità (0-100) di un'opportunità rispetto a un profilo.
+ *
+ *   · 0   → non compatibile (`avvisoCompatibileConProfilo` dice no);
+ *   · 60  → area SOSTEGNO senza una classe AD… propria: suggerimento EXTRA (rosso);
+ *   · 70  → profilo senza classi, aggancio per competenza/parola chiave;
+ *   · 80  → avviso senza codice classe ma materia coperta dalle classi del profilo;
+ *   · 100 → provincia + classe in comune.
+ *
+ * È la STESSA regola della consegna: prima `avvisoCompatibileConProfilo` decide
+ * `ok`/motivo, poi il punteggio gradua. Nessuna seconda copia dei criteri.
+ */
+export function punteggioCompatibilita(
+  profilo: ProfiloCompatibilita,
+  avviso: AvvisoCompatibilita,
+  opts: { ignoraFiltri?: boolean } = {},
+): number {
+  if (opts.ignoraFiltri === true) return PUNTEGGIO_MATCH_ESATTO;
+  if (!avvisoCompatibileConProfilo(profilo, avviso, opts).ok) return PUNTEGGIO_MATCH_NESSUNO;
+
+  // AREA SOSTEGNO fuori dalle proprie classi: inclusa SEMPRE (§26.45), ma come
+  // suggerimento EXTRA: resta in bacheca, dopo le priorità vere.
+  if (avvisoDiSostegno(avviso) && !profiloAderisceSostegno(profilo)) {
+    return PUNTEGGIO_EXTRA_SOSTEGNO;
+  }
+
+  const classiProfilo = (profilo.classi ?? []).map(normalizzaClasse).filter(Boolean);
+  if (classiProfilo.length === 0) return PUNTEGGIO_MATCH_POSSIBILE;
+  const classiAvviso = (avviso.classi ?? []).filter(Boolean);
+  if (classiAvviso.length > 0) return PUNTEGGIO_MATCH_ESATTO;
+  return PUNTEGGIO_MATCH_PROBABILE;
+}
+
 
 /**
  * FASE 4 — Trova nella tabella `profiles` gli utenti compatibili con un interpello:

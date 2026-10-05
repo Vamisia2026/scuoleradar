@@ -10,7 +10,8 @@
  * guida) vivono qui: l'unico input è l'avviso risolto dalla pagina.
  */
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, BadgeCheck, Clock, GraduationCap, MapPin } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BadgeCheck, Clock, MapPin } from 'lucide-react';
+import { IstitutoEmittente } from '@/components/IstitutoEmittente';
 import { etichettaClasseMateria } from '@/data/classiConcorso';
 import type { Interpello } from '@/data/interpelli';
 import {
@@ -69,12 +70,8 @@ export function SchedaAvviso({ interpello }: SchedaAvvisoProps) {
   return (
     <article className="rounded-2xl border border-primary-100 bg-white p-6 shadow-card sm:p-8">
       <h1 className="text-xl font-bold text-primary-800 sm:text-2xl">{titolo}</h1>
-      {interpello.istituto && (
-        <p className="mt-2 flex items-center gap-1.5 text-sm text-primary-600">
-          <GraduationCap className="h-4 w-4" />
-          {interpello.istituto}
-        </p>
-      )}
+      {/* SCUOLA EMITTENTE: sempre visibile — nome reale o dicitura gestita. */}
+      <IstitutoEmittente istituto={interpello.istituto} className="mt-2" />
 
       {/* Gerarchia STRETTA: obbligatorie sempre, opzionali solo se presenti. */}
       <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">

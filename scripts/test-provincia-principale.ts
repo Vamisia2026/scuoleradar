@@ -99,5 +99,26 @@ check(
     leggi('src/departments/radar/components/ProvinciaPill.tsx').includes('inAttesa?: boolean'),
 );
 
+// Persistenza: aggiungere, togliere o riordinare una provincia è un'azione
+// esplicita e marca il campo `provinceCodici`, così un caricamento o un refresh
+// del profilo non riscrive (né svuota) la selezione salvata.
+// Dettaglio end-to-end: npm run test:persistenza:preferenze
+check(
+  'preferenze: ogni azione sulle province marca il campo',
+  true,
+  (preferenze.match(/segnaToccato\('provinceCodici'\)/g) ?? []).length >= 3,
+);
+check(
+  'preferenze: il riordino marca il campo (la principale resta salvata)',
+  true,
+  /const promuoviPrincipale[\s\S]{0,200}segnaToccato\('provinceCodici'\)/.test(preferenze),
+);
+check(
+  'preferenze: il salvataggio parte solo dalle province toccate',
+  true,
+  /modificheDaSalvare<Preferenze>\(toccatiRef\.current/.test(preferenze),
+);
+check('preferenze: nessun troncamento automatico delle province', false, /slice\(0, maxProvince\)/.test(preferenze));
+
 console.log(errori === 0 ? '\n✅ PROVINCIA PRINCIPALE: nessun problema' : `\n❌ PROVINCIA PRINCIPALE: ${errori} errore/i`);
 process.exitCode = errori === 0 ? 0 : 1;
