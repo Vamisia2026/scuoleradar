@@ -1,11 +1,11 @@
 /**
  * ScuoleRadar.it — STATO dell'ANAGRAFICA di una riga d'interpello (modulo PURO).
  *
- * Direttiva 04/10/2026 (§26.47): un interpello GENUINO non si scarta e non si
- * nasconde MAI per un'anagrafica incompleta — l'esperienza sul campo è quella dei
- * 10 annunci di Padova, spariti dalla vetrina solo perché l'istituto non era
- * mappato. L'anagrafica si usa per ARRICCHIRE dove può; quando non può, la riga
- * entra comunque in `interpelli` con i dati grezzi del bando, marcata `parziale`.
+ * Direttive 04/10/2026 (§26.47) e 05/10/2026 (§26.59): un interpello GENUINO non si
+ * perde MAI per un'anagrafica incompleta — l'esperienza sul campo è quella dei
+ * 10 annunci di Padova. La riga entra comunque in `interpelli` con i dati grezzi del
+ * bando, marcata `parziale`; la VETRINA pubblica però richiede un istituto REALE
+ * risolto: senza nome la riga resta fuori dal tabellone (`lib/liveBoard.ts`).
  *
  * Qui vive l'unica regola che decide `completo` ↔ `parziale`, condivisa da:
  *   · scraper all'inserimento (`src/scraper/index.ts` → `mappaRigaInterpelli`);
@@ -23,13 +23,15 @@ import { nomeIstitutoPresentabile } from './nomeIstituto';
 export type StatoArricchimento = 'completo' | 'parziale';
 
 /**
- * Dicitura GESTITA della vetrina quando l'istituto non è risolvibile in chiaro:
- * il segnaposto NEUTRO «Scuola non specificata / Più plessi» dichiara che il nome
- * dell'istituto non è ancora associato — nessun messaggio tecnico, nessun nome
- * inventato e nessuno scarto dell'avviso (direttiva cliente 04/10/2026).
+ * Dicitura GESTITA della scheda del singolo avviso quando l'istituto non è
+ * risolvibile in chiaro: il segnaposto NEUTRO «Scuola non specificata / Più plessi»
+ * dichiara che il nome dell'istituto non è ancora associato — nessun messaggio
+ * tecnico e nessun nome inventato (direttiva cliente 04/10/2026).
  *
- * La vetrina pubblica resta pulita e professionale: il lavoro di arricchimento
- * anagrafico prosegue in background SOLO per l'invio delle notifiche puntuali.
+ * Da §26.59 (05/10/2026) NON entra più nella BACHECA: nel tabellone una riga senza
+ * istituto reale resta fuori (`liveBoard.nomeScuolaBoard`). Resta il segnaposto della
+ * card e della modale (`src/components/IstitutoEmittente.tsx`), dove l'avviso è già
+ * dell'utente.
  */
 export const SCUOLA_NON_SPECIFICATA = 'Scuola non specificata / Più plessi';
 

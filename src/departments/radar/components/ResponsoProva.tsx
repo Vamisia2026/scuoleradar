@@ -81,10 +81,7 @@ export function ResponsoProva({ esito, provincia, onAttiva }: ResponsoProvaProps
     );
   }
 
-  const intestazione =
-    esito.gruppo === 'nazionale'
-      ? `Mentre in provincia di ${provincia} non ci sono nuovi avvisi, ecco cosa è appena uscito in Italia.`
-      : `Di oggi in provincia di ${provincia}: interpelli e supplenze, PON/POR e PNRR, CPIA, ATA e bidelli, selezioni di esperti.`;
+  const intestazione = `Di oggi in provincia di ${provincia}: interpelli e supplenze, PON/POR e PNRR, CPIA, ATA e bidelli, selezioni di esperti.`;
 
   return (
     <div className="animate-fade-in mt-3">

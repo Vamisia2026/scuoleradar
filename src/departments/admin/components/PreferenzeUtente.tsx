@@ -23,6 +23,7 @@ function righe(u: AdminUtente): RigaPreferenza[] {
   return [
     { etichetta: 'Ordini di scuola', valori: p.ordini },
     { etichetta: 'Classi di concorso', valori: p.classi },
+    { etichetta: 'Materie', valori: p.materieClassi },
     { etichetta: 'Materie e competenze extra', valori: p.materie },
     { etichetta: 'Tag personalizzati', valori: p.tag },
     { etichetta: 'Province', valori: p.province },

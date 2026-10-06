@@ -58,7 +58,7 @@ export function DettaglioUtente({ utente, onChiudi }: { utente: AdminUtente; onC
           </div>
 
           <section className="rounded-xl border border-primary-100 p-3">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-primary-500">Profilo utente &amp; filtri radar</h3>
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-primary-500">Profilo utente &amp; preferenze Radar</h3>
             {/* Preferenze COMPLETE (ordini, classi, materie, tag, province, scuole):
                 blocco CONDIVISO con la card del tab «Radar», così nessuna vista
                 Admin ha buchi rispetto alla dashboard dell'utente. */}

@@ -2,12 +2,16 @@
  * Preferenze Radar — pannello «Filtri Avanzati Scuole».
  *
  * Due liste: scuole PREFERITE (badge «Scuola Preferita» + priorità) e scuole
- * ESCLUSE (gli avvisi vengono nascosti). Il campo resta a testo libero, con i
- * suggerimenti presi dal feed reale dell'utente (`scuoleConosciute`).
+ * ESCLUSE (gli avvisi vengono nascosti). Il campo resta a testo libero, ma i
+ * suggerimenti arrivano SOLO dalle scuole delle province da cercare
+ * (`scuoleConosciute`, già limitate a monte): un nome fuori da quell'ambito resta
+ * scrivibile, però la FORZATURA è DICHIARATA — avviso sotto il campo e badge
+ * sulla pill (§26.62).
  */
-import { Ban, Plus, Star } from 'lucide-react';
+import { AlertTriangle, Ban, Check, Info, Plus, Star } from 'lucide-react';
 import { Accordion } from '@/components/Accordion';
 import { Pill } from '@/components/Pill';
+import { messaggioAmbitoScuola, type AmbitoScolastico, type ScuolaNota } from '@/lib/filtriScuole';
 
 interface PannelloFiltriScuoleProps {
   /** Mappa di apertura degli accordion (chiave → stato). */
@@ -26,8 +30,64 @@ interface PannelloFiltriScuoleProps {
   setIgnoredScuolaInput: (valore: string) => void;
   addIgnoredScuola: () => void;
   removeIgnoredScuola: (scuola: string) => void;
-  /** Suggerimenti (datalist) dalle scuole presenti nel feed dell'utente. */
-  scuoleConosciute: string[];
+  /** Suggerimenti (datalist): le scuole delle province da cercare, con provincia. */
+  scuoleConosciute: ScuolaNota[];
+  /** Nomi leggibili delle province da cercare (proprie + entro 60 km). */
+  provinceSeguite: string[];
+  /** Ambito provinciale di un nome di scuola: `dentro`, `fuori` o `sconosciuta`. */
+  verificaAmbito: (nome: string) => AmbitoScolastico;
+}
+
+/**
+ * Avviso dell'ambito provinciale sotto il campo: resta muto finché non c'è
+ * qualcosa di scritto, così il pannello non parla a vuoto.
+ */
+function NotaAmbito({ nome, ambito }: { nome: string; ambito: AmbitoScolastico }) {
+  if (!nome.trim()) return null;
+  const fuori = ambito.stato === 'fuori';
+  const Icona = fuori ? AlertTriangle : ambito.stato === 'dentro' ? Check : Info;
+  return (
+    <p
+      role="status"
+      className={`mt-2 flex items-start gap-1.5 text-xs ${fuori ? 'text-warning-700' : 'text-primary-400'}`}
+    >
+      <Icona className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <span>{messaggioAmbitoScuola(ambito)}</span>
+    </p>
+  );
+}
+
+/** Badge della pill: una scuola forzata dichiara da dove arriva. */
+function BadgeForzatura({ provincia }: { provincia?: string }) {
+  return (
+    <span
+      title={`Scuola fuori dalle province da cercare${provincia ? ` (${provincia})` : ''}: forzatura dichiarata.`}
+      className="inline-flex items-center gap-1 rounded-full border border-warning-500/40 bg-warning-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-warning-700"
+    >
+      <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+      Fuori ambito{provincia ? ` · ${provincia}` : ''}
+    </span>
+  );
+}
+
+/** Pill + badge di forzatura: una sola resa per entrambe le liste. */
+function PillScuola({
+  nome,
+  color,
+  onRemove,
+  ambito,
+}: {
+  nome: string;
+  color: 'accent' | 'secondary';
+  onRemove: () => void;
+  ambito: AmbitoScolastico;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Pill label={nome} onRemove={onRemove} color={color} />
+      {ambito.stato === 'fuori' && <BadgeForzatura provincia={ambito.provincia} />}
+    </span>
+  );
 }
 
 export function PannelloFiltriScuole({
@@ -44,6 +104,8 @@ export function PannelloFiltriScuole({
   addIgnoredScuola,
   removeIgnoredScuola,
   scuoleConosciute,
+  provinceSeguite,
+  verificaAmbito,
 }: PannelloFiltriScuoleProps) {
   return (
       <Accordion
@@ -61,10 +123,17 @@ export function PannelloFiltriScuole({
           Tieni d&apos;occhio le scuole che ti interessano (priorità) e nascondi quelle che non vuoi
           più vedere.
         </p>
+        <p data-ambito-scuole className="mt-2 text-xs leading-relaxed text-primary-400">
+          {provinceSeguite.length > 0
+            ? `I suggerimenti mostrano solo le scuole delle province da cercare (${provinceSeguite.join(', ')}). Una scuola di un’altra provincia resta scrivibile, ma la forzatura viene dichiarata.`
+            : 'Nessuna provincia selezionata: scegli le province in «Dove vuoi cercare?» per ricevere i suggerimenti delle scuole.'}
+        </p>
 
+        {/* Il valore salvato resta il NOME della scuola: la provincia è solo
+            l'etichetta del suggerimento (`label`), così le liste restano confrontabili. */}
         <datalist id="scuole-conosciute">
           {scuoleConosciute.map((s) => (
-            <option key={s} value={s} />
+            <option key={`${s.nome}|${s.provinciaCodice}`} value={s.nome} label={s.provinciaCodice} />
           ))}
         </datalist>
 
@@ -98,10 +167,17 @@ export function PannelloFiltriScuole({
                 Aggiungi
               </button>
             </div>
+            <NotaAmbito nome={favoriteScuolaInput} ambito={verificaAmbito(favoriteScuolaInput)} />
             {favoriteSchools.length > 0 ? (
               <div className="mt-3 flex flex-wrap gap-2">
                 {favoriteSchools.map((s) => (
-                  <Pill key={s} label={s} onRemove={() => removeFavoriteScuola(s)} color="accent" />
+                  <PillScuola
+                    key={s}
+                    nome={s}
+                    color="accent"
+                    onRemove={() => removeFavoriteScuola(s)}
+                    ambito={verificaAmbito(s)}
+                  />
                 ))}
               </div>
             ) : (
@@ -137,10 +213,17 @@ export function PannelloFiltriScuole({
                 Aggiungi
               </button>
             </div>
+            <NotaAmbito nome={ignoredScuolaInput} ambito={verificaAmbito(ignoredScuolaInput)} />
             {ignoredSchools.length > 0 ? (
               <div className="mt-3 flex flex-wrap gap-2">
                 {ignoredSchools.map((s) => (
-                  <Pill key={s} label={s} onRemove={() => removeIgnoredScuola(s)} color="secondary" />
+                  <PillScuola
+                    key={s}
+                    nome={s}
+                    color="secondary"
+                    onRemove={() => removeIgnoredScuola(s)}
+                    ambito={verificaAmbito(s)}
+                  />
                 ))}
               </div>
             ) : (

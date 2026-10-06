@@ -16,6 +16,12 @@
  * assente resta neutro (la bacheca lo tratta come 100, `DashboardPage`), così
  * questo modulo non inventa una classificazione che il resto della dashboard non
  * condivide.
+ *
+ * §26.60 — ESCLUSIONE SECCA DEI RIEMPITIVI NON PERTINENTI. Il cap da solo non
+ * bastava: un avviso sotto il 70% che il Radar NON conferma (né la classe
+ * dell'utente, né una sua parola chiave) non è un «riempitivo da dosare»: è un
+ * falso positivo. `riempitivoNonPertinente` lo dichiara e la bacheca lo scarta a
+ * monte, senza quote. Il cap dinamico resta per i riempitivi PERTINENTI.
  */
 import { SOGLIA_COMPATIBILITA_ARANCIO } from './compatibilita';
 
@@ -102,4 +108,31 @@ export function limitaRiempitivi<T extends { compatibilita?: number | null }>(
     riempitiviNascosti: nascosti.size,
     motivo,
   };
+}
+
+/**
+ * RIEMPITIVO NON PERTINENTE — la voce NON entra in bacheca (§26.60).
+ *
+ * Regola di prodotto: sotto la soglia arancio (< 70%) la voce è un riempitivo;
+ * se il Radar NON la conferma — non è né la classe dell'utente né una sua parola
+ * chiave — è un falso positivo e viene **esclusa a monte**, senza quote e senza
+ * cap. Restano in bacheca, per costruzione:
+ *
+ *   · le opportunità di QUALITÀ (≥ soglia), a prescindere dalla pertinenza;
+ *   · i riempitivi PERTINENTI (agnunciati dal motore o dal voto della Modale 3),
+ *     che restano soggetti al cap dinamico di `limitaRiempitivi`;
+ *   · le scuole PREFERITE (`forzata`: scelta esplicita dell'utente, Modalità 5),
+ *     che nessun automatismo può togliere.
+ *
+ * Un punteggio ASSENTE resta neutro (mai classificato a caso): non esclude nulla.
+ */
+export function riempitivoNonPertinente(
+  voce: { compatibilita?: number | null },
+  contesto: { pertinente: boolean; forzata?: boolean; soglia?: number },
+): boolean {
+  if (contesto.forzata === true) return false;
+  if (contesto.pertinente) return false;
+  const soglia = contesto.soglia ?? SOGLIA_COMPATIBILITA_ARANCIO;
+  const punteggio = punteggioNoto(voce);
+  return punteggio !== null && punteggio < soglia;
 }

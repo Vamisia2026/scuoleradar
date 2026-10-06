@@ -11,11 +11,12 @@
  * Presentazione pura: nessuna query propria, lo stato arriva dal contesto (le
  * preferenze sono idratate al bootstrap del profilo e salvate su `profiles`).
  */
-import { BookOpen, Briefcase, Sparkles, Tag } from 'lucide-react';
+import { BookOpen, Briefcase, GraduationCap, Sparkles, Tag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { classeByCodice } from '@/data/classiConcorso';
 import { materie } from '@/data/ordiniMaterie';
+import { materieDelleClassi } from '@/lib/materieClassi';
 
 /** Pill di una voce del profilo (classe, competenza o parola chiave). */
 function Pill({ titolo, testo }: { titolo: string; testo?: string }) {
@@ -40,6 +41,9 @@ export function RiepilogoLavoro() {
     (id) => materie.find((m) => m.id === id)?.nome ?? id,
   );
   const parole = preferenze.materieCustom;
+  // Discipline coperte dalle classi scelte (stessa derivazione della scheda
+  // Admin: una sola regola, due superfici).
+  const materieCoperte = materieDelleClassi(preferenze.classiCodici);
   const vuoto = classi.length === 0 && competenze.length === 0 && parole.length === 0;
 
   return (
@@ -51,7 +55,7 @@ export function RiepilogoLavoro() {
         <div>
           <h3 className="text-base font-bold text-primary-900">In cosa puoi lavorare</h3>
           <p className="text-xs text-primary-500">
-            Classi di concorso, competenze e parole chiave del tuo Radar
+            Classi di concorso, materie coperte, competenze e parole chiave del tuo Radar
           </p>
         </div>
       </div>
@@ -79,6 +83,19 @@ export function RiepilogoLavoro() {
               <div className="mt-1.5 flex flex-wrap gap-2">
                 {classi.map((c) => (
                   <Pill key={c.codice} titolo={c.codice} testo={c.nome} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {materieCoperte.length > 0 && (
+            <div>
+              <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-primary-400">
+                <GraduationCap className="h-3.5 w-3.5" /> Materie
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {materieCoperte.map((m) => (
+                  <Pill key={m} titolo={m} />
                 ))}
               </div>
             </div>

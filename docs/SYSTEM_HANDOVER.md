@@ -308,7 +308,7 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | File | Righe | Contenuto |
 |---|---|---|
 | `moduli.ts` | 298 | ⚠️ **Ereditato**: il catalogo è stato diviso in `moduliAltreAree.ts` (500), `moduliEntiAltro.ts` (487), `moduliOrdiniScuola.ts` (2710), `classiConcorso.ts` (944); `moduli.ts` conserva tipi, `macroAree`, `ordineMacroAree`, helper `conAggiuntaInCima`, `getModuliScaricati`, `macroAreaById` e il tipo `DocumentoModulistica` |
-| `interpelli.ts` | 82 | Tipo `Interpello` + fallback **VUOTO** (`interpelli = []`: nessuna voce dimostrativa — policy dati) + i campi della compatibilità: `compatibilita`, `motivoCompatibilita` e **`scuolaPreferita`** (inclusione d'ufficio della whitelist scuole, §26.56) |
+| `interpelli.ts` | 89 | Tipo `Interpello` + fallback **VUOTO** (`interpelli = []`: nessuna voce dimostrativa — policy dati) + i campi della compatibilità: `compatibilita`, `motivoCompatibilita`, **`scuolaPreferita`** (inclusione d'ufficio della whitelist scuole, §26.56) e **`parolaChiaveVoto`** (la parola chiave che ha ASSEGNATO il voto d'ufficio, §26.58) |
 | `classiConcorso.ts` | — | `ClasseConcorso[]` (A-XX, ADEE, ADSS…) con `ordine`, `materie[]`, `requisitiCfu[]`; helper `classeByCodice` |
 | `ordiniMaterie.ts` | ~160 | `OrdineScuola` (infanzia/primaria/secondaria1/secondaria2/cpia/serali/pon/ata), `ordiniScuola`, `materie`, **`MATERIE_GENERICHE`** + **`materieCompetenzeExtra()`** (esclude le discipline curricolari: Storia/Geografia non sono "competenze extra"), **`competenzeSuggerite`** (12 **tag popolari** PNRR/PON: AI nella didattica, robotica educativa, **Stop Motion**, coding, digital storytelling, CLIL, **Lingua inglese**, STEM, creatività digitale, educazione motoria, progettazione bandi, orientamento), **`materieRicercabili()`** (le competenze extra PIÙ i tag popolari che sono discipline curricolari — «Lingua inglese», «Educazione motoria» — così anche loro si trovano dalla ricerca) e **`CORRELAZIONI_MATERIE`** (co-occorrenze curate termine → id di materie esistenti per la ricerca ESTESA: `inglese` → `clil`, `educazione_linguistica`…). Verificato da `npm run test:radar:preferenze` |
 | `province.ts` | 117 | `Provincia[]` (107 province: codice/nome/regione) + `regioni` |
@@ -325,16 +325,18 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 |---|---|---|
 | `supabase.ts` | 20 | Client Supabase frontend (anon); `supabase === null` in demo; `isSupabaseConfigurato` |
 | `matchingEngine.ts` | ~700 | Matching Radar + utenti compatibili (§5.2); `searchInterpelli` esclude gli scaduti; **`elencaUtentiNotificabili`** → TUTTI i profili con canale valido e Radar attivo (`findUtentiCompatibili(..., { ignoraFiltri: true })`, così anche chi ha province/classi configurate riceve il riepilogo). **Normalizzazione CLASSI robusta**: `normalizzaClasse` (`A-18` ≡ `A18` ≡ `a 18` ≡ `A_18` ≡ `A-018` → `A-18`; i codici sostegno `ADEE`/`AD24` restano invariati), **`normalizzaClassi`** (dedup + formato canonico), **`contieneClasse`**/**`rimuoviClasse`** (confronto a prova di formato per le caselle UI). **COMPETENZE/PAROLE CHIAVE** (§26.35): `normalizzaCompetenza`, `tokenCompetenza`, `radiceCompetenza`, `etichetteCompetenzeProfilo`, `competenzaCompatibileConAvviso` (regola condivisa da motore, digest e feed), **`avvisoDiSostegno`** (l'area sostegno è a **inclusione permanente**: gli avvisi `AD*` non passano dal controllo di classe — §26.45). Verificato da `npm run test:matching` e `npm run test:radar:preferenze`. **PROSSIMITÀ GEOGRAFICA (§26.55)**: `avvisoCompatibileConProfilo`/`punteggioCompatibilita` accettano `OpzioniCompatibilita` (`ignoraFiltri`, **`provinceLimitrofe`** — default `false`, la attiva solo la bacheca: la consegna resta strict); `normalizzaProvincia` vive in `prossimitaGeografica.ts` (§26.56: raggio di 60 km) ed è qui **riesportata** | 
-| `compatibilita.ts` | 125 | **Puro** — SOGLIE (🟢 ≥ 80 · 🟠 ≥ 70 · 🔴 ≥ 60), `normalizzaPunteggioCompatibilita`, `livelloCompatibilita`, `etichettaCompatibilita`, `bandaCompatibilita(punteggio, motivo?)` (livello + etichetta + descrizione/tooltip + classi Tailwind), **`ETICHETTA_SCUOLA_PREFERITA`** («Scuola preferita nel radar») e `descrizioneScuolaPreferita`. **§26.56:** le PENALITÀ cumulate sono state sostituite dalla MEDIA PONDERATA delle 5 MODALI (`PESI_MODALI`, §26.57), che vivono nei moduli dedicati (`punteggioOrdine`/`punteggioClasse`/`punteggioCompetenze`/`prossimitaGeografica`) (§26.54, §26.55, §26.56) |
-| `compatibilitaGraduata.ts` | 237 | **Puro** — livello di BACHECA della compatibilità (§26.56, **media ponderata** dalla §26.57): `valutaCompatibilita(profilo, avviso, opts)` = **media PONDERATA delle modali applicabili** (ordine · classi · parole chiave · provincia — le non applicabili escono dalla media e i pesi si rinormalizzano) **+ incrementi jolly del 3%**, con i **motivi leggibili** per il tooltip (compresa la composizione «media ponderata di N modali») e il dettaglio per modale (`modali` + `pesoTotale`). Decisione di prodotto in una riga: **`PESI_MODALI`** (classe **2** = requisito abilitante · ordine/competenze/provincia 1) e primitiva pura **`mediaPonderata(contributi)`** = `Σ(punteggio × peso) / Σpesi`. Invarianti: nessun peso raggiunge la metà dei pesi totali, il sostegno extra resta 60, oltre il raggio si è esclusi (salvo whitelist) e la consegna non passa di qui |
+| `compatibilita.ts` | 143 | **Puro** — SOGLIE (🟢 ≥ 80 · 🟠 ≥ 70 · 🔴 ≥ 60), `normalizzaPunteggioCompatibilita`, `livelloCompatibilita`, `etichettaCompatibilita`, `bandaCompatibilita(punteggio, motivo?)` (livello + etichetta + descrizione/tooltip + classi Tailwind), **`ETICHETTA_SCUOLA_PREFERITA`** («Scuola preferita nel radar») e `descrizioneScuolaPreferita`. **§26.56:** le PENALITÀ cumulate sono state sostituite dalla MEDIA PONDERATA delle 5 MODALI (`PESI_MODALI`, §26.57), che vivono nei moduli dedicati (`punteggioOrdine`/`punteggioClasse`/`punteggioCompetenze`/`prossimitaGeografica`) (§26.54, §26.55, §26.56). **§26.58**: **`ETICHETTA_PAROLA_CHIAVE`** («Parola chiave trovata») e `descrizioneParolaChiave(parola, punteggio)` — l'etichetta del VOTO ASSEGNATO dalla Modalità 3 (override) |
+| `compatibilitaGraduata.ts` | 242 | **Puro** — livello di BACHECA della compatibilità, in DUE tier dalla §26.58: **(1) OVERRIDE della Modalità 3** — una parola chiave trovata nel testo dell'avviso **assegna d'ufficio** il voto (90 parola chiave piena · 85 match vicino) e **blocca la media** (`override` + `pesoTotale` 0), con la **provincia come unica condizione** (oltre il raggio si è esclusi, salvo whitelist); **(2) MEDIA PONDERATA delle modali applicabili** quando la Modale 3 non aggancia nulla (ordine · classe · provincia — le non applicabili escono dalla media e i pesi si rinormalizzano, `mediaModali.ts`) **+ incrementi jolly del 3%**, con i **motivi leggibili** per il tooltip (comprese le righe «media ponderata di N modali» e «voto assegnato d'ufficio»). Invarianti: nessun peso della media supera la metà dei pesi totali, il sostegno extra resta 60 (l'override non lo promuove) e la consegna non passa di qui |
+| `mediaModali.ts` | 50 | **Puro** (§26.58) — la MEDIA PONDERATA delle modali in un solo posto: **`PESI_MODALI`** (classe **2** = requisito abilitante · ordine/provincia 1; le **parole chiave NON hanno peso**: o assegnano il voto, o sfumano col jolly), `ContributoModale` e la primitiva **`mediaPonderata(contributi)`** = `Σ(punteggio × peso) / Σpesi`, rinormalizzata sulle sole modali applicabili |
 | `areeDisciplinari.ts` (`affinitaDisciplinare.ts` fino alla §26.56) | 189 | **Puro** — AREE E PONTI DISCIPLINARI, base condivisa delle Modali 2 e 3: `areeDi(testo)` (radici curate ≥ 5 caratteri usate anche come PREFISSO: `teatr` → «teatrale»), `lingueDi`, `etichetteAree`, `areeInComune`, `ponteTraAree` (ponti affini: Digitale ↔ IA, Arte ↔ Digitale, Scientifico ↔ Digitale; contaminato: Letteratura ↔ Teatro). Sigle solo in maiuscolo («IA», mai «ai») |
 | `prossimitaGeografica.ts` | 185 | **Puro** — GEOGRAFIA delle province (§26.56, **Modalità 4**): `normalizzaProvincia` (fonte unica), `coordinateProvincia`, **`distanzaKm`** (Haversine fra capoluoghi), `provinceEntroRaggio`, `provinceDiRicerca` (proprie + entro il raggio di 60 km), `punteggioProvincia` (propria 100 · vicina con penalità 25/40/55 → 75/60/45 · **oltre il raggio = esclusione**), `provinciaCompatibile`. La consegna resta STRICT: senza `limitrofe` vale solo la provincia selezionata |
-| `riempitivi.ts` | 105 | **Puro** — CAP DINAMICO: `limitaRiempitivi(lista, opts)` con `MAX_RIEMPITIVI_BACHECA = 5` (sotto il 70%), `MINIMO_MATCH_QUALITA = 10` e **`proteggi`** (§26.56: le scuole preferite non sono riempitivi e non si nascondono); punteggi assenti neutri, ordine invariato, esito con conto e motivo (`sotto-tetto`/`tetto-raggiunto`) |
+| `riempitivi.ts` | 105 | **Puro** — CAP DINAMICO: `limitaRiempitivi(lista, opts)` con `MAX_RIEMPITIVI_BACHECA = 5` (sotto il 70%), `MINIMO_MATCH_QUALITA = 10` e **`proteggi`** (§26.56: le scuole preferite non sono riempitivi e non si nascondono); punteggi assenti neutri, ordine invariato, esito con conto e motivo (`sotto-tetto`/`tetto-raggiunto`) · **§26.60**: `riempitivoNonPertinente(voce)` — sotto il 70% **senza** aggancio del motore e **senza** parola chiave della Modale 3 la voce è un falso positivo: la bacheca la scarta a monte, **senza quota e senza cap** (`bachecaInterpelli` espone `riempitiviEsclusi`) |
 | `punteggioOrdine.ts` | 76 | **Puro** — **Modalità 1** «Dove vuoi lavorare» (§26.56): `punteggioOrdine(ordini, ordineAvviso)` → 100 selezionato · 90 adiacente (infanzia↔primaria↔secondaria I↔secondaria II) · 70 salto/altra tipologia · `null` = modale fuori dalla media. `ordiniAdiacenti`, `etichettaOrdine` |
 | `punteggioClasse.ts` | 198 | **Puro** — **Modalità 2** «Classi di concorso» (§26.56): `punteggioClasse` → 100 esatta · 95 affine (una materia del catalogo in comune: A-22 ↔ A-24) · 90 competenza dichiarata dentro la classe dell'avviso / materia coperta · 85 stessa area · 75 ponte affine · 65 area contaminata · 55 classe estranea; `classeVicina` (soglia 85) apre la bacheca, `materieInComune`, `etichettaClasse` |
-| `punteggioCompetenze.ts` | 135 | **Puro** — **Modalità 3** «Oltre la classe» con **ruolo JOLLY** (§26.56): parola chiave 90, match vicino 85, `null` = modale esclusa dalla media, `incrementi` = +3% per ogni corrispondenza parziale o riconducibile (tetto `JOLLY_MASSIMO = 3` → +9%) |
-| `filtriScuole.ts` | 70 | **Puro** — **Modalità 5** «Filtri Avanzati Scuole» (§26.56): `testoScuola` (istituto + titolo, minuscolo), `scuolaInElenco`, `scuolaEsclusa` (blacklist), `scuolaPreferita` (whitelist), `giudizioScuole` (la blacklist vince sulla whitelist) |
-| `bachecaInterpelli.ts` | 127 | **Puro** (§26.56) — PIPELINE della bacheca, un solo punto: avviso vivo → filtri scuole (blacklist fuori, whitelist dentro d'ufficio) → pertinenza (motore o classe/parola chiave «vicina») → punteggio delle modali → cap dei riempitivi con protezione delle preferite. `bachecaInterpelli(fonti, profilo)` restituisce lista + conti (`esclusiBlacklist`, `forzate`, `riempitiviNascosti`), così `useInterpelliFeed` resta un contenitore di stato |
+| `punteggioCompetenze.ts` | 167 | **Puro** — **Modalità 3** «Oltre la classe» (§26.56 → **override** dalla §26.58): la parola chiave trovata è un **OVERRIDE** e restituisce `override = { grado: 'esatta' | 'vicina', parolaChiave, punteggio }` (90 parola chiave piena · 85 match vicino) — `override: null` = ruolo **JOLLY** della modale, con `incrementi` = +3% per ogni corrispondenza parziale o riconducibile (tetto `JOLLY_MASSIMO = 3` → +9%) sul voto MEDIATO |
+| `filtriScuole.ts` | 185 | **Puro** — **Modalità 5** «Filtri Avanzati Scuole» (§26.56): `testoScuola` (istituto + titolo, minuscolo), `scuolaInElenco`, `scuolaEsclusa` (blacklist), `scuolaPreferita` (whitelist), `giudizioScuole` (la blacklist vince sulla whitelist) · **§26.62 — AMBITO PROVINCIALE dei suggerimenti**: `scuoleNote` (i nomi del feed con la loro provincia, senza doppioni), `suggerimentiScuole` (solo le province da cercare: proprie + entro 60 km), `ambitoScuola` (`dentro`/`fuori`/`sconosciuta`) e `messaggioAmbitoScuola` (una sola copy: la forzatura fuori ambito è **dichiarata**) |
+| `materieClassi.ts` | 41 | **Puro** — MATERIE COPERTE dalle classi di concorso (§26.62), derivazione **unica** di Admin e vista utente: `materieDelleClassi(codici)` normalizza i codici (`normalizzaClasse`: `A-018` ≡ `A18`), legge `materie[]` dal catalogo `src/data/classiConcorso.ts` e risolve gli id nel NOME (`src/data/ordiniMaterie.ts`), senza duplicati e nell'ordine delle classi scelte; un codice fuori catalogo resta codice, senza righe inventate. La usano la scheda utente dell'Admin (`departments/admin/components/derivaPreferenzeUtente.ts`, campo `materieClassi`) e il box «In cosa puoi lavorare» del Radar (`departments/radar/components/RiepilogoLavoro.tsx`) |
+| `bachecaInterpelli.ts` | 132 | **Puro** (§26.56 → §26.58) — PIPELINE della bacheca, un solo punto: avviso vivo → filtri scuole (blacklist fuori, whitelist dentro d'ufficio) → pertinenza (motore, classe «vicina» o **override della parola chiave**: `EsitoCompetenze.override`) → punteggio (override della Modalità 3 oppure media delle altre modali) → cap dei riempitivi con protezione delle preferite. `bachecaInterpelli(fonti, profilo)` restituisce lista + conti (`esclusiBlacklist`, `forzate`, `riempitiviNascosti`) e scrive sull'interpello `compatibilita`, `motivoCompatibilita`, `scuolaPreferita` e **`parolaChiaveVoto`** (§26.58), così `useInterpelliFeed` resta un contenitore di stato |
 | `scadenza.ts` | ~90 | Helper scadenza (puro): `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `stileScadenza` (semaforo 🟢 lungo / 🟡 vicino / 🔴 imminente) |
 | `alertInterpello.ts` | ~480 | Costruttore dell'**avviso strutturato** (gerarchia obbligatorie/opzionali + campo `email` dell'avviso), `pulisciTitoloAvviso` (via i dump di codici classe), **`emailAvviso`** + costanti condivise `EMAIL_ICONA`/`EMAIL_ETICHETTA`/`EMAIL_ETICHETTA_WEB`, **`ISTRUZIONE_AVVISO_UFFICIALE`** (direttiva standard "clicca STAMPA") e **`suggerimentoRicercaAvviso({ compatto })`** (guida operativa per elenchi/"Stampa" o fonte mancante), **`emailAvviso`** ed **`etichettaFonteLink`/`classificaFonteLink`/`ePaginaRiepilogo`** (etichetta ONESTA del link: PDF / Albo Pretorio / **pagina di riepilogo "Stampa"** / avviso — mai "Candidati"), **GATE DI QUALITÀ**: `eUrlAvvisoDiretto` (link = avviso specifico, mai home/elenco/ricerca/archivio regionale), `motivoAvvisoNonInviabile` e `avvisoInviabile` (**link diretto AND email di candidatura**: altrimenti nessun invio), **PULIZIA DELL'URL**: `pulisciUrlEsterna` (entità `&amp;`, virgolette/angolari/caporalia di markdown, spazi e punteggiatura di contorno) e **`urlFonteAvviso`** = stringa pulita + UNICO gate `eUrlAvvisoDiretto` (il punto unico dell'`href` per Telegram, email e canali — §26.45). Verificato da `npm run test:qualita` |
 | `interpelloRouting.ts` | ~40 | Deep link LEGACY `/interpello/:id` (puro): `eUuid`, `chiaveInterpelloDaParam` (uuid → `id`, hash → `hash_id`). **Policy**: le notifiche non generano più link interni; la rotta resta solo per i deep link storici (che reindirizzano subito alla fonte esterna) |
@@ -347,10 +349,10 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `testiDomNodi.ts` | 41 | **Puro e isomorfo** — LETTURA dei testi del DOM: era il secondo pezzo della scansione dell'«Editor Testi Rapido» (rimosso il 03/10/2026, §26.38), oggi serve al VISUAL EDITOR (§26.37) con il **tipo minimo `NodoDom`** (permette di ESEGUIRE i testi su un DOM finto negli script Node, senza jsdom) e `etichettaDove` («sezione · Paragrafo»). La scansione dei blocchi e la riscrittura stanno in `visualEditorRegole.ts`. Verificato da `npm run test:visual-editor` |
 | `testiDomRegole.ts` | 61 | **Puro, senza dipendenze** — REGOLE e NOMI dei testi del DOM (condivise col VISUAL EDITOR, §26.37): `normalizzaTesto`, `impronta` (djb2 in base 36), `chiaveTestoDom(tag, testo, occorrenza)` → `p#1a2b3c#0` (identità STABILE del testo: non dipende dalla posizione nel DOM, quindi l'override resta agganciato anche quando React ricrea i nodi e due testi identici restano occorrenze distinte) e `campoDi`/`contenitoreDi` per le etichette umane |
 | `emailScuola.ts` | ~110 | **Puro** — email UFFICIALE della scuola: `normalizzaCodiceMeccanografico`, `estraiCodiceMeccanograficoDaTesto`, `emailDaCodiceMeccanografico` (PEO `@istruzione.it` / PEC `@pec.istruzione.it`), `risolviEmailUfficialeScuola` (email di fonte → convenzione MIM; mai email inventate) |
-| `liveBoard.ts` | 238 | **Puro** — vetrina "Radar Live" (ogni nome passa dal GATE `nomeIstituto.ts`; `titoloLeggibile` per il sottotitolo, `rigaPresentabileVetrina` per la prova): `scuolaDaTitolo` (nome **prima del separatore** quando dopo c'è l'azione amministrativa; respinge frammenti di procedura, elenchi di codici classe e nomi generici), `nomeScuolaRiga` (campo → registro per codice → titolo: l'ente emittente NON è una scuola e non entra in bacheca; un `school_name` fatto solo di codici classe — «ADEE \| EEEE» — **non** è un nome), `nomePresentabileRiga` (per il responso della prova: ultima risorsa l'ENTE emittente, mai un codice), `preparaRigheBoard` (**NON scarta più NESSUNA riga per anagrafica** (il nome di ripiego è `nomeScuolaBoard`/`nomeGrezzoDaBando`, §26.47: nome reale → nome grezzo pubblicato dal bando, se leggibile → segnaposto gestito «Scuola non specificata / Più plessi» (§26.48); la riga resta in bacheca e `anagraficaParziale` lo dichiara; resta fuori solo l'avviso non vivo). Il tabellone continua a non mostrare mai "Scuola non indicata" né codici in vetrina — e tiene gli **avvisi senza scadenza** pubblicati negli ultimi `GIORNI_FINESTRA_SENZA_SCADENZA`=60 giorni con `scadenza: null` + `senzaScadenza`: mai una data inventata), `diversificaProvince` (round-robin deterministico per provincia: nessuna provincia monopolizza le prime pagine) |
+| `liveBoard.ts` | 238 | **Puro** — vetrina "Radar Live" (ogni nome passa dal GATE `nomeIstituto.ts`; `titoloLeggibile` per il sottotitolo, `rigaPresentabileVetrina` per la prova): `scuolaDaTitolo` (nome **prima del separatore** quando dopo c'è l'azione amministrativa; respinge frammenti di procedura, elenchi di codici classe e nomi generici), `nomeScuolaRiga` (campo → registro per codice → titolo: l'ente emittente NON è una scuola e non entra in bacheca; un `school_name` fatto solo di codici classe — «ADEE \| EEEE» — **non** è un nome), `nomePresentabileRiga` (per il responso della prova: lo **stesso** gate della bacheca — mai l'ente emittente al posto della scuola, §26.59), `nomeScuolaBoard`/`preparaRigheBoard` (**GATE STRETTO, §26.59**: entra solo una riga con un istituto REALE risolto — campo, registro per codice o titolo; il nome grezzo del bando non è un'anagrafica e non fa più entrare la riga, `nomeGrezzoDaBando` resta come giudizio puro per la qualità dell'ingestione; `anagraficaParziale` è `true` quando il nome è ricostruito (registro/titolo) o lo stato è `parziale`; resta fuori anche l'avviso non vivo). Il tabellone continua a non mostrare mai "Scuola non indicata" né codici in vetrina — e tiene gli **avvisi senza scadenza** pubblicati negli ultimi `GIORNI_FINESTRA_SENZA_SCADENZA`=60 giorni con `scadenza: null` + `senzaScadenza`: mai una data inventata), `diversificaProvince` (round-robin deterministico per provincia: nessuna provincia monopolizza le prime pagine) |
 | `nomeIstituto.ts` | 161 | **Puro, senza dipendenze** — GATE dei nomi in vetrina: `nomeIstitutoPresentabile` accetta una stringa solo se ha una **testa d'istituto** (`IC`, `I.I.S.`, `ITIS`, `Liceo`, `Istituto`, `Convitto`…) **e** una **denominazione** (un nome proprio), senza codici amministrativi (classe di concorso, sostegno, meccanografico, token misto lettere+cifre) e senza 3+ cifre consecutive; **taglia la coda di procedura** («IC ALBIGNASEGO Interpello per copertura posti» → «IC ALBIGNASEGO»). Verificato da `npm run test:nome-istituto` |
 | `school-lookup.ts` | 67 | **Anti-mock** (§26.47) — registro MINIMO delle scuole, solo istituti REALI registrati a mano: **`nomeScuolaDaCodice`** (mai "Istituto &lt;codice&gt;") e `scuolaDaCodice` (`SchoolInfo` completo, `null` se non registrato). Il vecchio **`resolveSchoolByCode`** — che per QUALSIASI codice fabbricava un nome (`Istituto &lt;codice&gt;`) e la città `N/D` — è stato **rimosso**: il recapito ufficiale nasce solo dalla convenzione MIM (`emailScuola.ts`). Verificato da `npm run test:pipeline` |
-| `statoArricchimento.ts` | 84 | **Puro e isomorfo** — STATO dell'anagrafica di una riga (§26.47): `statoArricchimento` (`completo` = istituto identificato + recapito PEO/PEC, altrimenti `parziale`), `istitutoIdentificato`, `recapitoPresente`, `normalizzaStatoArricchimento`, `anagraficaInAggiornamento` (true solo per `parziale`: uno stato ignoto non afferma nulla) e il segnaposto gestito `SCUOLA_NON_SPECIFICATA` («Scuola non specificata / Più plessi», §26.48). `parziale` NON è mai un motivo di scarto. Verificato da `npm run test:pipeline` |
+| `statoArricchimento.ts` | 84 | **Puro e isomorfo** — STATO dell'anagrafica di una riga (§26.47): `statoArricchimento` (`completo` = istituto identificato + recapito PEO/PEC, altrimenti `parziale`), `istitutoIdentificato`, `recapitoPresente`, `normalizzaStatoArricchimento`, `anagraficaInAggiornamento` (true solo per `parziale`: uno stato ignoto non afferma nulla) e il segnaposto gestito `SCUOLA_NON_SPECIFICATA` («Scuola non specificata / Più plessi», §26.48 — **fuori dalla bacheca dalla §26.59**: resta nella sola scheda del singolo avviso, `src/components/IstitutoEmittente.tsx`). `parziale` non è un motivo di scarto dalla pipeline (la riga entra in `interpelli`), ma **non** fa entrare in vetrina: senza un istituto reale risolto la riga resta fuori dal tabellone (§26.59). Verificato da `npm run test:pipeline` |
 | `provaRadarEngine.ts` | 117 | **Puro** — motore del **Radar di prova** pubblico (si prova con la **sola provincia**): `LIMITE_RISULTATI_PROVA`, `righeAttive` (senza scadenza = attiva), `selezionaRisultatiProva(provincia, nazionali, limite)` (tutte le opportunità ATTIVE della provincia + **completamento nazionale** senza duplicati) e la copy del responso (`messaggioConversione`, `messaggioRadarInScansione`, `CODA_CONVERSIONE_PROVA`); responso `{ gruppo: 'provincia'\|'nazionale'\|'vuoto', righe, daProvincia }`. Mai «zero risultati»: l'elenco resta pieno finché esiste un avviso vivo. Verificato da `npm run test:prova-radar` |
 | `provaRadar.ts` | 81 | **Memoria della provincia provata** (localStorage, tollerante agli errori): `salvaProvinciaProva`/`leggiProvinciaProva`/`svuotaProvinciaProva` + `provinceInizialiConProva` → la provincia del box «Prova il Radar» diventa la **provincia principale** del wizard/onboarding (validata sul catalogo `data/province`). Verificato da `npm run test:prova-radar` |
 | `notifier.ts` | 1.999 | **Node-only** — orchestratore notifiche: **`inviaAlertTelegramTempoReale`** (alert INDIVIDUALI Telegram per i **PRO**), **`inviaDigestGiornaliero`** (BATCH: email per tutti + Telegram solo per **BASE**; opzioni `forzato`, `soloUtente`, `soloRegistrare`/`finoA`, seam di test `inviaEmail`/`inviaTelegram`; guardia "una email al giorno" `chiaveDigestGiorno`) e **`inviaPromemoria24h`** (promemoria email ≥ 24h per scadenze entro 3 giorni). **ACCUMULO EMAIL** (`accumulaVoceEmail`/`inviaEmailAccumulate`): i percorsi di dispatch/backfill (`notificaNuoviInterpelli`, `notificaInterpelliPerUtente`) **non inviano mai una email per opportunità** — le voci compatibili si accumulano e partono con **UN'UNICA email di riepilogo** (`inviaDigestEmail`, stesso renderer del digest); `EsitoDispatchUtente.emailVoci` conta le opportunità incluse nel riepilogo. **REGISTRO INVII per utente** (§6.5.1): `avvisoGiaInviato` (**FREQUENCY CAP**: identità = scuola + classi + impronta del contenuto; **max 2 invii in 2 giorni diversi**, mai due volte nello stesso giorno, per canale di consegna, con marcatori storici pre-cap conservativi) e `registraInvioAvviso` (registra il **GIORNO** dell'invio su ledger file + `notifications_log` con canale `freq_email`/`freq_telegram`) → nessuno spam, e un contenuto aggiornato riparte come nuova opportunità. `recapitoNotifica` (PEO dal codice MIM), **GATE DI QUALITÀ STRICT** (`superaGateQualita`, da `avvisoInviabile`): nessun invio di avvisi senza **link diretto** o senza **recapito** — applicato a `notificaNuoviInterpelli`, `notificaInterpelliPerUtente`, `inviaAlertTelegramTempoReale`, `raccogliVociCanale` (digest) e `inviaPromemoria24h` |
@@ -5528,7 +5530,7 @@ NON entra nella vetrina pubblica»* — con una regola diversa e **non documenta
 | # | Intervento | Dettaglio |
 |---|---|---|
 | 1 | `nomeScuolaRiga` → `string \| null` | Torna il nome **reale** o `null`: `school_name` (dal gate) → registro per codice meccanografico → titolo (`scuolaDaTitolo`). L'ente emittente resta fuori dalla bacheca (§26.20, riga 2) |
-| 2 | `preparaRigheBoard` | Riapplicato `if (!scuola) continue;` prima del `push` (**NON più in vigore: revocato dalla §26.47 del 04/10/2026**): senza un nome in chiaro la riga **non entra**. Finestra dei 60 giorni e `senzaScadenza` invariati |
+| 2 | `preparaRigheBoard` | Riapplicato `if (!scuola) continue;` prima del `push` (**di nuovo IN VIGORE dalla §26.59 del 05/10/2026**; era stato revocato dalla §26.47 del 04/10/2026): senza un nome in chiaro la riga **non entra**. Finestra dei 60 giorni e `senzaScadenza` invariati |
 | 3 | `nomePresentabileRiga` → `string \| null` | Ultima risorsa legittima l'**ente emittente** (prova del Radar), `null` quando non c'è nulla di presentabile: `rigaPresentabileVetrina` filtra di nuovo davvero |
 | 4 | JSDoc e commenti allineati | Header del modulo, `nomeScuolaRiga`, `nomePresentabileRiga`, `preparaRigheBoard`: la «dicitura standard» non è più descritta come regola di prodotto |
 
@@ -6104,10 +6106,13 @@ catena di notifica richiesta) · guardie: `scripts/test-ricerca-unificata.ts`,
 
 ### 26.47 Pipeline Radar tollerante e blindata: bonifica dei mock, anagrafica `completo`/`parziale`, matching RPC nativo (04/10/2026)
 
-> **⚠️ Dicitura superata (04/10/2026).** La dicitura di vetrina introdotta in questa direttiva —
-> «Anagrafica in aggiornamento» — è **superata dalla §26.48**: la colonna «Scuola» mostra ora il
-> segnaposto neutro **«Scuola non specificata / Più plessi»**. Restano validi il resto della
-> direttiva (arricchimento `completo`/`parziale`, nessuno scarto per anagrafica, matching RPC).
+> **⚠️ Dicitura superata (04/10/2026) e regola superata (05/10/2026).** La dicitura di vetrina
+> introdotta in questa direttiva — «Anagrafica in aggiornamento» — è **superata dalla §26.48**
+> (segnaposto neutro **«Scuola non specificata / Più plessi»**); l'**ingresso in bacheca senza
+> istituto reale** è a sua volta **superato dalla §26.59** (in vetrina entra solo una riga con un
+> istituto reale risolto: il segnaposto resta nella sola scheda del singolo avviso). Restano validi
+> il resto della direttiva (arricchimento `completo`/`parziale`, ingresso della riga in `interpelli`
+> senza scarto per anagrafica, matching RPC nativo).
 
 Direttiva di prodotto del 04/10/2026 su **ingestione → database → matching**, con due
 correzioni dettate dal campo: (a) il «Liceo Augusto Monti» di **Asti è una scuola
@@ -6226,6 +6231,12 @@ colonne mancanti) · **dipartimento Radar**:
 scrittura sul DB: le due migrazioni sono da applicare dal committente).
 
 ### 26.48 «Radar Live» — etichetta anagrafica della vetrina: «Scuola non specificata / Più plessi» (04/10/2026)
+
+> **⚠️ Regola superata (05/10/2026).** Il **segnaposto** in bacheca è superato dalla **§26.59**: in
+> vetrina entra SOLO una riga con un istituto reale risolto (nome reale → registro per codice →
+> titolo). La dicitura «Scuola non specificata / Più plessi» resta nella **scheda del singolo
+> avviso** (`src/components/IstitutoEmittente.tsx`), dove l'avviso è già dell'utente. Cespite mai
+> toccato: `SCUOLA_NON_SPECIFICATA` in `src/lib/statoArricchimento.ts`.
 
 **Nota di sessione (04/10/2026).** Nuova direttiva di prodotto sulla **vetrina pubblica** della
 bacheca «Radar Live»: la colonna «Scuola» mostra, quando l'istituto non è risolvibile in chiaro,
@@ -6646,16 +6657,18 @@ prodotto e i **filtri avanzati scuole** (whitelist/blacklist) come giudizio che 
 |---|---|---|
 | 1 · «Dove vuoi lavorare» (ordine) | 100 selezionato · **90 subito prima/dopo** (infanzia↔primaria↔secondaria I↔secondaria II) · **70 salto** (es. primaria per chi cerca la secondaria) | tipologie fuori sequenza (CPIA, serali, PON, ATA): 100 solo se selezionate, altrimenti 70 |
 | 2 · «Classi di concorso» | 100 esatta (A-022 ≡ A-22) · **95 affine** (una materia del catalogo in comune: A-22 ↔ A-24) · 90 competenza dichiarata dentro la classe dell'avviso / materia coperta · **85 stessa area** · 75 ponte affine · 65 area contaminata · **55 estranea** | «penalità crescente in base alla distanza disciplinare»: quattro gradini misurati dalla matrice di `areeDisciplinari.ts` |
-| 3 · «In cosa puoi lavorare oltre la classe» | **90 parola chiave trovata** (a qualunque ordine di scuola) · **85 match vicino** (token parziali) | **RUOLO JOLLY**: senza corrispondenze la modale **esce dalla media** (non azzera l'offerta); ogni corrispondenza parziale/riconducibile vale **+3%** sul totale (tetto +9% → 93%, 87%…) |
+| 3 · «In cosa puoi lavorare oltre la classe» | **90 parola chiave trovata** (a qualunque ordine di scuola) · **85 match vicino** (token parziali) | **OVERRIDE (§26.58)**: il voto è **assegnato d'ufficio** e la media delle altre modali **non si calcola** (la provincia resta l'unica condizione: oltre il raggio si è esclusi); senza corrispondenze la modale **esce dalla media** e ogni corrispondenza parziale/riconducibile vale **+3%** sul voto MEDIATO (tetto +9%) |
 | 4 · «Provincia» | 100 provincia selezionata · **grossa penalità entro il raggio di 60 km**: −25 (≤ 20 km) / −40 (≤ 40 km) / −55 (≤ 60 km) → **75 / 60 / 45** · **oltre i 60 km: esclusione d'ufficio** | distanza in linea d'aria fra **capoluoghi** (Haversine) e ricerca allargata alle province entro il raggio |
 | 5 · «Filtri Avanzati Scuole» | **blacklist → avviso oscurato e scartato** a prescindere dal punteggio · **whitelist → inclusione d'ufficio** a prescindere dal punteggio | la blacklist VINCE sulla whitelist; se il punteggio è insufficiente la card mostra l'etichetta dedicata **«Scuola preferita nel radar»** al posto del voto basso, se è buono lo mette accanto al match |
 
-**Come si compone il punteggio.** `valutaCompatibilita` (bacheca) calcola i punteggi delle modali
+**Come si compone il punteggio.** `valutaCompatibilita` (bacheca) **prima** guarda la Modale 3: se
+una parola chiave del profilo è stata trovata il voto è **assegnato d'ufficio** (90 piena · 85 vicina,
+**§26.58**) e la media delle altre modali non si calcola; **altrimenti** calcola i punteggi delle modali
 **applicabili** — una modale senza dati dell'utente (nessun ordine, nessuna classe, nessuna parola
 chiave trovata, nessuna provincia) NON entra nella media: non azzera l'opportunità per un dato che
-l'utente non ha dichiarato — ne fa la media e vi somma gli **incrementi jolly del 3%**. Dalla
+l'utente non ha dichiarato — e vi somma gli **incrementi jolly del 3%**. Dalla
 **§26.57** quella media è **PONDERATA**: i pesi delle modali vivono nell'unico punto `PESI_MODALI`
-(`src/lib/compatibilitaGraduata.ts`).
+(`src/lib/mediaModali.ts`, spostato qui dalla §26.58).
 Il numero resta dentro le bande di §26.54 (🟢 ≥ 80 · 🟠 ≥ 70 · 🔴 ≥ 60) e nello stesso ordine di
 bacheca (`DashboardPage`: compatibilità → scadenza).
 
@@ -6676,7 +6689,8 @@ digest e `scripts/invia-*` non la passano (guardia), quindi email/Telegram conti
 le province scelte e `comunicazione/**` resta valido così com'è; la pertinenza resta un gate (senza
 aggancio del motore o di una vicinanza ≥ 85 il ponte tematico NON crea l'opportunità: niente card a
 caso); `DashboardPage` non cambia (ordina ancora compatibilità → scadenza) e il cap dei riempitivi resta
-5 sotto il 70% con la nuova protezione delle preferite.
+5 sotto il 70% con la nuova protezione delle preferite (**§26.60**: il cap vale per i riempitivi
+PERTINENTI — quelli non pertinenti non entrano più affatto, vedi la §26.60).
 
 **Scostamenti dichiarati (cambi di comportamento voluti dalla richiesta).** (1) L'**ordine di scuola non
 è più un filtro rigido**: un avviso adiacente o distante entra con 90/70 (il cap dei riempitivi evita il
@@ -6782,6 +6796,346 @@ peso doppio della classe). **Documentazione**: `docs/SYSTEM_HANDOVER.md` (questa
 moduli), `docs/DEPARTMENT_MAP.md`. **Non toccati**: `comunicazione/**` (nessuna regola di prodotto
 cambia: la consegna e i numeri delle singole modali restano quelli della §26.56), `src/departments/**`
 e la pipeline di consegna.
+
+### 26.58 L'OVERRIDE della Modale 3: la parola chiave assegna il voto (05/10/2026)
+
+**Perché.** Richiesta di prodotto sulla §26.57: le parole chiave non sono una modale «fra le
+altre». Quando una parola chiave del profilo compare nel testo dell'avviso il voto **non deve
+nascere da nessuna media**: la Modale 3 è un **override ad alta priorità** — assegna d'ufficio il
+voto e blocca ogni altro calcolo. La **PROVINCIA** resta l'unica condizione (oltre il raggio
+l'esclusione geografica vince: §26.56).
+
+**La regola, in due tier.**
+
+| Tier | Quando | Voto mostrato |
+|---|---|---|
+| **1 · OVERRIDE (Modalità 3)** | una parola chiave del profilo è TROVATA nel testo dell'avviso (tutti i suoi token significativi, es. «Intelligenza Artificiale») | **90%** d'ufficio: la media delle altre modali non viene calcolata (`pesoTotale` 0, nessun jolly) |
+| | match **SEMANTICO VICINO** (alcuni token della parola chiave, es. «Didattica Multimediale») | **85%** d'ufficio, stesse regole |
+| **2 · MEDIA PONDERATA (Modalità 1 · 2 · 4)** | la Modale 3 non aggancia nulla (o trova solo corrispondenze «riconducibili») | `Σ(punteggio × peso) / Σpesi` + jolly del 3% (§26.57) |
+
+Il match e la sua natura vivono in `punteggioCompetenze`: `EsitoCompetenze.override` =
+`{ grado: 'esatta' | 'vicina', parolaChiave, punteggio }` — **un solo oggetto** dichiara quale
+parola ha assegnato il voto, e `null` significa «media ponderata». Le parole chiave **non hanno
+peso** in `PESI_MODALI` (ora `{ ordine: 1, classe: 2, provincia: 1 }`): non entrano nella media —
+o decidono loro, o sfumano il voto col jolly (+3% per corrispondenza parziale o riconducibile,
+tetto +9%). Invariante verificata da `npm run test:modali` (`!('competenze' in PESI_MODALI)`).
+
+**La media ponderata ha la sua casa.** Pesi, `ContributoModale` e `mediaPonderata` sono passati
+nel nuovo modulo puro **`src/lib/mediaModali.ts`** (50 righe): la formula è una regola a sé,
+testabile senza l'aggregatore. `compatibilitaGraduata.ts` (**242 righe**) resta il punto dei due
+tier — override prima, media poi — e il tooltip dichiara la riga giusta: «voto assegnato
+d'ufficio 90% (Modale 3: parola chiave piena)» oppure «media ponderata di N modali».
+
+**Effetti sui numeri (dichiarati, non silenziosi).**
+
+| Caso | §26.57 | §26.58 |
+|---|---|---|
+| ordine 100 · classe affine 95 · provincia 100 · **parola chiave piena** | 96 | **90** (la media tace: la classe non conta più) |
+| ordine 100 · classe esatta 100 · provincia 100 · **match vicino** | 100 | **85** (voto assegnato, non mediato) |
+| ordine 100 · classe affine 95 · provincia 100 (nessuna parola chiave) | 98 | **98** (invariato: media ponderata di 3 modali) |
+| parola chiave piena ma provincia **oltre** i 60 km | — | **0 · escluso** (l'esclusione d'ufficio vince sull'override) |
+
+**Invarianti che NON cambiano.** Il pavimento EXTRA del sostegno resta **60** anche quando una
+parola chiave combacia (§26.45: è un suggerimento extra a inclusione permanente, non un match — e
+l'aggregatore esce sull'`PUNTEGGIO_EXTRA_SOSTEGNO` prima di valutare l'override). La **blacklist**
+continua a scartare a prescindere; la **whitelist** continua a includere d'ufficio e, se la parola
+chiave scatta, il voto assegnato resta quello. La consegna (email, Telegram, digest) resta STRICT e
+non passa di qui; il jolly del 3% resta **deterministico** e vale solo sulla media.
+
+**Card e dettaglio dichiarano il voto.** Nuova etichetta condivisa `ETICHETTA_PAROLA_CHIAVE`
+(«Parola chiave trovata») e `descrizioneParolaChiave(parola, punteggio)` in
+`src/lib/compatibilita.ts`, mostrate accanto al badge (o all'etichetta della scuola preferita) da
+`InterpelloCard.tsx` e `InterpelloDettaglioModal.tsx`: un voto fisso **spiegato**, mai un numero che
+sembra casuale. L'unico dato nuovo è **`parolaChiaveVoto`** (`src/data/interpelli.ts`): lo scrive la
+bacheca da `valutazione.override`, mai il DB.
+
+**Verifiche (05/10/2026, da `project/`).** `npm run typecheck` → ✅ exit 0 · **`npm test` (catena
+completa) → ✅ exit 0** · `npm run test:architettura` → ✅ nessuna violazione nuova (599 file ·
+**141** = baseline; `compatibilitaGraduata.ts` = 242 righe e `mediaModali.ts` = 50, sotto la soglia
+di attenzione di 250) · `npx eslint` sui file toccati → ✅ zero problemi · `npm run build` → ✅ exit 0 ·
+guardie: `test:override` (**nuova**, in `npm test`), `test:modali`, `test:compatibilita:graduata`,
+`test:filtri-scuole`, `test:opportunita`, `test:compatibilita`, `test:riempitivi`, `test:prossimita`
+→ ✅ exit 0.
+
+**File toccati.** **Condivisi essenziali**: `src/lib/mediaModali.ts` (**nuovo**: pesi + formula),
+`src/lib/compatibilitaGraduata.ts` (override + media dei tre pesi), `src/lib/punteggioCompetenze.ts`
+(`EsitoCompetenze.override`, `matchPrevalente`/`motivoDi` interni), `src/lib/bachecaInterpelli.ts`
+(pertinenza via override + `parolaChiaveVoto`), `src/lib/compatibilita.ts`
+(`ETICHETTA_PAROLA_CHIAVE`, `descrizioneParolaChiave`), `src/data/interpelli.ts` (`parolaChiaveVoto`) ·
+**viste condivise (fuori dal dipartimento, come da richiesta sulla vetrina)**:
+`src/components/InterpelloCard.tsx`, `src/components/InterpelloDettaglioModal.tsx` · **guardie**:
+`scripts/test-override-modale3.ts` (**nuova**), `scripts/test-modali-radar.ts`,
+`scripts/test-compatibilita-graduata.ts`, `package.json` (`test:override` + ingresso in `npm test`) ·
+**documentazione**: `docs/SYSTEM_HANDOVER.md` (questa §26.58 + mappa moduli),
+`docs/DEPARTMENT_MAP.md`. **Non toccati**: `comunicazione/**` (la consegna e i numeri della consegna
+restano quelli della §26.56/§26.57), `src/departments/**`, la pipeline di consegna
+(`src/lib/notifier.ts`, `src/lib/digest.ts`, `invia-*`).
+
+### 26.59 Vetrina: il gate STRETTO del nome scuola — in bacheca (e nella prova) entra solo una riga con un istituto REALE (05/10/2026)
+
+**Perché.** Direttiva di prodotto del 05/10/2026 sul **Radar Live**: il tabellone è la vetrina del
+servizio e una riga di cui **non si sa quale scuola** emette l'avviso non è verificabile in pubblico —
+sembra un servizio rotto. Le due direttive del 04/10 (§26.47 «nessuno scarto per anagrafica» e §26.48
+«segnaposto *Scuola non specificata / Più plessi*») avevano tenuto in bacheca anche le righe senza
+istituto: **qui si torna al gate stretto** (§26.20 del 28/09, che era stato revocato dalla §26.47). Lo
+stesso giudizio vale per il **responso della prova del Radar**: due superfici pubbliche non possono
+avere regole diverse. Companion della stessa sessione: **§26.60** (bacheca: riempitivi non pertinenti)
+e **§26.61** (prova: sola provincia, nessun pool nazionale).
+
+**La regola, in una riga.** In vetrina entra **solo** una riga con il nome di un **istituto REALE**
+risolto per anagrafica, in quest'ordine (`nomeScuolaRiga`, `src/lib/liveBoard.ts`): (1) `school_name`
+del record — comunque passato dal GATE `nomeIstituto.ts`; (2) **registro scolastico** per codice
+meccanografico (`school-lookup.ts`, soli istituti reali); (3) **titolo** dell'avviso (`scuolaDaTitolo`:
+nome prima del separatore quando dopo c'è l'azione amministrativa). Il terzo gradino è *ricostruito*:
+la riga entra ma l'anagrafica è dichiarata incompleta.
+
+**Cosa resta fuori.**
+
+| # | Esclusione | Perché |
+|---|---|---|
+| 1 | righe con il **solo nome grezzo pubblicato dal bando** (`nomeGrezzoDaBando`) | è il dato della fonte, non un'anagrafica: la §26.47 lo usava come ripiego di vetrina |
+| 2 | righe **senza alcun nome risolvibile** (per cui la §26.47/§26.48 prevedevano il segnaposto) | un segnaposto non è una scuola: la riga non è verificabile |
+| 3 | avvisi **non vivi** (scaduti o fuori dalla finestra dei 60 giorni) | invariato (§26.34/§26.20) |
+
+I **codici amministrativi** («ADEE \| EEEE», «BA02 \| AR04», elenchi di classi di concorso) restano
+fuori **a monte**, nel gate `nomeIstituto.ts`: non sono mai un nome, per nessuna strada.
+
+**Intervento (un solo punto di verità).** In `src/lib/liveBoard.ts` `nomeScuolaBoard(riga)`
+restituisce `NomeScuolaBoard | null` (`{ nome, approssimativo }`; `null` = riga **FUORI**) e
+sostituisce la vecchia catena a ripiego; `preparaRigheBoard` riapplica `if (!nome) continue;` prima
+del `push`; `nomePresentabileRiga` (responso della prova) usa lo **stesso** gate — l'ente emittente
+non è più una risorsa (l'import di `enteEmittenteDaTitolo` è rimosso) e `rigaPresentabileVetrina`
+richiede un istituto reale. `nomeGrezzoDaBando` resta nel modulo come **giudizio puro** («nome
+leggibile o dump di codici?») per la qualità dell'ingestione, ma non è più un ripiego. In
+`src/lib/statoArricchimento.ts` cambiano solo il contratto documentato del segnaposto
+(`SCUOLA_NON_SPECIFICATA` non è più una dicitura di vetrina) e la nota su `parziale`.
+
+**La tolleranza che resta (dichiarata, non silenziosa).** La pipeline **non perde** un avviso
+genuino: la riga entra comunque in `interpelli` con i dati grezzi e il suo `stato_arricchimento`
+(§26.47 invariata), resta nel feed dell'utente e nelle notifiche puntuali. Cambia la **superficie
+pubblica**. Caso Padova: istituto reale + anagrafica `parziale` → **entra** e `anagraficaParziale` lo
+dichiara (chip ambra di `radar/flightBoard/components/RigaBoard.tsx`); riga **senza** istituto →
+resta in database ma **non** in bacheca.
+
+**Effetti dichiarati.** (1) Il segnaposto «Scuola non specificata / Più plessi» non compare più in
+nessuna superficie della bacheca o della prova: resta nella **scheda del singolo avviso**
+(`src/components/IstitutoEmittente.tsx`), dove l'avviso è già dell'utente. (2) Una provincia con
+molte righe non mappate mostra **meno** righe di prima: il conteggio resta esatto e mai gonfiato
+(`npm run test:board:scala`). (3) La colonna «Scuola» non mostra mai un codice, per nessuna strada.
+
+**Verifiche (05/10/2026, da `project/`).** `npm run test:board` → ✅ («RADAR LIVE: nessun problema»:
+23 asserzioni, con i nuovi casi «nessun nome risolvibile → FUORI», «elenco di codici classe →
+FUORI», «anagrafica `parziale` con istituto reale → dentro e dichiarata») · `npm run
+test:nome-istituto` → ✅ («NOMI ISTITUTO: nessun problema»: gate di bacheca e responso della prova con
+la stessa regola stretta, «titolo leggibile ma nessuna scuola → FUORI») · `npm run test:pipeline` →
+✅ («PIPELINE TOLLERANTE: tutti i controlli superati», inclusa la riga di Padova tollerata e il
+giudizio puro su `nomeGrezzoDaBando`) · `npm run typecheck` → ✅ exit 0.
+
+**File toccati.** **Condivisi essenziali**: `src/lib/liveBoard.ts`, `src/lib/statoArricchimento.ts`
+(JSDoc/contratto). **Dipartimento Radar**: `src/departments/radar/flightBoard/righeBoard.ts` (JSDoc),
+`src/departments/radar/SimulatorRadar.tsx` (commento di vetrina). **Guardie**: `scripts/test-live-board.ts`,
+`scripts/test-nome-istituto.ts`, `scripts/test-pipeline-tollerante.ts`. **Documentazione**:
+`docs/SYSTEM_HANDOVER.md` (§26.59, mappa dei moduli, note di superamento in §26.47/§26.48),
+`comunicazione/04_canali_regionali/checklist_regionali.md` (§4: in bacheca nessuna riga senza la sua
+scuola). **Non toccati**: `src/departments/notizie/**`, `src/scraper/**`, il database.
+
+### 26.60 Bacheca: i riempitivi NON pertinenti non entrano — esclusione secca a monte del cap (05/10/2026)
+
+**Perché.** Il **cap dinamico** dei riempitivi (§26.55) metteva un tetto al rumore (max **5** voci
+sotto la soglia arancio, e nessuna quando ci sono già **10** match di qualità), ma **dosava** anche i
+falsi positivi: un avviso sotto il 70% che il Radar **non conferma** — né la classe dell'utente, né
+una sua parola chiave — non è «una voce che tocca di striscio il profilo»: è un avviso che **non
+appartiene** a quel docente. Il caso tipico era il **suggerimento EXTRA del sostegno** (§26.45): la
+conferma del motore lo include d'ufficio (`profiloAderisceSostegno`), quindi passava la porta
+d'ingresso e finiva tra i riempitivi, in cima agli occhi di un utente che non ha nessuna classe AD.
+Companion della stessa sessione: **§26.59** (gate stretto dei nomi d'istituto: in vetrina entra solo
+un istituto reale) e **§26.61** (la prova risponde con la sola provincia).
+
+**La regola, in una riga.** Se il punteggio è **noto** e **sotto la soglia arancio** (< 70%) e la
+voce **non è pertinente** (né classe dell'utente né parola chiave del profilo), la voce **non entra
+in bacheca**: nessuna quota, nessun cap. I riempitivi **pertinenti** restano — e restano soggetti al
+cap di 5 — e le **scuole preferite** non sono toccabili da nessun automatismo (scelta esplicita
+dell'utente, Modalità 5).
+
+**Chi resta, chi va** (`riempitivoNonPertinente` in `src/lib/riempitivi.ts`, applicato da
+`bachecaInterpelli` in `src/lib/bachecaInterpelli.ts`):
+
+| # | Caso | Esito |
+|---|---|---|
+| 1 | < 70% con la classe dell'utente **o** una parola chiave del profilo (Modale 3) | **resta**: riempitivo *pertinente*, soggetto al cap di 5 |
+| 2 | < 70% senza conferma per classe/competenza (tipico sostegno EXTRA) | **FUORI**: esclusione secca, a monte del cap |
+| 3 | < 70% ma scuola preferita (`forzata`) | **resta**: inclusione d'ufficio della Modalità 5 |
+| 4 | ≥ 70% (qualità) | resta a prescindere dalla pertinenza: il cap non la tocca |
+| 5 | punteggio **assente** (`null` dal DB) | resta: un valore assente è **neutro**, mai classificato a caso |
+
+**Meccanica (due punti di verità, nessun altro).** In `src/lib/riempitivi.ts` il nuovo predicato puro
+`riempitivoNonPertinente(voce, { pertinente, forzata?, soglia? })` risponde in quest'ordine:
+`forzata` → `false`; `pertinente` → `false`; punteggio non noto → `false`; altrimenti
+`punteggio < soglia`. In `src/lib/bachecaInterpelli.ts` la pipeline passa a **sei passi** e il voto
+della Modale 3 è calcolato **una volta sola** (`punteggioCompetenze(...).override !== null`): serve
+sia alla porta d'ingresso sia all'esclusione secca. La pertinenza è la conferma del motore (§26.54)
+**depurata del solo suggerimento EXTRA del sostegno** (`avvisoDiSostegno && !profiloAderisceSostegno`),
+perché per la pertinenza serve una conferma per **classe o competenza**. L'esclusione **conta**:
+`EsitoBacheca.riempitiviEsclusi` (companion di `riempitiviNascosti`) — nessuno scarto è silenzioso.
+
+**Effetti dichiarati.** (1) Una provincia magra può mostrare **meno** righe di ieri: quelle in più
+sono opportunità vere. (2) Nessun riempitivo di qualità perso: la quota di 5 resta piena sui
+pertinenti. (3) Cap ed esclusione **non** toccano la consegna (`notifier`/`digest`, §26.59): la
+bacheca è una superficie, non un filtro di notifica.
+
+**Verifiche (05/10/2026, da `project/`).** `npm run test:riempitivi` → ✅ («RIEMPITIVI: cap dinamico
+(max 5 sotto il 70%, nessuno con 10 match di qualità) + esclusione secca dei NON pertinenti
+(§26.60)», con le asserzioni «esclusione secca dei non pertinenti, A MONTE del cap» e «il conto
+degli esclusi è dichiarato, mai silenzioso») · `npm run test:filtri-scuole` → ✅ (le scuole preferite
+sopravvivono a cap e blacklist) · `npm run test:board` → ✅ · `npm run test:prova-radar` → ✅ ·
+`npm run test:nome-istituto` → ✅ · `npm run test:pipeline` → ✅ · `npm run test:admin:utente` → ✅ ·
+`npm run typecheck` → ✅ exit 0.
+
+**File toccati.** **Condivisi essenziali**: `src/lib/riempitivi.ts` (nuovo `riempitivoNonPertinente`
++ §26.60 nel contratto del modulo), `src/lib/bachecaInterpelli.ts` (passo 5 e
+`riempitiviEsclusi`), `src/lib/compatibilita.ts`/`src/lib/compatibilitaGraduata.ts` (soglia condivisa
+`sogliaCompatibilitaArancio`). **Guardie**: `scripts/test-riempitivi-bacheca.ts`. **Documentazione**:
+`docs/SYSTEM_HANDOVER.md` (§26.60), `docs/DEPARTMENT_MAP.md`,
+`comunicazione/04_canali_regionali/checklist_regionali.md` (§4: il rumore non occupa il posto di
+un'opportunità). **Non toccati**: `src/departments/notizie/**`, `src/scraper/**`, il database.
+
+### 26.61 Prova del Radar: si prova con la SOLA provincia — nessun pool nazionale, nessun dato di esempio (05/10/2026)
+
+**Perché.** Il box «Prova il Radar» dell'hero è il primo contatto con il servizio e la sua promessa è
+scritta nella UI: «Scegli la provincia: cerchiamo su tutte le categorie». Il responso però poteva
+attingere a un **ripiego nazionale** (le 60 righe lette fuori provincia) quando la provincia provata
+era magra: un avviso di un'altra provincia mostrato sotto il nome di quella provata è una promessa
+tradita — e in pubblico. Allineata al gate stretto dei nomi d'istituto (§26.59), la prova ora
+risponde con la **sola provincia** provata.
+
+**La regola, in una riga.** La prova legge **UNA** provincia — `.eq('province', <codice>)`, 200 righe,
+solo avvisi **vivi** — e il responso mostra **solo** quelle righe. Se la provincia non ha nulla di
+vivo il gruppo è `'vuoto'` e prende la parola `messaggioRadarInScansione(provincia)`: «Appena esce un
+avviso su <provincia> te lo diciamo noi». È una promessa vera (il Radar personale sorveglia quella
+provincia) e la prova resta onesta.
+
+**Perché non può più sbagliare (difesa strutturale, non copy).**
+`selezionaRisultatiProva(righeProvincia, limite)` ha un **unico ingresso**: non esiste una firma con
+cui passare un pool di altre province, quindi la chiusura della prova non ha modo di mostrare un
+avviso non locale. `GruppoProvaRadar` è `'provincia' | 'vuoto'` e `messaggioConversione` conta
+soltanto le righe mostrate: il conteggio è **esatto** e non gonfiato.
+
+| # | Prima (§26.40 e precedenti) | Ora (§26.61) |
+|---|---|---|
+| 1 | ripiego su righe **nazionali** quando la provincia era magra | **nessun** ripiego: fuori provincia non si legge |
+| 2 | il responso poteva dichiarare una provenienza non locale | provenienza **sempre** la provincia provata |
+| 3 | pool consumato da avvisi già scaduti (ordinamento per scadenza) | soglia `expiration_date` lato DB (margine di 1 giorno) + `righeAttive` in memoria: le righe senza scadenza restano |
+
+**Cosa resta invariato.** (1) La **maglia larga sulle categorie**: interpelli e supplenze, PON/POR,
+PNRR, CPIA, ATA/bidelli, esperti esterni — la geografia è stretta, le categorie no. (2) La **memoria
+della provincia provata** (`src/lib/provaRadar.ts`, `sr_prova_radar`): il wizard «Attiva il tuo
+Radar» la eredita come provincia **principale** invece di chiederla di nuovo (solo il codice, validato
+sul catalogo `data/province`). (3) Il **limite di schermo** (5 righe, `LIMITE_RISULTATI_PROVA`) e la
+coda di conversione unica. (4) Il gate dei nomi in vetrina vale anche qui (`rigaPresentabileVetrina`,
+§26.59).
+
+**Verifiche (05/10/2026, da `project/`).** `npm run test:prova-radar` → ✅ («PROVA DEL RADAR: nessun
+problema»: responso con la sola provincia provata, responso vuoto che dichiara la scansione, pool dei
+soli avvisi **vivi**, box dell'hero e wizard allineati) · `npm run test:board` → ✅ ·
+`npm run test:riempitivi` → ✅ · `npm run test:nome-istituto` → ✅ · `npm run test:pipeline` → ✅ ·
+`npm run typecheck` → ✅ exit 0.
+
+**File toccati.** **Condivisi essenziali**: `src/lib/provaRadarEngine.ts` (responso a un solo
+ingresso, gruppo `'vuoto'`), `src/lib/provaRadar.ts` (memoria della provincia provata, JSDoc).
+**Dipartimento Radar**: `src/departments/radar/services/provaRadarQuery.ts` (una provincia, solo
+vivi), `src/departments/radar/SimulatorRadar.tsx` (nessun selettore di classe, nessuna seconda query),
+`src/departments/radar/components/ResponsoProva.tsx`. **Guardie**: `scripts/test-prova-radar.ts` e la
+fixture condivisa `scripts/lib/fixtures-prova-radar.ts` (righe di prova, mai dati dimostrativi; lo
+stub dello storage in memoria vive qui). **Documentazione**: `docs/SYSTEM_HANDOVER.md` (§26.61),
+`docs/DEPARTMENT_MAP.md` (riga `services/`: rimossa la dicitura «60 nazionali»),
+`comunicazione/04_canali_regionali/checklist_regionali.md` (§4: si prova con la sola provincia; §5:
+guardia `test:prova-radar`). **Non toccati**: `src/departments/notizie/**`, `src/scraper/**`, il
+database.
+
+### 26.62 Preferenze Radar: i suggerimenti scuola restano nell'ambito provinciale (forzatura dichiarata) + scheda utente Admin completa (05/10/2026)
+
+**Perché.** Due buchi sulla stessa catena (profilo dell'utente ↔ lettura Admin). (1) Il campo «Scuole
+preferite / escluse» del pannello «Filtri Avanzati Scuole» proponeva come suggerimenti **tutte** le
+scuole comparse nel feed, comprese quelle di province che l'utente **non** segue: il feed è raccolto
+sulle province proprie **più** il raggio dei 60 km (§26.56), quindi un nome proposto poteva appartenere
+a una provincia fuori ambito e finire in whitelist/blacklist senza che l'utente sapesse di stare
+allargando le proprie province. (2) La scheda utente dell'Admin e la card del tab «Radar» mostravano le
+CLASSI come codici nudi — mai le DISCIPLINE che ne derivano — e i chip erano **troncati** con un «+N»:
+l'Admin non vedeva l'elenco completo delle preferenze del profilo.
+
+**La regola, in una riga.** I suggerimenti del campo scuola sono **solo** le scuole delle province da
+cercare (proprie + entro 60 km, `provinceDiRicerca`); un nome fuori da quell'ambito resta
+**scrivibile**, ma la **forzatura è dichiarata** (avviso sotto il campo + badge sulla pill) — e le
+superfici Admin mostrano le preferenze **complete**, con le materie derivate dalle classi e senza chip
+troncati.
+
+**Ambito di un nome di scuola** (`ambitoScuola` + `messaggioAmbitoScuola`, `src/lib/filtriScuole.ts`):
+
+| # | Caso | Esito | Cosa vede l'utente |
+|---|---|---|---|
+| 1 | Scuola di una provincia **seguita** (propria o entro 60 km) | `dentro` | «Scuola delle tue province (o entro 60 km): entra nelle liste senza forzature.» |
+| 2 | Scuola **nota** ma di un'altra provincia | `fuori` | «Scuola di <provincia>: fuori dalle tue province e dal raggio di 60 km — la forzatura è dichiarata.» + badge «Fuori ambito · <provincia>» sulla pill |
+| 3 | Nome **mai visto** nel feed (a campo vuoto: nessun avviso) | `sconosciuta` | «Scuola non presente nel feed: forzatura manuale dichiarata.» |
+
+**Meccanica (una sola sorgente, un solo confronto).** `scuoleNote(avvisi)` legge il feed reale
+(`istituto` + provincia dell'avviso) e costruisce la mappa nome → provincia senza doppioni;
+`suggerimentiScuole(note, provinceCodici)` tiene solo le province seguite; `ambitoScuola(note,
+provinceCodici, nome)` risponde `dentro`/`fuori`/`sconosciuta` con lo stesso confronto onesto delle
+liste (prima il nome intero, poi `includes`; sigle di provincia normalizzate in maiuscolo). La copy è
+**una sola** per campo, avviso e badge (`messaggioAmbitoScuola`). Senza province scelte non c'è ambito
+da proporre: i suggerimenti sono **vuoti** e il campo resta a testo libero — ogni nome digitato è una
+forzatura dichiarata. In `departments/radar/PreferenzeRadar.tsx` l'ambito è calcolato con
+`provinceDiRicerca(provinceCodici)` — la **stessa** fonte della Modalità 4 — quindi suggerimenti e
+forzature non possono divergere dal raggio dei 60 km.
+
+**Scheda utente Admin (#4).** Una sola derivazione (`preferenzeUtenteAdmin`,
+`departments/admin/components/derivaPreferenzeUtente.ts`) e una sola resa
+(`departments/admin/components/PreferenzeUtente.tsx`), montata dalla scheda di dettaglio del tab
+«Utenti» (`variante="dettaglio"`) e dalla card del tab «Radar» (`variante="compatto"`): ordini di
+scuola nel nome leggibile, classi di concorso, **Materie derivate dalle classi** (nuovo modulo
+condiviso `src/lib/materieClassi.ts`: `materieDelleClassi(codici)` normalizza i codici
+(`normalizzaClasse`: `A-018` ≡ `A18`) e legge `materie[]` dal catalogo `src/data/classiConcorso.ts`
+risolvendo gli id nel nome, senza duplicati e nell'ordine delle classi scelte; un codice fuori catalogo
+non inventa righe), materie/competenze di catalogo nel nome della materia, tag personalizzati, province
+e scuole preferite/escluse. Il titolo della sezione della scheda è **«Profilo utente & preferenze
+Radar»**; in variante compatta le due liste scuola diventano il **conteggio** «Scuole preferite /
+escluse: N / M». In `departments/admin/adminUi.tsx` il componente `Chips` **non tronca più** l'elenco:
+spariscono `lista.slice(0, 4)` e il contatore `+{lista.length - 4}` — l'Admin vede tutte le voci. La
+**stessa** derivazione delle materie vive nella vista utente
+(`departments/radar/components/RiepilogoLavoro.tsx`, box «In cosa puoi lavorare», riga «Materie»): due
+superfici, una sola regola.
+
+**Effetti dichiarati.** (1) Il campo scuola propone **meno** nomi di prima: quelli in più erano fuori
+ambito. (2) Nulla è stato reso impossibile: la forzatura resta scrivibile — cambia solo che ora è
+**visibile**, mai silenziosa. (3) Nessun effetto su matching, bacheca e notifiche: whitelist e blacklist
+continuano a valere come prima (`giudizioScuole`, la blacklist vince); qui cambiano l'aiuto alla
+digitazione e la sua dichiarazione.
+
+**Verifiche (05/10/2026, da `project/`).** `npm test` → ✅ exit 0 · `npm run test:filtri-scuole` → ✅
+(§4 nuova: scuole note senza doppioni, suggerimenti solo nell'ambito, `dentro`/`fuori`/`sconosciuta`,
+copy della forzatura, cablaggio di pannello e `PreferenzeRadar`) · `npm run test:admin:utente` → ✅
+(schede Admin complete: Materie derivate, nessun chip troncato) · `npm run build` → ✅ · `npm run
+typecheck` → ✅ exit 0 · `npm run test:architettura` → ✅ nessuna violazione nuova · `npx eslint` sui file
+toccati → ✅ nessun errore.
+
+**File toccati.** **Condivisi essenziali**: `src/lib/filtriScuole.ts` (sezione «ambito provinciale» con
+`scuoleNote`, `suggerimentiScuole`, `ambitoScuola`, `messaggioAmbitoScuola`, `ScuolaNota`,
+`AmbitoScolastico`), **nuovo** `src/lib/materieClassi.ts`. **Dipartimento Radar**:
+`src/departments/radar/PreferenzeRadar.tsx` (`scuoleNote(interpelliFiltrati)` + ambito con
+`provinceDiRicerca`), `src/departments/radar/preferenze/PannelloFiltriScuole.tsx` (datalist con la sigla
+di provincia accanto al nome, avviso dell'ambito sotto **entrambi** i campi, badge «Fuori ambito» sulle
+pill), `src/departments/radar/components/RiepilogoLavoro.tsx` (riga «Materie»). **Dipartimento Admin**:
+`src/departments/admin/components/derivaPreferenzeUtente.ts` (campo `materieClassi`),
+`src/departments/admin/components/PreferenzeUtente.tsx` (riga «Materie», conteggio delle scuole nella
+variante compatta), `src/departments/admin/tabs/utenti/DettaglioUtente.tsx` (titolo della sezione),
+`src/departments/admin/adminUi.tsx` (`Chips` senza troncamento). **Guardie**:
+`scripts/test-filtri-scuole.ts` (§4), `scripts/test-admin-dettaglio-radar.ts`. **Documentazione**:
+`docs/SYSTEM_HANDOVER.md` (§26.62), `docs/DEPARTMENT_MAP.md` (moduli `lib/filtriScuole.ts` e
+`lib/materieClassi.ts` + riga di changelog),
+`comunicazione/04_canali_regionali/checklist_regionali.md` (§4: la forzatura è dichiarata; §5: guardie
+`test:filtri-scuole` e `test:admin:utente`). **Non toccati**: `src/departments/notizie/**`,
+`src/scraper/**`, il database.
+
 
 
 

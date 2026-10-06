@@ -1,10 +1,13 @@
 /**
- * TEST — PIPELINE TOLLERANTE e BONIFICA DEI MOCK (direttiva 04/10/2026, §26.47).
+ * TEST — PIPELINE TOLLERANTE e BONIFICA DEI MOCK (§26.59, 05/10/2026; riprende e
+ * corregge la §26.47 del 04/10/2026).
  * ------------------------------------------------------------------------------
  * Due regole di prodotto, una guardia:
- *   1. **L'interpello genuino non si scarta MAI** per un'anagrafica incompleta
- *      (caso storico: i 10 annunci di Padova): la riga entra in `interpelli`, in
- *      vetrina e in notifica; lo stato `parziale` è solo un'etichetta onesta.
+ *   1. **In vetrina entra solo un avviso con un istituto REALE risolto**: la riga
+ *      senza istituto non entra nel tabellone — né con il nome grezzo pubblicato
+ *      dalla fonte, né con il segnaposto. Lo stato `parziale` NON è invece un motivo
+ *      di scarto: la riga con istituto reale e anagrafica incompleta entra e lo
+ *      dichiara (è questa la tolleranza rimasta del caso Padova).
  *   2. **Nessun dato fittizio**: il feed di fallback è vuoto, i nomi delle scuole
  *      non si inventano (niente «Istituto <codice>», niente città «N/D»), lo
  *      scraper senza risultati logga e si ferma — non genera nulla.
@@ -112,7 +115,7 @@ check('stato «parziale» → marcatore attivo', true, anagraficaInAggiornamento
 check('stato «completo» → nessun marcatore', false, anagraficaInAggiornamento('completo'));
 check('stato ignoto/assente → nessuna affermazione', false, anagraficaInAggiornamento(null));
 
-console.log('\n— 3. L’annuncio NON si scarta per anagrafica (caso Padova) —');
+console.log('\n— 3. In vetrina SOLO con un istituto reale (§26.59, caso Padova) —');
 const FUTURO = '2099-12-31';
 const righe = [
   {
@@ -122,6 +125,14 @@ const righe = [
     province: 'AT',
     expiration_date: FUTURO,
     stato_arricchimento: 'completo',
+  },
+  {
+    id: 'padova-reale',
+    title: 'Interpello supplenza — I.I.S. Scalcerle',
+    school_name: 'I.I.S. Scalcerle',
+    province: 'PD',
+    expiration_date: FUTURO,
+    stato_arricchimento: 'parziale',
   },
   {
     id: 'padova-1',
@@ -164,32 +175,32 @@ const righe = [
 ];
 const pronte = preparaRigheBoard(righe);
 const idPresenti = pronte.map((p) => p.riga.id);
-check('nessun avviso genuino scartato per anagrafica', ['reale', 'padova-1', 'padova-2', 'padova-3'], idPresenti);
+check('entrano SOLO le righe con un istituto reale risolto', ['reale', 'padova-reale'], idPresenti);
 check('avviso SCADUTO resta fuori (non è un avviso vivo)', false, idPresenti.includes('scaduto'));
 check('avviso fuori finestra 60 giorni resta fuori', false, idPresenti.includes('senza-data'));
-check('riga con nome reale: nessun marcatore', false, pronte.find((p) => p.riga.id === 'reale')?.anagraficaParziale);
+check('riga con nome reale e anagrafica completa: nessun marcatore', false, pronte.find((p) => p.riga.id === 'reale')?.anagraficaParziale);
 check(
-  'nome grezzo del bando mostrato quando manca l’istituto',
-  'Scuola primaria posto Montessori',
-  pronte.find((p) => p.riga.id === 'padova-3')?.scuola,
+  'righe senza istituto risolvibile: FUORI (mai il nome grezzo del bando)',
+  [],
+  ['padova-1', 'padova-2', 'padova-3'].filter((id) => idPresenti.includes(id)),
 );
 check(
-  'dump di codici → dicitura gestita (mai codici in vetrina)',
-  SCUOLA_NON_SPECIFICATA,
-  pronte.find((p) => p.riga.id === 'padova-2')?.scuola,
+  'la tolleranza che resta: anagrafica `parziale` + istituto reale → riga presente e dichiarata',
+  true,
+  Boolean(pronte.find((p) => p.riga.id === 'padova-reale')?.anagraficaParziale),
 );
 check(
-  'nessun nome risolvibile → dicitura gestita, riga presente',
-  SCUOLA_NON_SPECIFICATA,
-  pronte.find((p) => p.riga.id === 'padova-1')?.scuola,
+  'la riga tollerata mostra la denominazione reale, non un ripiego',
+  'I.I.S. Scalcerle',
+  pronte.find((p) => p.riga.id === 'padova-reale')?.scuola ?? null,
 );
 check(
-  'le righe di ripiego sono marcate per l’interfaccia',
-  [true, true, true],
-  pronte.filter((p) => p.riga.id.startsWith('padova')).map((p) => p.anagraficaParziale),
+  'nessuna riga in vetrina mostra la dicitura gestita',
+  [],
+  pronte.filter((p) => p.scuola === SCUOLA_NON_SPECIFICATA).map((p) => p.riga.id),
 );
 
-console.log('\n— 4. Nome grezzo del bando: mai pseudo-nomi —');
+console.log('\n— 4. Nome grezzo del bando: giudizio puro (non è un ripiego di vetrina) —');
 check('dump di codici di sostegno → null', null, nomeGrezzoDaBando('ADEE | EEEE'));
 check('codici misti → null', null, nomeGrezzoDaBando('AAAA | A246'));
 check('date/protocolli → null', null, nomeGrezzoDaBando('Avviso prot. 12345 del 12/09/2026'));

@@ -9,10 +9,17 @@
  * trovati in `interpelli` (dump di classi, «Conversazione in lingua straniera»,
  * «Esiti assegnazione sede», «timbro_…») più quelli citati dal cliente.
  *
+ * §26.59 (05/10/2026): il gate è STRETTO — le vetrine pubbliche (tabellone e prova)
+ * mostrano solo righe con un istituto REALE risolto (campo `school_name`, registro
+ * per codice, oppure nome leggibile nel titolo). Niente nome grezzo del bando,
+ * niente segnaposto «Scuola non specificata / Più plessi», niente ente emittente al
+ * posto della scuola.
+ *
  * Uso: npm run test:nome-istituto (incluso in `npm test`)
  */
 import {
   nomePresentabileRiga,
+  nomeScuolaBoard,
   rigaPresentabileVetrina,
   titoloLeggibile,
 } from '../src/lib/liveBoard.ts';
@@ -88,7 +95,7 @@ console.log('\n— Titolo di vetrina: mai un dump di codici al posto del testo �
 check('titolo fatto di soli codici → niente sottotitolo', null, titoloLeggibile('ADEE | A042 | AAAA | ADAA | EEEE | A042 | ADMM'));
 check('titolo leggibile → ripulito', 'Interpello per supplenza A-022', titoloLeggibile('Interpello per supplenza A-022 |'));
 
-console.log('\n— Responso della prova: stessa regola della bacheca —');
+console.log('\n— Responso della prova: stessa regola (STRETTA) della bacheca —');
 const rigaProva = (school_name: string | null, title: string) => ({
   id: 'p',
   title,
@@ -98,11 +105,47 @@ const rigaProva = (school_name: string | null, title: string) => ({
 });
 check('titolo-dump e nessuna scuola → fuori dalla vetrina', false, rigaPresentabileVetrina(rigaProva(null, 'ADEE | EEEE | A042')));
 check('scuola reale → dentro', true, rigaPresentabileVetrina(rigaProva('IC Carducci', 'ADEE | EEEE | A042')));
-check('titolo leggibile senza scuola → dentro', true, rigaPresentabileVetrina(rigaProva(null, 'Interpello per supplenza A-022')));
 check(
-  'ente emittente come etichetta (mai un codice di provincia)',
-  'USP Torino',
+  'titolo leggibile ma nessuna scuola → FUORI (§26.59)',
+  false,
+  rigaPresentabileVetrina(rigaProva(null, 'Interpello per supplenza A-022')),
+);
+check(
+  'istituto leggibile nel titolo → dentro',
+  true,
+  rigaPresentabileVetrina(rigaProva(null, 'Interpello supplenza — Liceo Scientifico Galilei')),
+);
+check(
+  'ente emittente: NON è un nome di scuola (nessuna etichetta)',
+  null,
   nomePresentabileRiga(rigaProva(null, 'Avviso USP Asti — graduatoria provinciale')),
+);
+check(
+  'etichetta della riga = solo un istituto reale',
+  'IC Carducci',
+  nomePresentabileRiga(rigaProva('IC Carducci', 'ADEE | EEEE | A042')),
+);
+
+console.log('\n— Gate di bacheca: senza istituto reale la riga resta fuori (§26.59) —');
+check(
+  'nome grezzo del bando (etichetta di posto) → nessun nome di vetrina',
+  null,
+  nomeScuolaBoard(rigaProva('Scuola primaria posto Montessori', 'Albo pretorio — elenco avvisi')),
+);
+check(
+  'etichetta di materia + titolo di soli codici → nessun nome di vetrina',
+  null,
+  nomeScuolaBoard(rigaProva('Conversazione in lingua straniera', 'ADEE | EEEE | A042')),
+);
+check(
+  'nome dal campo → denominazione reale, anagrafica completa',
+  { nome: 'IC Carducci', approssimativo: false },
+  nomeScuolaBoard(rigaProva('IC Carducci', 'ADEE | EEEE | A042')),
+);
+check(
+  'nome ricostruito dal titolo → dichiarato approssimativo',
+  true,
+  Boolean(nomeScuolaBoard(rigaProva(null, 'Interpello supplenza — Liceo Scientifico Galilei'))?.approssimativo),
 );
 
 console.log(errori === 0 ? '\n✅ NOMI ISTITUTO: nessun problema' : `\n❌ NOMI ISTITUTO: ${errori} errore/i`);

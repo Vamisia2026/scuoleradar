@@ -2,14 +2,20 @@
  * ScuoleRadar.it — MODALITÀ 3 «In cosa puoi lavorare oltre la classe» (parole
  * chiave/competenze), modulo PURO.
  *
- *   · parola chiave TROVATA nel testo dell'avviso          → 90% (d'ufficio,
- *     qualunque sia l'ordine di scuola);
+ *   · parola chiave TROVATA nel testo dell'avviso          → 90% (OVERRIDE:
+ *     il voto è ASSEGNATO d'ufficio, non mediato);
  *   · match SEMANTICO VICINO (alcuni token della parola
- *     chiave, es. «Didattica multimediale»)                → 85%;
+ *     chiave, es. «Didattica multimediale»)                → 85% (OVERRIDE);
  *   · RUOLO JOLLY: **se non c'è alcuna corrispondenza la modale esce dal calcolo
  *     della media** (non azzera l'offerta); se invece ci sono corrispondenze
  *     parziali o parole chiave RICONDUCIBILI (stessa area disciplinare o ponte
- *     curato), ognuna vale **+3%** sul punteggio finale (93%, 87%…).
+ *     curato), ognuna vale **+3%** sul punteggio MEDIATO dalle altre modali.
+ *
+ * L'OVERRIDE è la regola ad ALTA PRIORITÀ della Modalità 3: quando scatta (90 o
+ * 85) il voto finale è quello, qualunque cosa dicano ordine di scuola, classi e
+ * distanza. La PROVINCIA resta l'unica condizione (fuori dal raggio l'avviso è
+ * escluso d'ufficio). Il perimetro resta quello dichiarato: un match va provato
+ * dai TOKEN del testo o dalle aree disciplinari, mai da un giudizio a caso.
  *
  * La sfumatura del 3% è DETERMINISTICA (dipende dalle corrispondenze trovate, non
  * dal caso): un punteggio casuale non sarebbe né spiegabile all'utente né
@@ -40,19 +46,34 @@ export interface AvvisoCompetenze {
   titolo?: string | null;
 }
 
-/** Esito della modale: punteggio (o esclusione) + incrementi jolly + motivi. */
+/** Esito della modale: OVERRIDE del voto (o niente) + incrementi jolly + motivi. */
 export interface EsitoCompetenze {
-  /** 90 | 85 | `null` = nessuna corrispondenza → modale esclusa dalla media. */
-  punteggio: number | null;
-  /** Incrementi del 3% da sommare al punteggio finale (0 … `JOLLY_MASSIMO`). */
+  /**
+   * Voto ASSEGNATO d'ufficio — 90 (parola chiave piena) o 85 (match vicino) — con
+   * la parola chiave che l'ha assegnato. `null` = la modale non aggancia nulla:
+   * resta il ruolo JOLLY (esce dalla media e non altera il totale).
+   */
+  override: OverrideModale3 | null;
+  /** Incrementi del 3% da sommare al punteggio MEDIATO (0 … `JOLLY_MASSIMO`). */
   incrementi: number;
   /** Motivi leggibili (parola chiave riconosciuta, ponte, conteggi). */
   motivi: string[];
 }
 
-/** Classificazione di una singola parola chiave rispetto al testo dell'avviso. */
+/** Voto ASSEGNATO d'ufficio dalla Modale 3 «parole chiave»: nessuna media. */
+export interface OverrideModale3 {
+  /** `esatta` = nella parola chiave è stato trovato TUTTO il testo · `vicina` = match parziale. */
+  grado: 'esatta' | 'vicina';
+  /** La parola chiave del profilo che ha assegnato il voto. */
+  parolaChiave: string;
+  /** Voto d'ufficio (90 | 85). */
+  punteggio: number;
+}
+
+/** Grado di un match fra una parola chiave del profilo e il testo dell'avviso. */
 type Grado = 'esatta' | 'vicina' | 'riconducibile';
 
+/** Match di UNA parola chiave del profilo col testo dell'avviso. */
 interface MatchKeyword {
   keyword: string;
   grado: Grado;
@@ -85,50 +106,61 @@ function valutaKeyword(
 }
 
 
-/** Motivo leggibile del match più forte (le altre frasi restano nel conteggio). */
-function motivoPrevalente(matches: readonly MatchKeyword[]): string {
+/** Match più FORTE fra quelli trovati (esatta → vicina → riconducibile). */
+function matchPrevalente(matches: readonly MatchKeyword[]): MatchKeyword {
   const ordine: Grado[] = ['esatta', 'vicina', 'riconducibile'];
-  const forte = [...matches].sort(
+  return [...matches].sort(
     (a, b) =>
       ordine.indexOf(a.grado) - ordine.indexOf(b.grado) || a.keyword.localeCompare(b.keyword),
   )[0];
-  if (forte.grado === 'esatta') return `parola chiave: ${forte.keyword}`;
-  if (forte.grado === 'vicina') {
-    return `parola chiave vicina: «${forte.keyword}» (${forte.dettaglio})`;
+}
+
+/** Motivo leggibile del match (le altre frasi restano nel conteggio). */
+function motivoDi(match: MatchKeyword): string {
+  if (match.grado === 'esatta') return `parola chiave: ${match.keyword}`;
+  if (match.grado === 'vicina') {
+    return `parola chiave vicina: «${match.keyword}» (${match.dettaglio})`;
   }
-  return `parola chiave riconducibile: «${forte.keyword}» (${forte.dettaglio})`;
+  return `parola chiave riconducibile: «${match.keyword}» (${match.dettaglio})`;
 }
 
 /**
- * Punteggio della modale «Parole chiave» (Modalità 3). Nessuna corrispondenza →
- * `punteggio: null` + `incrementi: 0` (ruolo Jolly: la modale esce dalla media e
- * non altera il totale).
+ * Punteggio della modale «Parole chiave» (Modalità 3): `override` presente = voto
+ * ASSEGNATO d'ufficio (90 parola chiave piena · 85 match vicino) con la parola che
+ * l'ha assegnato; `override: null` = ruolo JOLLY (la modale esce dalla media;
+ * `incrementi` sfuma il voto mediato).
  */
 export function punteggioCompetenze(
   profilo: ProfiloCompetenze,
   avviso: AvvisoCompetenze,
 ): EsitoCompetenze {
   const paroleChiave = etichetteCompetenzeProfilo(profilo);
-  if (paroleChiave.length === 0) return { punteggio: null, incrementi: 0, motivi: [] };
+  const nessuno: EsitoCompetenze = { override: null, incrementi: 0, motivi: [] };
+  if (paroleChiave.length === 0) return nessuno;
   const testoAvviso = `${avviso.materia ?? ''} ${avviso.titolo ?? ''}`;
   const tokenAvviso = new Set(tokenCompetenza(testoAvviso));
   const areeAvviso = areeDi(testoAvviso);
   const matches = paroleChiave
     .map((k) => valutaKeyword(k, tokenAvviso, areeAvviso))
     .filter((m): m is MatchKeyword => m !== null);
-  if (matches.length === 0) return { punteggio: null, incrementi: 0, motivi: [] };
+  if (matches.length === 0) return nessuno;
 
+  const prevalente = matchPrevalente(matches);
   const esatte = matches.filter((m) => m.grado === 'esatta').length;
   const vicini = matches.filter((m) => m.grado === 'vicina').length;
   const riconducibili = matches.filter((m) => m.grado === 'riconducibile').length;
-  const punteggio =
-    esatte > 0 ? PUNTEGGIO_KEYWORD_ESATTA : vicini > 0 ? PUNTEGGIO_KEYWORD_VICINA : null;
-  const motivi = [motivoPrevalente(matches)];
+  const motivi = [motivoDi(prevalente)];
   if (matches.length > 1) motivi.push(`${matches.length} parole chiave riconosciute`);
+  // Un match solo «riconducibile» non assegna il voto: è materia del jolly.
+  const override: OverrideModale3 | null =
+    esatte > 0
+      ? { grado: 'esatta', parolaChiave: prevalente.keyword, punteggio: PUNTEGGIO_KEYWORD_ESATTA }
+      : vicini > 0
+        ? { grado: 'vicina', parolaChiave: prevalente.keyword, punteggio: PUNTEGGIO_KEYWORD_VICINA }
+        : null;
 
   return {
-    // Un match solo «riconducibile» non produce punteggio: è materia del jolly.
-    punteggio,
+    override,
     incrementi: Math.min(Math.max(0, esatte - 1) + vicini + riconducibili, JOLLY_MASSIMO),
     motivi,
   };

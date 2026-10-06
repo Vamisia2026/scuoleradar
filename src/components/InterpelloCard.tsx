@@ -11,7 +11,7 @@
  * link, una sola derivazione dei dati.
  */
 import { useState } from 'react';
-import { ArrowRight, BadgeCheck, Clock, GraduationCap, MapPin, Star } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Clock, GraduationCap, MapPin, Sparkles, Star } from 'lucide-react';
 import type { Interpello } from '@/data/interpelli';
 import { useApp } from '@/contexts/AppContext';
 import { etichettaClasseMateria } from '@/data/classiConcorso';
@@ -24,7 +24,13 @@ import {
   suggerimentoRicercaAvviso,
   urlEsterna,
 } from '@/lib/alertInterpello';
-import { bandaCompatibilita, descrizioneScuolaPreferita, ETICHETTA_SCUOLA_PREFERITA } from '@/lib/compatibilita';
+import {
+  bandaCompatibilita,
+  descrizioneParolaChiave,
+  descrizioneScuolaPreferita,
+  ETICHETTA_PAROLA_CHIAVE,
+  ETICHETTA_SCUOLA_PREFERITA,
+} from '@/lib/compatibilita';
 import { scuolaPreferita } from '@/lib/filtriScuole';
 import { giorniRimanenti, stileScadenza } from '@/lib/scadenza';
 import { InterpelloDettaglioModal } from './InterpelloDettaglioModal';
@@ -76,6 +82,10 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
   // Il MOTIVO dello scostamento (lingua affine, area affine, provincia limitrofa)
   // arriva dal feed e finisce nel tooltip: si dichiara, non si nasconde.
   const banda = bandaCompatibilita(interpello.compatibilita, interpello.motivoCompatibilita);
+  // MODALITÀ 3 — OVERRIDE: quando il voto è ASSEGNATO d'ufficio da una parola chiave
+  // trovata nel testo (`parolaChiaveVoto`, calcolata dalla bacheca) la card lo dichiara:
+  // il numero non nasce da una media e nasconderlo lo farebbe sembrare casuale.
+  const parolaChiaveVoto = interpello.parolaChiaveVoto ?? null;
   // ROUTING: la card espone SOLO la fonte ESTERNA originale (mai un link interno
   // della piattaforma spacciato per "fonte").
   const linkEsterno = urlEsterna(interpello.linkFonte);
@@ -105,31 +115,43 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
           </div>
           {/* Modalità 5: punteggio basso MA scuola preferita → etichetta dedicata
               (mai un voto insufficiente); punteggio buono → l'etichetta resta
-              accanto al match, per dire DA DOVE arriva l'opportunità. */}
-          {preferita ? (
-            <span
-              title={descrizioneScuolaPreferita(banda.punteggio)}
-              className="inline-flex items-center gap-1 rounded-full bg-accent-500 px-2.5 py-1 text-xs font-semibold text-white shadow-soft"
-            >
-              <Star className="h-3.5 w-3.5" />
-              {ETICHETTA_SCUOLA_PREFERITA}
-              {banda.visibile && (
-                <span className="ml-1 rounded-full bg-white/25 px-1.5 font-bold">
-                  {banda.punteggio}%
-                </span>
-              )}
-            </span>
-          ) : (
-            banda.visibile && (
+              accanto al match, per dire DA DOVE arriva l'opportunità.
+              Modalità 3 (override): sotto, la parola chiave che ha ASSEGNATO il voto. */}
+          <div className="flex flex-col items-end gap-2">
+            {preferita ? (
               <span
-                title={banda.descrizione}
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${banda.className}`}
+                title={descrizioneScuolaPreferita(banda.punteggio)}
+                className="inline-flex items-center gap-1 rounded-full bg-accent-500 px-2.5 py-1 text-xs font-semibold text-white shadow-soft"
               >
-                <BadgeCheck className="h-3.5 w-3.5" />
-                {banda.etichetta}
+                <Star className="h-3.5 w-3.5" />
+                {ETICHETTA_SCUOLA_PREFERITA}
+                {banda.visibile && (
+                  <span className="ml-1 rounded-full bg-white/25 px-1.5 font-bold">
+                    {banda.punteggio}%
+                  </span>
+                )}
               </span>
-            )
-          )}
+            ) : (
+              banda.visibile && (
+                <span
+                  title={banda.descrizione}
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${banda.className}`}
+                >
+                  <BadgeCheck className="h-3.5 w-3.5" />
+                  {banda.etichetta}
+                </span>
+              )
+            )}
+            {parolaChiaveVoto && (
+              <span
+                title={descrizioneParolaChiave(parolaChiaveVoto, banda.punteggio)}
+                className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-2.5 py-1 text-xs font-semibold text-accent-700 ring-1 ring-inset ring-accent-200"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {ETICHETTA_PAROLA_CHIAVE}: {parolaChiaveVoto}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Gerarchia obbligatoria: Provincia · Ordine · Classe/Materia · Scadenza. */}

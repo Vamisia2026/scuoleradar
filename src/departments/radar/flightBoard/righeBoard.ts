@@ -5,12 +5,12 @@
  * Funzioni PURE (nessun React, nessuna rete): l'unica dipendenza è il dataset
  * delle province.
  *
- * REGOLA (direttiva 04/10/2026, §26.47): la scelta del nome MOSTRATO e lo scarto
- * delle righe vivono in `lib/liveBoard.ts` (`nomeScuolaBoard`/`preparaRigheBoard`) —
- * un solo punto di verità. Qui restano solo le etichette di presentazione: le
- * vecchie `risolviNomeScuola` (dicitura fissa "Scuola non specificata / Più
- * plessi") ed `eInterpelloVisibile` erano codice MORTO e duplicavano la regola:
- * rimosse, così non possono divergere.
+ * REGOLA (§26.59, 05/10/2026): la scelta del nome MOSTRATO e lo scarto delle righe
+ * vivono in `lib/liveBoard.ts` (`nomeScuolaBoard`/`preparaRigheBoard`) — un solo punto
+ * di verità, e il gate è STRETTO: senza un istituto reale la riga non entra. Qui
+ * restano solo le etichette di presentazione: le vecchie `risolviNomeScuola` (dicitura
+ * fissa "Scuola non specificata / Più plessi") ed `eInterpelloVisibile` erano codice
+ * MORTO e duplicavano la regola: rimosse, così non possono divergere.
  */
 import { province } from '@/data/province';
 
@@ -29,9 +29,9 @@ export interface InterpelloLive {
   created_at: string | null;
   source_url?: string | null;
   /**
-   * True quando l'anagrafica della riga è incompleta: la colonna «Scuola» mostra
-   * un nome di ripiego (grezzo del bando o dicitura gestita) — l'interfaccia lo
-   * dichiara senza mai nascondere l'avviso (direttiva 04/10/2026, §26.47).
+   * True quando l'anagrafica della riga è incompleta (nome ricostruito da registro o
+   * titolo, oppure stato `parziale`): il nome mostrato è comunque quello di un istituto
+   * REALE (§26.59) e l'interfaccia lo dichiara — senza mai nascondere l'avviso.
    */
   anagrafica_parziale?: boolean;
 }

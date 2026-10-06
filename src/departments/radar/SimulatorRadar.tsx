@@ -1,14 +1,14 @@
 ﻿/**
  * Radar — box «Prova il Radar» (simulatore pubblico dell'hero).
  *
- * SI PROVA CON LA SOLA PROVINCIA: nessun selettore di classe di concorso. La
- * query parte dalla provincia provata su TUTTE le categorie (interpelli e
- * supplenze, PON/POR, PNRR, CPIA, ATA, esperti esterni) e il raggruppamento vive
- * in `@/lib/provaRadarEngine` (puro e testato):
- *   1. tutte le opportunità ATTIVE della provincia (date estese: nessuna scadenza
- *      = attiva): elenco ricco, mai «zero risultati»;
- *   2. COMPLETAMENTO/ripiego NAZIONALE quando la provincia non basta a riempire
- *      l'elenco o è momentaneamente ferma.
+ * SI PROVA CON LA SOLA PROVINCIA: nessun selettore di classe di concorso e NESSUN
+ * ripiego nazionale. La query legge UNA provincia su TUTTE le categorie (interpelli
+ * e supplenze, PON/POR, PNRR, CPIA, ATA, esperti esterni) e il responso vive in
+ * `@/lib/provaRadarEngine` (puro e testato): tutte le opportunità ATTIVE della
+ * provincia (date estese: nessuna scadenza = attiva), entro il limite dello
+ * schermo. Se la provincia non ha nulla di vivo il responso è vuoto e dichiara la
+ * verità (`messaggioRadarInScansione`): mai avvisi di altre province spacciati per
+ * locali, mai elenchi gonfiati «per riempire».
  *
  * La provincia provata viene memorizzata (`@/lib/provaRadar`): il wizard la
  * erediterà come provincia PRINCIPALE, senza richiederla una seconda volta.
@@ -20,14 +20,12 @@ import { province } from '@/data/province';
 import { salvaProvinciaProva } from '@/lib/provaRadar';
 import { rigaPresentabileVetrina } from '@/lib/liveBoard';
 import {
-  LIMITE_RISULTATI_PROVA,
   selezionaRisultatiProva,
   type EsitoProvaRadar,
 } from '@/lib/provaRadarEngine';
 import { useApp } from '@/contexts/AppContext';
 import {
   ATTESA_SCANSIONE_MS,
-  LIMITE_NAZIONALE,
   LIMITE_PROVINCIA,
   leggiInterpelliProva,
 } from './services/provaRadarQuery';
@@ -63,9 +61,10 @@ export function SimulatorRadar({ className = '' }: SimulatorRadarProps) {
   };
 
   /**
-   * Scansione in due tempi: prima la provincia provata (maglia larga su tutte le
-   * categorie), poi — solo se serve a riempire l'elenco — il pool nazionale. La
-   * provincia provata viene memorizzata per il wizard (`lib/provaRadar.ts`).
+   * Una sola scansione: la provincia provata (maglia larga su tutte le categorie,
+   * senza selettore di classe). Nessuna seconda query nazionale: quello che non
+   * c'è in provincia non viene mostrato. La provincia provata viene memorizzata
+   * per il wizard (`lib/provaRadar.ts`).
    */
   const handleSimula = useCallback(() => {
     if (!provCodice || isSearching) return;
@@ -77,23 +76,16 @@ export function SimulatorRadar({ className = '' }: SimulatorRadarProps) {
       void (async () => {
         try {
           salvaProvinciaProva(provincia);
-          // VETRINA: entrano solo righe con almeno un elemento leggibile (titolo
-          // pulito o istituto/ente reale). I dump di codici classe («ADEE | EEEE»)
-          // e i nomi non risolvibili restano fuori da una vista pubblica.
+          // VETRINA (§26.59): entrano solo righe con il nome di un istituto REALE
+          // risolto (campo, registro per codice o titolo). I dump di codici classe
+          // («ADEE | EEEE») e le righe senza istituto restano fuori da una vista
+          // pubblica: la prova mostra sempre una scuola.
           const locali = (await leggiInterpelliProva(provincia, LIMITE_PROVINCIA)).filter(
             rigaPresentabileVetrina,
           );
-          // Provincia già ricca: nessuna seconda query (il box resta scattante).
-          if (locali.length >= LIMITE_RISULTATI_PROVA) {
-            setEsito(selezionaRisultatiProva(locali));
-            return;
-          }
-          const nazionali = (await leggiInterpelliProva(null, LIMITE_NAZIONALE)).filter(
-            rigaPresentabileVetrina,
-          );
-          setEsito(selezionaRisultatiProva(locali, nazionali));
+          setEsito(selezionaRisultatiProva(locali));
         } catch {
-          setEsito({ gruppo: 'vuoto', righe: [], daProvincia: 0 });
+          setEsito({ gruppo: 'vuoto', righe: [] });
         } finally {
           setIsSearching(false);
         }

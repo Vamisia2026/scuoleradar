@@ -3,13 +3,18 @@
  * --------------------------------------------------------------------------
  * Verifica ciò che NON deve cambiare quando le modali misurano il match:
  *
- *   1. INVARIANTI — il sostegno extra resta 60; fuori dal raggio l'avviso è
- *      escluso (0) salvo whitelist; la CONSEGNA (notifier/digest) resta STRICT,
- *      perché `provinceLimitrofe` è un'opzione della sola bacheca;
- *   2. GRADUAZIONE — il punteggio mostrato è la MEDIA PONDERATA delle modali applicabili
- *      (pesi: classe 2, resto 1) + jolly, con la penalità dichiarata rispetto al motore;
- *   3. CABLAGGIO — il feed delega alla bacheca pura, che applica modali, filtri
- *      scuole e cap dei riempitivi; card e modale mostrano il motivo.
+ *   1. INVARIANTI — il sostegno extra resta 60 (anche con una parola chiave trovata);
+ *      fuori dal raggio l'avviso è escluso (0) salvo whitelist; la CONSEGNA
+ *      (notifier/digest) resta STRICT, perché `provinceLimitrofe` è un'opzione della
+ *      sola bacheca;
+ *   2. OVERRIDE (Modalità 3) — una parola chiave trovata ASSEGNA il voto (90 piena ·
+ *      85 vicina) e blocca la media delle altre modali: la provincia resta l'unica
+ *      condizione (fuori dal raggio, esclusione);
+ *   3. GRADUAZIONE — senza override il punteggio mostrato è la MEDIA PONDERATA delle
+ *      modali applicabili (pesi: classe 2, resto 1 — `mediaModali.ts`) + jolly, con la
+ *      penalità dichiarata rispetto al motore;
+ *   4. CABLAGGIO — il feed delega alla bacheca pura, che applica modali, filtri
+ *      scuole e cap dei riempitivi; card e modale mostrano motivo e parola chiave.
  *
  * I punteggi delle singole modali vivono in `npm run test:modali`; la geografia in
  * `npm run test:prossimita`; whitelist/blacklist in `npm run test:filtri-scuole`.
@@ -99,7 +104,61 @@ check('classe estranea: ordine 100 · classe 55 · provincia 100 → 78', 78, cl
 check('e pesa più della provincia vicina (78 < 90)', true, classeEstranea.punteggio < vicina.punteggio);
 
 
-/* ---------------------------- 2) CABLAGGIO -------------------------------- */
+/* ------------- 2) OVERRIDE DELLA MODALITÀ 3 (PAROLE CHIAVE) ---------------- */
+
+console.log('\n— Override: la parola chiave assegna il voto, la provincia resta la condizione —');
+/** Profilo con una parola chiave ad alta priorità (Modalità 3). */
+const chiave = { ...profilo, ordini: ['secondaria2'] as const, materieCustom: ['Intelligenza Artificiale'] };
+const conChiave = valutaCompatibilita(
+  chiave,
+  { province: 'AT', classi: ['A-24'], ordine: 'secondaria2', titolo: 'Corso di intelligenza artificiale' },
+  { provinceLimitrofe: true },
+);
+check('parola chiave trovata → voto ASSEGNATO 90 (la media delle altre modali tace)', 90, conChiave.punteggio);
+check('l’override dichiara la parola chiave', 'Intelligenza Artificiale', conChiave.override?.parolaChiave);
+check('nessun denominatore: la media non è stata calcolata', 0, conChiave.modali.pesoTotale);
+check('il motivo dichiara il voto d’ufficio', true, /voto assegnato d'ufficio/.test(conChiave.motivi.join(' ')));
+
+const chiaveVicina = valutaCompatibilita(
+  { ...profilo, ordini: ['secondaria2'], materieCustom: ['Didattica Multimediale'] },
+  { province: 'AT', classi: ['A-22'], ordine: 'secondaria2', titolo: 'Corso multimediale' },
+  { provinceLimitrofe: true },
+);
+check('match vicino → voto ASSEGNATO 85, anche con classe esatta (100)', 85, chiaveVicina.punteggio);
+check('il grado dell’override è dichiarato', 'vicina', chiaveVicina.override?.grado);
+
+// La PROVINCIA resta l’unica condizione: oltre il raggio l’esclusione d’ufficio vince.
+const chiaveFuori = valutaCompatibilita(
+  chiave,
+  { province: 'MN', classi: ['A-24'], ordine: 'secondaria2', titolo: 'Corso di intelligenza artificiale' },
+  { provinceLimitrofe: true },
+);
+check('oltre il raggio l’avviso con la parola chiave è ESCLUSO', true, chiaveFuori.escluso);
+check('e nessun voto d’ufficio viene assegnato', null, chiaveFuori.override ?? null);
+
+const chiaveForzata = valutaCompatibilita(
+  chiave,
+  { province: 'MN', classi: ['A-24'], ordine: 'secondaria2', titolo: 'Corso di intelligenza artificiale' },
+  { provinceLimitrofe: true, forzata: true },
+);
+check('whitelist + parola chiave: entra d’ufficio col voto assegnato', 90, chiaveForzata.punteggio);
+check('ed è marcata come inclusione d’ufficio', true, chiaveForzata.forzata);
+
+// INVARIANTE §26.45: il pavimento del sostegno non si sconta e l’override non lo promuove.
+const sostegnoChiave = valutaCompatibilita(
+  { ...profilo, ordini: ['secondaria2'], materieCustom: ['Intelligenza Artificiale'] },
+  {
+    province: 'AL',
+    classi: ['ADEE'],
+    ordine: 'primaria',
+    titolo: 'Interpello sostegno scuola primaria: intelligenza artificiale',
+  },
+  { provinceLimitrofe: true },
+);
+check('suggerimento EXTRA (sostegno) anche con la parola chiave: resta 60', PUNTEGGIO_EXTRA_SOSTEGNO, sostegnoChiave.punteggio);
+check('e non diventa un voto d’ufficio', null, sostegnoChiave.override ?? null);
+
+/* ---------------------------- 3) CABLAGGIO -------------------------------- */
 
 console.log('\n— Cablaggio: feed → bacheca pura → card/modale —');
 const feed = leggi('src/contexts/app/useInterpelliFeed.ts');
@@ -132,10 +191,38 @@ const moduli = [
   'src/lib/prossimitaGeografica.ts',
   'src/lib/filtriScuole.ts',
   'src/lib/areeDisciplinari.ts',
+  'src/lib/mediaModali.ts',
 ];
 check('una modale, un modulo (puro e testabile)', true, moduli.every((f) => leggi(f).length > 0));
+// OVERRIDE — dal modulo puro al tipo, alla bacheca, alla card: un solo filo.
+const datiInterpello = leggi('src/data/interpelli.ts');
+check('tipo: il campo della parola chiave che ha assegnato il voto', true, /parolaChiaveVoto\?: string \| null/.test(datiInterpello));
+check(
+  'bacheca: l’override della valutazione diventa `parolaChiaveVoto`',
+  true,
+  /parolaChiaveVoto: valutazione\.override\?\.parolaChiave/.test(bacheca),
+);
+check(
+  'bacheca: la pertinenza usa l’override (non un punteggio di modale)',
+  true,
+  /punteggioCompetenze\(profilo, avviso\)\.override !== null/.test(bacheca),
+);
+check(
+  'card e modale: etichetta dedicata + tooltip dell’override',
+  true,
+  /ETICHETTA_PAROLA_CHIAVE/.test(card) &&
+    /ETICHETTA_PAROLA_CHIAVE/.test(modale) &&
+    /descrizioneParolaChiave\(parolaChiaveVoto, banda\.punteggio\)/.test(card) &&
+    /descrizioneParolaChiave\(parolaChiaveVoto, banda\.punteggio\)/.test(modale),
+);
+check(
+  'graduata: la parola chiave è l’unico tier di OVERRIDE (prima della media)',
+  true,
+  /if \(competenze\.override\) \{/.test(graduata) &&
+    graduata.indexOf('if (competenze.override)') < graduata.indexOf('const contributi = ['),
+);
 
-/* ------------------------ 3) LA GUARDIA È NELLA CATENA -------------------- */
+/* ------------------------ 4) LA GUARDIA È NELLA CATENA -------------------- */
 
 console.log('\n— La guardia è nella catena di `npm test` —');
 const catena = JSON.parse(leggi('package.json')) as { scripts: Record<string, string> };
@@ -144,7 +231,7 @@ check('guardia nella catena', true, (catena.scripts.test ?? '').includes('script
 
 console.log(
   errori === 0
-    ? '\n✅ COMPATIBILITÀ GRADUATA: media ponderata delle 5 modali, sostegno a 60, consegna strict.'
+    ? '\n✅ COMPATIBILITÀ GRADUATA: override della parola chiave, media delle altre modali, sostegno a 60, consegna strict.'
     : `\n❌ COMPATIBILITÀ GRADUATA: ${errori} errore/i`,
 );
 process.exitCode = errori === 0 ? 0 : 1;

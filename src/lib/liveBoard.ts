@@ -4,33 +4,32 @@
  * peggio — un elenco di codici amministrativi al posto del nome («EEEE | A246»,
  * «AAAA | A246») fa sembrare il servizio rotto.
  *
- * REGOLA DI VETRINA (direttiva cliente 04/10/2026, §26.47 — corregge la §26.20 del
- * 28/09/2026): un avviso GENUINO **non si scarta MAI** per un'anagrafica
- * incompleta — è il caso dei 10 annunci di Padova, spariti dalla bacheca perché
- * l'istituto non era mappato. La colonna «Scuola» mostra, in ordine:
- *   1. il nome REALE dell'istituto (`school_name`, registro, titolo — gate
- *      `nomeIstituto.ts`);
- *   2. il nome GREZZO pubblicato dal bando (`nomeGrezzoDaBando`), quando è un nome
- *      leggibile e non un dump di codici;
- *   3. il segnaposto GESTITO «Scuola non specificata / Più plessi» (`statoArricchimento.ts`).
- * I codici amministrativi restano FUORI dalla colonna (mai uno pseudo-nome), ma la
- * riga ENTRA comunque e viene marcata (`anagraficaParziale`), così l'interfaccia
- * può dichiarare gentilmente che l'anagrafica è in via di aggiornamento.
+ * REGOLA DI VETRINA (§26.59, direttiva 05/10/2026 — ripristina il gate STRETTO e
+ * corregge la §26.47/§26.48 del 04/10/2026): in vetrina entra SOLO una riga con il
+ * nome di un istituto REALE risolto per anagrafica — `school_name` passato dal gate
+ * `nomeIstituto.ts`, registro scolastico per codice meccanografico, oppure nome
+ * leggibile ricavato dal titolo (`nomeScuolaRiga`). Restano FUORI:
+ *   1. le righe con il solo nome GREZZO pubblicato dal bando (`nomeGrezzoDaBando`):
+ *      è il dato della fonte, non un'anagrafica;
+ *   2. le righe senza alcun nome risolvibile, per cui la §26.47 prevedeva la dicitura
+ *      gestita «Scuola non specificata / Più plessi» (`statoArricchimento.ts`).
+ * Motivo: il tabellone è la vetrina del servizio — una riga di cui non si sa quale
+ * scuola emette l'avviso non è verificabile e fa sembrare il servizio rotto.
+ * I codici amministrativi restano FUORI a monte (`nomeIstituto.ts`): non sono mai un
+ * nome, per nessuna strada. La riga che entra ha sempre la sua scuola e
+ * `anagraficaParziale` dichiara lo stato dell'anagrafica (`completo`/`parziale`).
  */
 
 import { eAvvisoVivo, GIORNI_FINESTRA_SENZA_SCADENZA } from './scadenza';
-import { enteEmittenteDaTitolo } from './matchingEngine';
 import { nomeScuolaDaCodice } from './school-lookup';
 import { nomeIstitutoPresentabile } from './nomeIstituto';
 import { pulisciTitoloAvviso } from './alertInterpello';
-import {
-  SCUOLA_NON_SPECIFICATA,
-  anagraficaInAggiornamento,
-} from './statoArricchimento';
+import { anagraficaInAggiornamento } from './statoArricchimento';
 
 // La dicitura gestita appartiene a `statoArricchimento.ts` (un solo punto di
 // verità): qui si ri-esporta perché la vetrina sia importabile da un solo modulo.
-export { SCUOLA_NON_SPECIFICATA };
+// Da §26.59 NON entra più in vetrina: la riga senza istituto reale resta fuori.
+export { SCUOLA_NON_SPECIFICATA } from './statoArricchimento';
 
 /**
  * Finestra (in giorni) entro cui un avviso SENZA scadenza resta in bacheca.
@@ -49,7 +48,7 @@ export interface RigaBoard {
   expiration_date: string | null;
   created_at?: string | null;
   source_url?: string | null;
-  /** Stato dell'anagrafica (`completo` | `parziale` | null): mai un motivo di scarto. */
+  /** Stato dell'anagrafica (`completo` | `parziale` | null): non è un motivo di scarto. */
   stato_arricchimento?: string | null;
 }
 
@@ -63,10 +62,8 @@ export interface RigaBoardCompleta<R extends RigaBoard = RigaBoard> {
   /** True se la riga è in bacheca grazie alla finestra 60 giorni. */
   senzaScadenza: boolean;
   /**
-   * True quando l'anagrafica NON è completa: il nome mostrato è di ripiego (nome
-   * grezzo del bando o segnaposto) oppure la riga è marcata `parziale`.
-   * L'interfaccia dichiara il ripiego con «Scuola non specificata / Più plessi» —
-   * e la riga resta.
+   * True quando l'anagrafica NON è completa: il nome non viene da `school_name`
+   * (registro o titolo) oppure la riga è marcata `parziale`.
    */
   anagraficaParziale: boolean;
 }
@@ -99,8 +96,8 @@ export function scuolaDaTitolo(titolo?: string | null): string | null {
  *   1. `school_name` (comunque passato dal gate `nomeIstituto`);
  *   2. registro scuole per codice meccanografico;
  *   3. dal titolo (`scuolaDaTitolo`).
- * `null` quando non resta un nome in chiaro: è il segnale per il RIPIEGO della
- * vetrina (`nomeScuolaBoard`), mai un motivo di scarto della riga.
+ * `null` quando non resta un nome in chiaro: è il GATE STRETTO della vetrina
+ * (§26.59) — senza un istituto reale la riga non entra (`preparaRigheBoard`).
  */
 export function nomeScuolaRiga(r: RigaBoard): string | null {
   return (
@@ -111,12 +108,12 @@ export function nomeScuolaRiga(r: RigaBoard): string | null {
 }
 
 /**
- * Nome GREZZO pubblicato dal BANDO, usato come primo ripiego quando l'istituto
- * non è risolvibile in chiaro: è il dato che la fonte dichiara davvero, quindi
- * mostrarlo è onesto (e non inventa nulla). Si accetta SOLO se resta un nome
- * leggibile: un dump di codici («EEEE | A246», «BA02 | AR04», «ADEE») o una
- * sequenza amministrativa (date, protocolli, classi) vale `null` — al suo posto
- * interviene la dicitura gestita, mai uno pseudo-nome.
+ * Nome GREZZO pubblicato dal BANDO. Da §26.59 NON è più un ripiego di vetrina: la
+ * stringa di una fonte non è un'anagrafica, quindi non fa entrare una riga
+ * (`preparaRigheBoard`). Resta il giudizio PURO «nome leggibile o dump di codici?»,
+ * usato dalle verifiche di qualità dell'ingestione. Si accetta SOLO se resta un nome
+ * leggibile: un dump di codici («EEEE | A246», «BA02 | AR04», «ADEE») o una sequenza
+ * amministrativa (date, protocolli, classi) vale `null`.
  */
 export function nomeGrezzoDaBando(testo?: string | null): string | null {
   const pulito = (testo ?? '').replace(/\s+/g, ' ').trim();
@@ -129,52 +126,51 @@ export function nomeGrezzoDaBando(testo?: string | null): string | null {
   return pulito;
 }
 
-/** Nome da mostrare in bacheca, con il RIPIEGO dichiarato. */
+/** Nome della scuola per la colonna «Scuola»: solo un istituto REALE (§26.59). */
 export interface NomeScuolaBoard {
-  /** Testo della colonna «Scuola»: mai vuoto. */
+  /** Denominazione risolta: mai vuota, mai un segnaposto. */
   nome: string;
-  /** True se NON è la denominazione reale dell'istituto (nome grezzo o dicitura). */
+  /** True se il nome NON viene da `school_name` (registro o titolo): anagrafica da completare. */
   approssimativo: boolean;
 }
 
 /**
- * Nome per la colonna «Scuola» della BACHECA: non restituisce MAI `null`, perché
- * un avviso genuino non si scarta per un'anagrafica incompleta (direttiva
- * 04/10/2026). Catena: nome reale → nome grezzo del bando → segnaposto gestito
- * «Scuola non specificata / Più plessi»; `approssimativo` dice all'interfaccia
- * quando deve dichiararlo.
+ * Nome per la colonna «Scuola» della BACHECA — `null` quando la riga non ha un
+ * istituto REALE risolto (`nomeScuolaRiga`): è il GATE STRETTO della vetrina
+ * (§26.59) e `null` significa «riga fuori», non «mostra un ripiego». Nessun nome
+ * grezzo del bando e nessun segnaposto: non sono anagrafiche.
  */
-export function nomeScuolaBoard(r: RigaBoard): NomeScuolaBoard {
-  const reale = nomeScuolaRiga(r);
+export function nomeScuolaBoard(r: RigaBoard): NomeScuolaBoard | null {
+  const reale = nomeIstitutoPresentabile(r.school_name);
   if (reale) return { nome: reale, approssimativo: false };
-  const grezzo = nomeGrezzoDaBando(r.school_name);
-  if (grezzo) return { nome: grezzo, approssimativo: true };
-  return { nome: SCUOLA_NON_SPECIFICATA, approssimativo: true };
+  const risolto = nomeScuolaRiga(r);
+  return risolto ? { nome: risolto, approssimativo: true } : null;
 }
 
 /**
- * Etichetta della riga nella PROVA del Radar (responso): ultima risorsa
- * legittima l'ENTE emittente (es. «USP Torino»), mai un codice. `null` quando non
- * c'è nulla di presentabile: la riga resta fuori dalla prova
- * (`rigaPresentabileVetrina`).
+ * Nome d'istituto della riga nelle viste pubbliche (`responso della prova`): è lo
+ * stesso gate della bacheca — `nomeScuolaRiga`. Mai l'ente emittente al suo posto:
+ * un avviso di cui non si conosce la scuola non è una riga di vetrina (§26.59).
  */
 export function nomePresentabileRiga(r: RigaBoard): string | null {
-  return nomeScuolaRiga(r) ?? enteEmittenteDaTitolo(r.title, r.province);
+  return nomeScuolaRiga(r);
 }
 
+/** True se la riga ha un istituto REALE risolto: unica condizione d'ingresso (§26.59). */
 export function rigaPresentabileVetrina(r: RigaBoard): boolean {
-  return Boolean(titoloLeggibile(r.title) ?? nomePresentabileRiga(r));
+  return nomeScuolaRiga(r) !== null;
 }
 
 /**
  * Prepara le righe del tabellone: tiene gli interpelli con scadenza attiva e gli
- * avvisi senza scadenza pubblicati negli ultimi 60 giorni.
+ * avvisi senza scadenza pubblicati negli ultimi 60 giorni **e con un istituto
+ * reale risolto**.
  *
- * ⛔ **Nessuno scarto per anagrafica** (direttiva 04/10/2026, §26.47): una riga
- * che non ha un nome d'istituto risolvibile entra COMUNQUE, con il nome grezzo del
- * bando o con la dicitura gestita, e viene marcata `anagraficaParziale`. Restano
- * fuori solo le righe che NON sono avvisi vivi (scadute o senza data di
- * pubblicazione utile) — mai un bando genuino.
+ * ⛔ **GATE STRETTO del nome scuola** (§26.59, direttiva 05/10/2026): in vetrina
+ * entra solo una riga di cui si sa QUALE scuola emette l'avviso (`nomeScuolaRiga`).
+ * Restano fuori sia le righe con il solo nome grezzo del bando sia quelle senza
+ * alcun nome risolvibile (la §26.47 le teneva dentro con il segnaposto): il
+ * tabellone è la vetrina del servizio e una riga non verificabile non lo rappresenta.
  */
 export function preparaRigheBoard<R extends RigaBoard>(
   righe: R[] | null | undefined,
@@ -198,14 +194,20 @@ export function preparaRigheBoard<R extends RigaBoard>(
       senzaScadenza = true;
     }
 
-    const { nome: scuola, approssimativo } = nomeScuolaBoard(riga);
-    // Direttiva 04/10/2026 (§26.47): la riga ENTRA SEMPRE. Un avviso genuino non
-    // si scarta per un'anagrafica incompleta (caso Padova: 10 annunci spariti). Il
-    // nome mostrato è quello reale, altrimenti quello grezzo del bando, altrimenti
-    // la dicitura gestita; `anagraficaParziale` lo dichiara all'interfaccia.
+    const nome = nomeScuolaBoard(riga);
+    // GATE STRETTO (§26.59): senza un istituto reale la riga non entra. Non si
+    // ripiega sul nome grezzo del bando né sul segnaposto: una riga di cui non si
+    // sa quale scuola emette l'avviso non è verificabile in vetrina.
+    if (!nome) continue;
     const anagraficaParziale =
-      approssimativo || anagraficaInAggiornamento(riga.stato_arricchimento);
-    pronte.push({ riga, scuola, scadenza: scadenzaValida, senzaScadenza, anagraficaParziale });
+      nome.approssimativo || anagraficaInAggiornamento(riga.stato_arricchimento);
+    pronte.push({
+      riga,
+      scuola: nome.nome,
+      scadenza: scadenzaValida,
+      senzaScadenza,
+      anagraficaParziale,
+    });
   }
   return pronte;
 }

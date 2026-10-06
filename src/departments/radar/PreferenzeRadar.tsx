@@ -13,6 +13,8 @@ import type { OrdineScuola } from '@/data/ordiniMaterie';
 import { province } from '@/data/province';
 import { pianoLimits } from '@/lib/planLimits';
 import { normalizzaClasse, normalizzaClassi } from '@/lib/matchingEngine';
+import { ambitoScuola, scuoleNote, suggerimentiScuole } from '@/lib/filtriScuole';
+import { provinceDiRicerca } from '@/lib/prossimitaGeografica';
 import { promuoviProvinciaPrincipale } from '@/lib/provinceRadar';
 import { modificheDaSalvare } from '@/lib/preferenzeGuardia';
 import {
@@ -159,10 +161,22 @@ export function PreferenzeRadar() {
     setAccordionAperti((prev) => ({ ...prev, [chiave]: !prev[chiave] }));
 
   const provinceSorted = useMemo(() => [...province].sort((a, b) => a.nome.localeCompare(b.nome)), []);
-  const scuoleConosciute = useMemo(
-    () => [...new Set(interpelliFiltrati.map((i) => i.istituto).filter(Boolean))],
-    [interpelliFiltrati],
-  );
+  /**
+   * MODALITÀ 4 + 5 (§26.62) — AMBITO PROVINCIALE delle due liste scuole.
+   * Le province da cercare sono quelle scelte PIÙ quelle entro 60 km
+   * (`provinceDiRicerca`, lo stesso perimetro della bacheca). I suggerimenti del
+   * campo scuola restano dentro quell'ambito; un nome fuori è una forzatura
+   * comunque possibile, ma dichiarata dal pannello.
+   */
+  const scuoleAmbiente = useMemo(() => {
+    const provinceRicerca = provinceDiRicerca(provinceCodici);
+    const note = scuoleNote(interpelliFiltrati);
+    return {
+      provinceNomi: provinceRicerca.map((c) => province.find((p) => p.codice === c)?.nome ?? c),
+      suggerimenti: suggerimentiScuole(note, provinceRicerca),
+      verificaAmbito: (nome: string) => ambitoScuola(note, provinceRicerca, nome),
+    };
+  }, [provinceCodici, interpelliFiltrati]);
   const classiFiltrate = useMemo(() => {
     let list = classiConcorso;
     if (materiaFilter) list = list.filter((c) => c.materie.includes(materiaFilter));
@@ -502,7 +516,9 @@ export function PreferenzeRadar() {
           setIgnoredScuolaInput={setIgnoredScuolaInput}
           addIgnoredScuola={addIgnoredScuola}
           removeIgnoredScuola={removeIgnoredScuola}
-          scuoleConosciute={scuoleConosciute}
+          scuoleConosciute={scuoleAmbiente.suggerimenti}
+          provinceSeguite={scuoleAmbiente.provinceNomi}
+          verificaAmbito={scuoleAmbiente.verificaAmbito}
         />
 
         <PannelloCanali

@@ -6,6 +6,10 @@
  *   1. CAP — al massimo `MAX_RIEMPITIVI_BACHECA` (5) opportunità sotto il 70%;
  *      se la bacheca ha già `MINIMO_MATCH_QUALITA` (10) match di qualità, i
  *      riempitivi vengono nascosti del tutto;
+ *   1-bis. ESCLUSIONE SECCA (§26.60) — un riempitivo NON pertinente (sotto il 70%
+ *      e senza conferma per classe/competenza del Radar) NON entra in bacheca:
+ *      `riempitivoNonPertinente` lo dichiara a monte del cap, e le scuole
+ *      preferite restano comunque;
  *   2. INVARIANTI — il cap non tocca l'ordine, non classifica i punteggi assenti
  *      e non tocca le opportunità di qualità;
  *   3. CABLAGGIO — il feed applica il cap e cerca anche le province limitrofe,
@@ -19,6 +23,7 @@ import {
   MAX_RIEMPITIVI_BACHECA,
   MINIMO_MATCH_QUALITA,
   limitaRiempitivi,
+  riempitivoNonPertinente,
 } from '../src/lib/riempitivi.ts';
 
 let errori = 0;
@@ -63,6 +68,46 @@ check('punteggio assente = neutro (mai classificato a caso)', 1, neutro.lista.le
 check('e non fa scattare limiti', 'nessuno', neutro.motivo);
 check('lista vuota → nessun limite', 0, limitaRiempitivi([]).lista.length);
 
+/* ------- 1-bis) ESCLUSIONE SECCA DEI RIEMPITIVI NON PERTINENTI (§26.60) ------ */
+
+console.log('\n— Esclusione secca dei riempitivi NON pertinenti (§26.60) —');
+const striscio = { compatibilita: 55 };
+check(
+  'sotto il 70% e senza pertinenza del Radar → la voce NON entra',
+  true,
+  riempitivoNonPertinente(striscio, { pertinente: false }),
+);
+check(
+  'stessa voce, ma confermata da classe o parola chiave → resta (cap, non esclusione)',
+  false,
+  riempitivoNonPertinente(striscio, { pertinente: true }),
+);
+check(
+  'scuola preferita (whitelist, Modalità 5) → mai esclusa',
+  false,
+  riempitivoNonPertinente(striscio, { pertinente: false, forzata: true }),
+);
+check(
+  'punteggio di qualità (≥ 70%) → mai escluso',
+  false,
+  riempitivoNonPertinente({ compatibilita: 70 }, { pertinente: false }),
+);
+check(
+  'punteggio assente = neutro → mai escluso (nessuna classificazione a caso)',
+  false,
+  riempitivoNonPertinente({}, { pertinente: false }),
+);
+check(
+  'soglia dichiarabile (80%): 75 è un riempitivo non pertinente',
+  true,
+  riempitivoNonPertinente({ compatibilita: 75 }, { pertinente: false, soglia: 80 }),
+);
+check(
+  'il riempitivo PERTINENTE resta soggetto al cap dinamico (5 visibili su 8)',
+  5,
+  limitaRiempitivi(bassi(8)).riempitiviVisibili,
+);
+
 /* --------------------- 2) VOCI PROTETTE (SCUOLE PREFERITE) ---------------- */
 
 console.log('\n— Le voci protette non sono riempitivi (Modalità 5: whitelist) —');
@@ -94,6 +139,17 @@ check(
 );
 check('bacheca: cap dinamico dei riempitivi', true, /limitaRiempitivi\(/.test(bacheca));
 check('bacheca: le scuole preferite non sono riempitivi', true, /proteggi:/.test(bacheca));
+check(
+  'bacheca: esclusione secca dei non pertinenti, A MONTE del cap (§26.60)',
+  true,
+  /riempitivoNonPertinente\(/.test(bacheca) &&
+    bacheca.indexOf('riempitivoNonPertinente(') < bacheca.indexOf('limitaRiempitivi('),
+);
+check(
+  'bacheca: il conto degli esclusi è dichiarato, mai silenzioso',
+  true,
+  /riempitiviEsclusi: number/.test(bacheca) && /riempitiviEsclusi \+= 1/.test(bacheca),
+);
 check('bacheca: province entro il raggio con penalità', true, /provinceLimitrofe: true/.test(bacheca));
 const bandaConMotivo = /bandaCompatibilita\(interpello\.compatibilita, interpello\.motivoCompatibilita\)/;
 check('card e modale: banda + motivo dichiarato', true, bandaConMotivo.test(card) && bandaConMotivo.test(modale));
@@ -115,7 +171,7 @@ check(
 
 console.log(
   errori === 0
-    ? '\n✅ RIEMPITIVI: cap dinamico (max 5 sotto il 70%, nessuno con 10 match di qualità).'
+    ? '\n✅ RIEMPITIVI: cap dinamico (max 5 sotto il 70%, nessuno con 10 match di qualità) + esclusione secca dei NON pertinenti (§26.60).'
     : `\n❌ RIEMPITIVI: ${errori} errore/i`,
 );
 process.exitCode = errori === 0 ? 0 : 1;

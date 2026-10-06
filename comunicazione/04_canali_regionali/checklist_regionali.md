@@ -89,19 +89,24 @@
       vetrina ÷ 5 arrotondato per eccesso — nessun `+` di maggiorazione e nessuna
       dicitura fissa (direttiva cliente 03/10/2026); a database vuoto la sezione
       dice **«Nessun bando attivo al momento»**.
-- [ ] **Nessun avviso genuino scartato per anagrafica** (direttiva cliente
-      04/10/2026): una riga senza nome d'istituto risolvibile **resta in bacheca**,
-      con il nome grezzo pubblicato dal bando oppure con il segnaposto neutro
-      **«Scuola non specificata / Più plessi»**, e viene marcata per l'interfaccia
-      (`anagraficaParziale` — `src/lib/liveBoard.ts`, `src/lib/statoArricchimento.ts`).
-      Restano fuori solo gli avvisi **non vivi** (scaduti o fuori dalla finestra dei
-      60 giorni). La colonna «Scuola» non mostra **mai** un elenco di codici classe
-      al posto del nome dell'istituto.
+- [ ] **Nessuna riga in vetrina senza la sua scuola** (direttiva cliente 05/10/2026,
+      §26.59 — corregge la §26.47 del 04/10/2026): in bacheca entra solo una riga con
+      il nome di un **istituto reale** risolto per anagrafica (campo `school_name` al
+      gate `nomeIstituto.ts`, registro scolastico per codice meccanografico, oppure
+      nome leggibile ricavato dal titolo — `nomeScuolaRiga`, `src/lib/liveBoard.ts`).
+      Restano fuori: le righe con il solo **nome grezzo pubblicato dal bando**, quelle
+      senza alcun nome risolvibile (il segnaposto «Scuola non specificata / Più plessi»
+      **non** è un'anagrafica) e — come sempre — gli avvisi **non vivi** (scaduti o
+      fuori dalla finestra dei 60 giorni). La colonna «Scuola» non mostra **mai** un
+      elenco di codici classe al posto del nome dell'istituto. **Lo stesso gate vale per il responso
+      della prova del Radar** (`nomePresentabileRiga` / `rigaPresentabileVetrina`,
+      `src/lib/provaRadarEngine.ts`): due superfici pubbliche non possono avere due regole diverse.
 - [ ] **Vetrina pubblica pulita**: la colonna «Scuola» non mostra **mai** messaggi
-      tecnici o di errore all'utente — quando l'istituto non è risolvibile in chiaro
-      compare il segnaposto neutro **«Scuola non specificata / Più plessi»**.
-      L'arricchimento anagrafico prosegue in background ma serve **solo** all'invio
-      delle notifiche puntuali (direttiva cliente 04/10/2026).
+      tecnici o di errore all'utente, e non mostra il segnaposto neutro «Scuola non
+      specificata / Più plessi»: la dicitura resta nella **scheda del singolo avviso**
+      (`src/components/IstitutoEmittente.tsx`), quando il bando non pubblica la scuola.
+      L'arricchimento anagrafico serve all'ingresso in vetrina e all'invio delle
+      notifiche puntuali (direttive 04/10 e 05/10/2026).
 - [ ] **Copertura nazionale della bacheca**: il tabellone legge a **pagine**
       (`.range`, mai una richiesta sola: PostgREST non consegna più di 1.000 righe —
       `radar/flightBoard/letturaBoard.ts`, §26.34) con il filtro a doppio ramo
@@ -120,10 +125,16 @@
       accanto alla DATA di scadenza (o alla data di **pubblicazione** quando la
       fonte non ne dichiara una), senza conti alla rovescia né inviti a correre
       (`src/lib/urgency.ts`). Gli avvisi scaduti non compaiono mai in bacheca.
-- [ ] **Nome dell'istituto letto dalla FONTE**: la colonna «Scuola» mostra il nome
-      pubblicato dall'ente accanto al codice meccanografico (`scraper/scuolaDaRiga.ts`).
-      Se la fonte non lo pubblica, la riga non entra: mai un'etichetta di materia o un
-      dump di codici al posto dell'istituto.
+- [ ] **«Prova il Radar»: si prova con la SOLA provincia** — il box pubblico legge quella provincia e
+      nient'altro (`src/departments/radar/services/provaRadarQuery.ts`, `.eq('province')`;
+      `src/lib/provaRadarEngine.ts`): **nessun pool nazionale, nessun ripiego, nessun dato di
+      esempio**. Se la provincia non ha nulla di vivo il responso **non** pesca avvisi altrove:
+      dichiara che il Radar è in scansione («Appena esce un avviso su <provincia> te lo diciamo noi»).
+- [ ] **Il rumore non occupa il posto di un'opportunità**: un avviso sotto la soglia arancio (70%)
+      che il Radar **non** conferma per classe o parola chiave è un falso positivo e resta **fuori**
+      dalla bacheca (`riempitivoNonPertinente`, `src/lib/riempitivi.ts`): non è un riempitivo da
+      dosare. I riempitivi **pertinenti** restano, entro il cap di 5 (nessuno quando ci sono già 10
+      match di qualità), e le **scuole preferite** non vengono mai nascoste (§26.60).
 - [ ] **Scheda dell'opportunità (card + modale di dettaglio): scuola e fonte sempre in chiaro** —
       la card e la modale mostrano SEMPRE la **scuola emittente**
       (`src/components/IstitutoEmittente.tsx`: nome reale, oppure la dicitura gestita «Scuola non
@@ -138,12 +149,26 @@
       automatica** (`scripts/pulisci-scaduti.ts` rimuove anche le righe senza scadenza fuori
       finestra): un avviso che la fonte non data non resta pubblico per sempre.
 
+- [ ] **Scuole preferite/escluse: i suggerimenti restano nell'ambito delle proprie province (+60 km)** — il
+      campo scuola del Radar propone **solo** le scuole delle province da cercare (`suggerimentiScuole`,
+      `src/lib/filtriScuole.ts`, §26.62), con la **sigla della provincia** accanto al nome; una scuola di
+      un'altra provincia resta **scrivibile**, ma la **forzatura è dichiarata** (avviso sotto il campo e
+      badge «Fuori ambito · <provincia>» sulla pill) in **entrambe** le liste: nessuna forzatura silenziosa.
+
 
 ## 5. Verifica prima del merge
 - [ ] `npm run test:opportunita` + `npm run test:interpello-scadenza` — la scuola emittente e la
       fonte ufficiale sono visibili su card e modale, e la finestra dei 60 giorni vale in tutte le
       superfici pubbliche (feed, matching, bacheca, pulizia automatica).
+- [ ] `npm run test:prova-radar` — la prova risponde con la **sola provincia** provata (nessun avviso
+      di altre province, nessun dato di esempio) e il responso vuoto dichiara la scansione.
+- [ ] `npm run test:riempitivi` — in bacheca non entrano falsi positivi sotto soglia (riempitivi non
+      pertinenti esclusi a monte del cap) e il conto degli esclusi è dichiarato, mai silenzioso.
 
+- [ ] `npm run test:filtri-scuole` + `npm run test:admin:utente` — i suggerimenti scuola restano
+      nell'ambito provinciale (fuori ambito = forzatura dichiarata) e le schede utente dell'Admin mostrano
+      **tutte** le preferenze: ordini, classi, **materie derivate dalle classi**, competenze, tag, province
+      e scuole, senza elenchi troncati.
 
 - [ ] `npm run test:telegram:canali` — formato a 7 sezioni, testate, assenza di
       "candidati", assenza di "Email non disponibile", link safety.

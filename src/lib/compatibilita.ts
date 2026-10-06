@@ -34,6 +34,14 @@ export const SOGLIA_COMPATIBILITA_VERDE = 80;
  */
 export const ETICHETTA_SCUOLA_PREFERITA = 'Scuola preferita nel radar';
 
+/**
+ * Etichetta del VOTO D'UFFICIO della Modalità 3 (override delle parole chiave): quando una
+ * parola chiave del profilo compare nel testo dell'avviso il punteggio NON nasce da una
+ * media — è assegnato (90 piena · 85 match vicino) — e card e dettaglio lo dichiarano
+ * accanto al badge, con `descrizioneParolaChiave`.
+ */
+export const ETICHETTA_PAROLA_CHIAVE = 'Parola chiave trovata';
+
 export type LivelloCompatibilita = 'verde' | 'arancio' | 'rosso' | 'sotto-soglia';
 
 /** Banda cromatica di un punteggio di compatibilità. */
@@ -122,4 +130,14 @@ export function descrizioneScuolaPreferita(punteggio: number): string {
     return `Scuola che tieni d'occhio: match col profilo ${p}% (${DESCRIZIONI[livelloCompatibilita(p)].toLowerCase()})`;
   }
   return `Scuola che tieni d'occhio: inclusa d'ufficio anche se il match col profilo è ${p}%`;
+}
+
+/**
+ * Tooltip dell'etichetta della Modalità 3 (override): dice QUALE parola chiave ha
+ * assegnato il voto e PERCHÉ il numero è fisso — ordine di scuola, classi di concorso e
+ * distanza non entrano nel calcolo.
+ */
+export function descrizioneParolaChiave(parolaChiave: string, punteggio: number): string {
+  const p = normalizzaPunteggioCompatibilita(punteggio);
+  return `Parola chiave del tuo profilo trovata nell'avviso: «${parolaChiave}». Il voto ${p}% è assegnato d'ufficio dalla Modalità 3: non è una media di ordine, classe e distanza.`;
 }

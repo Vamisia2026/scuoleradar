@@ -94,7 +94,7 @@ export function Chips({ valori, vuoto = '—' }: { valori?: string[] | null; vuo
   if (lista.length === 0) return <span className="text-xs text-primary-300">{vuoto}</span>;
   return (
     <span className="flex flex-wrap gap-1">
-      {lista.slice(0, 4).map((v) => (
+      {lista.map((v) => (
         <span
           key={v}
           className="rounded-md bg-primary-50 px-1.5 py-0.5 text-[10px] font-semibold text-primary-600"
@@ -102,9 +102,6 @@ export function Chips({ valori, vuoto = '—' }: { valori?: string[] | null; vuo
           {v}
         </span>
       ))}
-      {lista.length > 4 && (
-        <span className="text-[10px] font-bold text-primary-400">+{lista.length - 4}</span>
-      )}
     </span>
   );
 }

@@ -69,6 +69,13 @@ export interface Interpello {
    * insufficiente e il cap dei riempitivi non può nasconderla.
    */
   scuolaPreferita?: boolean;
+  /**
+   * PAROLA CHIAVE del profilo che ha ASSEGNATO il voto (Modalità 3, OVERRIDE): presente
+   * SOLO quando `compatibilita` non è una media ponderata ma un voto d'ufficio — 90%
+   * (parola chiave piena) o 85% (match vicino, `src/lib/punteggioCompetenze.ts`). La card
+   * e il dettaglio lo dichiarano con `ETICHETTA_PAROLA_CHIAVE`: un voto fisso spiegato.
+   */
+  parolaChiaveVoto?: string | null;
 }
 
 /**

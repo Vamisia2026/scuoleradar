@@ -9,7 +9,7 @@
  * Classe/Materia · Scadenza), opzionali + recapito di candidatura, guida operativa
  * e UN SOLO **link diretto alla fonte ufficiale**, con etichetta onesta.
  */
-import { AlertTriangle, ArrowRight, BadgeCheck, BellRing, Star } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BadgeCheck, BellRing, Sparkles, Star } from 'lucide-react';
 import type { Interpello } from '@/data/interpelli';
 import { LIMITE_NOTIFICHE_PROVA, useApp } from '@/contexts/AppContext';
 import {
@@ -19,7 +19,13 @@ import {
   formatDataAvvisoLunga,
   type AvvisoStrutturato,
 } from '@/lib/alertInterpello';
-import { bandaCompatibilita, descrizioneScuolaPreferita, ETICHETTA_SCUOLA_PREFERITA } from '@/lib/compatibilita';
+import {
+  bandaCompatibilita,
+  descrizioneParolaChiave,
+  descrizioneScuolaPreferita,
+  ETICHETTA_PAROLA_CHIAVE,
+  ETICHETTA_SCUOLA_PREFERITA,
+} from '@/lib/compatibilita';
 import { scuolaPreferita } from '@/lib/filtriScuole';
 import { IstitutoEmittente } from './IstitutoEmittente';
 import { Modal } from './Modal';
@@ -60,6 +66,8 @@ export function InterpelloDettaglioModal({
   // Modalità 5: la scuola preferita ha l'etichetta dedicata anche qui.
   const preferita =
     interpello.scuolaPreferita ?? scuolaPreferita(preferenze.favoriteSchools, interpello);
+  // Modalità 3 — OVERRIDE: la parola chiave che ha assegnato il voto d'ufficio.
+  const parolaChiaveVoto = interpello.parolaChiaveVoto ?? null;
 
   return (
     <Modal open={open} onClose={onClose} title={titolo} size="lg">
@@ -68,31 +76,43 @@ export function InterpelloDettaglioModal({
         <IstitutoEmittente istituto={interpello.istituto} />
 
         {/* Modalità 5: scuola preferita → etichetta dedicata (inclusione
-            d'ufficio), con il match accanto quando il punteggio è sufficiente. */}
-        {preferita ? (
-          <span
-            title={descrizioneScuolaPreferita(banda.punteggio)}
-            className="inline-flex items-center gap-1 rounded-full bg-accent-500 px-3 py-1 text-sm font-semibold text-white shadow-soft"
-          >
-            <Star className="h-4 w-4" />
-            {ETICHETTA_SCUOLA_PREFERITA}
-            {banda.visibile && (
-              <span className="ml-1 rounded-full bg-white/25 px-1.5 font-bold">
-                {banda.punteggio}%
-              </span>
-            )}
-          </span>
-        ) : (
-          banda.visibile && (
+            d'ufficio), con il match accanto quando il punteggio è sufficiente.
+            Modalità 3 (override): accanto, la parola chiave che ha assegnato il voto. */}
+        <div className="flex flex-wrap items-center gap-2">
+          {preferita ? (
             <span
-              title={banda.descrizione}
-              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold ${banda.className}`}
+              title={descrizioneScuolaPreferita(banda.punteggio)}
+              className="inline-flex items-center gap-1 rounded-full bg-accent-500 px-3 py-1 text-sm font-semibold text-white shadow-soft"
             >
-              <BadgeCheck className="h-4 w-4" />
-              {banda.etichetta}
+              <Star className="h-4 w-4" />
+              {ETICHETTA_SCUOLA_PREFERITA}
+              {banda.visibile && (
+                <span className="ml-1 rounded-full bg-white/25 px-1.5 font-bold">
+                  {banda.punteggio}%
+                </span>
+              )}
             </span>
-          )
-        )}
+          ) : (
+            banda.visibile && (
+              <span
+                title={banda.descrizione}
+                className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold ${banda.className}`}
+              >
+                <BadgeCheck className="h-4 w-4" />
+                {banda.etichetta}
+              </span>
+            )
+          )}
+          {parolaChiaveVoto && (
+            <span
+              title={descrizioneParolaChiave(parolaChiaveVoto, banda.punteggio)}
+              className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-3 py-1 text-sm font-semibold text-accent-700 ring-1 ring-inset ring-accent-200"
+            >
+              <Sparkles className="h-4 w-4" />
+              {ETICHETTA_PAROLA_CHIAVE}: {parolaChiaveVoto}
+            </span>
+          )}
+        </div>
 
         {/* OBBLIGATORIE — sempre presenti: Provincia · Ordine · Classe/Materia · Scadenza. */}
         <dl className="grid gap-3 sm:grid-cols-2">

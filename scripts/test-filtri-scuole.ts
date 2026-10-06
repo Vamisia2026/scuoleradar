@@ -11,6 +11,10 @@
  *      («Scuola preferita nel radar») al posto di un voto basso; con punteggio
  *      buono evidenzia comunque che l'opportunità viene dalla scuola preferita;
  *   4. il cap dei riempitivi non può nascondere una scuola preferita.
+ *   5. AMBITO PROVINCIALE: i suggerimenti del campo scuola si limitano alle
+ *      province da cercare (le proprie + quelle entro i 60 km, `provinceDiRicerca`)
+ *      e una scuola forzata FUORI ambito è dichiarata (avviso sotto il campo +
+ *      badge sulla pill): mai un divieto, sempre una scelta detta.
  *
  * Esecuzione: npm run test:filtri-scuole (incluso in `npm test`)
  */
@@ -21,7 +25,17 @@ import {
   ETICHETTA_SCUOLA_PREFERITA,
   descrizioneScuolaPreferita,
 } from '../src/lib/compatibilita.ts';
-import { giudizioScuole, scuolaEsclusa, scuolaPreferita, testoScuola } from '../src/lib/filtriScuole.ts';
+import { provinceDiRicerca } from '../src/lib/prossimitaGeografica.ts';
+import {
+  ambitoScuola,
+  giudizioScuole,
+  messaggioAmbitoScuola,
+  scuolaEsclusa,
+  scuolaPreferita,
+  scuoleNote,
+  suggerimentiScuole,
+  testoScuola,
+} from '../src/lib/filtriScuole.ts';
 
 let errori = 0;
 function check(nome: string, atteso: unknown, ottenuto: unknown): void {
@@ -111,7 +125,50 @@ check('bacheca: il flag resta sull’avviso', true, /scuolaPreferita: scuole\.pr
 check('bacheca: il cap dei riempitivi protegge le preferite', true, /proteggi: \(v\) => v\.scuolaPreferita === true/.test(bacheca));
 check('card e modale leggono lo stesso helper puro', true, /scuolaPreferita\(preferenze\.favoriteSchools/.test(card) && /scuolaPreferita\(preferenze\.favoriteSchools/.test(modale));
 
-/* ------------------------ 4) LA GUARDIA È NELLA CATENA -------------------- */
+/* ---------------------- 4) AMBITO PROVINCIALE DELLE SCUOLE ---------------- */
+
+console.log('\n— Scuole note: nome + provincia dalla sorgente reale —');
+const feed = [
+  interpello({ id: '1', istituto: 'IIS Volta', provinciaCodice: 'AT', provinciaNome: 'Asti' }),
+  interpello({ id: '2', istituto: 'IIS Volta', provinciaCodice: 'AT', provinciaNome: 'Asti' }),
+  interpello({ id: '3', istituto: 'Liceo Manzoni', provinciaCodice: 'RM', provinciaNome: 'Roma' }),
+  interpello({ id: '4', istituto: '   ', provinciaCodice: 'AT', provinciaNome: 'Asti' }),
+];
+const note = scuoleNote(feed);
+check('senza doppioni (nome + provincia)', 2, note.length);
+check('la provincia sta accanto al nome', 'Roma', note.find((n) => n.nome === 'Liceo Manzoni')?.provinciaNome);
+check('scuola senza nome: fuori dall’elenco', false, note.some((n) => !n.nome));
+check('la sigla è confrontabile (maiuscolo)', 'AT', note[0]?.provinciaCodice);
+check('ambito di ricerca: le proprie province restano in testa', 'AT', provinceDiRicerca(['AT'])[0]);
+check('ambito di ricerca: non si allarga all’altra parte d’Italia', false, provinceDiRicerca(['AT']).includes('RM'));
+check('suggerimenti: solo le province da cercare', ['IIS Volta'], suggerimentiScuole(note, ['AT']).map((n) => n.nome));
+check('scuola di un’altra provincia: fuori dai suggerimenti', false, suggerimentiScuole(note, ['AT']).some((n) => n.nome === 'Liceo Manzoni'));
+check('nessuna provincia scelta: nessun suggerimento', [], suggerimentiScuole(note, []));
+
+console.log('\n— Ambito di un nome: dentro, fuori, sconosciuta —');
+check('provincia seguita → dentro', { stato: 'dentro' }, ambitoScuola(note, ['AT'], 'IIS Volta'));
+check('stessa scuola, provincia non seguita → fuori', { stato: 'fuori', provincia: 'Roma' }, ambitoScuola(note, ['AT'], 'Liceo Manzoni'));
+check('nome abbreviato riconosciuto (stesso confronto delle liste)', { stato: 'dentro' }, ambitoScuola(note, ['AT'], 'Volta'));
+check('maiuscole/minuscole non contano', { stato: 'dentro' }, ambitoScuola(note, ['AT'], 'iis volta'));
+check('scuola mai vista → sconosciuta', { stato: 'sconosciuta' }, ambitoScuola(note, ['AT'], 'IIS Galilei'));
+check('campo vuoto → nessun avviso', { stato: 'sconosciuta' }, ambitoScuola(note, ['AT'], '   '));
+check('la forzatura è DICHIARATA (fuori ambito)', true, /forzatura è dichiarata/.test(messaggioAmbitoScuola(ambitoScuola(note, ['AT'], 'Liceo Manzoni'))));
+check('in ambito: nessuna forzatura', true, /senza forzature/.test(messaggioAmbitoScuola(ambitoScuola(note, ['AT'], 'IIS Volta'))));
+check('sconosciuta: forzatura manuale dichiarata', true, /forzatura manuale/.test(messaggioAmbitoScuola({ stato: 'sconosciuta' })));
+
+console.log('\n— Cablaggio: suggerimenti in ambito, forzatura visibile —');
+const pannello = leggi('src/departments/radar/preferenze/PannelloFiltriScuole.tsx');
+const radar = leggi('src/departments/radar/PreferenzeRadar.tsx');
+check('pannello: i suggerimenti portano con sé la provincia', true, /scuoleConosciute: ScuolaNota\[\]/.test(pannello));
+check('pannello: la provincia è solo l’etichetta del suggerimento', true, /value=\{s\.nome\} label=\{s\.provinciaCodice\}/.test(pannello));
+check('pannello: avviso dell’ambito sotto entrambi i campi', true, /<NotaAmbito nome=\{favoriteScuolaInput\}/.test(pannello) && /<NotaAmbito nome=\{ignoredScuolaInput\}/.test(pannello));
+check('pannello: badge di forzatura sulle pill fuori ambito', true, /ambito\.stato === 'fuori' && <BadgeForzatura/.test(pannello));
+check('pannello: una sola copy dell’ambito', true, /messaggioAmbitoScuola\(ambito\)/.test(pannello));
+check('radar: ambito calcolato con il raggio dei 60 km', true, /provinceDiRicerca\(provinceCodici\)/.test(radar));
+check('radar: suggerimenti limitati all’ambito', true, /suggerimentiScuole\(note, provinceRicerca\)/.test(radar));
+check('radar: il feed reale è l’unica sorgente delle scuole note', true, /scuoleNote\(interpelliFiltrati\)/.test(radar));
+
+/* ------------------------ 5) LA GUARDIA È NELLA CATENA -------------------- */
 
 console.log('\n— La guardia è nella catena di `npm test` —');
 const catena = JSON.parse(leggi('package.json')) as { scripts: Record<string, string> };
