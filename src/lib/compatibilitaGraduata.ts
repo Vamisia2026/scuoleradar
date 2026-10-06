@@ -1,48 +1,42 @@
 /**
- * ScuoleRadar.it — COMPATIBILITÀ GRADUATA: OVERRIDE DELLA MODALE 3 E MEDIA
- * PONDERATA DELLE ALTRE (PURO).
+ * ScuoleRadar.it — COMPATIBILITÀ GRADUATA (modulo PURO): il punteggio MOSTRATO in bacheca.
  *
- * Un solo punto in cui i criteri del Radar diventano il punteggio MOSTRATO, in due tier:
+ * UN PUNTO SOLO, DUE LIVELLI (§26.63 · §26.64):
  *
- *   1. **OVERRIDE** — Modalità 3 «In cosa puoi lavorare oltre la classe»: una parola
- *      chiave trovata nel testo dell'avviso **assegna d'ufficio** il voto e blocca ogni
- *      altro calcolo (90 parola chiave piena · 85 match vicino). La PROVINCIA resta la
- *      sola condizione: fuori dal raggio l'avviso è escluso;
- *   2. **MEDIA PONDERATA** — Modalità 1 · 2 · 4 quando la Modale 3 non aggancia nulla:
+ *   1. **LIVELLO PRIMARIO** — le preferenze dichiarate (ordine, classi, provincia) fanno il
+ *      match e il voto: `mediaPonderata` delle modali APPLICABILI (`mediaModali.ts`), e una
+ *      modale senza dati dell'utente ESCE dalla media (non azzera l'offerta per un dato assente).
+ *   2. **LIVELLO SECONDARIO** — le competenze del profilo (`materie_id`, `materie_custom`)
+ *      NON assegnano il voto e NON entrano nella media: le interpreta il **JOLLY SEMANTICO**
+ *      (`jollySemantico.ts`, §26.64), ASIMMETRICO. Match PIENO → `PUNTEGGIO_JOLLY_PIENO` (90)
+ *      come PAVIMENTO del voto; fuori dalle proprie province, inclusione D'UFFICIO a 60 invece
+ *      dell'esclusione. Match PARZIALE → bonus dentro `BONUS_JOLLY_PARZIALE` (15). Nessun
+ *      match → zero punti e ZERO PENALIZZAZIONI. Il jolly è SOSPESO con la whitelist (§26.45),
+ *      col tetto del motore (profilo senza classi) e col pavimento del sostegno: lì vale la
+ *      §26.63, la sfumatura di al più `CAP_COMPETENZE`.
  *
- *        punteggio = media PONDERATA(ordine · classe · provincia) + jolly
- *                    └─ pesi e formula in `mediaModali.ts` ─┘
- *
- * Le MODALI sono le cinque finestre delle preferenze dell'utente:
- *   · «Dove vuoi lavorare» (ordine)            → 100 / 90 (adiacente) / 70 (salto)
- *   · «Classi di concorso»                     → 100 / 95 (affine) / 85 / 75 / 65 / 55
- *   · «Oltre la classe» (parole chiave)        → **OVERRIDE** 90 / 85, jolly +3%
- *   · «Provincia»                              → 100 / penalità entro 60 km / ESCLUSIONE
- *   · «Filtri Avanzati Scuole»                 → blacklist fuori, whitelist dentro
- *
- * Una modale NON applicabile (nessun ordine scelto, nessuna classe, nessuna parola
- * chiave trovata, nessuna provincia) **esce dalla media**: non azzera l'offerta per un
- * dato che l'utente non ha dichiarato. Due invarianti:
- *
- *   1. **Il pavimento del sostegno non si sconta**: l'area SOSTEGNO fuori dalle proprie
- *      classi resta a `PUNTEGGIO_EXTRA_SOSTEGNO` (60) — è un suggerimento EXTRA a
- *      inclusione permanente (§26.45), non un match: l'override delle parole chiave non
- *      lo promuove;
- *   2. **La consegna non passa di qui**: email/Telegram e digest usano il motore STRICT
- *      (`provinceLimitrofe` è un'opzione della sola bacheca): non cambia cosa arriva
- *      all'utente, cambia come si presenta.
+ * Due invarianti: il pavimento del sostegno non si sconta (suggerimento EXTRA a inclusione
+ * permanente: né le competenze né il jolly lo promuovono); la CONSEGNA (email/Telegram,
+ * digest) non passa di qui — usa il motore STRICT, perché `provinceLimitrofe` è della bacheca.
  */
 import type { OrdineScuola } from '../data/ordiniMaterie';
 import {
+  esitoJollySemantico,
+  motivoJolly,
+  punteggioConJolly,
+  secondarioDaDichiarare,
+} from './jollySemantico';
+import {
   PUNTEGGIO_EXTRA_SOSTEGNO,
   PUNTEGGIO_MATCH_NESSUNO,
+  PUNTEGGIO_MATCH_SECONDARIO,
   punteggioCompatibilita,
   type AvvisoCompatibilita,
   type OpzioniCompatibilita,
   type ProfiloCompatibilita,
 } from './matchingEngine';
 import { mediaPonderata, PESI_MODALI, type ContributoModale } from './mediaModali';
-import { INCREMENTO_JOLLY, punteggioCompetenze, type OverrideModale3 } from './punteggioCompetenze';
+import { punteggioCompetenze } from './punteggioCompetenze';
 import { punteggioClasse } from './punteggioClasse';
 import { punteggioOrdine } from './punteggioOrdine';
 import { punteggioProvincia } from './prossimitaGeografica';
@@ -67,18 +61,16 @@ export interface OpzioniModali extends OpzioniCompatibilita {
 export interface PunteggiModali {
   ordine: number | null;
   classe: number | null;
-  /** Modalità 3: voto dell'override (90/85) o `null` se la parola chiave non aggancia. */
+  /** LIVELLO SECONDARIO (§26.63): punti sfumati dalle competenze (0-25), `null` se nessuna. */
   competenze: number | null;
   provincia: number | null;
-  /** Quante volte il jolly del 3% ha sfumato il punteggio finale. */
-  incrementiJolly: number;
-  /** Somma dei PESI delle modali applicabili: denominatore della media (0 = voto d'ufficio). */
+  /** Somma dei PESI delle modali primarie applicabili: denominatore della media ponderata. */
   pesoTotale: number;
 }
 
 /** Esito completo della valutazione: numero mostrato, base del motore, motivi. */
 export interface ValutazioneCompatibilita {
-  /** Punteggio MOSTRATO (0-100): voto d'ufficio dell'override, oppure media delle modali + jolly. */
+  /** Punteggio MOSTRATO (0-100): media ponderata primaria + sfumatura delle competenze (§26.63). */
   punteggio: number;
   /** Punteggio del motore, prima delle modali (consegna/diagnostica). */
   punteggioMotore: number;
@@ -90,13 +82,33 @@ export interface ValutazioneCompatibilita {
   escluso: boolean;
   /** true = incluso d'ufficio dalla whitelist scuole (Modalità 5). */
   forzata: boolean;
-  /** Dettaglio per modale: serve alle guardie e al tooltip. */
-  modali: PunteggiModali;
   /**
-   * OVERRIDE della Modalità 3: presente SOLO quando il voto non è una media ma un VOTO
-   * ASSEGNATO d'ufficio da una parola chiave (90 parola chiave piena · 85 match vicino).
+   * LIVELLO SECONDARIO (§26.63): la competenza del profilo riconosciuta nel testo, coi punti
+   * che ha sfumato (`null` = nessuna competenza trovata: il voto è tutto delle preferenze
+   * primarie). La bacheca la porta sulla card (`Interpello.competenzaSecondaria`).
    */
-  override?: OverrideModale3;
+  competenzaSecondaria: CompetenzaSecondaria | null;
+  /**
+   * JOLLY SEMANTICO (§26.64): la competenza della Modalità 3 riconosciuta PER INTERO, che ha
+   * garantito il pavimento d'eccellenza — o l'ingresso d'ufficio fuori dalle proprie province
+   * (`null` = nessun match pieno: parziale o assente, e in quei casi il jolly non toglie nulla).
+   * La bacheca la porta sulla card (`Interpello.jollySemantico`).
+   */
+  jollySemantico: string | null;
+  /** Dettaglio delle modali PRIMARIE e del livello secondario: guardie e tooltip. */
+  modali: PunteggiModali;
+}
+
+/**
+ * Competenza del profilo riconosciuta nell'avviso: la sfumatura del livello SECONDARIO
+ * (§26.63). NON è un voto — il voto resta della media ponderata delle primarie — ma va
+ * DICHIARATA: altrimenti il punteggio più alto sembrerebbe casuale.
+ */
+export interface CompetenzaSecondaria {
+  /** Testo della competenza del profilo (o parola chiave personale) riconosciuta nell'avviso. */
+  etichetta: string;
+  /** Punti che ha aggiunto al punteggio primario (1 … `CAP_COMPETENZE`). */
+  punteggio: number;
 }
 
 const MODALI_VUOTE: PunteggiModali = {
@@ -104,32 +116,24 @@ const MODALI_VUOTE: PunteggiModali = {
   classe: null,
   competenze: null,
   provincia: null,
-  incrementiJolly: 0,
   pesoTotale: 0,
 };
-
 
 /** Contributo di una modale (`null` = non applicabile: resta fuori dalla media). */
 function contributo(punteggio: number | null | undefined, peso: number): ContributoModale | null {
   return typeof punteggio === 'number' ? { punteggio, peso } : null;
 }
 
-/** Riga del tooltip che dichiara la media ponderata (e la sfumatura jolly, se c'è). */
-function composizioneMotivo(modali: number, incrementiJolly: number): string {
-  const jolly = incrementiJolly > 0 ? ` + jolly ${incrementiJolly * INCREMENTO_JOLLY}%` : '';
-  return `media ponderata di ${modali} modali${jolly}`;
-}
-
-/** Riga del tooltip che dichiara il VOTO ASSEGNATO dalla Modalità 3 (override). */
-function motivoOverride(override: OverrideModale3): string {
-  const tipo = override.grado === 'esatta' ? 'parola chiave piena' : 'match vicino';
-  return `voto assegnato d'ufficio ${override.punteggio}% (Modale 3: ${tipo})`;
+/** Riga del tooltip che dichiara la media ponderata delle preferenze PRIMARIE. */
+function composizioneMotivo(modali: number): string {
+  return `media ponderata di ${modali} modali`;
 }
 
 /**
- * Valuta la compatibilità di un'opportunità col profilo dell'utente (bacheca):
- * **OVERRIDE** della Modalità 3 (parole chiave: voto assegnato d'ufficio 90/85) oppure
- * **MEDIA PONDERATA** delle modali applicabili (`mediaModali.ts`) + incrementi jolly.
+ * Valuta la compatibilità di un'opportunità col profilo dell'utente (bacheca), in DUE
+ * LIVELLI (§26.63): **MEDIA PONDERATA** delle preferenze primarie applicabili
+ * (`mediaModali.ts`: ordine · classe · provincia) **+ la sfumatura delle competenze**, che
+ * aggiunge al massimo `CAP_COMPETENZE` punti e non assegna mai il voto.
  *
  * `opts.provinceLimitrofe` abilita la ricerca delle province entro il raggio (60
  * km) con la relativa penalità; senza di essa la compatibilità resta STRICT sulle
@@ -147,8 +151,19 @@ export function valutaCompatibilita(
   });
   const forzata = opts.forzata === true;
 
-  // FUORI DAL RAGGIO (Modalità 4): esclusione d'ufficio, salvo whitelist.
-  if (geo.stato === 'fuori' && !forzata) {
+  // ── JOLLY SEMANTICO (Modalità 3, §26.64) — PRIMA del vaglio geografico ─────
+  // Il match PIENO non alza solo il voto: fa entrare l'avviso d'ufficio fuori dalle proprie
+  // province (i vincoli geografici SECONDARI non escludono più). Whitelist, tetto del motore e
+  // pavimento del sostegno lo sospendono, e lì vale la §26.63: una sola misura, due decisioni.
+  const jolly = esitoJollySemantico(profilo, avviso, {
+    statoGeo: geo.stato,
+    forzata,
+    tettoMotore: punteggioMotore === PUNTEGGIO_MATCH_SECONDARIO,
+    sostegno: punteggioMotore === PUNTEGGIO_EXTRA_SOSTEGNO,
+  });
+
+  // FUORI DAL RAGGIO (Modalità 4): esclusione d'ufficio, salvo whitelist o match PIENO.
+  if (geo.stato === 'fuori' && !forzata && !jolly.bypassRaggio) {
     return {
       punteggio: PUNTEGGIO_MATCH_NESSUNO,
       punteggioMotore,
@@ -156,6 +171,8 @@ export function valutaCompatibilita(
       motivi: [geo.motivo],
       escluso: true,
       forzata: false,
+      competenzaSecondaria: null,
+      jollySemantico: null,
       modali: { ...MODALI_VUOTE },
     };
   }
@@ -169,6 +186,8 @@ export function valutaCompatibilita(
       motivi: [],
       escluso: false,
       forzata,
+      competenzaSecondaria: null,
+      jollySemantico: null,
       modali: { ...MODALI_VUOTE },
     };
   }
@@ -178,35 +197,9 @@ export function valutaCompatibilita(
   const competenze = punteggioCompetenze(profilo, avviso);
   const provincia = geo.stato === 'propria' || geo.stato === 'vicina' ? geo.punteggio : null;
 
-  // ── MODALITÀ 3 — OVERRIDE AD ALTA PRIORITÀ (parole chiave) ────────────────
-  // Una parola chiave trovata NON entra nella media: **assegna d'ufficio** il voto
-  // (90 piena · 85 vicina) e blocca gli altri calcoli — voto fisso, nessun jolly. La
-  // provincia è già stata verificata sopra: entro il raggio passa anche penalizzata,
-  // oltre il raggio ha vinto l'esclusione d'ufficio.
-  if (competenze.override) {
-    const { override } = competenze;
-    return {
-      punteggio: override.punteggio,
-      punteggioMotore,
-      penalita: Math.max(0, punteggioMotore - override.punteggio),
-      motivi: [...competenze.motivi, motivoOverride(override)],
-      escluso: false,
-      forzata,
-      override,
-      modali: {
-        ordine: ordine?.punteggio ?? null,
-        classe: classe?.punteggio ?? null,
-        competenze: override.punteggio,
-        provincia,
-        incrementiJolly: 0,
-        pesoTotale: 0,
-      },
-    };
-  }
-
-  // ── MEDIA PONDERATA (Modalità 1 · 2 · 4) + JOLLY ──────────────────────────
-  // Solo le modali APPLICABILI entrano nella media, coi loro PESI: una modale senza dati
-  // dell'utente non abbassa il voto (pesi rinormalizzati), ma non lo alza nemmeno.
+  // ── LIVELLO PRIMARIO — MEDIA PONDERATA (Modalità 1 · 2 · 4) ───────────────
+  // Solo le preferenze APPLICABILI entrano nella media, coi loro PESI: una modale senza
+  // dati dell'utente non abbassa il voto (pesi rinormalizzati), ma non lo alza nemmeno.
   const contributi = [
     contributo(ordine?.punteggio, PESI_MODALI.ordine),
     contributo(classe?.punteggio, PESI_MODALI.classe),
@@ -214,13 +207,22 @@ export function valutaCompatibilita(
   ].filter((c): c is ContributoModale => c !== null);
   const pesoTotale = contributi.reduce((totale, c) => totale + c.peso, 0);
   const base = mediaPonderata(contributi);
-  const punteggio = base === 0 ? 0 : Math.min(100, base + competenze.incrementi * INCREMENTO_JOLLY);
+
+  // ── LIVELLO SECONDARIO — SFUMATURA DELLE COMPETENZE (§26.63) ──────────────
+  // Non entrano nella media e non assegnano il voto: misurano al più `CAP_COMPETENZE` punti.
+  // Col profilo senza classi il verdetto del motore è il tetto dell'intero punteggio.
+  const tetto = punteggioMotore === PUNTEGGIO_MATCH_SECONDARIO ? PUNTEGGIO_MATCH_SECONDARIO : 100;
+  const secondario = Math.min(tetto, base + competenze.punteggio);
+  // Il jolly rilegge la somma dei due livelli: il PIENO mette il pavimento, il PARZIALE lo stringe.
+  const punteggio = punteggioConJolly(jolly, base, secondario);
   const motivi = [
     ordine?.motivo,
     classe?.motivo,
-    ...competenze.motivi,
+    // §26.63: la misura si dichiara se i suoi punti sono stati applicati (il PIENO aggiunge).
+    ...(jolly.fascia === 'parziale' && jolly.bonus < jolly.punti ? motivoJolly(jolly) : competenze.motivi),
     geo.stato === 'vicina' ? geo.motivo : null,
-    composizioneMotivo(contributi.length, competenze.incrementi),
+    ...(jolly.fascia === 'pieno' ? motivoJolly(jolly) : []),
+    composizioneMotivo(contributi.length),
   ].filter((m): m is string => Boolean(m));
 
   return {
@@ -230,12 +232,14 @@ export function valutaCompatibilita(
     motivi,
     escluso: false,
     forzata,
+    // LIVELLO SECONDARIO (§26.63) e JOLLY SEMANTICO (§26.64): cosa dichiarare del secondo livello.
+    competenzaSecondaria: secondarioDaDichiarare(jolly, competenze),
+    jollySemantico: jolly.fascia === 'pieno' ? jolly.etichetta : null,
     modali: {
       ordine: ordine?.punteggio ?? null,
       classe: classe?.punteggio ?? null,
-      competenze: null,
+      competenze: competenze.punteggio > 0 ? competenze.punteggio : null,
       provincia,
-      incrementiJolly: competenze.incrementi,
       pesoTotale,
     },
   };

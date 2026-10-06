@@ -1,38 +1,53 @@
 /**
- * ScuoleRadar.it — MODALITÀ 3 «In cosa puoi lavorare oltre la classe» (parole
- * chiave/competenze), modulo PURO.
+ * ScuoleRadar.it — LIVELLO SECONDARIO del punteggio: le competenze e le parole chiave
+ * del profilo trovate nel testo dell'avviso («In cosa puoi lavorare oltre la classe»,
+ * Modalità 3), modulo PURO.
  *
- *   · parola chiave TROVATA nel testo dell'avviso          → 90% (OVERRIDE:
- *     il voto è ASSEGNATO d'ufficio, non mediato);
- *   · match SEMANTICO VICINO (alcuni token della parola
- *     chiave, es. «Didattica multimediale»)                → 85% (OVERRIDE);
- *   · RUOLO JOLLY: **se non c'è alcuna corrispondenza la modale esce dal calcolo
- *     della media** (non azzera l'offerta); se invece ci sono corrispondenze
- *     parziali o parole chiave RICONDUCIBILI (stessa area disciplinare o ponte
- *     curato), ognuna vale **+3%** sul punteggio MEDIATO dalle altre modali.
+ * IL PUNTEGGIO HA DUE LIVELLI (§26.63):
  *
- * L'OVERRIDE è la regola ad ALTA PRIORITÀ della Modalità 3: quando scatta (90 o
- * 85) il voto finale è quello, qualunque cosa dicano ordine di scuola, classi e
- * distanza. La PROVINCIA resta l'unica condizione (fuori dal raggio l'avviso è
- * escluso d'ufficio). Il perimetro resta quello dichiarato: un match va provato
- * dai TOKEN del testo o dalle aree disciplinari, mai da un giudizio a caso.
+ *   1. **PRIMARIO (100%)** — le preferenze DICHIARATE: ordine di scuola, classi di
+ *      concorso, provincia. È l'unico livello che FA il match, e vive altrove
+ *      (`compatibilitaGraduata.ts`, media ponderata di `mediaModali.ts`);
+ *   2. **SECONDARIO (max 25%)** — le competenze: `materie_id` del catalogo (anche
+ *      inferite da PNRR/PON) e parole chiave libere (`materie_custom`). NON assegna il
+ *      voto: sfuma quello del livello primario di al massimo `CAP_COMPETENZE` punti.
  *
- * La sfumatura del 3% è DETERMINISTICA (dipende dalle corrispondenze trovate, non
- * dal caso): un punteggio casuale non sarebbe né spiegabile all'utente né
- * verificabile da una guardia. Il «jolly» resta quindi: esclusione dalla media
- * quando non c'è nulla da dire, incremento misurabile quando c'è.
+ * L'OVERRIDE della Modalità 3 (90 parola chiave piena · 85 match vicino, §26.58) NON
+ * esiste più: una competenza trovata non può da sola portare il voto al livello del
+ * match, e nemmeno aprire la porta della bacheca — nessun avviso «in Radar» per una
+ * parola chiave, nessun avviso di una classe lontana promosso da un tag.
+ *
+ * Gradi del match (il PIÙ FORTE vince):
+ *   · `esatta`        → TUTTI i token significativi della competenza sono nel testo → 25;
+ *   · `vicina`        → alcuni token (match semantico vicino)                        → 20;
+ *   · `riconducibile` → stessa area disciplinare o ponte curato fra le aree          → 10.
+ * Ogni corrispondenza AGGIUNTIVA vale `INCREMENTO_JOLLY` (3) punti in più, sempre DENTRO
+ * il tetto: la sfumatura è DETERMINISTICA (dipende dalle corrispondenze trovate, non dal
+ * caso) e quindi spiegabile all'utente e verificabile da una guardia. Se non c'è alcuna
+ * corrispondenza il livello secondario non ha nulla da dire e non altera il punteggio.
+ *
+ * Il perimetro resta quello dichiarato: un match va provato dai TOKEN del testo o dalle
+ * aree disciplinari, mai da un giudizio a caso. Nessuna provenienza speciale: competenze
+ * di catalogo e parole chiave libere valgono allo stesso modo.
  */
 import { areeDi, areeInComune, ponteTraAree } from './areeDisciplinari';
 import { etichetteCompetenzeProfilo, tokenCompetenza } from './matchingEngine';
 
-/** Parola chiave presente nell'avviso con TUTTI i suoi token significativi. */
-export const PUNTEGGIO_KEYWORD_ESATTA = 90;
-/** Parola chiave riconosciuta solo in parte (match semantico vicino). */
-export const PUNTEGGIO_KEYWORD_VICINA = 85;
-/** Incremento (punti %) per ogni corrispondenza parziale o riconducibile. */
+/**
+ * TETTO del livello SECONDARIO (punti %): le competenze non pesano più di così. È lo
+ * stesso numero del motore quando il profilo non ha classi (`PUNTEGGIO_MATCH_SECONDARIO`,
+ * `matchingEngine.ts`): il secondo livello da solo non raggiunge mai il match pieno —
+ * guardia `npm run test:scoring`.
+ */
+export const CAP_COMPETENZE = 25;
+/** Competenza del profilo presente nell'avviso con TUTTI i suoi token significativi. */
+export const PUNTEGGIO_COMPETENZA_ESATTA = CAP_COMPETENZE;
+/** Competenza riconosciuta solo in parte (match semantico vicino). */
+export const PUNTEGGIO_COMPETENZA_VICINA = 20;
+/** Stessa area disciplinare o ponte curato fra le aree. */
+export const PUNTEGGIO_COMPETENZA_RICONDUCIBILE = 10;
+/** Punti aggiunti per ogni corrispondenza AGGIUNTIVA, sempre dentro `CAP_COMPETENZE`. */
 export const INCREMENTO_JOLLY = 3;
-/** Massimo numero di incrementi jolly (→ +9%: mai una promozione arbitraria). */
-export const JOLLY_MASSIMO = 3;
 
 /** Profilo minimo per la modale (parole chiave e competenze dichiarate). */
 export interface ProfiloCompetenze {
@@ -46,37 +61,35 @@ export interface AvvisoCompetenze {
   titolo?: string | null;
 }
 
-/** Esito della modale: OVERRIDE del voto (o niente) + incrementi jolly + motivi. */
+/**
+ * Esito del livello SECONDARIO (§26.63): punti sfumati, competenza riconosciuta, grado.
+ * `punteggio: 0` = nessuna competenza del profilo nel testo: il livello secondario non ha
+ * nulla da dire e non altera il voto del livello primario.
+ */
 export interface EsitoCompetenze {
   /**
-   * Voto ASSEGNATO d'ufficio — 90 (parola chiave piena) o 85 (match vicino) — con
-   * la parola chiave che l'ha assegnato. `null` = la modale non aggancia nulla:
-   * resta il ruolo JOLLY (esce dalla media e non altera il totale).
+   * Punti da aggiungere al punteggio del livello PRIMARIO (0 … `CAP_COMPETENZE`). Non è mai
+   * un voto: è una sfumatura, misurata dal grado del match + `INCREMENTO_JOLLY` per ogni
+   * corrispondenza aggiuntiva, sempre dentro il tetto.
    */
-  override: OverrideModale3 | null;
-  /** Incrementi del 3% da sommare al punteggio MEDIATO (0 … `JOLLY_MASSIMO`). */
+  punteggio: number;
+  /** La competenza del profilo riconosciuta nell'avviso (`null` = nessuna). */
+  competenza: string | null;
+  /** Grado del match prevalente (`null` = nessuna corrispondenza). */
+  grado: GradoCompetenza | null;
+  /** Corrispondenze AGGIUNTIVE contate oltre la prevalente (0 = una sola). */
   incrementi: number;
-  /** Motivi leggibili (parola chiave riconosciuta, ponte, conteggi). */
+  /** Motivi leggibili (competenza riconosciuta, ponte, conteggi, tetto). */
   motivi: string[];
 }
 
-/** Voto ASSEGNATO d'ufficio dalla Modale 3 «parole chiave»: nessuna media. */
-export interface OverrideModale3 {
-  /** `esatta` = nella parola chiave è stato trovato TUTTO il testo · `vicina` = match parziale. */
-  grado: 'esatta' | 'vicina';
-  /** La parola chiave del profilo che ha assegnato il voto. */
-  parolaChiave: string;
-  /** Voto d'ufficio (90 | 85). */
-  punteggio: number;
-}
+/** Grado di un match fra una competenza del profilo e il testo dell'avviso. */
+export type GradoCompetenza = 'esatta' | 'vicina' | 'riconducibile';
 
-/** Grado di un match fra una parola chiave del profilo e il testo dell'avviso. */
-type Grado = 'esatta' | 'vicina' | 'riconducibile';
-
-/** Match di UNA parola chiave del profilo col testo dell'avviso. */
+/** Match di UNA competenza del profilo col testo dell'avviso. */
 interface MatchKeyword {
   keyword: string;
-  grado: Grado;
+  grado: GradoCompetenza;
   dettaglio: string;
 }
 
@@ -108,60 +121,79 @@ function valutaKeyword(
 
 /** Match più FORTE fra quelli trovati (esatta → vicina → riconducibile). */
 function matchPrevalente(matches: readonly MatchKeyword[]): MatchKeyword {
-  const ordine: Grado[] = ['esatta', 'vicina', 'riconducibile'];
+  const ordine: GradoCompetenza[] = ['esatta', 'vicina', 'riconducibile'];
   return [...matches].sort(
     (a, b) =>
       ordine.indexOf(a.grado) - ordine.indexOf(b.grado) || a.keyword.localeCompare(b.keyword),
   )[0];
 }
 
-/** Motivo leggibile del match (le altre frasi restano nel conteggio). */
+/** Motivo leggibile del match (le altre corrispondenze restano nel conteggio). */
 function motivoDi(match: MatchKeyword): string {
-  if (match.grado === 'esatta') return `parola chiave: ${match.keyword}`;
+  if (match.grado === 'esatta') return `competenza: ${match.keyword}`;
   if (match.grado === 'vicina') {
-    return `parola chiave vicina: «${match.keyword}» (${match.dettaglio})`;
+    return `competenza vicina: «${match.keyword}» (${match.dettaglio})`;
   }
-  return `parola chiave riconducibile: «${match.keyword}» (${match.dettaglio})`;
+  return `competenza riconducibile: «${match.keyword}» (${match.dettaglio})`;
+}
+
+/** Punti del grado di un match (il tetto resta `CAP_COMPETENZE`). */
+function punteggioGrado(grado: GradoCompetenza): number {
+  if (grado === 'esatta') return PUNTEGGIO_COMPETENZA_ESATTA;
+  if (grado === 'vicina') return PUNTEGGIO_COMPETENZA_VICINA;
+  return PUNTEGGIO_COMPETENZA_RICONDUCIBILE;
 }
 
 /**
- * Punteggio della modale «Parole chiave» (Modalità 3): `override` presente = voto
- * ASSEGNATO d'ufficio (90 parola chiave piena · 85 match vicino) con la parola che
- * l'ha assegnato; `override: null` = ruolo JOLLY (la modale esce dalla media;
- * `incrementi` sfuma il voto mediato).
+ * LIVELLO SECONDARIO (§26.63) di un avviso rispetto al profilo: `punteggio` = punti da
+ * aggiungere al punteggio del livello PRIMARIO, sempre dentro `CAP_COMPETENZE`. Non assegna
+ * mai il voto, che resta del livello primario (`valutaCompatibilita`, `compatibilitaGraduata.ts`).
+ *
+ * `punteggio: 0` = nessuna competenza/parola chiave del profilo compare nel testo: il livello
+ * secondario non altera il voto. Altrimenti vale il grado del match PIÙ FORTE (`esatta` 25 ·
+ * `vicina` 20 · `riconducibile` 10) più `INCREMENTO_JOLLY` per ogni corrispondenza AGGIUNTIVA,
+ * con il tetto che resta fermo.
  */
 export function punteggioCompetenze(
   profilo: ProfiloCompetenze,
   avviso: AvvisoCompetenze,
 ): EsitoCompetenze {
-  const paroleChiave = etichetteCompetenzeProfilo(profilo);
-  const nessuno: EsitoCompetenze = { override: null, incrementi: 0, motivi: [] };
-  if (paroleChiave.length === 0) return nessuno;
+  const competenze = etichetteCompetenzeProfilo(profilo);
+  const nessuno: EsitoCompetenze = {
+    punteggio: 0,
+    competenza: null,
+    grado: null,
+    incrementi: 0,
+    motivi: [],
+  };
+  if (competenze.length === 0) return nessuno;
   const testoAvviso = `${avviso.materia ?? ''} ${avviso.titolo ?? ''}`;
   const tokenAvviso = new Set(tokenCompetenza(testoAvviso));
   const areeAvviso = areeDi(testoAvviso);
-  const matches = paroleChiave
+  const matches = competenze
     .map((k) => valutaKeyword(k, tokenAvviso, areeAvviso))
     .filter((m): m is MatchKeyword => m !== null);
   if (matches.length === 0) return nessuno;
 
   const prevalente = matchPrevalente(matches);
-  const esatte = matches.filter((m) => m.grado === 'esatta').length;
-  const vicini = matches.filter((m) => m.grado === 'vicina').length;
-  const riconducibili = matches.filter((m) => m.grado === 'riconducibile').length;
-  const motivi = [motivoDi(prevalente)];
-  if (matches.length > 1) motivi.push(`${matches.length} parole chiave riconosciute`);
-  // Un match solo «riconducibile» non assegna il voto: è materia del jolly.
-  const override: OverrideModale3 | null =
-    esatte > 0
-      ? { grado: 'esatta', parolaChiave: prevalente.keyword, punteggio: PUNTEGGIO_KEYWORD_ESATTA }
-      : vicini > 0
-        ? { grado: 'vicina', parolaChiave: prevalente.keyword, punteggio: PUNTEGGIO_KEYWORD_VICINA }
-        : null;
+  // Ogni corrispondenza OLTRE la prevalente sfuma di `INCREMENTO_JOLLY` punti: il totale
+  // resta DENTRO il tetto del livello secondario (mai una promozione arbitraria).
+  const incrementi = matches.length - 1;
+  const punteggio = Math.min(
+    CAP_COMPETENZE,
+    punteggioGrado(prevalente.grado) + incrementi * INCREMENTO_JOLLY,
+  );
+  const motivi = [
+    motivoDi(prevalente),
+    matches.length > 1 ? `${matches.length} competenze riconosciute` : null,
+    `livello secondario: +${punteggio} punti (tetto ${CAP_COMPETENZE}%)`,
+  ].filter((m): m is string => m !== null);
 
   return {
-    override,
-    incrementi: Math.min(Math.max(0, esatte - 1) + vicini + riconducibili, JOLLY_MASSIMO),
+    punteggio,
+    competenza: prevalente.keyword,
+    grado: prevalente.grado,
+    incrementi,
     motivi,
   };
 }

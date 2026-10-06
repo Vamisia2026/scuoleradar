@@ -5,12 +5,16 @@
  * altrimenti feed VUOTO — nessun dato dimostrativo) e lascia alla bacheca pura
  * (`src/lib/bachecaInterpelli.ts`) il filtro del profilo e il punteggio.
  *
- * LE 5 MODALI DEL RADAR (§26.56): ordine di scuola, classi di concorso, parole
- * chiave, provincia (raggio 60 km) e filtri scuole. La ricerca allarga le province
- * al raggio (`provinceDiRicerca`), il punteggio è la media delle modali applicabili
- * con il jolly del 3% (`valutaCompatibilita`) e le scuole preferite entrano
- * d'ufficio. La CONSEGNA non passa di qui: notifiche e digest restano strict
- * (§26.45).
+ * IL PUNTEGGIO HA DUE LIVELLI (§26.63). Le preferenze PRIMARIE — ordine di scuola,
+ * classi di concorso (peso 2), provincia (raggio 60 km) — fanno il match, il voto
+ * (media ponderata, `src/lib/mediaModali.ts`) e la PORTA D'INGRESSO della bacheca;
+ * competenze e parole chiave libere sono un livello SECONDARIO che **sfuma** soltanto
+ * il voto, dentro il tetto `CAP_COMPETENZE` (25 punti): non aprono la bacheca e non
+ * promuovono un avviso sotto soglia. Il jolly in percentuale della «Modalità 3» è
+ * RITIRATO (nessun override d'ufficio). La ricerca allarga le province al raggio
+ * (`provinceDiRicerca`), le scuole preferite entrano d'ufficio e il voto arriva da
+ * `valutaCompatibilita` (`src/lib/compatibilitaGraduata.ts`). La CONSEGNA non passa
+ * di qui: notifiche e digest restano strict (§26.45).
  *
  * `loading` resta nel provider: lo usano gli effetti di bootstrap del profilo.
  */
@@ -30,7 +34,7 @@ export interface FeedInterpelli {
   fontiInterpelli: Interpello[];
   /** Origine degli avvisi mostrati. */
   origineDati: 'vuoto' | 'supabase';
-  /** Avvisi del feed filtrati con le regole del profilo e delle 5 modali. */
+  /** Avvisi del feed filtrati con le regole del profilo: porta d'ingresso primaria e voto a due livelli (§26.63). */
   interpelliFiltrati: Interpello[];
 }
 
@@ -126,7 +130,7 @@ export function useInterpelliFeed(
 
   const interpelliFiltrati = useMemo<Interpello[]>(() => {
     if (!preferenze.onboarded) return [];
-    // BACHECA (pura): pertinenza, punteggio delle 5 modali, whitelist/blacklist
+    // BACHECA (pura): porta d'ingresso PRIMARIA, voto a due livelli (§26.63), whitelist/blacklist
     // scuole e cap dinamico dei riempitivi vivono in un solo modulo testabile.
     return bachecaInterpelli(fontiInterpelli, {
       ordini: preferenze.ordini,

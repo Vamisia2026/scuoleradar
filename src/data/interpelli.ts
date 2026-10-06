@@ -70,12 +70,23 @@ export interface Interpello {
    */
   scuolaPreferita?: boolean;
   /**
-   * PAROLA CHIAVE del profilo che ha ASSEGNATO il voto (Modalità 3, OVERRIDE): presente
-   * SOLO quando `compatibilita` non è una media ponderata ma un voto d'ufficio — 90%
-   * (parola chiave piena) o 85% (match vicino, `src/lib/punteggioCompetenze.ts`). La card
-   * e il dettaglio lo dichiarano con `ETICHETTA_PAROLA_CHIAVE`: un voto fisso spiegato.
+   * COMPETENZA SECONDARIA (§26.63): la competenza del profilo (`profiles.materie_id`,
+   * `materie_custom`) riconosciuta nel testo dell'avviso, che ha SFUMATO il punteggio
+   * (`src/lib/punteggioCompetenze.ts`, tetto `CAP_COMPETENZE` punti). NON è il voto: il
+   * voto resta delle preferenze primarie (ordine · classe · provincia). Presente SOLO
+   * quando una competenza è stata trovata; card e dettaglio la dichiarano con
+   * `ETICHETTA_COMPETENZA_SECONDARIA`, così la sfumatura è spiegata, mai silenziosa.
    */
-  parolaChiaveVoto?: string | null;
+  competenzaSecondaria?: string | null;
+  /**
+   * JOLLY SEMANTICO (§26.64): la competenza della Modalità 3 riconosciuta PER INTERO nel
+   * testo dell'avviso (`grado = 'esatta'`). Presente solo in quel caso, e allora il punteggio
+   * ha un PAVIMENTO dichiarato: 90 nelle proprie province, 60 con inclusione d'ufficio oltre
+   * il raggio dei 60 km (i vincoli geografici secondari non escludono più). Un match
+   * PARZIALE non compare qui — aggiunge solo un bonus al voto primario — e un'assenza non
+   * toglie nulla. Card e dettaglio la dichiarano con `ETICHETTA_JOLLY_SEMANTICO`.
+   */
+  jollySemantico?: string | null;
 }
 
 /**

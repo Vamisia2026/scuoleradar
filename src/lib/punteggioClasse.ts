@@ -7,7 +7,8 @@
  *   · classe SELEZIONATA (fino a 4 per PRO)     → 100%
  *   · classe AFFINE (condividono una materia
  *     del catalogo: A-22 ↔ A-24)                → 95%
- *   · avviso senza codice, materia coperta      → 90%  (match probabile)
+ *   · avviso senza codice, ma con la materia
+ *     coperta dalle PROPRIE classi              → 90%  (match probabile)
  *   · STESSA AREA disciplinare                  → 85%  (−15)
  *   · AREA AFFINE (ponte curato)                → 75%  (−25)
  *   · area contaminata (es. Letteratura ↔ Teatro)→ 65%  (−35)
@@ -17,9 +18,14 @@
  * finali sono le distanze misurate dalla matrice di `areeDisciplinari.ts`, mai un
  * giudizio a caso. `null` = modale non applicabile (nessuna classe nel profilo):
  * non entra nella media.
+ *
+ * LIVELLO PRIMARIO (§26.63). Questa è l'unica modale di CLASSE e non legge le
+ * competenze del profilo (`profiles.materie_id`/`materie_custom`): quelle sono il
+ * livello SECONDARIO, sfumano il punteggio di al massimo `CAP_COMPETENZE` punti
+ * (`punteggioCompetenze.ts`) e non possono da sole promuovere una classe «estranea»
+ * o aprire la bacheca.
  */
 import { classeByCodice } from '../data/classiConcorso';
-import { materie as catalogoMaterie } from '../data/ordiniMaterie';
 import { areeDi, areeInComune, ponteTraAree } from './areeDisciplinari';
 import { materiaCompatibileConClassi, normalizzaClassi } from './matchingEngine';
 
@@ -38,11 +44,14 @@ export const PENALITA_CLASSE_PONTE_CONTAMINATA = 35;
 /** Penalità (punti %) di una classe senza alcun rapporto disciplinare. */
 export const PENALITA_CLASSE_ESTRANEA = 45;
 
-/** Profilo minimo per la modale (struttura compatibile con `ProfiloCompatibilita`). */
+/**
+ * Profilo minimo per la modale PRIMARIA: SOLO le classi di concorso dell'utente.
+ * Le competenze dichiarate (`profiles.materie_id`/`materie_custom`) vivono nel livello
+ * secondario (`punteggioCompetenze.ts`) e non possono alterare questo voto (§26.63):
+ * non sono qui apposta, così ogni uso improprio è un errore di compilazione.
+ */
 export interface ProfiloClasse {
   classi?: readonly string[] | null;
-  /** Competenze del catalogo dichiarate dall'utente (`profiles.materie_id`). */
-  materieId?: readonly string[] | null;
 }
 
 /** Avviso minimo per la modale (struttura compatibile con `AvvisoCompatibilita`). */
@@ -88,29 +97,9 @@ function testoClassi(classi: readonly string[]): string {
 }
 
 /**
- * Competenze DICHIARATE presenti fra le materie delle classi di un avviso
- * (catalogo: `profiles.materie_id` ↔ `classi.materie`). Copre gli avvisi che
- * citano una classe (es. A-24) diversa dalle proprie ma che insegna una materia
- * in cui l'utente ha dichiarato di poter lavorare: senza questo confronto
- * l'opportunità sparirebbe dal feed.
- */
-function competenzeNellaClasse(
-  materieId: readonly string[] | null | undefined,
-  classiAvviso: readonly string[],
-): string[] {
-  const mie = new Set((materieId ?? []).filter(Boolean));
-  if (mie.size === 0) return [];
-  const inComune = classiAvviso.flatMap((ca) => materieDi(ca).filter((m) => mie.has(m)));
-  return [...new Set(inComune)]
-    .sort()
-    .map((id) => catalogoMaterie.find((m) => m.id === id)?.nome ?? id);
-}
-
-
-/**
- * Punteggio della modale «Classi di concorso» (Modalità 2) o `null` se il profilo
- * non ha classi. Ordine dei giudizi: esatta → affine → materia coperta →
- * distanza disciplinare (stessa area → ponte → estranea).
+ * Punteggio della modale PRIMARIA «Classi di concorso» (Modalità 2) o `null` se il
+ * profilo non ha classi. Ordine dei giudizi, tutti derivati dalle CLASSI dell'utente:
+ * esatta → affine → materia coperta → distanza disciplinare (stessa area → ponte → estranea).
  */
 export function punteggioClasse(
   profilo: ProfiloClasse,
@@ -143,13 +132,6 @@ export function punteggioClasse(
   }
 
   const testoAvviso = `${avviso.materia ?? ''} ${avviso.titolo ?? ''} ${testoClassi(classiAvviso)}`;
-  const competenze = competenzeNellaClasse(profilo.materieId, classiAvviso);
-  if (competenze.length > 0) {
-    return {
-      punteggio: PUNTEGGIO_CLASSE_PROBABILE,
-      motivo: `tua competenza nella classe dell'avviso: ${competenze.join(', ')}`,
-    };
-  }
   if (classiAvviso.length === 0 && materiaCompatibileConClassi(avviso.materia, classiProfilo)) {
     return {
       punteggio: PUNTEGGIO_CLASSE_PROBABILE,

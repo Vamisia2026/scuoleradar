@@ -648,11 +648,17 @@ export function avvisoCompatibileConProfilo(
 export const PUNTEGGIO_MATCH_NESSUNO = 0;
 /** Area SOSTEGNO senza una classe AD… tra le proprie: suggerimento EXTRA (banda rossa). */
 export const PUNTEGGIO_EXTRA_SOSTEGNO = 60;
-/** Profilo configurato solo su competenze/parole chiave (nessuna classe di concorso). */
-export const PUNTEGGIO_MATCH_POSSIBILE = 70;
+/**
+ * TETTO del livello SECONDARIO (§26.63): profilo configurato solo su competenze/parole
+ * chiave (nessuna classe di concorso). Senza un'aggancio PRIMARIO di classe il punteggio
+ * non può superare questo tetto — mai un match pieno per una competenza trovata nel testo.
+ * È lo stesso numero di `CAP_COMPETENZE` (`src/lib/punteggioCompetenze.ts`): la guardia
+ * `npm run test:scoring` verifica che i due valori restino uguali.
+ */
+export const PUNTEGGIO_MATCH_SECONDARIO = 25;
 /** Avviso senza codice classe, ma con la materia coperta dalle classi del profilo. */
 export const PUNTEGGIO_MATCH_PROBABILE = 80;
-/** Provincia + classe di concorso in comune (o competenza dichiarata nel testo). */
+/** Provincia + classe di concorso in comune: l'unico match pieno (le competenze sfumano). */
 export const PUNTEGGIO_MATCH_ESATTO = 100;
 
 /**
@@ -674,16 +680,18 @@ export function profiloAderisceSostegno(profilo: ProfiloCompatibilita): boolean 
  *
  *   · 0   → non compatibile (`avvisoCompatibileConProfilo` dice no);
  *   · 60  → area SOSTEGNO senza una classe AD… propria: suggerimento EXTRA (rosso);
- *   · 70  → profilo senza classi, aggancio per competenza/parola chiave;
+ *   · 25  → profilo senza classi: TETTO del livello secondario (§26.63), la competenza
+ *           trovata nel testo non è un match primario;
  *   · 80  → avviso senza codice classe ma materia coperta dalle classi del profilo;
  *   · 100 → provincia + classe in comune.
  *
  * È la STESSA regola della consegna: prima `avvisoCompatibileConProfilo` decide
  * `ok`/motivo, poi il punteggio gradua. Nessuna seconda copia dei criteri.
  *
- * Questo è il punteggio BASE (0/60/70/80/100). Il punteggio MOSTRATO in bacheca è
+ * Questo è il punteggio BASE (0/25/60/80/100). Il punteggio MOSTRATO in bacheca è
  * `valutaCompatibilita` (`src/lib/compatibilitaGraduata.ts`), che parte da qui e
- * applica le 5 MODALI (media + jolly: ordine, classi, parole chiave, provincia entro il raggio con `opts.provinceLimitrofe`): consegna e notifiche continuano a usare
+ * applica i DUE LIVELLI (§26.63: media ponderata di ordine · classe · provincia + sfumatura
+ * delle competenze, provincia entro il raggio con `opts.provinceLimitrofe`): consegna e notifiche continuano a usare
  * il base — invariato per costruzione.
  */
 export function punteggioCompatibilita(
@@ -701,7 +709,9 @@ export function punteggioCompatibilita(
   }
 
   const classiProfilo = (profilo.classi ?? []).map(normalizzaClasse).filter(Boolean);
-  if (classiProfilo.length === 0) return PUNTEGGIO_MATCH_POSSIBILE;
+  // Nessuna classe nel profilo: l'aggancio può venire solo dalle competenze/parole chiave,
+  // cioè dal livello SECONDARIO (§26.63). NON è un match primario: resta sotto il tetto.
+  if (classiProfilo.length === 0) return PUNTEGGIO_MATCH_SECONDARIO;
   const classiAvviso = (avviso.classi ?? []).filter(Boolean);
   if (classiAvviso.length > 0) return PUNTEGGIO_MATCH_ESATTO;
   return PUNTEGGIO_MATCH_PROBABILE;

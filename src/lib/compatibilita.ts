@@ -2,15 +2,15 @@
  * ScuoleRadar.it — COMPATIBILITÀ profilo ↔ opportunità: SOGLIE, BANDA CROMATICA e
  * etichette di servizio (modulo PURO, una sola fonte di verità).
  *
- * Il PUNTEGGIO (0-100) nasce dalla media PONDERATA delle 5 MODALI del Radar — dove vuoi
- * lavorare (ordine), classi di concorso, parole chiave, provincia, filtri scuole
- * (`valutaCompatibilita`, `src/lib/compatibilitaGraduata.ts`) — e qui vivono SOLO
- * le soglie e il modo in cui card, modale e qualunque altra superficie traducono
- * quel numero in colore, etichetta e motivo: nessuna copia delle soglie nei
- * componenti.
+ * Il PUNTEGGIO (0-100) nasce dalle PREFERENZE PRIMARIE del Radar — dove vuoi lavorare
+ * (ordine), classi di concorso, provincia, filtri scuole — in media PONDERATA
+ * (`valutaCompatibilita`, `src/lib/compatibilitaGraduata.ts`) SFUMATA dalle competenze del
+ * profilo (§26.63: al massimo `CAP_COMPETENZE` punti); qui vivono SOLO le soglie e il modo
+ * in cui card, modale e qualunque altra superficie traducono quel numero in colore,
+ * etichetta e motivo: nessuna copia delle soglie nei componenti.
  *
  *   🟢 verde    → ≥ 80  match forte col profilo
- *   🟠 arancio  → ≥ 70  match parziale (competenza/parola chiave o materia coperta)
+ *   🟠 arancio  → ≥ 70  match parziale (materia coperta, stessa area disciplinare)
  *   🔴 rosso    → ≥ 60  suggerimento EXTRA (es. area sostegno fuori dalle proprie classi)
  *   ⚪ niente badge → < 60  l'opportunità non si presenta come compatibile
  *
@@ -18,6 +18,8 @@
  * dice quanto l'avviso somiglia al profilo, mai una graduatoria di merito né una
  * fretta artificiale.
  */
+import { CAP_COMPETENZE } from './punteggioCompetenze';
+import { PUNTEGGIO_JOLLY_OLTRE_RAGGIO, PUNTEGGIO_JOLLY_PIENO } from './jollySemantico';
 
 /** Soglia (in %) da cui il badge è ROSSO: suggerimento extra, mai priorità. */
 export const SOGLIA_COMPATIBILITA_ROSSO = 60;
@@ -35,12 +37,22 @@ export const SOGLIA_COMPATIBILITA_VERDE = 80;
 export const ETICHETTA_SCUOLA_PREFERITA = 'Scuola preferita nel radar';
 
 /**
- * Etichetta del VOTO D'UFFICIO della Modalità 3 (override delle parole chiave): quando una
- * parola chiave del profilo compare nel testo dell'avviso il punteggio NON nasce da una
- * media — è assegnato (90 piena · 85 match vicino) — e card e dettaglio lo dichiarano
- * accanto al badge, con `descrizioneParolaChiave`.
+ * Etichetta del LIVELLO SECONDARIO (§26.63): una competenza del profilo compare nel testo
+ * dell'avviso e il punteggio ne è SFUMATO di qualche punto (max `CAP_COMPETENZE`). NON è un
+ * voto d'ufficio — il voto resta della media ponderata delle preferenze primarie (ordine ·
+ * classe · provincia) — e card e dettaglio la dichiarano accanto al badge, con
+ * `descrizioneCompetenzaSecondaria`.
  */
-export const ETICHETTA_PAROLA_CHIAVE = 'Parola chiave trovata';
+export const ETICHETTA_COMPETENZA_SECONDARIA = 'Competenza trovata';
+
+/**
+ * Etichetta del JOLLY SEMANTICO (§26.64): la competenza della Modalità 3 è stata riconosciuta
+ * PER INTERO (`grado = 'esatta'`) e il punteggio ha un PAVIMENTO d'eccellenza — oppure, oltre
+ * il raggio dei 60 km, l'avviso entra D'UFFICIO al pavimento d'inclusione. Sostituisce, quando
+ * presente, l'etichetta della sfumatura: una sola storia da raccontare.
+ */
+export const ETICHETTA_JOLLY_SEMANTICO = 'Interesse pieno';
+
 
 export type LivelloCompatibilita = 'verde' | 'arancio' | 'rosso' | 'sotto-soglia';
 
@@ -100,11 +112,12 @@ export function etichettaCompatibilita(punteggio: number): string {
 /**
  * Banda completa (livello + etichetta + stile + descrizione) di un punteggio.
  *
- * `motivo` (facoltativo) è la sintesi delle MODALI che hanno prodotto quel
- * punteggio — ordine, classe, parole chiave, provincia — misurata da
- * `valutaCompatibilita` (`src/lib/compatibilitaGraduata.ts`) e mostrata nel
- * tooltip della card. Serve a «evidenziare lo scostamento», non a nasconderlo: il
- * numero da solo non direbbe PERCHÉ il match è parziale.
+ * `motivo` (facoltativo) è la sintesi delle PREFERENZE PRIMARIE che hanno prodotto quel
+ * punteggio — ordine, classe, provincia — misurata da `valutaCompatibilita`
+ * (`src/lib/compatibilitaGraduata.ts`) e mostrata nel tooltip della card. Serve a
+ * «evidenziare lo scostamento», non a nasconderlo: il numero da solo non direbbe PERCHÉ il
+ * match è parziale. La sfumatura delle competenze viaggia a parte
+ * (`ETICHETTA_COMPETENZA_SECONDARIA`, §26.63).
  */
 export function bandaCompatibilita(punteggio: number, motivo?: string | null): BandaCompatibilita {
   const p = normalizzaPunteggioCompatibilita(punteggio);
@@ -133,11 +146,28 @@ export function descrizioneScuolaPreferita(punteggio: number): string {
 }
 
 /**
- * Tooltip dell'etichetta della Modalità 3 (override): dice QUALE parola chiave ha
- * assegnato il voto e PERCHÉ il numero è fisso — ordine di scuola, classi di concorso e
- * distanza non entrano nel calcolo.
+ * Tooltip dell'etichetta del livello SECONDARIO (§26.63): dice QUALE competenza del profilo
+ * è stata riconosciuta e quanto può valere — le competenze sfumano il punteggio, al massimo
+ * di `CAP_COMPETENZE` punti, e non assegnano mai il voto.
  */
-export function descrizioneParolaChiave(parolaChiave: string, punteggio: number): string {
+export function descrizioneCompetenzaSecondaria(competenza: string, punteggio: number): string {
   const p = normalizzaPunteggioCompatibilita(punteggio);
-  return `Parola chiave del tuo profilo trovata nell'avviso: «${parolaChiave}». Il voto ${p}% è assegnato d'ufficio dalla Modalità 3: non è una media di ordine, classe e distanza.`;
+  return `Competenza del tuo profilo trovata nell'avviso: «${competenza}». Ha sfumato il punteggio (${p}%) di qualche punto, al massimo ${CAP_COMPETENZE}: il voto resta di ordine di scuola, classi di concorso e distanza.`;
+}
+
+/**
+ * Tooltip dell'etichetta «Interesse pieno» del JOLLY SEMANTICO (§26.64): dice QUALE competenza
+ * della Modalità 3 è stata riconosciuta PER INTERO nell'avviso e cosa comporta — il pavimento
+ * d'eccellenza delle proprie province, oppure l'ingresso D'UFFICIO oltre il raggio dei 60 km.
+ * La geografia resta sovrana sul GRADO del match, non sull'inclusione: l'interesse dichiarato
+ * per intero non si perde per un confine.
+ */
+export function descrizioneJollySemantico(competenza: string, punteggio: number): string {
+  const p = normalizzaPunteggioCompatibilita(punteggio);
+  return (
+    `Hai dichiarato di poter lavorare su «${competenza}» e l'avviso la nomina per intero: ` +
+    `il punteggio mostrato (${p}%) ha il pavimento d'eccellenza di ${PUNTEGGIO_JOLLY_PIENO}% ` +
+    `della Modalità 3. Oltre il raggio dei 60 km lo stesso interesse pieno fa entrare ` +
+    `l'avviso d'ufficio al ${PUNTEGGIO_JOLLY_OLTRE_RAGGIO}%.`
+  );
 }

@@ -131,10 +131,12 @@
       esempio**. Se la provincia non ha nulla di vivo il responso **non** pesca avvisi altrove:
       dichiara che il Radar è in scansione («Appena esce un avviso su <provincia> te lo diciamo noi»).
 - [ ] **Il rumore non occupa il posto di un'opportunità**: un avviso sotto la soglia arancio (70%)
-      che il Radar **non** conferma per classe o parola chiave è un falso positivo e resta **fuori**
-      dalla bacheca (`riempitivoNonPertinente`, `src/lib/riempitivi.ts`): non è un riempitivo da
-      dosare. I riempitivi **pertinenti** restano, entro il cap di 5 (nessuno quando ci sono già 10
-      match di qualità), e le **scuole preferite** non vengono mai nascoste (§26.60).
+      che le preferenze **primarie** non agganciano (classi di concorso · ordine · provincia) è un
+      falso positivo e resta **fuori** dalla bacheca (`riempitivoNonPertinente`,
+      `src/lib/riempitivi.ts`): non è un riempitivo da dosare. La **pertinenza è primaria** (§26.63):
+      le competenze non la stabiliscono, la sfumano soltanto. I riempitivi **pertinenti** restano,
+      entro il cap di 5 (nessuno quando ci sono già 10 match di qualità), e le **scuole preferite**
+      non vengono mai nascoste (§26.60).
 - [ ] **Scheda dell'opportunità (card + modale di dettaglio): scuola e fonte sempre in chiaro** —
       la card e la modale mostrano SEMPRE la **scuola emittente**
       (`src/components/IstitutoEmittente.tsx`: nome reale, oppure la dicitura gestita «Scuola non
@@ -165,6 +167,11 @@
 - [ ] `npm run test:riempitivi` — in bacheca non entrano falsi positivi sotto soglia (riempitivi non
       pertinenti esclusi a monte del cap) e il conto degli esclusi è dichiarato, mai silenzioso.
 
+- [ ] `npm run test:scoring` + `npm run test:modali` + `npm run test:compatibilita:graduata` — il
+      punteggio ha **due livelli** (§26.63): le preferenze primarie fanno il voto, le competenze lo
+      sfumano al massimo di 25 punti e **non** aprono la bacheca né promuovono un avviso sotto soglia;
+      nessun simbolo dell'override ritirato resta in `src/**` o `scripts/**`.
+
 - [ ] `npm run test:filtri-scuole` + `npm run test:admin:utente` — i suggerimenti scuola restano
       nell'ambito provinciale (fuori ambito = forzatura dichiarata) e le schede utente dell'Admin mostrano
       **tutte** le preferenze: ordini, classi, **materie derivate dalle classi**, competenze, tag, province
@@ -186,3 +193,59 @@
 - [ ] `npm run test:telegram` — nessuna anteprima/logo, solo testo.
 - [ ] Prova manuale su un canale di test: leggibilità, inoltrabilità, un solo
       link ufficiale.
+
+## 6. Il punteggio ha DUE livelli (§26.63)
+
+Le preferenze **primarie** fanno il match e il voto; le competenze e le parole chiave libere
+(«In cosa puoi lavorare oltre la classe») sono un **secondo livello** che **sfuma** un voto già
+deciso. Nessun messaggio pubblico può raccontare il contrario.
+
+- [ ] **La porta d'ingresso è PRIMARIA**: un avviso entra in bacheca **solo** se il Radar lo aggancia
+      con le preferenze — conferma del motore (classe compatibile, province entro il raggio dei 60 km)
+      oppure classe almeno «stessa area» (85) — salvo le scuole preferite, incluse d'ufficio (§26.62).
+      Una **competenza trovata NON apre** la bacheca (`bachecaInterpelli`,
+      `src/lib/bachecaInterpelli.ts`): nessun avviso «in Radar» solo perché contiene una parola che
+      gli somiglia.
+- [ ] **Il voto**: media **ponderata** delle modali primarie (`ordine` 1 · `classi di concorso` 2 ·
+      `provincia` 1, in `src/lib/mediaModali.ts`) **+ la sfumatura** delle competenze
+      (`src/lib/punteggioCompetenze.ts`: 25 competenza piena · 20 vicina · 10 riconducibile, +3 per
+      ogni corrispondenza in più), dentro il tetto `CAP_COMPETENZE` = **25 punti**. Le competenze
+      restano **fuori** dal denominatore della media.
+- [ ] **Mai promosso da una parola chiave**: quando il motore ha agganciato solo il «match secondario»
+      (25) il tetto del voto resta **25**, quindi una competenza non porta mai un avviso sotto soglia
+      sopra la soglia. Il **sostegno EXTRA** fuori dalle proprie classi resta a **60** e le competenze
+      non lo promuovono; oltre i **60 km** l'avviso è escluso (whitelist a parte). La forzatura
+      (`scuola preferita`) bypassa geografia e cap dei riempitivi, **non** il punteggio.
+- [ ] **La scheda dice PERCHÉ**: card e modale mostrano il motivo leggibile e, quando c'è, la
+      **competenza trovata** (`ETICHETTA_COMPETENZA_SECONDARIA` → `descrizioneCompetenzaSecondaria`,
+      campo `Interpello.competenzaSecondaria`) accanto al voto delle preferenze: mai un numero che
+      sembra casuale. `competenzaSecondaria` è un dato **di vetrina**: lo scrive la bacheca, **non** il
+      database, e **non entra nelle consegne** (email e Telegram restano sul motore strict).
+- [ ] **Nessun voto d'ufficio**: l'override della «Modalità 3» (§26.58: 90 parola chiave piena · 85
+      match vicino assegnati d'ufficio) e il jolly in percentuale **non esistono più** — la parola
+      chiave non assegna voti e non fa da jolly in nessun testo pubblico.
+
+## 7. Il JOLLY SEMANTICO della Modalità 3 (§26.64): asimmetrico, mai una sottrazione
+
+«In cosa puoi lavorare oltre la classe» è un **interesse dichiarato**, non un filtro. Se l'avviso
+nomina **per intero** la competenza del candidato, quel fatto **apre e sostiene**; se la nomina di
+sfuggita, **sfuma**; se non la nomina, **non toglie nulla**.
+
+- [ ] **Match PIENO = apertura e pavimento.** Dentro le proprie province il voto ha il pavimento
+      d'eccellenza di **90** (`PUNTEGGIO_JOLLY_PIENO`); oltre il raggio dei 60 km l'avviso entra
+      **d'ufficio al 60** (`PUNTEGGIO_JOLLY_OLTRE_RAGGIO`, come il pavimento del sostegno §26.45) e
+      **la bacheca lo mostra**: mai un 90–100 a duecento chilometri di distanza, la distanza resta
+      dichiarata nel numero.
+- [ ] **Match PARZIALE = solo sfumatura, mai apertura.** Bonus fino a **15** (`BONUS_JOLLY_PARZIALE`,
+      più stretto del tetto §26.63 di 25): sfuma un voto già agganciato, **non apre** la bacheca e
+      **non scavalca** l'esclusione geografica.
+- [ ] **Assenza = nessuna penalizzazione.** Non trovare la competenza **non è un demerito**: il voto
+      resta esattamente quello delle preferenze primarie.
+- [ ] **Tre sospensioni** (lì vale la §26.63): scuola preferita in whitelist, profilo **senza classi**
+      (tetto del motore a 25), pavimento del sostegno EXTRA. Il jolly non tocca nessuna delle tre.
+- [ ] **La scheda dice PERCHÉ.** Card e modale mostrano l'etichetta «Interesse pieno»
+      (`ETICHETTA_JOLLY_SEMANTICO` → `descrizioneJollySemantico`) al posto del badge del livello
+      secondario, che **torna** quando il match è parziale; la competenza dichiarata viaggia in
+      `Interpello.jollySemantico` (vetrina: **non** database, **non** consegne).
+- [ ] **Guardia**: `npm run test:jolly`, in catena con `test:scoring` e `test:compatibilita:graduata`.
+

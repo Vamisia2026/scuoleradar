@@ -308,7 +308,7 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | File | Righe | Contenuto |
 |---|---|---|
 | `moduli.ts` | 298 | ⚠️ **Ereditato**: il catalogo è stato diviso in `moduliAltreAree.ts` (500), `moduliEntiAltro.ts` (487), `moduliOrdiniScuola.ts` (2710), `classiConcorso.ts` (944); `moduli.ts` conserva tipi, `macroAree`, `ordineMacroAree`, helper `conAggiuntaInCima`, `getModuliScaricati`, `macroAreaById` e il tipo `DocumentoModulistica` |
-| `interpelli.ts` | 89 | Tipo `Interpello` + fallback **VUOTO** (`interpelli = []`: nessuna voce dimostrativa — policy dati) + i campi della compatibilità: `compatibilita`, `motivoCompatibilita`, **`scuolaPreferita`** (inclusione d'ufficio della whitelist scuole, §26.56) e **`parolaChiaveVoto`** (la parola chiave che ha ASSEGNATO il voto d'ufficio, §26.58) |
+| `interpelli.ts` | 89 | Tipo `Interpello` + fallback **VUOTO** (`interpelli = []`: nessuna voce dimostrativa — policy dati) + i campi della compatibilità: `compatibilita`, `motivoCompatibilita`, **`scuolaPreferita`** (inclusione d'ufficio della whitelist scuole, §26.56) e **`competenzaSecondaria`** (la competenza del profilo che ha SFUMATO il voto — livello secondario §26.63, scritto dalla bacheca e mai dal DB) |
 | `classiConcorso.ts` | — | `ClasseConcorso[]` (A-XX, ADEE, ADSS…) con `ordine`, `materie[]`, `requisitiCfu[]`; helper `classeByCodice` |
 | `ordiniMaterie.ts` | ~160 | `OrdineScuola` (infanzia/primaria/secondaria1/secondaria2/cpia/serali/pon/ata), `ordiniScuola`, `materie`, **`MATERIE_GENERICHE`** + **`materieCompetenzeExtra()`** (esclude le discipline curricolari: Storia/Geografia non sono "competenze extra"), **`competenzeSuggerite`** (12 **tag popolari** PNRR/PON: AI nella didattica, robotica educativa, **Stop Motion**, coding, digital storytelling, CLIL, **Lingua inglese**, STEM, creatività digitale, educazione motoria, progettazione bandi, orientamento), **`materieRicercabili()`** (le competenze extra PIÙ i tag popolari che sono discipline curricolari — «Lingua inglese», «Educazione motoria» — così anche loro si trovano dalla ricerca) e **`CORRELAZIONI_MATERIE`** (co-occorrenze curate termine → id di materie esistenti per la ricerca ESTESA: `inglese` → `clil`, `educazione_linguistica`…). Verificato da `npm run test:radar:preferenze` |
 | `province.ts` | 117 | `Provincia[]` (107 province: codice/nome/regione) + `regioni` |
@@ -325,18 +325,18 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 |---|---|---|
 | `supabase.ts` | 20 | Client Supabase frontend (anon); `supabase === null` in demo; `isSupabaseConfigurato` |
 | `matchingEngine.ts` | ~700 | Matching Radar + utenti compatibili (§5.2); `searchInterpelli` esclude gli scaduti; **`elencaUtentiNotificabili`** → TUTTI i profili con canale valido e Radar attivo (`findUtentiCompatibili(..., { ignoraFiltri: true })`, così anche chi ha province/classi configurate riceve il riepilogo). **Normalizzazione CLASSI robusta**: `normalizzaClasse` (`A-18` ≡ `A18` ≡ `a 18` ≡ `A_18` ≡ `A-018` → `A-18`; i codici sostegno `ADEE`/`AD24` restano invariati), **`normalizzaClassi`** (dedup + formato canonico), **`contieneClasse`**/**`rimuoviClasse`** (confronto a prova di formato per le caselle UI). **COMPETENZE/PAROLE CHIAVE** (§26.35): `normalizzaCompetenza`, `tokenCompetenza`, `radiceCompetenza`, `etichetteCompetenzeProfilo`, `competenzaCompatibileConAvviso` (regola condivisa da motore, digest e feed), **`avvisoDiSostegno`** (l'area sostegno è a **inclusione permanente**: gli avvisi `AD*` non passano dal controllo di classe — §26.45). Verificato da `npm run test:matching` e `npm run test:radar:preferenze`. **PROSSIMITÀ GEOGRAFICA (§26.55)**: `avvisoCompatibileConProfilo`/`punteggioCompatibilita` accettano `OpzioniCompatibilita` (`ignoraFiltri`, **`provinceLimitrofe`** — default `false`, la attiva solo la bacheca: la consegna resta strict); `normalizzaProvincia` vive in `prossimitaGeografica.ts` (§26.56: raggio di 60 km) ed è qui **riesportata** | 
-| `compatibilita.ts` | 143 | **Puro** — SOGLIE (🟢 ≥ 80 · 🟠 ≥ 70 · 🔴 ≥ 60), `normalizzaPunteggioCompatibilita`, `livelloCompatibilita`, `etichettaCompatibilita`, `bandaCompatibilita(punteggio, motivo?)` (livello + etichetta + descrizione/tooltip + classi Tailwind), **`ETICHETTA_SCUOLA_PREFERITA`** («Scuola preferita nel radar») e `descrizioneScuolaPreferita`. **§26.56:** le PENALITÀ cumulate sono state sostituite dalla MEDIA PONDERATA delle 5 MODALI (`PESI_MODALI`, §26.57), che vivono nei moduli dedicati (`punteggioOrdine`/`punteggioClasse`/`punteggioCompetenze`/`prossimitaGeografica`) (§26.54, §26.55, §26.56). **§26.58**: **`ETICHETTA_PAROLA_CHIAVE`** («Parola chiave trovata») e `descrizioneParolaChiave(parola, punteggio)` — l'etichetta del VOTO ASSEGNATO dalla Modalità 3 (override) |
-| `compatibilitaGraduata.ts` | 242 | **Puro** — livello di BACHECA della compatibilità, in DUE tier dalla §26.58: **(1) OVERRIDE della Modalità 3** — una parola chiave trovata nel testo dell'avviso **assegna d'ufficio** il voto (90 parola chiave piena · 85 match vicino) e **blocca la media** (`override` + `pesoTotale` 0), con la **provincia come unica condizione** (oltre il raggio si è esclusi, salvo whitelist); **(2) MEDIA PONDERATA delle modali applicabili** quando la Modale 3 non aggancia nulla (ordine · classe · provincia — le non applicabili escono dalla media e i pesi si rinormalizzano, `mediaModali.ts`) **+ incrementi jolly del 3%**, con i **motivi leggibili** per il tooltip (comprese le righe «media ponderata di N modali» e «voto assegnato d'ufficio»). Invarianti: nessun peso della media supera la metà dei pesi totali, il sostegno extra resta 60 (l'override non lo promuove) e la consegna non passa di qui |
-| `mediaModali.ts` | 50 | **Puro** (§26.58) — la MEDIA PONDERATA delle modali in un solo posto: **`PESI_MODALI`** (classe **2** = requisito abilitante · ordine/provincia 1; le **parole chiave NON hanno peso**: o assegnano il voto, o sfumano col jolly), `ContributoModale` e la primitiva **`mediaPonderata(contributi)`** = `Σ(punteggio × peso) / Σpesi`, rinormalizzata sulle sole modali applicabili |
-| `areeDisciplinari.ts` (`affinitaDisciplinare.ts` fino alla §26.56) | 189 | **Puro** — AREE E PONTI DISCIPLINARI, base condivisa delle Modali 2 e 3: `areeDi(testo)` (radici curate ≥ 5 caratteri usate anche come PREFISSO: `teatr` → «teatrale»), `lingueDi`, `etichetteAree`, `areeInComune`, `ponteTraAree` (ponti affini: Digitale ↔ IA, Arte ↔ Digitale, Scientifico ↔ Digitale; contaminato: Letteratura ↔ Teatro). Sigle solo in maiuscolo («IA», mai «ai») |
+| `compatibilita.ts` | 146 | **Puro** — SOGLIE (🟢 ≥ 80 · 🟠 ≥ 70 · 🔴 ≥ 60), `normalizzaPunteggioCompatibilita`, `livelloCompatibilita`, `etichettaCompatibilita`, `bandaCompatibilita(punteggio, motivo?)` (livello + etichetta + descrizione/tooltip + classi Tailwind), **`ETICHETTA_SCUOLA_PREFERITA`** («Scuola preferita nel radar») e `descrizioneScuolaPreferita`. **§26.56:** le PENALITÀ cumulate sono state sostituite dalla MEDIA PONDERATA delle MODALI PRIMARIE (`PESI_MODALI`, §26.57), che vivono nei moduli dedicati (`punteggioOrdine`/`punteggioClasse`/`prossimitaGeografica`; le competenze sono il LIVELLO SECONDARIO, §26.63) (§26.54, §26.55, §26.56). **§26.63**: **`ETICHETTA_COMPETENZA_SECONDARIA`** («Competenza trovata») e `descrizioneCompetenzaSecondaria(competenza, punteggio)` — l'etichetta della SFUMATURA del livello secondario, accanto al voto delle preferenze primarie (l'override della Modalità 3 è stato ritirato) |
+| `compatibilitaGraduata.ts` | 240 | **Puro** — livello di BACHECA della compatibilità, in DUE LIVELLI dalla §26.63: **(1) PRIMARIO** — le preferenze dichiarate decidono il voto con la MEDIA PONDERATA di `mediaModali.ts` (classe 2, ordine/provincia 1; le modali senza dati dell'utente escono e i pesi si rinormalizzano) **+ la SFUMATURA del livello secondario**, dentro il tetto (`CAP_COMPETENZE` 25 — oppure `PUNTEGGIO_MATCH_SECONDARIO` quando il motore ha sentenziato che il profilo non ha classi); **(2) GEOGRAFIA SOVRANA** — la provincia resta l'unica condizione geografica: oltre il raggio si è esclusi (0), salvo whitelist. Espone `competenzaSecondaria` (la competenza che ha sfumato) e i **motivi leggibili** per il tooltip (righe «media ponderata di N modali» e «livello secondario: +N punti (tetto 25%)»). Invarianti: il sostegno EXTRA resta 60 (le competenze non lo promuovono) e la consegna non passa di qui |
+| `mediaModali.ts` | 50 | **Puro** (§26.57, §26.63) — la MEDIA PONDERATA delle modali in un solo posto: **`PESI_MODALI`** (classe **2** = requisito abilitante · ordine/provincia 1; le **competenze NON sono pesate**: sono il LIVELLO SECONDARIO, sfumano il voto di max 25 punti), `ContributoModale` e la primitiva **`mediaPonderata(contributi)`** = `Σ(punteggio × peso) / Σpesi`, rinormalizzata sulle sole modali applicabili |
+| `areeDisciplinari.ts` (`affinitaDisciplinare.ts` fino alla §26.56) | 189 | **Puro** — AREE E PONTI DISCIPLINARI, base condivisa della Modale 2 e del LIVELLO SECONDARIO (§26.63): `areeDi(testo)` (radici curate ≥ 5 caratteri usate anche come PREFISSO: `teatr` → «teatrale»), `lingueDi`, `etichetteAree`, `areeInComune`, `ponteTraAree` (ponti affini: Digitale ↔ IA, Arte ↔ Digitale, Scientifico ↔ Digitale; contaminato: Letteratura ↔ Teatro). Sigle solo in maiuscolo («IA», mai «ai») |
 | `prossimitaGeografica.ts` | 185 | **Puro** — GEOGRAFIA delle province (§26.56, **Modalità 4**): `normalizzaProvincia` (fonte unica), `coordinateProvincia`, **`distanzaKm`** (Haversine fra capoluoghi), `provinceEntroRaggio`, `provinceDiRicerca` (proprie + entro il raggio di 60 km), `punteggioProvincia` (propria 100 · vicina con penalità 25/40/55 → 75/60/45 · **oltre il raggio = esclusione**), `provinciaCompatibile`. La consegna resta STRICT: senza `limitrofe` vale solo la provincia selezionata |
 | `riempitivi.ts` | 105 | **Puro** — CAP DINAMICO: `limitaRiempitivi(lista, opts)` con `MAX_RIEMPITIVI_BACHECA = 5` (sotto il 70%), `MINIMO_MATCH_QUALITA = 10` e **`proteggi`** (§26.56: le scuole preferite non sono riempitivi e non si nascondono); punteggi assenti neutri, ordine invariato, esito con conto e motivo (`sotto-tetto`/`tetto-raggiunto`) · **§26.60**: `riempitivoNonPertinente(voce)` — sotto il 70% **senza** aggancio del motore e **senza** parola chiave della Modale 3 la voce è un falso positivo: la bacheca la scarta a monte, **senza quota e senza cap** (`bachecaInterpelli` espone `riempitiviEsclusi`) |
 | `punteggioOrdine.ts` | 76 | **Puro** — **Modalità 1** «Dove vuoi lavorare» (§26.56): `punteggioOrdine(ordini, ordineAvviso)` → 100 selezionato · 90 adiacente (infanzia↔primaria↔secondaria I↔secondaria II) · 70 salto/altra tipologia · `null` = modale fuori dalla media. `ordiniAdiacenti`, `etichettaOrdine` |
-| `punteggioClasse.ts` | 198 | **Puro** — **Modalità 2** «Classi di concorso» (§26.56): `punteggioClasse` → 100 esatta · 95 affine (una materia del catalogo in comune: A-22 ↔ A-24) · 90 competenza dichiarata dentro la classe dell'avviso / materia coperta · 85 stessa area · 75 ponte affine · 65 area contaminata · 55 classe estranea; `classeVicina` (soglia 85) apre la bacheca, `materieInComune`, `etichettaClasse` |
-| `punteggioCompetenze.ts` | 167 | **Puro** — **Modalità 3** «Oltre la classe» (§26.56 → **override** dalla §26.58): la parola chiave trovata è un **OVERRIDE** e restituisce `override = { grado: 'esatta' | 'vicina', parolaChiave, punteggio }` (90 parola chiave piena · 85 match vicino) — `override: null` = ruolo **JOLLY** della modale, con `incrementi` = +3% per ogni corrispondenza parziale o riconducibile (tetto `JOLLY_MASSIMO = 3` → +9%) sul voto MEDIATO |
+| `punteggioClasse.ts` | 180 | **Puro** — **Modalità 2** «Classi di concorso» (§26.56): `punteggioClasse` → 100 esatta · 95 affine (una materia del catalogo in comune: A-22 ↔ A-24) · 90 competenza dichiarata dentro la classe dell'avviso / materia coperta · 85 stessa area · 75 ponte affine · 65 area contaminata · 55 classe estranea; `classeVicina` (soglia 85) apre la bacheca, `materieInComune`, `etichettaClasse` |
+| `punteggioCompetenze.ts` | 199 | **Puro** — LIVELLO SECONDARIO del punteggio (**§26.63**; ex «Modalità 3» della §26.56, il cui OVERRIDE §26.58 è stato ritirato): `punteggioCompetenze(profilo, avviso)` SFUMA al massimo `CAP_COMPETENZE` (25) punti ciò che le preferenze primarie hanno già deciso — grado del match PIÙ FORTE (**esatta 25** · **vicina 20** · **riconducibile 10**) + `INCREMENTO_JOLLY` (3) per ogni corrispondenza AGGIUNTIVA, sempre dentro il tetto. `punteggio: 0` = nessuna competenza del profilo nel testo: il voto resta tutto delle modali primarie. Le competenze NON aprono la bacheca (la pertinenza è delle classi, §26.60) e non assegnano mai il voto |
 | `filtriScuole.ts` | 185 | **Puro** — **Modalità 5** «Filtri Avanzati Scuole» (§26.56): `testoScuola` (istituto + titolo, minuscolo), `scuolaInElenco`, `scuolaEsclusa` (blacklist), `scuolaPreferita` (whitelist), `giudizioScuole` (la blacklist vince sulla whitelist) · **§26.62 — AMBITO PROVINCIALE dei suggerimenti**: `scuoleNote` (i nomi del feed con la loro provincia, senza doppioni), `suggerimentiScuole` (solo le province da cercare: proprie + entro 60 km), `ambitoScuola` (`dentro`/`fuori`/`sconosciuta`) e `messaggioAmbitoScuola` (una sola copy: la forzatura fuori ambito è **dichiarata**) |
 | `materieClassi.ts` | 41 | **Puro** — MATERIE COPERTE dalle classi di concorso (§26.62), derivazione **unica** di Admin e vista utente: `materieDelleClassi(codici)` normalizza i codici (`normalizzaClasse`: `A-018` ≡ `A18`), legge `materie[]` dal catalogo `src/data/classiConcorso.ts` e risolve gli id nel NOME (`src/data/ordiniMaterie.ts`), senza duplicati e nell'ordine delle classi scelte; un codice fuori catalogo resta codice, senza righe inventate. La usano la scheda utente dell'Admin (`departments/admin/components/derivaPreferenzeUtente.ts`, campo `materieClassi`) e il box «In cosa puoi lavorare» del Radar (`departments/radar/components/RiepilogoLavoro.tsx`) |
-| `bachecaInterpelli.ts` | 132 | **Puro** (§26.56 → §26.58) — PIPELINE della bacheca, un solo punto: avviso vivo → filtri scuole (blacklist fuori, whitelist dentro d'ufficio) → pertinenza (motore, classe «vicina» o **override della parola chiave**: `EsitoCompetenze.override`) → punteggio (override della Modalità 3 oppure media delle altre modali) → cap dei riempitivi con protezione delle preferite. `bachecaInterpelli(fonti, profilo)` restituisce lista + conti (`esclusiBlacklist`, `forzate`, `riempitiviNascosti`) e scrive sull'interpello `compatibilita`, `motivoCompatibilita`, `scuolaPreferita` e **`parolaChiaveVoto`** (§26.58), così `useInterpelliFeed` resta un contenitore di stato |
+| `bachecaInterpelli.ts` | 160 | **Puro** (§26.56 → §26.63) — PIPELINE della bacheca, un solo punto: avviso vivo → filtri scuole (blacklist fuori, whitelist dentro d'ufficio) → **PORTA D'INGRESSO PRIMARIA** (conferma del motore, oppure classe almeno «stessa area» 85: una competenza trovata NON apre la bacheca) → punteggio (media ponderata delle modali primarie **+ la sfumatura del livello secondario**) → esclusione secca dei riempitivi non pertinenti (§26.60) → cap dei riempitivi con protezione delle scuole preferite. `bachecaInterpelli(fonti, profilo)` restituisce lista + conti (`esclusiBlacklist`, `forzate`, `riempitiviEsclusi`, `riempitiviNascosti`) e scrive sull'interpello `compatibilita`, `motivoCompatibilita`, `scuolaPreferita` e **`competenzaSecondaria`** (§26.63), così `useInterpelliFeed` resta un contenitore di stato |
 | `scadenza.ts` | ~90 | Helper scadenza (puro): `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `stileScadenza` (semaforo 🟢 lungo / 🟡 vicino / 🔴 imminente) |
 | `alertInterpello.ts` | ~480 | Costruttore dell'**avviso strutturato** (gerarchia obbligatorie/opzionali + campo `email` dell'avviso), `pulisciTitoloAvviso` (via i dump di codici classe), **`emailAvviso`** + costanti condivise `EMAIL_ICONA`/`EMAIL_ETICHETTA`/`EMAIL_ETICHETTA_WEB`, **`ISTRUZIONE_AVVISO_UFFICIALE`** (direttiva standard "clicca STAMPA") e **`suggerimentoRicercaAvviso({ compatto })`** (guida operativa per elenchi/"Stampa" o fonte mancante), **`emailAvviso`** ed **`etichettaFonteLink`/`classificaFonteLink`/`ePaginaRiepilogo`** (etichetta ONESTA del link: PDF / Albo Pretorio / **pagina di riepilogo "Stampa"** / avviso — mai "Candidati"), **GATE DI QUALITÀ**: `eUrlAvvisoDiretto` (link = avviso specifico, mai home/elenco/ricerca/archivio regionale), `motivoAvvisoNonInviabile` e `avvisoInviabile` (**link diretto AND email di candidatura**: altrimenti nessun invio), **PULIZIA DELL'URL**: `pulisciUrlEsterna` (entità `&amp;`, virgolette/angolari/caporalia di markdown, spazi e punteggiatura di contorno) e **`urlFonteAvviso`** = stringa pulita + UNICO gate `eUrlAvvisoDiretto` (il punto unico dell'`href` per Telegram, email e canali — §26.45). Verificato da `npm run test:qualita` |
 | `interpelloRouting.ts` | ~40 | Deep link LEGACY `/interpello/:id` (puro): `eUuid`, `chiaveInterpelloDaParam` (uuid → `id`, hash → `hash_id`). **Policy**: le notifiche non generano più link interni; la rotta resta solo per i deep link storici (che reindirizzano subito alla fonte esterna) |
@@ -6647,6 +6647,8 @@ hanno trovato e fatto correggere un bug reale (nome dell'opzione geo non propaga
 
 ### 26.56 Le 5 MODALI del Radar: media del punteggio, raggio dei 60 km e scuole preferite (05/10/2026)
 
+**Nota (06/10/2026).** Il modello a «5 modali» di questa sezione è stato **riordinato in DUE LIVELLI** dalla **§26.63**: le modali **PRIMARIE** (ordine · classi di concorso · provincia) fanno il voto con la media ponderata, le **competenze** (Modale 3) sono un **LIVELLO SECONDARIO** che sfuma al massimo 25 punti un voto che le preferenze hanno già deciso — **non lo assegnano** e **non aprono la bacheca**; l'**override della Modalità 3 (§26.58) è stato ritirato**. La tabella dei numeri delle singole modali resta valida (riga 3 a parte, da leggere secondo la §26.63), così come soglie, raggio dei 60 km, cap dei riempitivi e filtri scuole.
+
 **Perché.** Richiesta di prodotto: il punteggio di bacheca non è più una serie di sconti cumulati
 (§26.54/§26.55) ma la **media delle 5 MODALI** delle preferenze dell'utente, con i numeri decisi dal
 prodotto e i **filtri avanzati scuole** (whitelist/blacklist) come giudizio che vince sul punteggio.
@@ -6657,18 +6659,18 @@ prodotto e i **filtri avanzati scuole** (whitelist/blacklist) come giudizio che 
 |---|---|---|
 | 1 · «Dove vuoi lavorare» (ordine) | 100 selezionato · **90 subito prima/dopo** (infanzia↔primaria↔secondaria I↔secondaria II) · **70 salto** (es. primaria per chi cerca la secondaria) | tipologie fuori sequenza (CPIA, serali, PON, ATA): 100 solo se selezionate, altrimenti 70 |
 | 2 · «Classi di concorso» | 100 esatta (A-022 ≡ A-22) · **95 affine** (una materia del catalogo in comune: A-22 ↔ A-24) · 90 competenza dichiarata dentro la classe dell'avviso / materia coperta · **85 stessa area** · 75 ponte affine · 65 area contaminata · **55 estranea** | «penalità crescente in base alla distanza disciplinare»: quattro gradini misurati dalla matrice di `areeDisciplinari.ts` |
-| 3 · «In cosa puoi lavorare oltre la classe» | **90 parola chiave trovata** (a qualunque ordine di scuola) · **85 match vicino** (token parziali) | **OVERRIDE (§26.58)**: il voto è **assegnato d'ufficio** e la media delle altre modali **non si calcola** (la provincia resta l'unica condizione: oltre il raggio si è esclusi); senza corrispondenze la modale **esce dalla media** e ogni corrispondenza parziale/riconducibile vale **+3%** sul voto MEDIATO (tetto +9%) |
+| 3 · «In cosa puoi lavorare oltre la classe» | **livello SECONDARIO (§26.63)**: competenza piena **25** · vicina **20** · riconducibile **10**, +3 per ogni corrispondenza aggiuntiva, **tetto 25** | la competenza NON assegna più il voto (l'**override §26.58 è ritirato**): SFUMA di max 25 punti il voto delle preferenze primarie e **non apre la bacheca** (la pertinenza è delle classi, §26.60). La provincia resta l'unica condizione geografica: oltre il raggio si è esclusi |
 | 4 · «Provincia» | 100 provincia selezionata · **grossa penalità entro il raggio di 60 km**: −25 (≤ 20 km) / −40 (≤ 40 km) / −55 (≤ 60 km) → **75 / 60 / 45** · **oltre i 60 km: esclusione d'ufficio** | distanza in linea d'aria fra **capoluoghi** (Haversine) e ricerca allargata alle province entro il raggio |
 | 5 · «Filtri Avanzati Scuole» | **blacklist → avviso oscurato e scartato** a prescindere dal punteggio · **whitelist → inclusione d'ufficio** a prescindere dal punteggio | la blacklist VINCE sulla whitelist; se il punteggio è insufficiente la card mostra l'etichetta dedicata **«Scuola preferita nel radar»** al posto del voto basso, se è buono lo mette accanto al match |
 
-**Come si compone il punteggio.** `valutaCompatibilita` (bacheca) **prima** guarda la Modale 3: se
-una parola chiave del profilo è stata trovata il voto è **assegnato d'ufficio** (90 piena · 85 vicina,
-**§26.58**) e la media delle altre modali non si calcola; **altrimenti** calcola i punteggi delle modali
-**applicabili** — una modale senza dati dell'utente (nessun ordine, nessuna classe, nessuna parola
-chiave trovata, nessuna provincia) NON entra nella media: non azzera l'opportunità per un dato che
-l'utente non ha dichiarato — e vi somma gli **incrementi jolly del 3%**. Dalla
-**§26.57** quella media è **PONDERATA**: i pesi delle modali vivono nell'unico punto `PESI_MODALI`
-(`src/lib/mediaModali.ts`, spostato qui dalla §26.58).
+**Come si compone il punteggio (dalla §26.63, in DUE LIVELLI).** `valutaCompatibilita` (bacheca)
+calcola i punteggi delle modali **PRIMARIE applicabili** — una modale senza dati dell'utente (nessun
+ordine, nessuna classe, nessuna provincia) NON entra nella media: non azzera l'opportunità per un dato
+che l'utente non ha dichiarato — con la media **PONDERATA** della **§26.57** (`PESI_MODALI`,
+`src/lib/mediaModali.ts`), poi **somma la SFUMATURA del livello secondario** (le competenze: max 25
+punti) e chiude col **tetto**: `min(100, media + sfumatura)`, oppure `PUNTEGGIO_MATCH_SECONDARIO` (25)
+quando il profilo non ha classi di concorso. La Modale 3 **non assegna più il voto** (l'override della
+§26.58 è ritirato) e non produce più incrementi in percentuale sul voto mediato.
 Il numero resta dentro le bande di §26.54 (🟢 ≥ 80 · 🟠 ≥ 70 · 🔴 ≥ 60) e nello stesso ordine di
 bacheca (`DashboardPage`: compatibilità → scadenza).
 
@@ -6737,7 +6739,9 @@ puro) · **viste condivise (fuori dal dipartimento, richiesta esplicita dell'ute
 non cambia), `src/departments/**`, `src/modules/**` e la pipeline di consegna (`src/lib/notifier.ts`,
 `src/lib/digest.ts`).
 
-### 26.57 La MEDIA PONDERATA delle modali: i pesi del voto finale (05/10/2026)
+### 26.57 La MEDIA PONDERATA delle modali: i pesi del voto finale (05/10/2026) — aggiornata dalla §26.63
+
+> **Nota (06/10/2026).** Dalla **§26.63** i pesi valgono per le **modali PRIMARIE** (ordine · classi di concorso · provincia): le **competenze** NON sono più una modale pesata né un jolly in percentuale — sono il **LIVELLO SECONDARIO** che sfuma il voto di max 25 punti. Tabella e formula qui sotto vanno lette con questa avvertenza (la riga della «Modale 3» è già marcata SUPERATA).
 
 **Perché.** Richiesta di prodotto sulla §26.56: il voto finale della bacheca non è la media
 aritmetica delle modali, ma una **media PONDERATA** in cui ogni modale porta il suo **contributo**;
@@ -6751,19 +6755,21 @@ c'è davvero (una modale non configurata non abbassa il voto, ma non lo alza nem
 |---|---|---|
 | 2 · Classi di concorso | **2** | è il requisito **ABILITANTE**: senza una classe compatibile quella materia non si insegna, quindi il suo scostamento deve incidere il doppio — è la stessa gerarchia del motore §26.54 (100 classe in comune · 80 materia coperta · 70 competenze · 60 sostegno extra) |
 | 1 · Ordine di scuola | 1 | preferenza di **contesto**: dice dove, non se sei abilitato |
-| 3 · Parole chiave (jolly) | 1 | preferenza di contesto, con gli incrementi del 3% già chiusi a +9% |
+| 3 · Parole chiave | ~~1~~ | **SUPERATA (§26.63)**: le competenze sono il **LIVELLO SECONDARIO** — sfumatura di max 25 punti, **fuori** dalla media e dai pesi (la riga col peso 1 della §26.57 non esiste più) |
 | 4 · Provincia | 1 | **perimetro** geografico, non abilitazione: da sola non «promuove» un avviso della classe sbagliata |
 
-**La formula.** `punteggio = Σ(punteggio_modale × peso) / Σpesi(applicabili) + incrementi jolly`,
-arrotondata; se nessuna modale è applicabile il voto resta `PUNTEGGIO_MATCH_NESSUNO` (0). La
+**La formula (aggiornata dalla §26.63).** `punteggio = min(tetto, mediaPonderata(modali primarie) +
+sfumatura competenze)`, con `tetto = 100` — oppure `PUNTEGGIO_MATCH_SECONDARIO` (25) quando il profilo
+non ha classi di concorso — e le **competenze fuori dal denominatore**; se nessuna modale è applicabile
+il voto resta `PUNTEGGIO_MATCH_NESSUNO` (0). La
 primitiva pura è **`mediaPonderata(contributi)`** (con `ContributoModale = { punteggio, peso }`):
 sostituisce la media aritmetica `mediaModali`, che **non esiste più**. Il dettaglio per modale
 (`valutazione.modali`) dichiara anche **`pesoTotale`**, il denominatore usato: è ciò che rende il
 numero spiegabile a una guardia (e al tooltip).
 
-**Invariante strutturale.** Nessun peso raggiunge la metà dei pesi totali (2 su 5): il voto **non
-può derivare da una sola modale**. La verifica sta in `npm run test:modali`
-(`Math.max(pesi) * 2 < Σpesi`).
+**Invariante strutturale.** Nessun peso SUPERA la metà dei pesi totali applicabili (2 su 4 = 1+2+1: la
+`classe` pesa 2, al più metà): il voto **non può derivare da una sola modale**. La verifica sta in
+`npm run test:modali` (`Math.max(pesi) * 2 <= Σpesi`) — §26.63.
 
 **Effetti sui numeri (dichiarati, non silenziosi).** Dove la classe è debole il voto scende, dove
 la classe è giusta e la geografia è vicina sale:
@@ -6797,7 +6803,9 @@ moduli), `docs/DEPARTMENT_MAP.md`. **Non toccati**: `comunicazione/**` (nessuna 
 cambia: la consegna e i numeri delle singole modali restano quelli della §26.56), `src/departments/**`
 e la pipeline di consegna.
 
-### 26.58 L'OVERRIDE della Modale 3: la parola chiave assegna il voto (05/10/2026)
+### 26.58 L'OVERRIDE della Modale 3: la parola chiave assegna il voto (05/10/2026) — SUPERATA dalla §26.63 (API ritirata)
+
+> **Nota (06/10/2026).** Questa sezione è **STORICA**: l'**override** della Modalità 3 è stato **RITIRATO** dalla **§26.63**. Una competenza trovata nel testo **non assegna più il voto** (90 piena · 85 vicina), non blocca la media e **non apre** una card da sola: è il **LIVELLO SECONDARIO** che sfuma di max 25 punti il voto delle preferenze primarie. Ritirati con esso: il campo `EsitoCompetenze.override`, `ETICHETTA_PAROLA_CHIAVE`, `descrizioneParolaChiave`, il campo `Interpello.parolaChiaveVoto` e la guardia `npm run test:override` (`scripts/test-override-modale3.ts`, **rimosso**: al suo posto `npm run test:scoring`). La fotografia storica resta per tracciabilità.
 
 **Perché.** Richiesta di prodotto sulla §26.57: le parole chiave non sono una modale «fra le
 altre». Quando una parola chiave del profilo compare nel testo dell'avviso il voto **non deve
@@ -6962,8 +6970,8 @@ dell'utente, Modalità 5).
 
 | # | Caso | Esito |
 |---|---|---|
-| 1 | < 70% con la classe dell'utente **o** una parola chiave del profilo (Modale 3) | **resta**: riempitivo *pertinente*, soggetto al cap di 5 |
-| 2 | < 70% senza conferma per classe/competenza (tipico sostegno EXTRA) | **FUORI**: esclusione secca, a monte del cap |
+| 1 | < 70% con la **conferma del motore** (una classe in comune; per i profili senza classi vale il livello secondario, §26.63) | **resta**: riempitivo *pertinente*, soggetto al cap di 5 |
+| 2 | < 70% senza la conferma del motore (tipico sostegno EXTRA) | **FUORI**: esclusione secca, a monte del cap |
 | 3 | < 70% ma scuola preferita (`forzata`) | **resta**: inclusione d'ufficio della Modalità 5 |
 | 4 | ≥ 70% (qualità) | resta a prescindere dalla pertinenza: il cap non la tocca |
 | 5 | punteggio **assente** (`null` dal DB) | resta: un valore assente è **neutro**, mai classificato a caso |
@@ -6971,11 +6979,13 @@ dell'utente, Modalità 5).
 **Meccanica (due punti di verità, nessun altro).** In `src/lib/riempitivi.ts` il nuovo predicato puro
 `riempitivoNonPertinente(voce, { pertinente, forzata?, soglia? })` risponde in quest'ordine:
 `forzata` → `false`; `pertinente` → `false`; punteggio non noto → `false`; altrimenti
-`punteggio < soglia`. In `src/lib/bachecaInterpelli.ts` la pipeline passa a **sei passi** e il voto
-della Modale 3 è calcolato **una volta sola** (`punteggioCompetenze(...).override !== null`): serve
-sia alla porta d'ingresso sia all'esclusione secca. La pertinenza è la conferma del motore (§26.54)
+`punteggio < soglia`. In `src/lib/bachecaInterpelli.ts` la pipeline resta a **sei passi** e la **porta
+d'ingresso è PRIMARIA (§26.63)**: entrano gli avvisi confermati dal motore oppure con la classe almeno
+«stessa area» (`classeVicina`, 85) — una competenza trovata **non apre** la bacheca a un profilo che ha
+già una classe. La pertinenza è la conferma del motore (§26.54)
 **depurata del solo suggerimento EXTRA del sostegno** (`avvisoDiSostegno && !profiloAderisceSostegno`),
-perché per la pertinenza serve una conferma per **classe o competenza**. L'esclusione **conta**:
+perché per la pertinenza serve una conferma per **classe** (per un profilo senza classi resta il livello
+secondario, §26.63). L'esclusione **conta**:
 `EsitoBacheca.riempitiviEsclusi` (companion di `riempitiviNascosti`) — nessuno scarto è silenzioso.
 
 **Effetti dichiarati.** (1) Una provincia magra può mostrare **meno** righe di ieri: quelle in più
@@ -7135,6 +7145,182 @@ variante compatta), `src/departments/admin/tabs/utenti/DettaglioUtente.tsx` (tit
 `comunicazione/04_canali_regionali/checklist_regionali.md` (§4: la forzatura è dichiarata; §5: guardie
 `test:filtri-scuole` e `test:admin:utente`). **Non toccati**: `src/departments/notizie/**`,
 `src/scraper/**`, il database.
+
+### 26.63 Il punteggio ha DUE LIVELLI: le preferenze fanno il voto, le competenze lo sfumano (06/10/2026)
+
+**Perché.** Richiesta di prodotto sulla §26.56/§26.57/§26.58: il voto della bacheca **non può essere
+deciso** da una competenza del profilo. Le preferenze dichiarate — dove vuole lavorare, quali classi di
+concorso, in quale provincia — sono l'unico criterio che **fa** il match; le competenze e le parole
+chiave libere («In cosa puoi lavorare oltre la classe») sono un **secondo livello**: **sfumano** un voto
+che esiste già, di al massimo `CAP_COMPETENZE` = **25** punti. L'**override** della Modalità 3 (§26.58:
+90 parola chiave piena · 85 match vicino **assegnati d'ufficio**) è **ritirato**.
+
+**I due livelli.**
+
+| Livello | Chi lo compone | Cosa può fare |
+|---|---|---|
+| **PRIMARIO (100%)** | `punteggioOrdine` (peso 1) · `punteggioClasse` (2) · `punteggioProvincia` (1), media PONDERATA di `mediaModali.ts` | **decide** il voto **e** la porta d'ingresso della bacheca |
+| **SECONDARIO (max 25)** | `punteggioCompetenze` (competenze di catalogo + `materie_custom`) | **sfuma**: si somma al primario, non lo sostituisce e non apre nulla |
+
+**Come si calcola (un solo punto: `valutaCompatibilita`, `src/lib/compatibilitaGraduata.ts`).**
+
+```
+punteggio = min(tetto, mediaPonderata(modali primarie applicabili) + punteggioCompetenze)
+tetto     = punteggioMotore === PUNTEGGIO_MATCH_SECONDARIO ? 25 : 100
+```
+
+In quest'ordine: (1) la **geografia è sovrana** — oltre il raggio dei 60 km l'avviso è escluso (`0`),
+salvo `forzata` (whitelist); (2) il **sostegno EXTRA** fuori dalle proprie classi resta al pavimento
+`PUNTEGGIO_EXTRA_SOSTEGNO` = **60** e le competenze **non lo promuovono** (il livello secondario non
+entra: `pesoTotale` 0, `competenzaSecondaria` null); (3) altrimenti media ponderata delle modali
+primarie applicabili **+ la sfumatura**, dentro il tetto.
+
+**La sfumatura (`src/lib/punteggioCompetenze.ts`).** Il grado del match PIÙ FORTE fra le competenze
+trovate decide i punti: **esatta 25** (tutti i token significativi della competenza sono nel testo) ·
+**vicina 20** (match semantico vicino) · **riconducibile 10** (stessa area disciplinare o ponte curato).
+Ogni corrispondenza **aggiuntiva** vale `INCREMENTO_JOLLY` = **3** punti in più, sempre **dentro** il
+tetto: `punteggio = min(CAP_COMPETENZE, puntiDelGrado + 3 × corrispondenzeAggiuntive)`. Nessuna
+corrispondenza → `punteggio 0`: il livello secondario **non ha nulla da dire** e il voto resta tutto
+delle preferenze. È **deterministico** (dipende dalle corrispondenze trovate, non dal caso), quindi
+spiegabile all'utente e verificabile da una guardia.
+
+**Perché il tetto è 25 (e non un altro numero).** È **lo stesso numero del motore**:
+`PUNTEGGIO_MATCH_SECONDARIO` (`src/lib/matchingEngine.ts`) è la sentenza con cui il motore dice «questo
+profilo **non ha classi**: l'aggancio può venire solo dal testo». Il livello secondario, da solo, **non
+può** raggiungere il match pieno né superare la soglia rossa (60): da qui la regola del tetto —
+`punteggioMotore === PUNTEGGIO_MATCH_SECONDARIO` → `tetto = 25`, altrimenti `100`. La guardia
+`npm run test:scoring` verifica che i due numeri restino **uguali**.
+
+**La porta d'ingresso è primaria (`src/lib/bachecaInterpelli.ts`).** In bacheca entrano gli avvisi che
+le preferenze PRIMARIE agganciano: la conferma del motore (`avvisoCompatibileConProfilo`, province entro
+il raggio) **oppure** la classe almeno «stessa area» (`classeVicina`, 85). Una competenza trovata **non
+fa entrare una card da sola**: nessun avviso di una classe lontana promosso da un tag, nessuna quota di
+bacheca per una parola chiave (per un profilo **senza** classi di concorso l'aggancio possibile è solo
+testuale, e resta sotto il tetto — §26.45 e la regola storica del motore). La **pertinenza** dei
+riempitivi (§26.60) segue la stessa logica: è la conferma del motore per **classe**, depurata del solo
+suggerimento EXTRA del sostegno.
+
+**Card e modale dichiarano la sfumatura.** Nuova etichetta condivisa `ETICHETTA_COMPETENZA_SECONDARIA`
+(«Competenza trovata») e `descrizioneCompetenzaSecondaria(competenza, punteggio)` in
+`src/lib/compatibilita.ts`, mostrate accanto al badge da `InterpelloCard.tsx` e
+`InterpelloDettaglioModal.tsx`: il voto resta quello delle preferenze e la competenza è **dichiarata**
+come ciò che l'ha sfumato (mai un numero che sembra casuale). Il dato è `Interpello.competenzaSecondaria`
+(`src/data/interpelli.ts`, al posto di `parolaChiaveVoto`): lo scrive la bacheca, **mai il DB** (verificato il 06/10/2026: `competenzaSecondaria` non compare in `src/lib/notifier.ts`, `src/lib/digest.ts`, negli `invia-*` né in `supabase/**`), e **non
+entra nella consegna** — `notifier`, `digest` e `invia-*` continuano a usare il motore STRICT
+(`provinceLimitrofe` è un'opzione della sola bacheca).
+
+**Invarianti (nessuna regressione).** Sostegno extra **60** (le competenze non lo promuovono); esclusione
+oltre i 60 km salvo whitelist; `forzata` bypassa geografia e cap dei riempitivi, **non** il punteggio;
+nessun peso supera la metà dei pesi totali applicabili (classe 2 su 4); `0` = nessuna modale applicabile
+(resta il valore del DB); la consegna è intatta.
+
+**API ritirata (§26.58).** Nessun simbolo resta in `src/**` e `scripts/**`: `EsitoCompetenze.override`,
+`ETICHETTA_PAROLA_CHIAVE`, `descrizioneParolaChiave`, `Interpello.parolaChiaveVoto`, `JOLLY_MASSIMO`, il
+ruolo JOLLY in percentuale della Modalità 3 e la guardia `npm run test:override`
+(`scripts/test-override-modale3.ts`, **rimosso**). `npm run test:scoring` verifica l'assenza di tutti
+questi simboli e che lo script ritirato non sia più nella catena di `npm test`.
+
+**Verifiche (06/10/2026, da `project/`).** `npm run typecheck` → ✅ exit 0 · **`npm test` (catena
+completa) → ✅ exit 0** · `npm run test:architettura` → ✅ nessuna violazione nuova (602 file · **141** =
+baseline; `scripts/test-compatibilita-graduata.ts` = **248 righe**, sotto la soglia di attenzione di 250;
+`src/lib/punteggioCompetenze.ts` = 199) · `npx eslint` sui file toccati → ✅ zero problemi · `npm run
+build` → ✅ exit 0 · guardie: `test:scoring` (**nuova**, in `npm test`: sostituisce `test:override`),
+`test:modali`, `test:compatibilita:graduata`, `test:compatibilita`, `test:riempitivi`,
+`test:filtri-scuole`, `test:opportunita` → ✅ exit 0.
+
+**File toccati.** **Condivisi essenziali**: `src/lib/punteggioCompetenze.ts` (livello secondario: gradi
+25/20/10, `CAP_COMPETENZE`, `INCREMENTO_JOLLY`, tetto; ritirato l'override),
+`src/lib/compatibilitaGraduata.ts` (media primaria + sfumatura + regola del tetto + `competenzaSecondaria`),
+`src/lib/matchingEngine.ts` (`PUNTEGGIO_MATCH_SECONDARIO` = 25, commenti), `src/lib/mediaModali.ts`
+(commenti: le competenze fuori dai pesi), `src/lib/riempitivi.ts` (commenti: la pertinenza è PRIMARIA — le competenze non la stabiliscono, §26.60/§26.63), `src/lib/bachecaInterpelli.ts` (porta d'ingresso primaria +
+`competenzaSecondaria`), `src/lib/compatibilita.ts` (`ETICHETTA_COMPETENZA_SECONDARIA`,
+`descrizioneCompetenzaSecondaria`), `src/data/interpelli.ts` (`competenzaSecondaria` al posto di
+`parolaChiaveVoto`) · **viste condivise (fuori dal dipartimento, come nelle §26.56/§26.58)**:
+`src/components/InterpelloCard.tsx`, `src/components/InterpelloDettaglioModal.tsx`, `src/contexts/app/useInterpelliFeed.ts` (commenti: porta d'ingresso primaria e voto a due livelli, nessun jolly in percentuale) · **guardie**:
+`scripts/test-scoring-due-livelli.ts` (**nuova**), `scripts/test-modali-radar.ts`,
+`scripts/test-compatibilita-graduata.ts`, `scripts/test-compatibilita-punteggio.ts`, `package.json`
+(`test:scoring` al posto di `test:override`); **rimosso** `scripts/test-override-modale3.ts` ·
+**documentazione**: `docs/SYSTEM_HANDOVER.md` (questa §26.63 + mappa moduli + note di superamento sulle
+§26.56/§26.57/§26.58/§26.60), `docs/DEPARTMENT_MAP.md` (riga di changelog §26.63 + marcatura di riordino/superamento sulle righe §26.56, §26.57, §26.58 e §26.60),
+`comunicazione/04_canali_regionali/checklist_regionali.md` (nuova **§6 «Il punteggio ha DUE livelli (§26.63)»** in coda: porta d'ingresso primaria, grado ponderato con la sfumatura dichiarata, nessuna promozione da parola chiave, «perché è mostrato» + override ritirato; **§5** arricchita con `test:scoring`/`test:modali`/`test:compatibilita:graduata`; **§4** riscritta sul falso positivo con la pertinenza primaria).
+**Non toccati**: `src/departments/**`, `src/modules/**`, la pipeline di consegna (`src/lib/notifier.ts`,
+`src/lib/digest.ts`, `invia-*`), il database.
+
+### 26.64 Modalità 3 — JOLLY SEMANTICO asimmetrico: il match pieno apre e pavimenta, il parziale sfuma, l'assenza non toglie nulla (06/10/2026)
+
+**Perché.** La §26.63 aveva ricondotto la Modalità 3 («In cosa puoi lavorare oltre la classe») a una
+mera **sfumatura**: una competenza trovata aggiungeva al massimo `CAP_COMPETENZE` punti a un voto già
+deciso dalle preferenze. Ma se una competenza è nominata **per intero** nell'avviso, l'interesse
+dichiarato dall'utente è un **fatto**, non una sfumatura: non può valere zero. Il jolly diventa
+quindi **ASIMMETRICO**: verso l'alto è un acceleratore (può **aprire** la bacheca e **pavimentare** il
+voto), verso il basso non toglie nulla. Nessuna soglia, nessun filtro, nessuna fonte nuova: cambia il
+**significato** di ciò che la §26.63 già misura.
+
+**Una sola MISURA, due decisioni.** Il grado del match resta quello di `punteggioCompetenze.ts`
+(§26.63 — `esatta` **25** · `vicina` **20** · `riconducibile` **10**); il nuovo modulo
+`src/lib/jollySemantico.ts` **non rilegge il testo** (invariante verificato: niente `areeDi`,
+`areeInComune`, `ponteTraAree`, `tokenCompetenza`, `paroleNelTitolo`): interpreta la rilevazione già
+fatta. Un solo misuratore, due decisioni.
+
+| Fascia del match | Quando | Cosa fa il jolly |
+|---|---|---|
+| **PIENO** | grado `esatta` (tutti i token significativi della competenza compaiono nell'avviso) | **pavimento d'eccellenza** `PUNTEGGIO_JOLLY_PIENO` = **90** dentro le proprie province · **inclusione d'ufficio** `PUNTEGGIO_JOLLY_OLTRE_RAGGIO` = **60** oltre il raggio dei 60 km |
+| **PARZIALE** | grado `vicina` (20) o `riconducibile` (10) | **bonus** entro `BONUS_JOLLY_PARZIALE` = **15** (più stretto della §26.63): **sfuma** un voto già agganciato, **non apre** e **non scavalca** l'esclusione geografica |
+| **ASSENTE** | nessuna competenza trovata (0 punti) | **zero punti e zero penalizzazioni**: il voto resta esattamente quello delle preferenze primarie |
+
+**Come si applica (`punteggioConJolly`, una sola espressione).** PIENO **dentro** le proprie province →
+`max(voto, 90)`: **mai una decurtazione** (un match pieno non declassa ciò che le preferenze hanno già
+premiato). PIENO **oltre** il raggio → il voto **è** `60`: l'inclusione d'ufficio non si presenta come
+un 100% a chi ha l'avviso a 200 km — **la distanza resta dichiarata nel numero**. PARZIALE →
+`min(voto, base + 15)`. ASSENTE → voto **intatto**.
+
+**Le tre SOSPENSIONI (lì vale la §26.63, il jolly tace).** `forzata` (scuola preferita in whitelist,
+§26.62): l'inclusione d'ufficio è già della Modalità 5 e il voto resta quello dei due livelli
+primari; `tettoMotore` (profilo **senza classi**): il verdetto `PUNTEGGIO_MATCH_SECONDARIO` (25) resta
+il tetto e la sfumatura resta dichiarata; `sostegno` (pavimento `PUNTEGGIO_EXTRA_SOSTEGNO` = 60,
+§26.45): il pavimento del suggerimento EXTRA non si sconta con un secondo pavimento.
+
+**La porta d'ingresso (§26.63 · §26.64).** `bachecaInterpelli.ts` valuta **una volta** e usa il
+verdetto: un match **PIENO** è una **conferma di pertinenza** e apre la bacheca anche fuori dalle
+proprie province (`classeVicina(profilo, avviso) || jollyPieno`); un match **PARZIALE** **no**: sfuma
+un voto che le preferenze hanno già deciso e **non crea l'opportunità**.
+
+**Cosa vede l'utente.** Nuova etichetta `ETICHETTA_JOLLY_SEMANTICO` = «Interesse pieno» e tooltip
+`descrizioneJollySemantico(competenza, punteggio)` in `src/lib/compatibilita.ts`; card e modale la
+mostrano **al posto** del badge del livello secondario quando parla il jolly
+(`secondarioDaDichiarare`: PIENO → `null`, PARZIALE → il **bonus davvero applicato**, ASSENTE → la
+sfumatura classica della §26.63). Il campo di vetrina `Interpello.jollySemantico` viaggia sulla riga
+di bacheca: **non** è persistito su database e **non** entra nelle consegne.
+
+**Invarianti verificati.** `PUNTEGGIO_JOLLY_PIENO` (90) > soglia verde (80); `BONUS_JOLLY_PARZIALE`
+(15) < `CAP_COMPETENZE` (25); `PUNTEGGIO_JOLLY_OLTRE_RAGGIO` (60) = `PUNTEGGIO_EXTRA_SOSTEGNO`;
+asimmetria (**il jolly non abbassa mai** un punteggio: assenza = voto intatto); una sola misura, due
+decisioni; **consegna strict**: `notifier.ts` e `digest.ts` non vedono il jolly.
+
+**Verifiche (06/10/2026, da `project/`).** `npm run test:jolly` → ✅ (sezioni 1–7: tre fasce,
+sospensioni, asimmetria di `punteggioConJolly`, `secondarioDaDichiarare`, cablaggio
+`valutaCompatibilita`, invarianti, catena). `npm test` → ✅ catena verde. `npm run typecheck` → 0
+errori. `npm run test:architettura` → ✅ 604 file, 141 violazioni = baseline congelata (nessuna
+nuova; `E-DIM` 300 / `W-DIM` 250 rispettati: `test-jolly-semantico.ts` 243 righe, gli altri due
+guardati 249). `npm run lint` sui file toccati → 0 errori. `npm run build` → ✅.
+
+**File toccati.** Nuovo: `src/lib/jollySemantico.ts`, `scripts/test-jolly-semantico.ts`.
+Modificati: `src/lib/compatibilita.ts` (etichetta + `descrizioneJollySemantico`),
+`src/lib/compatibilitaGraduata.ts` (wiring di `valutaCompatibilita`),
+`src/lib/bachecaInterpelli.ts` (porta d'ingresso e campo di vetrina),
+`src/data/interpelli.ts` (`Interpello.jollySemantico`), `src/components/InterpelloCard.tsx` e
+`src/components/InterpelloDettaglioModal.tsx` (badge), `scripts/test-compatibilita-graduata.ts` e
+`scripts/test-scoring-due-livelli.ts` (allineamento asserzioni), `package.json` (script `test:jolly` +
+catena), `docs/**`, `comunicazione/04_canali_regionali/checklist_regionali.md`.
+
+**Non toccati.** Nessun dipartimento (`src/departments/**`), nessun modulo (`src/modules/**`),
+pipeline di consegna (email/Telegram), database/migrazioni.
+
+**Nota di sessione (06/10/2026).** Il jolly semantico completa la §26.63 senza contraddirla: la
+sfumatura resta il pavimento di sicurezza del livello secondario, il jolly è il suo **ramo
+asimmetrico**. Restano fuori perimetro (riportati come debito) eventuali ritocchi al copy delle email
+e l'estensione del jolly alle Modalità 1/2, che non ne hanno bisogno.
+
 
 
 

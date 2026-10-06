@@ -8,17 +8,18 @@
  *   2. **Modalità 5 — Filtri Avanzati Scuole**: blacklist → scartato a
  *      prescindere dal punteggio; whitelist → incluso d'ufficio (saltando gli
  *      altri criteri) e marcato `scuolaPreferita`;
- *   3. **pertinenza**: l'avviso deve appartenere al Radar — il motore lo conferma
- *      (`avvisoCompatibileConProfilo`, province entro il raggio) oppure la classe è
- *      almeno «stessa area» (85) o una parola chiave del profilo è stata trovata
- *      (OVERRIDE della Modale 3: 90 piena · 85 vicina). Un ponte tematico da solo NON
- *      crea l'opportunità: nessun invio (e nessuna card) a caso;
- *   4. **punteggio**: OVERRIDE della Modale 3 o media delle altre modali + jolly
- *      (`valutaCompatibilita`), con il motivo leggibile che card e modale mostrano nel
- *      tooltip;
+ *   3. **porta d'ingresso (§26.63 · §26.64)**: decidono le PREFERENZE PRIMARIE — il motore
+ *      conferma l'avviso (`avvisoCompatibileConProfilo`, province entro il raggio) oppure
+ *      la classe è almeno «stessa area» (85) — oppure un match PIENO del jolly semantico:
+ *      l'interesse dichiarato per intero apre l'opportunità anche fuori dalle proprie province.
+ *      Un match PARZIALE no: sfuma un voto che le preferenze hanno già agganciato. Nessun
+ *      invio (e nessuna card) a caso;
+ *   4. **punteggio**: media ponderata delle preferenze primarie + jolly semantico
+ *      (`valutaCompatibilita`, §26.64), col motivo leggibile e la competenza riconosciuta
+ *      che card e modale dichiarano accanto al voto;
  *   5. **esclusione secca dei riempitivi NON pertinenti** (§26.60): una voce sotto
- *      la soglia arancio (70%) che il Radar non conferma per classe/competenza —
- *      tipicamente il suggerimento EXTRA del sostegno (§26.45) — **non entra in
+ *      la soglia arancio (70%) che il Radar non conferma per classe o per match PIENO
+ *      — tipicamente il suggerimento EXTRA del sostegno (§26.45) — **non entra in
  *      bacheca**: nessun cap, nessuna quota (`riempitivoNonPertinente`);
  *   6. **cap dinamico dei riempitivi** (`limitaRiempitivi`) sui soli riempitivi
  *      PERTINENTI, che non tocca le scuole preferite.
@@ -33,7 +34,6 @@ import { valutaCompatibilita, type ProfiloModali } from './compatibilitaGraduata
 import { giudizioScuole } from './filtriScuole';
 import { avvisoCompatibileConProfilo, avvisoDiSostegno, profiloAderisceSostegno } from './matchingEngine';
 import { classeVicina } from './punteggioClasse';
-import { punteggioCompetenze } from './punteggioCompetenze';
 import { limitaRiempitivi, riempitivoNonPertinente } from './riempitivi';
 import { eAvvisoVivo } from './scadenza';
 
@@ -99,25 +99,31 @@ export function bachecaInterpelli(
     }
 
     const avviso = avvisoDaInterpello(i);
-    // La CONFERMA del motore (§26.54) e la PERTINENZA del Radar (§26.60) non sono la
-    // stessa cosa: la conferma include l'inclusione d'ufficio dell'area sostegno, che
-    // resta un suggerimento EXTRA (`profiloAderisceSostegno` = l'utente ha una classe
-    // AD… propria), mentre per la pertinenza serve una conferma per CLASSE/COMPETENZA.
-    const confermato = avvisoCompatibileConProfilo(profilo, avviso, { provinceLimitrofe: true }).ok;
-    const pertinenzaMotore =
-      confermato && !(avvisoDiSostegno(avviso) && !profiloAderisceSostegno(profilo));
-    // Il voto della Modale 3 è calcolato una volta: serve sia alla porta d'ingresso sia
-    // all'esclusione secca.
-    const competenze = punteggioCompetenze(profilo, avviso).override !== null;
-    if (!scuole.preferita) {
-      const inRadar = confermato || classeVicina(profilo, avviso) || competenze;
-      if (!inRadar) continue;
-    }
-
+    // PRIMA la valutazione: porta il verdetto del jolly semantico (§26.64), che può far
+    // entrare d'ufficio un match PIENO fuori dalle proprie province (i vincoli geografici
+    // secondari non escludono più) e quindi aprire anche la porta d'ingresso.
     const valutazione = valutaCompatibilita(profilo, avviso, {
       provinceLimitrofe: true,
       forzata: scuole.preferita,
     });
+    // La CONFERMA del motore (§26.54) e la PERTINENZA del Radar (§26.60) non sono la
+    // stessa cosa: la conferma include l'inclusione d'ufficio dell'area sostegno, che
+    // resta un suggerimento EXTRA (`profiloAderisceSostegno` = l'utente ha una classe
+    // AD… propria), mentre per la pertinenza serve una conferma per CLASSE. Un match
+    // PIENO del jolly (§26.64) È una conferma: l'utente ha dichiarato di saperci lavorare.
+    const jollyPieno = valutazione.jollySemantico !== null;
+    const confermato = avvisoCompatibileConProfilo(profilo, avviso, { provinceLimitrofe: true }).ok;
+    const pertinenzaMotore =
+      jollyPieno ||
+      (confermato && !(avvisoDiSostegno(avviso) && !profiloAderisceSostegno(profilo)));
+    // PORTA D'INGRESSO (§26.63 · §26.64): entrano gli avvisi che le preferenze PRIMARIE
+    // agganciano — conferma del motore, oppure classe almeno «stessa area» (85) — e quelli
+    // che un match PIENO del jolly ha aperto. Una competenza PARZIALE non apre la bacheca:
+    // sfuma un punteggio che le preferenze hanno già deciso, e non crea l'opportunità.
+    if (!scuole.preferita) {
+      const inRadar = confermato || classeVicina(profilo, avviso) || jollyPieno;
+      if (!inRadar) continue;
+    }
     if (valutazione.escluso) continue;
     // `0` = nessuna modale applicabile: si conserva il valore dal DB.
     if (valutazione.punteggio === 0) {
@@ -125,12 +131,13 @@ export function bachecaInterpelli(
       continue;
     }
     // §26.60 — ESCLUSIONE SECCA: sotto il 70% e senza pertinenza del Radar la voce è un
-    // falso positivo, non un riempitivo da dosare: fuori, senza quote e senza cap. Le
-    // scuole preferite restano (scelta esplicita dell'utente, Modalità 5).
+    // falso positivo, non un riempitivo da dosare: fuori, senza quote e senza cap. La
+    // pertinenza è PRIMARIA (§26.63: le competenze non la stabiliscono — sfumano soltanto).
+    // Le scuole preferite restano (scelta esplicita dell'utente, Modalità 5).
     if (
       riempitivoNonPertinente(
         { compatibilita: valutazione.punteggio },
-        { pertinente: pertinenzaMotore || competenze, forzata: scuole.preferita },
+        { pertinente: pertinenzaMotore, forzata: scuole.preferita },
       )
     ) {
       riempitiviEsclusi += 1;
@@ -142,9 +149,12 @@ export function bachecaInterpelli(
       compatibilita: valutazione.punteggio,
       motivoCompatibilita: valutazione.motivi.join(' · ') || undefined,
       scuolaPreferita: scuole.preferita,
-      // Modalità 3 — OVERRIDE: la parola chiave che ha ASSEGNATO il voto (`null` se il
-      // punteggio è una media ponderata delle altre modali).
-      parolaChiaveVoto: valutazione.override?.parolaChiave ?? null,
+      // LIVELLO SECONDARIO (§26.63): la competenza del profilo che ha SFUMATO il punteggio
+      // (`null` = nessuna competenza trovata: il voto è tutto delle preferenze primarie).
+      competenzaSecondaria: valutazione.competenzaSecondaria?.etichetta ?? null,
+      // JOLLY SEMANTICO (§26.64): la competenza riconosciuta PER INTERO, che ha garantito il
+      // pavimento d'eccellenza o l'ingresso d'ufficio fuori dalle proprie province.
+      jollySemantico: valutazione.jollySemantico,
     });
   }
 

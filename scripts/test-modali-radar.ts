@@ -1,19 +1,19 @@
 /**
- * TEST — LE MODALI DEL RADAR: ordine di scuola, classi di concorso, parole chiave.
+ * TEST — LE MODALI DEL RADAR: ordine di scuola, classi di concorso, competenze.
  * --------------------------------------------------------------------------
  * Verifica i punteggi di prodotto delle finestre di preferenze:
  *
  *   1. MODALITÀ 1 «Dove vuoi lavorare»: 100 esatto · 90 adiacente · 70 salto;
  *   2. MODALITÀ 2 «Classi di concorso»: 100 esatta · 95 affine · 90 competenza
  *      nella classe · 85 stessa area · 75 ponte affine · 65 contaminata · 55 estranea;
- *   3. MODALITÀ 3 «Oltre la classe»: 90 parola chiave · 85 match vicino — la parola
- *      chiave trovata è un OVERRIDE (voto d'ufficio); il JOLLY (+3% per corrispondenza
- *      parziale o riconducibile) sfuma il voto quando la modale NON aggancia;
- *   4. AGGREGATORE (senza override): media PONDERATA delle altre modali (pesi: classe 2,
- *      il resto 1 — `mediaModali.ts`) + incrementi jolly del 3%.
+ *   3. MODALITÀ 3 «Oltre la classe»: LIVELLO SECONDARIO (§26.63) — una competenza trovata
+ *      SFUMA il voto delle preferenze primarie (25 piena · 20 vicina · 10 riconducibile, +3
+ *      per ogni corrispondenza aggiuntiva) e resta tappata a `CAP_COMPETENZE`;
+ *   4. AGGREGATORE: la MEDIA PONDERATA delle tre modali PRIMARIE (pesi: classe 2, il resto
+ *      1 — `mediaModali.ts`) fa il voto, poi la sfumatura del livello secondario lo alza;
+ *   5. senza competenza nel profilo non c'è nulla da sfumare: vale la media ponderata.
  *
- * L'OVERRIDE della parola chiave (90/85 d'ufficio, provincia come unica condizione) ha la
- * sua guardia dedicata: `npm run test:override`.
+ * I punteggi del livello secondario hanno la loro guardia dedicata: `npm run test:scoring`.
  *
  * Esecuzione: npm run test:modali (incluso in `npm test`)
  */
@@ -35,10 +35,11 @@ import {
   punteggioClasse,
 } from '../src/lib/punteggioClasse.ts';
 import {
+  CAP_COMPETENZE,
   INCREMENTO_JOLLY,
-  JOLLY_MASSIMO,
-  PUNTEGGIO_KEYWORD_ESATTA,
-  PUNTEGGIO_KEYWORD_VICINA,
+  PUNTEGGIO_COMPETENZA_ESATTA,
+  PUNTEGGIO_COMPETENZA_RICONDUCIBILE,
+  PUNTEGGIO_COMPETENZA_VICINA,
   punteggioCompetenze,
 } from '../src/lib/punteggioCompetenze.ts';
 import { valutaCompatibilita } from '../src/lib/compatibilitaGraduata.ts';
@@ -75,7 +76,19 @@ const A22 = { classi: ['A-22'], materieId: [] };
 check('classe esatta (A-022 ≡ A-22) = 100', PUNTEGGIO_CLASSE_ESATTA, punteggioClasse(A22, { classi: ['A-022'] })?.punteggio);
 check('classe AFFINE (A-22 ↔ A-24, lingue) = 95', PUNTEGGIO_CLASSE_AFFINE, punteggioClasse(A22, { classi: ['A-24'] })?.punteggio);
 check('A-26 ↔ A-27 (matematica) = 95', PUNTEGGIO_CLASSE_AFFINE, punteggioClasse({ classi: ['A-26'] }, { classi: ['A-27'] })?.punteggio);
-check('competenza dichiarata nella classe dell’avviso = 90', PUNTEGGIO_CLASSE_PROBABILE, punteggioClasse({ classi: ['A-26'], materieId: ['inglese'] }, { classi: ['A-24'] })?.punteggio);
+/** §26.63 — profilo MINIMO della modale primaria: solo le classi (le competenze stanno altrove). */
+const classeLontana = { classi: ['A-26'] };
+const classeLontanaConCompetenza = { classi: ['A-26'], materieId: ['inglese'] };
+check(
+  'le competenze del profilo NON toccano la modale delle classi (§26.63): stessi 55',
+  punteggioClasse(classeLontana, { classi: ['A-24'] })?.punteggio,
+  punteggioClasse(classeLontanaConCompetenza, { classi: ['A-24'] })?.punteggio,
+);
+check(
+  'una classe lontana resta ESTRANEA anche con una competenza «amica» = 55',
+  PUNTEGGIO_CLASSE_ESATTA - PENALITA_CLASSE_ESTRANEA,
+  punteggioClasse(classeLontanaConCompetenza, { classi: ['A-24'] })?.punteggio,
+);
 check('avviso senza codice ma materia coperta = 90', PUNTEGGIO_CLASSE_PROBABILE, punteggioClasse(A22, { materia: 'Inglese' })?.punteggio);
 check('STESSA AREA (A-20 fisica × A-50 scienze) = 85', PUNTEGGIO_CLASSE_ESATTA - PENALITA_CLASSE_STESSA_AREA, punteggioClasse({ classi: ['A-20'] }, { classi: ['A-50'] })?.punteggio);
 check('PONTE AFFINE (A-01 arte × A-41 digitale) = 75', PUNTEGGIO_CLASSE_ESATTA - PENALITA_CLASSE_PONTE_AFFINE, punteggioClasse({ classi: ['A-01'] }, { classi: ['A-41'] })?.punteggio);
@@ -84,39 +97,43 @@ check('classe ESTRANEA (A-22 lingue × diritto) = 55', PUNTEGGIO_CLASSE_ESATTA -
 check('le penalità crescono con la distanza disciplinare', true, PENALITA_CLASSE_STESSA_AREA < PENALITA_CLASSE_PONTE_AFFINE && PENALITA_CLASSE_PONTE_AFFINE < PENALITA_CLASSE_PONTE_CONTAMINATA && PENALITA_CLASSE_PONTE_CONTAMINATA < PENALITA_CLASSE_ESTRANEA);
 check('modale non applicabile senza classi nel profilo → null', null, punteggioClasse({ classi: [] }, { classi: ['A-22'] }));
 
-/* --------------------- 3) MODALITÀ 3 — PAROLE CHIAVE (OVERRIDE + JOLLY) ----- */
+/* --------- 3) LIVELLO SECONDARIO — COMPETENZE (TETTO 25, §26.63) ------------ */
 
-console.log('\n— Modalità 3 «Oltre la classe»: 90 esatta · 85 vicina (voto d’ufficio) —');
+console.log('\n— Livello secondario «Oltre la classe»: sfumatura 25 piena · 20 vicina · 10 riconducibile —');
 const IA = { materieCustom: ['Intelligenza Artificiale'] };
 const ia = punteggioCompetenze(IA, { titolo: 'Corso di Intelligenza Artificiale per docenti' });
-check('parola chiave trovata = 90', PUNTEGGIO_KEYWORD_ESATTA, ia.override?.punteggio);
-check(
-  'l’override dichiara grado, parola chiave e voto',
-  { grado: 'esatta', parolaChiave: 'Intelligenza Artificiale', punteggio: 90 },
-  ia.override,
-);
-check('nessun incremento con una sola parola chiave', 0, ia.incrementi);
-check('motivo leggibile', true, /parola chiave/.test(ia.motivi.join(' ')));
+check('competenza trovata = 25 (una SFUMATURA, non un voto)', PUNTEGGIO_COMPETENZA_ESATTA, ia.punteggio);
+check('il tetto del livello secondario è dichiarato dal modulo', CAP_COMPETENZE, ia.punteggio);
+check('la competenza riconosciuta è dichiarata', 'Intelligenza Artificiale', ia.competenza);
+check('il grado del match è dichiarato', 'esatta', ia.grado);
+check('nessun incremento con una sola competenza', 0, ia.incrementi);
+check('motivo leggibile', true, /competenza: Intelligenza Artificiale/.test(ia.motivi.join(' ')));
 const vicina = punteggioCompetenze({ materieCustom: ['Didattica Multimediale'] }, { titolo: 'Corso multimediale' });
-check('match semantico vicino = 85', PUNTEGGIO_KEYWORD_VICINA, vicina.override?.punteggio);
-check('grado «vicina» dichiarato (match parziale)', 'vicina', vicina.override?.grado);
+check('match semantico vicino = 20', PUNTEGGIO_COMPETENZA_VICINA, vicina.punteggio);
+check('grado «vicina» dichiarato (match parziale)', 'vicina', vicina.grado);
 const riconducibile = punteggioCompetenze(IA, { titolo: 'Didattica multimediale in classe' });
-check('riconducibile (ponte IA ↔ Digitale) → +1 jolly', 1, riconducibile.incrementi);
-check('e nessun voto d’ufficio (resta jolly)', null, riconducibile.override);
+check('riconducibile (ponte IA ↔ Digitale) = 10', PUNTEGGIO_COMPETENZA_RICONDUCIBILE, riconducibile.punteggio);
+check('grado «riconducibile» dichiarato', 'riconducibile', riconducibile.grado);
+check('e nessun voto d’ufficio: resta sotto il tetto', true, riconducibile.punteggio < CAP_COMPETENZE);
 const nessuno = punteggioCompetenze({ materieCustom: ['Pedagogia Steineriana'] }, { titolo: 'Interpello di matematica' });
-check('nessuna corrispondenza → nessun voto d’ufficio', null, nessuno.override);
-check('e nessun incremento inventato', 0, nessuno.incrementi);
-check('jolly con tappo: al massimo +9%', 3, JOLLY_MASSIMO);
-check('incremento unitario del 3%', 3, INCREMENTO_JOLLY);
+check('nessuna corrispondenza → il livello secondario tace', 0, nessuno.punteggio);
+check('e nessuna competenza inventata', null, nessuno.competenza);
+check('incremento unitario per ogni corrispondenza aggiuntiva', 3, INCREMENTO_JOLLY);
+const dueCompetenze = punteggioCompetenze(
+  { materieCustom: ['Intelligenza Artificiale', 'Didattica Multimediale'] },
+  { titolo: 'Corso di Intelligenza Artificiale e Didattica Multimediale' },
+);
+check('due competenze: la seconda aggiunge 3 punti', 1, dueCompetenze.incrementi);
+check('ma la somma resta DENTRO il tetto (25, non 28)', CAP_COMPETENZE, dueCompetenze.punteggio);
 
-/* ---------- 4) AGGREGATORE: OVERRIDE DELLA MODALE 3, POI MEDIA + JOLLY ----- */
+/* ------- 4) AGGREGATORE: MEDIA PONDERATA DELLE MODALI PRIMARIE + TETTO ------ */
 
-console.log('\n— Aggregatore: la parola chiave assegna il voto, altrimenti media ponderata —');
+console.log('\n— Aggregatore: la media ponderata delle modali primarie, poi la sfumatura —');
 const pesiModali = [PESI_MODALI.ordine, PESI_MODALI.classe, PESI_MODALI.provincia];
 const sommaPesi = pesiModali.reduce((totale, peso) => totale + peso, 0);
 check('PESI di prodotto: le classi pesano 2, il contesto 1', { ordine: 1, classe: 2, provincia: 1 }, PESI_MODALI);
 check(
-  'le parole chiave NON sono pesate: o assegnano il voto, o sfumano col jolly',
+  'le competenze NON sono pesate: sono il livello secondario, non entrano nella media',
   true,
   !('competenze' in PESI_MODALI),
 );
@@ -162,33 +179,39 @@ const pieno = valutaCompatibilita(
   { provinceLimitrofe: true },
 );
 check('ordine + classe + provincia esatti → 100', 100, pieno.punteggio);
-check('senza parola chiave nessun voto d’ufficio', null, pieno.override ?? null);
+check('senza competenza nel profilo non c’è nulla da sfumare', null, pieno.competenzaSecondaria);
 check('le modali non applicabili restano fuori dalla media', null, pieno.modali.competenze);
 check('il denominatore è la somma dei pesi applicati (1 + 2 + 1)', 4, pieno.modali.pesoTotale);
 
-/* ------------------- 5) SENZA OVERRIDE: MEDIA PONDERATA + JOLLY ------------ */
+/* ------------- 5) SENZA COMPETENZA: MEDIA PONDERATA DELLE MODALI ------------- */
 
-console.log('\n— Senza parola chiave: media ponderata delle altre modali + jolly —');
+console.log('\n— Senza competenza: il voto è tutto della media ponderata primaria —');
 const graduato = valutaCompatibilita(
   { ordini: ['secondaria2'], classi: ['A-22'], province: ['AT'] },
   { province: 'AT', classi: ['A-24'], ordine: 'secondaria2', materia: 'Inglese' },
   { provinceLimitrofe: true },
 );
 check('ordine 100 · classe affine 95 (peso 2) · provincia 100 → 98', 98, graduato.punteggio);
+check('nessuna competenza nel profilo: niente da sfumare', null, graduato.competenzaSecondaria);
 check('il dettaglio delle modali è leggibile', 95, graduato.modali.classe);
 check('tre modali applicabili → denominatore 4 (1 + 2 + 1)', 4, graduato.modali.pesoTotale);
 check('il tooltip dichiara la media ponderata', true, /media ponderata di 3 modali/.test(graduato.motivi.join(' ')));
-const conJolly = valutaCompatibilita(
+const conCompetenza = valutaCompatibilita(
   { ordini: ['secondaria2'], classi: ['A-22'], province: ['AT'], materieCustom: ['Intelligenza Artificiale'] },
   { province: 'AT', classi: ['A-24'], ordine: 'secondaria2', titolo: 'Didattica multimediale in classe' },
   { provinceLimitrofe: true },
 );
-check('nessun override (solo «riconducibile»): media 98 + jolly 3% → 100', 100, conJolly.punteggio);
-check('l’incremento jolly è dichiarato', 1, conJolly.modali.incrementiJolly);
-check('la sfumatura jolly è dichiarata nel tooltip', true, /jolly 3%/.test(conJolly.motivi.join(' ')));
-check('i motivi raccontano le modali', true, conJolly.motivi.some((m) => /classe affine/.test(m)));
+check('la competenza sfuma DOPO la media: 98 primari + 10 → 100', 100, conCompetenza.punteggio);
+check(
+  'la sfumatura è dichiarata, col suo peso',
+  { etichetta: 'Intelligenza Artificiale', punteggio: 10 },
+  conCompetenza.competenzaSecondaria,
+);
+check('le competenze restano FUORI dalla media: denominatore 4', 4, conCompetenza.modali.pesoTotale);
+check('il tooltip dichiara anche il livello secondario', true, /livello secondario: \+10 punti/.test(conCompetenza.motivi.join(' ')));
+check('i motivi raccontano le modali', true, conCompetenza.motivi.some((m) => /classe affine/.test(m)));
 
-/* ------------------- 5) LA GUARDIA È NELLA CATENA DI `npm test` ------------ */
+/* ------------------- 6) LA GUARDIA È NELLA CATENA DI `npm test` ------------ */
 
 console.log('\n— La guardia è nella catena di `npm test` —');
 const catena = JSON.parse(
@@ -199,7 +222,7 @@ check('guardia nella catena', true, (catena.scripts.test ?? '').includes('script
 
 console.log(
   errori === 0
-    ? '\n✅ MODALI: override della parola chiave, media ponderata delle altre modali e jolly.'
+    ? '\n✅ MODALI: modali primarie a media ponderata, competenze come sfumatura (max 25).'
     : `\n❌ MODALI: ${errori} errore/i`,
 );
 process.exitCode = errori === 0 ? 0 : 1;

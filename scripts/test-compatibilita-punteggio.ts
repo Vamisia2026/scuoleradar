@@ -9,7 +9,8 @@
  *   2. PUNTEGGIO del motore (`punteggioCompatibilita`, `src/lib/matchingEngine.ts`):
  *      · 100 provincia + classe in comune;
  *      ·  80 avviso senza codice classe, ma materia coperta dalle proprie classi;
- *      ·  70 profilo configurato solo su competenze/parole chiave;
+ *      ·  25 profilo configurato solo su competenze: è il LIVELLO SECONDARIO (§26.63),
+ *           una sfumatura che da sola non apre la bacheca;
  *      ·  60 AREA SOSTEGNO senza una classe AD… propria → SUGGERIMENTO EXTRA
  *           (banda rossa: resta in bacheca ma va in coda, mai tra le priorità);
  *      ·   0 non compatibile.
@@ -33,8 +34,8 @@ import {
   PUNTEGGIO_EXTRA_SOSTEGNO,
   PUNTEGGIO_MATCH_ESATTO,
   PUNTEGGIO_MATCH_NESSUNO,
-  PUNTEGGIO_MATCH_POSSIBILE,
   PUNTEGGIO_MATCH_PROBABILE,
+  PUNTEGGIO_MATCH_SECONDARIO,
   etichetteMaterieClasse,
   profiloAderisceSostegno,
   punteggioCompatibilita,
@@ -95,9 +96,12 @@ check(
   PUNTEGGIO_MATCH_PROBABILE,
   punteggioCompatibilita(tedesco, { province: 'TO', classi: [], materia: etichetteA22[0] }),
 );
+// §26.63 — una COMPETENZA non è un match primario: senza classi nel profilo il motore
+// sentenzia il livello SECONDARIO (`PUNTEGGIO_MATCH_SECONDARIO` = 25 = `CAP_COMPETENZE`),
+// poi la sfumatura delle competenze lo lascia lì: da sola non apre la bacheca.
 check(
-  'profilo solo competenze × materia dell’avviso → 70',
-  PUNTEGGIO_MATCH_POSSIBILE,
+  'profilo solo competenze × materia dell’avviso → tetto del livello secondario 25',
+  PUNTEGGIO_MATCH_SECONDARIO,
   punteggioCompatibilita(
     { province: ['TO'], classi: [], materieCustom: ['Lingua inglese'] },
     { province: 'TO', classi: [], materia: 'Inglese' },

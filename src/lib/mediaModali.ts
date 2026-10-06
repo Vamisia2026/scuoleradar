@@ -10,9 +10,11 @@
  *     (stessa gerarchia del motore §26.54: 100/80/70/60);
  *   · `ordine` (1) · `provincia` (1) → preferenze di CONTESTO.
  *
- * La Modalità 3 «parole chiave» NON è pesata: non entra nella media — o assegna il
- * voto d'ufficio (override 90/85, `compatibilitaGraduata.ts`), o sfuma il risultato
- * col jolly del 3% (`punteggioCompetenze.ts`).
+ * Le COMPETENZE (l'«oltre la classe») non sono una modale pesata: restano **FUORI** da
+ * questo denominatore. Sono il LIVELLO SECONDARIO del punteggio (§26.63): la SFUMATURA
+ * di `punteggioCompetenze.ts` — al massimo `CAP_COMPETENZE` = 25 punti — che
+ * `compatibilitaGraduata.ts` somma al voto primario dentro il tetto. L'override 90/85
+ * della «Modalità 3» (§26.58) e il jolly in percentuale sono **RITIRATI**.
  *
  * I pesi si RINORMALIZZANO su ciò che il profilo ha davvero: una modale senza dati
  * dell'utente non abbassa il voto (e nemmeno lo alza). Nessun peso supera la metà dei

@@ -26,9 +26,11 @@ import {
 } from '@/lib/alertInterpello';
 import {
   bandaCompatibilita,
-  descrizioneParolaChiave,
+  descrizioneCompetenzaSecondaria,
+  descrizioneJollySemantico,
   descrizioneScuolaPreferita,
-  ETICHETTA_PAROLA_CHIAVE,
+  ETICHETTA_COMPETENZA_SECONDARIA,
+  ETICHETTA_JOLLY_SEMANTICO,
   ETICHETTA_SCUOLA_PREFERITA,
 } from '@/lib/compatibilita';
 import { scuolaPreferita } from '@/lib/filtriScuole';
@@ -82,10 +84,14 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
   // Il MOTIVO dello scostamento (lingua affine, area affine, provincia limitrofa)
   // arriva dal feed e finisce nel tooltip: si dichiara, non si nasconde.
   const banda = bandaCompatibilita(interpello.compatibilita, interpello.motivoCompatibilita);
-  // MODALITÀ 3 — OVERRIDE: quando il voto è ASSEGNATO d'ufficio da una parola chiave
-  // trovata nel testo (`parolaChiaveVoto`, calcolata dalla bacheca) la card lo dichiara:
-  // il numero non nasce da una media e nasconderlo lo farebbe sembrare casuale.
-  const parolaChiaveVoto = interpello.parolaChiaveVoto ?? null;
+  // LIVELLO SECONDARIO (§26.63): quando una competenza del profilo è stata trovata nel
+  // testo (`competenzaSecondaria`, calcolata dalla bacheca) la card lo dichiara: il
+  // punteggio è sfumato di qualche punto e nasconderlo lo farebbe sembrare casuale.
+  const competenzaSecondaria = interpello.competenzaSecondaria ?? null;
+  // JOLLY SEMANTICO (§26.64): la competenza riconosciuta PER INTERO, che ha garantito il
+  // pavimento d'eccellenza o l'ingresso d'ufficio fuori dalle proprie province. Quando c'è,
+  // parla lei: sotto non si duplica la sfumatura della §26.63.
+  const jollySemantico = interpello.jollySemantico ?? null;
   // ROUTING: la card espone SOLO la fonte ESTERNA originale (mai un link interno
   // della piattaforma spacciato per "fonte").
   const linkEsterno = urlEsterna(interpello.linkFonte);
@@ -116,7 +122,7 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
           {/* Modalità 5: punteggio basso MA scuola preferita → etichetta dedicata
               (mai un voto insufficiente); punteggio buono → l'etichetta resta
               accanto al match, per dire DA DOVE arriva l'opportunità.
-              Modalità 3 (override): sotto, la parola chiave che ha ASSEGNATO il voto. */}
+              Livello secondario (§26.63): sotto, la competenza che ha SFUMATO il voto. */}
           <div className="flex flex-col items-end gap-2">
             {preferita ? (
               <span
@@ -142,14 +148,26 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
                 </span>
               )
             )}
-            {parolaChiaveVoto && (
+            {/* Livello secondario: una sola storia per card e dettaglio — col match PIENO
+                (§26.64) parla il jolly; altrimenti la sfumatura delle competenze (§26.63). */}
+            {jollySemantico ? (
               <span
-                title={descrizioneParolaChiave(parolaChiaveVoto, banda.punteggio)}
-                className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-2.5 py-1 text-xs font-semibold text-accent-700 ring-1 ring-inset ring-accent-200"
+                title={descrizioneJollySemantico(jollySemantico, banda.punteggio)}
+                className="inline-flex items-center gap-1 rounded-full bg-primary-600 px-2.5 py-1 text-xs font-semibold text-white shadow-soft"
               >
                 <Sparkles className="h-3.5 w-3.5" />
-                {ETICHETTA_PAROLA_CHIAVE}: {parolaChiaveVoto}
+                {ETICHETTA_JOLLY_SEMANTICO}: {jollySemantico}
               </span>
+            ) : (
+              competenzaSecondaria && (
+                <span
+                  title={descrizioneCompetenzaSecondaria(competenzaSecondaria, banda.punteggio)}
+                  className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-2.5 py-1 text-xs font-semibold text-accent-700 ring-1 ring-inset ring-accent-200"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {ETICHETTA_COMPETENZA_SECONDARIA}: {competenzaSecondaria}
+                </span>
+              )
             )}
           </div>
         </div>

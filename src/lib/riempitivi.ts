@@ -18,10 +18,11 @@
  * condivide.
  *
  * §26.60 — ESCLUSIONE SECCA DEI RIEMPITIVI NON PERTINENTI. Il cap da solo non
- * bastava: un avviso sotto il 70% che il Radar NON conferma (né la classe
- * dell'utente, né una sua parola chiave) non è un «riempitivo da dosare»: è un
- * falso positivo. `riempitivoNonPertinente` lo dichiara e la bacheca lo scarta a
- * monte, senza quote. Il cap dinamico resta per i riempitivi PERTINENTI.
+ * bastava: un avviso sotto il 70% che il Radar NON conferma per CLASSE — la pertinenza
+ * è delle preferenze PRIMARIE, §26.63: le competenze sfumano soltanto — non è un
+ * «riempitivo da dosare»: è un falso positivo. `riempitivoNonPertinente` lo dichiara e
+ * la bacheca lo scarta a monte, senza quote. Il cap dinamico resta per i riempitivi
+ * PERTINENTI.
  */
 import { SOGLIA_COMPATIBILITA_ARANCIO } from './compatibilita';
 
@@ -114,13 +115,15 @@ export function limitaRiempitivi<T extends { compatibilita?: number | null }>(
  * RIEMPITIVO NON PERTINENTE — la voce NON entra in bacheca (§26.60).
  *
  * Regola di prodotto: sotto la soglia arancio (< 70%) la voce è un riempitivo;
- * se il Radar NON la conferma — non è né la classe dell'utente né una sua parola
- * chiave — è un falso positivo e viene **esclusa a monte**, senza quote e senza
- * cap. Restano in bacheca, per costruzione:
+ * se le preferenze PRIMARIE non la confermano — non è la classe dell'utente
+ * (ordine/provincia) — è un falso positivo e viene **esclusa a monte**, senza quote e
+ * senza cap. Il LIVELLO SECONDARIO (§26.63) non entra qui: le competenze **sfumano** un
+ * voto già agganciato, non stabiliscono la pertinenza. Restano in bacheca, per
+ * costruzione:
  *
  *   · le opportunità di QUALITÀ (≥ soglia), a prescindere dalla pertinenza;
- *   · i riempitivi PERTINENTI (agnunciati dal motore o dal voto della Modale 3),
- *     che restano soggetti al cap dinamico di `limitaRiempitivi`;
+ *   · i riempitivi PERTINENTI (confermati dal motore per CLASSE), che restano soggetti
+ *     al cap dinamico di `limitaRiempitivi`;
  *   · le scuole PREFERITE (`forzata`: scelta esplicita dell'utente, Modalità 5),
  *     che nessun automatismo può togliere.
  *

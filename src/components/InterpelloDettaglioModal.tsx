@@ -21,9 +21,11 @@ import {
 } from '@/lib/alertInterpello';
 import {
   bandaCompatibilita,
-  descrizioneParolaChiave,
+  descrizioneCompetenzaSecondaria,
+  descrizioneJollySemantico,
   descrizioneScuolaPreferita,
-  ETICHETTA_PAROLA_CHIAVE,
+  ETICHETTA_COMPETENZA_SECONDARIA,
+  ETICHETTA_JOLLY_SEMANTICO,
   ETICHETTA_SCUOLA_PREFERITA,
 } from '@/lib/compatibilita';
 import { scuolaPreferita } from '@/lib/filtriScuole';
@@ -66,8 +68,10 @@ export function InterpelloDettaglioModal({
   // Modalità 5: la scuola preferita ha l'etichetta dedicata anche qui.
   const preferita =
     interpello.scuolaPreferita ?? scuolaPreferita(preferenze.favoriteSchools, interpello);
-  // Modalità 3 — OVERRIDE: la parola chiave che ha assegnato il voto d'ufficio.
-  const parolaChiaveVoto = interpello.parolaChiaveVoto ?? null;
+  // LIVELLO SECONDARIO (§26.63 · §26.64): la competenza che ha sfumato il punteggio, oppure
+  // il match PIENO che invece il voto l'ha garantito (pavimento o ingresso d'ufficio).
+  const competenzaSecondaria = interpello.competenzaSecondaria ?? null;
+  const jollySemantico = interpello.jollySemantico ?? null;
 
   return (
     <Modal open={open} onClose={onClose} title={titolo} size="lg">
@@ -77,7 +81,7 @@ export function InterpelloDettaglioModal({
 
         {/* Modalità 5: scuola preferita → etichetta dedicata (inclusione
             d'ufficio), con il match accanto quando il punteggio è sufficiente.
-            Modalità 3 (override): accanto, la parola chiave che ha assegnato il voto. */}
+            Livello secondario (§26.63): accanto, la competenza che ha sfumato il voto. */}
         <div className="flex flex-wrap items-center gap-2">
           {preferita ? (
             <span
@@ -103,14 +107,25 @@ export function InterpelloDettaglioModal({
               </span>
             )
           )}
-          {parolaChiaveVoto && (
+          {/* Livello secondario (§26.63 · §26.64): col match PIENO parla il jolly. */}
+          {jollySemantico ? (
             <span
-              title={descrizioneParolaChiave(parolaChiaveVoto, banda.punteggio)}
-              className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-3 py-1 text-sm font-semibold text-accent-700 ring-1 ring-inset ring-accent-200"
+              title={descrizioneJollySemantico(jollySemantico, banda.punteggio)}
+              className="inline-flex items-center gap-1 rounded-full bg-primary-600 px-3 py-1 text-sm font-semibold text-white shadow-soft"
             >
               <Sparkles className="h-4 w-4" />
-              {ETICHETTA_PAROLA_CHIAVE}: {parolaChiaveVoto}
+              {ETICHETTA_JOLLY_SEMANTICO}: {jollySemantico}
             </span>
+          ) : (
+            competenzaSecondaria && (
+              <span
+                title={descrizioneCompetenzaSecondaria(competenzaSecondaria, banda.punteggio)}
+                className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-3 py-1 text-sm font-semibold text-accent-700 ring-1 ring-inset ring-accent-200"
+              >
+                <Sparkles className="h-4 w-4" />
+                {ETICHETTA_COMPETENZA_SECONDARIA}: {competenzaSecondaria}
+              </span>
+            )
           )}
         </div>
 
@@ -148,9 +163,8 @@ export function InterpelloDettaglioModal({
               <dd className="text-sm text-primary-800">{r.valore}</dd>
             </div>
           ))}
-          {/* Email candidature: blocco presente SOLO se l'indirizzo è stato
-              estratto (mai uno stato negativo tipo "Non indicata"). Etichetta
-              e icona sono le stesse di email e Telegram. */}
+          {/* Email candidature: blocco presente SOLO se l'indirizzo è stato estratto
+              (mai uno stato negativo tipo "Non indicata"); stessa etichetta di email. */}
           {avviso.email && (
             <div className="rounded-xl bg-slate-50 p-4">
               <dt className="text-sm font-semibold text-primary-700">
