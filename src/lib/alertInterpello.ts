@@ -69,6 +69,24 @@ export function formatDataAvvisoLunga(iso?: string | null): string {
   return `${GIORNI[d.getUTCDay()]} ${d.getUTCDate()} ${MESI_LUNGHI[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
+/**
+ * Etichetta della SCADENZA per le superfici pubbliche (§26.65): la scadenza vera
+ * quando c'è, altrimenti la data di PUBBLICAZIONE dichiarata («Pubblicato 12 set
+ * 2026») — mai una data inventata. Un campo vuoto non è una data: la card della
+ * bacheca stampava `Invalid Date` (reso in maiuscolo) sulle righe che la fonte
+ * non data, che è una bugia, non un dato. Stessa regola della tavola «Radar Live»
+ * (`rigaBoardDati.ottieniUrgenzaOAnzianita`).
+ */
+export function etichettaScadenzaAvviso(
+  iso?: string | null,
+  pubblicato?: string | null,
+): string {
+  const scadenza = formatDataAvviso(iso);
+  if (scadenza) return scadenza;
+  const pubblicazione = formatDataAvviso(pubblicato);
+  return pubblicazione ? `Pubblicato ${pubblicazione}` : 'Senza scadenza dichiarata';
+}
+
 /* --------------------- Email di candidatura (asset PRO) --------------------- */
 
 /**

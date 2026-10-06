@@ -15,6 +15,11 @@
  *      province da cercare (le proprie + quelle entro i 60 km, `provinceDiRicerca`)
  *      e una scuola forzata FUORI ambito è dichiarata (avviso sotto il campo +
  *      badge sulla pill): mai un divieto, sempre una scelta detta.
+ *   6. SUGGERIMENTI VERI (§26.65): nel campo scuola entrano solo ISTITUTI
+ *      presentabili (`scuolePresentabili` → gate dei nomi §26.59, nel modulo
+ *      dedicato `src/lib/scuolePresentabili.ts`) e il filtro è istantaneo su
+ *      provincia + testo digitato (`cercaScuole`): le voci di menu del feed
+ *      («Presentazione», «AREE TEMATICHE») non sono più suggerimenti.
  *
  * Esecuzione: npm run test:filtri-scuole (incluso in `npm test`)
  */
@@ -28,6 +33,7 @@ import {
 import { provinceDiRicerca } from '../src/lib/prossimitaGeografica.ts';
 import {
   ambitoScuola,
+  cercaScuole,
   giudizioScuole,
   messaggioAmbitoScuola,
   scuolaEsclusa,
@@ -36,6 +42,7 @@ import {
   suggerimentiScuole,
   testoScuola,
 } from '../src/lib/filtriScuole.ts';
+import { provinceSuggerite, scuolePresentabili } from '../src/lib/scuolePresentabili.ts';
 
 let errori = 0;
 function check(nome: string, atteso: unknown, ottenuto: unknown): void {
@@ -138,6 +145,34 @@ const note = scuoleNote(feed);
 check('senza doppioni (nome + provincia)', 2, note.length);
 check('la provincia sta accanto al nome', 'Roma', note.find((n) => n.nome === 'Liceo Manzoni')?.provinciaNome);
 check('scuola senza nome: fuori dall’elenco', false, note.some((n) => !n.nome));
+
+console.log('\n— Suggerimenti VERI: solo istituti, filtro istantaneo (§26.65) —');
+const conMenu = [...feed, interpello({ id: '5', istituto: 'Presentazione', provinciaCodice: 'AT', provinciaNome: 'Asti' })];
+const presentabili = scuolePresentabili(conMenu);
+check('una voce di menu non è un istituto', false, presentabili.some((n) => n.nome === 'Presentazione'));
+check('gli istituti veri restano (2)', 2, presentabili.length);
+const albignasego = scuolePresentabili([
+  interpello({
+    id: '6',
+    istituto: 'IC ALBIGNASEGO Interpello per copertura posti',
+    provinciaCodice: 'BS',
+    provinciaNome: 'Brescia',
+  }),
+]);
+check('la coda di procedura viene tagliata dal nome', 'IC ALBIGNASEGO', albignasego[0]?.nome);
+check('selettore province: solo province con istituti reali', ['Brescia'], provinceSuggerite(albignasego).map((p) => p.nome));
+const sorgenteSuggerimenti = leggi('src/lib/scuolePresentabili.ts');
+check(
+  'suggerimenti: il gate dei nomi vive nel modulo dedicato (§26.65)',
+  true,
+  /export function scuolePresentabili/.test(sorgenteSuggerimenti) && /nomeIstitutoPresentabile/.test(sorgenteSuggerimenti),
+);
+check('suggerimenti: una sola copia, mai anche fra le liste', false, /export function scuolePresentabili/.test(leggi('src/lib/filtriScuole.ts')));
+check('cercaScuole: filtro per provincia', [], cercaScuole(note, { provincia: 'RM', query: 'Volta' }));
+check('cercaScuole: filtro per testo (sottostringa)', ['Liceo Manzoni'], cercaScuole(note, { provincia: '', query: 'manz' }).map((s) => s.nome));
+check('cercaScuole: senza digitato elenca tutto l’ambito', 2, cercaScuole(note, { provincia: '', query: '' }).length);
+check('cercaScuole: la tendina è limitata', 1, cercaScuole(note, { provincia: '', query: '', limite: 1 }).length);
+
 check('la sigla è confrontabile (maiuscolo)', 'AT', note[0]?.provinciaCodice);
 check('ambito di ricerca: le proprie province restano in testa', 'AT', provinceDiRicerca(['AT'])[0]);
 check('ambito di ricerca: non si allarga all’altra parte d’Italia', false, provinceDiRicerca(['AT']).includes('RM'));
@@ -156,17 +191,22 @@ check('la forzatura è DICHIARATA (fuori ambito)', true, /forzatura è dichiarat
 check('in ambito: nessuna forzatura', true, /senza forzature/.test(messaggioAmbitoScuola(ambitoScuola(note, ['AT'], 'IIS Volta'))));
 check('sconosciuta: forzatura manuale dichiarata', true, /forzatura manuale/.test(messaggioAmbitoScuola({ stato: 'sconosciuta' })));
 
-console.log('\n— Cablaggio: suggerimenti in ambito, forzatura visibile —');
+console.log('\n— Cablaggio: suggerimenti in ambito, forzatura visibile, nomi veri —');
 const pannello = leggi('src/departments/radar/preferenze/PannelloFiltriScuole.tsx');
+const campo = leggi('src/departments/radar/preferenze/components/CampoScuola.tsx');
 const radar = leggi('src/departments/radar/PreferenzeRadar.tsx');
 check('pannello: i suggerimenti portano con sé la provincia', true, /scuoleConosciute: ScuolaNota\[\]/.test(pannello));
-check('pannello: la provincia è solo l’etichetta del suggerimento', true, /value=\{s\.nome\} label=\{s\.provinciaCodice\}/.test(pannello));
-check('pannello: avviso dell’ambito sotto entrambi i campi', true, /<NotaAmbito nome=\{favoriteScuolaInput\}/.test(pannello) && /<NotaAmbito nome=\{ignoredScuolaInput\}/.test(pannello));
+check('pannello: PROVINCIA e SCUOLA sono due campi distinti (§26.65)', true, /<CampoScuola/.test(pannello) && /provinceSuggerite/.test(pannello));
+check('campo: la sigla è solo l’etichetta del suggerimento', true, /value=\{s\.nome\} label=\{s\.provinciaCodice\}/.test(campo));
+check('campo: filtro istantaneo per provincia + testo digitato', true, /cercaScuole\(scuoleConosciute, \{/.test(campo) && /query: value/.test(campo));
+check('campo: ogni lista ha la sua tendina (useId)', true, /useId\(\)/.test(campo));
+check('campo: avviso dell’ambito sotto il campo', true, /<NotaAmbito nome=\{value\}/.test(campo) && /messaggioAmbitoScuola\(ambito\)/.test(campo));
 check('pannello: badge di forzatura sulle pill fuori ambito', true, /ambito\.stato === 'fuori' && <BadgeForzatura/.test(pannello));
-check('pannello: una sola copy dell’ambito', true, /messaggioAmbitoScuola\(ambito\)/.test(pannello));
 check('radar: ambito calcolato con il raggio dei 60 km', true, /provinceDiRicerca\(provinceCodici\)/.test(radar));
 check('radar: suggerimenti limitati all’ambito', true, /suggerimentiScuole\(note, provinceRicerca\)/.test(radar));
-check('radar: il feed reale è l’unica sorgente delle scuole note', true, /scuoleNote\(interpelliFiltrati\)/.test(radar));
+check('radar: i nomi vengono dal gate degli istituti', true, /scuolePresentabili\(interpelliFiltrati\)/.test(radar));
+check('radar: le province del selettore vengono dai suggerimenti', true, /provinceSuggerite\(suggerimenti\)/.test(radar));
+check('radar: nessun elenco statico di istituti (solo il feed reale)', true, /interpelliFiltrati/.test(radar) && !/scuoleDemo|ELENCO_SCUOLE/.test(radar));
 
 /* ------------------------ 5) LA GUARDIA È NELLA CATENA -------------------- */
 

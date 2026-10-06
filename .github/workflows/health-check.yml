@@ -47,6 +47,8 @@ jobs:
           ADMIN_ALERT_SECRET: ${{ secrets.ADMIN_ALERT_SECRET }}
           HEALTH_STALE_HOURS: '48'
           HEALTH_NEWS_STALE_DAYS: '14'
+          # Consegne personali: oltre questi giorni senza notifiche = anomalia (§26.66).
+          HEALTH_DELIVERY_STALE_DAYS: '7'
         run: |
           if npm run admin:health; then
             echo "::notice::Radar Health Check OK: dispatch notifiche regolare."

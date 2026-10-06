@@ -4,6 +4,7 @@ import { classeByCodice, eAvvisoSostegno, isCodiceSostegno } from '../data/class
 import { materie as catalogoMaterie } from '../data/ordiniMaterie';
 import { province } from '../data/province';
 import { normalizzaProvincia, provinciaCompatibile } from './prossimitaGeografica';
+import { inferisciOrdineDaTesto } from './alertInterpello';
 import { dataIsoLocale, dataLimiteFinestraSenzaScadenza } from './scadenza';
 import { normalizzaStatoArricchimento } from './statoArricchimento';
 
@@ -107,7 +108,12 @@ export function mapInterpelloDBToInterpello(r: InterpelloDB): Interpello {
     classeCodice: primaClasse,
     classiCodes: codici,
     materia: r.materia ?? null,
-    ordine: classe?.ordine ?? 'secondaria2',
+    // ORDINE (normalizzazione §26.65): senza un codice classe il livello si LEGGE
+    // dal titolo («supplenza scuola primaria», «CPIA – adulti», «corso serale»).
+    // Il vecchio default fisso `secondaria2` attribuiva a OGNI riga senza classe
+    // l'ordine sbagliato: la Modalità 1 dava punteggi piatti (salto di ordine per
+    // tutti) e la vetrina dichiarava un'identità che l'avviso non aveva.
+    ordine: classe?.ordine ?? inferisciOrdineDaTesto(r.title) ?? 'secondaria2',
     dataScadenza: r.expiration_date ?? '',
     dataPubblicazione: r.created_at ?? null,
     descrizione: r.title ?? '',

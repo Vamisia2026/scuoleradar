@@ -11,6 +11,7 @@
 import { SlidersHorizontal } from 'lucide-react';
 import { Accordion } from '@/components/Accordion';
 import { InterpelloCard } from '@/components/InterpelloCard';
+import { etichettaScadenzaAvviso } from '@/lib/alertInterpello';
 import { classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import type { Interpello } from '@/data/interpelli';
@@ -125,11 +126,7 @@ export function ElencoOpportunita({
                 >
                   <div className="flex items-center justify-between gap-2 border-b border-primary-100 bg-slate-50 px-3 py-1.5">
                     <span className="text-[10px] font-bold uppercase tracking-wide text-primary-400">
-                      {new Date(i.dataScadenza).toLocaleDateString('it-IT', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
+                      {etichettaScadenzaAvviso(i.dataScadenza, i.dataPubblicazione)}
                     </span>
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${URGENZA_STILE[urg].cls}`}

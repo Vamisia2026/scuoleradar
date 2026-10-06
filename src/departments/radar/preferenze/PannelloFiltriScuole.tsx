@@ -4,14 +4,24 @@
  * Due liste: scuole PREFERITE (badge «Scuola Preferita» + priorità) e scuole
  * ESCLUSE (gli avvisi vengono nascosti). Il campo resta a testo libero, ma i
  * suggerimenti arrivano SOLO dalle scuole delle province da cercare
- * (`scuoleConosciute`, già limitate a monte): un nome fuori da quell'ambito resta
- * scrivibile, però la FORZATURA è DICHIARATA — avviso sotto il campo e badge
- * sulla pill (§26.62).
+ * (`scuoleConosciute`, già limitate e RIPULITE a monte: `scuolePresentabili`,
+ * §26.59): un nome fuori da quell'ambito resta scrivibile, però la FORZATURA è
+ * DICHIARATA — avviso sotto il campo e badge sulla pill (§26.62).
+ *
+ * §26.65 — DUE CAMPI DISTINTI. Accanto al campo scuola c'è un **selettore di
+ * PROVINCIA**: scegliendo una provincia i suggerimenti si restringono
+ * istantaneamente a quella (l'elenco resta quello delle proprie province +
+ * 60 km). È il comportamento di un input di indirizzi: prima la provincia, poi —
+ * digitando — la scuola. Ogni campo ha la sua tendina (`CampoScuola`), quindi le
+ * due liste non si scambiano i suggerimenti.
  */
-import { AlertTriangle, Ban, Check, Info, Plus, Star } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, Ban, ChevronDown, Star } from 'lucide-react';
 import { Accordion } from '@/components/Accordion';
 import { Pill } from '@/components/Pill';
-import { messaggioAmbitoScuola, type AmbitoScolastico, type ScuolaNota } from '@/lib/filtriScuole';
+import type { AmbitoScolastico, ScuolaNota } from '@/lib/filtriScuole';
+import type { ProvinciaSuggerita } from '@/lib/scuolePresentabili';
+import { CampoScuola } from './components/CampoScuola';
 
 interface PannelloFiltriScuoleProps {
   /** Mappa di apertura degli accordion (chiave → stato). */
@@ -30,31 +40,14 @@ interface PannelloFiltriScuoleProps {
   setIgnoredScuolaInput: (valore: string) => void;
   addIgnoredScuola: () => void;
   removeIgnoredScuola: (scuola: string) => void;
-  /** Suggerimenti (datalist): le scuole delle province da cercare, con provincia. */
+  /** Suggerimenti del campo scuola: istituti PRESENTABILI delle province da cercare. */
   scuoleConosciute: ScuolaNota[];
+  /** Province offerte dal selettore accanto al campo (una voce = una sigla). */
+  provinceSuggerite: ProvinciaSuggerita[];
   /** Nomi leggibili delle province da cercare (proprie + entro 60 km). */
   provinceSeguite: string[];
   /** Ambito provinciale di un nome di scuola: `dentro`, `fuori` o `sconosciuta`. */
   verificaAmbito: (nome: string) => AmbitoScolastico;
-}
-
-/**
- * Avviso dell'ambito provinciale sotto il campo: resta muto finché non c'è
- * qualcosa di scritto, così il pannello non parla a vuoto.
- */
-function NotaAmbito({ nome, ambito }: { nome: string; ambito: AmbitoScolastico }) {
-  if (!nome.trim()) return null;
-  const fuori = ambito.stato === 'fuori';
-  const Icona = fuori ? AlertTriangle : ambito.stato === 'dentro' ? Check : Info;
-  return (
-    <p
-      role="status"
-      className={`mt-2 flex items-start gap-1.5 text-xs ${fuori ? 'text-warning-700' : 'text-primary-400'}`}
-    >
-      <Icona className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-      <span>{messaggioAmbitoScuola(ambito)}</span>
-    </p>
-  );
 }
 
 /** Badge della pill: una scuola forzata dichiara da dove arriva. */
@@ -104,9 +97,13 @@ export function PannelloFiltriScuole({
   addIgnoredScuola,
   removeIgnoredScuola,
   scuoleConosciute,
+  provinceSuggerite,
   provinceSeguite,
   verificaAmbito,
 }: PannelloFiltriScuoleProps) {
+  /** Provincia scelta per il campo scuola (`''` = tutte le proprie province). */
+  const [provincia, setProvincia] = useState('');
+
   return (
       <Accordion
         icona="🏫"
@@ -129,13 +126,34 @@ export function PannelloFiltriScuole({
             : 'Nessuna provincia selezionata: scegli le province in «Dove vuoi cercare?» per ricevere i suggerimenti delle scuole.'}
         </p>
 
-        {/* Il valore salvato resta il NOME della scuola: la provincia è solo
-            l'etichetta del suggerimento (`label`), così le liste restano confrontabili. */}
-        <datalist id="scuole-conosciute">
-          {scuoleConosciute.map((s) => (
-            <option key={`${s.nome}|${s.provinciaCodice}`} value={s.nome} label={s.provinciaCodice} />
-          ))}
-        </datalist>
+        {/* §26.65 — DUE CAMPI DISTINTI: prima la PROVINCIA, poi la scuola.
+            Il selettore restringe i suggerimenti del campo sotto; l'elenco delle
+            scuole resta comunque quello delle proprie province + 60 km. */}
+        <label className="mt-4 block">
+          <span className="mb-1.5 block text-sm font-medium text-primary-700">Provincia</span>
+          <div className="relative">
+            <select
+              value={provincia}
+              onChange={(e) => setProvincia(e.target.value)}
+              className="w-full appearance-none rounded-xl border border-primary-200 bg-white px-3 py-2.5 pr-9 text-sm text-primary-800 transition focus:border-primary-500"
+            >
+              <option value="">
+                {provinceSuggerite.length > 0
+                  ? `Tutte le tue province (${provinceSuggerite.length})`
+                  : 'Tutte le tue province'}
+              </option>
+              {provinceSuggerite.map((p) => (
+                <option key={p.codice} value={p.codice}>
+                  {p.nome} ({p.codice})
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary-400" />
+          </div>
+        </label>
+        <p className="mt-1.5 text-xs text-primary-400">
+          Scegli la provincia per restringere i suggerimenti del campo scuola qui sotto.
+        </p>
 
         <div className="mt-4 space-y-4">
           {/* Preferite (whitelist) */}
@@ -148,26 +166,18 @@ export function PannelloFiltriScuole({
               Hai una scuola che vuoi tenere d&apos;occhio? Aggiungila per ricevere le sue pubblicazioni
               anche se non c&apos;è un match perfetto col profilo.
             </p>
-            <div className="mt-3 flex gap-2">
-              <input
-                type="text"
-                value={favoriteScuolaInput}
-                onChange={(e) => setFavoriteScuolaInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addFavoriteScuola()}
+            <div className="mt-3">
+              <CampoScuola
                 placeholder="Nome della scuola da preferire"
-                list="scuole-conosciute"
-                className="input"
+                value={favoriteScuolaInput}
+                onChange={setFavoriteScuolaInput}
+                onAdd={addFavoriteScuola}
+                scuoleConosciute={scuoleConosciute}
+                provincia={provincia}
+                verificaAmbito={verificaAmbito}
+                colore="accent"
               />
-              <button
-                onClick={addFavoriteScuola}
-                disabled={!favoriteScuolaInput.trim()}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-accent-600 disabled:opacity-50"
-              >
-                <Plus className="h-4 w-4" />
-                Aggiungi
-              </button>
             </div>
-            <NotaAmbito nome={favoriteScuolaInput} ambito={verificaAmbito(favoriteScuolaInput)} />
             {favoriteSchools.length > 0 ? (
               <div className="mt-3 flex flex-wrap gap-2">
                 {favoriteSchools.map((s) => (
@@ -194,26 +204,18 @@ export function PannelloFiltriScuole({
             <p className="mt-2 text-xs leading-relaxed text-secondary-700">
               C&apos;è una scuola che non vuoi più vedere? Mettila in blacklist: smetteremo di segnalartela.
             </p>
-            <div className="mt-3 flex gap-2">
-              <input
-                type="text"
-                value={ignoredScuolaInput}
-                onChange={(e) => setIgnoredScuolaInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addIgnoredScuola()}
+            <div className="mt-3">
+              <CampoScuola
                 placeholder="Nome della scuola da ignorare"
-                list="scuole-conosciute"
-                className="input"
+                value={ignoredScuolaInput}
+                onChange={setIgnoredScuolaInput}
+                onAdd={addIgnoredScuola}
+                scuoleConosciute={scuoleConosciute}
+                provincia={provincia}
+                verificaAmbito={verificaAmbito}
+                colore="secondary"
               />
-              <button
-                onClick={addIgnoredScuola}
-                disabled={!ignoredScuolaInput.trim()}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-secondary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-secondary-600 disabled:opacity-50"
-              >
-                <Plus className="h-4 w-4" />
-                Aggiungi
-              </button>
             </div>
-            <NotaAmbito nome={ignoredScuolaInput} ambito={verificaAmbito(ignoredScuolaInput)} />
             {ignoredSchools.length > 0 ? (
               <div className="mt-3 flex flex-wrap gap-2">
                 {ignoredSchools.map((s) => (

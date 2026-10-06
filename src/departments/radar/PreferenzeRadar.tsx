@@ -13,7 +13,8 @@ import type { OrdineScuola } from '@/data/ordiniMaterie';
 import { province } from '@/data/province';
 import { pianoLimits } from '@/lib/planLimits';
 import { normalizzaClasse, normalizzaClassi } from '@/lib/matchingEngine';
-import { ambitoScuola, scuoleNote, suggerimentiScuole } from '@/lib/filtriScuole';
+import { ambitoScuola, suggerimentiScuole } from '@/lib/filtriScuole';
+import { provinceSuggerite, scuolePresentabili } from '@/lib/scuolePresentabili';
 import { provinceDiRicerca } from '@/lib/prossimitaGeografica';
 import { promuoviProvinciaPrincipale } from '@/lib/provinceRadar';
 import { modificheDaSalvare } from '@/lib/preferenzeGuardia';
@@ -162,18 +163,24 @@ export function PreferenzeRadar() {
 
   const provinceSorted = useMemo(() => [...province].sort((a, b) => a.nome.localeCompare(b.nome)), []);
   /**
-   * MODALITÀ 4 + 5 (§26.62) — AMBITO PROVINCIALE delle due liste scuole.
+   * MODALITÀ 4 + 5 (§26.62, §26.65) — AMBITO PROVINCIALE delle due liste scuole.
    * Le province da cercare sono quelle scelte PIÙ quelle entro 60 km
-   * (`provinceDiRicerca`, lo stesso perimetro della bacheca). I suggerimenti del
-   * campo scuola restano dentro quell'ambito; un nome fuori è una forzatura
-   * comunque possibile, ma dichiarata dal pannello.
+   * (`provinceDiRicerca`, lo stesso perimetro della bacheca).
+   *
+   * §26.65 — i suggerimenti non sono «le stringhe che compaiono nel feed»: sono
+   * gli ISTITUTI PRESENTABILI (`scuolePresentabili`, il gate §26.59), così il
+   * campo scuola non propone mai una voce di menu, una materia o un dump di
+   * codici. Le province del selettore accanto al campo si deducono da QUEI
+   * suggerimenti: non si può scegliere una provincia vuota.
    */
   const scuoleAmbiente = useMemo(() => {
     const provinceRicerca = provinceDiRicerca(provinceCodici);
-    const note = scuoleNote(interpelliFiltrati);
+    const note = scuolePresentabili(interpelliFiltrati);
+    const suggerimenti = suggerimentiScuole(note, provinceRicerca);
     return {
       provinceNomi: provinceRicerca.map((c) => province.find((p) => p.codice === c)?.nome ?? c),
-      suggerimenti: suggerimentiScuole(note, provinceRicerca),
+      suggerimenti,
+      provinceSuggerite: provinceSuggerite(suggerimenti),
       verificaAmbito: (nome: string) => ambitoScuola(note, provinceRicerca, nome),
     };
   }, [provinceCodici, interpelliFiltrati]);
@@ -517,6 +524,7 @@ export function PreferenzeRadar() {
           addIgnoredScuola={addIgnoredScuola}
           removeIgnoredScuola={removeIgnoredScuola}
           scuoleConosciute={scuoleAmbiente.suggerimenti}
+          provinceSuggerite={scuoleAmbiente.provinceSuggerite}
           provinceSeguite={scuoleAmbiente.provinceNomi}
           verificaAmbito={scuoleAmbiente.verificaAmbito}
         />

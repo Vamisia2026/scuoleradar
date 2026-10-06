@@ -5,6 +5,11 @@
  * Una sola pipeline, in quest'ordine:
  *   1. **avviso vivo** (`eAvvisoVivo`: scaduto no, senza scadenza solo entro la
  *      finestra dei 60 giorni);
+ *   1-bis. **la riga è un avviso?** (`motivoRigaNonOpportunita`, §26.65): le voci di
+ *      contorno che la fonte pubblica accanto agli avvisi — titoli di sezione, voci
+ *      di menu, indici di classi («A041 | B017»), numeri di protocollo — **non
+ *      entrano**: non sono opportunità e falsavano punteggi e suggerimenti scuola.
+ *      Lo scarto è dichiarato nel conto (`righeNonOpportunita`), mai silenzioso;
  *   2. **Modalità 5 — Filtri Avanzati Scuole**: blacklist → scartato a
  *      prescindere dal punteggio; whitelist → incluso d'ufficio (saltando gli
  *      altri criteri) e marcato `scuolaPreferita`;
@@ -34,6 +39,7 @@ import { valutaCompatibilita, type ProfiloModali } from './compatibilitaGraduata
 import { giudizioScuole } from './filtriScuole';
 import { avvisoCompatibileConProfilo, avvisoDiSostegno, profiloAderisceSostegno } from './matchingEngine';
 import { classeVicina } from './punteggioClasse';
+import { motivoRigaNonOpportunitaAvviso } from './qualitaAvviso';
 import { limitaRiempitivi, riempitivoNonPertinente } from './riempitivi';
 import { eAvvisoVivo } from './scadenza';
 
@@ -54,6 +60,8 @@ export interface ProfiloBacheca extends ProfiloModali {
 /** Esito della pipeline: lista pronta per la dashboard + conti per log/guardie. */
 export interface EsitoBacheca {
   lista: Interpello[];
+  /** Righe di contorno scartate a monte: non sono avvisi (§26.65). */
+  righeNonOpportunita: number;
   /** Avvisi scartati dalla blacklist scuole. */
   esclusiBlacklist: number;
   /** Avvisi inclusi d'ufficio dalla whitelist scuole. */
@@ -85,12 +93,24 @@ export function bachecaInterpelli(
   profilo: ProfiloBacheca,
 ): EsitoBacheca {
   const inBacheca: Interpello[] = [];
+  let righeNonOpportunita = 0;
   let esclusiBlacklist = 0;
   let forzate = 0;
   let riempitiviEsclusi = 0;
 
   for (const i of fonti) {
     if (!eAvvisoVivo(i.dataScadenza, i.dataPubblicazione)) continue;
+    // §26.65 — la riga è un AVVISO? Le voci di contorno (titoli di sezione, indici
+    // di classi, numeri di protocollo) escono PRIMA di ogni punteggio: senza questo
+    // filtro entravano in bacheca con punteggi piatti e finivano nei suggerimenti
+    // del campo scuola. Lo scarto è contato, mai silenzioso.
+    // Il segnale «istituto» vale solo se il nome è PRESENTABILE (§26.59): una
+    // stringa grezza che la fonte usa come titolo di sezione («Presentazione»,
+    // «A041 | B017») non è un istituto, e non tiene in vita una riga di contorno.
+    if (motivoRigaNonOpportunitaAvviso(i) !== null) {
+      righeNonOpportunita += 1;
+      continue;
+    }
 
     const scuole = giudizioScuole(profilo, i);
     if (scuole.escluso) {
@@ -161,6 +181,7 @@ export function bachecaInterpelli(
   const cap = limitaRiempitivi(inBacheca, { proteggi: (v) => v.scuolaPreferita === true });
   return {
     lista: cap.lista,
+    righeNonOpportunita,
     esclusiBlacklist,
     forzate,
     riempitiviEsclusi,

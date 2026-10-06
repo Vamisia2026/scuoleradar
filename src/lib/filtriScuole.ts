@@ -15,8 +15,13 @@
  * `includes`): le fonti reali non hanno un campo scuola affidabile, quindi il
  * match testuale è l'unica regola onesta. Scuola in entrambe le liste →
  * prevale la BLACKLIST (un divieto esplicito non si annulla con una preferenza).
+ *
+ * I SUGGERIMENTI del campo scuola — i nomi d'istituto presentabili e le province
+ * del selettore che gli sta accanto — vivono in `scuolePresentabili.ts` (§26.65):
+ * qui restano le due liste e il loro ambito, con `siglaProvincia` in comune.
  */
 import type { Interpello } from '../data/interpelli';
+import { normalizzaTestoRicerca } from './ricercaTesto';
 
 /** Avviso minimo per il confronto con le liste scuole. */
 export interface AvvisoScuola {
@@ -98,7 +103,7 @@ export interface AvvisoConProvincia extends AvvisoScuola {
 }
 
 /** Sigla di provincia in forma confrontabile. */
-function siglaProvincia(codice?: string | null): string {
+export function siglaProvincia(codice?: string | null): string {
   return (codice ?? '').trim().toUpperCase();
 }
 
@@ -138,9 +143,41 @@ export function suggerimentiScuole(
   return (note ?? []).filter((n) => seguite.has(n.provinciaCodice));
 }
 
+/** Opzioni della ricerca scuola: provincia scelta e testo digitato. */
+export interface RicercaScuole {
+  /** Sigla della provincia selezionata (`''`/assente = tutte le province). */
+  provincia?: string | null;
+  /** Testo digitato nel campo: il confronto è una SOTTOSTRINGA sul nome. */
+  query?: string | null;
+  /** Massimo numero di suggerimenti proposti. */
+  limite?: number;
+}
+
+/**
+ * Suggerimenti del campo scuola: filtro ISTANTANEO per provincia scelta e per
+ * testo digitato. Il confronto è per sottostringa normalizzata (accenti,
+ * maiuscole, spazi) — non per prefisso: digitando «J» esce «… Olga e Leopoldo
+ * Jona di Asti», non serve scorrere elenchi sterminati. Senza testo si mostra
+ * l'elenco della provincia scelta (limitato a `limite`, default 50).
+ */
+export function cercaScuole(
+  note: readonly ScuolaNota[] | null | undefined,
+  { provincia, query, limite = 50 }: RicercaScuole = {},
+): ScuolaNota[] {
+  const codice = siglaProvincia(provincia);
+  const q = normalizzaTestoRicerca(query ?? '');
+  const esito: ScuolaNota[] = [];
+  for (const n of note ?? []) {
+    if (codice && siglaProvincia(n.provinciaCodice) !== codice) continue;
+    if (q && !normalizzaTestoRicerca(n.nome).includes(q)) continue;
+    esito.push(n);
+    if (esito.length >= limite) break;
+  }
+  return esito;
+}
+
 /** Esito dell'ambito provinciale di un nome di scuola. */
 export type AmbitoScuola = 'dentro' | 'fuori' | 'sconosciuta';
-
 export interface AmbitoScolastico {
   stato: AmbitoScuola;
   /** Provincia della scuola riconosciuta (valorizzata solo con `stato: 'fuori'`). */
