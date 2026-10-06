@@ -8,15 +8,18 @@
  * §26.59): un nome fuori da quell'ambito resta scrivibile, però la FORZATURA è
  * DICHIARATA — avviso sotto il campo e badge sulla pill (§26.62).
  *
- * §26.65 — DUE CAMPI DISTINTI. Accanto al campo scuola c'è un **selettore di
- * PROVINCIA**: scegliendo una provincia i suggerimenti si restringono
- * istantaneamente a quella (l'elenco resta quello delle proprie province +
- * 60 km). È il comportamento di un input di indirizzi: prima la provincia, poi —
- * digitando — la scuola. Ogni campo ha la sua tendina (`CampoScuola`), quindi le
- * due liste non si scambiano i suggerimenti.
+ * §26.67 — LA PROVINCIA È DI OGNI LISTA, non del pannello. Il selettore di
+ * provincia sta DENTRO il campo (`CampoScuola`), sulla stessa riga del nome e del
+ * pulsante «Aggiungi»: preferite ed escluse hanno ciascuna la propria provincia,
+ * così scegliere una scuola non è più ambiguo (lo stesso istituto esiste in
+ * province diverse) e le due liste non si scambiano né provincia né suggerimenti.
+ * Sceglierla restringe i suggerimenti all'istante; senza scelta i suggerimenti
+ * arrivano da tutte le proprie province e la riga lo dichiara SOLO se ci sono
+ * omonimie da sciogliere (`omonimieScuole`) — niente più default «tutte le tue
+ * province» su un selettore unico in cima al pannello.
  */
 import { useState } from 'react';
-import { AlertTriangle, Ban, ChevronDown, Star } from 'lucide-react';
+import { AlertTriangle, Ban, Star } from 'lucide-react';
 import { Accordion } from '@/components/Accordion';
 import { Pill } from '@/components/Pill';
 import type { AmbitoScolastico, ScuolaNota } from '@/lib/filtriScuole';
@@ -42,7 +45,7 @@ interface PannelloFiltriScuoleProps {
   removeIgnoredScuola: (scuola: string) => void;
   /** Suggerimenti del campo scuola: istituti PRESENTABILI delle province da cercare. */
   scuoleConosciute: ScuolaNota[];
-  /** Province offerte dal selettore accanto al campo (una voce = una sigla). */
+  /** Province offerte dal selettore DI OGNI CAMPO (una voce = una sigla). */
   provinceSuggerite: ProvinciaSuggerita[];
   /** Nomi leggibili delle province da cercare (proprie + entro 60 km). */
   provinceSeguite: string[];
@@ -101,8 +104,13 @@ export function PannelloFiltriScuole({
   provinceSeguite,
   verificaAmbito,
 }: PannelloFiltriScuoleProps) {
-  /** Provincia scelta per il campo scuola (`''` = tutte le proprie province). */
-  const [provincia, setProvincia] = useState('');
+  /**
+   * §26.67 — UNA PROVINCIA PER LISTA (`''` = nessuna scelta: tutte le proprie
+   * province). Preferite ed escluse non condividono la scelta: chi cerca una
+   * scuola da preferire e una da ignorare sta guardando due province diverse.
+   */
+  const [provinciaPreferite, setProvinciaPreferite] = useState('');
+  const [provinciaEscluse, setProvinciaEscluse] = useState('');
 
   return (
       <Accordion
@@ -122,38 +130,13 @@ export function PannelloFiltriScuole({
         </p>
         <p data-ambito-scuole className="mt-2 text-xs leading-relaxed text-primary-400">
           {provinceSeguite.length > 0
-            ? `I suggerimenti mostrano solo le scuole delle province da cercare (${provinceSeguite.join(', ')}). Una scuola di un’altra provincia resta scrivibile, ma la forzatura viene dichiarata.`
+            ? `I suggerimenti mostrano solo le scuole delle province da cercare (${provinceSeguite.join(', ')}). Scegli la provincia NEL CAMPO, accanto al nome, per non confondere istituti omonimi. Una scuola di un’altra provincia resta scrivibile, ma la forzatura viene dichiarata.`
             : 'Nessuna provincia selezionata: scegli le province in «Dove vuoi cercare?» per ricevere i suggerimenti delle scuole.'}
         </p>
 
-        {/* §26.65 — DUE CAMPI DISTINTI: prima la PROVINCIA, poi la scuola.
-            Il selettore restringe i suggerimenti del campo sotto; l'elenco delle
-            scuole resta comunque quello delle proprie province + 60 km. */}
-        <label className="mt-4 block">
-          <span className="mb-1.5 block text-sm font-medium text-primary-700">Provincia</span>
-          <div className="relative">
-            <select
-              value={provincia}
-              onChange={(e) => setProvincia(e.target.value)}
-              className="w-full appearance-none rounded-xl border border-primary-200 bg-white px-3 py-2.5 pr-9 text-sm text-primary-800 transition focus:border-primary-500"
-            >
-              <option value="">
-                {provinceSuggerite.length > 0
-                  ? `Tutte le tue province (${provinceSuggerite.length})`
-                  : 'Tutte le tue province'}
-              </option>
-              {provinceSuggerite.map((p) => (
-                <option key={p.codice} value={p.codice}>
-                  {p.nome} ({p.codice})
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary-400" />
-          </div>
-        </label>
-        <p className="mt-1.5 text-xs text-primary-400">
-          Scegli la provincia per restringere i suggerimenti del campo scuola qui sotto.
-        </p>
+        {/* §26.67 — Qui NON c'è più il selettore unico con il default «tutte le
+            tue province»: la provincia è un comando di ciascun campo (sotto),
+            sulla stessa riga del nome — una per lista. */}
 
         <div className="mt-4 space-y-4">
           {/* Preferite (whitelist) */}
@@ -173,9 +156,12 @@ export function PannelloFiltriScuole({
                 onChange={setFavoriteScuolaInput}
                 onAdd={addFavoriteScuola}
                 scuoleConosciute={scuoleConosciute}
-                provincia={provincia}
+                provincia={provinciaPreferite}
+                onProvinciaChange={setProvinciaPreferite}
+                provinceSuggerite={provinceSuggerite}
                 verificaAmbito={verificaAmbito}
                 colore="accent"
+                etichettaProvincia="Provincia della scuola da preferire"
               />
             </div>
             {favoriteSchools.length > 0 ? (
@@ -211,9 +197,12 @@ export function PannelloFiltriScuole({
                 onChange={setIgnoredScuolaInput}
                 onAdd={addIgnoredScuola}
                 scuoleConosciute={scuoleConosciute}
-                provincia={provincia}
+                provincia={provinciaEscluse}
+                onProvinciaChange={setProvinciaEscluse}
+                provinceSuggerite={provinceSuggerite}
                 verificaAmbito={verificaAmbito}
                 colore="secondary"
+                etichettaProvincia="Provincia della scuola da ignorare"
               />
             </div>
             {ignoredSchools.length > 0 ? (

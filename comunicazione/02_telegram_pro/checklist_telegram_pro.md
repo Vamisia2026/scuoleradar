@@ -32,10 +32,13 @@
 
 ## 2. Gate di qualità prima di ogni invio
 
-- [ ] L'alert PRO parte **solo** se l'avviso ha:
-      1. **link diretto** all'avviso ufficiale (`eUrlAvvisoDiretto`), e
-      2. **recapito di candidatura valido** (`avvisoInviabile`).
-- [ ] Senza uno dei due requisiti: **nessun invio** (`motivoAvvisoNonInviabile`).
+- [ ] L'alert PRO parte **solo** con il **link diretto** all'avviso ufficiale
+      (`eUrlAvvisoDiretto`): senza la fonte specifica non si invia
+      (`motivoAvvisoNonInviabile`).
+- [ ] Il **recapito di candidatura mancante NON blocca più l'invio** (§26.68,
+      direttiva 06/10/2026): il messaggio parte **senza la riga `📧 Candidature:`**
+      (l'opportunità è vera) e la riga resta **segnalata**
+      (`avvisoSenzaRecapito`) per l'arricchimento e la revisione interna.
 - [ ] Mai home di ente, elenchi, archivi, pagine di ricerca, landing regionali o
       URL della piattaforma nel link di fonte.
 - [ ] Scadenze già passate o non valide non vengono mostrate.
@@ -57,8 +60,10 @@
       sull'URL dell'avviso. L'URL viene **pulito prima del gate**
       (`pulisciUrlEsterna` → `urlFonteAvviso`): entità HTML, virgolette, spazi e
       punteggiatura di contorno non possono più far sparire la riga.
-- [ ] **Contatti ufficiali** della scuola (`📧 Candidature: <mailto:…>`), così il
-      messaggio è **pronto da inoltrare** a chi può candidarsi.
+- [ ] **Contatti ufficiali** della scuola (`📧 Candidature: <mailto:…>`) **quando il
+      recapito è stato risolto** (fonte → anagrafica → storico interno → convenzione
+      MIM), così il messaggio è **pronto da inoltrare** a chi può candidarsi. Senza
+      recapito il messaggio parte comunque, senza la riga `📧` (§26.68).
 - [ ] Riga brand in testa, `📡 Scuole Radar.it` cliccabile su
       `https://www.scuoleradar.it`.
 - [ ] Nessun prompt `Filtra per provincia e classi` nei messaggi personali.

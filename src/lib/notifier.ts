@@ -31,7 +31,7 @@ import {
   type InterpelloDB,
   type UtenteCompatibile,
 } from './matchingEngine.ts';
-import { emailAvviso, motivoAvvisoNonInviabile } from './alertInterpello.ts';
+import { avvisoSenzaRecapito, emailAvviso, motivoAvvisoNonInviabile } from './alertInterpello.ts';
 import { improntaAvviso } from './dedupAvvisi.ts';
 import { risolviEmailUfficialeScuola } from './emailScuola.ts';
 import {
@@ -84,29 +84,49 @@ function recapitoNotifica(
 const gateQualitaLoggati = new Set<string>();
 
 /**
- * GATE DI QUALITÀ STRICT — un avviso si invia SOLO se ha un LINK DIRETTO
- * all'avviso ufficiale (non la home né una pagina di elenco/ricerca) e un
- * RECAPITO di candidatura valido (email/PEC della scuola). Gli avvisi
- * incompleti vengono scartati dal dispatch: un alert senza fonte o senza
- * contatto danneggia l'affidabilità del servizio.
+ * Avvisi già segnalati come «inviati senza recapito» in questo run: l'avvertenza
+ * entra nel log una volta per avviso (il digest gira su tutti i profili).
+ */
+const senzaRecapitoLoggati = new Set<string>();
+
+/**
+ * GATE DI QUALITÀ — un avviso si invia SOLO se ha un LINK DIRETTO all'avviso
+ * ufficiale (non la home né una pagina di elenco/ricerca): un alert senza fonte
+ * verificabile danneggia l'affidabilità del servizio.
+ *
+ * Da §26.68 (direttiva 06/10/2026) il RECAPITO di candidatura **non blocca più**
+ * l'invio: se manca, il messaggio parte senza il blocco contatto e l'avvertenza
+ * (`avvisoSenzaRecapito`) viene loggata una volta per avviso. Così un'interpellanza
+ * reale non si perde per un'anagrafica incompleta, e il monitoraggio continua a
+ * misurarla (`npm run admin:health`).
  *
  * Ritorna `true` quando l'avviso può partire.
  */
 function superaGateQualita(dettagli: DettagliNotifica, contesto: string): boolean {
-  const motivo = motivoAvvisoNonInviabile({
-    link: dettagli.link,
-    email: dettagli.contactEmail,
-  });
-  if (!motivo) return true;
-  const chiave = `${motivo}|${dettagli.link ?? ''}|${dettagli.id ?? ''}`;
-  if (!gateQualitaLoggati.has(chiave)) {
-    gateQualitaLoggati.add(chiave);
-    console.warn(
-      `  ⛔ Avviso escluso dall'invio (${motivo}) — ${contesto}: ` +
-        `${String(dettagli.title ?? '').slice(0, 60)}`,
-    );
+  const motivo = motivoAvvisoNonInviabile({ link: dettagli.link });
+  if (motivo) {
+    const chiave = `${motivo}|${dettagli.link ?? ''}|${dettagli.id ?? ''}`;
+    if (!gateQualitaLoggati.has(chiave)) {
+      gateQualitaLoggati.add(chiave);
+      console.warn(
+        `  ⛔ Avviso escluso dall'invio (${motivo}) — ${contesto}: ` +
+          `${String(dettagli.title ?? '').slice(0, 60)}`,
+      );
+    }
+    return false;
   }
-  return false;
+  const avvertenza = avvisoSenzaRecapito({ email: dettagli.contactEmail });
+  if (avvertenza) {
+    const chiave = `${avvertenza}|${dettagli.link ?? ''}|${dettagli.id ?? ''}`;
+    if (!senzaRecapitoLoggati.has(chiave)) {
+      senzaRecapitoLoggati.add(chiave);
+      console.warn(
+        `  ⚠ Avviso inviato SENZA recapito di candidatura (${avvertenza}) — ${contesto}: ` +
+          `${String(dettagli.title ?? '').slice(0, 60)}`,
+      );
+    }
+  }
+  return true;
 }
 
 export interface NotificheOptions {
@@ -819,9 +839,10 @@ export async function notificaNuoviInterpelli(
       ),
     };
 
-    // GATE DI QUALITÀ STRICT (PRIMA del matching): senza link diretto all'avviso
-    // o senza recapito di candidatura l'opportunità NON viene notificata a
-    // nessuno — inutile calcolare gli utenti compatibili.
+    // GATE DI QUALITÀ (PRIMA del matching): senza link diretto all'avviso
+    // l'opportunità NON viene notificata a nessuno — inutile calcolare gli utenti
+    // compatibili. Il recapito mancante NON blocca (§26.68): l'avviso parte senza
+    // la riga contatto.
     if (!superaGateQualita(dettagli, 'notifica nuovi')) continue;
 
     // Matching Engine: utenti con provincia e almeno una classe in comune.
@@ -1166,8 +1187,8 @@ export async function notificaInterpelliPerUtente(
     };
     const tipo: TipoMessaggio = pianoIllimitato(piano) ? 'notifica_pro' : 'prova1';
 
-    // GATE DI QUALITÀ STRICT: nessun dispatch di avvisi incompleti (link diretto
-    // all'avviso + recapito di candidatura obbligatori).
+    // GATE DI QUALITÀ: nessun dispatch di avvisi senza la fonte ufficiale diretta
+    // (§26.68: il recapito è un'avvertenza, non un blocco).
     if (!superaGateQualita(dettagli, 'dispatch utente')) continue;
 
     const avvisoDispatch = avvisoDaDettagli(dettagli);
@@ -1998,12 +2019,10 @@ export async function inviaPromemoria24h(
           `${r.title} ${r.school_name ?? ''}`,
         ),
       };
-      // GATE DI QUALITÀ STRICT: nessun promemoria su un avviso incompleto
-      // (link diretto + recapito obbligatori), come per ogni altra notifica.
-      const motivoGate = motivoAvvisoNonInviabile({
-        link: vocePromemoria.link,
-        email: vocePromemoria.contactEmail,
-      });
+      // GATE DI QUALITÀ: nessun promemoria su un avviso senza fonte ufficiale
+      // diretta. Il recapito mancante non blocca (§26.68): il promemoria parte
+      // senza la riga contatto.
+      const motivoGate = motivoAvvisoNonInviabile({ link: vocePromemoria.link });
       if (motivoGate) {
         motivi.set(`gate:${motivoGate}`, (motivi.get(`gate:${motivoGate}`) ?? 0) + 1);
         continue;
@@ -2113,9 +2132,9 @@ export async function inviaAlertTelegramTempoReale(
         ),
       };
 
-      // GATE DI QUALITÀ STRICT: l'alert PRO parte solo con link diretto
-      // all'avviso e recapito di candidatura validi (una sola volta per avviso,
-      // prima di calcolare gli utenti compatibili).
+      // GATE DI QUALITÀ: l'alert PRO parte con link diretto all'avviso (una sola
+      // volta per avviso, prima di calcolare gli utenti compatibili). Senza
+      // recapito l'alert parte comunque, senza il blocco contatto (§26.68).
       if (!superaGateQualita(dettagli, 'alert PRO')) continue;
 
       const utenti = await findUtentiCompatibili(client, {

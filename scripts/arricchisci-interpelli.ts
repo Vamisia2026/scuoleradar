@@ -2,16 +2,14 @@
  * ScuoleRadar.it — Manutenzione DATI: arricchisce gli interpelli esistenti.
  *
  * Colma i buchi che rendono una riga inutilizzabile in vetrina e nelle notifiche
- * (nome scuola, codice meccanografico, email di candidatura, PEC):
- *   0. ANAGRAFICA NAZIONALE (file SCUANAGRAFE, `lib/anagraficaScuole.ts`): dal
- *      CODICE MECCANOGRAFICO della riga — o dal NOME, quando è univoco —
- *      recupera denominazione reale dell'istituto, PEO e PEC. È la fonte più
- *      autorevole: le successive coprono solo ciò che resta vuoto;
- *   1. codice meccanografico ricavato dal titolo/nome scuola quando assente;
- *   2. email UFFICIALE (PEO) ricostruita dalla convenzione MIM sul codice;
- *   3. nome reale della scuola dal registro minimo per codice.
- * Non sovrascrive MAI un dato già presente e non inventa nulla: se non c'è un
- * appiglio reale (codice, nome o email in fonte) la riga resta com'è.
+ * (nome scuola, codice, email di candidatura, PEC), dalla fonte più autorevole
+ * alla meno: le successive coprono solo ciò che resta vuoto.
+ *   0. ANAGRAFICA NAZIONALE (SCUANAGRAFE, `lib/anagraficaScuole.ts`): dal CODICE
+ *      della riga, o dal NOME se univoco → denominazione reale + PEO + PEC;
+ *   1. codice dal titolo/nome · 2. PEO dalla convenzione MIM · 2-bis. TAILORING
+ *      (§26.68): recapito OSSERVATO della stessa scuola (storico interno) ·
+ *   3. nome reale dal registro minimo. Non sovrascrive MAI un dato presente e non
+ *      inventa nulla: senza appiglio reale la riga resta com'è.
  *
  * Uso:
  *   npm run dati:arricchisci                     # dry-run (mostra cosa cambierebbe)
@@ -33,6 +31,7 @@ import {
   risolviEmailUfficialeScuola,
 } from '../src/lib/emailScuola.ts';
 import { nomeScuolaDaCodice } from '../src/lib/school-lookup.ts';
+import { indiceStoricoContatti, patchDaStorico } from '../src/scraper/storicoContatti.ts';
 import { statoArricchimento } from '../src/lib/statoArricchimento.ts';
 
 process.loadEnvFile?.();
@@ -84,9 +83,9 @@ if (!url || !key) {
   let statoDisponibile = true;
 
   /**
-   * Legge TUTTE le righe a pagine (PostgREST non consegna più di 1.000 righe per
-   * richiesta). Una colonna "recente" assente (migrazione non applicata) viene
-   * tolta dall'elenco e la lettura riprova: l'arricchimento non si interrompe mai.
+   * Legge TUTTE le righe a pagine (PostgREST non consegna più di 1.000 righe per richiesta).
+   * Una colonna "recente" assente (migrazione non applicata) viene tolta dall'elenco e la
+   * lettura riprova: l'arricchimento non si interrompe mai.
    */
   async function leggiTutte(): Promise<Riga[]> {
     const tutte: Riga[] = [];
@@ -120,8 +119,8 @@ if (!url || !key) {
   }
 
   /**
-   * Aggiorna una riga togliendo dal payload SOLO la colonna che il database non
-   * conosce: nessun aggiornamento si perde per intero a causa di un campo opzionale.
+   * Aggiorna una riga togliendo dal payload SOLO la colonna che il database non conosce:
+   * nessun aggiornamento si perde per intero a causa di un campo opzionale.
    */
   async function aggiorna(id: string, patch: Record<string, string>): Promise<string | null> {
     let payload: Record<string, string> = { ...patch };
@@ -144,12 +143,15 @@ if (!url || !key) {
 
   try {
     const righe = await leggiTutte();
+    // TAILORING (§26.68): indice dello STORICO interno dalle righe GIÀ lette (zero query).
+    const storico = indiceStoricoContatti(righe);
     let daCodice = 0;
     let daEmail = 0;
     let daNome = 0;
     let daPec = 0;
     let daAnagraficaCodice = 0;
     let daAnagraficaNome = 0;
+    let daStorico = 0;
     let daStato = 0;
     let scritti = 0;
 
@@ -190,6 +192,10 @@ if (!url || !key) {
           daEmail += 1;
         }
       }
+      // 2-bis) TAILORING (§26.68): recapito OSSERVATO per la stessa scuola (storico interno).
+      const cucito = patchDaStorico(storico, { ...r, ...patch });
+      if (cucito) { Object.assign(patch, cucito); daStorico += 1; }
+      if (!pecDisponibile) delete patch.school_pec;
       // 3) Nome reale dal registro minimo per codice.
       if (!patch.school_name && !r.school_name?.trim()) {
         const nomeRegistro = nomeScuolaDaCodice(codice);
@@ -199,8 +205,7 @@ if (!url || !key) {
         }
       }
 
-      // 4) STATO dell'anagrafica (`completo`/`parziale`): SEMPRE riconsiderato (una
-      //    riga che perde il recapito torna `parziale`). Mai un motivo di scarto.
+      // 4) STATO dell'anagrafica (`completo`/`parziale`): SEMPRE riconsiderato, mai un motivo di scarto.
       if (statoDisponibile) {
         const stato = statoArricchimento({
           school_name: patch.school_name ?? r.school_name,
@@ -231,17 +236,11 @@ if (!url || !key) {
 
     console.log(`— Interpelli esaminati: ${righe.length} —`);
     console.log(
-      `  · anagrafica: risolti per codice ${daAnagraficaCodice}, per nome ${daAnagraficaNome}, PEC aggiunte ${daPec}`,
+      `  · anagrafica: codice ${daAnagraficaCodice} · nome ${daAnagraficaNome} · PEC ${daPec}` +
+        ` · storico interno ${daStorico} · codice dal testo ${daCodice}` +
+        ` · PEO da convenzione MIM ${daEmail} · nome dal registro ${daNome} · stato ${daStato}`,
     );
-    console.log(`  · codice meccanografico dal testo: ${daCodice}`);
-    console.log(`  · email ufficiale ricostruita (PEO da convenzione MIM): ${daEmail}`);
-    console.log(`  · nome scuola dal registro minimo: ${daNome}`);
-    console.log(`  · stato anagrafica aggiornato (completo/parziale): ${daStato}`);
-    console.log(
-      apply
-        ? `✓ Righe aggiornate: ${scritti}`
-        : `(dry-run) righe da aggiornare: ${scritti} — usa -- --apply per applicare`,
-    );
+    console.log(apply ? `✓ Righe aggiornate: ${scritti}` : `(dry-run) righe da aggiornare: ${scritti} — usa -- --apply per applicare`);
   } catch (err) {
     console.error(`✗ Lettura interpelli non riuscita: ${(err as Error).message}`);
     process.exitCode = 1;

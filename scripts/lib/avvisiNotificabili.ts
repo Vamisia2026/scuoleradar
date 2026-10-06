@@ -2,25 +2,36 @@
  * ScuoleRadar.it — AVVISI NOTIFICABILI (conteggio gate-aware, solo-Node).
  *
  * Perché esiste. Il dispatch verso gli utenti è GATED: un avviso parte solo con link
- * diretto all'avviso ufficiale E recapito di candidatura (`motivoAvvisoNonInviabile`).
- * Contare le righe grezze di `interpelli` fa sembrare «FERMO» un dispatch che invece
- * non ha nulla da consegnare. Qui il conteggio passa dallo STESSO giudizio del
- * notifier e della bacheca:
+ * diretto all'avviso ufficiale (`motivoAvvisoNonInviabile`). Da §26.68 il RECAPITO di
+ * candidatura **non è più un requisito di blocco**: si conta a parte (`senzaRecapito`),
+ * così il monitoraggio continua a misurare le righe da arricchire senza scartarle.
+ * Il conteggio passa dallo STESSO giudizio del notifier e della bacheca:
  *   · `emailAvviso` → email trovata dalla fonte;
  *   · `risolviEmailUfficialeScuola` → PEO ricostruita dal codice meccanografico (MIM);
+ *   · `avvisoSenzaRecapito` → avvertenza (non blocco) sul recapito non risolto;
  *   · `motivoRigaNonOpportunitaAvviso` → contorno del feed (§26.65).
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { emailAvviso, motivoAvvisoNonInviabile } from '../../src/lib/alertInterpello.ts';
+import {
+  avvisoSenzaRecapito,
+  emailAvviso,
+  motivoAvvisoNonInviabile,
+} from '../../src/lib/alertInterpello.ts';
 import { risolviEmailUfficialeScuola } from '../../src/lib/emailScuola.ts';
 import { motivoRigaNonOpportunitaAvviso } from '../../src/lib/qualitaAvviso.ts';
 
 /** Conteggio degli avvisi di una finestra: notificabili, contorno e motivi di scarto. */
 export interface ContoAvvisi {
-  /** Avvisi che superano il gate (link diretto + recapito); `null` = lettura fallita. */
+  /** Avvisi che superano il gate (link diretto); `null` = lettura fallita. */
   notificabili: number | null;
   /** Righe che la bacheca scarta perché non sono opportunità (§26.65). */
   contorno: number;
+  /**
+   * Avvisi INVITABILI ma senza recapito di candidatura (§26.68): sono consegnabili
+   * (l'avviso parte senza la riga contatto), restano misurati per l'arricchimento.
+   * `0` quando la lettura è degradata (`notificabili: null`).
+   */
+  senzaRecapito: number;
   /** Istogramma dei motivi di scarto del gate (per report e allarmi). */
   motivi: Map<string, number>;
 }
@@ -39,9 +50,10 @@ export async function contaAvvisiNotificabili(
     .select('title,materia,class_codes,school_name,source_url,contact_email,school_code')
     .gte('created_at', daISO)
     .limit(1000);
-  if (error || !Array.isArray(data)) return { notificabili: null, contorno: 0, motivi };
+  if (error || !Array.isArray(data)) return { notificabili: null, contorno: 0, senzaRecapito: 0, motivi };
   let notificabili = 0;
   let contorno = 0;
+  let senzaRecapito = 0;
   for (const r of data) {
     if (
       motivoRigaNonOpportunitaAvviso({
@@ -59,11 +71,17 @@ export async function contaAvvisiNotificabili(
       emailAvviso(r.contact_email) ??
       risolviEmailUfficialeScuola({ schoolCode: r.school_code, testo: r.title })?.email ??
       null;
-    const motivo = motivoAvvisoNonInviabile({ link: r.source_url, email: recapito });
-    if (motivo) motivi.set(motivo, (motivi.get(motivo) ?? 0) + 1);
-    else notificabili += 1;
+    const motivo = motivoAvvisoNonInviabile({ link: r.source_url });
+    if (motivo) {
+      motivi.set(motivo, (motivi.get(motivo) ?? 0) + 1);
+      continue;
+    }
+    notificabili += 1;
+    // Avviso consegnabile, ma senza recapito: si conta a parte (§26.68) — l'avviso
+    // parte comunque, senza il blocco contatto.
+    if (avvisoSenzaRecapito({ email: recapito })) senzaRecapito += 1;
   }
-  return { notificabili, contorno, motivi };
+  return { notificabili, contorno, senzaRecapito, motivi };
 }
 
 /** Dettaglio compatto dei motivi di scarto del gate (per report e allarmi). */

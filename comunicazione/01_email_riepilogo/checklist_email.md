@@ -118,8 +118,9 @@ se il precedente non esiste:
       `protocollo@…`, `dsga@…`, `dirigente@…`.
 - [ ] **4. PEC** — `codice@pec.istruzione.it` (atti formali), solo se non esiste
       alcun recapito PEO utilizzabile.
-- [ ] **5. `email non disponibile`** — **SOLO come ultima ratio**, quando nessuno
-      dei livelli precedenti esiste.
+- [ ] **5. Nessun recapito risolto** — il **blocco contatto si omette** dal
+      messaggio: mai `Email non disponibile`, mai una riga `📧` vuota (§26.68).
+      L'avviso parte comunque e la riga resta segnalata per la revisione.
 - [ ] **VIETATO**: inventare indirizzi fuori dalla convenzione MIM
       (`emailScuola.ts`), usare domini non istituzionali (gmail, libero, …), o
       ricostruire la PEC quando esiste la PEO.

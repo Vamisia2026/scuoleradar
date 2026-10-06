@@ -20,6 +20,11 @@
  *      dedicato `src/lib/scuolePresentabili.ts`) e il filtro è istantaneo su
  *      provincia + testo digitato (`cercaScuole`): le voci di menu del feed
  *      («Presentazione», «AREE TEMATICHE») non sono più suggerimenti.
+ *   7. PROVINCIA PER LISTA (§26.67): il selettore di provincia sta DENTRO il
+ *      campo scuola, sulla stessa riga del nome e di «Aggiungi», e preferite ed
+ *      escluse ne hanno UNA ciascuna — niente più selettore unico di pannello col
+ *      default «Tutte le tue province». Le OMONIMIE (`omonimieScuole`) sono
+ *      l'unica ragione per cui il campo chiede di sceglierla.
  *
  * Esecuzione: npm run test:filtri-scuole (incluso in `npm test`)
  */
@@ -42,7 +47,7 @@ import {
   suggerimentiScuole,
   testoScuola,
 } from '../src/lib/filtriScuole.ts';
-import { provinceSuggerite, scuolePresentabili } from '../src/lib/scuolePresentabili.ts';
+import { omonimieScuole, provinceSuggerite, scuolePresentabili } from '../src/lib/scuolePresentabili.ts';
 
 let errori = 0;
 function check(nome: string, atteso: unknown, ottenuto: unknown): void {
@@ -161,6 +166,14 @@ const albignasego = scuolePresentabili([
 ]);
 check('la coda di procedura viene tagliata dal nome', 'IC ALBIGNASEGO', albignasego[0]?.nome);
 check('selettore province: solo province con istituti reali', ['Brescia'], provinceSuggerite(albignasego).map((p) => p.nome));
+const omonime = scuolePresentabili([
+  interpello({ id: '7', istituto: 'IIS Volta', provinciaCodice: 'AT', provinciaNome: 'Asti' }),
+  interpello({ id: '8', istituto: 'iis volta', provinciaCodice: 'RM', provinciaNome: 'Roma' }),
+  interpello({ id: '9', istituto: 'Liceo Manzoni', provinciaCodice: 'RM', provinciaNome: 'Roma' }),
+]);
+check('omonimie: lo stesso nome in due province è dichiarato', ['IIS Volta'], omonimieScuole(omonime));
+check('omonimie: un nome univoco non accende nessun avviso', [], omonimieScuole(scuolePresentabili(feed)));
+check('omonimie: senza sigla di provincia non si dichiara nulla', [], omonimieScuole([{ nome: 'IIS Volta', provinciaCodice: '', provinciaNome: '' }]));
 const sorgenteSuggerimenti = leggi('src/lib/scuolePresentabili.ts');
 check(
   'suggerimenti: il gate dei nomi vive nel modulo dedicato (§26.65)',
@@ -197,6 +210,12 @@ const campo = leggi('src/departments/radar/preferenze/components/CampoScuola.tsx
 const radar = leggi('src/departments/radar/PreferenzeRadar.tsx');
 check('pannello: i suggerimenti portano con sé la provincia', true, /scuoleConosciute: ScuolaNota\[\]/.test(pannello));
 check('pannello: PROVINCIA e SCUOLA sono due campi distinti (§26.65)', true, /<CampoScuola/.test(pannello) && /provinceSuggerite/.test(pannello));
+check('pannello: il default «Tutte le tue province» non esiste più (§26.67)', false, /Tutte le tue province/.test(pannello));
+check('pannello: UNA provincia per lista, non una per il pannello', 2, (pannello.match(/onProvinciaChange=/g) ?? []).length);
+check('pannello: preferite ed escluse non condividono la scelta', true, /provinciaPreferite/.test(pannello) && /provinciaEscluse/.test(pannello));
+check('campo: la tendina di provincia sta nella riga del nome + «Aggiungi»', true, /Seleziona provincia/.test(campo) && /sm:flex-row/.test(campo));
+check('campo: la provincia è controllata dal pannello (nessun default muto)', true, /onProvinciaChange/.test(campo) && /provinceSuggerite: ProvinciaSuggerita\[\]/.test(campo));
+check('campo: le omonimie dell’ambito sono dichiarate, non nascoste', true, /omonimieScuole\(scuoleConosciute\)/.test(campo));
 check('campo: la sigla è solo l’etichetta del suggerimento', true, /value=\{s\.nome\} label=\{s\.provinciaCodice\}/.test(campo));
 check('campo: filtro istantaneo per provincia + testo digitato', true, /cercaScuole\(scuoleConosciute, \{/.test(campo) && /query: value/.test(campo));
 check('campo: ogni lista ha la sua tendina (useId)', true, /useId\(\)/.test(campo));

@@ -469,9 +469,41 @@ export interface DatiQualitaAvviso {
   email?: string | null;
 }
 
+/**
+ * MOTIVO dell'AVVERTENZA di qualità: il recapito di candidatura non è risolto.
+ *
+ * Da §26.68 (direttiva 06/10/2026) **non è più un motivo di blocco**: una
+ * opportunità genuina con la fonte ufficiale diretta si invia anche senza
+ * recapito — il blocco contatto si OMETTE dal messaggio (mai «Email non
+ * disponibile») e la riga resta segnalata come da arricchire. La stringa resta
+ * identica perché è il metro dei report (`npm run admin:health`) e delle guardie:
+ * cambia la conseguenza, non la misura.
+ */
+export const MOTIVO_RECAPITO_MANCANTE = 'recapito di candidatura mancante';
+
+/**
+ * Avvertenza di qualità sull'invio: `null` quando il recapito c'è (email della
+ * fonte, PEO/PEC da anagrafica, storico o convenzione MIM), altrimenti il motivo.
+ * Non è un blocco: chi invia logga l'avvertenza e procede senza la riga contatto.
+ */
+export function avvisoSenzaRecapito(dati: DatiQualitaAvviso = {}): string | null {
+  return emailAvviso(dati.email) ? null : MOTIVO_RECAPITO_MANCANTE;
+}
+
+/**
+ * Motivo per cui un avviso NON è inviabile (`null` = inviabile).
+ *
+ * INDEROGABILE: il LINK DIRETTO alla fonte ufficiale (`eUrlAvvisoDiretto`). Un
+ * avviso senza la sua pagina ufficiale non è verificabile e non parte.
+ *
+ * Il RECAPITO di candidatura NON è più un requisito di blocco (§26.68): un
+ * interpello reale non si perde per un'anagrafica incompleta. Il Tailoring
+ * (`lib/tailoringContatti.ts`) prova prima a recuperarlo (fonte → anagrafica →
+ * storico → convenzione MIM); se non riesce, `avvisoSenzaRecapito` lo segnala e
+ * il messaggio parte senza il blocco contatto.
+ */
 export function motivoAvvisoNonInviabile(dati: DatiQualitaAvviso = {}): string | null {
   if (!eUrlAvvisoDiretto(dati.link)) return 'fonte ufficiale non diretta';
-  if (!emailAvviso(dati.email)) return 'recapito di candidatura mancante';
   return null;
 }
 

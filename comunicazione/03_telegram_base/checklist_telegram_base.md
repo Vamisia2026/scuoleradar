@@ -68,7 +68,8 @@
 - [ ] Nessun URL ufficiale in chiaro nel testo (solo il link ipertestuale);
       anteprime dei link disattivate.
 - [ ] Recapito di candidatura come `📧 Candidature: <mailto:…>` **solo se
-      estratto**: mai `Email non disponibile`.
+      estratto**: mai `Email non disponibile`. Senza recapito **l'avviso parte
+      comunque** (§26.68), semplicemente senza la riga `📧`.
 - [ ] Solo testo: nessuna foto/logo, nessun `sendPhoto`/`sendMediaGroup`.
 - [ ] Firma `I tuoi colleghi di Scuole Radar` e CTA Notizie a due righe esatte.
 - [ ] Nessun prompt `Filtra per provincia e classi`.

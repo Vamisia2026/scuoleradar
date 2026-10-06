@@ -96,8 +96,14 @@
       nessun percorso può saltarlo.
 - [ ] Nessuna comunicazione se non ci sono **opportunità attive** (`vociAttive`)
       o fatti nuovi: niente messaggi "a vuoto" per riempire la giornata.
-- [ ] Nessun invio con link non diretto o senza recapito di candidatura
-      (`avvisoInviabile`): l'avviso incompleto si scarta e si logga il motivo.
+- [ ] Nessun invio con **link non diretto** (`eUrlAvvisoDiretto`): la fonte ufficiale
+      specifica è **inderogabile**, l'avviso non verificabile si scarta e si logga il
+      motivo. Il **recapito di candidatura mancante NON blocca più l'invio** (§26.68,
+      direttiva 06/10/2026): un'interpellanza vera non si perde per un'anagrafica
+      incompleta. Il blocco contatto si **omette** dal messaggio (mai
+      `Email non disponibile`, mai riga `📧` vuota), la riga resta **segnalata**
+      (`avvisoSenzaRecapito` → conteggio e alert di revisione) e il Tailoring prova a
+      recuperarla da anagrafica, storico interno e convenzione MIM.
 - [ ] Nessun contenuto ripetuto nella stessa comunicazione (no duplicati interni
       al messaggio, no blocchi copiati due volte).
 
@@ -108,7 +114,9 @@
 - [ ] `npm run test:copy` — firma e copy di brand completi.
 - [ ] `npm run test:dedup` e `npm run test:dedup:utente` — nessun duplicato.
 - [ ] `npm run test:telegram:tier` — split PRO/Base e conteggio per canale.
-- [ ] `npm run test:qualita` — gate link diretto + recapito.
+- [ ] `npm run test:qualita` — gate del **link diretto** (il recapito mancante è
+      un'avvertenza, non un blocco: §26.68) e `npm run test:tailoring` — recupero del
+      recapito da anagrafica / storico interno / convenzione MIM.
 - [ ] `npm run test:email` / `npm run test:telegram:template` — firma e link
       renderizzati correttamente nell'HTML/messaggio finale.
 - [ ] Revisione manuale del messaggio renderizzato: firma esatta, tono, link,

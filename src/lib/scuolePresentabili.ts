@@ -49,6 +49,32 @@ export interface ProvinciaSuggerita {
 }
 
 /**
+ * OMONIMIE — i nomi d'istituto che nell'ambito compaiono in PIÙ di una provincia.
+ *
+ * Sono la sola ragione per cui la provincia va detta: «IIS Volta» esiste in più
+ * province, e senza sapere DOVE sta la scuola la preferenza (o la blacklist)
+ * colpirebbe anche l'istituto omonimo di un'altra regione. Il campo la usa per
+ * parlarne **solo quando il rischio esiste davvero** (mai un avviso a vuoto), e
+ * il confronto è quello delle liste: nome in minuscolo + sigla normalizzata, una
+ * voce per nome, in ordine alfabetico. Se il nome è già univoco, elenco vuoto.
+ */
+export function omonimieScuole(note: readonly ScuolaNota[] | null | undefined): string[] {
+  const per = new Map<string, { nome: string; province: Set<string> }>();
+  for (const n of note ?? []) {
+    const nome = (n.nome ?? '').trim();
+    const codice = siglaProvincia(n.provinciaCodice);
+    if (!nome || !codice) continue;
+    const voce = per.get(nome.toLowerCase()) ?? { nome, province: new Set<string>() };
+    voce.province.add(codice);
+    per.set(nome.toLowerCase(), voce);
+  }
+  return [...per.values()]
+    .filter((v) => v.province.size > 1)
+    .map((v) => v.nome)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/**
  * Le province che il selettore del campo scuola può offrire: quelle dei
  * suggerimenti presenti, senza doppioni e in ordine alfabetico di nome. Vuoto
  * quando il feed non ha scuole presentabili (il campo resta a testo libero).

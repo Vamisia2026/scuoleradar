@@ -57,7 +57,8 @@
       la Classe/Materia.
 - [ ] Scadenze già passate o non valide **non** vengono mostrate.
 - [ ] Recapito di candidatura come `📧 Candidature: <mailto:…>` **solo se
-      estratto**; mai `Email non disponibile` e mai riga `📧` vuota.
+      estratto**; mai `Email non disponibile` e mai riga `📧` vuota. Senza recapito
+      l'avviso si pubblica comunque (§26.68), senza la riga `📧`.
 - [ ] Titolo pulito: nessun "dump" di codici classe, nessuna intestazione
       burocratica copiata dalla fonte.
 - [ ] Nessuna variante personale nei canali pubblici (no saluti, no
@@ -151,11 +152,16 @@
       automatica** (`scripts/pulisci-scaduti.ts` rimuove anche le righe senza scadenza fuori
       finestra): un avviso che la fonte non data non resta pubblico per sempre.
 
-- [ ] **Scuole preferite/escluse: i suggerimenti restano nell'ambito delle proprie province (+60 km)** — il
-      campo scuola del Radar propone **solo** le scuole delle province da cercare (`suggerimentiScuole`,
-      `src/lib/filtriScuole.ts`, §26.62), con la **sigla della provincia** accanto al nome; una scuola di
-      un'altra provincia resta **scrivibile**, ma la **forzatura è dichiarata** (avviso sotto il campo e
-      badge «Fuori ambito · <provincia>» sulla pill) in **entrambe** le liste: nessuna forzatura silenziosa.
+- [ ] **Scuole preferite/escluse: la provincia si sceglie PER LISTA e i suggerimenti restano nell'ambito delle proprie
+      province (+60 km)** — il campo scuola del Radar è una riga sola, `[ Provincia ▾ ] [ Nome della scuola ]
+      [ + Aggiungi ]`: la provincia sta **dentro il campo**, una per lista (preferite ed escluse **non** condividono la
+      scelta) e senza default «tutte le tue province» (`src/departments/radar/preferenze/components/CampoScuola.tsx`,
+      §26.67); il campo chiede la provincia **solo** quando esistono omonimie da sciogliere (`omonimieScuole`,
+      `src/lib/scuolePresentabili.ts`). I suggerimenti restano **solo** le scuole delle province da cercare
+      (`suggerimentiScuole`, `src/lib/filtriScuole.ts`, §26.62), con la **sigla della provincia** accanto al nome; una
+      scuola di un'altra provincia resta **scrivibile**, ma la **forzatura è dichiarata** (avviso sotto il campo e
+      badge «Fuori ambito · <provincia>» sulla pill) in **entrambe** le liste: nessuna forzatura silenziosa. Il valore
+      salvato resta il **nome** dell'istituto (la sigla è solo l'etichetta del suggerimento).
 
 
 ## 5. Verifica prima del merge

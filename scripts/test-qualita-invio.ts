@@ -4,8 +4,10 @@
  *     anteprime/immagini SEMPRE disattivate (nessun riquadro "gigante");
  *  2. LINK DIRETTO: "Guarda la fonte ufficiale" punta all'URL esatto dell'avviso,
  *     mai a una home, a una pagina di ricerca/elenco o a un archivio regionale;
- *  3. GATE: gli avvisi senza link diretto o senza recapito di candidatura vengono
- *     SCARTATI dal dispatch (nessun avviso incompleto parte);
+ *  3. GATE: gli avvisi senza link diretto vengono SCARTATI dal dispatch (nessun
+ *     avviso non verificabile parte). Il RECAPITO mancante non blocca più l'invio
+ *     (§26.68, direttiva 06/10/2026): si segnala con `avvisoSenzaRecapito` e il
+ *     messaggio parte senza la riga contatto — l'opportunità non si perde.
  *  4. MAPPATURA PROVINCE: i capoluoghi "composti" (es. Forlì → FC) non ricadono
  *     sulla provincia della fonte (era il bug "alert di Torino da Forlì-Cesena");
  *  5. CTA Notizie: le due righe esatte, in Telegram, email e Edge;
@@ -16,6 +18,7 @@
 import { readFileSync } from 'node:fs';
 import {
   avvisoInviabile,
+  avvisoSenzaRecapito,
   eUrlAvvisoDiretto,
   motivoAvvisoNonInviabile,
 } from '../src/lib/alertInterpello.ts';
@@ -57,27 +60,47 @@ check(
   eUrlAvvisoDiretto('https://www.usp-asti.gov.it/interpelli/stampa?cod=ASTF01000X'),
 );
 
-console.log('\n— GATE STRICT: link diretto ED email di candidatura obbligatori —');
+console.log('\n— GATE DI QUALITÀ: link diretto obbligatorio · recapito NON bloccante (§26.68) —');
 check('link diretto + email → inviabile', true, avvisoInviabile({
   link: 'https://www.usp-asti.gov.it/interpelli/avviso-a022',
   email: 'attf01000x@istruzione.it',
 }));
-check('link diretto ma senza email → SCARTATO', false, avvisoInviabile({
+check('link diretto SENZA email → inviabile (un interpello vero non si perde)', true, avvisoInviabile({
   link: 'https://www.usp-asti.gov.it/interpelli/avviso-a022',
   email: null,
+}));
+check('link diretto con email malformata → inviabile, con avvertenza', true, avvisoInviabile({
+  link: 'https://www.usp-asti.gov.it/interpelli/avviso-a022',
+  email: 'non-una-email',
 }));
 check('email valida ma link non diretto → SCARTATO', false, avvisoInviabile({
   link: 'https://www.scuolainterpelli.it/interpelli-lombardia/',
   email: 'attf01000x@istruzione.it',
 }));
+check('link assente → SCARTATO', false, avvisoInviabile({ email: 'attf01000x@istruzione.it' }));
 check('motivo: fonte non diretta', 'fonte ufficiale non diretta', motivoAvvisoNonInviabile({
   link: 'https://www.istruzionepiemonte.it/',
   email: 'attf01000x@istruzione.it',
 }));
-check('motivo: recapito mancante', 'recapito di candidatura mancante', motivoAvvisoNonInviabile({
-  link: 'https://www.usp-asti.gov.it/interpelli/avviso-a022',
-  email: 'non-una-email',
-}));
+check(
+  'nessun motivo di blocco per recapito mancante',
+  null,
+  motivoAvvisoNonInviabile({
+    link: 'https://www.usp-asti.gov.it/interpelli/avviso-a022',
+    email: 'non-una-email',
+  }),
+);
+check('avvertenza: recapito mancante', 'recapito di candidatura mancante', avvisoSenzaRecapito({ email: null }));
+check(
+  'avvertenza: email malformata = recapito mancante',
+  'recapito di candidatura mancante',
+  avvisoSenzaRecapito({ email: 'non-una-email' }),
+);
+check(
+  'avvertenza assente quando il recapito c’è',
+  null,
+  avvisoSenzaRecapito({ email: 'attf01000x@istruzione.it' }),
+);
 
 console.log('\n— MAPPATURA PROVINCE: capoluoghi “composti” (bug Forlì → FC) —');
 check('Forlì → FC (non TO)', 'FC', estraiProvincia('Interpello supplenza A-022 — Liceo di Forlì'));
@@ -167,6 +190,11 @@ const edge = readFileSync('supabase/functions/send-notification/index.ts', 'utf8
 check('Edge: brand cliccabile', true, edge.includes(BRAND));
 check('Edge: anteprime disattivate', true, /link_preview_options:\s*\{\s*is_disabled:\s*true\s*\}/.test(edge));
 check('Edge: gate di qualità presente', true, /motivoAvvisoNonInviabile/.test(edge));
+check(
+  'Edge: il recapito mancante non blocca più (avvertenza §26.68)',
+  true,
+  /avvisoSenzaRecapito/.test(edge) && !/emailValida\(email\)\)\s*return 'recapito di candidatura mancante'/.test(edge),
+);
 const webhook = readFileSync('supabase/functions/telegram-webhook/index.ts', 'utf8');
 check('Telegram webhook: brand cliccabile', true, webhook.includes(BRAND));
 check(

@@ -45,6 +45,13 @@ import * as cheerio from 'cheerio';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { arricchisciConAnagrafica, riepilogoAnagrafica } from './anagraficaInterpelli.ts';
 import {
+  applicaTailoring,
+  azzeraRiepilogoTailoring,
+  impostaStoricoContatti,
+  riepilogoTailoring,
+} from './tailoringInterpelli.ts';
+import { caricaStoricoContatti } from './storicoContatti.ts';
+import {
   parseInterpello,
   estraiDataPubblicazione,
   estraiDataScadenza,
@@ -953,7 +960,7 @@ function clientSupabase(url: string, key: string): SupabaseClient {
  * prova ricevono la stessa riga completa (nessuna logica duplicata a valle).
  */
 function mappaRigaInterpelli(a: InterpelloParsato) {
-  const avviso = arricchisciConAnagrafica(a);
+  const avviso = applicaTailoring(arricchisciConAnagrafica(a));
   return {
     hash_id: avviso.hashId,
     title: avviso.title,
@@ -1409,6 +1416,18 @@ async function main() {
     env.SCRAPER_EMAIL_DA_CODICE !== '0',
   );
 
+  // TAILORING (§26.68): precarica il NOSTRO storico dei contatti (scuola → recapito
+  // già risolto) e azzera i contatori del run. È la fonte che copre ciò che
+  // l'anagrafica non può fare dove i file SCUANAGRAFE non ci sono (runner CI).
+  azzeraRiepilogoTailoring();
+  const storicoContatti = await caricaStoricoContatti(supabase);
+  impostaStoricoContatti(storicoContatti);
+  console.log(
+    storicoContatti.disponibile
+      ? `• Tailoring: storico contatti con ${storicoContatti.righe} recapiti osservati (${storicoContatti.perCodice.size} codici meccanografici).`
+      : '• Tailoring: storico contatti non disponibile — si procede con convenzione MIM e anagrafica.',
+  );
+
   // GATE 2 — SOLO BANDI ATTIVI: dopo l'arricchimento delle scadenze, un bando già
   // scaduto non entra in bacheca (né in notifica). Una scadenza ASSENTE non è una
   // prova di scadenza: senza data il record resta attivo finché una fonte non lo
@@ -1639,6 +1658,29 @@ async function main() {
       `• Anagrafica scuole: ${anagrafica.arricchiti} avvisi arricchiti su ${unici.length} ` +
         `(${anagrafica.codici} codici meccanografici da ${anagrafica.file} file SCUANAGRAFE).`,
     );
+  }
+
+  // TAILORING (§26.68): cosa ha cucito il «database interno» e cosa resta da
+  // revisionare. Dichiarato SEMPRE, mai silenzioso: sono le righe che entrano (o
+  // restano) in `interpelli` senza recapito di candidatura.
+  const tailoring = riepilogoTailoring();
+  console.log(
+    `• Tailoring contatti: ${tailoring.recuperati} avvisi arricchiti ` +
+      `(storico interno ${tailoring.daStorico}, convenzione MIM ${tailoring.daConvenzione}) · ` +
+      `${tailoring.daRevisionare} da revisionare.`,
+  );
+  if (tailoring.daRevisionare > 0) {
+    await inviaAlertaAdmin({
+      severity: 'warning',
+      category: 'tailoring',
+      title: 'Tailoring: avvisi senza recapito di candidatura',
+      message:
+        `${tailoring.daRevisionare} candidati di questo run restano in \`interpelli\` senza recapito ` +
+        'di candidatura dopo storico interno, anagrafica e convenzione MIM. NON si perdono: restano in ' +
+        'bacheca e (da §26.68) vengono notificati senza il blocco contatto. Da revisionare a mano' +
+        (tailoring.esempi.length > 0 ? `: ${tailoring.esempi.join(' | ')}` : '.'),
+      meta: { ...tailoring },
+    });
   }
 
   if (error) {

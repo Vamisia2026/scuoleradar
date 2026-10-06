@@ -341,7 +341,8 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `materieClassi.ts` | 41 | **Puro** — MATERIE COPERTE dalle classi di concorso (§26.62), derivazione **unica** di Admin e vista utente: `materieDelleClassi(codici)` normalizza i codici (`normalizzaClasse`: `A-018` ≡ `A18`), legge `materie[]` dal catalogo `src/data/classiConcorso.ts` e risolve gli id nel NOME (`src/data/ordiniMaterie.ts`), senza duplicati e nell'ordine delle classi scelte; un codice fuori catalogo resta codice, senza righe inventate. La usano la scheda utente dell'Admin (`departments/admin/components/derivaPreferenzeUtente.ts`, campo `materieClassi`) e il box «In cosa puoi lavorare» del Radar (`departments/radar/components/RiepilogoLavoro.tsx`) |
 | `bachecaInterpelli.ts` | 191 | **Puro** (§26.56 → §26.65) — PIPELINE della bacheca, un solo punto: avviso vivo → **la riga è un avviso?** (`motivoRigaNonOpportunitaAvviso`, §26.65: il contorno del feed non entra e lo scarto è contato) → filtri scuole (blacklist fuori, whitelist dentro d'ufficio) → **PORTA D'INGRESSO PRIMARIA** (conferma del motore, oppure classe almeno «stessa area» 85: una competenza trovata NON apre la bacheca) → punteggio (media ponderata delle modali primarie **+ la sfumatura del livello secondario**) → esclusione secca dei riempitivi non pertinenti (§26.60) → cap dei riempitivi con protezione delle scuole preferite. `bachecaInterpelli(fonti, profilo)` restituisce lista + conti (`righeNonOpportunita`, `esclusiBlacklist`, `forzate`, `riempitiviEsclusi`, `riempitiviNascosti`) e scrive sull'interpello `compatibilita`, `motivoCompatibilita`, `scuolaPreferita` e **`competenzaSecondaria`** (§26.63), così `useInterpelliFeed` resta un contenitore di stato |
 | `scadenza.ts` | ~90 | Helper scadenza (puro): `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `stileScadenza` (semaforo 🟢 lungo / 🟡 vicino / 🔴 imminente) |
-| `alertInterpello.ts` | ~480 | Costruttore dell'**avviso strutturato** (gerarchia obbligatorie/opzionali + campo `email` dell'avviso), `pulisciTitoloAvviso` (via i dump di codici classe), **`emailAvviso`** + costanti condivise `EMAIL_ICONA`/`EMAIL_ETICHETTA`/`EMAIL_ETICHETTA_WEB`, **`ISTRUZIONE_AVVISO_UFFICIALE`** (direttiva standard "clicca STAMPA") e **`suggerimentoRicercaAvviso({ compatto })`** (guida operativa per elenchi/"Stampa" o fonte mancante), **`emailAvviso`** ed **`etichettaFonteLink`/`classificaFonteLink`/`ePaginaRiepilogo`** (etichetta ONESTA del link: PDF / Albo Pretorio / **pagina di riepilogo "Stampa"** / avviso — mai "Candidati"), **GATE DI QUALITÀ**: `eUrlAvvisoDiretto` (link = avviso specifico, mai home/elenco/ricerca/archivio regionale), `motivoAvvisoNonInviabile` e `avvisoInviabile` (**link diretto AND email di candidatura**: altrimenti nessun invio), **PULIZIA DELL'URL**: `pulisciUrlEsterna` (entità `&amp;`, virgolette/angolari/caporalia di markdown, spazi e punteggiatura di contorno) e **`urlFonteAvviso`** = stringa pulita + UNICO gate `eUrlAvvisoDiretto` (il punto unico dell'`href` per Telegram, email e canali — §26.45). Verificato da `npm run test:qualita` |
+| `alertInterpello.ts` | ~480 | Costruttore dell'**avviso strutturato** (gerarchia obbligatorie/opzionali + campo `email` dell'avviso), `pulisciTitoloAvviso` (via i dump di codici classe), **`emailAvviso`** + costanti condivise `EMAIL_ICONA`/`EMAIL_ETICHETTA`/`EMAIL_ETICHETTA_WEB`, **`ISTRUZIONE_AVVISO_UFFICIALE`** (direttiva standard "clicca STAMPA") e **`suggerimentoRicercaAvviso({ compatto })`** (guida operativa per elenchi/"Stampa" o fonte mancante), **`emailAvviso`** ed **`etichettaFonteLink`/`classificaFonteLink`/`ePaginaRiepilogo`** (etichetta ONESTA del link: PDF / Albo Pretorio / **pagina di riepilogo "Stampa"** / avviso — mai "Candidati"), **GATE DI QUALITÀ**: `eUrlAvvisoDiretto` (link = avviso specifico, mai home/elenco/ricerca/archivio regionale), `motivoAvvisoNonInviabile` e `avvisoInviabile` (**LINK DIRETTO obbligatorio**; da §26.68 il **recapito mancante NON blocca più** l'invio: `avvisoSenzaRecapito` + `MOTIVO_RECAPITO_MANCANTE` sono l'avvertenza che il dispatch logga e che il monitor conta), **PULIZIA DELL'URL**: `pulisciUrlEsterna` (entità `&amp;`, virgolette/angolari/caporalia di markdown, spazi e punteggiatura di contorno) e **`urlFonteAvviso`** = stringa pulita + UNICO gate `eUrlAvvisoDiretto` (il punto unico dell'`href` per Telegram, email e canali — §26.45). Verificato da `npm run test:qualita` |
+| `tailoringContatti.ts` | 103 | **Puro** (§26.68) — il **TAILORING DEL RECAPITO**, punto unico di decisione: `risolviContattoAvviso({ emailFonte, anagrafica, storico, convenzione })` risponde `{ email, pec, provenienza, daRevisionare }` nella gerarchia di autorevolezza **fonte → anagrafica (SCUANAGRAFE) → storico interno → convenzione MIM**; `Email malformata` scende alla fonte successiva, `daRevisionare` è l'esito onesto quando nessuna fonte produce un recapito (l'avviso si invia lo stesso, senza blocco contatto). `ETICHETTA_PROVENIENZA` per log e report. Verificato da `npm run test:tailoring` |
 | `interpelloRouting.ts` | ~40 | Deep link LEGACY `/interpello/:id` (puro): `eUuid`, `chiaveInterpelloDaParam` (uuid → `id`, hash → `hash_id`). **Policy**: le notifiche non generano più link interni; la rotta resta solo per i deep link storici (che reindirizzano subito alla fonte esterna) |
 | `digest.ts` | ~130 | **Puro, senza import** — finestra del BATCH giornaliero: `oraLocaleItalia`/`dataLocaleItalia`/`etichettaDataItalia` (fuso `Europe/Rome`), `ORA_DIGEST` (**17:00**), `eOraDelDigest(istante, forzato)`, `descrizioneFinestraDigest`, `ordinaVociDigest` (scadenza più vicina in cima), `raggruppaPerProvincia` |
 | `resend.ts` | 1.153 | **Node-only** — email Resend: 8 `TipoMessaggio` (`welcome, prova1, prova2, prova3, extra, recap, welcome_pro, notifica_pro`), **OGGETTO STANDARD delle opportunità** `OGGETTO_OPPORTUNITA = 'Nuove opportunità per te!'` (`subjectDigest`/`subjectOpportunita`/`subjectPerNotifica`; gli oggetti di ciclo di vita restano specifici), **`vociAttive`** (il digest contiene SOLO opportunità non scadute), **`footerEmailHtml`** (footer unico crisp: firma → CTA Notizie email → link Radar **in piccolo** (12.5 px) → riga brand → avviso "non rispondere" in coda; niente "P.S.", niente grigio `#94a3b8`), `ctaNotizieHtml`/`URL_NOTIZIE_VISIBILE`/`CTA_NOTIZIE_TESTO_EMAIL`/`TESTO_NON_RISPOSTA`, `linkOpportunita` (solo link diretto, **URL già pulito** via `urlFonteAvviso`) e **`fonteInEvidenza`** (PULSANTE dell'avviso ufficiale: **UNICA azione di fonte per voce**, etichetta standard; **nessun box giallo né guida operativa nelle email**), **`intestazioneBrandHtml`/`URL_BRAND`** (header email **SOLO testuale**, cliccabile verso `scuoleradar.it`: **nessun logo-immagine**), CORPO_MESSAGGI, `TIPI_CON_OPPORTUNITA`, `renderEmailHtml`, `inviaNotificaEmail`, `inviaNotificheInterpello`, `renderDigestEmailHtml`/`inviaDigestEmail`, **`renderPromemoriaEmailHtml`/`inviaPromemoriaEmail`**. Verificato da `npm run test:email`, `npm run test:digest`, `npm run test:promemoria`, `npm run test:link` |
@@ -5666,6 +5667,8 @@ per nome** che completa le righe alla fonte.
 | `src/lib/anagraficaIndice.ts` | Scoperta dei file per prefisso nella cartella `SCUOLERADAR_ANAGRAFICA_DIR` (default `~/Downloads`), costruzione dell'indice (`perCodice`, `perIstituto`, `perNome`) e **cache di processo** (i file pesano ~13 MB: mai ricaricati a riga) |
 | `src/lib/anagraficaScuole.ts` | Superficie pubblica (ri-esporta i due moduli sopra): `scuolaDaCodice`, `scuolaDaNome` (solo se **univoco**, con provincia; ripete togliendo una testa di 2–6 caratteri perché l'avviso scrive «I.C. Ferruccio Ulivi» e l'anagrafica «Ferruccio Ulivi»), `nomeDaAnagrafica` (denominazione dell'**istituto**, passata dal gate §26.20) e **`arricchisciDaAnagrafica(riga)`** → patch `{ school_code, school_name, contact_email, school_pec }` |
 | `src/scraper/anagraficaInterpelli.ts` | Ponte dello scraper: `arricchisciConAnagrafica(avviso)` completa la riga **all'inserimento** + `riepilogoAnagrafica()` per il log del run |
+| `src/scraper/storicoContatti.ts` | **Nuovo** (§26.68) — il «database interno» del Tailoring: `indiceStoricoContatti` (recapiti **osservati** per codice e per nome, un candidato per provincia, la riga più recente vince), `contattoDaStorico` (nome solo se univoco, `null` se ambiguo), `patchDaStorico` (mai sovrascritture, contratto identico a `arricchisciDaAnagrafica`), `caricaStoricoContatti` (una query per run, max 2000 righe, tollera colonne non migrate e client assente) |
+| `src/scraper/tailoringInterpelli.ts` | **Nuovo** (§26.68) — ponte dello scraper: `applicaTailoring(avviso)` in coda all'anagrafica in `mappaRigaInterpelli`, `impostaStoricoContatti` (una lettura per processo), contatori del run (`recuperati`, `daStorico`, `daConvenzione`, `daRevisionare`, `esempi`) per il log e l'**alert admin** di revisione |
 
 **Regole di sicurezza dei dati.** L'arricchimento **non sovrascrive mai** un campo già presente e
 **non inventa nulla**: se il codice non è in anagrafica la riga resta com'è; un nome **ambiguo**
@@ -7344,7 +7347,7 @@ e l'estensione del jolly alle Modalità 1/2, che non ne hanno bisogno.
 
 **L'ordine si LEGGE dal titolo.** `mapInterpelloDBToInterpello` (`matchingEngine.ts`) sceglieva `secondaria2` come **default fisso** per ogni riga senza codice classe: un salto di ordine per tutti e punteggi piatti in Modalità 1. Ora `inferisciOrdineDaTesto(title)` (in `alertInterpello.ts`: ATA/DSGA, infanzia, primaria, secondaria I e II) precede il default, che resta solo come ultima rete.
 
-**Campo scuola: DUE campi, suggerimenti veri.** Il pannello delle Preferenze mostra prima il selettore **Provincia** (le province con istituti reali, `provinceSuggerite`) e poi il campo **Scuola**: scegliendo la provincia i suggerimenti si restringono **istantaneamente** (`cercaScuole`, sottostringa normalizzata) — prima la provincia, poi la scuola, come in un input di indirizzi. Il componente `CampoScuola.tsx` ha la sua tendina (`useId`), quindi le due liste (preferite / escluse) non si scambiano i suggerimenti; il valore salvato resta il **nome** dell'istituto, la sigla di provincia è solo l'etichetta del suggerimento. I suggerimenti passano dal gate `scuolePresentabili(avvisi)` (nuovo `src/lib/scuolePresentabili.ts`): mai un titolo di sezione, mai una materia, mai un dump di codici; la coda procedurale viene tagliata («IC ALBIGNASEGO Interpello per copertura posti» → «IC ALBIGNASEGO»). L'ambito provinciale e la dichiarazione della forzatura restano quelli della §26.62, e senza province scelte i suggerimenti sono vuoti.
+**Campo scuola: DUE campi, suggerimenti veri.** Il pannello delle Preferenze mostra prima il selettore **Provincia** (le province con istituti reali, `provinceSuggerite`) e poi il campo **Scuola**: scegliendo la provincia i suggerimenti si restringono **istantaneamente** (`cercaScuole`, sottostringa normalizzata) — prima la provincia, poi la scuola, come in un input di indirizzi. Il componente `CampoScuola.tsx` ha la sua tendina (`useId`), quindi le due liste (preferite / escluse) non si scambiano i suggerimenti; il valore salvato resta il **nome** dell'istituto, la sigla di provincia è solo l'etichetta del suggerimento. I suggerimenti passano dal gate `scuolePresentabili(avvisi)` (nuovo `src/lib/scuolePresentabili.ts`): mai un titolo di sezione, mai una materia, mai un dump di codici; la coda procedurale viene tagliata («IC ALBIGNASEGO Interpello per copertura posti» → «IC ALBIGNASEGO»). L'ambito provinciale e la dichiarazione della forzatura restano quelli della §26.62, e senza province scelte i suggerimenti sono vuoti. **✔️ Aggiornato dalla §26.67**: quel selettore non sta più in cima al pannello (dov'era unico, col default «Tutte le tue province») — è DENTRO il campo, uno per lista.
 
 **Un modulo ESTRATTO, non una copia.** `scuolePresentabili.ts` (70 righe) è nato da `filtriScuole.ts`, che scendeva a 271 righe e scende a **223** (dentro la soglia di manutenzione di `MODULAR_ARCHITECTURE.md`): nel modulo dedicato stanno `scuolePresentabili` e `provinceSuggerite`, nel vecchio restano le LISTE (§26.56), l'ambito (§26.62) e la ricerca (`cercaScuole`), con `siglaProvincia` ora `export` per la condivisione. **Nessuna copia**: il test verifica che il gate dei nomi non risalga in `filtriScuole.ts`.
 
@@ -7382,6 +7385,108 @@ e l'estensione del jolly alle Modalità 1/2, che non ne hanno bisogno.
 **Azione dell'operatore (fuori dal codice).** (1) **Secrets GitHub**: impostare `ADMIN_ALERT_SECRET` (stesso valore dei secrets Supabase dell'Edge `telegram-admin-webhook`), altrimenti nessun alert parte dalla CI. (2) **Actions**: verificare che il workflow **Digest giornaliero** (`0 15,16 * * 1-5`) risulti eseguito e verde — dal ledger non risulta alcuna consegna del digest, quindi il sospetto è il cron (workflow disabilitato, minuti esauriti, run fallito prima dell'invio). (3) **Recapiti**: un avviso diventa notificabile solo con un'email o un meccanografico risolvibile; la copertura si alza con l'arricchimento anagrafico (file `SCUANAGRAFE`, non versionati, assenti in CI).
 
 **File toccati.** Nuovi: `scripts/lib/saluteDispatch.ts`, `scripts/lib/avvisiNotificabili.ts`. Riscritto: `scripts/admin-health-check.ts`. Docs: `docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`. Nessun altro dipartimento toccato, nessuna modifica a database/migrazioni, al digest o al gate di qualità.
+
+### 26.67 «Filtri Avanzati Scuole»: la provincia è di OGNI lista, non un default del pannello (06/10/2026)
+
+**Sintomo.** Nel box «Filtri Avanzati Scuole» il selettore **Provincia** stava in cima al pannello con il default «Tutte le tue province»: la stessa scelta valeva per entrambe le liste, e chi voleva preferire (o ignorare) una scuola doveva prima capire *quale* provincia avesse di fronte. Con due istituti omonimi in province diverse — caso normale, «IIS Volta» esiste in più regioni — l'ambiguità finiva dentro la lista salvata, perché il valore salvato è il **nome** (il confronto delle liste è testuale, §26.62: `istituto + titolo`, `includes`).
+
+**La regola nuova.** La provincia diventa un comando **del campo**, uno PER LISTA: `[ Provincia ▾ ] [ Nome della scuola ] [ + Aggiungi ]` sulla **stessa riga** (`preferenze/components/CampoScuola.tsx`), con due stati indipendenti nel pannello (`provinciaPreferite`, `provinciaEscluse`). Il selettore unico di pannello e il suo default «Tutte le tue province» sono **rimossi**: la tendina ha il placeholder neutro `Seleziona provincia…` e la scelta NON è condivisa fra preferite ed escluse (chi cerca una scuola da preferire e una da ignorare sta guardando due province diverse). Il valore salvato resta il **nome** dell'istituto — la sigla non viene appiccicata al nome, altrimenti il confronto `includes` delle liste non lo riconoscerebbe più.
+
+**Quando il campo chiede la provincia (e quando tace).** Nuova funzione pura `omonimieScuole(note)` in `src/lib/scuolePresentabili.ts`: i nomi che nell'ambito compaiono in **più di una provincia** (nome in minuscolo + sigla normalizzata, una voce per nome, ordine alfabetico). `CampoScuola` la usa per parlare **solo quando serve**: nessun istituto in ambito → «Nessun istituto nel feed per le tue province: scrivi il nome a mano — la forzatura resta dichiarata» · omonimie presenti e nessuna provincia scelta → «N nomi d'istituto compaiono in più province: scegli la provincia per non confonderli» · altrimenti **nessun avviso**: con un nome univoco la provincia non è obbligatoria e il campo non lo finge.
+
+**Cosa NON cambia.** L'ambito dei suggerimenti resta quello delle proprie province + 60 km (`suggerimentiScuole(note, provinceRicerca)`, §26.62): la provincia del campo **restringe** i suggerimenti, non allarga l'ambito. Il testo libero resta scrivibile e la forzatura resta **dichiarata** (avviso sotto il campo + badge «Fuori ambito · <provincia>» sulla pill). I suggerimenti restano gli istituti **presentabili** (`scuolePresentabili`, gate §26.59) e il `datalist` resta per-campo (`useId`): le due liste non si scambiano né provincia né suggerimenti.
+
+**Verifiche (06/10/2026, da `project/`).** `npm run test:filtri-scuole` → ✅ (nuovi blocchi: omonimie pure, tendina nella riga del nome, UNA provincia per lista, default «Tutte le tue province» assente). `npm test` → ✅ catena verde (comprese `test:copy-etico` e `test:admin:utente`). `npm run typecheck` → 0 errori. `npm run test:architettura` → ✅ 611 file, 141 violazioni = baseline congelata (250/300 rispettati: `PannelloFiltriScuole.tsx` 227, `CampoScuola.tsx` 189, `scuolePresentabili.ts` 95, `test-filtri-scuole.ts` 243). `npm run lint` sui file toccati → 0 errori. `npm run build` → ✅.
+
+**File toccati.** Dipartimento **Radar**: `src/departments/radar/preferenze/PannelloFiltriScuole.tsx` (selettore di pannello rimosso, due province di lista, nuova prop `etichettaProvincia`), `src/departments/radar/preferenze/components/CampoScuola.tsx` (riga a tre comandi + `NotaProvincia`). Condiviso essenziale: `src/lib/scuolePresentabili.ts` (`omonimieScuole`). Guardia: `scripts/test-filtri-scuole.ts`. Docs e checklist: `docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`, `comunicazione/04_canali_regionali/checklist_regionali.md`. **Non toccati**: gli altri dipartimenti (`notizie`, `cfu`, `modulistica`, …), `src/modules/**`, la pipeline di consegna, il database e le migrazioni (la lista salvata resta il nome: nessuna modifica allo schema).
+
+**Nota di sessione (06/10/2026).** Nessuna nuova libreria: due stati in più nel pannello e una funzione pura in più nel modulo estratto dalla §26.65. La regola di prodotto è quella della §26.62 (l'ambito è delle proprie province + 60 km, la forzatura si dichiara); cambia **il modo di scegliere**: la provincia si dice accanto al nome, una volta per lista, invece di un default uguale per entrambe.
+### 26.68 Tailoring del recapito: un interpello vero non si perde per un'anagrafica incompleta (06/10/2026)
+
+**Sintomo.** Le fonti non pubblicano sempre l'email di candidatura e sui runner CI i file SCUANAGRAFE
+(~15 MB, non versionati) non sono presenti: le righe nuove nascevano `parziale`, senza recapito, e il
+**gate di qualità** le escludeva dal dispatch — un'interpellanza reale spariva dalle notifiche per un dato
+amministrativo mancante. La regola di prodotto lo prevedeva («nessun invio senza recapito»), quindi il
+rimedio non poteva essere un silenzio: andava cambiata la regola e costruita la catena che il recapito lo
+recupera.
+
+**La regola nuova (prodotto).** Il **recapito di candidatura NON blocca più l'invio** (§26.68, direttiva
+06/10/2026): `motivoAvvisoNonInviabile` conserva **un solo requisito**, il **LINK DIRETTO** alla fonte
+ufficiale (un avviso senza la sua pagina non è verificabile), mentre la mancanza di recapito diventa
+un'**avvertenza** — `avvisoSenzaRecapito` (costante `MOTIVO_RECAPITO_MANCANTE`) — che il dispatch logga
+**una volta per avviso** e che il monitoraggio conta (`senzaRecapito` in `contoAvvisi`, riportato da
+`admin:health`). Il messaggio parte **senza il blocco contatto**: tutti i renderer (Telegram, email,
+post canale, Edge, viste web) omettevano già la riga `📧` quando l'indirizzo non c'è — nessuna riga vuota,
+mai `Email non disponibile`.
+
+**La catena che cuce il recapito (Tailoring).** Nuovo modulo **puro** `src/lib/tailoringContatti.ts`:
+`risolviContattoAvviso({ emailFonte, anagrafica, storico, convenzione })` è il **punto unico di decisione**
+e risponde con `{ email, pec, provenienza, daRevisionare }`. Ordine di autorevolezza: 1) `fonte` (la
+pagina/PDF/allegato) · 2) `anagrafica` (SCUANAGRAFE, §26.48) · 3) `storico` (**il nostro database**:
+`interpelli` → stesso istituto già risolto) · 4) `convenzione` (PEO/PEC dal codice meccanografico, MIM).
+Un'email malformata non interrompe la ricerca e **nessun indirizzo viene inventato**: se nessuna fonte
+risponde, l'esito è `daRevisionare: true` — la riga **resta** (bacheca inclusa), la notifica parte senza
+il blocco contatto e la si segnala alla revisione interna.
+
+**Il «database interno» (il pezzo che mancava davvero).** `src/scraper/storicoContatti.ts`: indice dei
+recapiti **osservati** per codice meccanografico e per nome (`indiceStoricoContatti`, `contattoDaStorico`,
+`patchDaStorico`, `caricaStoricoContatti`). Regole identiche all'anagrafica: vince la riga più **recente**;
+per il nome **un candidato per provincia** (due righe con lo stesso nome nella stessa provincia sono la
+stessa scuola che ha cambiato casella; due province diverse restano due voci e il nome è **ambiguo** senza
+provincia); mai sovrascritture; nessuna query in più di una per run (le più recenti, max 2000 righe). Ponte
+dello scraper `src/scraper/tailoringInterpelli.ts` (`applicaTailoring` in coda ad `arricchisciConAnagrafica`
+in `mappaRigaInterpelli`, con contatori di run e **alert admin** `warning` categoria `tailoring` quando
+qualche riga resta senza recapito: gli esempi — max 5 — finiscono nel messaggio). Lo stesso storico cura lo
+**storico esistente** in `scripts/arricchisci-interpelli.ts` (indice costruito sulle righe già lette: zero
+query aggiuntive, riepilogo con `storico interno N`). Nella Edge `send-notification`, `caricaEmailAvviso`
+aggiunge l'ultimo anello: se il codice non dà nulla, il recapito **osservato** per la stessa scuola
+(`school_name` esatto + email valorizzata) — la notifica non resta mai senza contatto per colpa di
+un'anagrafica incompleta.
+
+**Cosa NON cambia.** Il **link diretto** resta inderogabile (`eUrlAvvisoDiretto`): un avviso senza la
+pagina ufficiale continua a essere scartato e loggato. Il frequency cap, la deduplica, i ledger e le
+checklist di canale restano quelli; la policy dati della §26.47 resta intatta (niente dati inventati, la
+dicitura gestita resta nella scheda del singolo avviso). Nessuna migrazione, nessun cambio di schema:
+lo storico legge colonne già esistenti (`contact_email`, `school_pec`, `school_code`, `school_name`,
+`province`) e tollera quelle non ancora migrate.
+
+**Verifiche (06/10/2026, da `project/`).** Nuova guardia `npm run test:tailoring` → ✅ (gerarchia delle
+fonti, indice dello storico, ambiguità per provincia, mai sovrascritture, contatori del run, contratto di
+prodotto «senza recapito si invia, senza link no»). `npm run test:qualita` → ✅ (la vecchia asserzione
+«senza email → SCARTATO» è ora «senza email → **inviabile**, con avvertenza»; nuovo controllo che la Edge
+non blocchi più). `npm run typecheck` → 0 errori · `npm run scrape:check` → 0 errori · `npm run lint` sui
+12 file toccati → 0 errori · `npm run test:architettura` → ✅ 615 file, 141 violazioni = baseline
+congelata (`arricchisci-interpelli.ts` resta **248** righe; i tre nuovi file 103/183/123).
+
+**File toccati.** Dipartimento **Radar**, condivisi essenziali, guardie e regole di prodotto.
+Codice: `src/lib/alertInterpello.ts` (gate + `avvisoSenzaRecapito`), `src/lib/notifier.ts` (avvertenza
+nel gate + i quattro punti di dispatch), `src/lib/tailoringContatti.ts` (**nuovo**, puro),
+`src/scraper/storicoContatti.ts` (**nuovo**), `src/scraper/tailoringInterpelli.ts` (**nuovo**),
+`src/scraper/index.ts` (precaricamento dello storico, log e alert di run, `applicaTailoring` nel mapper),
+`supabase/functions/send-notification/index.ts` (gate senza recapito + lookup storico per scuola),
+`scripts/arricchisci-interpelli.ts` (passo 2-bis dal recapito dello storico),
+`scripts/lib/avvisiNotificabili.ts` e `scripts/lib/saluteDispatch.ts` (conteggio `senzaRecapito`, messaggi
+del monitor riscritti), `package.json` (script e catena `npm test`). Guardie: `scripts/test-tailoring.ts`
+(**nuovo**), `scripts/test-qualita-invio.ts`. Regole di prodotto:
+`comunicazione/00_regole_generali/checklist_straordinaria.md` §4/§5,
+`comunicazione/01_email_riepilogo/checklist_email.md` §6,
+`comunicazione/02_telegram_pro/checklist_telegram_pro.md` (§2 e riga contatti),
+`comunicazione/03_telegram_base/checklist_telegram_base.md`,
+`comunicazione/04_canali_regionali/checklist_regionali.md`. Docs: `docs/SYSTEM_HANDOVER.md` (questa
+sezione + righe d'inventario), `docs/DEPARTMENT_MAP.md`. **Non toccati**: gli altri dipartimenti
+(`notizie`, `cfu`, `modulistica`), `src/modules/**`, il database e le migrazioni, i workflow (il passo
+`test:qualita` continua a girare identico).
+
+**Nota di sessione (06/10/2026).** Il cambio di regola è **di prodotto** (richiesto esplicitamente) e
+l'ho trattato come tale: checklist e guardie aggiornate nello stesso blocco, nessuna scorciatoia e
+nessuna deroga al **link diretto**. Il Tailoring è una catena di fonti con **un solo** punto di
+decisione, tutta testabile senza rete: le fonti esterne (anagrafica, storico, convenzione) entrano come
+dati, non come chiamate. Il difetto trovato dalla guardia durante la scrittura — due righe con lo stesso
+nome nella stessa provincia che rendevano il nome «ambiguo» — è stato corretto nell'indice
+(**un candidato per provincia**, il più recente), non nel test.
+
+
+
 
 
 

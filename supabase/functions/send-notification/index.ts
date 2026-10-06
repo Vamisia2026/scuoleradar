@@ -82,9 +82,9 @@ const BRAND_EMAIL =
 const ETICHETTA_AVVISO = 'Guarda la fonte ufficiale';
 
 /**
- * Tipi il cui messaggio È un'opportunità: soggetti al GATE DI QUALITÀ STRICT
- * (link diretto all'avviso + recapito di candidatura obbligatori). Gli altri
- * tipi sono comunicazioni di ciclo di vita e non citano l'avviso.
+ * Tipi il cui messaggio È un'opportunità: soggetti al GATE DI QUALITÀ (link
+ * diretto all'avviso obbligatorio; il recapito mancante è un'avvertenza, §26.68).
+ * Gli altri tipi sono comunicazioni di ciclo di vita e non citano l'avviso.
  */
 const TIPI_CON_OPPORTUNITA = new Set([
   'step2',
@@ -142,14 +142,24 @@ function eUrlAvvisoDiretto(link?: string | null): boolean {
   return true;
 }
 
-/** Motivo per cui un'opportunità NON è inviabile (`null` = pronta all'invio). */
-function motivoAvvisoNonInviabile(
-  link?: string | null,
-  email?: string | null,
-): string | null {
+/**
+ * Motivo per cui un'opportunità NON è inviabile (`null` = pronta all'invio).
+ *
+ * INDEROGABILE: il LINK DIRETTO alla fonte ufficiale. Da §26.68 (direttiva
+ * 06/10/2026) il RECAPITO di candidatura non è più un motivo di blocco: se manca,
+ * il messaggio parte senza il blocco contatto (`avvisoSenzaRecapito` lo segnala).
+ */
+function motivoAvvisoNonInviabile(link?: string | null): string | null {
   if (!eUrlAvvisoDiretto(link)) return 'fonte ufficiale non diretta';
-  if (!emailValida(email)) return 'recapito di candidatura mancante';
   return null;
+}
+
+/**
+ * Avvertenza di qualità: il recapito di candidatura non è stato risolto
+ * (`null` = c'è). Non blocca l'invio — viene loggata.
+ */
+function avvisoSenzaRecapito(email?: string | null): string | null {
+  return emailValida(email) ? null : 'recapito di candidatura mancante';
 }
 
 /**
@@ -572,22 +582,51 @@ async function caricaEmailAvviso(body: Record<string, unknown>): Promise<string>
   if (!filtro) return '';
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/interpelli?${filtro}&select=contact_email,school_code,title&limit=1`,
+      `${SUPABASE_URL}/rest/v1/interpelli?${filtro}&select=contact_email,school_code,school_name,title&limit=1`,
       { headers: { apikey: SERVICE_ROLE, Authorization: `Bearer ${SERVICE_ROLE}` } },
     );
     if (!res.ok) return '';
     const rows = (await res.json()) as Array<{
       contact_email?: string | null;
       school_code?: string | null;
+      school_name?: string | null;
       title?: string | null;
     }>;
     const riga = rows?.[0] ?? null;
     const diretta = String(riga?.contact_email ?? '').trim();
     if (diretta) return diretta;
     // Riga (anche storica) senza email: PEO ufficiale dal codice meccanografico.
-    return emailDaCodice(riga?.school_code ?? codiceDaTesto(riga?.title)) ?? '';
+    const dalCodice = emailDaCodice(riga?.school_code ?? codiceDaTesto(riga?.title));
+    if (dalCodice) return dalCodice;
+    // TAILORING (§26.68): nessun appiglio sul codice → si riusa il recapito
+    // OSSERVATO per la stessa scuola in una riga già risolta. Solo un nome ESATTO
+    // e già con email: nessun indirizzo inventato.
+    return (await caricaEmailDaStoricoScuola(riga?.school_name)) ?? '';
   } catch {
     return '';
+  }
+}
+
+/**
+ * Recapito OSSERVATO in passato per la stessa scuola (nome esatto, §26.68): l'ultima
+ * riga di `interpelli` con quel `school_name` e un'email valorizzata. Best-effort:
+ * qualunque problema ritorna `null` (l'avviso parte comunque, senza blocco contatto).
+ */
+async function caricaEmailDaStoricoScuola(scuola?: string | null): Promise<string | null> {
+  const nome = String(scuola ?? '').trim();
+  if (!nome || !SUPABASE_URL || !SERVICE_ROLE) return null;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/interpelli?school_name=eq.${encodeURIComponent(nome)}` +
+        '&contact_email=not.is.null&select=contact_email&order=created_at.desc&limit=1',
+      { headers: { apikey: SERVICE_ROLE, Authorization: `Bearer ${SERVICE_ROLE}` } },
+    );
+    if (!res.ok) return null;
+    const rows = (await res.json()) as Array<{ contact_email?: string | null }>;
+    const trovato = String(rows?.[0]?.contact_email ?? '').trim();
+    return trovato.includes('@') ? trovato : null;
+  } catch {
+    return null;
   }
 }
 
@@ -724,11 +763,12 @@ serve(async (req: Request) => {
     piano: body.piano ? String(body.piano) : undefined,
   };
 
-  // GATE DI QUALITÀ STRICT: le comunicazioni di opportunità partono SOLO se
-  // contengono un link DIRETTO all'avviso ufficiale e un recapito di
-  // candidatura valido. Meglio saltare l'invio che spedire un alert incompleto.
+  // GATE DI QUALITÀ: le comunicazioni di opportunità partono SOLO con un link
+  // DIRETTO all'avviso ufficiale. Da §26.68 il recapito mancante NON blocca più
+  // l'invio: si logga l'avvertenza e il messaggio parte senza il blocco contatto
+  // (l'opportunità è vera anche se l'anagrafica non è completa).
   const motivoGate = TIPI_CON_OPPORTUNITA.has(tipo)
-    ? motivoAvvisoNonInviabile(opp.link, opp.email)
+    ? motivoAvvisoNonInviabile(opp.link)
     : null;
   if (motivoGate) {
     console.warn(`[send-notification] ${tipo} escluso (${motivoGate}).`);
@@ -736,6 +776,17 @@ serve(async (req: Request) => {
       JSON.stringify({ ok: false, skipped: motivoGate, tipo }),
       { status: 200, headers: CORS },
     );
+  }
+  // AVVERTENZA (non un blocco): l'avviso è vero ma il recapito di candidatura non
+  // è stato risolto. Il messaggio parte senza la riga contatto e lo si dichiara nei
+  // log, così il monitoraggio continua a misurare le righe da arricchire (§26.68).
+  if (TIPI_CON_OPPORTUNITA.has(tipo)) {
+    const avvertenza = avvisoSenzaRecapito(opp.email);
+    if (avvertenza) {
+      console.warn(
+        `[send-notification] ${tipo} inviato SENZA recapito di candidatura (${avvertenza}).`,
+      );
+    }
   }
 
   const saluto = nome ? `${caro(genere)} ${escapeHtml(nome)},<br/>` : '';
