@@ -21,7 +21,7 @@
  */
 
 import { eAvvisoVivo, GIORNI_FINESTRA_SENZA_SCADENZA } from './scadenza.ts';
-import { nomeScuolaDaCodice } from './school-lookup';
+import { nomeScuolaDaCodice } from './school-lookup.ts';
 import { nomeIstitutoPresentabile } from './nomeIstituto';
 import { pulisciTitoloAvviso } from './alertInterpello';
 import { anagraficaInAggiornamento } from './statoArricchimento';
@@ -241,3 +241,4 @@ export function diversificaProvince<T extends { riga: { province?: string } }>(
   }
   return alternate;
 }
+
