@@ -1,4 +1,4 @@
-import { materie as catalogoMaterie, type OrdineScuola } from './ordiniMaterie';
+import { materie as catalogoMaterie, type OrdineScuola } from './ordiniMaterie.ts';
 
 export interface RequisitoCfu {
   ambito: string;
@@ -941,3 +941,4 @@ export function etichettaClasseMateria(
   if (!code) return nome;
   return nome ? `${code} - ${nome}` : code;
 }
+

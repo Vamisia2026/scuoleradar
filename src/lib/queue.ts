@@ -17,8 +17,9 @@
  * confonde «database irraggiungibile» con «niente da fare» si spegne in
  * silenzio, e il guasto resta invisibile nel log del run.
  *
- * Le RPC sono di SERVIZIO: passare un client con `SUPABASE_SERVICE_ROLE_KEY`.
- * La chiave anon non ha `execute` sulla coda (non è consumabile dal browser).
+ * Le RPC sono di SERVIZIO: passare un client con `SUPABASE_SERVICE_ROLE_KEY`
+ * (la chiave anon non ha `execute` sulla coda). Il lato PUBBLICO — la richiesta
+ * di scansione, l'unica RPC aperta ad `anon` — vive in `./queueRichieste.ts`.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -161,4 +162,3 @@ export async function reapStuckScans(
   if (error) throw erroreCoda('reap_stuck_scans', error.message);
   return typeof data === 'number' ? data : 0;
 }
-

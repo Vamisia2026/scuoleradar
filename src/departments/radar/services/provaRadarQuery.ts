@@ -9,6 +9,7 @@
  */
 import type { RigaProvaRadar } from '@/lib/provaRadarEngine';
 import { supabase } from '@/lib/supabase';
+import { FONTE_RICHIESTA_PROVA, richiediScansioniProvince } from '@/lib/queueRichieste';
 
 /** Campi di `interpelli` serviti al simulatore. */
 const COLONNE_PROVA =
@@ -60,4 +61,19 @@ export async function leggiInterpelliProva(
     return [];
   }
   return (data ?? []) as RigaProvaRadar[];
+}
+
+/**
+ * CODA REGIONALE — chiede che la provincia appena provata sia ri-scansionata ORA
+ * (`request_scan_target`), non al prossimo giro periodico: chi prova il Radar su
+ * una provincia senza avvisi è la persona più interessata a sapere quando ne
+ * compariranno, e il run anticipato è ciò che riempie quella provincia.
+ *
+ * La scansione è REGIONALE: la richiesta va alla città del capoluogo della regione
+ * (`@/lib/scanTargets`), non a una riga per provincia. Best-effort per costruzione
+ * (la coda non è una dipendenza della prova) e fire-and-forget: chi chiama non
+ * aspetta il responso della coda. Ritorna le città accettate — le usa il test.
+ */
+export async function richiediScansioneProva(provincia: string): Promise<string[]> {
+  return richiediScansioniProvince(supabase, [provincia], FONTE_RICHIESTA_PROVA);
 }

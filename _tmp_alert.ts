@@ -14,7 +14,7 @@
  */
 
 import type { OrdineScuola } from '../data/ordiniMaterie';
-import { classeByCodice, etichettaClasseMateria } from '../data/classiConcorso.ts';
+import { classeByCodice, etichettaClasseMateria } from '../data/classiConcorso';
 
 /** Etichetta leggibile dell'ordine di scuola. */
 export const ORDINE_ETICHETTA: Record<OrdineScuola, string> = {

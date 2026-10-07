@@ -28,6 +28,7 @@ import {
   ATTESA_SCANSIONE_MS,
   LIMITE_PROVINCIA,
   leggiInterpelliProva,
+  richiediScansioneProva,
 } from './services/provaRadarQuery';
 import { ResponsoProva } from './components/ResponsoProva';
 
@@ -76,6 +77,11 @@ export function SimulatorRadar({ className = '' }: SimulatorRadarProps) {
       void (async () => {
         try {
           salvaProvinciaProva(provincia);
+          // CODA DI SCANSIONE: la provincia provata va ri-scansionata SUBITO, non
+          // fra sei ore. Fire-and-forget: il responso non aspetta la coda e un
+          // guasto della coda non può toccare la prova (`richiediScansioneProva`
+          // non lancia mai).
+          void richiediScansioneProva(provincia);
           // VETRINA (§26.59): entrano solo righe con il nome di un istituto REALE
           // risolto (campo, registro per codice o titolo). I dump di codici classe
           // («ADEE | EEEE») e le righe senza istituto restano fuori da una vista

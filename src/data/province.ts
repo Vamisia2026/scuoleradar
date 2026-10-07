@@ -78,6 +78,7 @@ export const province: Provincia[] = [
   { codice: 'PU', nome: 'Pesaro e Urbino', regione: 'Marche' },
   { codice: 'PV', nome: 'Pavia', regione: 'Lombardia' },
   { codice: 'PO', nome: 'Prato', regione: 'Toscana' },
+  { codice: 'PZ', nome: 'Potenza', regione: 'Basilicata' },
   { codice: 'RG', nome: 'Ragusa', regione: 'Sicilia' },
   { codice: 'RA', nome: 'Ravenna', regione: 'Emilia-Romagna' },
   { codice: 'RC', nome: 'Reggio Calabria', regione: 'Calabria' },

@@ -1,0 +1,152 @@
+﻿/**
+ * ScuoleRadar.it — LA RIGA DI FEED È UN AVVISO? (modulo PURO, un solo giudizio).
+ *
+ * Perché esiste. Le fonti pubblicano due cose diverse sulla stessa pagina: gli
+ * AVVISI (a cui un docente si candida) e il CONTENUTO DI CONTORNO — voci di menu,
+ * titoli di sezione, indici di classi di concorso, numeri di protocollo. Una
+ * ingestione che legge la pagina intera porta in `interpelli` anche il contorno:
+ * la bacheca lo mostra come «opportunità» con punteggi piatti e senza scadenza,
+ * e il campo scuola delle Preferenze propone perfino i titoli di sezione.
+ *
+ * Qui vive la regola che dice, per UNA riga, se è un avviso di lavoro. È lo
+ * STESSO giudizio usato da:
+ *   · la bacheca (`bachecaInterpelli`), che scarta la riga a monte del punteggio;
+ *   · la pulizia del database (`scripts/pulisci-non-opportunita.ts`).
+ *
+ * Due gradini, entrambi dichiarati:
+ *   1. **DUMP di codici** — il titolo è fatto SOLO di codici/sigle («A041 | B017»,
+ *      «EEEE | AAAA | ADEE», «A028 | AAAA»): è un indice o una tabella, mai un
+ *      avviso; non c'è nemmeno una parola da leggere.
+ *   2. **NESSUNA traccia di opportunità** — il testo non dichiara un lavoro
+ *      possibile (nessuna parola operativa in titolo/materia), non c'è una classe
+ *      di concorso riconosciuta e non c'è un istituto presentabile: è la voce di
+ *      menu («Presentazione», «AREE TEMATICHE», «Calendario scolastico») o il
+ *      numero di protocollo, non un'opportunità.
+ *
+ * Il giudizio è VOLUTAMENTE generoso: basta un segnale (una parola, una classe,
+ * un nome d'istituto) perché la riga resti. Una riga genuina non si scarta per un
+ * dettaglio che non capiamo (§26.47); si scarta ciò che non è nemmeno un testo.
+ *
+ * Guardia: `npm run test:qualita-avviso`.
+ */
+import { nomeIstitutoPresentabile } from './nomeIstituto';
+
+/**
+ * Parole che dichiarano un LAVORO possibile (radici, non forme piene: la fonte
+ * scrive «supplenza»/«supplenze»/«supplente»). «dirigenti» è volutamente esclusa:
+ * con «dirigenti scolastici» le fonti intitolano anche le voci di menu, mentre un
+ * avviso vero per quel ruolo scrive «selezione», «incarico», «conferimento».
+ */
+const RE_PAROLA_OPERATIVA =
+  /\b(?:interpell|supplenz|supplent|avvis|band[oi]|selezion|candidat|disponibil|post[oi]|cattedr|incaric|docen|insegnant|espert|formator|tutor|mentor|animator|ata\b|dsga|bidell|collaborator|assistent|pnrr|pon\b|reclutament|convocazion|conferiment|chiamat|contratt|assunzion|scorriment|domand|messa a disposizione)/i;
+
+/** Timbro di un token che è un CODICE (sigla di classe, area, profilo). */
+const RE_TOKEN_CODICE = /^[a-z]{1,4}\d{0,3}$/;
+
+/** Riga minima di feed su cui si esprime il giudizio. */
+export interface RigaFeed {
+  /** Titolo pubblicato dalla fonte. */
+  titolo?: string | null;
+  /** Materia/settore inferito dallo scraper. */
+  materia?: string | null;
+  /** Codici classe rilevati nell'avviso. */
+  classi?: readonly string[] | null;
+  /** Istituto risolto (nome presentabile) — `''`/`null` quando non c'è. */
+  scuola?: string | null;
+}
+
+/** Token alfanumerici del testo (senza punteggiatura). */
+function token(testo: string): string[] {
+  return testo.match(/[A-Za-zÀ-ÿ0-9]+/g) ?? [];
+}
+
+/**
+ * True se il titolo è un DUMP di codici: ogni token è una sigla («A041», «EEEE»,
+ * «ADEE», «AS2A», «a039») e non c'è una sola parola da leggere. Il testo vuoto
+ * NON è un dump (non c'è niente da giudicare: decide il secondo gradino).
+ */
+export function eDumpDiCodici(titolo?: string | null): boolean {
+  const t = (titolo ?? '').trim();
+  if (!t) return false;
+  const parole = token(t);
+  if (parole.length === 0) return false;
+  return parole.every((p) => RE_TOKEN_CODICE.test(p.toLowerCase()));
+}
+
+/**
+ * True se il titolo è un INDICE di codici: due o più voci separate da `|` che
+ * iniziano con una sigla «forte» — con una cifra («A042», «BA02») o di almeno tre
+ * lettere («EEEE», «ADEE»), mai le iniziali («I.C. Manzoni» non è un codice)
+ * («A042 | ADAA | A028 | Primaria Lingua Inglese», «BA02 – Conversazione in lingua
+ * straniera | BB02 –»). Sono le tabelle delle classi aperte pubblicate dalle
+ * fonti: il codice di classe c'è, l'avviso no. Una voce sola accanto al testo
+ * («Comunicazione | I.C. Manzoni | A042») NON è un indice; il titolo con una
+ * parola operativa è un avviso e resta (decide prima `dichiaraOpportunita`).
+ */
+export function eIndiceDiCodici(titolo?: string | null): boolean {
+  const t = (titolo ?? '').trim();
+  if (!t.includes('|')) return false;
+  let voci = 0;
+  for (const voce of t.split('|')) {
+    const primo = token(voce.trim())[0]?.toLowerCase() ?? '';
+    if (!RE_TOKEN_CODICE.test(primo)) continue;
+    if (/\d/.test(primo) || primo.length >= 3) voci += 1;
+  }
+  return voci >= 2;
+}
+
+/** True se il testo dichiara un lavoro possibile (una parola operativa). */
+export function dichiaraOpportunita(testo?: string | null): boolean {
+  return RE_PAROLA_OPERATIVA.test((testo ?? '').trim());
+}
+
+/**
+ * Motivo per cui la riga NON è un'opportunità (`null` = la riga resta):
+ *   · `'titolo-dump-di-codici'` → indice/tabella, nessuna parola da leggere;
+ *   · `'indice-di-codici'` → due o più voci di codice accanto a poche parole:
+ *     tabella delle classi aperte, non un avviso (§26.65);
+ *   · `'nessuna-traccia-di-opportunita'` → voce di menu, titolo di sezione o atto
+ *     senza contenuto: nessuna parola operativa, nessuna classe riconosciuta,
+ *     nessun istituto presentabile.
+ */
+export function motivoRigaNonOpportunita(riga: RigaFeed): string | null {
+  if (eDumpDiCodici(riga.titolo)) return 'titolo-dump-di-codici';
+  const dichiarata = dichiaraOpportunita(`${riga.titolo ?? ''} ${riga.materia ?? ''}`);
+  if (dichiarata) return null;
+  if (eIndiceDiCodici(riga.titolo)) return 'indice-di-codici';
+  if ((riga.classi ?? []).some((c) => Boolean((c ?? '').trim()))) return null;
+  if ((riga.scuola ?? '').trim()) return null;
+  return 'nessuna-traccia-di-opportunita';
+}
+
+/**
+ * True se la riga è un avviso di lavoro (complemento di `motivoRigaNonOpportunita`). */
+export function eRigaOpportunita(riga: RigaFeed): boolean {
+  return motivoRigaNonOpportunita(riga) === null;
+}
+
+/** Riga di feed in forma canonica (i campi dell'`Interpello` mappato). */
+export interface RigaAvviso {
+  titolo?: string | null;
+  materia?: string | null;
+  classiCodes?: readonly string[] | null;
+  istituto?: string | null;
+}
+
+/**
+ * LO STESSO GIUDIZIO sull'avviso mappato: lo usano la bacheca e la pulizia del
+ * database, così vetrina e manutenzione non possono divergere.
+ *
+ * Il segnale «istituto» vale solo se il nome è PRESENTABILE (§26.59,
+ * `nomeIstitutoPresentabile`): le fonti usano la colonna dell'istituto anche per
+ * i titoli di sezione («Presentazione», «A041 | B017»), e una stringa grezza non
+ * deve tenere in vita una riga di contorno.
+ */
+export function motivoRigaNonOpportunitaAvviso(riga: RigaAvviso): string | null {
+  return motivoRigaNonOpportunita({
+    titolo: riga.titolo,
+    materia: riga.materia,
+    classi: riga.classiCodes,
+    scuola: nomeIstitutoPresentabile(riga.istituto),
+  });
+}

@@ -9,6 +9,7 @@ import { useCallback, type Dispatch, type SetStateAction } from 'react';
 import { getModuliScaricati } from '@/data/moduli';
 import { normalizzaClassi } from '@/lib/matchingEngine';
 import { supabase } from '@/lib/supabase';
+import { FONTE_RICHIESTA_PREFERENZE, richiediScansioniProvince } from '@/lib/queueRichieste';
 import type { Preferenze, User } from './types';
 
 /** Dati anagrafici raccolti dal mini-onboarding (nome/cognome obbligatori). */
@@ -142,6 +143,13 @@ export function useAnagraficaProfilo({
         console.error('Errore salvataggio profilo su Supabase:', error.message);
       } else {
         console.log('✓ Profilo salvato su Supabase (tabella profiles).');
+        // CODA DI SCANSIONE: le province appena salvate sono quelle su cui
+        // partiranno le notifiche, quindi le città che le coprono vanno
+        // ri-scansionate ORA (best-effort e fire-and-forget: la coda non è una
+        // dipendenza del salvataggio e `richiediScansioniProvince` non lancia mai).
+        // Al più una richiesta per città del seed, poi riassorbite dal throttle
+        // server-side: salvare due volte di fila non martella la coda.
+        void richiediScansioniProvince(supabase, dati.provinceCodici, FONTE_RICHIESTA_PREFERENZE);
       }
     },
     [preferenze, user],
