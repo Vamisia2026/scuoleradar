@@ -20,7 +20,7 @@
  * `anagraficaParziale` dichiara lo stato dell'anagrafica (`completo`/`parziale`).
  */
 
-import { eAvvisoVivo, GIORNI_FINESTRA_SENZA_SCADENZA } from './scadenza';
+import { eAvvisoVivo, GIORNI_FINESTRA_SENZA_SCADENZA } from './scadenza.ts';
 import { nomeScuolaDaCodice } from './school-lookup';
 import { nomeIstitutoPresentabile } from './nomeIstituto';
 import { pulisciTitoloAvviso } from './alertInterpello';
