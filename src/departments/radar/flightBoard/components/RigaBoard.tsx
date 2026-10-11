@@ -19,7 +19,7 @@
  */
 import { ExternalLink } from 'lucide-react';
 import { titoloLeggibile, SCUOLA_NON_SPECIFICATA } from '@/lib/liveBoard';
-import { ePdf, hostDi, urlValido, type InterpelloLive } from '../righeBoard';
+import { ePdf, hostDi, urlValido, estraiProvincia, type InterpelloLive } from '../righeBoard';
 import { dataItBreve, inferisciTipologia, ottieniUrgenzaOAnzianita } from '../rigaBoardDati';
 
 export interface RigaBoardProps {
@@ -156,7 +156,7 @@ export function RigaBoard({ riga: r, indice }: RigaBoardProps) {
       {/* 4. Provincia */}
       <td className="px-4 py-2.5 text-center truncate">
         <span className="inline-flex items-center justify-center rounded-md bg-primary-100 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-primary-700">
-          {r.province || '—'}
+          {estraiProvincia(r)}
         </span>
       </td>
 
