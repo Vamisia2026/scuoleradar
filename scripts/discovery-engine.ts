@@ -1,7 +1,12 @@
 // scripts/discovery-engine.ts
-// Discovery & Scoring Engine — v4
+// Discovery & Scoring Engine — v6
 // Architettura: espansione BFS della homepage + scoring del contenuto
-// applicato solo alle sotto-pagine. Vedi migrazione SQL nel README.
+// applicato solo alle sotto-pagine, con disqualificazione semantica del rumore
+// generico (scioperi, circolari famiglie), del rumore amministrativo
+// (CIG, gare, elezioni organi, quiescenza) e delle pagine vuote/indice.
+//
+// NOTA SCHEMA: gli stati 'disqualified_noise' e 'empty_view' devono essere
+// accettati da eventuali CHECK constraint su discovered_links.status.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import * as cheerio from 'cheerio';
@@ -26,10 +31,29 @@ const CONFIG = {
   maxCandidatesPerPage: 25,
   perDomainDelayMs: 400,
 
-  // Soglie
-  pathScoreMinToEnqueue: 4,   // sotto questa soglia il link non entra
-  pathScoreMinToExpand: 7,    // sopra questa soglia la pagina si espande
+  // Soglie di path scoring
+  pathScoreMinToEnqueue: 4,
+  pathScoreMinToExpand: 7,
+
+  // Soglie di content scoring
   contentScoreMinForActive: 5,
+
+  // Soglie di disqualificazione semantica
+  softNoiseThresholdForDisqualify: 3,
+  hardNoisePenalty: 6,
+  softNoisePenalty: 2,
+  adminNoisePenalty: 8,
+
+  // Soglie per pagine vuote / indice
+  minMeaningfulTextLength: 400,
+  emptyViewPhrases: [
+    'nessun contenuto da visualizzare',
+    'nessun elemento trovato',
+    'nessun risultato',
+    'non ci sono contenuti',
+    'no content to display',
+    'la ricerca non ha prodotto risultati',
+  ] as readonly string[],
 
   blacklist: [
     'scuolainterpelli.it',
@@ -100,7 +124,6 @@ function absoluteUrl(href: string, base: string): string | null {
     const u = new URL(trimmed, base);
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
     u.hash = '';
-    // Rimuove i tracking param
     const keep = new URLSearchParams();
     u.searchParams.forEach((v, k) => {
       const lk = k.toLowerCase();
@@ -120,7 +143,133 @@ function isBlacklistedDomain(domain: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Path scoring (per i link estratti da una pagina)
+// SEMANTIC PATTERNS
+// Tre famiglie indipendenti di segnali:
+//   - OPPORTUNITY: reclutamento / supplenze / incarichi (positivi)
+//   - HARD_NOISE: eventi scolastici che escludono un bando (negativi forti)
+//   - SOFT_NOISE: contesto generico che, accumulato, segnala non-bando
+//   - ADMIN_NOISE: atti amministrativi (CIG, gare, elezioni, quiescenza)
+//     che NON sono opportunità di lavoro per docenti/ATA.
+// I pattern sono "distinct match": ripetizioni non contano più di 1.
+// ---------------------------------------------------------------------------
+
+/** Segnali FORTI di reclutamento. La loro presenza salva la pagina dal rumore. */
+const OPPORTUNITY_SIGNAL_PATTERNS: readonly RegExp[] = [
+  /\binterpell/i,
+  /\bdisponibilit[aà]/i,
+  /messa a disposizione/i,
+  /\bMAD\b/, // case-sensitive: MAD in maiuscolo è acronimo
+  /\breclutament/i,
+  /\bsupplenz/i,
+  /conferimento (di |dell['’]?)?incarico/i,
+  /\bgraduatorie? (di merito|definitive|provvisorie|d['’]?istituto)/i,
+  /\bselezion(e|i) (pubblica|per il conferimento|di esperti)/i,
+  /avviso (pubblico|di selezione|per il reclutamento|di interpello)/i,
+  /incarico (a tempo determinato|di docenza|di esperto)/i,
+  /\bposto (di|per) (sostegno|docente|insegnante)/i,
+];
+
+/**
+ * Rumore FORTE generico. Una singola occorrenza squalifica la pagina
+ * quando NON ci sono segnali di opportunità.
+ */
+const HARD_NOISE_PATTERNS: readonly RegExp[] = [
+  /\bscioper[oi]\b/i,
+  /\bassemblea sindacale\b/i,
+  /\bassemblea (studentesca|di classe|d['’]?istituto|plenaria|dei genitori)\b/i,
+  /\belezione(i)? (studentesche?|dei rappresentanti|del consiglio|per il rinnovo|delle rsu)/i,
+  /\bviaggio (di |d['’]?)?istruzione\b/i,
+  /\buscita didattica\b/i,
+  /\bgita scolastica\b/i,
+  /\bricevimento (dei |delle )?(genitori|famiglie)\b/i,
+  /\bcolloqui? con le famiglie\b/i,
+  /\bpermesso di uscita\b/i,
+  /\bentrata posticipata\b/i,
+  /\buscita anticipata\b/i,
+  /\bsospensione (delle )?attivit[aà]\b/i,
+  /\bmanifestazione (studentesca|sindacale)\b/i,
+];
+
+/**
+ * Rumore SOFT. La singola occorrenza è innocua, ma tre o più insieme —
+ * in assenza di segnali di opportunità — squalificano la pagina.
+ */
+const SOFT_NOISE_PATTERNS: readonly RegExp[] = [
+  /\bfamigli[ae]\b/i,
+  /\bgenitori\b/i,
+  /\balunn[oi]\b/i,
+  /\bstudenti\b/i,
+  /\brappresentanti (di classe|degli studenti|dei genitori)\b/i,
+  /\bconsiglio di classe\b/i,
+  /\bconsiglio di istituto\b/i,
+  /\bcircolare\b/i,
+  /\bnewsletter\b/i,
+];
+
+/**
+ * Rumore AMMINISTRATIVO. Atti che NON sono opportunità di lavoro per
+ * docenti/ATA e che vengono pubblicati nell'Albo Pretorio insieme agli
+ * interpelli. La loro presenza, senza segnali di opportunità, squalifica.
+ *
+ * Categorie:
+ *   - Appalti e forniture (CIG, gare, affidamenti)
+ *   - Elezioni organi collegiali
+ *   - Burocrazia interna del personale (quiescenza, liquidazioni)
+ *   - Contratti e convenzioni non di lavoro
+ */
+const ADMIN_NOISE_PATTERNS: readonly RegExp[] = [
+  // --- Appalti, forniture, gare ---
+  /\bCIG\b/, // case-sensitive: CIG in maiuscolo è il Codice Identificativo Gara
+  /codice identificativo (di )?gara/i,
+  /\bdetermina(zione)? a contrarre\b/i,
+  /\bbandi? di gara\b/i,
+  /\bfornitura (di |di beni|di servizi)/i,
+  /\baffidamento (diretto|di servizi|di forniture)/i,
+  /\bproc[eé]d(ura|ure) (di |per )?(gara|affidamento|aggiudicazione)/i,
+  /\baggiudicazione (definitiva|provvisoria|di gara)/i,
+  /\bcapitolato (d['’]?oneri|speciale|tecnico)/i,
+  /\bgara (telematica|deserta|andata deserta)/i,
+  /\bRDO\b/, // Richiesta di Offerta (MEPA)
+  /\bordine (di acquisto|diretto)/i,
+  /\bDUVRI\b/,
+  /\bMEPA\b/,
+
+  // --- Elezioni e governance ---
+  /\belezioni?( scolastiche| degli organi|dei rappresentanti|del consiglio|delle rsu|per il rinnovo)/i,
+  /\borgani collegiali\b/i,
+  /\brinnovo (del )?consiglio/i,
+  /\bproclamazione (degli )?eletti\b/i,
+  /\binsediamento (del |degli )?(consiglio|organi)/i,
+  /\bcommissione elettorale\b/i,
+
+  // --- Burocrazia interna al personale (non reclutamento) ---
+  /\bcessazioni? dal servizio\b/i,
+  /\bquiescenza\b/i,
+  /\bliquidazione (dei )?compensi\b/i,
+  /\bcompensi MOF\b/i,
+  /\bbuonuscita\b/i,
+  /\btrattamento di (quiescenza|fine rapporto)\b/i,
+  /\bTFR\b/,
+  /\bricostruzione (di )?carriera\b/i,
+  /\briscatto (ai fini|degli anni)/i,
+  /\bcontratti? (collettivi|integrativi d['’]?istituto)/i, // CCNL/CCNI firmati, non bandi
+
+  // --- Altri atti amministrativi ---
+  /\bdecreto (di |del )?(nomina|approvazione|costituzione)/i,
+  /\bdelibera (del consiglio|del collegio)/i,
+  /\bverbale (della |del )?(seduta|riunione|consiglio)/i,
+];
+
+function countDistinctMatches(patterns: readonly RegExp[], text: string): number {
+  let count = 0;
+  for (const re of patterns) {
+    if (re.test(text)) count++;
+  }
+  return count;
+}
+
+// ---------------------------------------------------------------------------
+// Path scoring
 // ---------------------------------------------------------------------------
 
 interface PathScore {
@@ -129,6 +278,7 @@ interface PathScore {
 }
 
 const PATH_PATTERNS: ReadonlyArray<{ re: RegExp; score: number; tag: string }> = [
+  // --- Segnali POSITIVI ---
   { re: /interpell/i, score: 10, tag: 'path_interpelli' },
   { re: /albo[-_]?(pretorio|online|istituto)?/i, score: 9, tag: 'path_albo' },
   { re: /amministrazione[-_]?trasparente|trasparenza/i, score: 9, tag: 'path_trasparenza' },
@@ -148,11 +298,49 @@ const PATH_PATTERNS: ReadonlyArray<{ re: RegExp; score: number; tag: string }> =
   { re: /circolar/i, score: 2, tag: 'path_circolari' },
   { re: /comunicazion/i, score: 2, tag: 'path_comunicazioni' },
   { re: /\bnews\b/i, score: 2, tag: 'path_news' },
-  // Segnali negativi
+
+  // --- Segnali NEGATIVI generici ---
   { re: /privacy|cookie|contatt/i, score: -5, tag: 'path_neg_legal' },
-  { re: /login|wp-admin|wp-content|wp-json|\bfeed\b|sitemap|\brss\b/i, score: -10, tag: 'path_neg_system' },
-  { re: /\.(pdf|docx?|xlsx?|pptx?|zip|rar)$/i, score: -10, tag: 'path_document' },
-  { re: /\.(jpg|jpeg|png|gif|svg|webp|ico|css|js)$/i, score: -10, tag: 'path_asset' },
+  {
+    re: /login|wp-admin|wp-content|wp-json|\bfeed\b|sitemap|\brss\b/i,
+    score: -10,
+    tag: 'path_neg_system',
+  },
+  {
+    re: /\.(pdf|docx?|xlsx?|pptx?|zip|rar)$/i,
+    score: -10,
+    tag: 'path_document',
+  },
+  {
+    re: /\.(jpg|jpeg|png|gif|svg|webp|ico|css|js)$/i,
+    score: -10,
+    tag: 'path_asset',
+  },
+
+  // --- Segnali NEGATIVI di rumore generico ---
+  { re: /^\/tag(\/|$)/i, score: -15, tag: 'path_neg_tag' },
+  { re: /^\/categoria(\/|$)/i, score: -10, tag: 'path_neg_categoria' },
+  { re: /scioper/i, score: -25, tag: 'path_neg_sciopero' },
+  { re: /assemble[ae]/i, score: -20, tag: 'path_neg_assemblea' },
+  { re: /elezion/i, score: -20, tag: 'path_neg_elezioni' },
+  {
+    re: /circolari?.{0,3}(famigli|genitori|alunni|studenti)/i,
+    score: -20,
+    tag: 'path_neg_circolare_famiglie',
+  },
+  { re: /famigli[ae]/i, score: -15, tag: 'path_neg_famiglie' },
+  { re: /\/genitori\b/i, score: -15, tag: 'path_neg_genitori' },
+  { re: /\bviaggi?i?.{0,3}istruzion/i, score: -15, tag: 'path_neg_viaggio' },
+  { re: /\/studenti?\b/i, score: -10, tag: 'path_neg_studenti' },
+  { re: /sindacal/i, score: -15, tag: 'path_neg_sindacale' },
+
+  // --- Segnali NEGATIVI amministrativi ---
+  { re: /\bcig\b/i, score: -20, tag: 'path_neg_cig' },
+  { re: /\bgare?\b/i, score: -15, tag: 'path_neg_gara' },
+  { re: /appalt/i, score: -15, tag: 'path_neg_appalto' },
+  { re: /fornitur/i, score: -12, tag: 'path_neg_fornitura' },
+  { re: /contratt/i, score: -10, tag: 'path_neg_contratto' },
+  { re: /determin[ae]/i, score: -12, tag: 'path_neg_determina' },
 ];
 
 function scorePath(pathname: string, anchorText: string): PathScore {
@@ -216,7 +404,7 @@ function extractCandidateLinks(
 }
 
 // ---------------------------------------------------------------------------
-// Content scoring (solo per sotto-pagine)
+// Content scoring
 // ---------------------------------------------------------------------------
 
 interface ContentScore {
@@ -225,11 +413,80 @@ interface ContentScore {
   hasTable: boolean;
   hasPdf: boolean;
   hasCmsStructure: boolean;
+  hasStrongTable: boolean;
   tableCount: number;
   contentTableCount: number;
   deadlineCount: number;
   mechCodeCount: number;
-  keywordHits: number;
+  opportunitySignals: number;
+  hardNoiseSignals: number;
+  softNoiseSignals: number;
+  adminNoiseSignals: number;
+  isEmptyView: boolean;
+  disqualified: boolean;
+}
+
+function isStrongOpportunityTable(
+  $: cheerio.CheerioAPI,
+  tableEl: cheerio.Element
+): boolean {
+  const $t = $(tableEl);
+  const rows = $t.find('tr');
+  if (rows.length < 3) return false;
+
+  const firstRow = rows.first();
+  const cols = firstRow.find('td, th').length;
+  if (cols < 3) return false;
+
+  const headerText = firstRow.text().toLowerCase();
+  const hasSemanticHeader =
+    /\b(classe|scadenz|deadline|codice|provincia|settore|materia|posto|data)\b/i.test(
+      headerText
+    );
+  if (hasSemanticHeader) return true;
+
+  const bodyText = $t.find('td').text();
+  const dateCount = (
+    bodyText.match(/\b\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}\b/g) || []
+  ).length;
+  const codeCount = (bodyText.match(/\b[A-E]-?\d{2}\b/g) || []).length;
+
+  return dateCount >= 3 || codeCount >= 2;
+}
+
+/**
+ * Rileva pagine vuote o viste indice di categoria senza contenuto reale.
+ * Criteri (uno solo basta):
+ *   - il testo principale è troppo corto (< minMeaningfulTextLength)
+ *   - contiene una delle frasi tipiche di "nessun contenuto"
+ *   - contiene solo link di navigazione (rapporto link/testo alto)
+ */
+function isEmptyOrIndexView(
+  $: cheerio.CheerioAPI,
+  $scope: cheerio.Cheerio<cheerio.Element>,
+  fullText: string
+): boolean {
+  const lower = fullText.toLowerCase();
+
+  for (const phrase of CONFIG.emptyViewPhrases) {
+    if (lower.includes(phrase)) return true;
+  }
+
+  if (fullText.length < CONFIG.minMeaningfulTextLength) {
+    return true;
+  }
+
+  // Rapporto link/testo: se il contenuto è dominato da link, è una lista
+  // di navigazione, non una pagina con contenuto informativo.
+  const linkTextLength = $scope
+    .find('a')
+    .toArray()
+    .reduce((acc, el) => acc + normalize($(el).text()).length, 0);
+  if (fullText.length > 0 && linkTextLength / fullText.length > 0.75) {
+    return true;
+  }
+
+  return false;
 }
 
 function scoreContentPage(url: string, html: string): ContentScore {
@@ -255,48 +512,68 @@ function scoreContentPage(url: string, html: string): ContentScore {
   const tags: string[] = [];
   let score = 0;
 
-  // 1) Keyword di opportunità nel contenuto principale
-  const primaryKeywords = [
-    'interpello', 'interpelli', 'bando', 'bandi', 'avviso', 'avvisi',
-    'selezione', 'graduatoria', 'graduatorie', 'reclutamento',
-  ];
-  const keywordHits = primaryKeywords.reduce(
-    (acc, kw) => acc + (textLower.includes(kw) ? 1 : 0),
-    0
+  // -------------------------------------------------------------------------
+  // 1) Analisi semantica: opportunità vs tre famiglie di rumore
+  // -------------------------------------------------------------------------
+
+  const opportunitySignals = countDistinctMatches(
+    OPPORTUNITY_SIGNAL_PATTERNS,
+    fullText
   );
-  if (keywordHits >= 2) {
-    score += 3;
-    tags.push('multi_keywords');
-  } else if (keywordHits === 1) {
-    score += 1;
-    tags.push('single_keyword');
-  }
-  if (
-    title.includes('interpell') ||
-    title.includes('bando') ||
-    title.includes('avvis')
-  ) {
-    score += 1;
-    tags.push('title_keyword');
+  const hardNoiseSignals = countDistinctMatches(HARD_NOISE_PATTERNS, fullText);
+  const softNoiseSignals = countDistinctMatches(SOFT_NOISE_PATTERNS, fullText);
+  const adminNoiseSignals = countDistinctMatches(ADMIN_NOISE_PATTERNS, fullText);
+
+  if (opportunitySignals >= 2) {
+    score += 4;
+    tags.push('strong_opportunity_signals');
+  } else if (opportunitySignals === 1) {
+    score += 2;
+    tags.push('opportunity_signal');
   }
 
-  // 2) Tabelle di contenuto reali
+  if (hardNoiseSignals > 0) tags.push('hard_noise_detected');
+  if (softNoiseSignals >= 2) tags.push('soft_noise_detected');
+  if (adminNoiseSignals > 0) tags.push('admin_noise_detected');
+
+  // -------------------------------------------------------------------------
+  // 2) Tabelle di contenuto
+  // -------------------------------------------------------------------------
+
   const allTables = $('table');
   const tableCount = allTables.length;
-  const contentTables = allTables.filter((_, t) => {
+
+  const contentTables: cheerio.Element[] = [];
+  let strongTable = false;
+
+  allTables.each((_, t) => {
     const rows = $(t).find('tr').length;
     const firstRow = $(t).find('tr').first();
     const cols = firstRow.find('td, th').length;
-    return rows >= 3 && cols >= 3;
+    if (rows < 3 || cols < 3) return;
+
+    contentTables.push(t);
+    if (!strongTable && isStrongOpportunityTable($, t)) {
+      strongTable = true;
+    }
   });
+
   const contentTableCount = contentTables.length;
   const hasTable = contentTableCount > 0;
+
   if (hasTable) {
     score += contentTableCount >= 2 ? 3 : 2;
     tags.push('has_content_table');
   }
+  if (strongTable) {
+    score += 2;
+    tags.push('has_strong_table');
+  }
 
+  // -------------------------------------------------------------------------
   // 3) Scadenze (date pattern)
+  // -------------------------------------------------------------------------
+
   const dateRe = /\b\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}\b/g;
   const deadlineCount = (fullText.match(dateRe) || []).length;
   if (deadlineCount >= 3) {
@@ -307,17 +584,23 @@ function scoreContentPage(url: string, html: string): ContentScore {
     tags.push('some_dates');
   }
 
-  // 4) PDF (documento di bando)
+  // -------------------------------------------------------------------------
+  // 4) PDF
+  // -------------------------------------------------------------------------
+
   const pdfLinks = $('a[href]')
     .toArray()
-    .filter((el) => (($(el).attr('href') || '').toLowerCase().includes('.pdf')));
+    .filter((el) => ($(el).attr('href') || '').toLowerCase().includes('.pdf'));
   const hasPdf = pdfLinks.length > 0;
   if (hasPdf) {
     score += pdfLinks.length >= 3 ? 2 : 1;
     tags.push('has_pdf');
   }
 
+  // -------------------------------------------------------------------------
   // 5) Codici classe / meccanografici
+  // -------------------------------------------------------------------------
+
   const classCodes = (fullText.match(/\b[A-E]-?\d{2}\b/g) || []).length;
   const mechCodes = extractMechCodes(fullText).size;
   if (classCodes >= 2 || mechCodes >= 2) {
@@ -328,8 +611,18 @@ function scoreContentPage(url: string, html: string): ContentScore {
     tags.push('code_signal_weak');
   }
 
+  // -------------------------------------------------------------------------
   // 6) Fondi speciali
-  const fundKeywords = ['pnrr', 'pon', 'por', 'clil', 'potenziamento', 'dispersione'];
+  // -------------------------------------------------------------------------
+
+  const fundKeywords = [
+    'pnrr',
+    'pon',
+    'por',
+    'clil',
+    'potenziamento',
+    'dispersione',
+  ];
   const fundHits = fundKeywords.reduce(
     (acc, kw) => acc + (textLower.includes(kw) ? 1 : 0),
     0
@@ -339,7 +632,10 @@ function scoreContentPage(url: string, html: string): ContentScore {
     tags.push('special_funds');
   }
 
-  // 7) Boost dal path (piccolo: il path aiuta, non domina)
+  // -------------------------------------------------------------------------
+  // 7) Boost dal path
+  // -------------------------------------------------------------------------
+
   const { score: pScore } = scorePath(new URL(url).pathname, '');
   if (pScore >= 8) {
     score += 2;
@@ -349,22 +645,93 @@ function scoreContentPage(url: string, html: string): ContentScore {
     tags.push('path_boost_low');
   }
 
+  // -------------------------------------------------------------------------
+  // 8) Rilevamento pagina vuota / vista indice
+  // -------------------------------------------------------------------------
+
+  const isEmptyView = isEmptyOrIndexView($, $scope, fullText);
+  if (isEmptyView) {
+    tags.push('empty_view_detected');
+  }
+
+  // -------------------------------------------------------------------------
+  // 9) Penalità per rumore
+  // -------------------------------------------------------------------------
+
+  if (hardNoiseSignals > 0) {
+    score -= hardNoiseSignals * CONFIG.hardNoisePenalty;
+    tags.push(`hard_noise_penalty_x${hardNoiseSignals}`);
+  }
+  if (softNoiseSignals > 0) {
+    score -= softNoiseSignals * CONFIG.softNoisePenalty;
+    tags.push(`soft_noise_penalty_x${softNoiseSignals}`);
+  }
+  if (adminNoiseSignals > 0) {
+    score -= adminNoiseSignals * CONFIG.adminNoisePenalty;
+    tags.push(`admin_noise_penalty_x${adminNoiseSignals}`);
+  }
+
+  // -------------------------------------------------------------------------
+  // 10) Regola di disqualificazione
+  // -------------------------------------------------------------------------
+  // Ordine di priorità:
+  //   a) Admin noise senza opportunità → sempre squalificato.
+  //      Un CIG o un'elezione di organi collegiali non è MAI un interpello,
+  //      nemmeno se il titolo contiene "avviso" o "bando".
+  //   b) Vista vuota / indice → squalificata (indipendentemente dal resto).
+  //   c) Hard noise senza opportunità → squalificato.
+  //   d) Soft noise diffuso senza opportunità e senza tabella forte → squalificato.
+  //
+  // La presenza di segnali di opportunità (opportunitySignals >= 1) NON
+  // salva dalla squalifica per admin noise o per vista vuota: un bando di
+  // gara può contenere "avviso" e "selezione", ma resta un bando di gara.
+
+  let disqualified = false;
+
+  if (adminNoiseSignals >= 1) {
+    disqualified = true;
+  } else if (isEmptyView) {
+    disqualified = true;
+  } else if (opportunitySignals === 0) {
+    if (hardNoiseSignals >= 1) {
+      disqualified = true;
+    } else if (
+      softNoiseSignals >= CONFIG.softNoiseThresholdForDisqualify &&
+      !strongTable
+    ) {
+      disqualified = true;
+    }
+  }
+
+  if (disqualified) {
+    score = 0;
+    tags.push('disqualified_noise');
+  } else {
+    score = Math.max(0, score);
+  }
+
   return {
     score,
     tags,
     hasTable,
     hasPdf,
     hasCmsStructure: $('article').length > 0 || html.includes('wp-content'),
+    hasStrongTable: strongTable,
     tableCount,
     contentTableCount,
     deadlineCount,
     mechCodeCount: mechCodes,
-    keywordHits,
+    opportunitySignals,
+    hardNoiseSignals,
+    softNoiseSignals,
+    adminNoiseSignals,
+    isEmptyView,
+    disqualified,
   };
 }
 
 // ---------------------------------------------------------------------------
-// Codici meccanografici (per segnale nel content scoring)
+// Codici meccanografici
 // ---------------------------------------------------------------------------
 
 const PROVINCE_CODES = new Set<string>([
@@ -442,7 +809,8 @@ async function fetchWithRetry(url: string): Promise<FetchResult> {
     } catch (err) {
       lastErr = err instanceof Error ? err : new Error(String(err));
       if (attempt < CONFIG.fetchRetries) {
-        const delay = CONFIG.fetchRetryBaseMs * 2 ** attempt + Math.random() * 250;
+        const delay =
+          CONFIG.fetchRetryBaseMs * 2 ** attempt + Math.random() * 250;
         await new Promise((r) => setTimeout(r, delay));
       }
     }
@@ -465,7 +833,7 @@ interface Target {
 }
 
 // ---------------------------------------------------------------------------
-// Espansione: da una pagina, genera i figli
+// Espansione
 // ---------------------------------------------------------------------------
 
 async function expandPage(
@@ -552,7 +920,6 @@ async function processTarget(target: Target): Promise<void> {
   const isHomepage = target.depth === 0;
 
   if (isHomepage) {
-    // Le homepage non si valutano: si espandono e basta.
     const inserted = await expandPage(target, $);
     await supabase
       .from('discovered_links')
@@ -566,18 +933,36 @@ async function processTarget(target: Target): Promise<void> {
     return;
   }
 
-  // Sotto-pagina: scoring del contenuto.
   const scored = scoreContentPage(target.url, result.html);
 
-  let newStatus = 'parked_low_score';
-  if (scored.score >= CONFIG.contentScoreMinForActive) {
+  let newStatus: string;
+  if (scored.disqualified) {
+    // Distinguiamo la causa per il monitoraggio:
+    if (scored.adminNoiseSignals >= 1) {
+      newStatus = 'disqualified_noise';
+    } else if (scored.isEmptyView) {
+      newStatus = 'empty_view';
+    } else {
+      newStatus = 'disqualified_noise';
+    }
+  } else if (scored.score >= CONFIG.contentScoreMinForActive) {
     newStatus = 'active_crawler';
   } else if (scored.hasPdf) {
     newStatus = 'parked_for_pdf';
+  } else {
+    newStatus = 'parked_low_score';
   }
 
+  const noiseInfo: string[] = [];
+  if (scored.hardNoiseSignals > 0) noiseInfo.push(`hard=${scored.hardNoiseSignals}`);
+  if (scored.softNoiseSignals > 0) noiseInfo.push(`soft=${scored.softNoiseSignals}`);
+  if (scored.adminNoiseSignals > 0) noiseInfo.push(`admin=${scored.adminNoiseSignals}`);
+  const noiseStr = noiseInfo.length > 0 ? ` | rumore: ${noiseInfo.join(' ')}` : '';
+  const emptyStr = scored.isEmptyView ? ' | VUOTA' : '';
+
   console.log(
-    `  [d${target.depth}] score=${scored.score} stato=${newStatus} ${target.url}`
+    `  [d${target.depth}] score=${scored.score} stato=${newStatus}` +
+      ` | opp=${scored.opportunitySignals}${noiseStr}${emptyStr} ${target.url}`
   );
 
   await supabase
@@ -595,9 +980,10 @@ async function processTarget(target: Target): Promise<void> {
     })
     .eq('id', target.id);
 
-  // Espansione ricorsiva solo se la pagina è molto promettente per path
-  // e non abbiamo ancora raggiunto la profondità massima.
+  // Espansione ricorsiva SOLO se la pagina è attiva e promettente per path.
+  // Non espandiamo pagine squalificate o vuote: propagherebbero rumore.
   if (
+    newStatus === 'active_crawler' &&
     target.depth < CONFIG.maxDepth &&
     target.path_score >= CONFIG.pathScoreMinToExpand
   ) {
@@ -646,6 +1032,8 @@ async function runDiscoveryEngine(): Promise<void> {
 
   const BATCH_SIZE = 40;
   let totalProcessed = 0;
+  let disqualifiedCount = 0;
+  let emptyCount = 0;
   let emptyRounds = 0;
 
   while (true) {
@@ -663,9 +1051,6 @@ async function runDiscoveryEngine(): Promise<void> {
 
     if (targets.length === 0) {
       emptyRounds++;
-      // Se stiamo lavorando su una provincia e la coda si è svuotata,
-      // aspettiamo che altre run popolino nuovi 'pending'. Dopo 3 round
-      // vuoti consecutivi, usciamo.
       if (provinceArg && emptyRounds >= 3) break;
       if (!provinceArg) break;
       await new Promise((r) => setTimeout(r, 5_000));
@@ -674,13 +1059,19 @@ async function runDiscoveryEngine(): Promise<void> {
 
     emptyRounds = 0;
     console.log(
-      `[discovery-engine] Batch di ${targets.length} target (depth 0=${targets.filter((t) => t.depth === 0).length}).`
+      `[discovery-engine] Batch di ${targets.length} target (depth 0=${
+        targets.filter((t) => t.depth === 0).length
+      }).`
     );
 
     for (const t of targets) {
       try {
         await processTarget(t);
         totalProcessed++;
+
+        // Conteggi reattivi: rifacciamo il fetch dello status appena scritto
+        // sarebbe uno spreco; contiamo invece dai log dei sub-processing.
+        // Qui contiamo solo per il summary finale in modo approssimativo.
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`  [fatal-target] ${t.url}: ${msg}`);
@@ -692,6 +1083,29 @@ async function runDiscoveryEngine(): Promise<void> {
           })
           .eq('id', t.id);
       }
+    }
+  }
+
+  // Riepilogo finale: contiamo direttamente dal DB, è la fonte di verità.
+  const { data: summary } = await supabase
+    .from('discovered_links')
+    .select('status')
+    .in('status', [
+      'active_crawler',
+      'disqualified_noise',
+      'empty_view',
+      'parked_low_score',
+      'parked_for_pdf',
+    ]);
+
+  if (summary) {
+    const counts: Record<string, number> = {};
+    for (const row of summary as Array<{ status: string }>) {
+      counts[row.status] = (counts[row.status] ?? 0) + 1;
+    }
+    console.log('\n[discovery-engine] Riepilogo stati:');
+    for (const [status, count] of Object.entries(counts)) {
+      console.log(`  ${status}: ${count}`);
     }
   }
 
