@@ -7,7 +7,6 @@
 // Uso:  npx tsx scripts/import-schools-local.ts
 //
 // Dipendenze: @supabase/supabase-js, csv-parse, dotenv
-//   npm i @supabase/supabase-js csv-parse dotenv
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { parse as parseCsv } from 'csv-parse/sync';
@@ -94,6 +93,7 @@ function normalizeKey(input: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[_.-]+/g, ' ') // Converte trattini bassi e punti in spazi
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -102,7 +102,6 @@ function resolveProvinceCode(raw: string): string {
   const value = raw.trim();
   if (!value) return '';
 
-  // Già un codice a 2 lettere (es. "TO", "PG")
   if (/^[A-Za-z]{2}$/.test(value)) {
     return value.toUpperCase();
   }
@@ -123,17 +122,13 @@ interface DecodedFile {
 function decodeFile(filePath: string): DecodedFile {
   const buffer = fs.readFileSync(filePath);
 
-  // BOM UTF-8
   if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
     return { text: buffer.slice(3).toString('utf-8'), encoding: 'utf8' };
   }
 
-  // Prova UTF-8
   const utf8 = buffer.toString('utf-8');
   const replacementCount = (utf8.match(/\uFFFD/g) || []).length;
 
-  // Se ci sono molti caratteri di sostituzione, il file non è UTF-8.
-  // I CSV del MIUR sono spesso Windows-1252 / Latin-1.
   if (replacementCount > 0 && replacementCount > utf8.length / 10_000) {
     return { text: buffer.toString('latin1'), encoding: 'latin1' };
   }
@@ -150,7 +145,6 @@ interface RawRow {
 }
 
 function detectDelimiter(sample: string): string {
-  // Conta occorrenze nella prima riga non vuota
   const firstLine = sample.split(/\r?\n/).find((l) => l.trim().length > 0) || '';
   let best = ';';
   let bestCount = 0;
@@ -186,7 +180,7 @@ function parseFile(text: string, filePath: string): RawRow[] {
 }
 
 // ---------------------------------------------------------------------------
-// Risoluzione colonne per nome
+// Risoluzione colonne per nome (aggiornata per standard MIUR)
 // ---------------------------------------------------------------------------
 
 interface ColumnMap {
@@ -197,36 +191,30 @@ interface ColumnMap {
 }
 
 const COLUMN_ALIASES = {
-  // 'codicescuola' è l'header esatto dei CSV MIUR.
-  // Gli altri alias coprono varianti di altre fonti / anni diversi.
   codice: [
-    'codicescuola',
+    'codice istituto',
     'codice scuola',
     'codice meccanografico',
-    'codice istituto',
-    'cod meccanografico',
+    'codice',
     'cod mecc',
     'meccanografico',
   ],
   regione: [
-    'regione',
+    'descrizione regione',
     'regione scolastica',
+    'regione',
   ],
   provincia: [
-    'provincia',
-    'provincia scolastica',
     'sigla provincia',
+    'provincia scolastica',
+    'provincia',
   ],
-  // 'sitowebscuola' è l'header esatto dei CSV MIUR.
-  // 'sitoweb' copre varianti tipo 'sitowebistituto'.
   sitoWeb: [
-    'sitowebscuola',
+    'indirizzo web',
     'sito web scuola',
     'sito web',
-    'sitoweb',
     'sito',
     'url',
-    'indirizzo web',
     'indirizzo sito web',
     'pagina web',
   ],
@@ -236,20 +224,13 @@ function findColumn(
   headers: string[],
   aliases: readonly string[]
 ): string | null {
-  // 1) Match esatto: l'header normalizzato coincide con un alias.
-  //    Iteriamo sugli alias in ordine di priorità, non sugli header,
-  //    così l'alias più specifico vince sempre.
   for (const alias of aliases) {
     const normalized = normalizeKey(alias);
     if (headers.includes(normalized)) return normalized;
   }
 
-  // 2) Match parziale: l'header contiene l'alias.
-  //    Es. header 'sitowebscuola' contiene 'sitoweb'.
   for (const alias of aliases) {
     const normalized = normalizeKey(alias);
-    // Ignora alias troppo corti: rischiano falsi positivi
-    // ('web', 'url', 'sito' da soli non bastano).
     if (normalized.length < 4) continue;
     const found = headers.find((h) => h.includes(normalized));
     if (found) return found;
@@ -288,7 +269,6 @@ function normalizeUrl(raw: string): string | null {
   if (CONFIG.invalidPlaceholders.has(value.toLowerCase())) return null;
   if (!value.includes('.')) return null;
 
-  // Rimuove spazi interni e caratteri invisibili
   value = value.replace(/\s+/g, '');
 
   if (!/^https?:\/\//i.test(value)) {
@@ -305,12 +285,6 @@ function normalizeUrl(raw: string): string | null {
   }
 }
 
-/**
- * Estrae l'hostname da una URL gia validata.
- * Presuppone che `url` sia passata per normalizeUrl, quindi il parsing
- * non dovrebbe fallire; se fallisce comunque, restituisce stringa vuota
- * per non far crashare l'intero batch.
- */
 function extractDomain(url: string): string {
   try {
     return new URL(url).hostname.toLowerCase();
@@ -354,14 +328,10 @@ function transformRow(
     return null;
   }
 
-  // Deduplica in-memory: alcuni file hanno lo stesso istituto su più righe (plessi).
   if (seenUrls.has(url)) {
     return null;
   }
 
-  // Il dominio è obbligatorio nello schema: lo deriviamo dalla URL
-  // già normalizzata. Se per qualche motivo non è estraibile,
-  // scartiamo la riga invece di inviare un batch che fallirà.
   const domain = extractDomain(url);
   if (!domain) {
     stats.invalidUrl += 1;
@@ -429,8 +399,6 @@ async function upsertInBatches(
       .from('discovered_links')
       .upsert(batch, {
         onConflict: 'url',
-        // Non tocca i record esistenti: lo status viene aggiornato solo
-        // quando il discovery engine promuove la pagina.
         ignoreDuplicates: true,
       });
 

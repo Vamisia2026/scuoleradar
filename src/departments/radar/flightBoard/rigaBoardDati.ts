@@ -4,20 +4,19 @@
  *
  * Da una riga di `interpelli` alle informazioni che la tavola mostra ma il
  * database non contiene: la tipologia (classe di concorso o categoria), la
- * banda di urgenza/anzianità della scadenza e le date brevi. Nessun rendering,
- * nessuna rete, nessuno stato: il JSX sta in `components/RigaBoard.tsx`.
- *
- * Estratto da `flightBoard/rigaBoard.tsx` per il limite di 250 righe/file
- * (`.clinerules` §3): etichette, soglie e rami sono INVARIATI — nessun
- * cambiamento visibile, solo la separazione fra dati e presentazione.
- *
- * Regola di prodotto: la cella «Scadenza» mostra la scadenza vera quando c'è,
- * altrimenti la data di PUBBLICAZIONE dichiarata («Pubblicato 12 set») — mai una
- * data inventata; un avviso senza scadenza è urgente in base alla sua età.
+ * banda di urgenza basata ESCLUSIVAMENTE sulla scadenza e le date brevi.
+ * Nessun rendering, nessuna rete, nessuno stato: il JSX sta in `components/RigaBoard.tsx`.
  */
-import { calcolaUrgenza } from '@/lib/urgency';
 import { materiaClasse } from '@/data/classiConcorso';
-import type { InterpelloLive } from './righeBoard';
+import { 
+  type InterpelloLive, 
+  livelloUrgenza, 
+  coloreUrgenza, 
+  etichettaUrgenza, 
+  normalizzaDataScadenza,
+  type Urgenza,
+  type ColoreUrgenza 
+} from './righeBoard';
 
 /** Data breve `it-IT` («12 set») da una stringa ISO; stringa vuota se assente o non valida. */
 export function dataItBreve(iso?: string | null): string {
@@ -29,38 +28,51 @@ export function dataItBreve(iso?: string | null): string {
     : d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
 }
 
-/** Calcola l'urgenza o l'equivalente basato sull'età per gli avvisi senza scadenza esplicita. */
+/** Mappa il livello di urgenza e le classi CSS per il colour coding (Verde, Giallo, Rosso). */
 export function ottieniUrgenzaOAnzianita(expirationDate?: string | null, createdAt?: string | null) {
-  if (expirationDate) {
-    return calcolaUrgenza(expirationDate);
-  }
+  // Costruiamo un oggetto fittizio compatibile con le funzioni pure di righeBoard.ts
+  const rigaTemp: InterpelloLive = {
+    id: '',
+    title: '',
+    school_name: null,
+    province: '',
+    class_codes: null,
+    materia: null,
+    expiration_date: expirationDate ?? null,
+    created_at: createdAt ?? null,
+  };
 
-  if (createdAt) {
-    const pub = new Date(createdAt.length <= 10 ? `${createdAt}T00:00:00` : createdAt);
-    if (!Number.isNaN(pub.getTime())) {
-      const diffGiorni = (Date.now() - pub.getTime()) / (1000 * 60 * 60 * 24);
-      if (diffGiorni <= 30) {
+  const livello = livelloUrgenza(rigaTemp);
+  const colore = coloreUrgenza(livello);
+  const etichetta = etichettaUrgenza(rigaTemp);
+
+  let className = 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+
+  switch (colore) {
+    case 'verde':
+      className = 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+      break;
+    case 'giallo':
+      className = 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold';
+      break;
+    case 'rosso':
+      className = 'bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold';
+      break;
+    case 'grigio':
+      // Se non c'è scadenza ma abbiamo la data di creazione, mostriamo la pubblicazione in modo neutro
+      if (createdAt) {
         return {
-          label: 'In corso',
-          className: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
-        };
-      } else if (diffGiorni <= 44) {
-        return {
-          label: `Scade tra ${Math.round(60 - diffGiorni)}g`,
-          className: 'bg-amber-100 text-amber-800 border border-amber-200',
-        };
-      } else {
-        return {
-          label: `Scade tra ${Math.round(60 - diffGiorni)}g`,
-          className: 'bg-rose-100 text-rose-800 border border-rose-200',
+          label: `Pubblicato ${dataItBreve(createdAt)}`,
+          className: 'bg-slate-800 text-slate-300 border border-slate-700',
         };
       }
-    }
+      className = 'bg-slate-800 text-slate-300 border border-slate-700';
+      break;
   }
 
   return {
-    label: 'In corso',
-    className: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+    label: etichetta,
+    className,
   };
 }
 
