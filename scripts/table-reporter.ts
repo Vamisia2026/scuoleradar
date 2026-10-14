@@ -1,11 +1,18 @@
 // scripts/table-reporter.ts
 //
-// Table Reporter — v4
-//   • Pre-check Strutturale: rifiuta pagine senza vera tabella interpelli
-//     (Albo Online generico, delibere, determine, mense, gare, regolamenti)
-//     restituendo 0 record senza tentare conversioni forzate.
-//   • Filtro Rigido Chiusi (case-insensitive, spazi normalizzati).
-//   • Provincia Forzata da Codice Meccanografico (addio "EE" fantasma).
+// Table Reporter — v6
+//   • Auto-disattivazione target inutili: se una pagina viene scartata dal
+//     pre-check `pageContainsInterpelliTable($)` (Albo Online, Amministrazione
+//     Trasparente, sezioni burocratiche), il target corrispondente in
+//     `discovered_links` viene impostato a `status = 'disabled'` per non
+//     sprecare richieste HTTP ai run successivi.
+//   • Cleanup iniziale: disattiva i link Umbria con URL contenenti pattern
+//     `amministrazione-trasparente` / `albo-online`.
+//   • Anti-spam Sindacale & Rumore — Zero Tolleranza.
+//   • Mappatura rigida provincia da codice meccanografico o da URL `ambito_XX`.
+//   • Scadenza reale: parsing YYYY-MM-DD; righe scadute SCARTATE.
+//   • Pre-check Strutturale: rifiuta pagine senza vera tabella interpelli.
+//   • Filtro rigido chiusi + link attivo (fix v3 preservati).
 //
 // Legge i target da discovered_links (status = 'active_crawler'),
 // estrae le righe delle tabelle interpelli e fa upsert su interpelli.
@@ -29,6 +36,9 @@ const CONFIG = {
   fetchTimeoutMs: 25_000,
   minSchoolNameLength: 4,
   fallbackProvince: 'EE',
+  // Stato impostato sui target quando la pagina non contiene una vera
+  // tabella di interpelli. Vengono esclusi dai run successivi.
+  disqualifiedStatus: 'disabled',
 } as const;
 
 const supabaseUrl =
@@ -111,6 +121,14 @@ interface ProcessResult {
   status: 'success' | 'error';
   signature: string | null;
   error?: string;
+  // True se la pagina è stata scartata perché priva di una vera tabella
+  // di interpelli → il target va disattivato in discovered_links.
+  disqualified?: boolean;
+}
+
+interface ExtractionResult {
+  records: InterpelloRecord[];
+  disqualified: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -160,15 +178,45 @@ function resolveUrl(href: string, baseUrl: string): string {
   }
 }
 
-function parseDeadline(text: string): string | null {
-  const match = text.match(/\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})\b/);
-  if (!match) return null;
+// ---------------------------------------------------------------------------
+// Parsing della scadenza
+// ---------------------------------------------------------------------------
 
-  const [, d, m, y] = match;
+function todayIso(): string {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(now.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+const TODAY_ISO = todayIso();
+
+function parseDeadline(text: string): string | null {
+  // 1) Formato ISO già presente: YYYY-MM-DD
+  const isoMatch = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (isoMatch) {
+    const [, y, m, d] = isoMatch;
+    return validateIsoDate(y, m, d);
+  }
+
+  // 2) Formato italiano/europeo: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY (anche 2 cifre)
+  const euMatch = text.match(/\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})\b/);
+  if (!euMatch) return null;
+
+  const [, d, m, y] = euMatch;
   const day = d.padStart(2, '0');
   const month = m.padStart(2, '0');
   const year = y.length === 2 ? `20${y}` : y;
 
+  return validateIsoDate(year, month, day);
+}
+
+function validateIsoDate(
+  year: string,
+  month: string,
+  day: string
+): string | null {
   const dayNum = Number(day);
   const monthNum = Number(month);
   const yearNum = Number(year);
@@ -180,28 +228,55 @@ function parseDeadline(text: string): string | null {
   return `${year}-${month}-${day}`;
 }
 
-function extractSubjectAndClass(text: string): {
-  classCode: string;
-  subject: string;
-} {
-  const classMatch = text.match(/\b([A-E][0-9]{2}|[A-Z]{2,3}[0-9]{1,2})\b/i);
-  const classCode = classMatch ? classMatch[1].toUpperCase() : 'GENERALE';
+function isExpired(deadlineIso: string | null): boolean {
+  if (!deadlineIso) return false;
+  return deadlineIso < TODAY_ISO;
+}
 
-  let subject = 'Non specificata';
-  const t = text.toLowerCase();
+// ---------------------------------------------------------------------------
+// Estrazione provincia dall'URL (per i portali USR che usano `ambito_XX`)
+// ---------------------------------------------------------------------------
 
-  if (t.includes('sostegno')) subject = 'Sostegno';
-  else if (t.includes('inglese')) subject = 'Inglese';
-  else if (t.includes('matematica')) subject = 'Matematica';
-  else if (t.includes('italiano')) subject = 'Italiano';
-  else if (t.includes('fisica')) subject = 'Fisica';
-  else if (t.includes('chimica')) subject = 'Chimica';
-  else if (t.includes('storia')) subject = 'Storia';
-  else if (t.includes('filosofia')) subject = 'Filosofia';
-  else if (t.includes('latino')) subject = 'Latino';
-  else if (t.includes('scienze')) subject = 'Scienze';
+const URL_AMBITO_REGEX = /ambito[_\-.]?([a-z]{2})(?:[_\-.]|\b)/i;
 
-  return { classCode, subject };
+function extractProvinceFromUrl(url: string): string | null {
+  if (!url) return null;
+  const m = url.match(URL_AMBITO_REGEX);
+  if (!m) return null;
+  const prov = m[1].toUpperCase();
+  if (PROVINCE_CODES.has(prov)) return prov;
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Anti-spam sindacale & rumore (Zero Tolleranza)
+// ---------------------------------------------------------------------------
+
+const NOISE_KEYWORDS = [
+  'assemblea sindacale',
+  'assemblee sindacali',
+  'sciopero',
+  'scioperi',
+  'rappresentanza sindacale',
+  'rappresentanze sindacali',
+  'r.s.u.',
+  'rsu',
+  'orario ricevimento',
+  'orari di ricevimento',
+  'verbale',
+  'verbali',
+  'delibera',
+  'delibere',
+  'determina',
+  'determine',
+  'cig',
+];
+
+function rowIsNoise(fullRowTextLower: string): boolean {
+  for (const kw of NOISE_KEYWORDS) {
+    if (fullRowTextLower.includes(kw)) return true;
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -245,27 +320,7 @@ function rowIndicatesClosed(fullRowTextLower: string): boolean {
 // ---------------------------------------------------------------------------
 // PRE-CHECK STRUTTURALE — la pagina contiene una VERA tabella di interpelli?
 // ---------------------------------------------------------------------------
-//
-// Obiettivo: scartare in partenza pagine che non contengono una tabella di
-// interpelli (Albo Online generico, Amministrazione Trasparente, elenchi di
-// delibere, determine, mense, regolamenti, gare, bandi, ...) evitando falsi
-// positivi che sporcherebbero la tabella `interpelli` su Supabase.
-//
-// Strategia a due livelli:
-//   1) Match esplicito: presenza della radice "interpell*" nel testo delle
-//      tabelle (header o corpo) → pagina accettata immediatamente.
-//   2) Punteggio:
-//        - marcatori FORTI (tipici della tabella interpelli)
-//        - marcatori DEBOLI (contesto generico di avvisi)
-//      La pagina è accettata SOLO se:
-//        - almeno 2 marcatori forti distinti, OPPURE
-//        - almeno 1 forte + 2 deboli.
-//
-// In tutti gli altri casi la funzione ritorna `false` e il chiamante deve
-// restituire `[]` senza tentare alcuna conversione forzata.
-//
 
-// Marcatori "forti": se ne trovano 2 la pagina è quasi certamente interpelli.
 const STRONG_INTERPELLI_MARKERS: RegExp[] = [
   /classi?\s+di\s+concorso/i,
   /cod(?:ice)?\.?\s*mecc(?:anografico)?/i,
@@ -274,7 +329,6 @@ const STRONG_INTERPELLI_MARKERS: RegExp[] = [
   /supplenz/i,
 ];
 
-// Marcatori "deboli": da soli non bastano, ma corroborano il contesto.
 const WEAK_INTERPELLI_MARKERS: RegExp[] = [
   /candidatur/i,
   /posti?\s+disponibil/i,
@@ -374,23 +428,24 @@ async function fetchHtml(url: string): Promise<FetchResult> {
 function extractRecordsFromHtml(
   $: cheerio.CheerioAPI,
   target: DiscoveredLink
-): InterpelloRecord[] {
+): ExtractionResult {
   const records: InterpelloRecord[] = [];
 
   // --- PRE-CHECK STRUTTURALE ---
-  // Se la pagina non contiene una vera tabella di interpelli (Albo Online,
-  // Amministrazione Trasparente, delibere, determine, mense, regolamenti,
-  // gare, bandi...), restituiamo `[]` immediatamente, senza tentare
-  // conversioni forzate e senza inserire record spazzatura su Supabase.
+  // Se la pagina non contiene una vera tabella di interpelli, segnaliamo
+  // il target come `disqualified` così il chiamante può disattivarlo.
   if (!pageContainsInterpelliTable($)) {
     console.log(
       '[table-reporter] Pagina priva di tabella interpelli riconoscibile — skip.'
     );
-    return [];
+    return { records: [], disqualified: true };
   }
 
   const defaultProvince = (target.province || CONFIG.fallbackProvince).toUpperCase();
   const region = target.region;
+
+  // Provincia derivabile dall'URL del target (es. portali USR con `ambito_XX`).
+  const urlProvince = extractProvinceFromUrl(target.url);
 
   $('table').each((_tableIdx, tableEl) => {
     const $table = $(tableEl);
@@ -411,16 +466,17 @@ function extractRecordsFromHtml(
       const fullRowText = colTexts.join(' ');
       const fullRowTextLower = fullRowText.toLowerCase();
 
+      // --- FIX v5 #1: ANTI-SPAM SINDACALE & RUMORE (Zero Tolleranza) ---
+      if (rowIsNoise(fullRowTextLower)) {
+        return;
+      }
+
       // --- FIX v3: FILTRO RIGIDO CHIUSI ---
-      // Scarta in modo aggressivo qualsiasi riga che indichi uno stato
-      // chiuso / scaduto / non attivo (case-insensitive, spazi normalizzati).
       if (rowIndicatesClosed(fullRowTextLower)) {
         return;
       }
 
-      // --- FIX v3: VERIFICA PRESENZA LINK DI CANDIDATURA ATTIVO ---
-      // Se la riga non contiene alcun <a> valido, l'interpello è considerato
-      // non più candidabile e viene scartato.
+      // --- FIX v3: LINK DI CANDIDATURA ATTIVO ---
       const $link = $row.find('a').first();
       const rawHref = $link.attr('href');
       if (
@@ -441,27 +497,34 @@ function extractRecordsFromHtml(
       if (schoolName.toLowerCase().includes('scuola non specificata')) return;
       if (href.includes('artov.rm.cnr.it')) return;
 
+      // --- FIX v5 #3: SCADENZA REALE + SCARTO SE SCADUTA ---
+      const deadline = parseDeadline(fullRowText);
+      if (isExpired(deadline)) {
+        return;
+      }
+
       const schoolCode = extractMechCode(fullRowText);
 
-      // --- FIX v3: RISOLUZIONE FORZATA PROVINCIA DA CODICE MECCANOGRAFICO ---
-      // Se il codice meccanografico è valido e riconosciuto, la provincia
-      // viene derivata OBBLIGATORIAMENTE dalle prime 2 lettere (es. AT, BI, VB).
-      // Il fallback (target.province / 'EE') viene usato SOLO se il codice
-      // non è disponibile o non è riconosciuto.
+      // --- FIX v5 #2: MAPPATURA RIGIDA PROVINCIA ---
+      // Priorità:
+      //   1) sigla derivata dal codice meccanografico (NO/BI/VC/CN/AT/...)
+      //   2) sigla estratta dall'URL del target (pattern `ambito_XX`)
+      //   3) fallback target.province / 'EE'
       let province: string;
       if (schoolCode !== 'ND' && isLikelyMechCode(schoolCode)) {
         const derivedProv = schoolCode.slice(0, 2).toUpperCase();
         if (PROVINCE_CODES.has(derivedProv)) {
           province = derivedProv;
         } else {
-          province = defaultProvince;
+          province = urlProvince ?? defaultProvince;
         }
+      } else if (urlProvince) {
+        province = urlProvince;
       } else {
         province = defaultProvince;
       }
 
       const { classCode, subject } = extractSubjectAndClass(fullRowText);
-      const deadline = parseDeadline(fullRowText);
       const sourceUrl = resolveUrl(href, target.url);
       const title = `${schoolName} - Interpello Ufficiale`;
       const hashId = generateHashId(province, schoolCode, title, sourceUrl);
@@ -481,11 +544,86 @@ function extractRecordsFromHtml(
     });
   });
 
-  return records;
+  return { records, disqualified: false };
 }
 
 // ---------------------------------------------------------------------------
-// Orchestrazione
+// Orchestrazione — disattivazione target inutili
+// ---------------------------------------------------------------------------
+
+// Pattern URL usati per il cleanup iniziale (link Umbria evidentemente
+// burocratici che non contengono mai tabelle di interpelli).
+const JUNK_UMBRIA_URL_PATTERNS: RegExp[] = [
+  /amministrazione[\-\s_]?trasparente/i,
+  /albo[\-\s_]?online/i,
+];
+
+async function disableObviousJunkTargets(): Promise<number> {
+  const { data, error } = await supabase
+    .from('discovered_links')
+    .select('id, url, status')
+    .eq('region', 'Umbria')
+    .eq('status', 'active_crawler');
+
+  if (error) {
+    console.error(
+      `[table-reporter] Errore query Umbria (cleanup iniziale): ${error.message}`
+    );
+    return 0;
+  }
+
+  const ids = (data ?? [])
+    .filter((row) =>
+      JUNK_UMBRIA_URL_PATTERNS.some((re) => re.test(String(row.url ?? '')))
+    )
+    .map((row) => row.id);
+
+  if (ids.length === 0) {
+    console.log(
+      '[table-reporter] Cleanup iniziale: nessun link Umbria generico da disattivare.'
+    );
+    return 0;
+  }
+
+  const { error: updErr } = await supabase
+    .from('discovered_links')
+    .update({ status: CONFIG.disqualifiedStatus })
+    .in('id', ids);
+
+  if (updErr) {
+    console.error(
+      `[table-reporter] Errore disattivazione Umbria (cleanup iniziale): ${updErr.message}`
+    );
+    return 0;
+  }
+
+  console.log(
+    `[table-reporter] Cleanup iniziale: disattivati ${ids.length} link Umbria generici.`
+  );
+  return ids.length;
+}
+
+// Disattiva un singolo target dopo che il pre-check strutturale ha rilevato
+// l'assenza di una vera tabella interpelli.
+async function disqualifyTarget(target: DiscoveredLink): Promise<void> {
+  const { error } = await supabase
+    .from('discovered_links')
+    .update({ status: CONFIG.disqualifiedStatus })
+    .eq('id', target.id);
+
+  if (error) {
+    console.error(
+      `[table-reporter] Errore disattivazione ${target.url}: ${error.message}`
+    );
+  } else {
+    console.log(
+      `[table-reporter] Target disattivato (${CONFIG.disqualifiedStatus}) — nessuna tabella interpelli: ${target.url}`
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Orchestrazione — main
 // ---------------------------------------------------------------------------
 
 async function loadTargets(): Promise<DiscoveredLink[]> {
@@ -525,7 +663,8 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
 
     const $ = cheerio.load(html);
     const signature = getStructuralSignature($);
-    const records = extractRecordsFromHtml($, target);
+    const extraction = extractRecordsFromHtml($, target);
+    const records = extraction.records;
 
     if (records.length > 0) {
       const { error: upsertError } = await supabase
@@ -549,6 +688,7 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
       extracted: records.length,
       status: 'success',
       signature,
+      disqualified: extraction.disqualified,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -583,6 +723,16 @@ async function writeReport(
 async function runTableReporter(): Promise<void> {
   console.log('[table-reporter] Avvio scansione tabellare...');
 
+  // STEP 0 — cleanup iniziale: disattiva i link Umbria genericamente
+  // burocratici prima di sprecare richieste HTTP.
+  try {
+    await disableObviousJunkTargets();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[table-reporter] Cleanup iniziale fallito: ${msg}`);
+    // Non blocchiamo il run: proseguiamo comunque.
+  }
+
   let targets: DiscoveredLink[];
   try {
     targets = await loadTargets();
@@ -604,6 +754,7 @@ async function runTableReporter(): Promise<void> {
   let totalExtracted = 0;
   let successCount = 0;
   let errorCount = 0;
+  let disqualifiedCount = 0;
 
   for (const target of targets) {
     const label = `${target.region ?? 'N/D'} / ${target.province ?? 'N/D'} — ${target.url}`;
@@ -618,6 +769,12 @@ async function runTableReporter(): Promise<void> {
       console.log(
         `[table-reporter] Estratti ${result.extracted} record validi da ${target.url}`
       );
+
+      // Auto-disattivazione del target se privo di tabella interpelli.
+      if (result.disqualified) {
+        await disqualifyTarget(target);
+        disqualifiedCount += 1;
+      }
     } else {
       errorCount += 1;
       console.error(`[table-reporter] Errore su ${target.url}: ${result.error}`);
@@ -628,6 +785,7 @@ async function runTableReporter(): Promise<void> {
   console.log(`  Target elaborati: ${targets.length}`);
   console.log(`  Successi: ${successCount}`);
   console.log(`  Errori: ${errorCount}`);
+  console.log(`  Target disattivati (no tabella): ${disqualifiedCount}`);
   console.log(`  Record totali processati: ${totalExtracted}`);
 
   if (errorCount > 0) {
