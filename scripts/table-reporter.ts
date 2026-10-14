@@ -1,14 +1,17 @@
 // scripts/table-reporter.ts
 //
-// Table Reporter — v2
+// Table Reporter — v4
+//   • Pre-check Strutturale: rifiuta pagine senza vera tabella interpelli
+//     (Albo Online generico, delibere, determine, mense, gare, regolamenti)
+//     restituendo 0 record senza tentare conversioni forzate.
+//   • Filtro Rigido Chiusi (case-insensitive, spazi normalizzati).
+//   • Provincia Forzata da Codice Meccanografico (addio "EE" fantasma).
+//
 // Legge i target da discovered_links (status = 'active_crawler'),
 // estrae le righe delle tabelle interpelli e fa upsert su interpelli.
 //
 // Dipendenze: @supabase/supabase-js, cheerio, dotenv
 // Uso: npx tsx scripts/table-reporter.ts
-//
-// Nota schema: il record scritto in `interpelli` include il campo `region`.
-// Se la colonna non esiste ancora, va aggiunta con una migrazione.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import * as cheerio from 'cheerio';
@@ -59,8 +62,8 @@ const PROVINCE_CODES = new Set<string>([
   'VT','VV',
 ]);
 
-// Senza flag /i: i codici meccanografici sono sempre maiuscoli.
-const MECH_CODE_REGEX = /\b([A-Z]{2}[A-Z0-9]{8})\b/g;
+// Case-insensitive: cattura anche codici in minuscolo presenti nelle tabelle.
+const MECH_CODE_REGEX = /\b([A-Za-z]{2}[A-Za-z0-9]{8})\b/g;
 
 function isLikelyMechCode(code: string): boolean {
   if (code.length !== 10) return false;
@@ -72,7 +75,8 @@ function isLikelyMechCode(code: string): boolean {
 function extractMechCode(text: string): string {
   const matches = text.match(MECH_CODE_REGEX) || [];
   for (const raw of matches) {
-    if (isLikelyMechCode(raw)) return raw;
+    const upper = raw.toUpperCase();
+    if (isLikelyMechCode(upper)) return upper;
   }
   return 'ND';
 }
@@ -201,6 +205,135 @@ function extractSubjectAndClass(text: string): {
 }
 
 // ---------------------------------------------------------------------------
+// Filtro di stato (interpelli chiusi / scaduti / non attivi) — FIX v3
+// ---------------------------------------------------------------------------
+
+const CLOSED_STATE_KEYWORDS = [
+  'chiuso',
+  'chiusa',
+  'chiusi',
+  'chiuse',
+  'scaduto',
+  'scaduta',
+  'scaduti',
+  'scadute',
+  'concluso',
+  'conclusa',
+  'conclusi',
+  'concluse',
+  'terminato',
+  'terminata',
+  'terminati',
+  'terminate',
+  'non attivo',
+  'non attiva',
+  'non attivi',
+  'non attive',
+  'inattivo',
+  'inattiva',
+  'expired',
+  'closed',
+];
+
+function rowIndicatesClosed(fullRowTextLower: string): boolean {
+  for (const kw of CLOSED_STATE_KEYWORDS) {
+    if (fullRowTextLower.includes(kw)) return true;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// PRE-CHECK STRUTTURALE — la pagina contiene una VERA tabella di interpelli?
+// ---------------------------------------------------------------------------
+//
+// Obiettivo: scartare in partenza pagine che non contengono una tabella di
+// interpelli (Albo Online generico, Amministrazione Trasparente, elenchi di
+// delibere, determine, mense, regolamenti, gare, bandi, ...) evitando falsi
+// positivi che sporcherebbero la tabella `interpelli` su Supabase.
+//
+// Strategia a due livelli:
+//   1) Match esplicito: presenza della radice "interpell*" nel testo delle
+//      tabelle (header o corpo) → pagina accettata immediatamente.
+//   2) Punteggio:
+//        - marcatori FORTI (tipici della tabella interpelli)
+//        - marcatori DEBOLI (contesto generico di avvisi)
+//      La pagina è accettata SOLO se:
+//        - almeno 2 marcatori forti distinti, OPPURE
+//        - almeno 1 forte + 2 deboli.
+//
+// In tutti gli altri casi la funzione ritorna `false` e il chiamante deve
+// restituire `[]` senza tentare alcuna conversione forzata.
+//
+
+// Marcatori "forti": se ne trovano 2 la pagina è quasi certamente interpelli.
+const STRONG_INTERPELLI_MARKERS: RegExp[] = [
+  /classi?\s+di\s+concorso/i,
+  /cod(?:ice)?\.?\s*mecc(?:anografico)?/i,
+  /graduator/i,
+  /\bscadenz/i,
+  /supplenz/i,
+];
+
+// Marcatori "deboli": da soli non bastano, ma corroborano il contesto.
+const WEAK_INTERPELLI_MARKERS: RegExp[] = [
+  /candidatur/i,
+  /posti?\s+disponibil/i,
+  /tipo\s+posto/i,
+  /data\s+pubblicazione/i,
+  /codice\s+scuola/i,
+  /destinatari/i,
+  /requisiti/i,
+  /\bclass[ei]\b/i,
+  /\bstato\b/i,
+];
+
+function pageContainsInterpelliTable($: cheerio.CheerioAPI): boolean {
+  const tables = $('table');
+  if (tables.length === 0) return false;
+
+  const headersText: string[] = [];
+  const bodyChunks: string[] = [];
+
+  tables.each((_, tableEl) => {
+    const $table = $(tableEl);
+
+    // Dev'essere una tabella "reale": almeno 2 righe.
+    if ($table.find('tr').length < 2) return;
+
+    $table.find('th, thead td').each((_, el) => {
+      headersText.push(normalize($(el).text()));
+    });
+    bodyChunks.push(normalize($table.text()));
+  });
+
+  if (bodyChunks.length === 0) return false;
+
+  const headerScope = headersText.join(' ').toLowerCase();
+  const bodyScope = bodyChunks.join(' ').toLowerCase();
+  const fullScope = `${headerScope} ${bodyScope}`;
+
+  if (fullScope.trim().length === 0) return false;
+
+  // (1) Match esplicito "interpell*" → pagina di interpelli.
+  if (/\binterpell/i.test(fullScope)) return true;
+
+  // (2) Conteggio marcatori forti / deboli.
+  const strongHits = STRONG_INTERPELLI_MARKERS.reduce(
+    (n, re) => n + (re.test(fullScope) ? 1 : 0),
+    0
+  );
+  const weakHits = WEAK_INTERPELLI_MARKERS.reduce(
+    (n, re) => n + (re.test(fullScope) ? 1 : 0),
+    0
+  );
+
+  if (strongHits >= 2) return true;
+  if (strongHits >= 1 && weakHits >= 2) return true;
+
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // Fetch
 // ---------------------------------------------------------------------------
 
@@ -243,7 +376,20 @@ function extractRecordsFromHtml(
   target: DiscoveredLink
 ): InterpelloRecord[] {
   const records: InterpelloRecord[] = [];
-  const province = (target.province || CONFIG.fallbackProvince).toUpperCase();
+
+  // --- PRE-CHECK STRUTTURALE ---
+  // Se la pagina non contiene una vera tabella di interpelli (Albo Online,
+  // Amministrazione Trasparente, delibere, determine, mense, regolamenti,
+  // gare, bandi...), restituiamo `[]` immediatamente, senza tentare
+  // conversioni forzate e senza inserire record spazzatura su Supabase.
+  if (!pageContainsInterpelliTable($)) {
+    console.log(
+      '[table-reporter] Pagina priva di tabella interpelli riconoscibile — skip.'
+    );
+    return [];
+  }
+
+  const defaultProvince = (target.province || CONFIG.fallbackProvince).toUpperCase();
   const region = target.region;
 
   $('table').each((_tableIdx, tableEl) => {
@@ -258,9 +404,36 @@ function extractRecordsFromHtml(
       const cols = $row.find('td');
       if (cols.length < 2) return;
 
+      // Estrai il testo normalizzato di tutte le colonne.
+      const colTexts = cols
+        .map((_, el) => normalize($(el).text()))
+        .get();
+      const fullRowText = colTexts.join(' ');
+      const fullRowTextLower = fullRowText.toLowerCase();
+
+      // --- FIX v3: FILTRO RIGIDO CHIUSI ---
+      // Scarta in modo aggressivo qualsiasi riga che indichi uno stato
+      // chiuso / scaduto / non attivo (case-insensitive, spazi normalizzati).
+      if (rowIndicatesClosed(fullRowTextLower)) {
+        return;
+      }
+
+      // --- FIX v3: VERIFICA PRESENZA LINK DI CANDIDATURA ATTIVO ---
+      // Se la riga non contiene alcun <a> valido, l'interpello è considerato
+      // non più candidabile e viene scartato.
       const $link = $row.find('a').first();
+      const rawHref = $link.attr('href');
+      if (
+        !$link.length ||
+        !rawHref ||
+        rawHref.trim() === '' ||
+        rawHref.trim() === '#'
+      ) {
+        return;
+      }
+
       const linkText = normalize($link.text());
-      const href = $link.attr('href') || target.url;
+      const href = rawHref;
       const secondCellText = normalize($(cols[1]).text());
       const schoolName = linkText || secondCellText;
 
@@ -268,12 +441,25 @@ function extractRecordsFromHtml(
       if (schoolName.toLowerCase().includes('scuola non specificata')) return;
       if (href.includes('artov.rm.cnr.it')) return;
 
-      const colTexts = cols
-        .map((_, el) => normalize($(el).text()))
-        .get();
-      const fullRowText = colTexts.join(' ');
-
       const schoolCode = extractMechCode(fullRowText);
+
+      // --- FIX v3: RISOLUZIONE FORZATA PROVINCIA DA CODICE MECCANOGRAFICO ---
+      // Se il codice meccanografico è valido e riconosciuto, la provincia
+      // viene derivata OBBLIGATORIAMENTE dalle prime 2 lettere (es. AT, BI, VB).
+      // Il fallback (target.province / 'EE') viene usato SOLO se il codice
+      // non è disponibile o non è riconosciuto.
+      let province: string;
+      if (schoolCode !== 'ND' && isLikelyMechCode(schoolCode)) {
+        const derivedProv = schoolCode.slice(0, 2).toUpperCase();
+        if (PROVINCE_CODES.has(derivedProv)) {
+          province = derivedProv;
+        } else {
+          province = defaultProvince;
+        }
+      } else {
+        province = defaultProvince;
+      }
+
       const { classCode, subject } = extractSubjectAndClass(fullRowText);
       const deadline = parseDeadline(fullRowText);
       const sourceUrl = resolveUrl(href, target.url);
