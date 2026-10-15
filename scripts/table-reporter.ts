@@ -1,18 +1,22 @@
 // scripts/table-reporter.ts
 //
-// Table Reporter — v6
-//   • Auto-disattivazione target inutili: se una pagina viene scartata dal
-//     pre-check `pageContainsInterpelliTable($)` (Albo Online, Amministrazione
-//     Trasparente, sezioni burocratiche), il target corrispondente in
-//     `discovered_links` viene impostato a `status = 'disabled'` per non
-//     sprecare richieste HTTP ai run successivi.
-//   • Cleanup iniziale: disattiva i link Umbria con URL contenenti pattern
-//     `amministrazione-trasparente` / `albo-online`.
-//   • Anti-spam Sindacale & Rumore — Zero Tolleranza.
-//   • Mappatura rigida provincia da codice meccanografico o da URL `ambito_XX`.
-//   • Scadenza reale: parsing YYYY-MM-DD; righe scadute SCARTATE.
-//   • Pre-check Strutturale: rifiuta pagine senza vera tabella interpelli.
-//   • Filtro rigido chiusi + link attivo (fix v3 preservati).
+// Table Reporter — v7
+//   • FIX #1 — Provincia rigida: priorità assoluta alla PRIMA colonna
+//     (Codice Meccanografico), poi fallback su URL `ambito_XX`, poi su
+//     `target.province`. MAI "EE" quando esiste una sigla valida.
+//   • FIX #2 — Denominazione scuola: letta dalla SECONDA colonna (o dalla
+//     colonna riconosciuta come "Denominazione Istituto Scolastico"). Il
+//     valore della cella NON viene sovrascritto con fallback generici
+//     quando la cella è piena. Il testo del link diventa solo l'ultimo
+//     fallback in caso di cella vuota.
+//   • FIX #3 — Scadenza REALE: la `deadline` è letta tassativamente dalla
+//     colonna "Data Scadenza Interpello" / "Scadenza" (o equivalente),
+//     NON dalla "Data Interpello". Normalizzazione in YYYY-MM-DD.
+//     Righe con deadline < oggi vengono SCARTATE.
+//   • Auto-disattivazione target inutili (v6) preservata.
+//   • Cleanup iniziale Umbria (v6) preservato.
+//   • Anti-spam Sindacale & Rumore — Zero Tolleranza (v5).
+//   • Pre-check Strutturale (v4) + Filtro Chiusi / Link attivo (v3).
 //
 // Legge i target da discovered_links (status = 'active_crawler'),
 // estrae le righe delle tabelle interpelli e fa upsert su interpelli.
@@ -83,6 +87,7 @@ function isLikelyMechCode(code: string): boolean {
 }
 
 function extractMechCode(text: string): string {
+  if (!text) return 'ND';
   const matches = text.match(MECH_CODE_REGEX) || [];
   for (const raw of matches) {
     const upper = raw.toUpperCase();
@@ -121,14 +126,19 @@ interface ProcessResult {
   status: 'success' | 'error';
   signature: string | null;
   error?: string;
-  // True se la pagina è stata scartata perché priva di una vera tabella
-  // di interpelli → il target va disattivato in discovered_links.
   disqualified?: boolean;
 }
 
 interface ExtractionResult {
   records: InterpelloRecord[];
   disqualified: boolean;
+}
+
+interface ColumnMapping {
+  codeIdx: number;
+  schoolIdx: number;
+  deadlineIdx: number;
+  publishDateIdx: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -193,6 +203,8 @@ function todayIso(): string {
 const TODAY_ISO = todayIso();
 
 function parseDeadline(text: string): string | null {
+  if (!text) return null;
+
   // 1) Formato ISO già presente: YYYY-MM-DD
   const isoMatch = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
   if (isoMatch) {
@@ -280,7 +292,7 @@ function rowIsNoise(fullRowTextLower: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Filtro di stato (interpelli chiusi / scaduti / non attivi) — FIX v3
+// Filtro di stato (interpelli chiusi / scaduti / non attivi)
 // ---------------------------------------------------------------------------
 
 const CLOSED_STATE_KEYWORDS = [
@@ -350,8 +362,6 @@ function pageContainsInterpelliTable($: cheerio.CheerioAPI): boolean {
 
   tables.each((_, tableEl) => {
     const $table = $(tableEl);
-
-    // Dev'essere una tabella "reale": almeno 2 righe.
     if ($table.find('tr').length < 2) return;
 
     $table.find('th, thead td').each((_, el) => {
@@ -368,10 +378,8 @@ function pageContainsInterpelliTable($: cheerio.CheerioAPI): boolean {
 
   if (fullScope.trim().length === 0) return false;
 
-  // (1) Match esplicito "interpell*" → pagina di interpelli.
   if (/\binterpell/i.test(fullScope)) return true;
 
-  // (2) Conteggio marcatori forti / deboli.
   const strongHits = STRONG_INTERPELLI_MARKERS.reduce(
     (n, re) => n + (re.test(fullScope) ? 1 : 0),
     0
@@ -385,6 +393,96 @@ function pageContainsInterpelliTable($: cheerio.CheerioAPI): boolean {
   if (strongHits >= 1 && weakHits >= 2) return true;
 
   return false;
+}
+
+// ---------------------------------------------------------------------------
+// Rilevamento colonne della tabella (FIX v7)
+// ---------------------------------------------------------------------------
+//
+// I portali USR/ATP (es. USR Piemonte) espongono tabelle con header simili a:
+//   | Codice Meccanografico | Denominazione Istituto Scolastico | ...
+//   | Data Interpello | Data Scadenza Interpello | ... | <link>
+//
+// Per estrarre in modo rigoroso provincia, denominazione e scadenza, leggiamo
+// gli header della tabella e mappiamo gli indici di colonna. Se gli header
+// non sono disponibili o non riconosciuti, usiamo le posizioni di default
+// (colonna 0 = codice, colonna 1 = denominazione) e lasciamo la deadline
+// al fallback sull'intero testo della riga.
+//
+
+function getTableHeaders(
+  $: cheerio.CheerioAPI,
+  tableEl: cheerio.Element
+): string[] {
+  const $table = $(tableEl);
+
+  // 1) Preferisci <thead>
+  const $thead = $table.find('thead').first();
+  if ($thead.length > 0) {
+    const cells = $thead.find('tr').first().find('th, td');
+    if (cells.length > 0) {
+      return cells
+        .map((_, el) => normalize($(el).text()).toLowerCase())
+        .get();
+    }
+  }
+
+  // 2) Fallback: prima riga con <th>
+  const $firstRow = $table.find('tr').first();
+  if ($firstRow.find('th').length > 0) {
+    return $firstRow
+      .find('th, td')
+      .map((_, el) => normalize($(el).text()).toLowerCase())
+      .get();
+  }
+
+  return [];
+}
+
+function detectColumns(headers: string[]): ColumnMapping {
+  const findIdx = (patterns: RegExp[]): number => {
+    for (let i = 0; i < headers.length; i += 1) {
+      if (patterns.some((re) => re.test(headers[i]))) return i;
+    }
+    return -1;
+  };
+
+  const codeIdx = findIdx([
+    /cod(?:ice)?\.?\s*mecc/,
+    /codice\s*scuola/,
+    /cod\.?\s*scuola/,
+  ]);
+
+  const schoolIdx = findIdx([
+    /denominazione/,
+    /istituto\s+scolastico/,
+    /nome\s+(?:istituto|scuola)/,
+    /scuola/,
+    /istituto/,
+  ]);
+
+  // La scadenza DEVE vincere sul match generico "data".
+  // Ordine: pattern più specifici prima.
+  const deadlineIdx = findIdx([
+    /data\s*scadenza\s*interpello/,
+    /scadenza\s*interpello/,
+    /data\s*scadenza/,
+    /\bscadenz/,
+  ]);
+
+  const publishDateIdx = findIdx([
+    /data\s*interpello/,
+    /data\s*pubblicazione/,
+    /data\s*avviso/,
+  ]);
+
+  return {
+    // Default: colonna 0 = codice, colonna 1 = denominazione.
+    codeIdx: codeIdx >= 0 ? codeIdx : 0,
+    schoolIdx: schoolIdx >= 0 ? schoolIdx : 1,
+    deadlineIdx,
+    publishDateIdx,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -432,8 +530,6 @@ function extractRecordsFromHtml(
   const records: InterpelloRecord[] = [];
 
   // --- PRE-CHECK STRUTTURALE ---
-  // Se la pagina non contiene una vera tabella di interpelli, segnaliamo
-  // il target come `disqualified` così il chiamante può disattivarlo.
   if (!pageContainsInterpelliTable($)) {
     console.log(
       '[table-reporter] Pagina priva di tabella interpelli riconoscibile — skip.'
@@ -441,14 +537,21 @@ function extractRecordsFromHtml(
     return { records: [], disqualified: true };
   }
 
-  const defaultProvince = (target.province || CONFIG.fallbackProvince).toUpperCase();
+  const defaultProvince = (
+    target.province || CONFIG.fallbackProvince
+  ).toUpperCase();
   const region = target.region;
 
-  // Provincia derivabile dall'URL del target (es. portali USR con `ambito_XX`).
+  // Provincia derivabile dall'URL del target (es. `ambito_cn`, `ambito_to`).
   const urlProvince = extractProvinceFromUrl(target.url);
 
   $('table').each((_tableIdx, tableEl) => {
     const $table = $(tableEl);
+
+    // Mappatura colonne per QUESTA tabella (gli header possono cambiare
+    // da tabella a tabella nella stessa pagina).
+    const headers = getTableHeaders($, tableEl as cheerio.Element);
+    const columns = detectColumns(headers);
 
     $table.find('tr').each((rowIndex, rowEl) => {
       const $row = $(rowEl);
@@ -459,24 +562,25 @@ function extractRecordsFromHtml(
       const cols = $row.find('td');
       if (cols.length < 2) return;
 
-      // Estrai il testo normalizzato di tutte le colonne.
-      const colTexts = cols
+      // Testo normalizzato di ogni colonna, accessibile per indice.
+      const colTexts: string[] = cols
         .map((_, el) => normalize($(el).text()))
         .get();
+
       const fullRowText = colTexts.join(' ');
       const fullRowTextLower = fullRowText.toLowerCase();
 
-      // --- FIX v5 #1: ANTI-SPAM SINDACALE & RUMORE (Zero Tolleranza) ---
+      // --- Anti-spam sindacale & rumore ---
       if (rowIsNoise(fullRowTextLower)) {
         return;
       }
 
-      // --- FIX v3: FILTRO RIGIDO CHIUSI ---
+      // --- Filtro rigido chiusi ---
       if (rowIndicatesClosed(fullRowTextLower)) {
         return;
       }
 
-      // --- FIX v3: LINK DI CANDIDATURA ATTIVO ---
+      // --- Link di candidatura attivo ---
       const $link = $row.find('a').first();
       const rawHref = $link.attr('href');
       if (
@@ -490,33 +594,84 @@ function extractRecordsFromHtml(
 
       const linkText = normalize($link.text());
       const href = rawHref;
-      const secondCellText = normalize($(cols[1]).text());
-      const schoolName = linkText || secondCellText;
 
-      if (schoolName.length < CONFIG.minSchoolNameLength) return;
+      // -----------------------------------------------------------------
+      // FIX #2 — DENOMINAZIONE SCUOLA dalla colonna dedicata
+      // -----------------------------------------------------------------
+      // Priorità: cella della colonna riconosciuta → cella colonna 1 →
+      //           testo del link. Il valore della cella NON viene
+      //           sostituito da fallback generici se non è vuoto.
+      const schoolCellRaw =
+        columns.schoolIdx >= 0 && columns.schoolIdx < colTexts.length
+          ? colTexts[columns.schoolIdx]
+          : '';
+
+      let schoolName = schoolCellRaw;
+      if (!schoolName || schoolName.length < CONFIG.minSchoolNameLength) {
+        // Fallback 1: seconda cella posizionale (molto comune nei portali USR)
+        const secondCellText =
+          colTexts[1] !== undefined ? colTexts[1] : '';
+        if (
+          secondCellText &&
+          secondCellText.length >= CONFIG.minSchoolNameLength
+        ) {
+          schoolName = secondCellText;
+        } else if (
+          linkText &&
+          linkText.length >= CONFIG.minSchoolNameLength
+        ) {
+          // Fallback 2: testo del link (SOLO se la cella è vuota/corta).
+          schoolName = linkText;
+        }
+      }
+
+      if (!schoolName || schoolName.length < CONFIG.minSchoolNameLength) return;
       if (schoolName.toLowerCase().includes('scuola non specificata')) return;
       if (href.includes('artov.rm.cnr.it')) return;
 
-      // --- FIX v5 #3: SCADENZA REALE + SCARTO SE SCADUTA ---
-      const deadline = parseDeadline(fullRowText);
+      // -----------------------------------------------------------------
+      // FIX #3 — SCADENZA REALE dalla colonna "Data Scadenza Interpello"
+      // -----------------------------------------------------------------
+      // Se la colonna scadenza è stata identificata dagli header, la
+      // scadenza viene letta SOLO da lì. In assenza di header, si usa
+      // l'intera riga come best-effort (NON si usa mai la colonna
+      // "Data Interpello" come deadline).
+      let deadline: string | null = null;
+      if (columns.deadlineIdx >= 0 && columns.deadlineIdx < colTexts.length) {
+        deadline = parseDeadline(colTexts[columns.deadlineIdx]);
+      } else {
+        deadline = parseDeadline(fullRowText);
+      }
+
+      // Righe scadute: SCARTATE a monte.
       if (isExpired(deadline)) {
         return;
       }
 
-      const schoolCode = extractMechCode(fullRowText);
+      // -----------------------------------------------------------------
+      // FIX #1 — PROVINCIA RIGIDA
+      // -----------------------------------------------------------------
+      // Priorità 1: Codice Meccanografico dalla colonna dedicata.
+      // Priorità 2: Codice Meccanografico dall'intera riga (best effort).
+      // Priorità 3: pattern URL `ambito_XX`.
+      // Priorità 4: target.province / fallback.
+      let schoolCode = 'ND';
+      if (columns.codeIdx >= 0 && columns.codeIdx < colTexts.length) {
+        schoolCode = extractMechCode(colTexts[columns.codeIdx]);
+      }
+      if (schoolCode === 'ND') {
+        schoolCode = extractMechCode(fullRowText);
+      }
 
-      // --- FIX v5 #2: MAPPATURA RIGIDA PROVINCIA ---
-      // Priorità:
-      //   1) sigla derivata dal codice meccanografico (NO/BI/VC/CN/AT/...)
-      //   2) sigla estratta dall'URL del target (pattern `ambito_XX`)
-      //   3) fallback target.province / 'EE'
       let province: string;
       if (schoolCode !== 'ND' && isLikelyMechCode(schoolCode)) {
         const derivedProv = schoolCode.slice(0, 2).toUpperCase();
         if (PROVINCE_CODES.has(derivedProv)) {
           province = derivedProv;
+        } else if (urlProvince) {
+          province = urlProvince;
         } else {
-          province = urlProvince ?? defaultProvince;
+          province = defaultProvince;
         }
       } else if (urlProvince) {
         province = urlProvince;
@@ -548,11 +703,37 @@ function extractRecordsFromHtml(
 }
 
 // ---------------------------------------------------------------------------
+// Utility: estrazione materia / classe di concorso (invariata)
+// ---------------------------------------------------------------------------
+
+function extractSubjectAndClass(text: string): {
+  classCode: string;
+  subject: string;
+} {
+  const classMatch = text.match(/\b([A-E][0-9]{2}|[A-Z]{2,3}[0-9]{1,2})\b/i);
+  const classCode = classMatch ? classMatch[1].toUpperCase() : 'GENERALE';
+
+  let subject = 'Non specificata';
+  const t = text.toLowerCase();
+
+  if (t.includes('sostegno')) subject = 'Sostegno';
+  else if (t.includes('inglese')) subject = 'Inglese';
+  else if (t.includes('matematica')) subject = 'Matematica';
+  else if (t.includes('italiano')) subject = 'Italiano';
+  else if (t.includes('fisica')) subject = 'Fisica';
+  else if (t.includes('chimica')) subject = 'Chimica';
+  else if (t.includes('storia')) subject = 'Storia';
+  else if (t.includes('filosofia')) subject = 'Filosofia';
+  else if (t.includes('latino')) subject = 'Latino';
+  else if (t.includes('scienze')) subject = 'Scienze';
+
+  return { classCode, subject };
+}
+
+// ---------------------------------------------------------------------------
 // Orchestrazione — disattivazione target inutili
 // ---------------------------------------------------------------------------
 
-// Pattern URL usati per il cleanup iniziale (link Umbria evidentemente
-// burocratici che non contengono mai tabelle di interpelli).
 const JUNK_UMBRIA_URL_PATTERNS: RegExp[] = [
   /amministrazione[\-\s_]?trasparente/i,
   /albo[\-\s_]?online/i,
@@ -603,8 +784,6 @@ async function disableObviousJunkTargets(): Promise<number> {
   return ids.length;
 }
 
-// Disattiva un singolo target dopo che il pre-check strutturale ha rilevato
-// l'assenza di una vera tabella interpelli.
 async function disqualifyTarget(target: DiscoveredLink): Promise<void> {
   const { error } = await supabase
     .from('discovered_links')
@@ -723,14 +902,12 @@ async function writeReport(
 async function runTableReporter(): Promise<void> {
   console.log('[table-reporter] Avvio scansione tabellare...');
 
-  // STEP 0 — cleanup iniziale: disattiva i link Umbria genericamente
-  // burocratici prima di sprecare richieste HTTP.
+  // STEP 0 — cleanup iniziale Umbria.
   try {
     await disableObviousJunkTargets();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[table-reporter] Cleanup iniziale fallito: ${msg}`);
-    // Non blocchiamo il run: proseguiamo comunque.
   }
 
   let targets: DiscoveredLink[];
@@ -770,7 +947,6 @@ async function runTableReporter(): Promise<void> {
         `[table-reporter] Estratti ${result.extracted} record validi da ${target.url}`
       );
 
-      // Auto-disattivazione del target se privo di tabella interpelli.
       if (result.disqualified) {
         await disqualifyTarget(target);
         disqualifiedCount += 1;
