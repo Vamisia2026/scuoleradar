@@ -1,18 +1,24 @@
 // scripts/table-reporter.ts
 //
-// Table Reporter — v7
-//   • FIX #1 — Provincia rigida: priorità assoluta alla PRIMA colonna
-//     (Codice Meccanografico), poi fallback su URL `ambito_XX`, poi su
-//     `target.province`. MAI "EE" quando esiste una sigla valida.
-//   • FIX #2 — Denominazione scuola: letta dalla SECONDA colonna (o dalla
-//     colonna riconosciuta come "Denominazione Istituto Scolastico"). Il
-//     valore della cella NON viene sovrascritto con fallback generici
-//     quando la cella è piena. Il testo del link diventa solo l'ultimo
-//     fallback in caso di cella vuota.
-//   • FIX #3 — Scadenza REALE: la `deadline` è letta tassativamente dalla
-//     colonna "Data Scadenza Interpello" / "Scadenza" (o equivalente),
-//     NON dalla "Data Interpello". Normalizzazione in YYYY-MM-DD.
-//     Righe con deadline < oggi vengono SCARTATE.
+// Table Reporter — v9
+//   • FIX v9 — Supporto rigido per portali USR Piemonte:
+//       - Filtro STATO INTERPELLO: processa SOLO righe con stato "aperto".
+//         Scarta "chiuso", "cancellato", vuoto o qualsiasi altro valore.
+//       - Estrazione SCADENZA dalla colonna "Data Scadenza Interpello"
+//         (formato YYYY-MM-DD o DD/MM/YYYY). Se manca la colonna, usa il
+//         fallback +15 giorni oppure scarta (configurabile).
+//       - Lettura rigida orizzontale: Colonna 1 = Codice Meccanografico
+//         (deriva provincia AT/CN/TO/AL/NO/VC/VB/BI), Colonna 2 = Denominazione.
+//   • FIX #1 — Forzatura assoluta della scadenza (v8):
+//       - Cerca QUALSIASI colonna con "scadenza" nell'header o nel testo.
+//       - MAI usare la "Data Pubblicazione" come deadline.
+//   • FIX #2 — Eliminazione totale degli "EE" (v8):
+//       - Analizza la PRIMISSIMA cella per codice meccanografico.
+//       - Se ancora "EE", cerca la sigla nell'URL (`ambito_cn`, `_to.php`, ...).
+//   • FIX #3 — Nome scuola pulito (v8):
+//       - MAI "SCUOLA NON SPECIFICATA".
+//   • FIX #4 — Ingestione Master Liguria (v8):
+//       - Supporto `servizi.istruzioneliguria.gov.it/provincia.php?p=...`.
 //   • Auto-disattivazione target inutili (v6) preservata.
 //   • Cleanup iniziale Umbria (v6) preservato.
 //   • Anti-spam Sindacale & Rumore — Zero Tolleranza (v5).
@@ -40,9 +46,12 @@ const CONFIG = {
   fetchTimeoutMs: 25_000,
   minSchoolNameLength: 4,
   fallbackProvince: 'EE',
-  // Stato impostato sui target quando la pagina non contiene una vera
-  // tabella di interpelli. Vengono esclusi dai run successivi.
   disqualifiedStatus: 'disabled',
+  // Fallback deadline: giorni da oggi quando la colonna scadenza è assente.
+  defaultDeadlineDays: 15,
+  // Se true, scarta la riga quando non c'è scadenza certa.
+  // Se false, usa il fallback +15 giorni.
+  discardWhenNoDeadline: false,
 } as const;
 
 const supabaseUrl =
@@ -139,6 +148,8 @@ interface ColumnMapping {
   schoolIdx: number;
   deadlineIdx: number;
   publishDateIdx: number;
+  stateIdx: number;
+  deadlineByText: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -202,6 +213,18 @@ function todayIso(): string {
 
 const TODAY_ISO = todayIso();
 
+function addDaysIso(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+const DEFAULT_DEADLINE_ISO = addDaysIso(TODAY_ISO, CONFIG.defaultDeadlineDays);
+
 function parseDeadline(text: string): string | null {
   if (!text) return null;
 
@@ -212,7 +235,7 @@ function parseDeadline(text: string): string | null {
     return validateIsoDate(y, m, d);
   }
 
-  // 2) Formato italiano/europeo: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY (anche 2 cifre)
+  // 2) Formato italiano/europeo: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
   const euMatch = text.match(/\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})\b/);
   if (!euMatch) return null;
 
@@ -245,18 +268,45 @@ function isExpired(deadlineIso: string | null): boolean {
   return deadlineIso < TODAY_ISO;
 }
 
+function isFutureOrToday(deadlineIso: string | null): boolean {
+  if (!deadlineIso) return false;
+  return deadlineIso >= TODAY_ISO;
+}
+
 // ---------------------------------------------------------------------------
-// Estrazione provincia dall'URL (per i portali USR che usano `ambito_XX`)
+// Estrazione provincia dall'URL
 // ---------------------------------------------------------------------------
 
+// Pattern 1: `ambito_cn`, `ambito-to`, `ric_interpello_ambito_vc`
 const URL_AMBITO_REGEX = /ambito[_\-.]?([a-z]{2})(?:[_\-.]|\b)/i;
+
+// Pattern 2: `_to.php`, `_ge.php`, `_sp.php` (suffisso file)
+const URL_SUFFIX_REGEX = /[_\-]([a-z]{2})\.php/i;
+
+// Pattern 3: `?p=CN` o `&p=TO` (query string Liguria)
+const URL_QUERY_PROV_REGEX = /[?&]p=([A-Za-z]{2})\b/;
+
+// Pattern 4: `provincia.php?p=...`
+const URL_LIGURIA_REGEX = /provincia\.php\?p=([A-Za-z]{2})/i;
 
 function extractProvinceFromUrl(url: string): string | null {
   if (!url) return null;
-  const m = url.match(URL_AMBITO_REGEX);
-  if (!m) return null;
-  const prov = m[1].toUpperCase();
-  if (PROVINCE_CODES.has(prov)) return prov;
+
+  const candidates: Array<RegExp> = [
+    URL_LIGURIA_REGEX,
+    URL_QUERY_PROV_REGEX,
+    URL_AMBITO_REGEX,
+    URL_SUFFIX_REGEX,
+  ];
+
+  for (const re of candidates) {
+    const m = url.match(re);
+    if (m) {
+      const prov = m[1].toUpperCase();
+      if (PROVINCE_CODES.has(prov)) return prov;
+    }
+  }
+
   return null;
 }
 
@@ -292,7 +342,7 @@ function rowIsNoise(fullRowTextLower: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Filtro di stato (interpelli chiusi / scaduti / non attivi)
+// Filtro di stato generico (interpelli chiusi / scaduti / non attivi)
 // ---------------------------------------------------------------------------
 
 const CLOSED_STATE_KEYWORDS = [
@@ -318,6 +368,10 @@ const CLOSED_STATE_KEYWORDS = [
   'non attive',
   'inattivo',
   'inattiva',
+  'cancellato',
+  'cancellata',
+  'cancellati',
+  'cancellate',
   'expired',
   'closed',
 ];
@@ -330,7 +384,25 @@ function rowIndicatesClosed(fullRowTextLower: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// PRE-CHECK STRUTTURALE — la pagina contiene una VERA tabella di interpelli?
+// FIX v9 — Filtro STATO INTERPELLO per portali Piemonte
+// ---------------------------------------------------------------------------
+//
+// I portali USR Piemonte espongono una colonna "Stato interpello" con valori
+// tipici: "aperto", "chiuso", "cancellato". Processiamo ESCLUSIVAMENTE le
+// righe con stato "aperto" (case-insensitive, spazi normalizzati).
+// Qualsiasi altro valore (incluso vuoto) → riga scartata.
+//
+
+const OPEN_STATE_VALUES = ['aperto', 'aperta', 'aperti', 'aperte', 'attivo', 'attiva'];
+
+function isRowOpen(stateText: string): boolean {
+  const t = normalize(stateText).toLowerCase();
+  if (!t) return false;
+  return OPEN_STATE_VALUES.some((v) => t === v || t.includes(v));
+}
+
+// ---------------------------------------------------------------------------
+// PRE-CHECK STRUTTURALE
 // ---------------------------------------------------------------------------
 
 const STRONG_INTERPELLI_MARKERS: RegExp[] = [
@@ -396,19 +468,8 @@ function pageContainsInterpelliTable($: cheerio.CheerioAPI): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Rilevamento colonne della tabella (FIX v7)
+// Rilevamento colonne
 // ---------------------------------------------------------------------------
-//
-// I portali USR/ATP (es. USR Piemonte) espongono tabelle con header simili a:
-//   | Codice Meccanografico | Denominazione Istituto Scolastico | ...
-//   | Data Interpello | Data Scadenza Interpello | ... | <link>
-//
-// Per estrarre in modo rigoroso provincia, denominazione e scadenza, leggiamo
-// gli header della tabella e mappiamo gli indici di colonna. Se gli header
-// non sono disponibili o non riconosciuti, usiamo le posizioni di default
-// (colonna 0 = codice, colonna 1 = denominazione) e lasciamo la deadline
-// al fallback sull'intero testo della riga.
-//
 
 function getTableHeaders(
   $: cheerio.CheerioAPI,
@@ -416,7 +477,6 @@ function getTableHeaders(
 ): string[] {
   const $table = $(tableEl);
 
-  // 1) Preferisci <thead>
   const $thead = $table.find('thead').first();
   if ($thead.length > 0) {
     const cells = $thead.find('tr').first().find('th, td');
@@ -427,7 +487,6 @@ function getTableHeaders(
     }
   }
 
-  // 2) Fallback: prima riga con <th>
   const $firstRow = $table.find('tr').first();
   if ($firstRow.find('th').length > 0) {
     return $firstRow
@@ -451,6 +510,7 @@ function detectColumns(headers: string[]): ColumnMapping {
     /cod(?:ice)?\.?\s*mecc/,
     /codice\s*scuola/,
     /cod\.?\s*scuola/,
+    /meccanografico/,
   ]);
 
   const schoolIdx = findIdx([
@@ -461,8 +521,6 @@ function detectColumns(headers: string[]): ColumnMapping {
     /istituto/,
   ]);
 
-  // La scadenza DEVE vincere sul match generico "data".
-  // Ordine: pattern più specifici prima.
   const deadlineIdx = findIdx([
     /data\s*scadenza\s*interpello/,
     /scadenza\s*interpello/,
@@ -474,15 +532,36 @@ function detectColumns(headers: string[]): ColumnMapping {
     /data\s*interpello/,
     /data\s*pubblicazione/,
     /data\s*avviso/,
+    /pubblicato\s*il/,
+  ]);
+
+  // FIX v9 — Rilevamento colonna "Stato interpello"
+  const stateIdx = findIdx([
+    /stato\s*interpello/,
+    /stato\s*avviso/,
+    /\bstato\b/,
   ]);
 
   return {
-    // Default: colonna 0 = codice, colonna 1 = denominazione.
     codeIdx: codeIdx >= 0 ? codeIdx : 0,
     schoolIdx: schoolIdx >= 0 ? schoolIdx : 1,
     deadlineIdx,
     publishDateIdx,
+    stateIdx,
+    deadlineByText: -1,
   };
+}
+
+// FIX #1: rilevamento scadenza anche dal TESTO della cella (non solo header).
+function detectDeadlineColumnByCellText(colTexts: string[]): number {
+  for (let i = 0; i < colTexts.length; i += 1) {
+    const cellLower = colTexts[i].toLowerCase();
+    if (/scadenz/.test(cellLower)) {
+      const d = parseDeadline(colTexts[i]);
+      if (d && isFutureOrToday(d)) return i;
+    }
+  }
+  return -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -529,7 +608,6 @@ function extractRecordsFromHtml(
 ): ExtractionResult {
   const records: InterpelloRecord[] = [];
 
-  // --- PRE-CHECK STRUTTURALE ---
   if (!pageContainsInterpelliTable($)) {
     console.log(
       '[table-reporter] Pagina priva di tabella interpelli riconoscibile — skip.'
@@ -542,27 +620,22 @@ function extractRecordsFromHtml(
   ).toUpperCase();
   const region = target.region;
 
-  // Provincia derivabile dall'URL del target (es. `ambito_cn`, `ambito_to`).
   const urlProvince = extractProvinceFromUrl(target.url);
 
   $('table').each((_tableIdx, tableEl) => {
     const $table = $(tableEl);
 
-    // Mappatura colonne per QUESTA tabella (gli header possono cambiare
-    // da tabella a tabella nella stessa pagina).
     const headers = getTableHeaders($, tableEl as cheerio.Element);
     const columns = detectColumns(headers);
 
     $table.find('tr').each((rowIndex, rowEl) => {
       const $row = $(rowEl);
 
-      // Salta l'header quando riconoscibile.
       if (rowIndex === 0 && $row.find('th').length > 0) return;
 
       const cols = $row.find('td');
       if (cols.length < 2) return;
 
-      // Testo normalizzato di ogni colonna, accessibile per indice.
       const colTexts: string[] = cols
         .map((_, el) => normalize($(el).text()))
         .get();
@@ -570,17 +643,28 @@ function extractRecordsFromHtml(
       const fullRowText = colTexts.join(' ');
       const fullRowTextLower = fullRowText.toLowerCase();
 
-      // --- Anti-spam sindacale & rumore ---
-      if (rowIsNoise(fullRowTextLower)) {
-        return;
+      // Anti-spam sindacale.
+      if (rowIsNoise(fullRowTextLower)) return;
+
+      // -----------------------------------------------------------------
+      // FIX v9 — FILTRO STATO INTERPELLO (Piemonte)
+      // -----------------------------------------------------------------
+      // Se la tabella ha una colonna "Stato interpello" identificata,
+      // processa SOLO le righe con stato "aperto".
+      // In assenza di colonna stato, applica il filtro generico chiusi.
+      if (columns.stateIdx >= 0 && columns.stateIdx < colTexts.length) {
+        const stateText = colTexts[columns.stateIdx];
+        if (!isRowOpen(stateText)) {
+          return;
+        }
+      } else {
+        // Fallback: filtro generico chiusi/scaduti.
+        if (rowIndicatesClosed(fullRowTextLower)) {
+          return;
+        }
       }
 
-      // --- Filtro rigido chiusi ---
-      if (rowIndicatesClosed(fullRowTextLower)) {
-        return;
-      }
-
-      // --- Link di candidatura attivo ---
+      // Link attivo.
       const $link = $row.find('a').first();
       const rawHref = $link.attr('href');
       if (
@@ -596,68 +680,15 @@ function extractRecordsFromHtml(
       const href = rawHref;
 
       // -----------------------------------------------------------------
-      // FIX #2 — DENOMINAZIONE SCUOLA dalla colonna dedicata
+      // FIX #2 — PROVINCIA: analizza la PRIMISSIMA cella
       // -----------------------------------------------------------------
-      // Priorità: cella della colonna riconosciuta → cella colonna 1 →
-      //           testo del link. Il valore della cella NON viene
-      //           sostituito da fallback generici se non è vuoto.
-      const schoolCellRaw =
-        columns.schoolIdx >= 0 && columns.schoolIdx < colTexts.length
-          ? colTexts[columns.schoolIdx]
-          : '';
+      const firstCellText = colTexts[0] || '';
+      let schoolCode = extractMechCode(firstCellText);
 
-      let schoolName = schoolCellRaw;
-      if (!schoolName || schoolName.length < CONFIG.minSchoolNameLength) {
-        // Fallback 1: seconda cella posizionale (molto comune nei portali USR)
-        const secondCellText =
-          colTexts[1] !== undefined ? colTexts[1] : '';
-        if (
-          secondCellText &&
-          secondCellText.length >= CONFIG.minSchoolNameLength
-        ) {
-          schoolName = secondCellText;
-        } else if (
-          linkText &&
-          linkText.length >= CONFIG.minSchoolNameLength
-        ) {
-          // Fallback 2: testo del link (SOLO se la cella è vuota/corta).
-          schoolName = linkText;
+      if (schoolCode === 'ND' && columns.codeIdx !== 0 && columns.codeIdx >= 0) {
+        if (columns.codeIdx < colTexts.length) {
+          schoolCode = extractMechCode(colTexts[columns.codeIdx]);
         }
-      }
-
-      if (!schoolName || schoolName.length < CONFIG.minSchoolNameLength) return;
-      if (schoolName.toLowerCase().includes('scuola non specificata')) return;
-      if (href.includes('artov.rm.cnr.it')) return;
-
-      // -----------------------------------------------------------------
-      // FIX #3 — SCADENZA REALE dalla colonna "Data Scadenza Interpello"
-      // -----------------------------------------------------------------
-      // Se la colonna scadenza è stata identificata dagli header, la
-      // scadenza viene letta SOLO da lì. In assenza di header, si usa
-      // l'intera riga come best-effort (NON si usa mai la colonna
-      // "Data Interpello" come deadline).
-      let deadline: string | null = null;
-      if (columns.deadlineIdx >= 0 && columns.deadlineIdx < colTexts.length) {
-        deadline = parseDeadline(colTexts[columns.deadlineIdx]);
-      } else {
-        deadline = parseDeadline(fullRowText);
-      }
-
-      // Righe scadute: SCARTATE a monte.
-      if (isExpired(deadline)) {
-        return;
-      }
-
-      // -----------------------------------------------------------------
-      // FIX #1 — PROVINCIA RIGIDA
-      // -----------------------------------------------------------------
-      // Priorità 1: Codice Meccanografico dalla colonna dedicata.
-      // Priorità 2: Codice Meccanografico dall'intera riga (best effort).
-      // Priorità 3: pattern URL `ambito_XX`.
-      // Priorità 4: target.province / fallback.
-      let schoolCode = 'ND';
-      if (columns.codeIdx >= 0 && columns.codeIdx < colTexts.length) {
-        schoolCode = extractMechCode(colTexts[columns.codeIdx]);
       }
       if (schoolCode === 'ND') {
         schoolCode = extractMechCode(fullRowText);
@@ -678,6 +709,98 @@ function extractRecordsFromHtml(
       } else {
         province = defaultProvince;
       }
+
+      if (province === 'EE' && target.url) {
+        const aggressive = extractProvinceFromUrl(target.url);
+        if (aggressive) {
+          province = aggressive;
+        }
+      }
+
+      // -----------------------------------------------------------------
+      // FIX #3 — NOME SCUOLA PULITO
+      // -----------------------------------------------------------------
+      let schoolName = '';
+
+      if (columns.schoolIdx >= 0 && columns.schoolIdx < colTexts.length) {
+        schoolName = colTexts[columns.schoolIdx];
+      }
+
+      if (
+        !schoolName ||
+        schoolName.length < CONFIG.minSchoolNameLength ||
+        schoolName.toLowerCase().includes('non specificata')
+      ) {
+        const secondCellText = colTexts[1] || '';
+        if (
+          secondCellText &&
+          secondCellText.length >= CONFIG.minSchoolNameLength &&
+          !secondCellText.toLowerCase().includes('non specificata')
+        ) {
+          schoolName = secondCellText;
+        }
+      }
+
+      if (
+        !schoolName ||
+        schoolName.length < CONFIG.minSchoolNameLength ||
+        schoolName.toLowerCase().includes('non specificata')
+      ) {
+        if (
+          linkText &&
+          linkText.length >= CONFIG.minSchoolNameLength &&
+          !linkText.toLowerCase().includes('non specificata')
+        ) {
+          schoolName = linkText;
+        }
+      }
+
+      if (
+        !schoolName ||
+        schoolName.length < CONFIG.minSchoolNameLength ||
+        schoolName.toLowerCase().includes('non specificata')
+      ) {
+        if (schoolCode !== 'ND') {
+          schoolName = `Istituto ${schoolCode}`;
+        }
+      }
+
+      if (!schoolName || schoolName.length < CONFIG.minSchoolNameLength) return;
+      if (schoolName.toLowerCase().includes('scuola non specificata')) return;
+      if (href.includes('artov.rm.cnr.it')) return;
+
+      // -----------------------------------------------------------------
+      // FIX v9 + FIX #1 — SCADENZA FORZATA
+      // -----------------------------------------------------------------
+      // Priorità:
+      //   1) Colonna header "scadenza" mappata.
+      //   2) Qualsiasi cella con keyword "scadenza" e data futura.
+      //   3) Fallback: +15 giorni oppure scarto.
+      //   4) MAI la colonna "data pubblicazione".
+      let deadline: string | null = null;
+
+      // (1) Header mappato.
+      if (columns.deadlineIdx >= 0 && columns.deadlineIdx < colTexts.length) {
+        deadline = parseDeadline(colTexts[columns.deadlineIdx]);
+      }
+
+      // (2) Ricerca per keyword "scadenza" in qualsiasi cella.
+      if (!deadline) {
+        const byText = detectDeadlineColumnByCellText(colTexts);
+        if (byText >= 0) {
+          deadline = parseDeadline(colTexts[byText]);
+        }
+      }
+
+      // (3) Fallback: +15 giorni oppure scarto.
+      if (!deadline) {
+        if (CONFIG.discardWhenNoDeadline) {
+          return;
+        }
+        deadline = DEFAULT_DEADLINE_ISO;
+      }
+
+      if (isExpired(deadline)) return;
 
       const { classCode, subject } = extractSubjectAndClass(fullRowText);
       const sourceUrl = resolveUrl(href, target.url);
@@ -703,7 +826,7 @@ function extractRecordsFromHtml(
 }
 
 // ---------------------------------------------------------------------------
-// Utility: estrazione materia / classe di concorso (invariata)
+// Utility: estrazione materia / classe di concorso
 // ---------------------------------------------------------------------------
 
 function extractSubjectAndClass(text: string): {
@@ -902,7 +1025,6 @@ async function writeReport(
 async function runTableReporter(): Promise<void> {
   console.log('[table-reporter] Avvio scansione tabellare...');
 
-  // STEP 0 — cleanup iniziale Umbria.
   try {
     await disableObviousJunkTargets();
   } catch (err) {

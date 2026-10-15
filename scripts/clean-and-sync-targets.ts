@@ -11,9 +11,31 @@
 //      ad alcuna scuola valida (school_code = 'ND' o nullo).
 //   4) Disattiva (status = 'disabled') i link generici di Amministrazione
 //      Trasparente / Albo Online dell'Umbria.
-//   5) Inserisce/attiva (status = 'active_crawler') i portali tabellari
-//      Piemonte (ambiti AT/BI/CN/NO/TO/VB/VC) + USR/ATP di Veneto, Liguria
-//      ed Emilia-Romagna.
+//   5) Inserisce/attiva (status = 'active_crawler') la lista UFFICIALE
+//      e verificata di portali tabellari interpelli per:
+//      Emilia-Romagna, Lazio, Liguria, Piemonte, Sicilia, P.A. Trento,
+//      Umbria, Valle d'Aosta, Veneto, Sardegna.
+//
+// FIX v4:
+//   • Sostituita integralmente la lista dei target con quella ufficiale
+//     fornita dal team. Rimossi TUTTI gli URL generici o non funzionanti.
+//   • Ogni URL è mappato con regione e provincia corretta:
+//       - Liguria: provincia estratta dal parametro `p=XX`
+//         (`provincia.php?p=GE|SP|IM|SV`).
+//       - Piemonte: provincia esplicita dal suffisso `_XX.php`
+//         (`ric_interpello_ambito_to.php`, `_al.php`, `_at.php`, ...).
+//       - Emilia-Romagna: hub regionale + sottodomini UST per provincia
+//         (BO/FE/FC/MO/PR/PC/RA/RE) + `interpelloweb.it`.
+//       - Lazio: ATP Roma (RM) + USP Rieti (RI).
+//       - Sicilia: USR Sicilia (hub regionale, provincia null).
+//       - P.A. Trento: `vivoscuola.it` (hub, provincia TN).
+//       - Umbria: `istruzione.umbria.it` (hub + pagina interpelli aperti).
+//       - Valle d'Aosta: `scuole.vda.it/interpelli` (AO).
+//       - Veneto: hub regionale + UAT Padova (PD).
+//       - Sardegna: MIM Sassari (SS), Nuoro (NU), Cagliari (CA).
+//   • Il campo `domain` continua ad essere estratto automaticamente da
+//     ogni URL (`new URL(url).hostname`) e incluso in TUTTI gli
+//     insert/update su `discovered_links`, risolvendo il vincolo NOT NULL.
 //
 // Dipendenze: @supabase/supabase-js, dotenv
 // Uso:        npx tsx scripts/clean-and-sync-targets.ts
@@ -61,6 +83,27 @@ function todayIso(): string {
 const TODAY_ISO = todayIso();
 
 // ---------------------------------------------------------------------------
+// Estrazione dominio da URL — FIX v2
+// ---------------------------------------------------------------------------
+//
+// Il vincolo NOT NULL su `discovered_links.domain` richiede che ogni record
+// abbia un dominio popolato. Estraiamo automaticamente lo hostname da ogni
+// URL passato a `upsertTarget`. In caso di URL malformato, restituiamo una
+// stringa vuota (il chiamante potrà loggare e proseguire).
+//
+
+function extractDomain(url: string): string {
+  if (!url) return '';
+  try {
+    return new URL(url).hostname;
+  } catch {
+    // Fallback: prova a estrarre manualmente lo hostname.
+    const m = url.match(/^https?:\/\/([^/?#]+)/i);
+    return m ? m[1] : '';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Parole chiave spazzatura (interpelli)
 // ---------------------------------------------------------------------------
 
@@ -77,27 +120,13 @@ const JUNK_KEYWORDS = [
 ];
 
 // ---------------------------------------------------------------------------
-// Portali Piemonte (USR / ATP) — base configurabile via env
+// Lista UFFICIALE e VERIFICATA dei target di seed — FIX v4
 // ---------------------------------------------------------------------------
-
-const PIEMONTE_BASE =
-  process.env.PIEMONTE_BASE_URL || 'https://www.istruzionepiemonte.it';
-
-const PIEMONTE_AMBITI: Array<{ prov: string; path: string }> = [
-  { prov: 'AT', path: '/ric_interpello_ambito_at.php' },
-  { prov: 'BI', path: '/ric_interpello_ambito_bi.php' },
-  { prov: 'CN', path: '/ric_interpello_ambito_cn.php' },
-  { prov: 'NO', path: '/ric_interpello_ambito_no.php' },
-  { prov: 'TO', path: '/ric_interpello_ambito_to.php' },
-  { prov: 'VB', path: '/ric_interpello_ambito_vb.php' },
-  { prov: 'VC', path: '/ric_interpello_ambito_vc.php' },
-];
-
-// ---------------------------------------------------------------------------
-// Altri portali USR/ATP — personalizza i percorsi se necessario.
-// Le voci sono predisposte come base URL: il TableReporter le accetterà
-// solo se il pre-check strutturale trova una vera tabella interpelli.
-// ---------------------------------------------------------------------------
+//
+// Ogni voce specifica regione + provincia (o `null` per gli hub regionali).
+// La provincia viene mappata esplicitamente, così da non dipendere dalla
+// sola estrazione dall'URL del TableReporter.
+//
 
 interface TargetSeed {
   url: string;
@@ -105,33 +134,74 @@ interface TargetSeed {
   province: string | null;
 }
 
-const EXTRA_TARGETS: TargetSeed[] = [
-  // Veneto
-  { url: 'https://www.istruzioneveneto.it/wpusr/interpelli/', region: 'Veneto', province: null },
-  { url: 'https://www.istruzioneveneto.it/wpusr/atp-venezia/', region: 'Veneto', province: 'VE' },
-  { url: 'https://www.istruzioneveneto.it/wpusr/atp-padova/', region: 'Veneto', province: 'PD' },
-  { url: 'https://www.istruzioneveneto.it/wpusr/atp-verona/', region: 'Veneto', province: 'VR' },
-  { url: 'https://www.istruzioneveneto.it/wpusr/atp-vicenza/', region: 'Veneto', province: 'VI' },
-  { url: 'https://www.istruzioneveneto.it/wpusr/atp-treviso/', region: 'Veneto', province: 'TV' },
+const TARGETS: TargetSeed[] = [
+  // ── Emilia-Romagna ────────────────────────────────────────────────────────
+  { url: 'https://www.istruzioneer.gov.it/', region: 'Emilia-Romagna', province: null },
+  { url: 'https://bo.istruzioneer.gov.it/', region: 'Emilia-Romagna', province: 'BO' },
+  { url: 'https://interpelloweb.it/interpelli-supplenze/istituto/boss000vd8/', region: 'Emilia-Romagna', province: null },
+  { url: 'https://fe.istruzioneer.gov.it/', region: 'Emilia-Romagna', province: 'FE' },
+  { url: 'https://fe.istruzioneer.gov.it/category/interpelli_docenti/', region: 'Emilia-Romagna', province: 'FE' },
+  { url: 'https://fe.istruzioneer.gov.it/category/interpelli-personale-ata/', region: 'Emilia-Romagna', province: 'FE' },
+  { url: 'https://fc.istruzioneer.gov.it/', region: 'Emilia-Romagna', province: 'FC' },
+  { url: 'https://fc.istruzioneer.gov.it/category/interpelli-a-s-2026-27/', region: 'Emilia-Romagna', province: 'FC' },
+  { url: 'https://mo.istruzioneer.gov.it/', region: 'Emilia-Romagna', province: 'MO' },
+  { url: 'https://mo.istruzioneer.gov.it/category/interpelli-personale-docente-2026-27/', region: 'Emilia-Romagna', province: 'MO' },
+  { url: 'https://pr.istruzioneer.gov.it/', region: 'Emilia-Romagna', province: 'PR' },
+  { url: 'https://pr.istruzioneer.gov.it/interpelli-docenti/', region: 'Emilia-Romagna', province: 'PR' },
+  { url: 'https://pc.istruzioneer.gov.it/', region: 'Emilia-Romagna', province: 'PC' },
+  { url: 'https://pc.istruzioneer.gov.it/interpelli/', region: 'Emilia-Romagna', province: 'PC' },
+  { url: 'https://ra.istruzioneer.gov.it/', region: 'Emilia-Romagna', province: 'RA' },
+  { url: 'https://ra.istruzioneer.gov.it/conferimento-supplenze-per-esaurimento-graduatorie-di-istituto/', region: 'Emilia-Romagna', province: 'RA' },
+  { url: 'https://re.istruzioneer.gov.it/', region: 'Emilia-Romagna', province: 'RE' },
+  { url: 'https://re.istruzioneer.gov.it/category/docenti/interpello/', region: 'Emilia-Romagna', province: 'RE' },
 
-  // Liguria
-  { url: 'https://www.istruzioneliguria.it/interpelli/', region: 'Liguria', province: null },
-  { url: 'https://www.istruzioneliguria.it/atp-genova/', region: 'Liguria', province: 'GE' },
-  { url: 'https://www.istruzioneliguria.it/atp-savona/', region: 'Liguria', province: 'SV' },
-  { url: 'https://www.istruzioneliguria.it/atp-imperia/', region: 'Liguria', province: 'IM' },
-  { url: 'https://www.istruzioneliguria.it/atp-la-spezia/', region: 'Liguria', province: 'SP' },
+  // ── Lazio ─────────────────────────────────────────────────────────────────
+  { url: 'https://www.atpromaistruzione.it/', region: 'Lazio', province: 'RM' },
+  { url: 'https://www.atpromaistruzione.it/atp/category/reclutamento/interpelli-personale-docente/', region: 'Lazio', province: 'RM' },
+  { url: 'https://www.usp-rieti.it/interpelli/', region: 'Lazio', province: 'RI' },
 
-  // Emilia-Romagna
-  { url: 'https://www.istruzioneer.it/interpelli/', region: 'Emilia-Romagna', province: null },
-  { url: 'https://www.istruzioneer.it/atp-bologna/', region: 'Emilia-Romagna', province: 'BO' },
-  { url: 'https://www.istruzioneer.it/atp-modena/', region: 'Emilia-Romagna', province: 'MO' },
-  { url: 'https://www.istruzioneer.it/atp-parma/', region: 'Emilia-Romagna', province: 'PR' },
-  { url: 'https://www.istruzioneer.it/atp-reggio-emilia/', region: 'Emilia-Romagna', province: 'RE' },
-  { url: 'https://www.istruzioneer.it/atp-ferrara/', region: 'Emilia-Romagna', province: 'FE' },
-  { url: 'https://www.istruzioneer.it/atp-ravenna/', region: 'Emilia-Romagna', province: 'RA' },
-  { url: 'https://www.istruzioneer.it/atp-forli-cesena/', region: 'Emilia-Romagna', province: 'FC' },
-  { url: 'https://www.istruzioneer.it/atp-rimini/', region: 'Emilia-Romagna', province: 'RN' },
-  { url: 'https://www.istruzioneer.it/atp-piacenza/', region: 'Emilia-Romagna', province: 'PC' },
+  // ── Liguria ───────────────────────────────────────────────────────────────
+  { url: 'https://servizi.istruzioneliguria.gov.it/provincia.php?p=GE&as=2026%2F2027', region: 'Liguria', province: 'GE' },
+  { url: 'https://servizi.istruzioneliguria.gov.it/provincia.php?p=SP&as=2026%2F2027', region: 'Liguria', province: 'SP' },
+  { url: 'https://servizi.istruzioneliguria.gov.it/provincia.php?p=IM&as=2026%2F2027', region: 'Liguria', province: 'IM' },
+  { url: 'https://servizi.istruzioneliguria.gov.it/provincia.php?p=SV&as=2026%2F2027', region: 'Liguria', province: 'SV' },
+  { url: 'https://servizi.istruzioneliguria.gov.it/', region: 'Liguria', province: null },
+  { url: 'https://servizi.istruzioneliguria.gov.it/nazionali.php', region: 'Liguria', province: null },
+
+  // ── Piemonte ──────────────────────────────────────────────────────────────
+  { url: 'https://www.istruzionepiemonte.it/', region: 'Piemonte', province: null },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_to.php', region: 'Piemonte', province: 'TO' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_al.php', region: 'Piemonte', province: 'AL' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_at.php', region: 'Piemonte', province: 'AT' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_bi.php', region: 'Piemonte', province: 'BI' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_cn.php', region: 'Piemonte', province: 'CN' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_no.php', region: 'Piemonte', province: 'NO' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_vb.php', region: 'Piemonte', province: 'VB' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_vc.php', region: 'Piemonte', province: 'VC' },
+
+  // ── Sicilia ───────────────────────────────────────────────────────────────
+  { url: 'https://www.usr.sicilia.it/', region: 'Sicilia', province: null },
+  { url: 'https://www.usr.sicilia.it/category/personale-scuola/docenti/interpelli-nazionali-contratti-a-tempo-determinato-docenti/', region: 'Sicilia', province: null },
+
+  // ── Provincia Autonoma di Trento ──────────────────────────────────────────
+  { url: 'https://www.vivoscuola.it/', region: 'Trentino-Alto Adige', province: 'TN' },
+
+  // ── Umbria ────────────────────────────────────────────────────────────────
+  { url: 'https://istruzione.umbria.it/', region: 'Umbria', province: null },
+  { url: 'https://istruzione.umbria.it/interpelli/interpelli-aperti/', region: 'Umbria', province: null },
+
+  // ── Valle d'Aosta ─────────────────────────────────────────────────────────
+  { url: 'https://scuole.vda.it/interpelli', region: "Valle d'Aosta", province: 'AO' },
+
+  // ── Veneto ────────────────────────────────────────────────────────────────
+  { url: 'https://istruzioneveneto.gov.it/', region: 'Veneto', province: null },
+  { url: 'https://padova.istruzioneveneto.gov.it/category/interpelli-personale-docente/', region: 'Veneto', province: 'PD' },
+  { url: 'https://padova.istruzioneveneto.gov.it/category/interpelli-dsga/', region: 'Veneto', province: 'PD' },
+
+  // ── Sardegna ──────────────────────────────────────────────────────────────
+  { url: 'https://www.mim.gov.it/web/sassari/interpelli-docenti', region: 'Sardegna', province: 'SS' },
+  { url: 'https://www.mim.gov.it/web/nuoro/interpelli', region: 'Sardegna', province: 'NU' },
+  { url: 'https://www.mim.gov.it/web/cagliari/interpelli-docenti-e-personale-educativo', region: 'Sardegna', province: 'CA' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -330,6 +400,10 @@ async function disableUmbriaTrasparenza(): Promise<number> {
   const idsToDisable = (data ?? [])
     .filter((row) => {
       const url = String(row.url ?? '');
+      // Non disattivare i target ufficiali dell'Umbria che stiamo
+      // attivando in questa stessa esecuzione.
+      const isWhitelisted = TARGETS.some((t) => t.url === url);
+      if (isWhitelisted) return false;
       return JUNK_URL_PATTERNS.some((re) => re.test(url));
     })
     .map((row) => row.id);
@@ -360,17 +434,31 @@ async function disableUmbriaTrasparenza(): Promise<number> {
 }
 
 // ---------------------------------------------------------------------------
-// STEP 5 — Upsert target Piemonte + USR/ATP verificati
+// STEP 5 — Upsert dei target ufficiali
 // ---------------------------------------------------------------------------
+//
+// `domain` viene calcolato da `seed.url` e incluso in TUTTI gli
+// insert/update. Per i record già esistenti con `domain` nullo,
+// l'update dei metadati lo ripara.
+//
 
 async function upsertTarget(
   seed: TargetSeed,
   label: string
 ): Promise<'inserted' | 'reactivated' | 'unchanged' | 'error'> {
-  // Cerchiamo prima per URL.
+  const domain = extractDomain(seed.url);
+  if (!domain) {
+    console.error(
+      `[clean-and-sync] Impossibile estrarre il dominio da ${seed.url} — skip.`
+    );
+    return 'error';
+  }
+
+  // Cerchiamo prima per URL. Selezioniamo anche `domain` per capire se il
+  // record esistente è già popolato (evita update inutili).
   const { data, error } = await supabase
     .from('discovered_links')
-    .select('id, status')
+    .select('id, status, domain')
     .eq('url', seed.url)
     .maybeSingle();
 
@@ -382,8 +470,10 @@ async function upsertTarget(
   }
 
   if (!data) {
+    // INSERT: includiamo sempre `domain`.
     const { error: insErr } = await supabase.from('discovered_links').insert({
       url: seed.url,
+      domain,
       region: seed.region,
       province: seed.province,
       status: 'active_crawler',
@@ -394,15 +484,20 @@ async function upsertTarget(
       );
       return 'error';
     }
-    console.log(`[clean-and-sync] + Inserito [${label}] ${seed.url}`);
+    console.log(
+      `[clean-and-sync] + Inserito [${label}] ${seed.url} (domain=${domain})`
+    );
     return 'inserted';
   }
 
   if (data.status !== 'active_crawler') {
+    // REACTIVATE: includiamo `domain` per riparare eventuali record
+    // pre-esistenti con dominio mancante.
     const { error: updErr } = await supabase
       .from('discovered_links')
       .update({
         status: 'active_crawler',
+        domain,
         region: seed.region,
         province: seed.province,
       })
@@ -413,22 +508,39 @@ async function upsertTarget(
       );
       return 'error';
     }
-    console.log(`[clean-and-sync] ~ Riattivato [${label}] ${seed.url}`);
+    console.log(
+      `[clean-and-sync] ~ Riattivato [${label}] ${seed.url} (domain=${domain})`
+    );
     return 'reactivated';
   }
 
-  // Già attivo: aggiorna solo metadati se diversi (provincia/regione).
+  // Già attivo: aggiorna i metadati. Ripara `domain` se nullo o vuoto.
+  const needsDomainFix =
+    !data.domain || String(data.domain).trim() === '';
+
   const { error: metaErr } = await supabase
     .from('discovered_links')
-    .update({ region: seed.region, province: seed.province })
+    .update({
+      region: seed.region,
+      province: seed.province,
+      domain: needsDomainFix ? domain : data.domain,
+    })
     .eq('id', data.id);
+
   if (metaErr) {
     console.error(
       `[clean-and-sync] Errore update meta ${seed.url}: ${metaErr.message}`
     );
     return 'error';
   }
-  console.log(`[clean-and-sync] = Già attivo [${label}] ${seed.url}`);
+
+  if (needsDomainFix) {
+    console.log(
+      `[clean-and-sync] = Già attivo [${label}] ${seed.url} (domain riparato=${domain})`
+    );
+  } else {
+    console.log(`[clean-and-sync] = Già attivo [${label}] ${seed.url}`);
+  }
   return 'unchanged';
 }
 
@@ -440,23 +552,7 @@ async function syncVerifiedTargets(): Promise<{
 }> {
   const stats = { inserted: 0, reactivated: 0, unchanged: 0, errors: 0 };
 
-  // Piemonte
-  for (const { prov, path } of PIEMONTE_AMBITI) {
-    const url = `${PIEMONTE_BASE.replace(/\/+$/, '')}${path}`;
-    const seed: TargetSeed = {
-      url,
-      region: 'Piemonte',
-      province: prov,
-    };
-    const r = await upsertTarget(seed, `Piemonte/${prov}`);
-    if (r === 'inserted') stats.inserted += 1;
-    else if (r === 'reactivated') stats.reactivated += 1;
-    else if (r === 'unchanged') stats.unchanged += 1;
-    else stats.errors += 1;
-  }
-
-  // Veneto / Liguria / Emilia-Romagna
-  for (const seed of EXTRA_TARGETS) {
+  for (const seed of TARGETS) {
     const label = `${seed.region}${seed.province ? '/' + seed.province : ''}`;
     const r = await upsertTarget(seed, label);
     if (r === 'inserted') stats.inserted += 1;
@@ -466,6 +562,61 @@ async function syncVerifiedTargets(): Promise<{
   }
 
   return stats;
+}
+
+// ---------------------------------------------------------------------------
+// STEP 6 — Riparazione dominio sui record esistenti (safety net)
+// ---------------------------------------------------------------------------
+//
+// Scansiona i record di `discovered_links` con `domain` nullo o vuoto e
+// prova a popolarlo dall'URL. Utile per sanare record creati prima del
+// FIX v2 da altri script che non popolavano il dominio.
+//
+
+async function repairMissingDomains(): Promise<number> {
+  const { data, error } = await supabase
+    .from('discovered_links')
+    .select('id, url, domain')
+    .or('domain.is.null,domain.eq.');
+
+  if (error) {
+    console.error(
+      `[clean-and-sync] Errore query domini mancanti: ${error.message}`
+    );
+    return 0;
+  }
+
+  const rows = data ?? [];
+  if (rows.length === 0) {
+    console.log(
+      '[clean-and-sync] Nessun record con dominio mancante da riparare.'
+    );
+    return 0;
+  }
+
+  let repaired = 0;
+  for (const row of rows) {
+    const dom = extractDomain(String(row.url ?? ''));
+    if (!dom) continue;
+
+    const { error: updErr } = await supabase
+      .from('discovered_links')
+      .update({ domain: dom })
+      .eq('id', row.id);
+
+    if (updErr) {
+      console.error(
+        `[clean-and-sync] Errore riparazione dominio per ${row.url}: ${updErr.message}`
+      );
+      continue;
+    }
+    repaired += 1;
+  }
+
+  console.log(
+    `[clean-and-sync] Riparati ${repaired}/${rows.length} record con dominio mancante.`
+  );
+  return repaired;
 }
 
 // ---------------------------------------------------------------------------
@@ -489,8 +640,11 @@ async function main(): Promise<void> {
   console.log('\n── STEP 4: disattivazione link Umbria generici ──');
   const umbriaDisabled = await disableUmbriaTrasparenza();
 
-  console.log('\n── STEP 5: sincronizzazione target verificati ──');
+  console.log('\n── STEP 5: sincronizzazione target ufficiali ──');
   const stats = await syncVerifiedTargets();
+
+  console.log('\n── STEP 6: riparazione dominio sui record esistenti ──');
+  const domainsRepaired = await repairMissingDomains();
 
   console.log('\n[clean-and-sync] Riepilogo:');
   console.log(`  Record spazzatura eliminati:    ${junkRemoved}`);
@@ -500,6 +654,7 @@ async function main(): Promise<void> {
   console.log(`  Target inseriti:                ${stats.inserted}`);
   console.log(`  Target riattivati:              ${stats.reactivated}`);
   console.log(`  Target già attivi (invariati):  ${stats.unchanged}`);
+  console.log(`  Domini riparati:                ${domainsRepaired}`);
   console.log(`  Errori durante l'upsert:        ${stats.errors}`);
 
   if (stats.errors > 0) {
