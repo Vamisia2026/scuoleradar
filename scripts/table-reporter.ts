@@ -1,6 +1,20 @@
 // scripts/table-reporter.ts
 //
-// Table Reporter — v9
+// Table Reporter — v10
+//   • FIX v10 — ALLINEAMENTO della SCADENZA alla colonna CANONICA:
+//       - il parser scrive `expiration_date` (timestamptz), la scadenza che
+//         leggono bacheca «Radar Live», filtro degli avvisi attivi, matching e
+//         notifiche — non più soltanto il vecchio `deadline` (colonna legacy
+//         `text`): erano due verità diverse e, sul database reale, 992 righe su
+//         992 con la scadenza piena avevano `expiration_date` NULLO;
+//       - upsert in DUE passi: i NUOVI avvisi si inseriscono
+//         (`ignoreDuplicates`), alle righe ESISTENTI la scadenza viene
+//         SCRITTA o SOVRASCRITTA con un UPDATE mirato. Serve perché l'`hash_id`
+//         (`provincia|codice|titolo|url`) NON contiene la data: il solo upsert
+//         saltava il conflitto e la riga non riceveva mai la scadenza;
+//       - `deadline` resta come specchio testuale ISO e, se la colonna non
+//         esiste, viene tolta dal payload senza rompere l'inserimento (stesso
+//         patto di `COLONNE_OPZIONALI` in `src/scraper/index.ts`).
 //   • FIX v9 — Supporto rigido per portali USR Piemonte:
 //       - Filtro STATO INTERPELLO: processa SOLO righe con stato "aperto".
 //         Scarta "chiuso", "cancellato", vuoto o qualsiasi altro valore.
@@ -105,6 +119,25 @@ function extractMechCode(text: string): string {
   return 'ND';
 }
 
+/** Codice meccanografico scritto DENTRO una cella (Umbria: «PGIS013005 I.O. …»). */
+const RE_CODICE_NEL_NOME = /\b[A-Za-z]{2}[A-Za-z0-9]{8}\b/g;
+
+/**
+ * Nome dell'istituto SENZA il codice meccanografico.
+ *
+ * Molte tabelle regionali (Umbria, colonna «Ist. scolastica») mettono il codice
+ * nella STESSA cella del nome: «PGIS013005 I.O. "ROSSELLI-RASETTI"». Il codice è
+ * già salvato a parte in `school_code`, e dentro il nome blocca la vetrina
+ * (`nomeIstituto.ts` scarta ogni token misto lettere+cifre). Si toglie SOLO un
+ * token a forma di codice con almeno una cifra, per non mutilare le parole.
+ */
+function pulisciNomeScuola(nome: string): string {
+  const senzaCodice = nome.replace(RE_CODICE_NEL_NOME, (trovato) =>
+    /\d/.test(trovato) && isLikelyMechCode(trovato.toUpperCase()) ? ' ' : trovato
+  );
+  return normalize(senzaCodice).replace(/^[\s|·,;:.–—-]+|[\s|·,;:.–—-]+$/g, '');
+}
+
 // ---------------------------------------------------------------------------
 // Tipi
 // ---------------------------------------------------------------------------
@@ -126,7 +159,14 @@ interface InterpelloRecord {
   region: string | null;
   class_code: string;
   subject: string;
+  /** Colonna LEGACY (text, OPZIONALE): specchio ISO della scadenza. */
   deadline: string | null;
+  /**
+   * Colonna CANONICA (`timestamptz`): è la scadenza che leggono bacheca,
+   * filtro degli avvisi attivi, matching e notifiche. Sempre valorizzata
+   * insieme a `deadline`: mai due verità diverse.
+   */
+  expiration_date: string | null;
   source_url: string;
 }
 
@@ -278,10 +318,10 @@ function isFutureOrToday(deadlineIso: string | null): boolean {
 // ---------------------------------------------------------------------------
 
 // Pattern 1: `ambito_cn`, `ambito-to`, `ric_interpello_ambito_vc`
-const URL_AMBITO_REGEX = /ambito[_\-.]?([a-z]{2})(?:[_\-.]|\b)/i;
+const URL_AMBITO_REGEX = /ambito[_.-]?([a-z]{2})(?:[_.-]|\b)/i;
 
 // Pattern 2: `_to.php`, `_ge.php`, `_sp.php` (suffisso file)
-const URL_SUFFIX_REGEX = /[_\-]([a-z]{2})\.php/i;
+const URL_SUFFIX_REGEX = /[_-]([a-z]{2})\.php/i;
 
 // Pattern 3: `?p=CN` o `&p=TO` (query string Liguria)
 const URL_QUERY_PROV_REGEX = /[?&]p=([A-Za-z]{2})\b/;
@@ -513,10 +553,16 @@ function detectColumns(headers: string[]): ColumnMapping {
     /meccanografico/,
   ]);
 
+  // «Ist. scolastica» (Umbria) e «Istituzione scolastica» (Liguria, tabella
+  // `provincia.php`): senza queste forme la colonna non viene riconosciuta e il
+  // nome finisce per essere preso per POSIZIONE (cella sbagliata).
   const schoolIdx = findIdx([
     /denominazione/,
     /istituto\s+scolastico/,
+    /istituzion[ei]\s+scolastica/,
+    /ist\.?\s*scol\w*/,
     /nome\s+(?:istituto|scuola)/,
+    /scuola\s*\/?\s*ufficio/,
     /scuola/,
     /istituto/,
   ]);
@@ -526,6 +572,9 @@ function detectColumns(headers: string[]): ColumnMapping {
     /scadenza\s*interpello/,
     /data\s*scadenza/,
     /\bscadenz/,
+    // «Data chiusura avviso» (Umbria): la scadenza è dichiarata come «chiusura».
+    /\bchiusur/,
+    /\btermine\b/,
   ]);
 
   const publishDateIdx = findIdx([
@@ -553,10 +602,12 @@ function detectColumns(headers: string[]): ColumnMapping {
 }
 
 // FIX #1: rilevamento scadenza anche dal TESTO della cella (non solo header).
+// §26.72: vale anche per le fonti che chiamano la scadenza «chiusura»
+// («Data chiusura avviso», Umbria) o «termine di presentazione».
 function detectDeadlineColumnByCellText(colTexts: string[]): number {
   for (let i = 0; i < colTexts.length; i += 1) {
     const cellLower = colTexts[i].toLowerCase();
-    if (/scadenz/.test(cellLower)) {
+    if (/scadenz|chiusur|\btermine\b/.test(cellLower)) {
       const d = parseDeadline(colTexts[i]);
       if (d && isFutureOrToday(d)) return i;
     }
@@ -723,7 +774,10 @@ function extractRecordsFromHtml(
       let schoolName = '';
 
       if (columns.schoolIdx >= 0 && columns.schoolIdx < colTexts.length) {
-        schoolName = colTexts[columns.schoolIdx];
+        // §26.72 — il codice meccanografico sta nella STESSA cella del nome
+        // (Umbria, «Ist. scolastica»): si toglie subito, così se la cella
+        // conteneva soltanto il codice la cascata ripiega su link o nome d'ufficio.
+        schoolName = pulisciNomeScuola(colTexts[columns.schoolIdx]);
       }
 
       if (
@@ -731,7 +785,7 @@ function extractRecordsFromHtml(
         schoolName.length < CONFIG.minSchoolNameLength ||
         schoolName.toLowerCase().includes('non specificata')
       ) {
-        const secondCellText = colTexts[1] || '';
+        const secondCellText = pulisciNomeScuola(colTexts[1] || '');
         if (
           secondCellText &&
           secondCellText.length >= CONFIG.minSchoolNameLength &&
@@ -802,7 +856,11 @@ function extractRecordsFromHtml(
 
       if (isExpired(deadline)) return;
 
-      const { classCode, subject } = extractSubjectAndClass(fullRowText);
+      // Nelle tabelle la classe di concorso può essere scritta col trattino
+      // («A-40»): si ricompone prima di riconoscerla, altrimenti resta «GENERALE».
+      const { classCode, subject } = extractSubjectAndClass(
+        fullRowText.replace(/\b([A-E])-(\d{2,3})\b/g, '$1$2')
+      );
       const sourceUrl = resolveUrl(href, target.url);
       const title = `${schoolName} - Interpello Ufficiale`;
       const hashId = generateHashId(province, schoolCode, title, sourceUrl);
@@ -817,6 +875,9 @@ function extractRecordsFromHtml(
         class_code: classCode,
         subject,
         deadline,
+        // Stessa data, DUE colonne: `expiration_date` è la canonica (timestamptz)
+        // letta dal prodotto, `deadline` lo specchio testuale legacy.
+        expiration_date: deadline,
         source_url: sourceUrl,
       });
     });
@@ -854,12 +915,172 @@ function extractSubjectAndClass(text: string): {
 }
 
 // ---------------------------------------------------------------------------
+// Scrittura su `interpelli` — insert dei nuovi + allineamento della scadenza
+// ---------------------------------------------------------------------------
+
+/**
+ * Colonne NON garantite dallo schema documentato (`docs/SYSTEM_HANDOVER.md`
+ * §13.11): se il database non le ha, il payload le perde e la scrittura non si
+ * rompe. Stesso patto di `COLONNE_OPZIONALI` in `src/scraper/index.ts`.
+ *
+ * `deadline` è un residuo storico (colonna `text`): lo schema canonico ha
+ * `expiration_date` (`timestamptz`). Si continua a tenerla allineata finché la
+ * colonna esiste, perché la usano il cleanup dei target e la diagnostica.
+ */
+const COLONNE_OPZIONALI: readonly string[] = ['deadline'];
+
+/** Payload senza le colonne opzionali non disponibili su questo database. */
+function payloadSenzaColonne(
+  records: InterpelloRecord[],
+  scartate: readonly string[]
+): Array<Record<string, unknown>> {
+  return records.map((r) => {
+    const copia: Record<string, unknown> = { ...r };
+    for (const colonna of scartate) delete copia[colonna];
+    return copia;
+  });
+}
+
+/** Colonna OPZIONALE mancante dichiarata dall'errore PostgREST, altrimenti null. */
+function colonnaOpzionaleMancante(messaggio: string): string | null {
+  const trovata = messaggio.match(/Could not find the '([^']+)' column/i);
+  if (!trovata) return null;
+  const colonna = trovata[1];
+  return COLONNE_OPZIONALI.includes(colonna) ? colonna : null;
+}
+
+interface EsitoScrittura {
+  error: string | null;
+  /** Righe NUOVE davvero inserite: i conflitti (già in tabella) non si contano. */
+  inseriti: number;
+  /** Righe ESISTENTI a cui la scadenza è stata scritta o sovrascritta. */
+  scadenzeAllineate: number;
+}
+
+/**
+ * Il predicato `or` di PostgREST che seleziona SOLO le righe da aggiornare:
+ * scadenza assente, oppure scadenza diversa da quella appena estratta. Una riga
+ * già in pari non viene riscritta (l'operazione è idempotente).
+ */
+function predicatoScadenzaDaAllineare(iso: string, conDeadline: boolean): string {
+  const parti = ['expiration_date.is.null'];
+  if (conDeadline) parti.push('deadline.is.null', `deadline.neq.${iso}`);
+  return parti.join(',');
+}
+
+/** `hash_id` per UPDATE: fette piccole, query leggere e nessun URL gigantesco. */
+const HASH_PER_UPDATE = 50;
+
+/**
+ * Allinea `expiration_date` (canonica) e `deadline` (specchio testuale) sulle
+ * righe GIÀ PRESENTI, raggruppate per scadenza:
+ *
+ *   update interpelli
+ *      set expiration_date = <iso>, deadline = <iso>
+ *    where hash_id in (<fetta>)
+ *      and (expiration_date is null or deadline is null or deadline <> <iso>)
+ *
+ * NON tocca nessun'altra colonna: nome istituto, classi di concorso, materia e
+ * recapiti restano quelli arricchiti dalle pipeline dedicate (mai un nome
+ * grezzo che riscrive un'anagrafica buona).
+ */
+async function allineaScadenze(
+  records: InterpelloRecord[],
+  scartate: readonly string[]
+): Promise<number> {
+  const gruppi = new Map<string, string[]>();
+  for (const record of records) {
+    if (!record.deadline) continue;
+    const hashIds = gruppi.get(record.deadline);
+    if (hashIds) hashIds.push(record.hash_id);
+    else gruppi.set(record.deadline, [record.hash_id]);
+  }
+
+  const conDeadline = !scartate.includes('deadline');
+  let aggiornate = 0;
+
+  for (const [iso, hashIds] of gruppi) {
+    for (let i = 0; i < hashIds.length; i += HASH_PER_UPDATE) {
+      const fetta = hashIds.slice(i, i + HASH_PER_UPDATE);
+      const patch: Record<string, unknown> = { expiration_date: iso };
+      if (conDeadline) patch.deadline = iso;
+
+      const { data, error } = await supabase
+        .from('interpelli')
+        .update(patch)
+        .in('hash_id', fetta)
+        .or(predicatoScadenzaDaAllineare(iso, conDeadline))
+        .select('hash_id');
+
+      if (error) {
+        console.error(
+          `[table-reporter] Allineamento scadenza ${iso} fallito: ${error.message}`
+        );
+        continue;
+      }
+
+      aggiornate += Array.isArray(data) ? data.length : 0;
+    }
+  }
+
+  return aggiornate;
+}
+
+/**
+ * Scrive gli avvisi estratti su `interpelli` in DUE passi.
+ *
+ * Serve perché l'`hash_id` è `provincia|codice meccanografico|titolo|url` e NON
+ * contiene la scadenza: con il solo `ignoreDuplicates` una riga già in banca
+ * dati non riceveva mai la scadenza estratta dal parser (era il
+ * disallineamento fra ingestione e bacheca pubblica).
+ *
+ *   1. INSERT dei soli avvisi NUOVI (`ignoreDuplicates: true`): le righe
+ *      esistenti non vengono riscritte;
+ *   2. ALLINEAMENTO della scadenza sulle righe esistenti (`allineaScadenze`).
+ */
+async function salvaRecords(records: InterpelloRecord[]): Promise<EsitoScrittura> {
+  const scartate: string[] = [];
+
+  for (let tentativo = 0; tentativo <= COLONNE_OPZIONALI.length; tentativo += 1) {
+    const { data, error } = await supabase
+      .from('interpelli')
+      .upsert(payloadSenzaColonne(records, scartate), {
+        onConflict: 'hash_id',
+        ignoreDuplicates: true,
+      })
+      .select('hash_id');
+
+    if (!error) {
+      const inseriti = Array.isArray(data) ? data.length : 0;
+      const scadenzeAllineate = await allineaScadenze(records, scartate);
+      return { error: null, inseriti, scadenzeAllineate };
+    }
+
+    const mancante = colonnaOpzionaleMancante(error.message);
+    if (!mancante || scartate.includes(mancante)) {
+      return { error: error.message, inseriti: 0, scadenzeAllineate: 0 };
+    }
+
+    scartate.push(mancante);
+    console.warn(
+      `[table-reporter] Colonna opzionale assente (${mancante}): la tolgo dal payload e riprovo.`
+    );
+  }
+
+  return {
+    error: 'Colonne opzionali non risolvibili dopo tutti i tentativi',
+    inseriti: 0,
+    scadenzeAllineate: 0,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Orchestrazione — disattivazione target inutili
 // ---------------------------------------------------------------------------
 
 const JUNK_UMBRIA_URL_PATTERNS: RegExp[] = [
-  /amministrazione[\-\s_]?trasparente/i,
-  /albo[\-\s_]?online/i,
+  /amministrazione[-\s_]?trasparente/i,
+  /albo[-\s_]?online/i,
 ];
 
 async function disableObviousJunkTargets(): Promise<number> {
@@ -969,21 +1190,21 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
     const records = extraction.records;
 
     if (records.length > 0) {
-      const { error: upsertError } = await supabase
-        .from('interpelli')
-        .upsert(records, {
-          onConflict: 'hash_id',
-          ignoreDuplicates: true,
-        });
+      const scrittura = await salvaRecords(records);
 
-      if (upsertError) {
+      if (scrittura.error) {
         return {
           extracted: 0,
           status: 'error',
           signature,
-          error: `Upsert interpelli: ${upsertError.message}`,
+          error: `Upsert interpelli: ${scrittura.error}`,
         };
       }
+
+      console.log(
+        `[table-reporter] ${target.url}: ${scrittura.inseriti} nuovi, ` +
+          `${scrittura.scadenzeAllineate} scadenze allineate su righe esistenti.`
+      );
     }
 
     return {

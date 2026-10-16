@@ -12,11 +12,33 @@
  *   · la riga intera come contesto (scuola, classi, date) per il parser;
  *   · titolo descrittivo della voce (mai "Elenco avvisi" come titolo unico).
  *
+ * Tabelle-dati (§26.72, 16/10/2026): in una tabella la SCADENZA non è scritta
+ * accanto alla data, ma nell'INTESTAZIONE della colonna («Scadenza», «Data
+ * chiusura avviso» — fonte Umbria, portali provinciali come Liguria). La voce
+ * porta quindi anche le etichette di colonna in `suggerimenti`, ricomposte come
+ * «Scadenza: 16/10/2026»: senza di esse la data della riga resta anonima e
+ * l'avviso viene scartato come "senza scadenza".
+ *
+ * Griglie ARIA (§26.72, 16/10/2026): gli stessi elenchi tabellari sono pubblicati
+ * anche SENZA tag `<table>` — `div[role="row"]` con celle `role="cell"` e
+ * intestazioni `role="columnheader"` (USR Liguria, `provincia.php`). Righe e
+ * celle ARIA sono trattate come righe e celle di tabella; i testi delle celle
+ * vengono uniti con uno spazio dove due nodi HTML erano incollati
+ * («A051»+«Spezzone» → «A051 Spezzone»). Menu, header e footer sono esclusi a
+ * monte: non sono voci d'elenco.
+ *
+ * Le funzioni che leggono la SINGOLA riga-dati (`datiRiga`, `eRigaIntestazione`)
+ * vivono nel modulo gemello `righeTabella.ts`, estratte per rispettare il limite
+ * di 300 righe per file: qui restano il riconoscimento della pagina indice, il
+ * ciclo sulle righe e la composizione delle voci.
+ *
  * Nessuna dipendenza dalla rete: ricevuto l'HTML, restituisce gli avvisi.
  */
 
 import * as cheerio from 'cheerio';
 import { parseInterpello, type InterpelloParsato } from './parser.ts';
+import { eUrlElenco, sembraTitoloElenco } from './paginaElenco.ts';
+import { datiRiga, eRigaIntestazione, titoloVoce } from './righeTabella.ts';
 
 /** Una voce (riga) di un elenco: un avviso individuale. */
 export interface VoceElenco {
@@ -26,26 +48,26 @@ export interface VoceElenco {
   url: string;
   /** Testo completo della riga: scuola, classi, scadenze… (contesto parser). */
   contesto: string;
+  /**
+   * Etichette di colonna della riga con il loro valore («Scadenza: 16/10/2026»),
+   * solo per le tabelle-dati. In una tabella la parola chiave della scadenza sta
+   * nell'intestazione: qui viene ricomposta accanto al valore.
+   */
+  suggerimenti?: string;
 }
-
-/** Percorsi tipici di una pagina INDICE/ELENCO. */
-const RE_PATH_ELENCO =
-  /(elenco|elenchi|indice|lista|liste|avvisi|interpelli|bandi|graduator|albo|pubblicazion|circolari|comunicazioni|scadenze|notizie)/i;
-
-/** Titoli tipici di una pagina INDICE. */
-const RE_TITOLO_ELENCO = /(elenco|elenchi|indice|lista|tutti gli|avvisi pubblicati|graduatorie|scadenze)/i;
 
 /** Link di navigazione/rumore: mai una voce d'elenco. */
 const RE_URL_RUMORE =
   /(privacy|cookie|facebook|twitter|instagram|linkedin|youtube|tiktok|whatsapp|telegram|t\.me|mailto:|tel:|javascript:|wp-login|wp-admin|\/feed\/?$|\/page\/\d|\/pagina\/\d|paginazione|pagina-successiva|accessibilit|\/contatti?\/?$|\/chi-siamo)/i;
 
-/** Etichette di link non descrittive (il titolo va preso dalla riga). */
-const RE_TESTO_LINK_GENERICO = /^(scarica|leggi|apri|visualizza|dettagli|dettaglio|vai|pdf|documento|link|qui|elenco)\b/i;
-
 /** Contenitori tipici di una voce d'elenco (il più interno vince). */
 const SELETTORI_RIGA = [
   'li',
   'tr',
+  // Griglie ARIA: i portali provinciali (Liguria, `provincia.php`) pubblicano
+  // l'elenco come `div[role="row"]` con celle `role="cell"` e intestazioni
+  // `role="columnheader"` — è una tabella-dati SENZA tag `<table>`.
+  '[role="row"]',
   'article',
   'div.card',
   'div.entry',
@@ -56,22 +78,8 @@ const SELETTORI_RIGA = [
   'div.list-item',
 ];
 
-/** True se l'URL "sembra" una pagina indice/elenco (euristica sul percorso). */
-export function eUrlElenco(url?: string | null): boolean {
-  const u = (url ?? '').trim();
-  if (!/^https?:\/\//i.test(u)) return false;
-  try {
-    const p = new URL(u);
-    return RE_PATH_ELENCO.test(`${p.pathname}${p.search}`);
-  } catch {
-    return false;
-  }
-}
-
-/** True se il titolo dichiara un elenco ("Elenco interpelli…", "Indice avvisi"). */
-export function sembraTitoloElenco(titolo?: string | null): boolean {
-  return RE_TITOLO_ELENCO.test((titolo ?? '').toLowerCase());
-}
+/** Riconoscimento della pagina-elenco (percorso/titolo): vedi `paginaElenco.ts`. */
+export { eUrlElenco, sembraTitoloElenco };
 
 function normalizza(testo: string, max: number): string {
   return testo.replace(/\s+/g, ' ').trim().slice(0, max);
@@ -143,31 +151,29 @@ export function estraiVociElenco(
   for (const selettore of SELETTORI_RIGA) {
     $(selettore).each((_, el) => {
       const $riga = $(el);
+      // Voci di MENU/NAVIGAZIONE (header, footer, briciole): non sono avvisi —
+      // sono la causa tipica delle righe «vuote» raccolte dalle pagine degli enti.
+      if ($riga.closest('nav, header, footer, [role="navigation"]').length > 0) return;
       // Contenitore (contiene altre righe): la voce vera è la riga interna.
       if ($riga.find(selettoriRiga).length > 0) return;
+      // Riga di INTESTAZIONE (solo etichette di colonna): non è una voce.
+      if (eRigaIntestazione($, el)) return;
 
       const links = linksUtili(el);
       const scelto = scegliLinkRiga(links);
       if (!scelto) return;
       if (urlVisti.has(scelto.href)) return;
 
-      const contesto = normalizza($riga.text(), 600);
-      // Titolo: testo del link se descrittivo, altrimenti la riga stessa
-      // (ripulita dal testo del link e dalle etichette generiche).
-      let titolo =
-        scelto.testo.length >= 12 && !RE_TESTO_LINK_GENERICO.test(scelto.testo) ? scelto.testo : '';
-      if (!titolo) {
-        const residuo = contesto
-          .replace(scelto.testo, '')
-          .replace(/^[\s\-–—:|·]+|[\s\-–—:|·]+$/g, '');
-        titolo = residuo.length >= 12 ? residuo : '';
-      }
-      if (!titolo) titolo = contesto;
-      titolo = normalizza(titolo, 220);
+      const dati = datiRiga($, el);
+      const contesto = dati?.contesto ?? normalizza($riga.text(), 600);
+      // Tabelle-dati: la parola chiave della scadenza sta nell'INTESTAZIONE della
+      // colonna, non accanto alla data → si ricompone qui l'etichetta.
+      const suggerimenti = dati?.suggerimenti ?? '';
+      const titolo = titoloVoce(contesto, scelto.testo);
       if (titolo.length < 12) return;
 
       urlVisti.add(scelto.href);
-      voci.push({ titolo, url: scelto.href, contesto });
+      voci.push({ titolo, url: scelto.href, contesto, suggerimenti });
     });
     if (voci.length >= max) break;
   }
@@ -214,7 +220,9 @@ export function espandiElencoInAvvisi(
       linkCandidati: [voce.url],
       provincia: ctx.provincia,
       source: ctx.source ?? ctx.baseUrl,
-      corpo: voce.contesto,
+      // Le etichette di colonna («Scadenza: 16/10/2026») vanno PRIMA del testo
+      // della riga: è la parola chiave che qualifica la data come scadenza.
+      corpo: voce.suggerimenti ? `${voce.suggerimenti} · ${voce.contesto}` : voce.contesto,
       dataPubblicazione: ctx.dataPubblicazione ?? null,
     });
     if (hashVisti.has(avviso.hashId)) continue;

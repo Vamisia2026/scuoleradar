@@ -11,7 +11,8 @@
  *   1. una TESTA d'istituto — sigla (`IC`, `I.I.S.`, `ITIS`, `CPIA`…) o parola di
  *      tipo scuola (`Liceo`, `Istituto`, `Convitto`, `Comprensivo`…);
  *   2. una DENOMINAZIONE — almeno un nome proprio che non sia generico né un
- *      marcatore di posto/procedura/materia (`Ferruccio Ulivi`, `Curbastro`…);
+ *      marcatore di posto/procedura/materia (`Ferruccio Ulivi`, `Curbastro`…) oppure
+ *      un numero/ordinale (`Comprensivo 7`, `2° Circolo`, `V Circolo`);
  *   3. nessun CODICE (classe di concorso, sostegno, meccanografico, token misto
  *      lettere+cifre) e nessuna sequenza di 3+ cifre;
  *   4. il testo oltre il primo marcatore di procedura viene TAGLIATO
@@ -31,15 +32,27 @@ const PAROLE_GENERICHE = new Set([
   'sezioni', 'plesso', 'statale', 'paritaria', 'pubblica', 'nazionale', 'indirizzo',
   'primo', 'prima', 'secondo', 'seconda', 'terzo', 'terza', 'quarto', 'quinto',
   'sesto', 'settimo', 'ottavo', 'nono', 'decimo', 'sostegno',
+  // Descrivono la SCUOLA, non la nominano: senza un nome proprio una riga come
+  // «Circolo Didattico» resta fuori vetrina.
+  'didattico', 'didattici',
 ]);
 
-/** Sigle d'istituto REALI (mai codici di classe): valgono come TESTA del nome. */
+/** Sigle d'istituto REALI (mai codici di classe): valgono come TESTA del nome.
+ *
+ * Aggiunte del 15/10/2026 (§26.72 — fonti Liguria e Umbria): le sigle BREVI e le
+ * forme usate dai portali regionali — `I.S.`, `I.O.`, `S.M.S.`, `ISA`, `Circolo`,
+ * `Materna` («I.O. "ROSSELLI-RASETTI"», «D.D. 2^ CIRCOLO "COMPAROZZI"»,
+ * «ISA 23 IC LEVANTO»). Restano escluse da `eDenominazione`, quindi NON possono
+ * fare da nome proprio: una riga con la sola testa («Circolo Didattico») continua
+ * a non essere presentabile.
+ */
 const SIGLE_ISTITUTO = new Set([
   'ic', 'iis', 'isis', 'isiss', 'iiss', 'iss', 'itis', 'ipsia', 'ipsas', 'itc',
   'ite', 'itg', 'itn', 'iti', 'ips', 'itas', 'ipssar', 'ipsseoa', 'cpia', 'its',
   'ls', 'lss', 'lsp', 'lc', 'lsc', 'lg', 'lsg', 'sm', 'dds', 'cd', 'dd', 'liceo',
   'licei', 'istituto', 'istituti', 'istituzione', 'convitto', 'collegio',
   'educandato', 'comprensivo', 'omnicomprensivo', 'scuola', 'scuole', 'liceale',
+  'is', 'io', 'sms', 'isa', 'circolo', 'circoli', 'materna', 'materne',
 ]);
 
 /** Numeri romani: prefissi legittimi del nome («III IC Ricci Curbastro»). */
@@ -131,6 +144,18 @@ function eDenominazione(token: string): boolean {
 }
 
 /**
+ * True se il token è una DENOMINAZIONE NUMERALE: moltissimi istituti si chiamano
+ * con un numero o un ordinale — «Istituto Comprensivo 7», «2° Circolo»,
+ * «D.D. 2^ CIRCOLO "COMPAROZZI"», «V Circolo» (fonti Liguria/Umbria, §26.72).
+ * La cifra NON è un codice: vale solo insieme a una TESTA (`contieneTesta`),
+ * quindi non apre la porta a dump di classi e codici.
+ */
+function eDenominazioneNumerale(token: string): boolean {
+  if (/^\d{1,2}[°º^]?$/.test(token)) return true;
+  return NUMERI_ROMANI.has(token.toLowerCase());
+}
+
+/**
  * «corso»/«corsi» sono PROCEDURA solo in un sintagma preciso («corso di
  * formazione»): nel nome di un istituto sono spesso una VIA
  * («I.C. CUNEO CORSO SOLERI»). Tagliare lì produrrebbe un nome troncato e
@@ -176,7 +201,10 @@ function nomeDaFrammento(frammento: string): string | null {
   if (!tagliato || AZIONI_AVVISO.test(tagliato)) return null;
   const tokens = tokenizza(tagliato);
   if (tokens.some(eCodiceAmministrativo)) return null;
-  if (!contieneTesta(tokens) || !tokens.some(eDenominazione)) return null;
+  if (!contieneTesta(tokens)) return null;
+  // Denominazione: nome proprio oppure NUMERO/ordinale («Istituto Comprensivo 7»,
+  // «V Circolo»). La cifra conta solo con una testa presente: da sola resta un codice.
+  if (!tokens.some(eDenominazione) && !tokens.some(eDenominazioneNumerale)) return null;
   return tagliato;
 }
 

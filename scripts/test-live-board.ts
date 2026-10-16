@@ -7,8 +7,10 @@
  * per codice meccanografico, oppure nome leggibile ricavato dal titolo. Restano
  * FUORI: (a) le righe con il solo nome GREZZO pubblicato dal bando, (b) quelle senza
  * alcun nome risolvibile (per cui la §26.47 prevedeva il segnaposto «Scuola non
- * specificata / Più plessi»), (c) — come sempre — le righe che non sono avvisi vivi:
- * scadute o senza data di pubblicazione utile per la finestra dei 60 giorni.
+ * specificata / Più plessi»), (c) — §26.71 — le righe senza una scadenza dichiarata
+ * e non ancora passata: la finestra dei 60 giorni per gli avvisi che la fonte NON
+ * data è ritirata da questa superficie, quindi in vetrina non esiste più la banda
+ * «Scadenza n/d».
  * Nella colonna «Scuola» non finisce MAI un codice amministrativo («EEEE | A246»,
  * «AAAA | A246»), per nessuna strada.
  *
@@ -116,9 +118,9 @@ check(
     .map((p) => p.riga.id),
 );
 check(
-  'nessuna riga entra senza scadenza se non per la finestra dei 60 giorni',
+  'nessuna riga entra in vetrina senza scadenza (§26.71)',
   [],
-  pronte.filter((p) => p.scadenza === null && !p.senzaScadenza).map((p) => p.riga.id),
+  pronte.filter((p) => p.scadenza === null).map((p) => p.riga.id),
 );
 check('scuola dal titolo: frammento generico ignorato', null, scuolaDaTitolo('Avviso supplenza — Scuola'));
 check(

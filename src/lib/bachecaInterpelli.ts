@@ -3,8 +3,11 @@
  * che la dashboard mostra.
  *
  * Una sola pipeline, in quest'ordine:
- *   1. **avviso vivo** (`eAvvisoVivo`: scaduto no, senza scadenza solo entro la
- *      finestra dei 60 giorni);
+ *   1. **opportunità con scadenza** (`eOpportunitaConScadenza`, §26.71): senza una
+ *      `expiration_date` dichiarata e non ancora passata la riga NON entra nel feed
+ *      — le pagine di archivio, i regolamenti e gli indici di classi di concorso
+ *      non sono opportunità di lavoro e non si candidano. Lo scarto è contato
+ *      (`senzaScadenza`), mai silenzioso;
  *   1-bis. **la riga è un avviso?** (`motivoRigaNonOpportunita`, §26.65): le voci di
  *      contorno che la fonte pubblica accanto agli avvisi — titoli di sezione, voci
  *      di menu, indici di classi («A041 | B017»), numeri di protocollo — **non
@@ -41,7 +44,7 @@ import { avvisoCompatibileConProfilo, avvisoDiSostegno, profiloAderisceSostegno 
 import { classeVicina } from './punteggioClasse';
 import { motivoRigaNonOpportunitaAvviso } from './qualitaAvviso';
 import { limitaRiempitivi, riempitivoNonPertinente } from './riempitivi';
-import { eAvvisoVivo } from './scadenza';
+import { eOpportunitaConScadenza } from './scadenza';
 
 /** Profilo completo della bacheca: criteri del Radar + liste scuole. */
 export interface ProfiloBacheca extends ProfiloModali {
@@ -62,6 +65,11 @@ export interface EsitoBacheca {
   lista: Interpello[];
   /** Righe di contorno scartate a monte: non sono avvisi (§26.65). */
   righeNonOpportunita: number;
+  /**
+   * Righe senza una scadenza dichiarata e valida: NON sono opportunità (§26.71) e
+   * non entrano nel feed (pagine di archivio, regolamenti, indici di classi).
+   */
+  senzaScadenza: number;
   /** Avvisi scartati dalla blacklist scuole. */
   esclusiBlacklist: number;
   /** Avvisi inclusi d'ufficio dalla whitelist scuole. */
@@ -94,12 +102,20 @@ export function bachecaInterpelli(
 ): EsitoBacheca {
   const inBacheca: Interpello[] = [];
   let righeNonOpportunita = 0;
+  let senzaScadenza = 0;
   let esclusiBlacklist = 0;
   let forzate = 0;
   let riempitiviEsclusi = 0;
 
   for (const i of fonti) {
-    if (!eAvvisoVivo(i.dataScadenza, i.dataPubblicazione)) continue;
+    // §26.71 — REGOLA FERREA: senza una scadenza dichiarata e non ancora passata la
+    // riga NON è un'opportunità. Prima di ogni punteggio e di ogni porta d'ingresso:
+    // le pagine di archivio e gli indici di classi di concorso non devono né entrare
+    // né consumare quota. Lo scarto è contato, mai silenzioso.
+    if (!eOpportunitaConScadenza(i.dataScadenza)) {
+      senzaScadenza += 1;
+      continue;
+    }
     // §26.65 — la riga è un AVVISO? Le voci di contorno (titoli di sezione, indici
     // di classi, numeri di protocollo) escono PRIMA di ogni punteggio: senza questo
     // filtro entravano in bacheca con punteggi piatti e finivano nei suggerimenti
@@ -182,6 +198,7 @@ export function bachecaInterpelli(
   return {
     lista: cap.lista,
     righeNonOpportunita,
+    senzaScadenza,
     esclusiBlacklist,
     forzate,
     riempitiviEsclusi,

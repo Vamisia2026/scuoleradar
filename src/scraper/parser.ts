@@ -699,9 +699,14 @@ export function raccogliDate(testo: string): DataRilevata[] {
  * Parole chiave che qualificano una data come SCADENZA. Devono PRECEDERE la data
  * ("Scadenza: 15/09/2026", "entro il 12/09/2026", "termine presentazione domande: …"):
  * così una data di pubblicazione in testa al post NON viene mai scambiata per scadenza.
+ *
+ * `chiusur` (16/10/2026, §26.72): la fonte Umbria (`istruzione.umbria.it`,
+ * «Data chiusura avviso») e molte tabelle provinciali chiamano la scadenza
+ * «chiusura»/«data di chiusura». Senza questa parola chiave la data resta
+ * anonima e l'avviso viene scartato come «senza scadenza».
  */
 const RE_CONTESTO_SCADENZA =
-  /scadenz|scade|scadut|\bentro\b|\btermine\b|presentazion|presentare|domand|candidatur|istanz|non oltre|ultimo|ricezion|riceviment|\binvio\b|trasmis|\boffert|compilazion|manifestazion|fino al|entro e non oltre|\bore\s(?:[01]?\d|2[0-3])(?::\d{2})?\b/i;
+  /scadenz|scade|scadut|chiusur|\bentro\b|\btermine\b|presentazion|presentare|domand|candidatur|istanz|non oltre|ultimo|ricezion|riceviment|\binvio\b|trasmis|\boffert|compilazion|manifestazion|fino al|entro e non oltre|\bore\s(?:[01]?\d|2[0-3])(?::\d{2})?\b/i;
 
 /** Parole chiave che qualificano una data come PUBBLICAZIONE. */
 const RE_CONTESTO_PUBBLICAZIONE =

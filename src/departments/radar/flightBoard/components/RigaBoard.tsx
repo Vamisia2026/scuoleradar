@@ -13,14 +13,16 @@
  * prima delle 250 righe; componente in `components/`). Etichette di copy e
  * classi di stile sono le stesse: nessun cambiamento visivo.
  *
- * Regola di prodotto invariata: la cella «Scadenza» mostra la scadenza vera
- * quando c'è, altrimenti la data di PUBBLICAZIONE dichiarata («Pubblicato 12
- * set») — mai una data inventata.
+ * Regola di prodotto (§26.67): la cella «Scadenza» mostra la scadenza VERA
+ * (`expiration_date`) con la banda colore dei giorni mancanti; quando la fonte
+ * non dichiara una scadenza la cella mostra il trattino `—` con la banda
+ * neutra «Scadenza n/d». La data di pubblicazione NON è una scadenza e non
+ * compare più in questa colonna.
  */
 import { ExternalLink } from 'lucide-react';
 import { titoloLeggibile, SCUOLA_NON_SPECIFICATA } from '@/lib/liveBoard';
 import { ePdf, hostDi, urlValido, estraiProvincia, type InterpelloLive } from '../righeBoard';
-import { dataItBreve, inferisciTipologia, ottieniUrgenzaOAnzianita } from '../rigaBoardDati';
+import { badgeScadenza, dataItBreve, inferisciTipologia } from '../rigaBoardDati';
 
 export interface RigaBoardProps {
   /** Riga presentabile del tabellone (già filtrata e alternata per provincia). */
@@ -39,10 +41,12 @@ export function RigaBoard({ riga: r, indice }: RigaBoardProps) {
   const classe = tipologiaInferita.codice;
   const descrizioneMateria = tipologiaInferita.descrizione;
 
-  const urgenza = ottieniUrgenzaOAnzianita(r.expiration_date, r.created_at);
+  // Colonna «Scadenza»: SOLO la scadenza vera. Senza `expiration_date` la cella
+  // mostra il trattino `—` con la banda neutra «Scadenza n/d`: `created_at` non
+  // entra MAI nel calcolo (§26.61 / §26.67).
+  const urgenza = badgeScadenza(r.expiration_date);
 
   const dataScad = dataItBreve(r.expiration_date);
-  const dataPub = r.expiration_date ? '' : dataItBreve(r.created_at);
   const urlFonte = urlValido(r.source_url);
   const titoloLink = urlFonte
     ? `${ePdf(urlFonte) ? 'Apri il PDF ufficiale' : 'Apri la pagina ufficiale'}${
@@ -160,13 +164,18 @@ export function RigaBoard({ riga: r, indice }: RigaBoardProps) {
         </span>
       </td>
 
-      {/* 5. Scadenza */}
+      {/* 5. Scadenza — la scadenza vera, oppure il vuoto DICHIARATO (`—`) */}
       <td className="px-4 py-2.5 text-center align-middle truncate">
-        {(dataScad || dataPub) && (
-          <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-slate-500 truncate">
-            {dataScad || `Pubblicato ${dataPub}`}
-          </span>
-        )}
+        <span
+          className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-slate-500 truncate"
+          title={
+            urgenza.fonte === 'scadenza'
+              ? `Scadenza dichiarata dalla fonte: ${dataScad}`
+              : 'La fonte non dichiara una scadenza'
+          }
+        >
+          {dataScad || '—'}
+        </span>
         <span className={`inline-flex items-center justify-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-black ${urgenza.className}`}>
           {urgenza.label}
         </span>

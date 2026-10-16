@@ -7,9 +7,11 @@
  *   1. la SCUOLA EMITTENTE e un LINK DIRETTO alla fonte ufficiale devono essere
  *      visibili sia sulla CARD sia nella MODALE di dettaglio (e nella scheda
  *      pubblica `/interpello/:id`), con l'etichetta ONESTA della fonte;
- *   2. un avviso SENZA scadenza esplicita esce dalle superfici pubbliche dopo 60
- *      giorni dalla pubblicazione: la stessa finestra vale per feed, bacheca,
- *      matching (RPC + fallback) e pulizia automatica (`eAvvisoVivo`).
+ *   2. REGOLA FERREA DELLA SCADENZA (§26.71): senza una `expiration_date`
+ *      dichiarata e non ancora passata la riga non è un'opportunità — fuori dal
+ *      feed della dashboard (conto dichiarato) e fuori dalla bacheca pubblica. La
+ *      finestra dei 60 giorni resta solo dove serve al *fetch* e alla pulizia
+ *      automatica (`eAvvisoVivo`, RPC `match_interpelli`, `scripts/pulisci-scaduti.ts`);
  *
  *   3. la COMPATIBILITÀ è colorata da un'unica banda condivisa (60 rosso · 70
  *      arancio · 80 verde) e l'area sostegno senza una classe AD… propria vale 60
@@ -71,22 +73,37 @@ check(
   /from '.\/IstitutoEmittente'/.test(card) && /from '.\/IstitutoEmittente'/.test(modale),
 );
 
-console.log('\n— 2. Finestra dei 60 giorni: una sola regola, tutte le superfici pubbliche —');
-check('feed dashboard: usa eAvvisoVivo (via bacheca pura)', true, /eAvvisoVivo\(/.test(bachecaFeed));
+console.log('\n— 2. Regola ferrea della scadenza nel feed, finestra 60gg solo per fetch/pulizia —');
 check(
-  'il feed non usa più la vecchia regola “solo scadenza”',
+  'feed dashboard: scarta a monte la riga senza scadenza (regola ferrea)',
+  true,
+  /eOpportunitaConScadenza\(/.test(bachecaFeed),
+);
+check(
+  'lo scarto è CONTATO, mai silenzioso (contatore `senzaScadenza`)',
+  true,
+  /senzaScadenza \+= 1/.test(bachecaFeed),
+);
+check(
+  'il feed non usa più la vecchia regola “avviso vivo” come porta d’ingresso',
   false,
-  /nonScaduto = eInterpelloAttivo/.test(feed),
+  /eAvvisoVivo\(i\.dataScadenza/.test(bachecaFeed),
 );
 check(
-  'matching (fallback PostgREST): ramo senza scadenza con finestra created_at',
+  'matching (fallback PostgREST): niente ramo senza scadenza',
+  false,
+  /expiration_date\.is\.null/.test(motore),
+);
+check('matching: filtro sulla sola scadenza dichiarata', true, /\.gte\('expiration_date', oggiIso\)/.test(motore));
+check(
+  'bacheca «Radar Live»: la regola ferrea arriva dal modulo condiviso',
   true,
-  /expiration_date\.is\.null,created_at\.gte\./.test(motore),
+  /from '@\/lib\/scadenza'/.test(bacheca) && /expiration_date\.gte\./.test(bacheca),
 );
 check(
-  'bacheca «Radar Live»: la finestra arriva dal modulo condiviso',
+  'bacheca «Radar Live»: l’espressione è la sola scadenza (nessun ramo `is.null` di codice)',
   true,
-  /from '@\/lib\/scadenza'/.test(bacheca),
+  /return `expiration_date\.gte\.\$\{dataIsoLocale\(oggi\)\}`;/.test(bacheca),
 );
 check(
   'pulizia automatica: rimuove anche gli avvisi senza scadenza fuori finestra',
@@ -145,7 +162,7 @@ check(
 
 console.log(
   errori === 0
-    ? '\n✅ OPPORTUNITÀ: scuola e fonte sempre visibili; gli avvisi non vivi escono dopo 60 giorni.'
+    ? '\n✅ OPPORTUNITÀ: scuola e fonte sempre visibili; senza scadenza la riga non è un’opportunità.'
     : `\n❌ OPPORTUNITÀ: ${errori} errore/i`,
 );
 process.exitCode = errori === 0 ? 0 : 1;

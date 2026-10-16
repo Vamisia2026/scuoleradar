@@ -18,9 +18,16 @@
  * I codici amministrativi restano FUORI a monte (`nomeIstituto.ts`): non sono mai un
  * nome, per nessuna strada. La riga che entra ha sempre la sua scuola e
  * `anagraficaParziale` dichiara lo stato dell'anagrafica (`completo`/`parziale`).
+ *
+ * REGOLA FERREA DELLA SCADENZA (§26.71, direttiva 16/10/2026): la vetrina è fatta
+ * di OPPORTUNITÀ — senza una `expiration_date` dichiarata e non ancora passata la
+ * riga NON entra (`eOpportunitaConScadenza`). Le pagine di archivio, i regolamenti
+ * e gli indici di classi di concorso che la fonte non data restano fuori: grazie
+ * alla vecchia finestra dei 60 giorni entravano in bacheca come «Scadenza n/d» e
+ * gonfiavano il conto degli avvisi attivi senza essere candidabili.
  */
 
-import { eAvvisoVivo, GIORNI_FINESTRA_SENZA_SCADENZA } from './scadenza.ts';
+import { eOpportunitaConScadenza, GIORNI_FINESTRA_SENZA_SCADENZA } from './scadenza.ts';
 import { nomeScuolaDaCodice } from './school-lookup.ts';
 import { nomeIstitutoPresentabile } from './nomeIstituto.ts';
 import { pulisciTitoloAvviso } from './alertInterpello';
@@ -59,8 +66,6 @@ export interface RigaBoardCompleta<R extends RigaBoard = RigaBoard> {
   scuola: string;
   /** Scadenza ISO valida; null quando la fonte non ne pubblica una. */
   scadenza: string | null;
-  /** True se la riga è in bacheca grazie alla finestra 60 giorni. */
-  senzaScadenza: boolean;
   /**
    * True quando l'anagrafica NON è completa: il nome non viene da `school_name`
    * (registro o titolo) oppure la riga è marcata `parziale`.
@@ -162,9 +167,10 @@ export function rigaPresentabileVetrina(r: RigaBoard): boolean {
 }
 
 /**
- * Prepara le righe del tabellone: tiene gli interpelli con scadenza attiva e gli
- * avvisi senza scadenza pubblicati negli ultimi 60 giorni **e con un istituto
- * reale risolto**.
+ * Prepara le righe del tabellone: tiene SOLO gli interpelli con una scadenza
+ * dichiarata e non ancora passata **e con un istituto reale risolto** (§26.71:
+ * niente «Scadenza n/d» in vetrina — le pagine di archivio e gli indici di codici
+ * che la fonte non data non sono opportunità).
  *
  * ⛔ **GATE STRETTO del nome scuola** (§26.59, direttiva 05/10/2026): in vetrina
  * entra solo una riga di cui si sa QUALE scuola emette l'avviso (`nomeScuolaRiga`).
@@ -180,19 +186,14 @@ export function preparaRigheBoard<R extends RigaBoard>(
 
   for (const riga of righe ?? []) {
     const scadenza = (riga.expiration_date ?? '').trim();
-    let scadenzaValida: string | null = null;
-    let senzaScadenza = false;
 
-    // Regola UNICA di vetrina pubblica (`eAvvisoVivo`): con scadenza → non ancora
-    // passata; senza scadenza → pubblicato entro la finestra dei 60 giorni. Una
-    // riga senza scadenza E senza data di pubblicazione utile non è viva → fuori.
-    if (scadenza) {
-      if (!eAvvisoVivo(scadenza, null, adesso)) continue;
-      scadenzaValida = scadenza;
-    } else {
-      if (!eAvvisoVivo(null, riga.created_at, adesso)) continue;
-      senzaScadenza = true;
-    }
+    // REGOLA FERREA (§26.71): senza una scadenza dichiarata e non ancora passata la
+    // riga NON è un'opportunità attiva → fuori dalla vetrina. La finestra dei 60
+    // giorni per gli avvisi che la fonte non data è ritirata da questa superficie:
+    // nei dati reali quelle righe sono pagine di archivio, regolamenti e indici di
+    // classi di concorso — contorno che non si candida.
+    if (!eOpportunitaConScadenza(scadenza, adesso)) continue;
+    const scadenzaValida: string | null = scadenza;
 
     const nome = nomeScuolaBoard(riga);
     // GATE STRETTO (§26.59): senza un istituto reale la riga non entra. Non si
@@ -205,7 +206,6 @@ export function preparaRigheBoard<R extends RigaBoard>(
       riga,
       scuola: nome.nome,
       scadenza: scadenzaValida,
-      senzaScadenza,
       anagraficaParziale,
     });
   }
@@ -213,10 +213,57 @@ export function preparaRigheBoard<R extends RigaBoard>(
 }
 
 /**
- * Diversità geografica (round-robin per provincia) per evitare il monopolio di singole province.
+ * MESCOLAMENTO GIORNALIERO DELL'ORDINE DELLE PROVINCE (§26.72, 15/10/2026).
+ *
+ * L'alternanza a giri da sola non basta: l'ordine dei gruppi seguiva l'ordine di
+ * arrivo della query, quindi le prime schermate mostravano sempre le stesse
+ * province e il tabellone sembrava fermo. Qui l'ordine dei gruppi viene mescolato
+ * con un SEME derivato dal giorno:
+ *   · STABILE per tutta la giornata — due richieste dello stesso giorno danno lo
+ *     stesso tabellone (la paginazione non cambia sotto il dito dell'utente);
+ *   · DIVERSO domani — in pochi giorni il tabellone ruota su tutta l'Italia;
+ *   · deterministico e senza dipendenze: stessa data ⇒ stesso ordine (testabile).
+ * Dentro ogni provincia l'ordine di arrivo resta INTATTO (cronologia decrescente).
+ */
+function semeDelGiorno(oggi: Date): number {
+  const chiave = `${oggi.getFullYear()}-${oggi.getMonth() + 1}-${oggi.getDate()}`;
+  let hash = 2166136261;
+  for (let i = 0; i < chiave.length; i += 1) {
+    hash ^= chiave.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+/** Fisher-Yates deterministico (mai in loco): stesso seme ⇒ stesso ordine. */
+function mescolaConSeme<T>(valori: T[], seme: number): T[] {
+  const copia = [...valori];
+  let stato = seme;
+  const prossimo = (): number => {
+    stato = (stato + 0x6d2b79f5) >>> 0;
+    let t = stato;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  for (let i = copia.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(prossimo() * (i + 1));
+    const scambio = copia[i];
+    copia[i] = copia[j];
+    copia[j] = scambio;
+  }
+  return copia;
+}
+
+/**
+ * Diversità geografica: nessuna provincia monopolizza le prime pagine. I gruppi
+ * (uno per provincia) vengono MESCOLATI con il seme del giorno e poi alternati a
+ * giri (round-robin). `oggi` è iniettabile: i test fissano il giorno e ottengono
+ * un ordine stabile; in produzione l'ordine ruota ogni giorno.
  */
 export function diversificaProvince<T extends { riga: { province?: string } }>(
   righe: T[] | null | undefined,
+  oggi: Date = new Date(),
 ): T[] {
   const elenco = righe ?? [];
   const perProvincia = new Map<string, T[]>();
@@ -227,7 +274,7 @@ export function diversificaProvince<T extends { riga: { province?: string } }>(
     else perProvincia.set(chiave, [riga]);
   }
 
-  const gruppi = [...perProvincia.values()];
+  const gruppi = mescolaConSeme([...perProvincia.values()], semeDelGiorno(oggi));
   const alternate: T[] = [];
   for (let giro = 0; alternate.length < elenco.length; giro += 1) {
     let aggiunteNelGiro = 0;

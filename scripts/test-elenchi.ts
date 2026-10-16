@@ -15,6 +15,14 @@ import {
   estraiVociElenco,
   sembraTitoloElenco,
 } from '../src/scraper/elenchi.ts';
+import { eUrlHome } from '../src/scraper/paginaElenco.ts';
+import { parseAvvisi } from '../src/scraper/index.ts';
+import {
+  GRIGLIA_ARIA,
+  TABELLA_UMBRIA,
+  URL_LIGURIA,
+  URL_UMBRIA,
+} from './_fixture-elenchi.ts';
 
 let errori = 0;
 function check(nome: string, atteso: unknown, ottenuto: unknown): void {
@@ -80,6 +88,14 @@ check(
     'https://www.istruzione.lombardia.it/it/2026/09/documento-12345',
   ),
 );
+
+console.log('\n— Home/indice del sito: mai un avviso (link di testata) —');
+// Il marchio e il titolo del sito riportano alla home: i portali provinciali non
+// usano `<header>`/`<nav>` e senza questo filtro il link diventava un avviso.
+check('home del dominio riconosciuta', true, eUrlHome('https://www.uspumbria.istruzione.it/'));
+check('file di indice riconosciuto (Liguria)', true, eUrlHome('https://servizi.istruzioneliguria.gov.it/index.php'));
+check('pagina di avviso NON è indice', false, eUrlHome('https://servizi.istruzioneliguria.gov.it/interpello.php?id=1190'));
+check('indice CON query = pagina specifica', false, eUrlHome('https://www.uspumbria.istruzione.it/index.php?id=1234'));
 
 console.log('\n— Estrazione delle voci (una per avviso) —');
 const voci = estraiVociElenco(ELENCO, INDEX_URL);
@@ -166,6 +182,65 @@ check(
   2,
   new Set(avvisiCarte.map((a) => a.link)).size,
 );
+
+console.log('\n— Tabelle-dati: la scadenza sta nell’INTESTAZIONE di colonna (Umbria) —');
+// Fixture: `_fixture-elenchi.ts` (§26.72). Senza l'etichetta di colonna la data
+// resta anonima e l'avviso viene scartato; i link di menu/footer NON sono voci.
+const vociUmbria = estraiVociElenco(TABELLA_UMBRIA, URL_UMBRIA);
+check('righe-dati estratte, riga di intestazione esclusa (2)', 2, vociUmbria.length);
+check('nessuna voce da menu o footer', [], vociUmbria.filter((v) => /pon-pn|contatti|privacy|index\.php/.test(v.url)));
+check(
+  'etichetta di colonna della scadenza riportata nella voce',
+  true,
+  /Data chiusura avviso: 20\/10\/2026/.test(vociUmbria[0]?.suggerimenti ?? ''),
+);
+check('pagina indice riconosciuta', true, ePaginaElenco(TABELLA_UMBRIA, URL_UMBRIA, URL_UMBRIA));
+const avvisiUmbria = espandiElencoInAvvisi(TABELLA_UMBRIA, {
+  baseUrl: URL_UMBRIA,
+  provincia: 'PG',
+});
+check('un avviso per riga (2)', 2, avvisiUmbria.length);
+check('scadenza dalla colonna, non la pubblicazione', '2026-10-20', avvisiUmbria[0]?.expirationDate ?? null);
+check('scadenza in lettere della seconda riga', '2026-10-16', avvisiUmbria[1]?.expirationDate ?? null);
+check('classe di concorso letta dalla riga', true, (avvisiUmbria[0]?.classCodes ?? []).includes('A-022'));
+
+console.log('\n— Griglia ARIA senza <table> (portali provinciali, Liguria) —');
+// Fixture: `_fixture-elenchi.ts` (§26.72): `div[role="row"]`/`role="cell"` con
+// intestazioni `role="columnheader"`; la riga di intestazione non è una voce e
+// gli `<span>` adiacenti delle celle non incollano le parole.
+const vociLiguria = estraiVociElenco(GRIGLIA_ARIA, URL_LIGURIA);
+check('righe ARIA estratte, riga di intestazione esclusa (3)', 3, vociLiguria.length);
+check('celle con <span> non incollano le parole', true, /IC Genova Bolzaneto/.test(vociLiguria[0]?.contesto ?? ''));
+check('scadenza dalla colonna «Scadenza»', true, /Scadenza: 18\/10\/2026/.test(vociLiguria[0]?.suggerimenti ?? ''));
+const avvisiLiguria = espandiElencoInAvvisi(GRIGLIA_ARIA, {
+  baseUrl: URL_LIGURIA,
+  provincia: 'GE',
+});
+check('un avviso per riga ARIA (3)', 3, avvisiLiguria.length);
+check('scadenza della prima riga', '2026-10-18', avvisiLiguria[0]?.expirationDate ?? null);
+check('nessun avviso punta alla griglia', true, !avvisiLiguria.some((a) => a.link === URL_LIGURIA));
+
+console.log('\n— Percorso del CRAWLER (parseAvvisi): testata, menu e footer esclusi —');
+const avvisiCrawler = parseAvvisi(TABELLA_UMBRIA, 'PG', URL_UMBRIA);
+check('un avviso per riga-dati (2)', 2, avvisiCrawler.length);
+check(
+  'nessun avviso da menu, footer o testata',
+  [],
+  avvisiCrawler.filter((a) => /pon-pn|contatti|privacy|index\.php/.test(a.link ?? '')),
+);
+check('scadenza qualificata dall’etichetta di colonna', '2026-10-20', avvisiCrawler[0]?.expirationDate ?? null);
+// Portale provinciale: testata in un semplice `<div>` (site-brand) e menu in un
+// `<nav>` senza `<header>`; la riga «Graduatoria ATA», atto informativo senza
+// parola chiave, resta fuori (sembraOpportunita / GATE 1).
+const avvisiLiguriaCrawler = parseAvvisi(GRIGLIA_ARIA, 'GE', URL_LIGURIA);
+check('griglia ARIA: un avviso per riga di opportunità (2)', 2, avvisiLiguriaCrawler.length);
+check(
+  'griglia ARIA: nessun avviso da testata o menu',
+  [],
+  avvisiLiguriaCrawler.filter((a) => /index\.php|provincia\.php/.test(a.link ?? '')),
+);
+check('griglia ARIA: link della riga, mai la griglia', true, avvisiLiguriaCrawler.every((a) => /\/albo\/.*\.pdf$/.test(a.link ?? '')));
+check('griglia ARIA: scadenza dalla colonna «Scadenza»', '2026-10-21', avvisiLiguriaCrawler[0]?.expirationDate ?? null);
 
 console.log(
   errori === 0 ? '\n✅ ELENCHI: nessun problema' : `\n❌ ELENCHI: ${errori} errore/i`,

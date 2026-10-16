@@ -85,11 +85,12 @@
       dichiarazioni, interviste, rassegne, eventi) e gli **atti informativi**
       (esiti, graduatorie, revoche) restano nel dominio Notizie: mai un post.
 - [ ] **Bacheca pubblica «Radar Live» (lato UI)**: nessun mock, mai. Il totale
-      mostrato è il **conteggio esatto** del database e le schermate si contano
-      sulle righe davvero presenti: **«Schermata X di Y»**, con `Y` = elementi in
+      mostrato e le schermate nascono dallo **stesso** numero — le righe davvero in
+      vetrina (§26.71): **«Schermata X di Y»**, con `Y` = elementi in
       vetrina ÷ 5 arrotondato per eccesso — nessun `+` di maggiorazione e nessuna
       dicitura fissa (direttiva cliente 03/10/2026); a database vuoto la sezione
-      dice **«Nessun bando attivo al momento»**.
+      dice **«Nessun bando attivo al momento»**. Mai un conteggio preso dal database
+      grezzo: direbbe «869 avvisi attivi» mentre il tabellone ne pagina 396.
 - [ ] **Nessuna riga in vetrina senza la sua scuola** (direttiva cliente 05/10/2026,
       §26.59 — corregge la §26.47 del 04/10/2026): in bacheca entra solo una riga con
       il nome di un **istituto reale** risolto per anagrafica (campo `school_name` al
@@ -110,17 +111,22 @@
       notifiche puntuali (direttive 04/10 e 05/10/2026).
 - [ ] **Copertura nazionale della bacheca**: il tabellone legge a **pagine**
       (`.range`, mai una richiesta sola: PostgREST non consegna più di 1.000 righe —
-      `radar/flightBoard/letturaBoard.ts`, §26.34) con il filtro a doppio ramo
-      `radar/flightBoard/filtroAttivi.ts` — «scadenza non ancora passata» **oppure**
-      «nessuna scadenza ma pubblicato negli ultimi 60 giorni»
-      (`GIORNI_FINESTRA_SENZA_SCADENZA`) — e usa lo **stesso** filtro per il
-      conteggio mostrato: mai un totale che parla di avvisi diversi da quelli
-      leggibili. Le righe presentabili si **alternano per provincia**
+      `radar/flightBoard/letturaBoard.ts`, §26.34) con il filtro
+      `radar/flightBoard/filtroAttivi.ts` — **solo** avvisi con una
+      `expiration_date` dichiarata e non ancora passata — e usa lo **stesso** filtro
+      per il conteggio mostrato. Le righe presentabili si **alternano per provincia**
       (`diversificaProvince`): una sola provincia non occupa mai le prime pagine.
-- [ ] **Avvisi senza scadenza**: entrano in bacheca (finestra dei 60 giorni) con la
-      banda «Scadenza n/d» e la **data di pubblicazione** accanto, mai con una data
-      di scadenza inventata. Il nome dell'istituto resta obbligatorio: senza nome
-      reale la riga non entra.
+- [ ] **Regola ferrea della scadenza** (§26.71): un avviso senza `expiration_date`
+      (assente o non interpretabile) **non è un'opportunità** e non entra né in
+      bacheca né nel feed, né consuma quota di notifica. Nei dati reali quelle righe
+      sono pagine di archivio, regolamenti e **indici di classi di concorso**
+      («ADEE | AAAA», «A041 | EEEE | A043»): entravano in bacheca con la banda
+      «Scadenza n/d» e facevano sembrare «attivi» avvisi che non si candidano.
+      Regola in un solo punto (`eOpportunitaConScadenza`, `src/lib/scadenza.ts`),
+      applicata da filtro di lettura, `preparaRigheBoard` e pipeline del feed
+      (`bachecaInterpelli` → contatore `senzaScadenza`, scarto **dichiarato**).
+      Un solo grado di urgenza senza data resta possibile: la riga **fuori dal feed**
+      che il chiamante ha già deciso di mostrare (banda grigia, mai una data inventata).
 - [ ] **Bande di urgenza della colonna «Scadenza»**: il colore dice quanto manca —
       scade oggi · ultime 48h · entro 3 giorni · entro 7 giorni · in corso — sempre
       accanto alla DATA di scadenza (o alla data di **pubblicazione** quando la
@@ -145,12 +151,14 @@
       ufficiale** con etichetta onesta (`etichettaFonteLink`, nuova scheda
       `target="_blank" rel="noopener noreferrer"`): nessuna vista senza contesto, mai un link interno
       spacciato per fonte.
-- [ ] **Finestra dei 60 giorni in TUTTE le superfici pubbliche** — lo **stesso** numero e la stessa
-      data **locale** vivono in `src/lib/scadenza.ts` (`GIORNI_FINESTRA_SENZA_SCADENZA`,
-      `eAvvisoVivo(scadenza, pubblicazione)`) e valgono per bacheca, **feed della dashboard**,
-      matching (fallback PostgREST + RPC nativa, migrazione `20261005120000_...`) e **pulizia
-      automatica** (`scripts/pulisci-scaduti.ts` rimuove anche le righe senza scadenza fuori
-      finestra): un avviso che la fonte non data non resta pubblico per sempre.
+- [ ] **Finestra dei 60 giorni: solo FETCH e pulizia, mai vetrina** (§26.71) — lo **stesso** numero
+      e la stessa data **locale** vivono in `src/lib/scadenza.ts`
+      (`GIORNI_FINESTRA_SENZA_SCADENZA`, `eAvvisoVivo(scadenza, pubblicazione)`) e valgono per la
+      lettura permissiva (matching: fallback PostgREST + RPC nativa, migrazione `20261005120000_...`)
+      e per la **pulizia automatica** (`scripts/pulisci-scaduti.ts` rimuove anche le righe senza
+      scadenza fuori finestra): nessuna riga non databile resta nel database per sempre. Non è più
+      una porta d'ingresso: bacheca e feed scartano a monte la riga senza scadenza
+      (`eOpportunitaConScadenza`) e lo dichiarano nel contatore.
 
 - [ ] **Scuole preferite/escluse: la provincia si sceglie PER LISTA e i suggerimenti restano nell'ambito delle proprie
       province (+60 km)** — il campo scuola del Radar è una riga sola, `[ Provincia ▾ ] [ Nome della scuola ]
@@ -190,6 +198,12 @@
       (isolamento dal dominio Notizie).
 - [ ] `npm run test:scraper:attivi` — solo bandi attivi e categorie di
       reclutamento; ping fallace ≠ record scartato.
+- [ ] `npm run test:elenchi` + `npm run test:scraper:fonti` — i feed di elenco e i
+      **portali provinciali** si leggono per **righe** (tabelle `<table>` e **griglie
+      ARIA** `role="row"`): la riga di intestazione non è una voce, la scadenza arriva
+      dall'**etichetta di colonna**, e menu/testata/footer non entrano — la **home
+      dell'ente non è mai un avviso** (`eUrlHome`, §26.72).
+
 - [ ] `npm run test:board` + `npm run test:board:scala` + `npm run test:board:filtro` + `npm run test:board:metriche` + `npm run test:urgenza` + `npm run test:copy:schermo`
       — vetrina della bacheca: righe complete, codici classe mai come nome scuola,
       conteggio esatto e nessun mock nel tabellone, finestra dei 60 giorni senza date

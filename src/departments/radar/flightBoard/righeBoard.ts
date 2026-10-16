@@ -251,7 +251,7 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
  *
  *   - ISO completo           "2026-10-15T12:00:00Z"
  *   - ISO data               "2026-10-15"
- *   - Italiano con slash     "15/10/2026"
+ *   - Italiano con slash     "16/10/2026"
  *   - Italiano con trattino  "15-10-2026"
  *   - Italiano con punto     "15.10.2026"
  *

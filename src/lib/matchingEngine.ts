@@ -5,7 +5,7 @@ import { materie as catalogoMaterie } from '../data/ordiniMaterie';
 import { province } from '../data/province';
 import { normalizzaProvincia, provinciaCompatibile } from './prossimitaGeografica';
 import { inferisciOrdineDaTesto } from './alertInterpello';
-import { dataIsoLocale, dataLimiteFinestraSenzaScadenza } from './scadenza';
+import { dataIsoLocale } from './scadenza';
 import { normalizzaStatoArricchimento } from './statoArricchimento';
 
 /**
@@ -198,17 +198,14 @@ export async function searchInterpelli(
   if (provinceCercate.length > 0) query = query.in('province', provinceCercate);
   if (varianti.length > 0) query = query.overlaps('class_codes', varianti);
 
-  // Esclude gli interpelli NON VIVI dalle liste attive pubbliche: con scadenza →
-  // non scaduti; senza scadenza → pubblicati entro la finestra dei 60 giorni
-  // (`eAvvisoVivo` / `GIORNI_FINESTRA_SENZA_SCADENZA`). Stessa semantica del filtro
-  // della bacheca (`radar/flightBoard/filtroAttivi.ts`) e della RPC `match_interpelli`.
-  const adesso = new Date();
-  const oggiIso = dataIsoLocale(adesso);
-  const limiteFinestra = dataLimiteFinestraSenzaScadenza(adesso);
+  // Esclude le righe che NON sono opportunità (§26.71): senza una `expiration_date`
+  // dichiarata e non ancora passata non si candidano. Stessa regola della bacheca
+  // (`radar/flightBoard/filtroAttivi.ts`): la RPC `match_interpelli` può ancora
+  // consegnare un sovrainsieme (finestra dei 60 giorni) — a scartarlo è la pipeline
+  // pura (`bachecaInterpelli` → `senzaScadenza` dichiarato).
+  const oggiIso = dataIsoLocale(new Date());
   const { data: righe, error: erroreFallback } = await query
-    .or(
-      `expiration_date.gte.${oggiIso},and(expiration_date.is.null,created_at.gte.${limiteFinestra})`,
-    )
+    .gte('expiration_date', oggiIso)
     .order('expiration_date', { ascending: true, nullsFirst: false })
     .limit(limit ?? 100);
 

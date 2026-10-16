@@ -29,6 +29,7 @@
  */
 import { createClient } from '@supabase/supabase-js';
 import process from 'node:process';
+import { preparaRigheBoard, rigaPresentabileVetrina, type RigaBoard } from '@/lib/liveBoard';
 import { filtroAttivi } from '../filtroAttivi.ts';
 import { leggiTutteLePagine } from '../letturaBoard.ts';
 import { metricaBoard } from '../metricaBoard.ts';
@@ -57,8 +58,11 @@ const COLONNE =
 /** Le stesse cinque righe per pagina della vetrina. */
 const RIGHE_PER_PAGINA = 5;
 
-/** Campi di riga che servono a QUESTA verifica (identità e presenza della fonte). */
-interface Riga {
+/**
+ * Campi di riga che servono a QUESTA verifica: identità, presenza della fonte e
+ * i campi su cui si esprime il gate di vetrina (`preparaRigheBoard`).
+ */
+interface Riga extends RigaBoard {
   id: string;
   source_url?: string | null;
 }
@@ -129,6 +133,20 @@ async function main(): Promise<void> {
     pagina: 1,
   });
 
+  // ---- 3-bis. La VETRINA: le righe che superano il gate di presentabilità
+  //           (`preparaRigheBoard`: avviso vivo + istituto reale). È QUESTO il
+  //           numero che genera «Schermata X di Y`: senza misurarlo, la verifica
+  //           confrontava il conteggio del database con righe che il tabellone
+  //           non mostra — e il contatore delle schermate risultava più corto
+  //           del doppio (sintomo: «869 attivi» ma «Schermata 1 di 80»).
+  const inVetrina = preparaRigheBoard(conFonte);
+  const metricaVetrina = metricaBoard({
+    righeCaricate: inVetrina.length,
+    totaleReale: attese,
+    righePerPagina: RIGHE_PER_PAGINA,
+    pagina: 1,
+  });
+
   console.log('\n— Lettura del tabellone —');
   console.log(`  avvisi attivi nel database       : ${attese ?? '(conteggio non disponibile)'}`);
   console.log(
@@ -138,9 +156,52 @@ async function main(): Promise<void> {
   console.log(`  righe scartate come doppioni     : ${lettura.duplicati}`);
   console.log(`  lettura esaustiva                : ${lettura.esaustiva ? 'sì' : 'NO'}`);
   if (lettura.errore) console.log(`  errore di lettura                : ${lettura.errore}`);
-  console.log(`  presentabili in bacheca          : ${conFonte.length} (con una fonte valida)`);
-  console.log(`  etichetta di pagina              : ${metrica.etichettaPagine}`);
+  console.log(`  righe con una fonte valida       : ${conFonte.length}`);
+
+  console.log('\n— Vetrina (gate di presentabilità) —');
+  console.log(`  righe IN VETRINA                 : ${inVetrina.length}`);
+  console.log(`  scartate dal gate (scuola/vita)  : ${conFonte.length - inVetrina.length}`);
+  // Composizione dello scarto: senza scadenza (finestra dei 60 giorni) oppure
+  // senza un istituto reale. Sono due problemi DIVERSI (regola di prodotto vs
+  // anagrafica) e vanno contati separatamente per non decidere alla cieca.
+  const senzaScadenza = conFonte.filter((r) => !(r.expiration_date ?? '').trim()).length;
+  const senzaNome = conFonte.filter((r) => !rigaPresentabileVetrina(r)).length;
+  console.log(`   · senza scadenza pubblicata      : ${senzaScadenza}`);
+  console.log(`   · senza istituto reale           : ${senzaNome}`);
+  console.log(`  etichetta sugli avvisi attivi    : ${metrica.etichettaPagine}`);
+  console.log(`  etichetta REALE delle schermate  : ${metricaVetrina.etichettaPagine}`);
   console.log(`  etichetta degli avvisi attivi    : ${metrica.etichettaTotale ?? '(nessuna)'}`);
+
+  // ---- 3-ter. Campione OPZIONALE delle righe scartate dal gate: serve a
+  //            decidere se lo scarto è «anagrafica da arricchire» o «contorno da
+  //            togliere dal database». Si attiva solo a mano.
+  if (process.env.SCUOLERADAR_ESEMPI === '1') {
+    const scartate = conFonte.filter((r) => !rigaPresentabileVetrina(r));
+    const conData = scartate.filter((r) => (r.expiration_date ?? '').trim());
+    const host = (url?: string | null): string => {
+      try {
+        return new URL(String(url)).host;
+      } catch {
+        return '(host n/d)';
+      }
+    };
+    const perHost = new Map<string, number>();
+    for (const r of scartate) perHost.set(host(r.source_url), (perHost.get(host(r.source_url)) ?? 0) + 1);
+    console.log('\n— Scartate dal gate: distribuzione per host —');
+    for (const [h, n] of [...perHost.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12)) {
+      console.log(`  ${String(n).padStart(4)}  ${h}`);
+    }
+    console.log(
+      `\n— Scartate dal gate: ${conData.length} hanno una SCADENZA (opportunità vere da recuperare) —`,
+    );
+    for (const r of conData.slice(0, 40)) {
+      console.log(
+        `  · [${r.province ?? '—'}] ${host(r.source_url)} | ${r.expiration_date ?? 'n/d'}` +
+          ` | codice: ${r.school_code ?? '—'} | scuola: ${(r.school_name ?? '—').slice(0, 42)}` +
+          ` | titolo: ${(r.title ?? '—').slice(0, 45)}`,
+      );
+    }
+  }
   if (singola.length < lettura.righe.length) {
     const recuperate = lettura.righe.length - singola.length;
     console.log(

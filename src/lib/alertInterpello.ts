@@ -74,8 +74,9 @@ export function formatDataAvvisoLunga(iso?: string | null): string {
  * quando c'è, altrimenti la data di PUBBLICAZIONE dichiarata («Pubblicato 12 set
  * 2026») — mai una data inventata. Un campo vuoto non è una data: la card della
  * bacheca stampava `Invalid Date` (reso in maiuscolo) sulle righe che la fonte
- * non data, che è una bugia, non un dato. Stessa regola della tavola «Radar Live»
- * (`rigaBoardDati.ottieniUrgenzaOAnzianita`).
+ * non data, che è una bugia, non un dato. Diversa dalla tavola «Radar Live»
+ * (`rigaBoardDati.badgeScadenza`, §26.67): lì la colonna «Scadenza» non mostra
+ * mai un surrogato — al massimo il trattino `—` con la banda «Scadenza n/d».
  */
 export function etichettaScadenzaAvviso(
   iso?: string | null,

@@ -37,6 +37,19 @@
 //     ogni URL (`new URL(url).hostname`) e incluso in TUTTI gli
 //     insert/update su `discovered_links`, risolvendo il vincolo NOT NULL.
 //
+// FIX v5 (15/10/2026):
+//   • STEP 3-bis — eliminazione dei record che arrivano da BACHECHE CHIUSE
+//     (login-walled): `*spaggiari.eu` e `nuvola.madisoft.it`. Misurato: 347
+//     righe, TUTTE senza `class_codes` e senza `materia`, 290 con la stessa
+//     scadenza (la data dell'INDICE bacheca, non dell'avviso) e pagine che non
+//     consegnano testo leggibile (1–167 byte: app solo-JS). I siti delle scuole
+//     su `*.madisoft.it` (es. `scuolatest.madisoft.it`) NON sono toccati.
+//   • STEP 3 esteso — `province = 'EE'` è il SENTINELLA «provincia non nota»:
+//     quando nemmeno `school_code` dichiara una provincia (es. `SCOLASTICO`,
+//     un'intestazione di tabella presa per codice) la riga è orfana: sparisce.
+//   • STEP 4-bis — disattivazione in `discovered_links` dei link alle stesse
+//     piattaforme: la regola vale anche per i prossimi giri di scansione.
+//
 // Dipendenze: @supabase/supabase-js, dotenv
 // Uso:        npx tsx scripts/clean-and-sync-targets.ts
 //
@@ -45,6 +58,7 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { provinciaDaCodice } from '../src/lib/scanTargets.ts';
 
 dotenv.config();
 
@@ -118,6 +132,30 @@ const JUNK_KEYWORDS = [
   'determina',
   'determine',
 ];
+
+// ---------------------------------------------------------------------------
+// Piattaforme a BACHECA CHIUSA (login-walled) — FIX v5
+// ---------------------------------------------------------------------------
+//
+// MISURATO il 15/10/2026 sul progetto di produzione (347 righe di `interpelli`):
+//   · host: `web.spaggiari.eu` 133 · `cspace.spaggiari.eu` 58 · `nuvola.madisoft.it` 156;
+//   · 347/347 senza `class_codes` e senza `materia` → nessun utente può matcharle;
+//   · 290 con la STESSA scadenza (la data dell'indice bacheca) e titoli come
+//     «Istituto PROTOCOLLO - Interpello Ufficiale» / «Avviso - Interpello Ufficiale»;
+//   · le pagine non consegnano contenuto: `web.spaggiari.eu` risponde 200 con
+//     **1 byte di testo visibile** (app solo-JS), `nuvola.madisoft.it` con
+//     «abilita JavaScript…» (167 byte); alcuni URL sono `auth.php?token=…`
+//     (token di sessione) o `…/Documenti/…` → 404 Not Found.
+// Sono artefatti dell'ingestione su pagine NON leggibili: fuori dal pool e fuori
+// dalla coda. `*.madisoft.it` NON è bloccato in blocco: i siti delle scuole
+// ospitati sulla piattaforma sono pagine vere.
+
+const HOST_BACHECA_CHIUSA = ['spaggiari.eu', 'nuvola.madisoft.it'];
+
+/** Filtro PostgREST `ilike` su una colonna URL per le bacheche login-walled. */
+function filtroPiattaformeBloccate(colonna: string): string {
+  return HOST_BACHECA_CHIUSA.map((host) => `${colonna}.ilike.%${host}%`).join(',');
+}
 
 // ---------------------------------------------------------------------------
 // Lista UFFICIALE e VERIFICATA dei target di seed — FIX v4
@@ -365,10 +403,105 @@ async function deleteEeWithoutSchool(): Promise<number> {
     }
   }
 
+  // PASS 3 (FIX v5) — `school_code` che NON sa dichiarare una provincia: è
+  // l'orfano vero. `province = 'EE'` è il sentinella «provincia non nota»: se
+  // nemmeno il codice la dichiara, la riga non ha né provincia né scuola.
+  // Misurato: 7 righe con `school_code = 'SCOLASTICO'` (un'intestazione di
+  // tabella presa per codice) su `servizi.istruzionepiemonte.it`.
+  {
+    const { data, error: qErr } = await supabase
+      .from('interpelli')
+      .select('id, school_code')
+      .eq('province', 'EE')
+      .limit(1000);
+
+    if (qErr) {
+      console.error(`[clean-and-sync] Errore lettura EE/codice: ${qErr.message}`);
+    } else {
+      const orfane = (data ?? [])
+        .filter((r) => !provinciaDaCodice(String(r.school_code ?? '').slice(0, 2)))
+        .map((r) => r.id);
+
+      if (orfane.length === 0) {
+        console.log(
+          '[clean-and-sync] Nessun record EE con codice che non dichiara provincia.'
+        );
+      } else {
+        for (let i = 0; i < orfane.length; i += 50) {
+          const lotto = orfane.slice(i, i + 50);
+          const { error: dErr } = await supabase
+            .from('interpelli')
+            .delete()
+            .in('id', lotto);
+
+          if (dErr) {
+            console.error(
+              `[clean-and-sync] Errore delete EE/codice ignoto: ${dErr.message}`
+            );
+            continue;
+          }
+          removed += lotto.length;
+        }
+        console.log(
+          `[clean-and-sync] Eliminati ${orfane.length} record province=EE senza provincia nel codice.`
+        );
+      }
+    }
+  }
+
   if (removed === 0) {
     console.log('[clean-and-sync] Nessun record EE orfano trovato.');
   }
   return removed;
+}
+
+// ---------------------------------------------------------------------------
+// STEP 3-bis — Eliminazione dei record da BACHECHE CHIUSE (Spaggiari / Nuvola)
+// ---------------------------------------------------------------------------
+//
+// I record arrivati da queste piattaforme non contengono un avviso: l'ingestione
+// ha letto una pagina che NON ha contenuto nel HTML (app solo-JS o login). Sono
+// già fuori da ogni matching (nessuna classe, nessuna materia) ma occupano la
+// bacheca con scadenze inventate: vanno tolti dal pool, non "aggiustati".
+
+async function deleteInterpelliPiattaformeBloccate(): Promise<number> {
+  const orFilter = filtroPiattaformeBloccate('source_url');
+
+  const { count, error: countErr } = await supabase
+    .from('interpelli')
+    .select('hash_id', { count: 'exact', head: true })
+    .or(orFilter);
+
+  if (countErr) {
+    console.error(
+      `[clean-and-sync] Errore conteggio bacheche chiuse: ${countErr.message}`
+    );
+    return 0;
+  }
+
+  if (!count || count === 0) {
+    console.log(
+      '[clean-and-sync] Nessun record da bacheche chiuse (Spaggiari/Nuvola).'
+    );
+    return 0;
+  }
+
+  const { error: delErr } = await supabase
+    .from('interpelli')
+    .delete()
+    .or(orFilter);
+
+  if (delErr) {
+    console.error(
+      `[clean-and-sync] Errore delete bacheche chiuse: ${delErr.message}`
+    );
+    return 0;
+  }
+
+  console.log(
+    `[clean-and-sync] Eliminati ${count} record da bacheche chiuse (Spaggiari/Nuvola).`
+  );
+  return count;
 }
 
 // ---------------------------------------------------------------------------
@@ -391,9 +524,9 @@ async function disableUmbriaTrasparenza(): Promise<number> {
   }
 
   const JUNK_URL_PATTERNS = [
-    /amministrazione[\-\s_]?trasparente/i,
-    /\balbo[\-\s_]?online\b/i,
-    /\balbo[\-\s_]?pretorio\b/i,
+    /amministrazione[\s_-]?trasparente/i,
+    /\balbo[\s_-]?online\b/i,
+    /\balbo[\s_-]?pretorio\b/i,
     /\balbo\b/i,
   ];
 
@@ -431,6 +564,63 @@ async function disableUmbriaTrasparenza(): Promise<number> {
     `[clean-and-sync] Disattivati ${idsToDisable.length} link Umbria generici.`
   );
   return idsToDisable.length;
+}
+
+// ---------------------------------------------------------------------------
+// STEP 4-bis — Disattivazione dei link di BACHECA CHIUSA nella coda
+// ---------------------------------------------------------------------------
+//
+// La stessa regola del STEP 3-bis applicata a monte: `discovered_links` non deve
+// consegnare allo scanner pagine che non hanno contenuto leggibile. La scansione
+// oggi non ha righe di questo tipo in coda (misurato: 0 link `web.spaggiari.eu` e
+// 0 `nuvola.madisoft.it`), quindi questo passo è la GUARDIA per i prossimi giri.
+
+async function blacklistLinkPiattaforme(): Promise<number> {
+  const { data, error } = await supabase
+    .from('discovered_links')
+    .select('id, url, status')
+    .or(filtroPiattaformeBloccate('url'))
+    .limit(1000);
+
+  if (error) {
+    console.error(
+      `[clean-and-sync] Errore lettura link bacheche chiuse: ${error.message}`
+    );
+    return 0;
+  }
+
+  const daDisattivare = (data ?? [])
+    .filter((row) => row.status !== 'disabled')
+    .map((row) => row.id);
+
+  if (daDisattivare.length === 0) {
+    console.log(
+      '[clean-and-sync] Nessun link di bacheca chiusa in coda (guardia attiva per i prossimi giri).'
+    );
+    return 0;
+  }
+
+  let disattivati = 0;
+  for (let i = 0; i < daDisattivare.length; i += 50) {
+    const lotto = daDisattivare.slice(i, i + 50);
+    const { error: updErr } = await supabase
+      .from('discovered_links')
+      .update({ status: 'disabled' })
+      .in('id', lotto);
+
+    if (updErr) {
+      console.error(
+        `[clean-and-sync] Errore disattivazione link bacheca chiusa: ${updErr.message}`
+      );
+      continue;
+    }
+    disattivati += lotto.length;
+  }
+
+  console.log(
+    `[clean-and-sync] Disattivati ${disattivati} link di bacheca chiusa (Spaggiari/Nuvola).`
+  );
+  return disattivati;
 }
 
 // ---------------------------------------------------------------------------
@@ -637,8 +827,16 @@ async function main(): Promise<void> {
   console.log('\n── STEP 3: eliminazione record province=EE orfani ──');
   const eeRemoved = await deleteEeWithoutSchool();
 
+  console.log(
+    '\n── STEP 3-bis: eliminazione record da bacheche chiuse (Spaggiari/Nuvola) ──'
+  );
+  const bachecheChiuseRemoved = await deleteInterpelliPiattaformeBloccate();
+
   console.log('\n── STEP 4: disattivazione link Umbria generici ──');
   const umbriaDisabled = await disableUmbriaTrasparenza();
+
+  console.log('\n── STEP 4-bis: disattivazione link di bacheca chiusa ──');
+  const linkBachecaChiusa = await blacklistLinkPiattaforme();
 
   console.log('\n── STEP 5: sincronizzazione target ufficiali ──');
   const stats = await syncVerifiedTargets();
@@ -650,7 +848,9 @@ async function main(): Promise<void> {
   console.log(`  Record spazzatura eliminati:    ${junkRemoved}`);
   console.log(`  Record scaduti eliminati:       ${expiredRemoved}`);
   console.log(`  Record EE orfani eliminati:     ${eeRemoved}`);
+  console.log(`  Record bacheche chiuse eliminati: ${bachecheChiuseRemoved}`);
   console.log(`  Link Umbria disattivati:        ${umbriaDisabled}`);
+  console.log(`  Link bacheca chiusa disattivati: ${linkBachecaChiusa}`);
   console.log(`  Target inseriti:                ${stats.inserted}`);
   console.log(`  Target riattivati:              ${stats.reactivated}`);
   console.log(`  Target già attivi (invariati):  ${stats.unchanged}`);

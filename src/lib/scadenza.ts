@@ -5,9 +5,13 @@
  *   · `giorniRimanenti(iso)`   → giorni (data-only) alla scadenza, `null` se assente;
  *   · `eScaduto(iso)`          → true se la scadenza è passata;
  *   · `eInterpelloAttivo(iso)` → filtro per ESCLUDERE gli scaduti dalle liste pubbliche;
- *   · `eAvvisoVivo(scadenza, pubblicazione)` → regola UNICA di vetrina pubblica:
+ *   · `eAvvisoVivo(scadenza, pubblicazione)` → regola UNICA di lettura pubblica:
  *     con scadenza → non ancora passata; senza scadenza → pubblicato entro la
  *     finestra dei `GIORNI_FINESTRA_SENZA_SCADENZA` (60 giorni);
+ *   · `eOpportunitaConScadenza(scadenza)` → REGOLA FERREA del feed (§26.71):
+ *     senza una scadenza dichiarata e non ancora passata la riga NON è
+ *     un'opportunità attiva (le pagine di archivio e gli indici di codici restano
+ *     fuori da bacheca, punteggio e conteggi);
  *   · `stileScadenza(giorni)`  → semaforo del badge: 🟢 lungo · 🟡 vicino · 🔴 imminente.
  */
 
@@ -117,6 +121,33 @@ export function eAvvisoVivo(
   const giornoPub = new Date(dataPub);
   giornoPub.setHours(0, 0, 0, 0);
   return giornoPub.getTime() >= limite.getTime();
+}
+
+/**
+ * REGOLA FERREA DELL'OPPORTUNITÀ (§26.71, direttiva 16/10/2026): senza una
+ * `expiration_date` dichiarata — o con una data già passata — la riga NON è
+ * un'opportunità di lavoro attiva.
+ *
+ * Perché è una regola a parte e non un ramo di `eAvvisoVivo`: le righe che la
+ * fonte non data sono, nella pratica misurata sulla banca dati, pagine di
+ * archivio, regolamenti e **indici di classi di concorso** («ADEE | AAAA»,
+ * «A041 | EEEE | A043»): contorno che non si candida e che, restando in vetrina
+ * grazie alla finestra dei 60 giorni, gonfiava il conto degli avvisi attivi e il
+ * punteggio di righe non lavorabili. Chi deve *scartare* un avviso dal feed
+ * (bacheca «Radar Live», feed della dashboard) usa QUESTA regola; la finestra dei
+ * 60 giorni di `eAvvisoVivo` resta per il *fetch*, la pulizia automatica e le
+ * superfici che devono continuare a vedere una riga non databile
+ * (`scripts/pulisci-scaduti.ts`, RPC `match_interpelli`).
+ *
+ * Un solo punto di verità: il verdetto è lo stesso per bacheca pubblica, feed
+ * della dashboard e i rispettivi filtri di lettura.
+ */
+export function eOpportunitaConScadenza(
+  scadenza?: string | null,
+  oggi: Date = new Date(),
+): boolean {
+  if (!(scadenza ?? '').trim()) return false;
+  return eInterpelloAttivo(scadenza, oggi);
 }
 
 /**

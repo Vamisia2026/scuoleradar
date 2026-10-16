@@ -17,7 +17,10 @@
  *      copia locale;
  *   4. il tetto di lettura non esiste più come costante della metrica: chi cerca
  *      `LIMITE_RIGHE_LETTE` non deve trovarlo in giro (una sola sorgente di verità);
- *   5. la guardia è nella catena di `npm test` (non solo invocabile a mano).
+ *   5. la guardia è nella catena di `npm test` (non solo invocabile a mano);
+ *   6. §26.71 — l'etichetta del totale e le schermate nascono dallo STESSO numero
+ *      (le righe in vetrina): nessun conteggio del database può più dire «869
+ *      avvisi attivi» mentre il tabellone ne pagina 396.
  *
  * La verifica vive DENTRO il dipartimento (`flightBoard/__tests__/`), accanto ai
  * moduli che controlla: il gate strutturale ammette gli import fra moduli dello
@@ -72,9 +75,19 @@ check('una sola definizione delle colonne lette', true, /COLONNE_INTERPELLI/.tes
 check('filtro di prodotto: quello condiviso, non una copia locale', true, /filtroAttivi\(adesso\)/.test(componente));
 check('gli errori di lettura sono dichiarati in console, mai muti', true, /\[flight-board\]/.test(componente));
 
-console.log('\n— 3. Una sola sorgente di verità per le pagine —');
+console.log('\n— 3. Totale mostrato e schermate: lo stesso numero (§26.71) —');
 check('la metrica non contiene più un tetto di lettura', false, /LIMITE_RIGHE_LETTE/.test(metrica));
 check('la metrica calcola ancora le pagine sulle righe presenti', true, /pagineBoard/.test(metrica));
+check(
+  'il tabellone passa a `totaleReale` le righe che ha DAVVERO in vetrina',
+  true,
+  /totaleReale: totale,/.test(componente),
+);
+check(
+  'nessun conteggio del database alimenta più l’etichetta',
+  false,
+  /setTotaleAttivi|totaleReale: totaleAttivi/.test(componente),
+);
 
 console.log('\n— 4. La guardia è nella catena di `npm test` —');
 check('script dedicato', true, 'test:board:lettura' in catena.scripts);

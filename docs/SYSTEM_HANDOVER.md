@@ -497,14 +497,16 @@ data/ · types.ts`. Dettaglio e regole: [`DEPARTMENT_MAP.md`](./DEPARTMENT_MAP.m
 
 | File | Righe | Responsabilità |
 |---|---|---|
-| `index.ts` | 1.747 | Pipeline scraper interpelli (§5.3): env, province attive da `profiles`, **selezione delle FONTI** (`fontiPerRun`: hub dei capoluoghi + feed nazionale), connettori hub/aggregatore, gate di conformità (§5.3), **espansione ELENCHI** (`espandiElenchi`), dedupe hash_id, upsert `interpelli`/`notices`, notifiche ai nuovi |
+| `index.ts` | 1.899 | Pipeline scraper interpelli (§5.3): env, province attive da `profiles`, **selezione delle FONTI** (`fontiPerRun`: hub dei capoluoghi + feed nazionale), connettori hub/aggregatore, gate di conformità (§5.3), **espansione ELENCHI** (`espandiElenchi`), `parseAvvisi` (raccolta dei link: esclude `nav`/`header`/`footer`/`[role=navigation]`/`th`/`[role=columnheader]`, i link di TESTATA via `eUrlHome` e `.site-brand/.site-logo/.site-titles/.testata/.marchio`; titolo e scadenza qualificati dalla RIGA), dedupe hash_id, upsert `interpelli`/`notices`, notifiche ai nuovi |
 | `fonti.ts` | 190 | **Node-only, puro** — registro fonti: tipi (`FonteInterpelli`, `TipoFonte`), costruzione del catalogo (dati in `fontiRegistro.ts`), `regioneDiProvincia`, `fontiAttive`, `fontiPerProvincia`, `fontiPerRun` (hub locali → feed nazionale; archivi opt-in `SCRAPER_ARCHIVI=1`), tetti `MAX_FONTI_PER_PROVINCIA`/`MAX_FONTI_PER_RUN` |
 | `fontiRegistro.ts` | 111 | **Node-only, puro** — SOLO DATI del registro: feed dell'aggregatore (indice nazionale + archivi regionali) e hub di reclutamento USR/USP dei capoluoghi. Ogni URL verificata (HTTP 200) con data; le fonti non verificabili stanno in `HUB_ESCLUSI` col motivo (mai copertura finta) |
 | `fontiCopertura.ts` | 81 | **Node-only, puro** — copertura dichiarata: `regioniCoperte`/`regioniScoperte`, `CAPOLUOGHI_PRINCIPALI` (Torino…Perugia), `fontiPerCapoluogo`, `capoluoghiScoperti`, `sintesiCopertura` (log) |
 | `hub.ts` | 111 | **Node-only, puro** — connettore dei capoluoghi: `eUrlSezioneReclutamento`/`scopriSezioniReclutamento` (dalle pagine USR si scoprono le sezioni interpelli/avvisi, max `MAX_SEZIONI_HUB`), `eTitoloNavigazione` (menu/archivi/ricerca non sono avvisi) |
 | `qualitaOpportunita.ts` | 202 | **Node-only, puro** — conformità della bacheca: `eContenutoEditoriale`/`motivoScartoEditoriale` (separazione dal dominio Notizie), `eTitoloInformativo` (esiti/graduatorie), `motivoScartoOpportunita` (editoriale → informativo → non-opportunità → categoria → scaduto), `eRecordStrutturato` e **`valutaGateLink`** (ping fallace ≠ record scartato) |
-| `elenchi.ts` | ~215 | **Node-only, puro** — espansione delle PAGINE INDICE ("elenchi" USR/USP): `eUrlElenco`/`sembraTitoloElenco`/`ePaginaElenco` riconoscono l'elenco, `estraiVociElenco` estrae **una voce per avviso** (riga più specifica vince, mai la lista master), `espandiElencoInAvvisi` le trasforma in avvisi strutturati con link proprio |
-| `parser.ts` | ~600 | Parser: `rilevaClassi` (A-XX/ADEE + compatti A042/AB25), `rilevaCategoriaAvviso`, `sembraOpportunita`, `estraiProvincia`/`estraiScuola` (dai dati reali; **`ALIAS_CITTA` completata** — es. **Forlì → FC**, Monza → MB, Pesaro → PU, Barletta → BT, Carbonia → SU, La Spezia → SP: prima un avviso di Forlì-Cesena ricadeva sulla provincia della FONTE, es. TO), `estraiDataPubblicazione`/`estraiDataScadenza` (pubblicazione ≠ scadenza; **due passate** per la scadenza: parola chiave PRIMA della data, poi DOPO — "Pubblicato il 12/09/2026. Scadenza: 15/09/2026" → **15/09**, non 12/09), `inferisciMateria`, `estraiEmail`, **`scegliUrlFonte`** (solo candidati con `eUrlAvvisoDiretto`: **mai la home dell'ente** né un elenco regionale, nessun fallback → `null`), `verificaAvviso`/`eSorgenteVerificata` (anti-mock/dummy), `generaHashId`, `parseInterpello` |
+| `elenchi.ts` | 234 | **Node-only, puro** — espansione delle PAGINE INDICE ("elenchi" USR/USP): `estraiVociElenco` estrae **una voce per avviso** (riga più specifica vince, mai la lista master), `ePaginaElenco` riconosce la pagina indice, `espandiElencoInAvvisi` le trasforma in avvisi strutturati con link proprio. Riconoscimento di pagina e di riga: `paginaElenco.ts` / `righeTabella.ts` |
+| `paginaElenco.ts` | 69 | **Node-only, puro** — riconoscimento della PAGINA INDICE: `eUrlElenco` (percorso: `/avvisi/`, `?sezione=bandi`), `sembraTitoloElenco` ("Elenco interpelli"), **`eUrlHome`** (radice del dominio o file di indice senza query: un link di TESTATA non è mai un avviso — `index.php` del portale provinciale) |
+| `righeTabella.ts` | 180 | **Node-only, puro** — riconoscimento delle RIGHE di dati: `celleRiga`/`intestazioniTabella`/`eRigaIntestazione` (la riga di intestazione non è una voce), `suggerimentiDaRiga` (etichetta di colonna: «Scadenza» qualifica la data), `datiRiga`/`titoloVoce` (contesto della riga per titolo e scadenza). Copre **`<table>`** e **griglie ARIA** (`div[role="row"]`/`[role="cell"]`, USR Liguria `provincia.php`); gli `<span>` adiacenti sono separati da spazio (mai parole incollate) |
+| `parser.ts` | 1.184 | Parser: `rilevaClassi` (A-XX/ADEE + compatti A042/AB25), `rilevaCategoriaAvviso`, `sembraOpportunita`, `estraiProvincia`/`estraiScuola` (dai dati reali; **`ALIAS_CITTA` completata** — es. **Forlì → FC**, Monza → MB, Pesaro → PU, Barletta → BT, Carbonia → SU, La Spezia → SP: prima un avviso di Forlì-Cesena ricadeva sulla provincia della FONTE, es. TO), `estraiDataPubblicazione`/`estraiDataScadenza` (pubblicazione ≠ scadenza; **due passate** per la scadenza: parola chiave PRIMA della data, poi DOPO — "Pubblicato il 12/09/2026. Scadenza: 15/09/2026" → **15/09**, non 12/09), `inferisciMateria`, `estraiEmail`, **`scegliUrlFonte`** (solo candidati con `eUrlAvvisoDiretto`: **mai la home dell'ente** né un elenco regionale, nessun fallback → `null`), `verificaAvviso`/`eSorgenteVerificata` (anti-mock/dummy), `generaHashId`, `parseInterpello` |
 
 ### 2.13 `src/services/` + `src/types/`
 
@@ -4480,6 +4482,11 @@ la cella mostra la banda `sconosciuto` («Scadenza n/d») e, al posto della data
 **data di pubblicazione** (`Pubblicato 12 set`, `dataItBreve` nel componente): un
 fatto vero, chiaramente etichettato come pubblicazione.
 
+*(Superato il 15/10/2026 — §26.69: la data di pubblicazione **non** compare più nella
+colonna «Scadenza». La cella mostra la scadenza vera, altrimenti il trattino `—` con la
+banda neutra «Scadenza n/d»: la causa radice era a monte — l'ingestione scriveva la
+scadenza in `deadline` mentre la bacheca leggeva `expiration_date`.)*
+
 **Fix 3 — scala.** `LIMITE_RIGHE_LETTE = 1.000` al posto di
 `LIMITE_RIGHE_BOARD = 10.000` (fuorviante: PostgREST non restituisce più di 1.000
 righe per richiesta) e ordinamento `created_at DESC` + `expiration_date ASC` (a
@@ -7493,4 +7500,493 @@ nome nella stessa provincia che rendevano il nome «ambiguo» — è stato corre
 
 
 
+
+
+---
+
+### 26.69 La scadenza era scritta in un'ALTRA colonna: il tabellone mostrava solo la pubblicazione (15/10/2026)
+
+**Il sintomo.** La colonna «Scadenza» del tabellone pubblico stampava `Pubblicato 12 set`
+(la data di pubblicazione) su quasi tutte le righe, come se il database non avesse
+scadenze. Il parser le scadenze le estraeva: erano scritte **da un'altra parte**.
+
+**La diagnosi, misurata in sola lettura sul progetto di produzione (15/10/2026).**
+La scadenza di un avviso viveva in DUE colonne con due nomi diversi:
+
+| colonna | tipo | chi la legge | righe piene |
+|---|---|---|---|
+| `expiration_date` | `timestamptz` — **CANONICA** | bacheca «Radar Live», filtro degli avvisi attivi (`filtroAttivi`), matching, notifiche | **1** su 1.399 |
+| `deadline` | `text` — **LEGACY**, non dichiarata in nessuna migrazione | solo il vecchio `table-reporter` e il cleanup dei target | **992** |
+
+`scripts/table-reporter.ts` scriveva `deadline` e **non** `expiration_date`; per di più
+l'`hash_id` è `provincia|codice meccanografico|titolo|url` (`generateHashId`) e **non
+contiene la data**: con `.upsert(records, { onConflict: 'hash_id', ignoreDuplicates: true })`
+una riga già in banca dati **non riceveva mai** la scadenza. Risultato contato:
+**992 righe su 992 con `deadline` piena avevano `expiration_date` NULLO** e in tabellone la
+cella mostrava la data di pubblicazione. I formati in `deadline` erano per giunta misti
+(639 `YYYY-MM-DD`, 226 `YY-MM-DD` — anno troncato da un vecchio `slice(2,10)`,
+127 `DD/MM/YYYY` con separatori diversi): il testo legacy rendeva sbagliato anche il
+confronto con `TODAY_ISO` di `clean-and-sync-targets.ts` (confronto lessicografico fra
+stringhe di forma diversa).
+
+**Fix 1 — ingestione (`scripts/table-reporter.ts`, v10).** Il parser scrive la scadenza
+nella colonna **canonica** (`expiration_date`) e, in parallelo, nello specchio testuale
+ISO (`deadline`) finché la colonna esiste (`COLONNE_OPZIONALI`: se il DB non la ha, il
+payload la perde e l'inserimento non si rompe — stesso patto di `src/scraper/index.ts`).
+La scrittura è in **DUE passi** (`salvaRecords`):
+
+1. `upsert(..., { ignoreDuplicates: true }).select('hash_id')` → solo gli avvisi **NUOVI**;
+   le righe esistenti non vengono riscritte (nome istituto, classi di concorso, materia e
+   recapiti restano quelli prodotti dall'arricchimento: nessun nome grezzo riscrive
+   un'anagrafica buona);
+2. `allineaScadenze` → `update({ expiration_date, deadline })` su fette di 50 `hash_id`
+   raggruppate per scadenza, con predicato
+   `expiration_date.is.null, deadline.is.null, deadline.neq.<iso>`: la scadenza viene
+   **scritta o sovrascritta** dove manca o è cambiata, e l'operazione è **idempotente**
+   (una riga già in pari non viene toccata). Nessun'altra colonna è nel `patch`.
+
+Il conteggio finisce nel log del run: `N nuovi, M scadenze allineate su righe esistenti`.
+
+**Fix 2 — frontend (`radar/flightBoard`).** La cella «Scadenza» non ha più alcun
+surrogato: `badgeScadenza(expiration_date)` (in `rigaBoardDati.ts`, sostituisce
+`ottieniUrgenzaOAnzianita`) prende **una sola** data — `created_at` non è nemmeno un
+parametro, così non può entrare nel calcolo (regola §26.61: la banda dipende solo dalla
+scadenza). Senza `expiration_date` la cella mostra il **trattino `—`** con la banda neutra
+«Scadenza n/d»; con la data mostra la scadenza in chiaro e la banda dei **giorni mancanti**
+(rosso scade oggi / entro 48h, arancio entro 3 giorni, giallo entro 7, verde oltre).
+Il ramo «anzianità da `created_at`» (che stampava `Pubblicato …` e poteva produrre una
+banda d'allarme su una data che non era una scadenza) è stato **rimosso**, non commentato.
+`RigaBoard.tsx` passa da `Pubblicato ${dataPub}` a `{dataScad || '—'}`.
+
+**Fix 2-bis — un giorno di scarto che nessuno aveva visto.** Scrivendo la guardia è emerso
+che `dataItBreve` formattava con `toLocaleDateString` una data costruita a **23:59:59 UTC**:
+in Italia (UTC+1/+2) il giorno stampato era quello **successivo** alla scadenza reale
+(`12 set` → `13 set`). Ora la formattazione è in UTC con tabella `MESI_BREVI` locale:
+deterministica e indipendente dall'ICU ridotto (stessa scelta di `lib/alertInterpello.ts`).
+
+**Fix 3 — riparazione e verifica del database.** Due artefatti:
+
+- `supabase/migrations/20261015120000_allinea_deadline_expiration_interpelli.sql`
+  (idempotente): normalizza `deadline` in ISO dove il formato è **riconoscibile senza
+  ambiguità** (il primo gruppo delle righe `YY-MM-DD` è sempre 13–31 = anno, non giorno) e
+  riempie `expiration_date` dove è NULLO, a **mezzanotte UTC**. `make_date` rifiuta le date
+  impossibili (31/02) e la riga resta **intatta**: mai una data indovinata. Non cancella
+  nulla e non riscrive una `expiration_date` già valorizzata;
+- `npm run db:verifica-interpelli` (`scripts/verifica-schema-interpelli.ts`, **sola
+  lettura**): sonda il tipo di `expiration_date` (data/timestamp) e di `deadline` (text),
+  conta righe, scadenze mancanti e **«righe da riparare»**, e stampa la remediation.
+  Exit code 1 finché il disallineamento è > 0.
+
+**Attenzione (effetto voluto).** Allineando 992 righe, le scadenze **già passate** escono
+dalla bacheca: il filtro è «scadenza non passata **oppure** senza scadenza pubblicata negli
+ultimi 60 giorni» (§26.31). Le righe senza `deadline` (407) restano visibili per la
+finestra dei 60 giorni. È esattamente la regola «solo opportunità reali e attive», ma è un
+cambio **visibile** del numero di avvisi in vetrina: va guardato dopo l'applicazione della
+migrazione.
+
+**Schema LIVE vs repo.** Il database di produzione ha colonne che nessuna migrazione
+dichiara (`deadline`, `region`, `class_code`, `subject`, `link_status`, `verified_at`,
+`city_slug`): la §13.11 resta il dump delle migrazioni — questa sezione documenta ciò che
+esiste davvero e che `table-reporter` usa. La migrazione di §26.69 **non crea** colonne:
+allinea soltanto i valori.
+
+**File toccati.** `scripts/table-reporter.ts` (v10: `expiration_date` nel record,
+`salvaRecords` + `allineaScadenze` a due passi, `COLONNE_OPZIONALI`, tre `no-useless-escape`
+preesistenti ripuliti perché il file toccato resti lint-pulito),
+`src/departments/radar/flightBoard/rigaBoardDati.ts` (`badgeScadenza` al posto di
+`ottieniUrgenzaOAnzianita`, `FonteBadge` senza `pubblicazione`, `dataItBreve` in UTC;
+**-25 righe**), `.../flightBoard/components/RigaBoard.tsx` (cella «Scadenza»: scadenza
+vera o `—`), `src/lib/alertInterpello.ts` (solo il riferimento incrociato nel commento: le
+superfici di notifica restano §26.65),
+`.../flightBoard/__tests__/badgeScadenza.test.ts` (**nuovo**: banda per giorni mancanti,
+assenza → neutro, firma a un argomento), `scripts/verifica-schema-interpelli.ts`
+(**nuovo**, sola lettura), `supabase/migrations/20261015120000_...sql` (**nuova**),
+`package.json` (`test:board:scadenza`, `db:verifica-interpelli`, voce in `npm test`),
+`docs/SYSTEM_HANDOVER.md` (questa sezione + nota su §26.31).
+**Non toccati**: gli altri dipartimenti (`notizie`, `cfu`, `modulistica`), `src/modules/**`,
+i workflow, i testi di `comunicazione/**` (nessuna etichetta pubblica è cambiata: la cella
+non inventava un testo, ne mostrava uno non vero).
+
+**Verifiche eseguite.** `npm run typecheck` ✅ · `npm test` ✅ (nuova guardia inclusa) ·
+`npm run build` ✅ · lint dei **file toccati** ✅ (le 53 segnalazioni di `npm run lint` sono
+in file di altri dipartimenti, preesistenti). `npm run test:architettura`: **nessuna
+violazione nuova** — le 6 E-DIM segnalate (`righeBoard.ts`, `discovery-engine.ts`,
+`clean-and-sync-targets.ts`, `import-schools-local.ts`, oltre a `table-reporter.ts` e
+`rigaBoardDati.ts`) sono **preesistenti**: `rigaBoardDati.ts` è passato anzi da 379 a 354
+righe. Il gate resta rosso perché quei file non sono in
+`scripts/architettura-baseline.json`: va congelata la baseline (deliberato) o spezzato il
+debito con uno split.
+
+**Nota di sessione (15/10/2026).** Il valore di questa sessione è stato **non fidarsi del
+sintomo**: la richiesta parlava di «fallback nel frontend», la causa era a monte — una
+scrittura su una colonna diversa da quella letta. Ho misurato il database prima di toccare
+il codice (conteggi, tipi di colonna, formati reali) e dopo, e ho tenuto le due riparazioni
+separate: il **codice** non ripara i dati storici, la **migrazione** non cambia il codice.
+Le scelte «scomode» sono state dichiarate invece che aggirate: la migrazione rifiuta le date
+ambigue (meglio un vuoto che un falso), l'update allinea **solo** la scadenza per non
+riscrivere anagrafiche arricchite, e l'effetto sul numero di avvisi in vetrina è scritto qui
+perché si veda quando accadrà.
+
+
+### 26.70 Scadenza allineata sui dati + bacheche chiuse fuori dal pool (16/10/2026)
+
+**La §26.69 è chiusa anche sui dati.** Misurato sul progetto di produzione il
+16/10/2026: `npm run db:verifica-interpelli` → **«RIGHE DA RIPARARE: 0»**, **0**
+formati non ISO su 992 righe legacy. `expiration_date` è popolata su tutte le
+righe che hanno una scadenza: la colonna «Scadenza» del tabellone legge un dato
+vero.
+
+**Fix 1 — `npm run db:allinea-scadenze` (applicatore idempotente).**
+`supabase/migrations/20261015120000_...sql` è un blocco `do $$ … $$`: PostgREST
+(cioè tutto ciò che la service role può chiamare) esegue **DML**, non SQL
+arbitrario, e `db push` richiede la CLI collegata **e** la password del database.
+`scripts/allinea-scadenze-interpelli.ts` replica la **stessa** regola col client
+Supabase — le forme riconosciute vivono in `scripts/lib/scadenzeLegacy.ts`
+(**puro**, nessun I/O): ISO stretto, `YY-MM-DD` con anno troncato, `D-M-YYYY`
+giorno-prima; data impossibile (31/02) o formato ignoto → la riga resta
+**intatta** e viene contata. Due esecutori, una regola: **se cambia il SQL
+cambia anche il modulo** (e viceversa). Guardia `npm run test:scadenze`
+(`scripts/test-scadenze-legacy.ts`, 25 asserzioni: forme reali, date impossibili,
+29/02 bisestile, piano che non tocca le righe già a posto).
+`--dry-run` misura senza scrivere; exit 2 = restano righe non riconoscibili.
+
+**Fix 2 — blacklist delle BACHECHE CHIUSE (`clean-and-sync-targets.ts`, STEP
+3-bis/4-bis).** `province = 'EE'` non è una provincia: è il **sentinella «non
+nota»** (`table-reporter.fallbackProvince`, `righeBoard.FALLBACK_PROVINCE`),
+quindi non è mai una prova di validità. Misurato: 347 righe arrivavano da
+`web.spaggiari.eu` (133), `cspace.spaggiari.eu` (58), `nuvola.madisoft.it` (156);
+**347/347 senza `class_codes` e senza `materia`** (nessun utente può matcharle),
+290 con la **stessa** scadenza (la data dell'**indice** bacheca) e titoli come
+«Istituto PROTOCOLLO - Interpello Ufficiale». La prova decisiva è la pagina:
+`web.spaggiari.eu` risponde 200 con **1 byte di testo visibile**, `nuvola.madisoft.it`
+con «abilita JavaScript…» (167 byte), alcuni URL sono `auth.php?token=…` (token di
+sessione) o `…/Documenti/…` → **404**. Sono artefatti di ingestione su pagine
+illeggibili: si **cancellano** dal pool (STEP 3-bis) e si **disattivano**
+(`status='disabled'`) in coda appena compaiono (STEP 4-bis, guardia: oggi 0 link).
+`*.madisoft.it` **non** è bloccato in blocco: i siti delle scuole ospitati sulla
+piattaforma sono pagine vere. Lo STEP 3 guadagna il **terzo passaggio**: `EE` +
+codice che non dichiara una provincia (`provinciaDaCodice` su `src/lib/scanTargets.ts`)
+= orfano vero (misurato: 7 righe con `school_code = 'SCOLASTICO'`).
+
+**Effetti reali della pulizia (prima → dopo, stesse query).** `interpelli`
+**1.418 → 870**: −1 spazzatura per parola chiave, −193 scadenze passate (il testo
+legacy finalmente confrontabile con `TODAY_ISO`), −7 orfani `EE`, −347 bacheche
+chiuse. Target ufficiali: 37 riattivati, 11 già attivi, **0 errori**. Bacheca
+verificata con la stessa lettura del componente (`npm run board:verifica`):
+**869 avvisi attivi**, 868 presentabili, lettura esaustiva (174 schermate).
+
+
+**Finding APERTO (non risolto di proposito) — 152 righe con `province = 'EE'`.**
+Sono interpelli **piemontesi veri** (`servizi.istruzionepiemonte.it`) con
+`school_code` valido (es. `TOIC887003`): la provincia non è mai stata ricavata e
+lo stub `EE` è rimasto. In **vetrina** non si vede (il tabellone risolve la
+provincia a 4 livelli: `righeBoard.estraiProvincia`, L2 = prefisso del codice
+meccanografico), ma **matching e notifiche filtrano sul valore salvato**: quelle
+righe, per provincia, non raggiungono nessuno. La riparazione esiste ed è
+deterministica (L2 su codice **validato**, oppure `ambito_xx.php` nell'URL), ma
+cambia la consegna di 152 righe di produzione: **decisione del committente**, non
+del codice. Nota per chi la farà: il solo prefisso a 2 lettere **non basta**
+(`PROTOCOLLO` → `PR` è un falso positivo: servono le forme `^[A-Z]{2}[A-Z]{2}\d{5,6}[A-Z]?$`
+o l'anagrafica).
+
+**Blocco dichiarato sul FRONTEND LOCALE.** `npm run board:diag` segnala
+`VITE_SUPABASE_ANON_KEY: MANCANTE`: il `.env` locale contiene **solo**
+`SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`, quindi `src/lib/supabase.ts` espone
+`supabase === null` e l'app su `http://localhost:5174` gira in **modalità demo**
+(non legge il pool). La chiave **anon è pubblica** (viaggia nel bundle) ma non è
+nel repo: va incollata dall'owner in `.env`
+(`VITE_SUPABASE_URL=https://gwdmsgsshvdnfrplbjiv.supabase.co` +
+`VITE_SUPABASE_ANON_KEY=<chiave anon del progetto>`). Finché manca, la lettura del
+tabellone si verifica con `npm run board:verifica` (service role, **stessa**
+query del componente: `COLONNE_INTERPELLI` include `expiration_date`), che è
+l'unica prova possibile senza credenziali browser.
+
+**Verifiche di questa sessione.** `npm run typecheck` ✅ · `npm test` ✅ (exit 0,
+la nuova guardia `test-scadenze-legacy.ts` chiude la catena) · `npm run build` ✅ ·
+lint dei **file toccati** ✅ (ripuliti anche 3 `no-useless-escape` preesistenti in
+`clean-and-sync-targets.ts`) · `npm run db:verifica-interpelli` ✅ (0 da riparare) ·
+`npm run board:verifica` ✅ (bacheca esaustiva) · `npm run test:architettura`:
+**0 violazioni nuove** — le **6** E-DIM sono le stesse già note (`rigaBoardDati.ts`,
+`righeBoard.ts`, `clean-and-sync-targets.ts`, `discovery-engine.ts`,
+`import-schools-local.ts`, `table-reporter.ts`), tutte fuori baseline. Il primo
+tentativo aveva introdotto una **W-DIM** (script a 300 righe): risolta spezzando la
+logica pura in `scripts/lib/scadenzeLegacy.ts` (133 righe) — il gate va lasciato
+com'è, non aggirato.
+
+**File toccati in questa sessione.** `scripts/allinea-scadenze-interpelli.ts`
+(**nuovo**, 199 righe) · `scripts/lib/scadenzeLegacy.ts` (**nuovo**, puro) ·
+`scripts/test-scadenze-legacy.ts` (**nuovo**) · `scripts/clean-and-sync-targets.ts`
+(STEP 3-bis/4-bis + PASS 3 su `EE` + 3 escape ripulite) · `package.json`
+(`db:allinea-scadenze`, `test:scadenze`, guardia in `npm test`) ·
+`docs/SYSTEM_HANDOVER.md` (questa sezione). **Non toccati**: gli altri
+dipartimenti, `src/modules/**`, `src/scraper/**` (la guardia permanente lato
+ingestione richiede uno sblocco esplicito), i workflow, `comunicazione/**`.
+
+**Nota di sessione (16/10/2026).** Tre richieste, due diagnosi corrette e una
+**sbagliata**: la premessa «link Spaggiari/Nuvola in `discovered_links`» è falsa
+(lì sono **0**), i link veri erano nelle `source_url` di `interpelli`; la premessa
+«province 'EE' orfane **senza scuola valida**» è vera solo per 7 righe su 340 (le
+altre **hanno** una scuola: era il campo provincia a essere inutile). Prima di
+scrivere una regola di cancellazione ho quindi misurato i dati e **provato le
+pagine**: 347 righe spazzatura confermate da tre prove indipendenti (classi
+materia assenti, scadenza identica, contenuto assente nel HTML). La «spazzatura»
+era quasi tutta già **in bacheca**: cancellarla è il vero guadagno di prodotto di
+questa sessione. Le due scelte non fatte (province `EE` delle 152 righe, baseline
+architetturale) sono scritte qui **con il motivo**, non aggirate.
+
+
+### 26.71 «Radar Live»: la scadenza è obbligatoria e i due contatori mostrano la stessa popolazione — *corregge la §26.53 (finestra dei 60 giorni in vetrina)*
+
+**Le tre richieste (16/10/2026).** (1) inventario dei file di scoring e filtraggio;
+(2) «regola ferrea»: un avviso senza `expiration_date` **non è un'opportunità attiva**
+— score 0 oppure escluso a monte dal feed principale; (3) il contatore delle
+schermate «si ferma a 80» mentre gli avvisi attivi sono 869: deve riflettere il
+totale reale degli avvisi attivi filtrati.
+
+**Diagnosi, misurata prima di scrivere una riga di codice.** `npm run board:verifica`
+(service role, sola lettura) è stata estesa per misurare **la VETRINA**, non solo la
+lettura: è il numero che genera «Schermata X di Y» e nessuno lo stava guardando.
+Prima: **869** attivi · 868 con una fonte valida · **396 in vetrina** → `Schermata 1
+di 80` (**esatto**, 396 ÷ 5) · **472 fuori dal gate**, composti così:
+**169 con una scadenza vera ma senza istituto presentabile** + **303 senza scadenza e
+senza istituto** (pagine di archivio e **indici di classi di concorso**: «ADEE |
+AAAA», «A041 | EEEE | A043», «A044 | EEHN» — 84 righe da `servizi.istruzionepiemonte.it`,
+40 da `www.istruzionepiemonte.it`, 28 da `ustlucca.it`…) · in vetrina entravano anche
+**56 righe «Scadenza n/d»**. Quadratura: **509** = 340 + 169 (con scadenza) e **359** =
+303 + 56 (senza scadenza).
+
+**La seconda delle premesse era sbagliata, e la misura lo dice.** Le «174 schermate»
+attese (869 ÷ 5) non esistono: oltre la 80ª non c'è nessuna riga da mostrare, quindi
+la pagina 81 sarebbe **vuota** (la rotazione avrebbe girato a vuoto su 94 schermate).
+Il contatore delle schermate era già corretto; a parlare di un'altra popolazione era
+**l'etichetta** («869 avvisi attivi in Italia», conteggio del database grezzo), che
+contava anche le 360 righe non candidabili — il contrario di ciò che la checklist
+impone («mai un totale che parla di avvisi diversi da quelli leggibili», §26.34/§26.42).
+
+**La correzione — regola in un solo punto.** Nuovo predicato puro
+**`eOpportunitaConScadenza(scadenza, oggi)`** (`src/lib/scadenza.ts`, §26.71): senza
+data dichiarata e non ancora passata la riga non entra. Applicato in cascata:
+· **filtro di lettura** `radar/flightBoard/filtroAttivi.ts` → espressione a **un solo
+ramo** (`expiration_date.gte.<oggi>`, che in PostgREST esclude da sé le righe senza
+data): il ramo `is.null` + finestra 60 giorni è **ritirato da questa superficie**;
+· **vetrina** `src/lib/liveBoard.ts` → `preparaRigheBoard` richiede la scadenza;
+il campo `senzaScadenza` di `RigaBoardCompleta` **non esiste più** (non c'è più una
+riga in bacheca «grazie alla finestra»);
+· **feed della dashboard** `src/lib/bachecaInterpelli.ts` → passo 1 = regola ferrea,
+con **contatore dichiarato** `senzaScadenza` nell'`EsitoBacheca` (mai uno scarto
+silenzioso, come `righeNonOpportunita`);
+· **fetch del matching** `src/lib/matchingEngine.ts` → fallback PostgREST allineato
+(`.gte('expiration_date', oggiIso)`). La **RPC** `match_interpelli` resta sulla finestra
+dei 60 giorni (migrazione `20261005120000_...`, già in produzione): consegna un
+**sovrainsieme** che la pipeline pura scarta — nessuna migrazione necessaria per la
+regola, e il debito è dichiarato qui;
+· **contatori** `radar/FlightBoardInterpelli.tsx` → il badge del totale riceve **le
+righe in vetrina**, lo stesso numero che genera `pagineBoard`: i due numeri non
+possono più raccontare due storie. Lo stato `totaleAttivi` è stato rimosso; il
+`count` esatto del database resta **solo** per chiudere la lettura a pagine.
+
+**Bug trovato per strada (e corretto): il badge «Scadenza» contava ISTANTI.** In
+`radar/flightBoard/rigaBoardDati.ts` i giorni erano
+`Math.ceil((scad − Date.now()) / 86_400_000)` con `scad` ancorata alle 23:59:59 UTC:
+un avviso che **scade oggi** veniva etichettato **«Scade domani»** per tutta la
+giornata, e «tra 3g» arrivava il quarto giorno. Ora i giorni passano dalla regola
+condivisa `lib/scadenza.giorniRimanenti` (**giorni di calendario**), come il resto del
+prodotto: «Scade oggi» il giorno della scadenza, «Scaduto» il giorno dopo. La guardia
+`test:board:scadenza` era **stata scritta su una revisione precedente** (palette
+`bg-red-600/orange-500/amber-500` e soglie 2/3/7 giorni, mentre il modulo consegnato
+usa `URGENZA_TOKENS` e le soglie 2/10): era **rossa nel commit di partenza**. È stata
+riallineata al contratto reale del modulo (token `bg-rose-100` · `bg-amber-100` ·
+`bg-emerald-100`, soglie 2/10, nessuna banda che pulsa) e resa **insensibile al fuso**
+(helper a mezzogiorno *locale*: prima l'esito dipendeva dall'ora di esecuzione). Il
+client **finto** di `npm run test:match-rpc` ha imparato il nuovo filtro (`.gte`).
+
+
+**Inventario dei file di scoring / qualificazione / pulizia (richiesta 1).** *Scoring e
+vigore*: `src/lib/punteggioOrdine.ts`, `punteggioClasse.ts`, `punteggioCompetenze.ts`,
+`mediaModali.ts`, `compatibilita.ts`, `compatibilitaGraduata.ts` (`valutaCompatibilita`,
+due livelli), `jollySemantico.ts`, `matchingEngine.ts`, `radarValidation.ts`.
+*Qualificazione degli avvisi e falsi positivi*: `src/lib/qualitaAvviso.ts`
+(`motivoRigaNonOpportunita`: dump di codici, indici, nessuna traccia di opportunità),
+`src/lib/riempitivi.ts` (`riempitivoNonPertinente`: sotto soglia **e** non confermato),
+`src/lib/bachecaInterpelli.ts` (pipeline: vivo → contorno → blacklist → porta
+d'ingresso → punteggio → esclusione → cap), `src/lib/liveBoard.ts` (gate di vetrina),
+`src/lib/nomeIstituto.ts` (nomi presentabili), `src/lib/scadenza.ts` (regola ferrea).
+*Filtro di lettura*: `src/departments/radar/flightBoard/{filtroAttivi,metricaBoard,
+righeBoard,rigaBoardDati}.ts`. *Pulizia e ingestione*: `src/scraper/qualitaOpportunita.ts`,
+`scripts/{pulisci-non-opportunita,pulisci-scaduti,clean-and-sync-targets,table-reporter,
+allinea-scadenze-interpelli}.ts`, migrazione RPC `match_interpelli`.
+
+**Effetto misurato (prima → dopo, stesse query).** Filtro di prodotto: 869 → **509**
+avvisi (le 359 righe non databili escono **a monte**: non arrivano più nemmeno in
+vetrina come «Scadenza n/d»). Vetrina: 396 → **340**; schermate: 80 → **68**; badge:
+«869 avvisi attivi in Italia» → «**340** avvisi attivi in Italia» = **esattamente** il
+denominatore delle schermate. Residuo dichiarato dal gate: **169** righe con scadenza
+vera e nome non riconosciuto (per-host: `www.portaleargo.it`, `docs.google.com`,
+`forms.gle`, `faustini-frank.edu.it`, `7circolopiacenza.edu.it`, `www.polovolta.edu.it`,
+`pc.istruzioneer.gov.it`, `ic*piacenza.edu.it`), quasi tutte con `school_code`
+inutilizzabile (`ND`, `ISTRUZIONE`, `COMUNICATI`).
+
+
+**Finding APERTO (decisione del committente, non del codice) — le 169 opportunità perse
+dal gate dei nomi.** Sono avvisi **veri** («… - Interpello Ufficiale») con `province`
+corretta e scadenza reale, che `nomeIstitutoPresentabile` respinge perché il nome è
+**numerale** o una **sigla non in elenco**: `I.S. “Galilei-Bocchialini”`, `SMS
+Faustini/Frank`, `IS Volta`, `IS Tramello-Cassinari`, `Istituto Comprensivo 7`,
+`V Circolo`, `III Circolo`. Recuperarli porterebbe la vetrina a **509 righe = 102
+schermate**: il «più del doppio delle pagine» chiesto si ottiene **da qui**, non da un
+conteggio più gonfiato. Tocca però una **direttiva cliente** (§26.59, gate STRETTO) e
+una libreria condivisa usata anche da Preferenze e prova del Radar: serve via libera
+esplicito. Le due strade: (a) allargare la testa d'istituto alle sigle reali (`is`,
+`sms`) e alle denominazioni numerali (`Istituto Comprensivo <n>`, `<romano> Circolo`),
+con l'anagrafica a confermare dove esiste; (b) arricchire `school_code` (le fonti
+pubblicano la sigla accanto al nome) e lasciare il gate com'è. **Nessuna delle due è
+stata fatta**, e nessun dato è stato toccato in scrittura.
+
+**Verifiche.** `npm run typecheck` ✅ 0 · **`npm test` ✅ exit 0** (catena intera,
+incluse le guardie riallineate `test:board:scadenza`, `test:board:filtro`,
+`test:board:scala`, `test:board`, `test:board:metriche`, `test:board:lettura`,
+`test:opportunita`, `test:match-rpc`) · `npm run build` ✅ (10,5 s) · `npx eslint` sui
+file toccati ✅ 0 · `npm run board:verifica` ✅ (nuova misura della vetrina, lettura
+esaustiva) · `npm run test:architettura`: **6 violazioni, le stesse 6 già note**
+(`rigaBoardDati.ts` 312, `righeBoard.ts` **392** — riportato esattamente alla
+dimensione di partenza, `clean-and-sync-targets.ts`, `discovery-engine.ts`,
+`import-schools-local.ts`, `table-reporter.ts`): **nessun file nuovo entra
+nell'elenco** e nessuna W-DIM introdotta (il primo tentativo ne aveva creata una su
+`FlightBoardInterpelli.tsx`, 256 righe: risolta **comprimendo i commenti**, non
+congelando il debito).
+
+**File toccati.** *Condivisi essenziali*: `src/lib/scadenza.ts` (`eOpportunitaConScadenza`),
+`src/lib/liveBoard.ts` (`preparaRigheBoard`, campo `senzaScadenza` rimosso),
+`src/lib/bachecaInterpelli.ts` (passo 1 + contatore), `src/lib/matchingEngine.ts`
+(fallback allineato). *Dipartimento Radar*: `flightBoard/filtroAttivi.ts`,
+`flightBoard/metricaBoard.ts` (contratto del totale), `flightBoard/rigaBoardDati.ts`
+(bug dei giorni), `FlightBoardInterpelli.tsx` (badge = righe in vetrina), guardie
+`__tests__/{filtroAttivi,metricaBoard,letturaBoardCablaggio,badgeScadenza}.test.ts` e la
+sonda `__tests__/letturaBoardLive.ts` (misura della vetrina + campione opt-in
+`SCUOLERADAR_ESEMPI=1`). *Guardie condivise*: `scripts/{test-live-board-scala,test-live-board,
+test-opportunita-vive,test-match-rpc}.ts`. *Regole di prodotto*:
+`comunicazione/04_canali_regionali/checklist_regionali.md` (quattro punti riscritti:
+totale = righe leggibili · filtro a un ramo · regola ferrea · finestra 60 giorni solo
+per fetch e pulizia). *Documentazione*: questa sezione. **Non toccati**: gli altri
+dipartimenti, `src/modules/**`, `src/scraper/**`, i workflow, le migrazioni, i dati.
+
+**Nota di sessione (16/10/2026).** Due delle tre premesse erano **corrette** (i file di
+scoring esistono e fanno esattamente ciò che fanno; la paginazione **non** è la causa
+del «80») e una era **un'ipotesi da misurare**: le 174 schermate. La misura ha mostrato
+che il contatore era onesto e che a mentire era l'etichetta — e ha portato alla luce
+due cose non richieste che valgono più del ticket: il badge **«Scade domani»** su un
+avviso che scade oggi (bug di fuso, corretto con la regola condivisa dei giorni) e
+**169 opportunità vere** scartate dal gate dei nomi (`I.S.`, `V Circolo`, `Istituto
+Comprensivo 7`: §26.59, decisione del committente). Il numero che l'utente cercava
+esiste, ma si ottiene **recuperando quelle 169 righe**: gonfiare il contatore avrebbe
+prodotto 94 schermate vuote.
+
+
+### 26.72 I portali provinciali non sono tabelle: griglie ARIA lette come RIGHE, testata e menu fuori dai falsi avvisi (16/10/2026)
+
+**Il sintomo.** Due feed regionali dichiarati in `fontiRegistro.ts` non producevano
+avvisi utili e ne producevano uno **falso**: USR Liguria (`provincia.php?provincia=GE`) e
+USR Umbria (interpelli aperti). Dal portale ligure usciva un avviso il cui titolo era
+«**Interpelli docenti Ambito di Genova**» puntato a `index.php`: non un avviso, il
+**marchio del sito**.
+
+**La diagnosi, misurata su due snapshot reali delle pagine (sola lettura).**
+Le due pagine non sono due varianti dello stesso schema: sono **due famiglie diverse**.
+
+| pagina | struttura reale | righe | intestazione | link per riga |
+|---|---|---|---|---|
+| USR Liguria `provincia.php` | **griglia ARIA** — nessun `<table>`: `div[role="row"]` + `div[role="cell"]` | 94 | `div[role="columnheader"]` | **1** (`interpello.php?id=…`) |
+| USR Umbria «Interpelli aperti» | `<table>` vera | 10 | 8 `<th>` («Ist. scolastica», … «**Data chiusura avviso**») | 1-2 |
+
+Due difetti distinti, entrambi nel percorso `parseAvvisi` (`src/scraper/index.ts`):
+
+1. **il layout non era riconosciuto**: il riconoscimento delle righe conosceva solo
+   `<table><tr><td>`; `div[role="row"]`/`[role="cell"]` non esisteva, quindi la scadenza
+   non aveva contesto e la pagina si leggeva come un elenco di link sciolti (o non si
+   leggeva affatto);
+2. **il contorno entrava nel feed**: menu, testata e footer sono fatti di **link**, e ogni
+   link con una parola chiave (`interpell`, `avviso`, `bando`…) finiva fra gli avvisi. Il
+   portale ligure non ha `<header>`/`<nav>` attorno al marchio: la testata è
+   `<div class="site-brand">` con `<a class="site-logo">` e `<a class="site-titles">`
+   puntati a `index.php` — e «Interpelli docenti Ambito di Genova» **contiene** la parola
+   chiave.
+
+**Fix 1 — le righe (`src/scraper/righeTabella.ts`).** Il riconoscimento della riga
+(`celleRiga`, `intestazioniTabella`, `eRigaIntestazione`, `suggerimentiDaRiga`, `datiRiga`)
+accetta **`<table>`, `tr` e griglie ARIA** (`[role="row"]`, `[role="cell"]`,
+`[role="columnheader"]`). Tre dettagli che la pagina reale ha imposto:
+
+* la **riga di intestazione non è una voce** (`th` / `[role="columnheader"]` / `eRigaIntestazione`);
+* gli **`<span>` adiacenti** di una cella ARIA vanno separati da uno **spazio**
+  (`testoNodi`): senza, «Spezzone **IC** GASTALDI» diventava «SpezzoneIC GASTALDI»;
+* l'**etichetta di colonna** entra nella voce come suggerimento
+  («Data chiusura avviso: 16/10/2026», «Scadenza: 18/10/2026»): la data letta è la
+  **scadenza**, non la pubblicazione (§26.69).
+
+
+**Fix 2 — il contorno (`src/scraper/index.ts`, `parseAvvisi`).** I link strutturali sono
+esclusi a monte: `nav`, `header`, `footer`, `[role="navigation"]`, `th`,
+`[role="columnheader"]`. Per la testata serviva un predicato **nel merito**, non per
+selettore: nuovo **`eUrlHome(url)`** (`src/scraper/paginaElenco.ts`), vero se l'URL è la
+radice del dominio o un **file di indice senza query** (`index.php`) — quindi
+`…/index.php` **sì**, `…/index.php?id=1234` **no** (è una pagina specifica). Accanto, la
+guardia dichiarativa `closest('.site-brand, .site-logo, .site-titles, .testata, .marchio')`.
+Un link di home **non è mai un avviso**, coerente con `scegliUrlFonte`/`eUrlAvvisoDiretto`
+che la escludono dai link di fonte (§26.51, `test:scraper:attivi`).
+
+**Fix 3 — i file restano sotto i limiti (`W-DIM` 250 / `E-DIM` 300).** Il riconoscimento
+di **pagina** e di **riga** è stato separato dalla pipeline degli elenchi:
+`paginaElenco.ts` (69 righe: `eUrlElenco`, `sembraTitoloElenco`, `eUrlHome`) e
+`righeTabella.ts` (180 righe), con `elenchi.ts` ridotto a 234 (espansione, non
+riconoscimento). Nei nuovi moduli il nodo cheerio è tipizzato **`NodoHtml`**, derivato da
+`Parameters<cheerio.CheerioAPI>[0]`: cheerio non ri-esporta i propri tipi di nodo.
+
+**Misura dopo (stessa pagina reale, sola lettura).** Umbria: **10 righe → 10 avvisi**,
+**0** da menu/footer/testata. Liguria: **94 righe → 94 avvisi** con **0** link a
+`index.php` o `provincia.php` (il falso avviso «Interpelli docenti Ambito di Genova» non
+c'è più). Due esiti che **non** sono regressions e vanno letti per quello che sono:
+
+* le 10 coppie di avvisi con lo stesso titolo sono interpelli **diversi** (id 1077 / 1036,
+  1073 / 689 …): stesso istituto, stessa classe, «Preventivo ≤ 10 giorni» — la pagina ha un
+  link per riga, nessun duplicato;
+* le righe il cui link **non** porta parola chiave (`/albo/graduatoria-ata-….pdf`,
+  «Documento prot. 9001») restano fuori dal percorso del crawler: sono **atti
+  informativi** che `sembraOpportunita` e il GATE 1 scartano comunque.
+
+
+**Verifiche.** `npm test` ✅ **exit 0 — catena intera, 0 fallimenti** (2708 righe di log) ·
+`npm run test:elenchi` ✅ (nuovi blocchi: tabella-dati Umbria, griglia ARIA
+Liguria, **percorso del crawler** con testata/menu/footer esclusi, `eUrlHome`) ·
+`npm run typecheck` ✅ · `npm run scrape:check` ✅ · `npx eslint` sui file toccati ✅ 0 ·
+`npm run test:parser` ✅ · `test:scraper:fonti` / `test:scraper:domini` / `test:scraper:attivi` ✅ ·
+`test:board` / `test:board:scala` / `test:board:scadenza` / `test:urgenza` /
+`test:nome-istituto` ✅ · `npm run test:architettura`: **nessuna violazione nuova dai file
+di questa sessione**. Dopo le aggiunte `scripts/test-elenchi.ts` era a **251 righe**
+(W-DIM): riportato a **248** **comprimendo i commenti**, non congelando il debito. Le 7
+violazioni residue sono debito **di altre sessioni** e restano fuori dal perimetro
+(`rigaBoardDati.ts` 319, `righeBoard.ts` 392, `src/lib/liveBoard.ts` 294,
+`clean-and-sync-targets.ts` 869, `discovery-engine.ts` 1.120, `import-schools-local.ts` 533,
+`table-reporter.ts` 1.319).
+
+**Non eseguito in questa sessione (dichiarato).** `npm run scrape` scrive sulla base dati
+di produzione: la verifica è stata fatta sui due snapshot reali delle pagine e sulle
+guardie, non con un run di ingestione.
+
+**File toccati.** *Scraper*: `src/scraper/index.ts` (filtri del contorno + `eUrlHome`),
+`src/scraper/elenchi.ts`, `src/scraper/paginaElenco.ts` e `src/scraper/righeTabella.ts`
+(estrazione dei moduli). *Guardie*: `scripts/test-elenchi.ts`, `scripts/_fixture-elenchi.ts`
+(fixture delle due pagine: tabella-dati, griglia ARIA con testata `.site-brand` e
+`nav.site-nav-band`, riga-dati di intestazione). *Documentazione*: questa sezione e la
+tabella §2.12. **Non toccati**: gli altri dipartimenti, `src/modules/**`, i workflow, le
+migrazioni, i dati.
+
+**Nota di sessione (16/10/2026).** Le pagine non erano «rotte»: erano **non tabellari**.
+Il falso avviso non nasceva dal contenuto ma dal **marchio del sito**, e la sua radice
+vera era che il contorno (menu, testata, footer) era trattato come contenuto perché *ogni
+link con una parola chiave era un avviso*. La regola utile non è «scarta `nav`» (il
+portale ligure non ce l'ha attorno al marchio), ma «la **home** di un ente non è mai un
+avviso» — un predicato puro, con guardia, riusabile su qualunque portale provinciale. Il
+secondo risultato è di ordine pratico: riconoscere la **riga** (non la tabella) fa entrare
+in un colpo **94 interpelli veri** dalla Liguria e **10** dall'Umbria, con la scadenza
+qualificata dall'etichetta di colonna invece della data di pubblicazione.
 

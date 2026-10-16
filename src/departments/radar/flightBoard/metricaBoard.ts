@@ -10,6 +10,12 @@
  * « - Aggiornamento automatico» sono stati rimossi il 03/10/2026 su direttiva
  * cliente: se le righe in bacheca aumentano, l'etichetta cresce di una schermata
  * solo quando se ne apre davvero una nuova.
+ *
+ * REGOLA (§26.71, 16/10/2026): il totale mostrato e le schermate nascono dallo
+ * **stesso** numero — le righe davvero in vetrina. Il tabellone passa a
+ * `totaleReale` ciò che ha caricato: un conteggio preso altrove (il database
+ * grezzo) farebbe dire all'etichetta più di quanto il tabellone può mostrare
+ * (sintomo misurato: «869 avvisi attivi in Italia» con «Schermata 1 di 80»).
  */
 
 export function formattaNumeroIt(numero: number): string {

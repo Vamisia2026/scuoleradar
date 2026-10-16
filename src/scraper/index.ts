@@ -73,6 +73,8 @@ import {
   espandiElencoInAvvisi,
   sembraTitoloElenco,
 } from './elenchi.ts';
+import { datiRiga, titoloVoce } from './righeTabella.ts';
+import { eUrlHome } from './paginaElenco.ts';
 import { MAX_FONTI_PER_RUN, fontiPerRun, type FonteInterpelli } from './fonti.ts';
 import { sintesiCopertura } from './fontiCopertura.ts';
 import { MAX_SEZIONI_HUB, eTitoloNavigazione, scopriSezioniReclutamento } from './hub.ts';
@@ -191,19 +193,15 @@ export function parseAvvisi(html: string, provincia: string, source: string): Av
 
   $('a').each((_, el) => {
     const $el = $(el);
+    // Link di NAVIGAZIONE (menu principale, header, footer, briciole): mai un
+    // avviso — era la causa tipica delle «opportunità» che puntavano alla home di
+    // una sezione del sito («PON-PN Scuola e Competenze 2021-2027»).
+    if ($el.closest('nav, header, footer, [role="navigation"]').length > 0) return;
+    // Link dentro una CELLA DI INTESTAZIONE (`th`, `role="columnheader"`): è un
+    // comando di ordinamento/filtro della tabella, non un avviso.
+    if ($el.closest('th, [role="columnheader"]').length > 0) return;
     const href = $el.attr('href') ?? '';
     const testo = $el.text().replace(/\s+/g, ' ').trim();
-
-    const contesto = `${href} ${testo}`;
-    // Filtro di rilevanza: vedi `sembraOpportunita` in parser.ts (copre
-    // interpelli/supplenze, bandi, avvisi, selezioni di esperti, PON/POR/PNRR).
-    if (!sembraOpportunita(contesto)) return;
-    if (testo.length < 10) return;
-
-    // Scadenza e pubblicazione sono estratte dal PARSER in modo contestuale
-    // (qui si passa solo il testo del link + del contenitore, senza pre-assegnare
-    // la prima data trovata alla scadenza).
-    const contenitore = $el.closest('li, article, .entry, .post, .avviso').text().replace(/\s+/g, ' ');
 
     let link = href;
     if (href && !href.startsWith('http')) {
@@ -213,15 +211,54 @@ export function parseAvvisi(html: string, provincia: string, source: string): Av
         link = href;
       }
     }
+    // TESTATA del sito (marchio/titolo che riportano alla HOME): mai un avviso.
+    // Molti portali non usano `<header>`/`<nav>` e la testata è un semplice
+    // `<div class="site-…">`: il suo link («Interpelli docenti Ambito di Genova»)
+    // diventava un falso avviso puntato a `index.php` (USR Liguria).
+    if (eUrlHome(link)) return;
+    if ($el.closest('.site-brand, .site-logo, .site-titles, .testata, .marchio').length > 0) return;
+
+    const contesto = `${href} ${testo}`;
+    // Filtro di rilevanza: vedi `sembraOpportunita` in parser.ts (copre
+    // interpelli/supplenze, bandi, avvisi, selezioni di esperti, PON/POR/PNRR).
+    if (!sembraOpportunita(contesto)) return;
+
+    // Scadenza e pubblicazione sono estratte dal PARSER in modo contestuale
+    // (qui si passa solo il testo del link + del contenitore, senza pre-assegnare
+    // la prima data trovata alla scadenza).
+    //
+    // Il contenitore può essere anche la RIGA di una tabella-DATI: i portali
+    // provinciali (Liguria, `provincia.php`) e regionali (Umbria, «interpelli
+    // aperti») pubblicano gli avvisi in tabelle — o in griglie ARIA
+    // (`div[role="row"]`) — e la riga è il vero contesto: scuola, codice, classi
+    // e SCADENZA (in Umbria «Data chiusura avviso»). `datiRiga` vale solo per una
+    // vera riga-dati (celle multiple o intestazioni): le tabelle di impaginazione
+    // restano escluse.
+    const rigaEl = $el.closest('tr, [role="row"]').get(0);
+    const dati = rigaEl ? datiRiga($, rigaEl) : null;
+
+    // Titolo: nella riga-dati il testo del link è spesso un'etichetta generica
+    // («Avviso», «Vai all'interpello ›») → si usa il testo della riga stessa.
+    const titolo = dati ? titoloVoce(dati.contesto, testo) : testo;
+    if (titolo.length < 10) return;
+
+    const contenitore = (
+      $el.closest('li, article, .entry, .post, .avviso').text() ||
+      dati?.contesto ||
+      ''
+    ).replace(/\s+/g, ' ');
+    // Le etichette di colonna («Data chiusura avviso: 20/10/2026») vanno PRIMA
+    // del testo della riga: è la parola chiave che qualifica la data a scadenza.
+    const corpo = dati?.suggerimenti ? `${dati.suggerimenti} · ${contenitore}` : contenitore;
 
     risultati.push(
       parseInterpello({
-        title: testo,
+        title: titolo.slice(0, 300),
         link: link || null,
         linkCandidati: link ? [link] : [],
         provincia,
         source,
-        corpo: contenitore,
+        corpo,
       }),
     );
   });

@@ -111,6 +111,12 @@ function clientFinto(opts: {
       chiamate.filtri.push(`overlaps:${colonna}`);
       return builder;
     },
+
+    /** §26.71: il fallback filtra sulla sola scadenza dichiarata e non passata. */
+    gte(colonna: string) {
+      chiamate.filtri.push(`gte:${colonna}`);
+      return builder;
+    },
     or(espressione: string) {
       chiamate.filtri.push(`or:${espressione}`);
       return builder;
@@ -193,19 +199,18 @@ const esitoFallback = await searchInterpelli(comeClient(senzaRpc), {
 check('la RPC è stata comunque tentata', 1, senzaRpc.chiamate.rpc.length);
 check(
   'fallback PostgREST con gli stessi filtri',
-  ['in:province', 'overlaps:class_codes', 'order:expiration_date', 'limit:5'],
-  senzaRpc.chiamate.filtri.filter((f) => !f.startsWith('or:')),
+  ['in:province', 'overlaps:class_codes', 'gte:expiration_date', 'order:expiration_date', 'limit:5'],
+  senzaRpc.chiamate.filtri,
 );
 check(
-  'il fallback tiene solo gli avvisi attivi (senza scadenza o non scaduti)',
+  'il fallback tiene solo le opportunità con scadenza dichiarata (§26.71)',
   true,
-  // Dal §26.53 il ramo «senza scadenza» porta anche la FINESTRA dei 60 giorni
-  // sulla pubblicazione (`created_at`): la stessa regola di `eAvvisoVivo`.
-  senzaRpc.chiamate.filtri.some(
-    (f) =>
-      f.startsWith('or:expiration_date.gte.') &&
-      f.includes(',and(expiration_date.is.null,created_at.gte.'),
-  ),
+  // La finestra dei 60 giorni per le righe che la fonte NON data non è più una
+  // porta d'ingresso: il filtro è la sola `expiration_date.gte.<oggi>` (che in
+  // PostgREST esclude da sé le righe senza data). La pipeline pura
+  // (`bachecaInterpelli`) resta la seconda difesa, col conto dichiarato.
+  senzaRpc.chiamate.filtri.includes('gte:expiration_date') &&
+    !senzaRpc.chiamate.filtri.some((f) => f.startsWith('or:') || f.includes('is.null')),
 );
 check('righe servite dal fallback (il feed non si svuota)', 1, esitoFallback?.length ?? 0);
 

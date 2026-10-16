@@ -5,8 +5,10 @@
  * più vicina prima). Lettura A PAGINE (`flightBoard/letturaBoard.ts`): il
  * tabellone copre TUTTI gli avvisi attivi, non solo quelli che stanno in una
  * risposta di PostgREST (max 1.000 righe). Chi entra in bacheca lo decide il
- * filtro condiviso `flightBoard/filtroAttivi.ts`: scadenza non passata OPPURE
- * nessuna scadenza ma pubblicato negli ultimi 60 giorni (`lib/liveBoard.ts`).
+ * filtro condiviso `flightBoard/filtroAttivi.ts`: scadenza dichiarata e non ancora
+ * passata (§26.71: la finestra dei 60 giorni non vale più in vetrina) e
+ * `lib/liveBoard.ts` applica la stessa regola in memoria. Il totale mostrato è
+ * quello delle righe DAVVERO in vetrina: lo STESSO numero che genera le schermate.
  * Le righe presentabili vengono poi alternate per provincia
  * (`diversificaProvince`), così il tabellone è una vetrina NAZIONALE e non la
  * classifica di una sola provincia.
@@ -41,7 +43,6 @@ export function FlightBoardInterpelli() {
   const [righe, setRighe] = useState<InterpelloLive[]>([]);
   const [pagina, setPagina] = useState(0);
   const [caricato, setCaricato] = useState(false);
-  const [totaleAttivi, setTotaleAttivi] = useState<number | null>(null);
 
   useEffect(() => {
     if (!supabase) {
@@ -54,14 +55,15 @@ export function FlightBoardInterpelli() {
       const adesso = new Date();
       const filtro = filtroAttivi(adesso);
 
-      // Conteggio esatto degli avvisi attivi: query leggera (`head: true`) che
-      // alimenta l'etichetta della vetrina e CHIUDE la lettura a pagine.
+      // Conteggio esatto degli avvisi attivi: serve solo a CHIUDERE la lettura a
+      // pagine, non più all'etichetta (§26.71: il numero mostrato è quello delle
+      // righe in vetrina, lo stesso che genera le schermate — il conteggio grezzo
+      // del database diceva «869 avvisi attivi» mentre il tabellone ne pagina 396).
       const { count } = await client
         .from('interpelli')
         .select('id', { count: 'exact', head: true })
         .or(filtro);
       if (!attivo) return;
-      setTotaleAttivi(typeof count === 'number' ? count : null);
 
       // TUTTI gli avvisi attivi, a pagine (`flightBoard/letturaBoard.ts`):
       // PostgREST non consegna più di 1.000 righe per richiesta, quindi una
@@ -127,15 +129,14 @@ export function FlightBoardInterpelli() {
   }, []);
 
   const totale = righe.length;
-  // UNICA fonte della scala: le schermate contano le righe DAVVERO in vetrina
-  // (`RIGHE_PER_PAGINA` righe ciascuna). La stessa `pagine` governa l'etichetta,
-  // la rotazione automatica e il taglio delle righe mostrate: mai un conteggio
-  // diverso da quello che il tabellone può davvero mostrare.
+  // UNICA fonte della scala: schermate e totale mostrato nascono dallo STESSO
+  // numero — le righe DAVVERO in vetrina. Mai un totale che parla di avvisi
+  // diversi da quelli leggibili (§26.71: «869 avvisi attivi» con «Schermata 1 di 80»).
   const pagine = pagineBoard(totale, RIGHE_PER_PAGINA);
   const paginaSicura = pagina < pagine ? pagina : 0;
   const metrica = metricaBoard({
     righeCaricate: totale,
-    totaleReale: totaleAttivi,
+    totaleReale: totale,
     righePerPagina: RIGHE_PER_PAGINA,
     pagina: paginaSicura + 1,
   });
