@@ -115,9 +115,10 @@ export const notizieIngestite: NewsArticle[] = [
       "Cosa cambia: Se stai valutando un trasferimento, un passaggio di cattedra o il rientro nella tua provincia, sono online scadenze e regole della mobilità: le trovi nell’avviso.",
       "Chi riguarda: docenti di ruolo e dirigenti scolastici.",
       "Scadenza: 7 ottobre 2026 (termine indicato nell’avviso).",
-      "Cosa devi fare: Tutta la procedura è digitale e si gestisce su Istanze Online con credenziali SPID (Sistema Pubblico di Identità Digitale) o CIE (Carta d’Identità Elettronica). Rispetta la finestra temporale e allega con cura i documenti per le precedenze."
+      "Cosa devi fare: Tutta la procedura è digitale e si gestisce su Istanze Online con credenziali SPID (Sistema Pubblico di Identità Digitale) o CIE (Carta d’Identità Elettronica). Rispetta la finestra temporale e allega con cura i documenti per le precedenze.",
+      "Presenta la domanda: Istanze Online (POLIS) (link diretto nell’articolo)."
     ],
-    "content_html": "<p>Se stai valutando un trasferimento, un passaggio di cattedra o il rientro nella tua provincia, sono online scadenze e regole della mobilità: le trovi nell’avviso «Mobilità sostenibile e nuove competenze: il 7 ottobre al MIM (Ministero dell’Istruzione e del Merito) il Convegno nazionale della Rete E-Mobility». Il termine indicato nell'avviso era il 7 ottobre 2026.</p>\n    <p>Riguarda docenti di ruolo e dirigenti scolastici. La procedura si regge su preferenze, vincoli triennali e precedenze di legge. Una mossa falsa o una domanda fuori termine significa restare bloccati un altro anno: verifica i requisiti prima di compilare.</p>\n    <p>Tutta la procedura è digitale e si gestisce su Istanze Online con credenziali SPID (Sistema Pubblico di Identità Digitale) o CIE (Carta d’Identità Elettronica). Rispetta la finestra temporale e allega con cura i documenti per le precedenze. Fonte ufficiale: <a href=\"https://www.mim.gov.it/web/guest/-/mobilita-sostenibile-e-nuove-competenze-il-7-ottobre-al-mim-il-convegno-nazionale-della-rete-e-mobility\" target=\"_blank\" rel=\"noopener noreferrer\">apri l'avviso ufficiale</a>.</p>",
+    "content_html": "<p>Se stai valutando un trasferimento, un passaggio di cattedra o il rientro nella tua provincia, sono online scadenze e regole della mobilità: le trovi nell’avviso «Mobilità sostenibile e nuove competenze: il 7 ottobre al MIM (Ministero dell’Istruzione e del Merito) il Convegno nazionale della Rete E-Mobility». Il termine dell'avviso era il 7 ottobre 2026; la procedura si presenta da <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online (POLIS)</a>.</p>\n    <p>Riguarda docenti di ruolo e dirigenti scolastici. La procedura si regge su preferenze, vincoli triennali e precedenze di legge. Una mossa falsa o una domanda fuori termine significa restare bloccati un altro anno: verifica i requisiti prima di compilare.</p>\n    <p>Tutta la procedura è digitale e si gestisce su Istanze Online con credenziali SPID (Sistema Pubblico di Identità Digitale) o CIE (Carta d’Identità Elettronica). Rispetta la finestra temporale e allega con cura i documenti per le precedenze. Presenta la domanda da <a href=\"https://www.istruzione.it/polis/Istanzeonline.htm\" target=\"_blank\" rel=\"noopener noreferrer\">Istanze Online (POLIS)</a>. Fonte ufficiale: <a href=\"https://www.mim.gov.it/web/guest/-/mobilita-sostenibile-e-nuove-competenze-il-7-ottobre-al-mim-il-convegno-nazionale-della-rete-e-mobility\" target=\"_blank\" rel=\"noopener noreferrer\">apri l'avviso ufficiale</a>.</p>",
     "official_source_url": "https://www.mim.gov.it/web/guest/-/mobilita-sostenibile-e-nuove-competenze-il-7-ottobre-al-mim-il-convegno-nazionale-della-rete-e-mobility",
     "official_pdf_url": null,
     "relevance_score": 93,
@@ -141,21 +142,21 @@ export const notizieIngestite: NewsArticle[] = [
     "published_at": "2026-10-09T00:00:00.000Z"
   },
   {
-    "id": "notizia-scuola-dal-15-ottobre-attivo-per-l-a-s-2026-2027-ascoltami-i-mim",
-    "title": "Scuola: dal 15 ottobre attivo per l’a.s. 2026/2027 AscoltaMI, il servizio per il supporto psicologico degli studenti",
-    "category": "Scuole",
-    "deadline_date": "2026-10-15",
+    "id": "notizia-comparto-e-area-istruzione-e-ricerca-settore-scuola-sciopero-mim",
+    "title": "Comparto e Area Istruzione e Ricerca - settore scuola: sciopero plurisettoriale per l'intera giornata del 2 ottobre 2026 - Dati de",
+    "category": "CCNL",
+    "deadline_date": "2026-10-02",
     "summary_points": [
       "Cosa cambia: Ci sono novità operative sull’organizzazione e sugli adempimenti della vita scolastica: le trovi nella comunicazione.",
       "Chi riguarda: dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie.",
-      "Scadenza: 15 ottobre 2026 (termine indicato nell’avviso).",
+      "Scadenza: 2 ottobre 2026 (termine indicato nell’avviso).",
       "Cosa devi fare: Le modalità operative e i requisiti sono quelli fissati dal documento ufficiale linkato qui sotto."
     ],
-    "content_html": "<p>Ci sono novità operative sull’organizzazione e sugli adempimenti della vita scolastica: le trovi nella comunicazione «Scuola: dal 15 ottobre attivo per l’a.s. 2026/2027 AscoltaMI, il servizio per il supporto psicologico degli studenti». Il termine indicato nell'avviso era il 15 ottobre 2026.</p>\n    <p>Riguarda dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie. Qui trovi le scadenze che impattano su orari, adempimenti e gestione quotidiana: leggerle in anticipo evita di rincorrere le circolari interne all’ultimo minuto.</p>\n    <p>Le modalità operative e i requisiti sono quelli fissati dal documento ufficiale linkato qui sotto. Fonte ufficiale: <a href=\"https://www.mim.gov.it/web/guest/-/scuola-dal-15-ottobre-attivo-per-l-a-s-2026-2027-ascoltami-il-servizio-per-il-supporto-psicologico-degli-studenti\" target=\"_blank\" rel=\"noopener noreferrer\">apri l'avviso ufficiale</a>.</p>",
-    "official_source_url": "https://www.mim.gov.it/web/guest/-/scuola-dal-15-ottobre-attivo-per-l-a-s-2026-2027-ascoltami-il-servizio-per-il-supporto-psicologico-degli-studenti",
+    "content_html": "<p>Ci sono novità operative sull’organizzazione e sugli adempimenti della vita scolastica: le trovi nella comunicazione «Comparto e Area Istruzione e Ricerca - settore scuola: sciopero plurisettoriale per l'intera giornata del 2 ottobre 2026 - Dati de ...». Il termine indicato nell'avviso era il 2 ottobre 2026.</p>\n    <p>Riguarda dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie. Qui trovi le scadenze che impattano su orari, adempimenti e gestione quotidiana: leggerle in anticipo evita di rincorrere le circolari interne all’ultimo minuto.</p>\n    <p>Le modalità operative e i requisiti sono quelli fissati dal documento ufficiale linkato qui sotto. Fonte ufficiale: <a href=\"https://www.mim.gov.it/web/guest/-/comparto-e-area-istruzione-e-ricerca-settore-scuola-sciopero-plurisettoriale-per-l-intera-giornata-del-2-ottobre-2026-dati-definitivi\" target=\"_blank\" rel=\"noopener noreferrer\">apri l'avviso ufficiale</a>.</p>",
+    "official_source_url": "https://www.mim.gov.it/web/guest/-/comparto-e-area-istruzione-e-ricerca-settore-scuola-sciopero-plurisettoriale-per-l-intera-giornata-del-2-ottobre-2026-dati-definitivi",
     "official_pdf_url": null,
-    "relevance_score": 78,
-    "published_at": "2026-10-15T00:00:00.000Z"
+    "relevance_score": 92,
+    "published_at": "2026-10-16T00:00:00.000Z"
   },
   {
     "id": "notizia-scuola-personale-ata-in-pagamento-oltre-120-milioni-tra-aume-mim",
