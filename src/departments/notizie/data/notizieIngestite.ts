@@ -142,23 +142,6 @@ export const notizieIngestite: NewsArticle[] = [
     "published_at": "2026-10-09T00:00:00.000Z"
   },
   {
-    "id": "notizia-comparto-e-area-istruzione-e-ricerca-settore-scuola-sciopero-mim",
-    "title": "Comparto e Area Istruzione e Ricerca - settore scuola: sciopero plurisettoriale per l'intera giornata del 2 ottobre 2026 - Dati de",
-    "category": "CCNL",
-    "deadline_date": "2026-10-02",
-    "summary_points": [
-      "Cosa cambia: Ci sono novità operative sull’organizzazione e sugli adempimenti della vita scolastica: le trovi nella comunicazione.",
-      "Chi riguarda: dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie.",
-      "Scadenza: 2 ottobre 2026 (termine indicato nell’avviso).",
-      "Cosa devi fare: Le modalità operative e i requisiti sono quelli fissati dal documento ufficiale linkato qui sotto."
-    ],
-    "content_html": "<p>Ci sono novità operative sull’organizzazione e sugli adempimenti della vita scolastica: le trovi nella comunicazione «Comparto e Area Istruzione e Ricerca - settore scuola: sciopero plurisettoriale per l'intera giornata del 2 ottobre 2026 - Dati de ...». Il termine indicato nell'avviso era il 2 ottobre 2026.</p>\n    <p>Riguarda dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie. Qui trovi le scadenze che impattano su orari, adempimenti e gestione quotidiana: leggerle in anticipo evita di rincorrere le circolari interne all’ultimo minuto.</p>\n    <p>Le modalità operative e i requisiti sono quelli fissati dal documento ufficiale linkato qui sotto. Fonte ufficiale: <a href=\"https://www.mim.gov.it/web/guest/-/comparto-e-area-istruzione-e-ricerca-settore-scuola-sciopero-plurisettoriale-per-l-intera-giornata-del-2-ottobre-2026-dati-definitivi\" target=\"_blank\" rel=\"noopener noreferrer\">apri l'avviso ufficiale</a>.</p>",
-    "official_source_url": "https://www.mim.gov.it/web/guest/-/comparto-e-area-istruzione-e-ricerca-settore-scuola-sciopero-plurisettoriale-per-l-intera-giornata-del-2-ottobre-2026-dati-definitivi",
-    "official_pdf_url": null,
-    "relevance_score": 92,
-    "published_at": "2026-10-16T00:00:00.000Z"
-  },
-  {
     "id": "notizia-scuola-personale-ata-in-pagamento-oltre-120-milioni-tra-aume-mim",
     "title": "Scuola, personale ATA: in pagamento oltre 120 milioni tra aumenti e arretrati per circa 40.000 dipendenti. Valditara: \"Promessa mantenuta, continueremo a valorizzare chi lavora per la scuola",
     "category": "ATA",
@@ -189,5 +172,22 @@ export const notizieIngestite: NewsArticle[] = [
     "official_pdf_url": null,
     "relevance_score": 80,
     "published_at": "2026-10-10T10:42:06.546Z"
+  },
+  {
+    "id": "notizia-comparto-e-area-istruzione-e-ricerca-settore-scuola-sciopero-mim",
+    "title": "Comparto e Area Istruzione e Ricerca - settore scuola: sciopero plurisettoriale per l'intera giornata del 2 ottobre 2026 - Dati de",
+    "category": "CCNL",
+    "deadline_date": "2026-10-02",
+    "summary_points": [
+      "Cosa cambia: Ci sono novità operative sull’organizzazione e sugli adempimenti della vita scolastica: le trovi nella comunicazione.",
+      "Chi riguarda: dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie.",
+      "Scadenza: 2 ottobre 2026 (termine indicato nell’avviso).",
+      "Cosa devi fare: Le modalità operative e i requisiti sono quelli fissati dal documento ufficiale linkato qui sotto."
+    ],
+    "content_html": "<p>Ci sono novità operative sull’organizzazione e sugli adempimenti della vita scolastica: le trovi nella comunicazione «Comparto e Area Istruzione e Ricerca - settore scuola: sciopero plurisettoriale per l'intera giornata del 2 ottobre 2026 - Dati de». Il termine indicato nell'avviso era il 2 ottobre 2026.</p>\n    <p>Riguarda dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie. Qui trovi le scadenze che impattano su orari, adempimenti e gestione quotidiana: leggerle in anticipo evita di rincorrere le circolari interne all’ultimo minuto.</p>\n    <p>Le modalità operative e i requisiti sono quelli fissati dal documento ufficiale linkato qui sotto. Fonte ufficiale: <a href=\"https://www.mim.gov.it/web/guest/-/comparto-e-area-istruzione-e-ricerca-settore-scuola-sciopero-plurisettoriale-per-l-intera-giornata-del-2-ottobre-2026-dati-definitivi\" target=\"_blank\" rel=\"noopener noreferrer\">apri l'avviso ufficiale</a>.</p>",
+    "official_source_url": "https://www.mim.gov.it/web/guest/-/comparto-e-area-istruzione-e-ricerca-settore-scuola-sciopero-plurisettoriale-per-l-intera-giornata-del-2-ottobre-2026-dati-definitivi",
+    "official_pdf_url": null,
+    "relevance_score": 92,
+    "published_at": "2026-10-16T00:00:00.000Z"
   }
 ];
