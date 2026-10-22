@@ -16,11 +16,16 @@ export const OGGI = new Date('2026-09-27T00:00:00');
 
 /** Riga di prova minimale (id esplicito; ogni altro campo è sostituibile). */
 export function rigaProva(patch: Partial<RigaProvaRadar> & { id: string }): RigaProvaRadar {
+  // Scadenza relativa a OGGI REALE (5 giorni): resta dentro l'orizzonte delle
+  // opportunità (§26.75, 30 giorni) e non dipende dal riferimento `OGGI` della
+  // fixture, che il motore non usa per il giudizio «avviso vivo».
+  const scad = new Date();
+  scad.setDate(scad.getDate() + 5);
   return {
     title: 'Interpello supplenza',
     school_name: 'Liceo di prova',
     province: 'AT',
-    expiration_date: '2099-01-01',
+    expiration_date: scad.toISOString().slice(0, 10),
     source_url: 'https://www.scuoleradar.it',
     ...patch,
   };

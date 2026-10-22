@@ -34,6 +34,17 @@ function normalizza(testo: string, max: number): string {
 /** Intestazioni di colonna che dichiarano una SCADENZA (parola chiave + valore). */
 const RE_INTESTAZIONE_SCADENZA = /scadenz|chiusur|termine|giorno|fine|entro|presentazion/i;
 
+/**
+ * Intestazioni che NON sono una scadenza di candidatura (§26.75, 22/10/2026).
+ * «Durata supplenza», «Data interpello» (la FINE dell'incarico), «Pubblicato il»
+ * e le note di cancellazione contengono date che NON sono termini per
+ * candidarsi: senza questo filtro una tabella come quella del USR Piemonte
+ * offriva al parser la fine del contratto (`30/06/2027`) spacciata per scadenza.
+ * L'esclusione è valutata PRIMA delle parole chiave di scadenza.
+ */
+const RE_INTESTAZIONE_NON_SCADENZA =
+  /durata|supplenz|incaric|decorrenz|inizio|data\s*interpello|pubblicat|protocoll|cancellazion|note/i;
+
 /** Celle senza valore (segnaposto): non aggiungono contesto, si saltano. */
 const RE_CELLA_VUOTA = /^[-–—.…]*$/;
 
@@ -125,7 +136,8 @@ function suggerimentiDaRiga($: cheerio.CheerioAPI, el: NodoHtml): string {
   for (let i = 0; i < intestazioni.length; i += 1) {
     const etichetta = intestazioni[i];
     const valore = valori[i] ?? '';
-    if (!etichetta || !RE_INTESTAZIONE_SCADENZA.test(etichetta)) continue;
+    if (!etichetta || RE_INTESTAZIONE_NON_SCADENZA.test(etichetta)) continue;
+    if (!RE_INTESTAZIONE_SCADENZA.test(etichetta)) continue;
     if (!valore || RE_CELLA_VUOTA.test(valore)) continue;
     pezzi.push(`${etichetta}: ${valore}`);
   }

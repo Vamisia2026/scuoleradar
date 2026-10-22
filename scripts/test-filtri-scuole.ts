@@ -59,6 +59,11 @@ const leggi = (p: string): string => readFileSync(p, 'utf8');
 
 /** Interpello minimo di prova (fixture di guardia, mai dato dimostrativo). */
 function interpello(over: Partial<Interpello>): Interpello {
+  // La scadenza è RELATIVA a oggi (§26.75): una data fissa come `2030-01-01`
+  // usciva dall'orizzonte delle opportunità e la fixture verificava un'altra cosa
+  // (whitelist) su una riga che il gate scartava a monte.
+  const scad = new Date();
+  scad.setDate(scad.getDate() + 5);
   return {
     id: 'x',
     titolo: 'Interpello di arte',
@@ -69,7 +74,7 @@ function interpello(over: Partial<Interpello>): Interpello {
     classiCodes: ['A-01'],
     materia: 'Arte e immagine',
     ordine: 'primaria',
-    dataScadenza: '2030-01-01',
+    dataScadenza: scad.toISOString().slice(0, 10),
     descrizione: 'Fixture di guardia',
     linkFonte: 'https://example.org/avviso',
     compatibilita: 100,

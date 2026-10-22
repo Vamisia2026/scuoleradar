@@ -116,7 +116,13 @@ check('stato «completo» → nessun marcatore', false, anagraficaInAggiornament
 check('stato ignoto/assente → nessuna affermazione', false, anagraficaInAggiornamento(null));
 
 console.log('\n— 3. In vetrina SOLO con un istituto reale (§26.59, caso Padova) —');
-const FUTURO = '2099-12-31';
+// Scadenza relativa a oggi (§26.75): una data fissa al 2099 uscirebbe
+// dall'orizzonte dei 30 giorni e il gate scarterebbe OGNI riga della fixture.
+const FUTURO = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() + 5);
+  return d.toISOString().slice(0, 10);
+})();
 const righe = [
   {
     id: 'reale',

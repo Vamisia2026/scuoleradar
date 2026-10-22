@@ -9,10 +9,12 @@
  *   1. la geometria delle pagine vive SOLO in `flightBoard/letturaBoard.ts`, che
  *      è puro e isomorfo (nessuna dipendenza da React, da Supabase o dall'alias
  *      `@/`) — riceve la funzione di lettura, non la conosce;
- *   2. `FlightBoardInterpelli.tsx` legge A PAGINE con `.range()`, NON ha più il
- *      `.limit()` che tagliava la vetrina, passa `attese` (il conteggio esatto
- *      chiude la lettura) e ordina con `id` come ultimo criterio, senza il quale
- *      la paginazione potrebbe ripetere o saltare righe;
+ *   2. `FlightBoardInterpelli.tsx` legge A PAGINE con `.range()` (la query vive in
+ *      `flightBoard/letturaInterpelli.ts`), NON ha più il `.limit()` che tagliava
+ *      la vetrina, passa `attese` (il conteggio esatto chiude la lettura) e ordina
+ *      con `id` come ultimo criterio, senza il quale la paginazione potrebbe
+ *      ripetere o saltare righe; la query riprova senza `school_site` finché la
+ *      migrazione §26.77 non è applicata, così il tabellone non si spegne;
  *   3. il filtro di prodotto resta quello condiviso (`filtroAttivi`), non una
  *      copia locale;
  *   4. il tetto di lettura non esiste più come costante della metrica: chi cerca
@@ -41,6 +43,7 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
 }
 
 const modulo = leggi('src/departments/radar/flightBoard/letturaBoard.ts');
+const query = leggi('src/departments/radar/flightBoard/letturaInterpelli.ts');
 const componente = leggi('src/departments/radar/FlightBoardInterpelli.tsx');
 const metrica = leggi('src/departments/radar/flightBoard/metricaBoard.ts');
 const catena = JSON.parse(leggi('package.json')) as { scripts: Record<string, string> };
@@ -55,8 +58,9 @@ check('il client lo riceve come funzione', true, /chiediPagina/.test(modulo));
 
 console.log('\n— 2. Il tabellone legge a pagine e non taglia più la vetrina —');
 check('usa la lettura a pagine', true, /leggiTutteLePagine</.test(componente));
-check('la finestra è passata col `range` di PostgREST', true, /\.range\(da, a\)/.test(componente));
-check('il `.limit()` che troncava è sparito', false, /\.limit\(/.test(componente));
+check('la query è delegata al modulo dedicato', true, /creaLettoreInterpelli\(client, filtro\)/.test(componente));
+check('la finestra è passata col `range` di PostgREST', true, /\.range\(da, a\)/.test(query));
+check('il `.limit()` che troncava è sparito', false, /\.limit\(/.test(componente + query));
 check('nessun riferimento alla vecchia costante', false, /LIMITE_RIGHE_LETTE/.test(componente));
 check(
   'il conteggio esatto viene PRIMA della lettura (chiude il ciclo)',
@@ -69,13 +73,29 @@ check('chiave di riga: l’id (mai doppioni in tabellone)', true, /chiave: \(r\)
 check(
   'ordinamento stabile: `id` come ultimo criterio della paginazione',
   true,
-  /\.order\('id', \{ ascending: false \}\)/.test(componente),
+  /\.order\('id', \{ ascending: false \}\)/.test(query),
 );
-check('una sola definizione delle colonne lette', true, /COLONNE_INTERPELLI/.test(componente));
+check('una sola definizione delle colonne lette', true, /export const COLONNE_INTERPELLI/.test(query));
+check(
+  'il sito istituzionale è fra le colonne servite (§26.77)',
+  true,
+  /school_site/.test(query.slice(query.indexOf('export const COLONNE_INTERPELLI'), query.indexOf('SENZA_SITO'))),
+);
 check('filtro di prodotto: quello condiviso, non una copia locale', true, /filtroAttivi\(adesso\)/.test(componente));
 check('gli errori di lettura sono dichiarati in console, mai muti', true, /\[flight-board\]/.test(componente));
 
+console.log('\n— 2-bis. `school_site` prima della migrazione: la bacheca non si spegne —');
+check(
+  'il ripiego toglie SOLO il sito istituzionale',
+  true,
+  /SENZA_SITO = COLONNE_INTERPELLI\.replace\(', school_site', ''\)/.test(query),
+);
+check('riconosce l’errore di Postgres (`does not exist`)', true, /does not exist/.test(query));
+check('riconosce l’errore di PostgREST (`Could not find`)', true, /Could not find/.test(query));
+check('il ripiego è una tantum (una sola variabile di stato)', true, /let conSito = true/.test(query));
+
 console.log('\n— 3. Totale mostrato e schermate: lo stesso numero (§26.71) —');
+
 check('la metrica non contiene più un tetto di lettura', false, /LIMITE_RIGHE_LETTE/.test(metrica));
 check('la metrica calcola ancora le pagine sulle righe presenti', true, /pagineBoard/.test(metrica));
 check(

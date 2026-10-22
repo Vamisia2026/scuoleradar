@@ -1008,6 +1008,7 @@ function mappaRigaInterpelli(a: InterpelloParsato) {
     school_name: avviso.schoolName,
     school_code: avviso.schoolCode,
     school_pec: avviso.schoolPec ?? null,
+    school_site: avviso.schoolSite ?? null,
     source_url: avviso.link,
     published_at: avviso.publishedAt,
     expiration_date: avviso.expirationDate,
@@ -1065,6 +1066,7 @@ const COLONNE_OPZIONALI = [
   'contact_email',
   'stato_arricchimento',
   'school_pec',
+  'school_site',
 ];
 
 /**

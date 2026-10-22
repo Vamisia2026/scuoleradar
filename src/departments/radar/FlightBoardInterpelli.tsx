@@ -25,19 +25,21 @@ import { supabase } from '@/lib/supabase';
 import { diversificaProvince, preparaRigheBoard } from '@/lib/liveBoard';
 import { metricaBoard, pagineBoard } from './flightBoard/metricaBoard';
 import { leggiTutteLePagine } from './flightBoard/letturaBoard';
+import { creaLettoreInterpelli } from './flightBoard/letturaInterpelli';
 import { filtroAttivi } from './flightBoard/filtroAttivi';
-import { urlValido, type InterpelloLive } from './flightBoard/righeBoard';
+import { fonteApribile } from './flightBoard/linkFonte';
+import type { InterpelloLive } from './flightBoard/righeBoard';
 import { RigaBoard, RigheRiempimento } from './flightBoard/components/RigaBoard';
+import { IntestazioneBoard } from './flightBoard/components/IntestazioneBoard';
 
 const RIGHE_PER_PAGINA = 5;
 const ROTAZIONE_MS = 8_000;
 
-/** Colonne servite alla tavola: una sola definizione per tutte le pagine lette. */
-const COLONNE_INTERPELLI =
-  'id, title, school_name, school_code, province, class_codes, materia, expiration_date, created_at, source_url';
-
-/** Rendering della riga: `flightBoard/components/RigaBoard.tsx` (RigaBoard, RigheRiempimento);
- *  dati derivati (tipologia, urgenza, date brevi): `flightBoard/rigaBoardDati.ts`. */
+/**
+ * Rendering della riga: `flightBoard/components/RigaBoard.tsx` (RigaBoard, RigheRiempimento);
+ *  intestazione (titolo + contatore): `flightBoard/components/IntestazioneBoard.tsx`;
+ *  dati derivati (tipologia, urgenza, date brevi): `flightBoard/rigaBoardDati.ts`;
+ *  colonne servite e tolleranza alla migrazione: `flightBoard/letturaInterpelli.ts`. */
 
 export function FlightBoardInterpelli() {
   const [righe, setRighe] = useState<InterpelloLive[]>([]);
@@ -71,17 +73,7 @@ export function FlightBoardInterpelli() {
       const lettura = await leggiTutteLePagine<InterpelloLive>({
         attese: typeof count === 'number' ? count : null,
         chiave: (r) => r.id,
-        chiediPagina: async (da, a) => {
-          const { data, error } = await client
-            .from('interpelli')
-            .select(COLONNE_INTERPELLI)
-            .or(filtro)
-            .order('created_at', { ascending: false })
-            .order('expiration_date', { ascending: true, nullsFirst: false })
-            .order('id', { ascending: false })
-            .range(da, a);
-          return { data: (data ?? null) as InterpelloLive[] | null, error };
-        },
+        chiediPagina: creaLettoreInterpelli(client, filtro),
       });
       if (!attivo) return;
       if (lettura.errore) {
@@ -98,7 +90,14 @@ export function FlightBoardInterpelli() {
         console.warn(`[flight-board] ${lettura.duplicati} righe ripetute scartate`);
       }
 
-      const conFonte = lettura.righe.filter((r) => Boolean(urlValido(r.source_url)));
+      // FONTE APRIBILE (§26.76, direttiva 22/10/2026): la riga entra solo se il
+      // click porta a una pagina verificabile — l'avviso vero, oppure la home
+      // `.edu.it` dell'istituto quando la fonte pubblicava solo una piattaforma
+      // (portale Argo, Nuvola/ClasseViva, modulo Google, cartella WeTransfer).
+      // Prima bastava «un URL valido»: i link di piattaforma restavano in bacheca
+      // per giorni e aprivano una pagina di login o un modulo scaduto, cioè un
+      // link morto spacciato per «avviso ufficiale».
+      const conFonte = lettura.righe.filter((r) => fonteApribile(r) !== null);
 
       const pronte = diversificaProvince(preparaRigheBoard(conFonte));
 
@@ -106,9 +105,10 @@ export function FlightBoardInterpelli() {
         ...p.riga,
         school_name: p.scuola,
         expiration_date: p.scadenza,
-        // Marcatore di vetrina: il nome mostrato è un ripiego (nome grezzo del
-        // bando o «Scuola non specificata / Più plessi») → la riga lo dichiara. La
-        // riga resta comunque in bacheca (direttiva 04/10/2026).
+        // Stato dell'anagrafica: informativo. Da §26.76 NON è più un badge a
+        // schermo (il vecchio «Scuola non specificata / Più plessi» compariva su
+        // tutte le righe con anagrafica incompleta e sembrava che la scuola non
+        // si sapesse): la colonna mostra solo nomi reali.
         anagrafica_parziale: p.anagraficaParziale,
       }));
 
@@ -175,25 +175,7 @@ export function FlightBoardInterpelli() {
       translate="no"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
-            Radar Live: Tutti gli Interpelli Scuola e Avvisi di Reclutamento in Italia
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Scansione in tempo reale h24 di tutti gli interpelli nazionali, supplenze brevi e annuali, bandi PNRR/PON e avvisi per Docenti di ogni ordine e grado, Personale ATA, Collaboratori Scolastici ed Esperti Esterni.
-          </p>
-          {metrica.etichettaTotale && (
-            <div className="mt-3 flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
-              <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                <span className="w-2 h-2 mr-2 bg-emerald-500 rounded-full animate-pulse" />
-                {metrica.etichettaTotale.toUpperCase()}
-              </div>
-              <h2 className="text-base sm:text-lg lg:text-xl font-extrabold text-blue-600 tracking-tight whitespace-nowrap">
-                CLICKA SU UN’OFFERTA DI LAVORO QUALSIASI PER VEDERE CHE SONO AVVISI VERI, NON ESEMPI!
-              </h2>
-            </div>
-          )}
-        </div>
+        <IntestazioneBoard etichettaTotale={metrica.etichettaTotale} />
 
         {vuoto && (
           <div className="rounded-xl border border-primary-100 bg-slate-900 px-6 py-10 text-center shadow-card">

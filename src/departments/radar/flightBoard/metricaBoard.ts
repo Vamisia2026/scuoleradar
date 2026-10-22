@@ -71,9 +71,25 @@ export function metricaBoard(dati: {
 }): MetricaBoard {
   const { righeCaricate, totaleReale, righePerPagina } = dati;
   const pagine = pagineBoard(righeCaricate, righePerPagina);
+
+  // QUADRATURA DEL CONTATORE (§26.75, direttiva 22/10/2026): il totale mostrato
+  // non può superare NÉ le righe davvero in vetrina (`righeCaricate`) NÉ i record
+  // che le schermate possono rendere (`pagine × righePerPagina`). Sintomo
+  // misurato: pill «1.405 avvisi attivi» con «Schermata 1 di 137» — 685 record.
+  // Il numero veniva dal conteggio grezzo del database, che includeva righe poi
+  // scartate dal gate della vetrina (nome istituto non risolto, scadenza fuori
+  // orizzonte). Il tetto è una DIFESA, non un arrotondamento: non inventa righe
+  // e non ne aggiunge mai per «riempire» l'ultima schermata.
+  const capacita = pagine * Math.max(1, Math.trunc(righePerPagina));
+  const dichiarato =
+    typeof totaleReale === 'number' && Number.isFinite(totaleReale)
+      ? Math.max(0, Math.trunc(totaleReale))
+      : righeCaricate;
+  const totaleMostrato = Math.min(dichiarato, Math.max(0, righeCaricate), capacita);
+
   return {
     pagine,
     etichettaPagine: etichettaPagina(dati.pagina ?? 1, pagine),
-    etichettaTotale: etichettaTotaleAvvisi(totaleReale, righeCaricate),
+    etichettaTotale: etichettaTotaleAvvisi(totaleMostrato, righeCaricate),
   };
 }

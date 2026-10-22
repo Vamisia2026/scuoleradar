@@ -76,7 +76,7 @@ check('senza scadenza né pubblicazione → NON vivo', false, eAvvisoVivo(null, 
 check('pubblicazione illeggibile → NON vivo', false, eAvvisoVivo(null, 'non-una-data', OGGI));
 check('senza scadenza e stringa vuota → NON vivo', false, eAvvisoVivo('', '', OGGI));
 
-console.log('\n— Semaforo (colori) —');
+console.log('\n— Semaforo (colori pieni, unica palette §26.75) —');
 check('lungo (10gg) → verde', 'lungo', stileScadenza(10).livello);
 check('lungo (10gg) label', 'In corso', stileScadenza(10).label);
 check('vicino (5gg) → giallo', 'vicino', stileScadenza(5).livello);
@@ -86,9 +86,16 @@ check('imminente (2gg) label', 'Ultimi 2 giorni', stileScadenza(2).label);
 check('oggi (0gg) label', 'Scade oggi', stileScadenza(0).label);
 check('scaduto → grigio', 'scaduto', stileScadenza(-3).livello);
 check('sconosciuto → n/d', 'sconosciuto', stileScadenza(null).livello);
-check('verde usa classe emerald', true, stileScadenza(10).className.includes('emerald'));
-check('giallo usa classe amber', true, stileScadenza(5).className.includes('amber'));
-check('rosso usa classe red', true, stileScadenza(1).className.includes('red'));
+check('verde usa la tinta piena emerald-700', true, stileScadenza(10).className.includes('bg-emerald-700'));
+check('giallo/arancio usa la tinta piena amber-600', true, stileScadenza(5).className.includes('bg-amber-600'));
+check('rosso usa la tinta piena rose-700', true, stileScadenza(1).className.includes('bg-rose-700'));
+check('nessuna banda pastello (…-100/…-200)', false, /-(?:50|100|200)\b/.test(stileScadenza(10).className + stileScadenza(5).className + stileScadenza(1).className));
+check('senza scadenza → ardesia piena, non un colore d’allarme', true, stileScadenza(null).className.includes('bg-slate-600'));
+check('scaduto → ardesia scura', true, stileScadenza(-3).className.includes('bg-slate-700'));
+check('testo bianco in grassetto su tutte le bande', true, [10, 5, 1, 0, -3, null].every((g) => {
+  const c = stileScadenza(g as number | null).className;
+  return c.includes('text-white') && c.includes('font-bold');
+}));
 
 console.log('\n──────────────────────────────────────────────────────────');
 if (falliti === 0) {

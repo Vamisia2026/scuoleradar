@@ -19,17 +19,28 @@
  * nome, per nessuna strada. La riga che entra ha sempre la sua scuola e
  * `anagraficaParziale` dichiara lo stato dell'anagrafica (`completo`/`parziale`).
  *
- * REGOLA FERREA DELLA SCADENZA (§26.71, direttiva 16/10/2026): la vetrina è fatta
- * di OPPORTUNITÀ — senza una `expiration_date` dichiarata e non ancora passata la
- * riga NON entra (`eOpportunitaConScadenza`). Le pagine di archivio, i regolamenti
- * e gli indici di classi di concorso che la fonte non data restano fuori: grazie
- * alla vecchia finestra dei 60 giorni entravano in bacheca come «Scadenza n/d» e
- * gonfiavano il conto degli avvisi attivi senza essere candidabili.
+ * REGOLA FERREA DELLA SCADENZA (§26.71, direttiva 16/10/2026; orizzonte §26.75,
+ * 22/10/2026): la vetrina è fatta di OPPORTUNITÀ — senza una `expiration_date`
+ * dichiarata, non ancora passata e DENTRO I 30 GIORNI la riga NON entra
+ * (`eOpportunitaConScadenza`). Le pagine di archivio, i regolamenti e gli indici
+ * di classi di concorso che la fonte non data restano fuori: grazie alla vecchia
+ * finestra dei 60 giorni entravano in bacheca come «Scadenza n/d» e gonfiavano il
+ * conto degli avvisi attivi senza essere candidabili. Lo stesso vale per le
+ * «scadenze» che in realtà sono la FINE di un incarico annuale (2027): sembravano
+ * opportunità lunghissime e restavano verdi per mesi.
+ *
+ * TITOLO UTILE (§26.76, 22/10/2026): un titolo composto dalla sola riga di
+ * pubblicazione («PUBBLICATO IL 18/10/2026») non descrive nulla e non entra in
+ * vetrina (`eTitoloSoloData` in `titoloBoard.ts`). La denominazione della scuola
+ * ricavata dal titolo segue invece `nomeScuolaDaTitolo` (stesso modulo): segmenti
+ * forti, poi teste d'istituto accorciate, sempre filtrate dal gate
+ * `nomeIstitutoPresentabile` — mai un codice amministrativo al posto del nome.
  */
 
 import { eOpportunitaConScadenza, GIORNI_FINESTRA_SENZA_SCADENZA } from './scadenza.ts';
 import { nomeScuolaDaCodice } from './school-lookup.ts';
 import { nomeIstitutoPresentabile } from './nomeIstituto.ts';
+import { eTitoloSoloData, nomeScuolaDaTitolo } from './titoloBoard.ts';
 import { pulisciTitoloAvviso } from './alertInterpello';
 import { anagraficaInAggiornamento } from './statoArricchimento';
 
@@ -44,6 +55,13 @@ export { SCUOLA_NON_SPECIFICATA } from './statoArricchimento';
  * ri-esporta perché il tabellone e i suoi test lo importino un solo significato.
  */
 export { GIORNI_FINESTRA_SENZA_SCADENZA };
+
+/**
+ * Diversità geografica delle schermate (§26.72): vive in `diversificaProvince.ts`
+ * dal §26.76, per tenere questo modulo sotto le 250 righe del gate strutturale.
+ * Si ri-esporta perché il tabellone e i suoi test la importino da un solo modulo.
+ */
+export { diversificaProvince } from './diversificaProvince.ts';
 
 /** Sottoinsieme di interpelli necessario al tabellone. */
 export interface RigaBoard {
@@ -73,27 +91,18 @@ export interface RigaBoardCompleta<R extends RigaBoard = RigaBoard> {
   anagraficaParziale: boolean;
 }
 
-function segmentoScuola(segmento: string): string | null {
-  return nomeIstitutoPresentabile((segmento.split(',')[0] ?? '').trim());
-}
-
 export function titoloLeggibile(titolo?: string | null): string | null {
   const pulito = pulisciTitoloAvviso(titolo, null);
   return pulito && pulito !== 'Avviso ufficiale' ? pulito : null;
 }
 
+/**
+ * Nome d'istituto ricavato dal titolo (ultimo ripiego, dopo i dati certi).
+ * La strategia vive in `titoloBoard.ts` (segmenti + teste d'istituto); qui resta
+ * l'API storica usata dal tabellone e dalle verifiche.
+ */
 export function scuolaDaTitolo(titolo?: string | null): string | null {
-  const t = (titolo ?? '').trim();
-  if (!t) return null;
-  const segmenti = t
-    .split(/[—–]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (segmenti.length === 0) return null;
-  return (
-    segmentoScuola(segmenti[segmenti.length - 1]) ??
-    (segmenti.length > 1 ? segmentoScuola(segmenti[0]) : null)
-  );
+  return nomeScuolaDaTitolo(titolo);
 }
 
 /**
@@ -195,6 +204,11 @@ export function preparaRigheBoard<R extends RigaBoard>(
     if (!eOpportunitaConScadenza(scadenza, adesso)) continue;
     const scadenzaValida: string | null = scadenza;
 
+    // TITOLO VUOTO (§26.76, 22/10/2026): «PUBBLICATO IL 18/10/2026» non descrive
+    // l'opportunità — in bacheca occuperebbe una schermata senza dire niente.
+    // La riga resta nel database (e nelle liste interne): qui non entra.
+    if (eTitoloSoloData(riga.title)) continue;
+
     const nome = nomeScuolaBoard(riga);
     // GATE STRETTO (§26.59): senza un istituto reale la riga non entra. Non si
     // ripiega sul nome grezzo del bando né sul segnaposto: una riga di cui non si
@@ -212,82 +226,6 @@ export function preparaRigheBoard<R extends RigaBoard>(
   return pronte;
 }
 
-/**
- * MESCOLAMENTO GIORNALIERO DELL'ORDINE DELLE PROVINCE (§26.72, 15/10/2026).
- *
- * L'alternanza a giri da sola non basta: l'ordine dei gruppi seguiva l'ordine di
- * arrivo della query, quindi le prime schermate mostravano sempre le stesse
- * province e il tabellone sembrava fermo. Qui l'ordine dei gruppi viene mescolato
- * con un SEME derivato dal giorno:
- *   · STABILE per tutta la giornata — due richieste dello stesso giorno danno lo
- *     stesso tabellone (la paginazione non cambia sotto il dito dell'utente);
- *   · DIVERSO domani — in pochi giorni il tabellone ruota su tutta l'Italia;
- *   · deterministico e senza dipendenze: stessa data ⇒ stesso ordine (testabile).
- * Dentro ogni provincia l'ordine di arrivo resta INTATTO (cronologia decrescente).
- */
-function semeDelGiorno(oggi: Date): number {
-  const chiave = `${oggi.getFullYear()}-${oggi.getMonth() + 1}-${oggi.getDate()}`;
-  let hash = 2166136261;
-  for (let i = 0; i < chiave.length; i += 1) {
-    hash ^= chiave.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
-/** Fisher-Yates deterministico (mai in loco): stesso seme ⇒ stesso ordine. */
-function mescolaConSeme<T>(valori: T[], seme: number): T[] {
-  const copia = [...valori];
-  let stato = seme;
-  const prossimo = (): number => {
-    stato = (stato + 0x6d2b79f5) >>> 0;
-    let t = stato;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-  for (let i = copia.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(prossimo() * (i + 1));
-    const scambio = copia[i];
-    copia[i] = copia[j];
-    copia[j] = scambio;
-  }
-  return copia;
-}
-
-/**
- * Diversità geografica: nessuna provincia monopolizza le prime pagine. I gruppi
- * (uno per provincia) vengono MESCOLATI con il seme del giorno e poi alternati a
- * giri (round-robin). `oggi` è iniettabile: i test fissano il giorno e ottengono
- * un ordine stabile; in produzione l'ordine ruota ogni giorno.
- */
-export function diversificaProvince<T extends { riga: { province?: string } }>(
-  righe: T[] | null | undefined,
-  oggi: Date = new Date(),
-): T[] {
-  const elenco = righe ?? [];
-  const perProvincia = new Map<string, T[]>();
-  for (const riga of elenco) {
-    const chiave = (riga.riga.province ?? '').trim().toUpperCase();
-    const gruppo = perProvincia.get(chiave);
-    if (gruppo) gruppo.push(riga);
-    else perProvincia.set(chiave, [riga]);
-  }
-
-  const gruppi = mescolaConSeme([...perProvincia.values()], semeDelGiorno(oggi));
-  const alternate: T[] = [];
-  for (let giro = 0; alternate.length < elenco.length; giro += 1) {
-    let aggiunteNelGiro = 0;
-    for (const gruppo of gruppi) {
-      const riga = gruppo[giro];
-      if (!riga) continue;
-      alternate.push(riga);
-      aggiunteNelGiro += 1;
-    }
-    if (aggiunteNelGiro === 0) break;
-  }
-  return alternate;
-}
 
 
 

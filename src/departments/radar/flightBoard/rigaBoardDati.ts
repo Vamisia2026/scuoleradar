@@ -26,19 +26,30 @@
  *  - I token di colore vivono SOLO in `URGENZA_TOKENS`.
  *  - Il ritorno pubblico è SEMPRE `{ label, className, fonte }`.
  *
- * COLOUR CODING (§badge-urgenza, aggiornato):
- *   differenza <= 2 giorni (<= 48h) → ROSSO   «Scaduto» / «Scade oggi» /
- *                                              «Scade domani» / «Ultime 48h»
- *   differenza 3–10 giorni           → GIALLO  «Scade tra Xg»
- *   differenza > 10 giorni           → VERDE   «In corso»
+ * COLOUR CODING (§badge-urgenza, §26.75 del 22/10/2026 — allineato a
+ * `lib/scadenza.stileScadenza` e a `righeBoard.livelloUrgenza`):
+ *   differenza <= 2 giorni (<= 48h) → ROSSO PIENO     «Scaduto» / «Scade oggi» /
+ *                                                      «Scade domani» / «Ultime 48h»
+ *   differenza 3–7 giorni           → ARANCIONE PIENO «Ultima settimana»
+ *   differenza > 7 giorni           → VERDE PIENO     «In corso»
  * I giorni sono di CALENDARIO (regola condivisa), mai una differenza fra istanti.
+ * Le soglie erano 3–10: la banda arancione si sovrapponeva a un semaforo diverso
+ * da quello dei `SOGLIA_IMMINENTE`/`SOGLIA_VICINA` condivisi, e un avviso a 9
+ * giorni risultava «vicino» sul tabellone e «in corso» ovunque altro.
  *
- * PALETTE PIENA (§26.72, direttiva 15/10/2026): le tre bande di urgenza usano
- * colori SATURI (emerald-700 / amber-600 / rose-700) su testo BIANCO in grassetto,
- * così il colore si vede anche di sfuggita e su schermo piccolo. Le tinte pastello
- * (…-100) erano troppo deboli per un segnale di urgenza. L'unica eccezione resta
- * `neutro` (grigio tenue): NON è una banda di urgenza ma l'assenza di un dato
- * pubblicato, e non deve gridare come una scadenza vicina.
+ * ETICHETTE FISSE (direttiva 22/10/2026): i tre badge dicono lo STATO, non un
+ * conto alla rovescia. Il vecchio «Scade tra 5g» cambiava parola ogni giorno,
+ * rendeva la colonna rumorosa e sembrava un'offerta a tempo; ora la banda
+ * arancione dice «Ultima settimana» e quella rossa al massimo «Ultime 48h».
+ *
+ * PALETTE PIENA (§26.72, direttiva 15/10/2026; confermata §26.75): le bande di
+ * urgenza usano SOLO colori SATURI (emerald-700 / amber-600 / rose-700) su testo
+ * BIANCO in grassetto, così il colore si vede anche di sfuggita e su schermo
+ * piccolo. Le tinte pastello (…-100, …-200) erano troppo deboli per un segnale di
+ * urgenza e sono state rimosse da tutto il tabellone. Anche la banda `neutro`
+ * (assenza di un dato pubblicato) è piena — ardesia scuro, mai un colore
+ * d'allarme: non deve gridare, ma nemmeno sparire; nel «Radar Live» non è
+ * comunque più raggiungibile, perché una riga senza scadenza non entra (§26.71).
  *
  * REGOLA DI PRODOTTO (§denominazione-fonte):
  *  La denominazione della scuola mostrata in riga proviene SEMPRE dalla
@@ -64,7 +75,10 @@ export const URGENZA_TOKENS = {
   verde: 'bg-emerald-700 text-white font-bold shadow-sm',
   giallo: 'bg-amber-600 text-white font-bold shadow-sm',
   rosso: 'bg-rose-700 text-white font-bold shadow-sm',
-  neutro: 'bg-slate-100 text-slate-700 border border-slate-200',
+  // NON è una banda di urgenza: dichiara l'ASSENZA di una scadenza pubblicata.
+  // Piena anche lei (nessun pastello nel tabellone), ma su ardesia: non confondibile
+  // con i tre semafori. Nel «Radar Live» non è raggiungibile (§26.71).
+  neutro: 'bg-slate-600 text-white font-bold shadow-sm',
 } as const;
 
 export type UrgenzaBand = keyof typeof URGENZA_TOKENS;
@@ -146,20 +160,27 @@ export function dataItBreve(iso?: string | null): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Assegna una banda in base ai giorni di calendario che mancano alla scadenza
- * (`ceil`: 47h → 2g, 49h → 3g).
+ * Assegna una banda in base ai giorni di calendario che mancano alla scadenza.
  *   <= 2 giorni (<= 48h) → rosso   (scaduta / oggi / domani / ultime 48h)
- *   3–10 giorni          → giallo  (vicina)
- *   > 10 giorni          → verde   (in corso)
+ *   3–7 giorni           → arancio (vicina)
+ *   > 7 giorni           → verde   (in corso, entro l'orizzonte dei 30 giorni
+ *                                   già garantito dal gate `eOpportunitaConScadenza`)
+ *
+ * Le soglie sono le STESSE di `lib/scadenza` (`SOGLIA_IMMINENTE` = 2,
+ * `SOGLIA_VICINA` = 7) e di `righeBoard.livelloUrgenza` (≤ 2 / ≤ 7 / oltre):
+ * un solo semaforo in tutta l'applicazione.
  */
 function calcolaBandaDaScadenza(scad: Date): UrgenzaBand {
   const giorni = giorniRimanenti(scad.toISOString().slice(0, 10)) ?? Number.POSITIVE_INFINITY;
   if (giorni <= 2) return 'rosso';
-  if (giorni <= 10) return 'giallo';
+  if (giorni <= 7) return 'giallo';
   return 'verde';
 }
 
-/** Etichetta leggibile basata sui giorni rimanenti (`ceil`). */
+/**
+ * Etichetta leggibile dello STATO rispetto alla scadenza (mai un conto alla
+ * rovescia: cfr. «ETICHETTE FISSE» in testa al modulo).
+ */
 function etichettaDaScadenza(scad: Date): string {
   const giorni = giorniRimanenti(scad.toISOString().slice(0, 10)) ?? Number.POSITIVE_INFINITY;
 
@@ -169,7 +190,7 @@ function etichettaDaScadenza(scad: Date): string {
     if (giorni === 1) return 'Scade domani';
     return 'Ultime 48h';
   }
-  if (giorni <= 10) return `Scade tra ${giorni}g`;
+  if (giorni <= 7) return 'Ultima settimana';
   return 'In corso';
 }
 
@@ -195,9 +216,9 @@ function badgeDaScadenza(scad: Date): BadgeUrgenza {
  * Badge di urgenza della colonna «Scadenza» del tabellone.
  *
  * Colour coding di prodotto (unica fonte di verità):
- *   <= 2 giorni (<= 48h) → rosso
- *   3–10 giorni          → giallo
- *   > 10 giorni          → verde
+ *   <= 2 giorni (<= 48h) → rosso pieno   (rose-700)
+ *   3–7 giorni           → arancio pieno (amber-600)
+ *   > 7 giorni           → verde pieno   (emerald-700)
  *
  * Ordine di risoluzione RIGOROSO:
  *   1. `expirationDate` assente → banda NEUTRA dichiarata («Scadenza n/d»).

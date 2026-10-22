@@ -98,6 +98,45 @@ check('schermata fuori scala riportata a 1', 'Schermata 1 di 150', etichettaPagi
 check('schermata oltre il totale agganciata all’ultima', 'Schermata 32 di 32', etichettaPagina(99, 32));
 check('schermate non valide riportate a 1', 'Schermata 1 di 1', etichettaPagina(3, 0));
 
+console.log('\n— 5. Quadratura del contatore: mai più avvisi di quelli paginabili (§26.75) —');
+/**
+ * Sintomo misurato il 22/10/2026: pill «1.405 AVVISI ATTIVI» con «Schermata 1 di
+ * 137» — cioè 685 record nelle pagine (137 × 5). Il numero del pill veniva dal
+ * conteggio grezzo del database (che includeva righe poi scartate dal gate della
+ * vetrina), non dalle righe in tabellone. Ora il totale mostrato non può
+ * superare `pagine × righePerPagina`: il contatore e la paginazione non possono
+ * raccontare due popolazioni diverse.
+ */
+const divergente = metricaBoard({ righeCaricate: 685, totaleReale: 1405, righePerPagina: 5 });
+check('137 schermate restano quelle delle righe in vetrina', 137, divergente.pagine);
+check('il pill non supera i record paginabili (685)', '685 avvisi attivi in Italia', divergente.etichettaTotale);
+check(
+  'i record dichiarati stanno nelle schermate mostrate',
+  true,
+  Number(String(divergente.etichettaTotale).replace(/\D/g, '')) <= divergente.pagine * 5,
+);
+const ultimaPaginaParziale = metricaBoard({ righeCaricate: 7, totaleReale: 1405, righePerPagina: 5 });
+check('pagina parziale: restano 7 gli avvisi dichiarati', '7 avvisi attivi in Italia', ultimaPaginaParziale.etichettaTotale);
+check('pagina parziale: 2 schermate', 2, ultimaPaginaParziale.pagine);
+
+/**
+ * Misura reale del 22/10/2026: 543 righe in vetrina. Pill e schermate devono
+ * nascere dallo STESSO array filtrato: 543 avvisi → 109 schermate da 5 (la
+ * centonovesima è l'ultima, con 3 righe), senza `LIMIT` e senza `slice`.
+ */
+const cinquecentoquarantatre = metricaBoard({
+  righeCaricate: 543,
+  totaleReale: 543,
+  righePerPagina: 5,
+});
+check('543 righe → 109 schermate (nessun tetto, nessun arrotondamento per difetto)', 109, cinquecentoquarantatre.pagine);
+check('543 righe → pill delle stesse righe paginate', '543 avvisi attivi in Italia', cinquecentoquarantatre.etichettaTotale);
+check(
+  '543 righe → il numero del pill è il denominatore delle schermate',
+  cinquecentoquarantatre.pagine,
+  pagineBoard(Number(String(cinquecentoquarantatre.etichettaTotale).replace(/\D/g, '')), 5),
+);
+
 process.exitCode = errori === 0 ? 0 : 1;
 console.log(
   errori === 0

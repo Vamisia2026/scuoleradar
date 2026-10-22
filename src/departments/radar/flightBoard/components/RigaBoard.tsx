@@ -13,15 +13,18 @@
  * prima delle 250 righe; componente in `components/`). Etichette di copy e
  * classi di stile sono le stesse: nessun cambiamento visivo.
  *
- * Regola di prodotto (§26.67): la cella «Scadenza» mostra la scadenza VERA
+ * Regola di prodotto (§26.67, §26.75): la cella «Scadenza» mostra la scadenza VERA
  * (`expiration_date`) con la banda colore dei giorni mancanti; quando la fonte
- * non dichiara una scadenza la cella mostra il trattino `—` con la banda
- * neutra «Scadenza n/d». La data di pubblicazione NON è una scadenza e non
- * compare più in questa colonna.
+ * non dichiara una scadenza la riga NON entra nel tabellone (§26.71), quindi il
+ * caso «Scadenza n/d» non è più raggiungibile in vetrina. La data di
+ * pubblicazione NON è una scadenza e non compare in questa colonna.
+ * Palette: SOLO badge pieni ad alto contrasto (rose-700 / amber-600 / emerald-700
+ * su testo bianco); nessuna tinta pastello nel tabellone (§26.75).
  */
 import { ExternalLink } from 'lucide-react';
-import { titoloLeggibile, SCUOLA_NON_SPECIFICATA } from '@/lib/liveBoard';
-import { ePdf, hostDi, urlValido, estraiProvincia, type InterpelloLive } from '../righeBoard';
+import { nomeScuolaRiga, titoloLeggibile } from '@/lib/liveBoard';
+import { ePdf, hostDi, estraiProvincia, type InterpelloLive } from '../righeBoard';
+import { fonteApribile } from '../linkFonte';
 import { badgeScadenza, dataItBreve, inferisciTipologia } from '../rigaBoardDati';
 
 export interface RigaBoardProps {
@@ -47,27 +50,34 @@ export function RigaBoard({ riga: r, indice }: RigaBoardProps) {
   const urgenza = badgeScadenza(r.expiration_date);
 
   const dataScad = dataItBreve(r.expiration_date);
-  const urlFonte = urlValido(r.source_url);
-  const titoloLink = urlFonte
-    ? `${ePdf(urlFonte) ? 'Apri il PDF ufficiale' : 'Apri la pagina ufficiale'}${
-        hostDi(urlFonte) ? ` (${hostDi(urlFonte)})` : ''
-      }`
-    : "Apri l'avviso ufficiale";
-  const nomeScuola = r.school_name?.trim() || '';
+  // Dove porta il click: l'avviso vero, oppure la home `.edu.it` dell'istituto
+  // quando la fonte pubblicava solo una piattaforma (Argo, Google Forms…). Senza
+  // nessuna delle due la riga non entra in vetrina (`linkFonte.fonteApribile`).
+  const fonte = fonteApribile(r);
+  const urlFonte = fonte?.url ?? null;
+  const titoloLink = !fonte
+    ? "Apri l'avviso ufficiale"
+    : `${
+        fonte.tipo === 'sito-scuola'
+          ? 'Apri il sito ufficiale della scuola'
+          : ePdf(fonte.url)
+            ? 'Apri il PDF ufficiale'
+            : 'Apri la pagina ufficiale'
+      }${hostDi(fonte.url) ? ` (${hostDi(fonte.url)})` : ''}`;
+  // Nome SEMPRE reale: `nomeScuolaRiga` scarta i segnaposto («Scuola non
+  // specificata / Più plessi») e i dump di codici. Una riga senza istituto è già
+  // fuori dalla vetrina a monte (`preparaRigheBoard`): qui resta il vuoto `—`,
+  // mai un'etichetta che sembri un nome.
+  const nomeScuola = nomeScuolaRiga(r) ?? '—';
   const sottotitolo = titoloLeggibile(r.title);
-  // MARCATORE DI VETRINA (direttiva 04/10/2026): la riga ha un'anagrafica
-  // incompleta (il nome mostrato è un ripiego) ma resta VISIBILE — qui lo dichiara
-  // col segnaposto neutro «Scuola non specificata / Più plessi». Quando la colonna
-  // mostra già lo stesso segnaposto il marcatore è ridondante.
-  const marcatoreAnagrafica =
-    r.anagrafica_parziale && nomeScuola !== SCUOLA_NON_SPECIFICATA ? (
-      <span
-        className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-700"
-        title="Scuola non specificata / Più plessi: l'istituto non è ancora associato"
-      >
-        Scuola non specificata / Più plessi
-      </span>
-    ) : null;
+
+  // NIENTE SEGNAPOSTO DI SCUOLA (§26.76, direttiva 22/10/2026): il vecchio badge
+  // «Scuola non specificata / Più plessi» compariva su TUTTE le righe con
+  // anagrafica incompleta — anche quando il nome dell'istituto c'era ed era
+  // corretto — e sembrava che il tabellone non sapesse quale scuola emette
+  // l'avviso. La colonna «Scuola» mostra solo nomi reali (`nomeScuolaRiga`);
+  // quando l'anagrafica è incompleta il marcatore resta nel dato
+  // (`anagraficaParziale`), non a schermo.
   const apriFonte = (): void => {
     if (urlFonte) window.open(urlFonte, '_blank', 'noopener,noreferrer');
   };
@@ -119,19 +129,25 @@ export function RigaBoard({ riga: r, indice }: RigaBoardProps) {
               <span className="truncate font-semibold underline-offset-4 group-hover:text-accent-600 group-hover:underline">
                 {nomeScuola}
               </span>
-              {ePdf(urlFonte) && (
-                <span className="shrink-0 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-rose-700">
+              {fonte?.tipo === 'avviso' && ePdf(fonte.url) && (
+                <span className="shrink-0 rounded bg-rose-700 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
                   PDF
                 </span>
               )}
-              {marcatoreAnagrafica}
+              {fonte?.tipo === 'sito-scuola' && (
+                <span
+                  className="shrink-0 rounded bg-slate-600 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-white"
+                  title="La fonte pubblicava solo una piattaforma (portale Argo, modulo Google…): il link porta al sito ufficiale della scuola"
+                >
+                  Sito
+                </span>
+              )}
               <ExternalLink className="h-3.5 w-3.5 shrink-0 text-primary-400 transition group-hover:text-accent-500" />
             </span>
           </a>
         ) : (
           <span className="flex items-center gap-1.5 truncate">
             <span className="truncate font-semibold">{nomeScuola}</span>
-            {marcatoreAnagrafica}
           </span>
         )}
       </td>
@@ -159,7 +175,7 @@ export function RigaBoard({ riga: r, indice }: RigaBoardProps) {
 
       {/* 4. Provincia */}
       <td className="px-4 py-2.5 text-center truncate">
-        <span className="inline-flex items-center justify-center rounded-md bg-primary-100 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-primary-700">
+        <span className="inline-flex items-center justify-center rounded-md bg-slate-700 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-white">
           {estraiProvincia(r)}
         </span>
       </td>

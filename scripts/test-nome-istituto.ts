@@ -33,7 +33,13 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
   console.log(`${ok ? '✓' : '✗'} ${nome}: atteso=${JSON.stringify(atteso)} ottenuto=${JSON.stringify(ottenuto)}`);
 }
 
-const FUTURO = '2099-12-31';
+// Scadenza relativa a oggi (§26.75): fuori dall'orizzonte dei 30 giorni il gate
+// della vetrina scarterebbe la riga e la guardia misurerebbe il gate, non il nome.
+const FUTURO = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() + 5);
+  return d.toISOString().slice(0, 10);
+})();
 
 console.log('— Gate: codici amministrativi e stringhe grezze MAI in vetrina —');
 check('«EEEE | A246» (esempio cliente) non è un nome di scuola', null, nomeIstitutoPresentabile('EEEE | A246'));
@@ -48,6 +54,23 @@ check('ufficio scolastico → non è un istituto', null, nomeIstitutoPresentabil
 check('artefatto «timbro_…» → nessun nome', null, nomeIstitutoPresentabile('timbro_protocollo_interpello_COSMA_-'));
 check('sigla di plesso «PRIMARIA-signed» → nessun nome', null, nomeIstitutoPresentabile('PRIMARIA-signed'));
 check('codice col trattino dentro un testo → nessun nome', null, nomeIstitutoPresentabile('I.C. A-48 Carducci'));
+// SEGNAPOSTO (§26.76/§26.77, direttiva 22/10/2026): «Scuola non specificata / Più
+// plessi» è una DICHIARAZIONE di dato mancante, non una denominazione. Il gate la
+// rifiuta in ogni sua forma (accenti, maiuscole, separatori) e la riga ricade sul
+// nome ricavato dal titolo — o resta fuori dal tabellone.
+check(
+  'segnaposto intero «Scuola non specificata / Più plessi»',
+  null,
+  nomeIstitutoPresentabile('Scuola non specificata / Più plessi'),
+);
+check(
+  'segnaposto in MAIUSCOLO (il badge storico)',
+  null,
+  nomeIstitutoPresentabile('SCUOLA NON SPECIFICATA / PIÙ PLESSI'),
+);
+check('prima metà del segnaposto', null, nomeIstitutoPresentabile('Scuola non specificata'));
+check('segnaposto senza accenti e col trattino', null, nomeIstitutoPresentabile('Scuola non specificata - Piu plessi'));
+check('«Più plessi» da solo non è un istituto', null, nomeIstitutoPresentabile('Più plessi'));
 
 console.log('\n— Gate: i nomi REALI passano (e la coda di procedura si taglia) —');
 check('«Liceo Statale A. Monti»', 'Liceo Statale A. Monti', nomeIstitutoPresentabile('Liceo Statale A. Monti'));
@@ -76,6 +99,43 @@ check(
   'IC ALBIGNASEGO',
   nomeIstitutoPresentabile('IC ALBIGNASEGO corso di formazione per esperti'),
 );
+console.log('\n— §26.73: sigle, abbreviazioni e numerali delle FONTI reali (gate ammorbidito) —');
+// Righe REALI scartate dal gate il 16/10/2026 (`npm run board:verifica`: 33 su 495
+// avvisi attivi), quasi tutte per una sigla che il gate non riconosceva.
+check(
+  '«I grado Faustini – Frank – Nicolini» (13 righe faustini-frank.edu.it)',
+  'I grado Faustini – Frank – Nicolini',
+  nomeIstitutoPresentabile('I grado Faustini – Frank – Nicolini'),
+);
+check('«Ottavo Circolo» (ordinale a parole)', 'Ottavo Circolo', nomeIstitutoPresentabile('Ottavo Circolo'));
+check('«IISLAGRANGIA» → sigla incollata aperta', 'IIS LAGRANGIA', nomeIstitutoPresentabile('IISLAGRANGIA'));
+check(
+  '«ICFRANCESCONEGRI» → sigla incollata aperta',
+  'IC FRANCESCONEGRI',
+  nomeIstitutoPresentabile('ICFRANCESCONEGRI'),
+);
+check('«IST. COMPR. CURIONI»', 'IST. COMPR. CURIONI', nomeIstitutoPresentabile('IST. COMPR. CURIONI'));
+check('«ICS CARDUCCI»', 'ICS CARDUCCI', nomeIstitutoPresentabile('ICS CARDUCCI'));
+check('«IT DA VINCI»', 'IT DA VINCI', nomeIstitutoPresentabile('IT DA VINCI'));
+check(
+  '«DIREZIONE DIDATTICA VALENZA»',
+  'DIREZIONE DIDATTICA VALENZA',
+  nomeIstitutoPresentabile('DIREZIONE DIDATTICA VALENZA'),
+);
+check(
+  '«CPIA3 TORINO TULLIO DE MAURO» → cifra staccata',
+  'CPIA 3 TORINO TULLIO DE MAURO',
+  nomeIstitutoPresentabile('CPIA3 TORINO TULLIO DE MAURO'),
+);
+check('«CPIA2AL -NOVI LIGURE» → cifra staccata', 'CPIA 2 AL -NOVI LIGURE', nomeIstitutoPresentabile('CPIA2AL -NOVI LIGURE'));
+console.log('  …e quello che resta FUORI (codice, segnaposto o titolo: non è un nome)');
+check('«ISTITUTO COMPRENSIVO» senza denominazione', null, nomeIstitutoPresentabile('ISTITUTO COMPRENSIVO'));
+check('nome-segnaposto «Avviso»', null, nomeIstitutoPresentabile('Avviso'));
+check('codice come nome «CNIC868005»', null, nomeIstitutoPresentabile('CNIC868005'));
+check('codice minuscolo «cnic84300r»', null, nomeIstitutoPresentabile('cnic84300r'));
+check('codice parziale «BIPS000N»', null, nomeIstitutoPresentabile('BIPS000N'));
+check('«G. BARUFFI»: solo denominazione, nessuna testa', null, nomeIstitutoPresentabile('G. BARUFFI'));
+check('titolo «CALENDARIO SCOLASTICO» non è una scuola', null, nomeIstitutoPresentabile('CALENDARIO SCOLASTICO'));
 console.log('\n— Sigle di sostegno: solo `AD…`, mai un toponimo di 4 lettere —');
 /** «ASTI» ha la stessa forma A+?+2 lettere: il vecchio pattern la scartava come sostegno. */
 check('«I.C. VILLAFRANCA D ASTI» è un nome (non una sigla di sostegno)', 'I.C. VILLAFRANCA D ASTI', nomeIstitutoPresentabile('I.C. VILLAFRANCA D ASTI'));

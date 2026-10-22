@@ -65,6 +65,7 @@ export function arricchisciConAnagrafica(a: InterpelloParsato): InterpelloParsat
     school_code: a.schoolCode,
     school_name: a.schoolName,
     contact_email: a.contactEmail,
+    school_site: a.schoolSite,
     title: a.title,
     province: a.province,
   });
@@ -77,6 +78,7 @@ export function arricchisciConAnagrafica(a: InterpelloParsato): InterpelloParsat
     schoolCode: patch.school_code ?? a.schoolCode,
     schoolName: patch.school_name ?? a.schoolName,
     schoolPec: patch.school_pec ?? a.schoolPec ?? null,
+    schoolSite: patch.school_site ?? a.schoolSite ?? null,
     contactEmail: patch.contact_email ?? a.contactEmail,
   };
 }

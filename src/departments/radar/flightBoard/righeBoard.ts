@@ -38,6 +38,15 @@ export interface InterpelloLive {
   expiration_date: string | null;
   created_at: string | null;
   source_url?: string | null;
+  /** Recapiti pubblicati dalla fonte: servono a ricavare la home `.edu.it`
+   *  quando `source_url` punta a una piattaforma (Argo, Google Forms…). */
+  contact_email?: string | null;
+  school_pec?: string | null;
+  /** Sito istituzionale dall'anagrafica MIM (`SITOWEBSCUOLA` → `school_site`,
+   *  solo host, es. `www.iccarducci.edu.it`): è la PRIMA scelta di
+   *  `fonteApribile` per la home `.edu.it` (§26.77). */
+  school_site?: string | null;
+  /** Stato dell'anagrafica: informativo, NON è più un badge di vetrina (§26.76). */
   anagrafica_parziale?: boolean;
 }
 

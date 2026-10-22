@@ -11,7 +11,9 @@
  *   · `eOpportunitaConScadenza(scadenza)` → REGOLA FERREA del feed (§26.71):
  *     senza una scadenza dichiarata e non ancora passata la riga NON è
  *     un'opportunità attiva (le pagine di archivio e gli indici di codici restano
- *     fuori da bacheca, punteggio e conteggi);
+ *     fuori da bacheca, punteggio e conteggi); dentro vale anche l'ORIZZONTE
+ *     (`GIORNI_ORIZZONTE_OPPORTUNITA`, §26.75): una «scadenza» a 8 mesi è la fine
+ *     di un contratto, non il termine per candidarsi;
  *   · `stileScadenza(giorni)`  → semaforo del badge: 🟢 lungo · 🟡 vicino · 🔴 imminente.
  */
 
@@ -124,9 +126,24 @@ export function eAvvisoVivo(
 }
 
 /**
- * REGOLA FERREA DELL'OPPORTUNITÀ (§26.71, direttiva 16/10/2026): senza una
- * `expiration_date` dichiarata — o con una data già passata — la riga NON è
- * un'opportunità di lavoro attiva.
+ * ORIZZONTE di un'opportunità (§26.75, direttiva 22/10/2026): una candidatura si
+ * apre a ridosso del termine. Oltre i 30 giorni la «scadenza» che si legge nei
+ * dati reali non è un termine per candidarsi ma la FINE dell'incarico
+ * («supplenza dal 23/10/2026 al 30/06/2027», «Durata Supplenza: fino al
+ * 23/03/2027»): quelle righe restano fuori da bacheca e dal Radar Live.
+ *
+ * Perché serve un tetto esplicito: senza di esso il badge verde «In corso»
+ * segnalava come lunghe opportunità che erano in realtà contratti annuali già
+ * assegnati (sintomo misurato: 3 righe con scadenza 2027 su una popolazione di
+ * 353 avvisi attivi).
+ */
+export const GIORNI_ORIZZONTE_OPPORTUNITA = 30;
+
+/**
+ * REGOLA FERREA DELL'OPPORTUNITÀ (§26.71, direttiva 16/10/2026; orizzonte §26.75):
+ * senza una `expiration_date` dichiarata — o con una data già passata, o oltre
+ * l'orizzonte dei `GIORNI_ORIZZONTE_OPPORTUNITA` — la riga NON è un'opportunità
+ * di lavoro attiva.
  *
  * Perché è una regola a parte e non un ramo di `eAvvisoVivo`: le righe che la
  * fonte non data sono, nella pratica misurata sulla banca dati, pagine di
@@ -140,42 +157,50 @@ export function eAvvisoVivo(
  * (`scripts/pulisci-scaduti.ts`, RPC `match_interpelli`).
  *
  * Un solo punto di verità: il verdetto è lo stesso per bacheca pubblica, feed
- * della dashboard e i rispettivi filtri di lettura.
+ * della dashboard, filtro PostgREST (`filtroAttivi`) e rispettivi filtri di lettura.
  */
 export function eOpportunitaConScadenza(
   scadenza?: string | null,
   oggi: Date = new Date(),
+  orizzonteGiorni: number = GIORNI_ORIZZONTE_OPPORTUNITA,
 ): boolean {
   if (!(scadenza ?? '').trim()) return false;
-  return eInterpelloAttivo(scadenza, oggi);
+  if (!eInterpelloAttivo(scadenza, oggi)) return false;
+  const giorni = giorniRimanenti(scadenza, oggi);
+  if (giorni === null) return false;
+  return giorni <= orizzonteGiorni;
 }
 
 /**
- * Semaforo di scadenza per i badge:
- *   🟢 verde   → lungo termine (> 7 giorni)
- *   🟡 giallo  → in avvicinamento (3–7 giorni)
- *   🔴 rosso   → imminente / ultimi giorni (≤ 2 giorni, "scade oggi")
- *   ⚫ grigio  → scaduto o scadenza non indicata
+ * Semaforo di scadenza per i badge — PALETTE PIENA ad alto contrasto
+ * (§26.75, direttiva 22/10/2026): le tinte pastello (`…-100`, `…-200`) non si
+ * leggono di sfuggita e sul tabellone convivevano con le bande sature del
+ * «Radar Live». Qui valgono gli stessi token del tabellone
+ * (`rigaBoardDati.URGENZA_TOKENS`): colore PIENO, testo BIANCO, grassetto.
+ *   🟢 verde   → lungo termine (> 7 giorni)   `bg-emerald-700`
+ *   🟠 arancio → in avvicinamento (3–7 giorni) `bg-amber-600`
+ *   🔴 rosso   → imminente / ultimi giorni (≤ 2 giorni, "scade oggi") `bg-rose-700`
+ *   ⚫ ardesia → scaduto o scadenza non indicata (assenza di dato, non allarme)
  */
 export function stileScadenza(giorni: number | null): StileScadenza {
   if (giorni === null) {
-    return { livello: 'sconosciuto', className: 'bg-slate-100 text-slate-600', label: 'Scadenza n/d' };
+    return { livello: 'sconosciuto', className: 'bg-slate-600 text-white font-bold', label: 'Scadenza n/d' };
   }
   if (giorni < 0) {
-    return { livello: 'scaduto', className: 'bg-slate-200 text-slate-600', label: 'Scaduto' };
+    return { livello: 'scaduto', className: 'bg-slate-700 text-white font-bold', label: 'Scaduto' };
   }
   if (giorni === 0) {
-    return { livello: 'imminente', className: 'bg-red-600 text-white animate-pulse', label: 'Scade oggi' };
+    return { livello: 'imminente', className: 'bg-rose-700 text-white font-bold animate-pulse', label: 'Scade oggi' };
   }
   if (giorni <= SOGLIA_IMMINENTE) {
     return {
       livello: 'imminente',
-      className: 'bg-red-600 text-white animate-pulse',
+      className: 'bg-rose-700 text-white font-bold animate-pulse',
       label: `Ultimi ${giorni} ${giorni === 1 ? 'giorno' : 'giorni'}`,
     };
   }
   if (giorni <= SOGLIA_VICINA) {
-    return { livello: 'vicino', className: 'bg-amber-500 text-white', label: `Tra ${giorni} giorni` };
+    return { livello: 'vicino', className: 'bg-amber-600 text-white font-bold', label: `Tra ${giorni} giorni` };
   }
-  return { livello: 'lungo', className: 'bg-emerald-600 text-white', label: 'In corso' };
+  return { livello: 'lungo', className: 'bg-emerald-700 text-white font-bold', label: 'In corso' };
 }

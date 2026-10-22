@@ -39,6 +39,12 @@ const heroLanding = leggi('src/components/landing/LandingHero.tsx');
 /** Box «Prova il Radar» (simulatore pubblico) e bacheca interpelli del primo schermo. */
 const simulatoreHero = leggi('src/departments/radar/SimulatorRadar.tsx');
 const boardRadar = leggi('src/departments/radar/FlightBoardInterpelli.tsx');
+// Intestazione del tabellone (titolo + pill del totale): estratta dal board nel
+// §26.76 per tenere il file sotto le 250 righe del gate strutturale. Il conteggio
+// però deve restare QUELLO del tabellone: la guardia verifica il passaggio del
+// numero (`etichettaTotale={metrica.etichettaTotale}`) e l'assenza di totali
+// scritti a mano in entrambi i file.
+const boardIntestazione = leggi('src/departments/radar/flightBoard/components/IntestazioneBoard.tsx');
 
 console.log('— Primo schermo: hero e Radar Live —');
 check(
@@ -107,7 +113,9 @@ check(
 check(
   'Radar Live: il badge usa il conteggio reale (mai un totale scritto a mano)',
   true,
-  /\{metrica\.etichettaTotale &&/.test(boardRadar) &&
+  /etichettaTotale=\{metrica\.etichettaTotale\}/.test(boardRadar) &&
+    /\{etichettaTotale\.toUpperCase\(\)\}/.test(boardIntestazione) &&
+    !/(?:\d{3,}\s*avvisi|8\.000|5\.000|500\+)/.test(boardIntestazione) &&
     !/aria-label="Radar Live"[\s\S]{0,4000}(?:\d{3,}\s*avvisi|8\.000|5\.000|500\+)/.test(boardRadar),
 );
 check(

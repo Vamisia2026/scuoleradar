@@ -30,6 +30,8 @@ import {
   leggiTutteLePagine,
   type RispostaPagina,
 } from '../letturaBoard';
+import { creaLettoreInterpelli } from '../letturaInterpelli';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 /** Interfaccia minima per l'ambiente (come gli altri test di prodotto). */
 declare const process: { exitCode?: number };
@@ -161,6 +163,57 @@ const vuoto = await leggiTutteLePagine<RigaFinta>({
 check('nessuna riga', 0, vuoto.righe.length);
 check('nessuna richiesta', 0, vuoto.pagineLette);
 check('esaustiva', true, vuoto.esaustiva);
+
+/**
+ * Client Supabase finto per la QUERY del tabellone (`letturaInterpelli.ts`):
+ * registra le colonne chieste a ogni `select` e può fallire come farebbe il
+ * database con la migrazione di `school_site` non applicata.
+ */
+function clientInterpelliFinto(opzioni: { errorePrima?: string; righe?: RigaFinta[] }) {
+  const selezioni: string[] = [];
+  const catena = {
+    select: (colonne: string) => {
+      selezioni.push(colonne);
+      return catena;
+    },
+    or: () => catena,
+    order: () => catena,
+    range: async () => {
+      const colonne = selezioni[selezioni.length - 1] ?? '';
+      if (opzioni.errorePrima && colonne.includes('school_site')) {
+        return { data: null, error: { message: opzioni.errorePrima } };
+      }
+      return { data: opzioni.righe ?? [], error: null };
+    },
+  };
+  const client = { from: () => catena } as unknown as SupabaseClient;
+  return { selezioni, client };
+}
+
+console.log('\n— 9. `school_site` prima della migrazione: la bacheca non si spegne —');
+const primaMigrazione = clientInterpelliFinto({
+  errorePrima: 'column interpelli.school_site does not exist',
+  righe: righeFinte(3),
+});
+const lettore = creaLettoreInterpelli(primaMigrazione.client, "expiration_date.gte.2026-01-01");
+const primoEsito = await lettore(0, 999);
+check('la prima select chiede anche il sito istituzionale', true, primaMigrazione.selezioni[0].includes('school_site'));
+check('la seconda select NON chiede più `school_site`', false, primaMigrazione.selezioni[1].includes('school_site'));
+check('la PEC resta nella select di ripiego', true, primaMigrazione.selezioni[1].includes('school_pec'));
+check('nessun errore riportato al tabellone', null, primoEsito.error);
+check('le righe arrivano lo stesso', 3, primoEsito.data?.length);
+await lettore(0, 999);
+check(
+  'il ripiego resta valido per le pagine successive (nessun errore ripetuto)',
+  false,
+  primaMigrazione.selezioni[2].includes('school_site'),
+);
+
+const guasto = clientInterpelliFinto({ errorePrima: 'permission denied for table interpelli', righe: righeFinte(1) });
+const lettoreGuasto = creaLettoreInterpelli(guasto.client, '');
+const esitoGuasto = await lettoreGuasto(0, 999);
+check('un errore diverso NON viene nascosto', 'permission denied for table interpelli', esitoGuasto.error?.message);
+check('un errore diverso non innesca un secondo tentativo', 1, guasto.selezioni.length);
 
 process.exitCode = errori === 0 ? 0 : 1;
 console.log(

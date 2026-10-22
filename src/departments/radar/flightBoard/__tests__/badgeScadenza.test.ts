@@ -7,9 +7,10 @@
  *   1. il colore è quello dei GIORNI DI CALENDARIO mancanti da oggi (rosso
  *      imminente → verde lontano), con la regola condivisa
  *      (`lib/scadenza.giorniRimanenti`): scade oggi / entro 48h → rosso,
- *      3–10 giorni → giallo, oltre 10 giorni → verde. Il conto NON è una
- *      differenza fra istanti: un avviso che scade oggi è «Scade oggi», mai
- *      «Scade domani» (era il bug corretto il 16/10/2026, §26.71);
+ *      3–7 giorni → arancio, oltre 7 giorni → verde (§26.75: le soglie sono le
+ *      stesse di `SOGLIA_IMMINENTE`/`SOGLIA_VICINA` e di `livelloUrgenza`). Il
+ *      conto NON è una differenza fra istanti: un avviso che scade oggi è «Scade
+ *      oggi», mai «Scade domani» (era il bug corretto il 16/10/2026, §26.71);
  *   2. senza scadenza NON si inventa nulla: banda neutra «Scadenza n/d» — mai la
  *      data di pubblicazione spacciata per scadenza (il vecchio `Pubblicato 12
  *      set`) e mai un colore d'allarme;
@@ -45,22 +46,29 @@ function fra(giorni: number): string {
   return dataIsoLocale(d);
 }
 
-console.log('— 0. Palette PIENA delle tre bande di urgenza (§26.72, 15/10/2026) —');
+console.log('— 0. Palette PIENA delle bande di urgenza (§26.72 / §26.75) —');
 // Direttiva di prodotto: il colore di urgenza deve vedersi di sfuggita, anche su
 // schermo piccolo → tinta SATURA con testo bianco in grassetto. Le tinte pastello
-// (…-100) erano troppo deboli per un segnale di urgenza.
+// (…-100, …-200) erano troppo deboli per un segnale di urgenza e sono state
+// rimosse da TUTTO il tabellone (badge, pill del totale, marcatori di riga).
 const ePieno = (token: string): boolean =>
   /\bbg-\w+-[5-9]00\b/.test(token) && token.includes('text-white') && token.includes('font-bold');
 check('verde: colore pieno su testo bianco', true, ePieno(URGENZA_TOKENS.verde));
 check('giallo: colore pieno su testo bianco', true, ePieno(URGENZA_TOKENS.giallo));
 check('rosso: colore pieno su testo bianco', true, ePieno(URGENZA_TOKENS.rosso));
+check('neutro: colore pieno su testo bianco', true, ePieno(URGENZA_TOKENS.neutro));
 check('verde del design system: `bg-emerald-700`', true, URGENZA_TOKENS.verde.includes('bg-emerald-700'));
 check('giallo del design system: `bg-amber-600`', true, URGENZA_TOKENS.giallo.includes('bg-amber-600'));
 check('rosso del design system: `bg-rose-700`', true, URGENZA_TOKENS.rosso.includes('bg-rose-700'));
-// La banda NEUTRA non è un'urgenza: dichiara l'ASSENZA di un dato, quindi resta
-// tenue — non deve gridare come una scadenza vicina.
-check('neutro: tinta tenue (assenza di dato, non allarme)', true, URGENZA_TOKENS.neutro.includes('bg-slate-100'));
-check('neutro: nessun testo bianco da allarme', false, URGENZA_TOKENS.neutro.includes('text-white'));
+// Nessuna tinta pastello (…-50 / …-100 / …-200) in nessun token: la direttiva
+// §26.75 chiede SOLO colori pieni ad alto contrasto.
+check(
+  'nessun token pastello (…-50/…-100/…-200)',
+  [],
+  Object.entries(URGENZA_TOKENS)
+    .filter(([, token]) => /\bbg-\w+-(?:50|100|200)\b/.test(token))
+    .map(([banda]) => banda),
+);
 
 console.log('\n— 1. Colore = giorni di CALENDARIO mancanti: rosso imminente, verde lontano —');
 const oggi = badgeScadenza(fra(0));
@@ -80,22 +88,26 @@ check('entro 48h → rosso', URGENZA_TOKENS.rosso, due.className);
 
 const tre = badgeScadenza(fra(3));
 check('3 giorni → giallo', URGENZA_TOKENS.giallo, tre.className);
-check('3 giorni → etichetta compatta', 'Scade tra 3g', tre.label);
+check('3 giorni → etichetta di STATO, non un conto alla rovescia', 'Ultima settimana', tre.label);
+check('nessuna etichetta è un «Scade tra Ng»', false, /Scade tra \d/.test(tre.label));
 
 const sette = badgeScadenza(fra(7));
-check('7 giorni → giallo (soglia di prodotto: 3–10)', URGENZA_TOKENS.giallo, sette.className);
+check('7 giorni → giallo (soglia di prodotto: 3–7)', URGENZA_TOKENS.giallo, sette.className);
+check('7 giorni → stessa etichetta di stato della banda', 'Ultima settimana', sette.label);
+check('nessun conto alla rovescia nemmeno a 5 giorni', 'Ultima settimana', badgeScadenza(fra(5)).label);
 
-const undici = badgeScadenza(fra(11));
-check('11 giorni → verde (oltre la soglia dei 10)', URGENZA_TOKENS.verde, undici.className);
+const otto = badgeScadenza(fra(8));
+check('8 giorni → verde (oltre la soglia dei 7)', URGENZA_TOKENS.verde, otto.className);
+check('8 giorni → etichetta «In corso»', 'In corso', otto.label);
 
 const lontano = badgeScadenza(fra(30));
 check('30 giorni → etichetta', 'In corso', lontano.label);
-check('30 giorni → verde', URGENZA_TOKENS.verde, lontano.className);
+check('30 giorni → verde (ultimo giorno dell’orizzonte)', URGENZA_TOKENS.verde, lontano.className);
 check('30 giorni → ISO della scadenza per il tooltip', fra(30), lontano.dataRif);
 
 console.log('\n— 2. Senza scadenza NON si inventa nulla (mai la pubblicazione) —');
 const assente = badgeScadenza(null);
-check('null → banda neutra', true, assente.className.includes('bg-slate-100'));
+check('null → banda neutra piena (ardesia)', true, assente.className.includes('bg-slate-600'));
 check('null → etichetta dichiarata', 'Scadenza n/d', assente.label);
 check('null → fonte «nessuna»', 'nessuna', assente.fonte);
 check('null → nessun colore d’allarme', false, /bg-(rose|amber|emerald)-/.test(assente.className));
@@ -107,7 +119,7 @@ check('undefined → stessa banda', 'Scadenza n/d', badgeScadenza(undefined).lab
 const sporca = badgeScadenza('non-una-data');
 check('data non parsabile → dichiarata, non colorata', 'Scadenza non valida', sporca.label);
 check('data non parsabile → mai rossa', false, sporca.className === URGENZA_TOKENS.rosso);
-check('data non parsabile → resta neutra', true, sporca.className.includes('bg-slate-100'));
+check('data non parsabile → resta neutra', true, sporca.className.includes('bg-slate-600'));
 
 console.log('\n— 3. La data della cella: ISO reale, vuota quando manca (trattino) —');
 check('data ISO → «12 set»', '12 set', dataItBreve('2026-09-12'));

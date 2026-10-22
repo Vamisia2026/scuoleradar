@@ -1,53 +1,88 @@
 // scripts/table-reporter.ts
 //
 // Table Reporter — v10
-//   • FIX v10 — ALLINEAMENTO della SCADENZA alla colonna CANONICA:
-//       - il parser scrive `expiration_date` (timestamptz), la scadenza che
-//         leggono bacheca «Radar Live», filtro degli avvisi attivi, matching e
-//         notifiche — non più soltanto il vecchio `deadline` (colonna legacy
-//         `text`): erano due verità diverse e, sul database reale, 992 righe su
-//         992 con la scadenza piena avevano `expiration_date` NULLO;
-//       - upsert in DUE passi: i NUOVI avvisi si inseriscono
-//         (`ignoreDuplicates`), alle righe ESISTENTI la scadenza viene
-//         SCRITTA o SOVRASCRITTA con un UPDATE mirato. Serve perché l'`hash_id`
-//         (`provincia|codice|titolo|url`) NON contiene la data: il solo upsert
-//         saltava il conflitto e la riga non riceveva mai la scadenza;
-//       - `deadline` resta come specchio testuale ISO e, se la colonna non
-//         esiste, viene tolta dal payload senza rompere l'inserimento (stesso
-//         patto di `COLONNE_OPZIONALI` in `src/scraper/index.ts`).
-//   • FIX v9 — Supporto rigido per portali USR Piemonte:
-//       - Filtro STATO INTERPELLO: processa SOLO righe con stato "aperto".
-//         Scarta "chiuso", "cancellato", vuoto o qualsiasi altro valore.
-//       - Estrazione SCADENZA dalla colonna "Data Scadenza Interpello"
-//         (formato YYYY-MM-DD o DD/MM/YYYY). Se manca la colonna, usa il
-//         fallback +15 giorni oppure scarta (configurabile).
-//       - Lettura rigida orizzontale: Colonna 1 = Codice Meccanografico
-//         (deriva provincia AT/CN/TO/AL/NO/VC/VB/BI), Colonna 2 = Denominazione.
-//   • FIX #1 — Forzatura assoluta della scadenza (v8):
-//       - Cerca QUALSIASI colonna con "scadenza" nell'header o nel testo.
-//       - MAI usare la "Data Pubblicazione" come deadline.
-//   • FIX #2 — Eliminazione totale degli "EE" (v8):
-//       - Analizza la PRIMISSIMA cella per codice meccanografico.
-//       - Se ancora "EE", cerca la sigla nell'URL (`ambito_cn`, `_to.php`, ...).
-//   • FIX #3 — Nome scuola pulito (v8):
-//       - MAI "SCUOLA NON SPECIFICATA".
-//   • FIX #4 — Ingestione Master Liguria (v8):
-//       - Supporto `servizi.istruzioneliguria.gov.it/provincia.php?p=...`.
+//   • FIX v10 — Robustezza per portali USR Piemonte (pagine PHP legacy):
+//       - Rilevamento header anche dalla prima riga di <td> (le tabelle
+//         Piemonte spesso non hanno <thead>).
+//       - Mappatura colonne più flessibile con pattern multipli e
+//         fallback posizionali.
+//       - Rilevamento dinamico della colonna "Stato" analizzando i valori
+//         delle celle (cerca "aperto"/"chiuso").
+//       - Filtro stato: se non c'è colonna stato, controlla l'intera riga
+//         per "aperto" e assenza di "chiuso"/"cancellato".
+//       - Estrazione codice meccanografico e scadenza da QUALSIASI cella,
+//         non solo dalla prima.
+//       - Log di debug opzionali (DEBUG=1) per ispezionare header e colonne.
+//   • FIX v9 — Filtro STATO INTERPELLO dedicato + lettura orizzontale rigida.
+//   • FIX #1 — Forzatura assoluta della scadenza (v8).
+//   • FIX #2 — Eliminazione totale degli "EE" (v8).
+//   • FIX #3 — Nome scuola pulito (v8).
+//   • FIX #4 — Ingestione Master Liguria (v8).
 //   • Auto-disattivazione target inutili (v6) preservata.
 //   • Cleanup iniziale Umbria (v6) preservato.
 //   • Anti-spam Sindacale & Rumore — Zero Tolleranza (v5).
 //   • Pre-check Strutturale (v4) + Filtro Chiusi / Link attivo (v3).
+//
+// VERSIONE v11 (22/10/2026) — filtro regioni per verifiche mirate:
+//   `npx tsx scripts/table-reporter.ts --regioni=Piemonte,Liguria`
+//   limita i target a quelle regioni: serve a validare una correzione di
+//   sorgente (es. il passaggio Piemonte `/interpello2025/` → `/interpello2026/`)
+//   senza riscrivere gli interpelli delle altre regioni in produzione.
+//
+//   • FIX v11 — parser allineati ai portali 2026: Piemonte (le righe non hanno
+//     <a>, l'azione è un submit POST «Stampa <progr>»: `source_url` diventa
+//     `<pagina>#progr=<n>`) e Liguria (lista servita come griglia di <div>
+//     `results-row`, non più come <table>).
+//
+// VERSIONE v12 (22/10/2026) — codici di classe e griglia nazionale Liguria:
+//   • FIX v12 — `A041`/`A026`/`A048` diventavano `GENERALE`. Il pattern v11
+//     del codice di classe (`[A-Za-z]{2,6}[0-9]{0,2}`) pretendeva almeno DUE
+//     lettere: le classi del secondo grado scritte come «A041 - Scienze e
+//     tecnologie informatiche» non passavano e ricadevano su
+//     `extractSubjectAndClass` → `GENERALE` (misurato: 17 righe Piemonte e 33
+//     Liguria incapaci di fare match). Ora il codice è riconosciuto in TRE
+//     forme: 4-6 lettere (AAAA, ADEE, AAIRC), 2 lettere + 2 cifre (AA24, BD02)
+//     e 1 lettera + 2/3 cifre (A026, A041).
+//   • FIX v12 — la griglia Liguria ha DUE layout: per provincia (5 celle, la
+//     scadenza è la cella «Scadenza») e nazionale (7 celle: Data · Regione ·
+//     Provincia · Scuola · CDC · Interpello · Azione). Il layout nazionale
+//     veniva letto con le colonne del primo: `school_name` = «Puglia»,
+//     `province` = 'EE', `deadline` inventata. Ora il layout si rileva dagli
+//     header e ogni riga prende la provincia reale (città → codice dal
+//     catalogo) e la data dopo l'etichetta «Scadenza:».
+//
+// VERSIONE v13 (22/10/2026) — la SCADENZA è solo quella dichiarata (§26.75):
+//   • FIX v13 — la tabella Piemonte ha 12 colonne: «Durata Supplenza» (30 Giugno,
+//     04 Febbraio, «fino a 10 giorni») e «Data Interpello» (07/10/2027, la FINE
+//     dell'incarico) non sono scadenze di candidatura. Il vecchio fallback
+//     «cerca QUALSIASI data futura in qualsiasi cella» pescava quelle date e la
+//     riga risultava aperta fino all'anno dopo. Ora la scadenza si legge SOLO
+//     dalla colonna mappata o da una cella che scrive «Scadenza:».
+//   • FIX v13 — caduti i due ripieghi che INVENTAVANO una data: `oggi + 15
+//     giorni` (tabelle senza colonna scadenza) e «data di pubblicazione + 15»
+//     (griglia Liguria senza etichetta). Una riga senza scadenza dichiarata si
+//     scarta: niente più badge verdi «In corso» su avvisi che nessuno ha datato.
 //
 // Legge i target da discovered_links (status = 'active_crawler'),
 // estrae le righe delle tabelle interpelli e fa upsert su interpelli.
 //
 // Dipendenze: @supabase/supabase-js, cheerio, dotenv
 // Uso: npx tsx scripts/table-reporter.ts
+//      npx tsx scripts/table-reporter.ts --regioni=Piemonte,Liguria
+//      npx tsx scripts/table-reporter.ts --regioni=Piemonte,Liguria --dry-run
+//        (dry-run: stampa i record estratti senza scrivere su Supabase)
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import * as cheerio from 'cheerio';
 import * as dotenv from 'dotenv';
 import * as crypto from 'crypto';
+
+// FIX v12 — la griglia nazionale Liguria nomina la provincia per esteso
+// («Taranto», «Reggio Calabria»): il codice e la regione si leggono dal
+// catalogo condiviso, senza tabelle duplicate nello script.
+import { provinciaDaCitta, provinciaDaCodice } from '../src/lib/scanTargets.ts';
+// FIX v13 — l'orizzonte della scadenza è lo stesso della vetrina: un solo numero.
+import { GIORNI_ORIZZONTE_OPPORTUNITA } from '../src/lib/scadenza.ts';
 
 dotenv.config();
 
@@ -61,12 +96,34 @@ const CONFIG = {
   minSchoolNameLength: 4,
   fallbackProvince: 'EE',
   disqualifiedStatus: 'disabled',
-  // Fallback deadline: giorni da oggi quando la colonna scadenza è assente.
-  defaultDeadlineDays: 15,
-  // Se true, scarta la riga quando non c'è scadenza certa.
-  // Se false, usa il fallback +15 giorni.
-  discardWhenNoDeadline: false,
+  // Debug: se true, stampa header e colonne rilevate per ogni tabella.
+  debug: process.env.DEBUG === '1' || process.env.DEBUG === 'true',
 } as const;
+
+// FIX v13 (§26.75) — NIENTE PIÙ `defaultDeadlineDays`: fino alla v12 una riga
+// senza scadenza riceveva `oggi + 15 giorni`, una data che nessuna fonte aveva
+// pubblicato (e che il «Radar Live» mostrava come badge verde «In corso»). Ora
+// una riga senza scadenza DICHIARATA si scarta: la colonna «Scadenza» del
+// tabellone deve potere essere sempre vera.
+
+// Filtro regioni opzionale (case-insensitive): `--regioni=Piemonte,Liguria`
+// oppure variabile d'ambiente `REGIONI=Piemonte,Liguria`. Vuoto = tutte.
+const REGIONI_FILTRO: string[] = (() => {
+  const arg = process.argv.find((a) => a.startsWith('--regioni='));
+  const raw = arg
+    ? arg.slice('--regioni='.length)
+    : process.env.REGIONI ?? '';
+  return raw
+    .split(',')
+    .map((r) => r.trim().toLowerCase())
+    .filter(Boolean);
+})();
+
+// `--dry-run` (o `DRY_RUN=1`): esegue fetch ed estrazione e stampa i record
+// trovati, senza scrivere su Supabase. Serve a validare una correzione di
+// parser PRIMA di toccare la produzione.
+const DRY_RUN =
+  process.argv.includes('--dry-run') || process.env.DRY_RUN === '1';
 
 const supabaseUrl =
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -99,13 +156,14 @@ const PROVINCE_CODES = new Set<string>([
   'VT','VV',
 ]);
 
-// Case-insensitive: cattura anche codici in minuscolo presenti nelle tabelle.
-const MECH_CODE_REGEX = /\b([A-Za-z]{2}[A-Za-z0-9]{8})\b/g;
+// Regex più permissiva: cattura codici con eventuali spazi interni.
+const MECH_CODE_REGEX = /\b([A-Za-z]{2}\s*[A-Za-z0-9]\s*[A-Za-z0-9]\s*[A-Za-z0-9]\s*[A-Za-z0-9]\s*[A-Za-z0-9]\s*[A-Za-z0-9]\s*[A-Za-z0-9]\s*[A-Za-z0-9])\b/g;
 
 function isLikelyMechCode(code: string): boolean {
-  if (code.length !== 10) return false;
-  if (!PROVINCE_CODES.has(code.slice(0, 2))) return false;
-  if (!/^[A-Z]{2}$/.test(code.slice(2, 4))) return false;
+  const clean = code.replace(/\s+/g, '');
+  if (clean.length !== 10) return false;
+  if (!PROVINCE_CODES.has(clean.slice(0, 2))) return false;
+  if (!/^[A-Z]{2}$/.test(clean.slice(2, 4))) return false;
   return true;
 }
 
@@ -113,29 +171,16 @@ function extractMechCode(text: string): string {
   if (!text) return 'ND';
   const matches = text.match(MECH_CODE_REGEX) || [];
   for (const raw of matches) {
-    const upper = raw.toUpperCase();
+    const clean = raw.replace(/\s+/g, '').toUpperCase();
+    if (isLikelyMechCode(clean)) return clean;
+  }
+  // Fallback: cerca pattern standard senza spazi
+  const fallback = text.match(/\b([A-Za-z]{2}[A-Za-z0-9]{8})\b/);
+  if (fallback) {
+    const upper = fallback[1].toUpperCase();
     if (isLikelyMechCode(upper)) return upper;
   }
   return 'ND';
-}
-
-/** Codice meccanografico scritto DENTRO una cella (Umbria: «PGIS013005 I.O. …»). */
-const RE_CODICE_NEL_NOME = /\b[A-Za-z]{2}[A-Za-z0-9]{8}\b/g;
-
-/**
- * Nome dell'istituto SENZA il codice meccanografico.
- *
- * Molte tabelle regionali (Umbria, colonna «Ist. scolastica») mettono il codice
- * nella STESSA cella del nome: «PGIS013005 I.O. "ROSSELLI-RASETTI"». Il codice è
- * già salvato a parte in `school_code`, e dentro il nome blocca la vetrina
- * (`nomeIstituto.ts` scarta ogni token misto lettere+cifre). Si toglie SOLO un
- * token a forma di codice con almeno una cifra, per non mutilare le parole.
- */
-function pulisciNomeScuola(nome: string): string {
-  const senzaCodice = nome.replace(RE_CODICE_NEL_NOME, (trovato) =>
-    /\d/.test(trovato) && isLikelyMechCode(trovato.toUpperCase()) ? ' ' : trovato
-  );
-  return normalize(senzaCodice).replace(/^[\s|·,;:.–—-]+|[\s|·,;:.–—-]+$/g, '');
 }
 
 // ---------------------------------------------------------------------------
@@ -159,12 +204,13 @@ interface InterpelloRecord {
   region: string | null;
   class_code: string;
   subject: string;
-  /** Colonna LEGACY (text, OPZIONALE): specchio ISO della scadenza. */
-  deadline: string | null;
+  /** Colonna LEGACY (text ISO): resta per compatibilità e per la migrazione. */
+  deadline: string;
   /**
-   * Colonna CANONICA (`timestamptz`): è la scadenza che leggono bacheca,
-   * filtro degli avvisi attivi, matching e notifiche. Sempre valorizzata
-   * insieme a `deadline`: mai due verità diverse.
+   * FIX v13 (§26.75) — la scadenza CANONICA che leggono bacheca, filtro attivi,
+   * matching e notifiche. Prima lo script scriveva SOLO `deadline`: le righe
+   * Piemonte/Liguria entravano con `expiration_date` NULLO e restavano invisibili
+   * al «Radar Live» (misurato il 22/10/2026: **382 righe su 382**).
    */
   expiration_date: string | null;
   source_url: string;
@@ -186,6 +232,8 @@ interface ExtractionResult {
 interface ColumnMapping {
   codeIdx: number;
   schoolIdx: number;
+  /** FIX v12 — colonna «Classe di concorso» (Piemonte: `A041 - Scienze…`). */
+  classIdx: number;
   deadlineIdx: number;
   publishDateIdx: number;
   stateIdx: number;
@@ -253,29 +301,46 @@ function todayIso(): string {
 
 const TODAY_ISO = todayIso();
 
-function addDaysIso(iso: string, days: number): string {
+// FIX v13 (§26.75) — ORIZZONTE di una scadenza tabellare. Il portale Piemonte a
+// volte scrive nella colonna «Data Scadenza Interpello» la FINE del contratto
+// (`30/06/2027`, `31/05/2027`) invece del termine per candidarsi: la riga
+// risulterebbe aperta per mesi. Oltre l'orizzonte condiviso con la vetrina
+// (`GIORNI_ORIZZONTE_OPPORTUNITA`) la riga non entra nel database.
+function isoPiuGiorni(iso: string, giorni: number): string {
   const [y, m, d] = iso.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() + days);
+  dt.setUTCDate(dt.getUTCDate() + giorni);
   const yy = dt.getUTCFullYear();
   const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(dt.getUTCDate()).padStart(2, '0');
   return `${yy}-${mm}-${dd}`;
 }
 
-const DEFAULT_DEADLINE_ISO = addDaysIso(TODAY_ISO, CONFIG.defaultDeadlineDays);
+const LIMITE_ORIZZONTE_ISO = isoPiuGiorni(TODAY_ISO, GIORNI_ORIZZONTE_OPPORTUNITA);
+
+/** True se la scadenza è entro l'orizzonte dell'opportunità (mai una fine incarico). */
+function entroOrizzonte(deadlineIso: string): boolean {
+  return deadlineIso <= LIMITE_ORIZZONTE_ISO;
+}
+
+/**
+ * Scadenza canonica per `interpelli.expiration_date` (timestamptz): mezzanotte
+ * UTC, come le scadenze già presenti in tabella e come fa la migrazione
+ * `20261015120000_allinea_deadline_expiration_interpelli.sql`.
+ */
+function aExpirationDate(deadlineIso: string): string {
+  return `${deadlineIso}T00:00:00+00:00`;
+}
 
 function parseDeadline(text: string): string | null {
   if (!text) return null;
 
-  // 1) Formato ISO già presente: YYYY-MM-DD
   const isoMatch = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
   if (isoMatch) {
     const [, y, m, d] = isoMatch;
     return validateIsoDate(y, m, d);
   }
 
-  // 2) Formato italiano/europeo: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
   const euMatch = text.match(/\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})\b/);
   if (!euMatch) return null;
 
@@ -285,6 +350,33 @@ function parseDeadline(text: string): string | null {
   const year = y.length === 2 ? `20${y}` : y;
 
   return validateIsoDate(year, month, day);
+}
+
+// FIX v12 — LIGURIA, griglia NAZIONALE: la cella «Interpello» è un testo lungo
+// («A044 – Sostegno … – 13 ore dal 23/10/2026 al 30/06/2027 – prot. 26737 del
+// 21/10/2026 Scadenza: 22/10/2026 13:00»). Le prime date sono l'INIZIO
+// dell'incarico e la data del protocollo: `parseDeadline` prenderebbe la prima
+// (23/10) e la riga risulterebbe aperta fino a novembre. Si legge SOLO la data
+// che segue l'etichetta «Scadenza:».
+function parseLabeledDeadline(text: string): string | null {
+  if (!text) return null;
+  const m = normalize(text).match(
+    /scadenz\w*\s*:?\s*(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})/i
+  );
+  return m ? parseDeadline(m[1]) : null;
+}
+
+/**
+ * Scadenza di una riga della griglia Liguria: il layout NAZIONALE porta un testo
+ * lungo (inizio incarico, fine contratto, protocollo, poi «Scadenza: …»), quindi
+ * vale solo la data ETICHETTATA; il layout PROVINCIALE ha una cella dedicata e si
+ * legge diretta. In nessun caso si ripiega su un'altra data della riga (§26.75).
+ */
+function parseDeadlineLabeledOrCell(
+  layout: LiguriaGridLayout,
+  testo: string
+): string | null {
+  return layout === 'nazionale' ? parseLabeledDeadline(testo) : parseDeadline(testo);
 }
 
 function validateIsoDate(
@@ -317,16 +409,9 @@ function isFutureOrToday(deadlineIso: string | null): boolean {
 // Estrazione provincia dall'URL
 // ---------------------------------------------------------------------------
 
-// Pattern 1: `ambito_cn`, `ambito-to`, `ric_interpello_ambito_vc`
-const URL_AMBITO_REGEX = /ambito[_.-]?([a-z]{2})(?:[_.-]|\b)/i;
-
-// Pattern 2: `_to.php`, `_ge.php`, `_sp.php` (suffisso file)
-const URL_SUFFIX_REGEX = /[_-]([a-z]{2})\.php/i;
-
-// Pattern 3: `?p=CN` o `&p=TO` (query string Liguria)
+const URL_AMBITO_REGEX = /ambito[_\-.]?([a-z]{2})(?:[_\-.]|\b)/i;
+const URL_SUFFIX_REGEX = /[-_]([a-z]{2})\.php/i;
 const URL_QUERY_PROV_REGEX = /[?&]p=([A-Za-z]{2})\b/;
-
-// Pattern 4: `provincia.php?p=...`
 const URL_LIGURIA_REGEX = /provincia\.php\?p=([A-Za-z]{2})/i;
 
 function extractProvinceFromUrl(url: string): string | null {
@@ -424,21 +509,37 @@ function rowIndicatesClosed(fullRowTextLower: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// FIX v9 — Filtro STATO INTERPELLO per portali Piemonte
+// FIX v10 — Filtro STATO INTERPELLO robusto
 // ---------------------------------------------------------------------------
-//
-// I portali USR Piemonte espongono una colonna "Stato interpello" con valori
-// tipici: "aperto", "chiuso", "cancellato". Processiamo ESCLUSIVAMENTE le
-// righe con stato "aperto" (case-insensitive, spazi normalizzati).
-// Qualsiasi altro valore (incluso vuoto) → riga scartata.
-//
 
-const OPEN_STATE_VALUES = ['aperto', 'aperta', 'aperti', 'aperte', 'attivo', 'attiva'];
+const OPEN_STATE_VALUES = [
+  'aperto', 'aperta', 'aperti', 'aperte',
+  'attivo', 'attiva', 'attivi', 'attive',
+  'disponibile', 'disponibili',
+];
 
 function isRowOpen(stateText: string): boolean {
   const t = normalize(stateText).toLowerCase();
   if (!t) return false;
   return OPEN_STATE_VALUES.some((v) => t === v || t.includes(v));
+}
+
+// Rilevamento dinamico della colonna stato: cerca una colonna i cui valori
+// nel corpo della tabella contengano "aperto" o "chiuso".
+function detectStateColumnByCellText(
+  colTexts: string[]
+): number {
+  for (let i = 0; i < colTexts.length; i += 1) {
+    const cellLower = colTexts[i].toLowerCase();
+    if (
+      cellLower.includes('aperto') ||
+      cellLower.includes('chiuso') ||
+      cellLower.includes('cancellato')
+    ) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -463,6 +564,7 @@ const WEAK_INTERPELLI_MARKERS: RegExp[] = [
   /requisiti/i,
   /\bclass[ei]\b/i,
   /\bstato\b/i,
+  /denominazione/i,
 ];
 
 function pageContainsInterpelliTable($: cheerio.CheerioAPI): boolean {
@@ -504,6 +606,15 @@ function pageContainsInterpelliTable($: cheerio.CheerioAPI): boolean {
   if (strongHits >= 2) return true;
   if (strongHits >= 1 && weakHits >= 2) return true;
 
+  // FIX v10: accetta anche tabelle con codice meccanografico + denominazione
+  // anche senza la parola "interpello".
+  if (
+    /cod(?:ice)?\.?\s*mecc/i.test(fullScope) &&
+    /denominazione/i.test(fullScope)
+  ) {
+    return true;
+  }
+
   return false;
 }
 
@@ -517,6 +628,7 @@ function getTableHeaders(
 ): string[] {
   const $table = $(tableEl);
 
+  // 1) <thead> esplicito
   const $thead = $table.find('thead').first();
   if ($thead.length > 0) {
     const cells = $thead.find('tr').first().find('th, td');
@@ -527,6 +639,7 @@ function getTableHeaders(
     }
   }
 
+  // 2) Prima riga con <th>
   const $firstRow = $table.find('tr').first();
   if ($firstRow.find('th').length > 0) {
     return $firstRow
@@ -535,9 +648,58 @@ function getTableHeaders(
       .get();
   }
 
+  // FIX v10: 3) Prima riga di <td> come potenziale header (tabelle legacy).
+  if ($firstRow.find('td').length > 0) {
+    const texts = $firstRow
+      .find('td')
+      .map((_, el) => normalize($(el).text()).toLowerCase())
+      .get();
+    // Verifica che sembri un header: contiene parole chiave tipiche.
+    const joined = texts.join(' ');
+    if (
+      /cod(?:ice)?/.test(joined) ||
+      /denominazione/.test(joined) ||
+      /scadenz/.test(joined) ||
+      /stato/.test(joined) ||
+      /classe/.test(joined) ||
+      /data/.test(joined)
+    ) {
+      return texts;
+    }
+  }
+
   return [];
 }
 
+/**
+ * Colonne che NON sono MAI la scadenza di candidatura — FIX v13 (§26.75).
+ *
+ * Il caso reale (Piemonte, `interpello2026`): la tabella ha DODICI colonne e la
+ * «Data Interpello» contiene la FINE dell'incarico (`07/10/2027`, `30/06/2027`),
+ * mentre la «Durata Supplenza» contiene «Disponibile fino a 10 giorni»,
+ * «30 Giugno», «04 Febbraio». Il vecchio fallback «cerca QUALSIASI data futura in
+ * qualsiasi cella» pescava proprio quelle: la scadenza finiva a un anno di
+ * distanza e il badge verde «In corso» dichiarava aperto un contratto annuale.
+ *
+ * Da qui in poi una data vale come scadenza SOLO se la sua colonna lo dichiara.
+ */
+const RE_COLONNA_NON_SCADENZA =
+  /durata|supplenz|incaric|decorrenz|inizio|data\s*interpello|pubblicat|protocoll|cancellazion|note/i;
+
+/**
+ * True se l'intestazione dichiara una SCADENZA di candidatura («Data Scadenza
+ * Interpello», «Scadenza domande», «Termine presentazione», «Chiusura avviso»).
+ * Le intestazioni di durata/pubblicazione sono escluse a monte: `data interpello`
+ * non è una scadenza, è la fine del rapporto di lavoro.
+ */
+function intestazioneScadenza(header: string): boolean {
+  const h = normalize(header).toLowerCase();
+  if (!h) return false;
+  if (RE_COLONNA_NON_SCADENZA.test(h)) return false;
+  return /scadenz|chiusur|termine\s*(?:presentazione|domande|candidatur|iscrizion)|presentazione\s*(?:domande|candidatur)/.test(
+    h
+  );
+}
 function detectColumns(headers: string[]): ColumnMapping {
   const findIdx = (patterns: RegExp[]): number => {
     for (let i = 0; i < headers.length; i += 1) {
@@ -546,54 +708,67 @@ function detectColumns(headers: string[]): ColumnMapping {
     return -1;
   };
 
+  // Pattern più flessibili e multipli.
   const codeIdx = findIdx([
     /cod(?:ice)?\.?\s*mecc/,
     /codice\s*scuola/,
     /cod\.?\s*scuola/,
     /meccanografico/,
+    /codice/,
   ]);
 
-  // «Ist. scolastica» (Umbria) e «Istituzione scolastica» (Liguria, tabella
-  // `provincia.php`): senza queste forme la colonna non viene riconosciuta e il
-  // nome finisce per essere preso per POSIZIONE (cella sbagliata).
   const schoolIdx = findIdx([
     /denominazione/,
     /istituto\s+scolastico/,
-    /istituzion[ei]\s+scolastica/,
-    /ist\.?\s*scol\w*/,
     /nome\s+(?:istituto|scuola)/,
-    /scuola\s*\/?\s*ufficio/,
     /scuola/,
     /istituto/,
+    /sede/,
   ]);
 
-  const deadlineIdx = findIdx([
-    /data\s*scadenza\s*interpello/,
-    /scadenza\s*interpello/,
-    /data\s*scadenza/,
-    /\bscadenz/,
-    // «Data chiusura avviso» (Umbria): la scadenza è dichiarata come «chiusura».
-    /\bchiusur/,
-    /\btermine\b/,
+  // FIX v12 — colonna della classe di concorso: serve a leggere anche i codici
+  // «nudi» (senza descrizione) e a non dipendere dal match sul testo intero.
+  const classIdx = findIdx([
+    /classe\s+di\s+concorso/,
+    /classi\s+di\s+concorso/,
+    /classe\s*concorso/,
+    /codice\s+classe/,
+    /\bcdc\b/,
   ]);
+
+  // FIX v13 (§26.75) — la scadenza si mappa SOLO su un'intestazione che la
+  // dichiara (`intestazioneScadenza`). Sono state rimosse le regex generiche
+  // `/termine/` e `/data fine/`: su una tabella con «Durata supplenza» o «Data
+  // fine incarico» agganciavano la fine del contratto, non il termine per
+  // candidarsi.
+  const deadlineIdx = headers.findIndex((h) => intestazioneScadenza(h));
 
   const publishDateIdx = findIdx([
     /data\s*interpello/,
     /data\s*pubblicazione/,
     /data\s*avviso/,
     /pubblicato\s*il/,
+    /data\s*pubbl/,
   ]);
 
-  // FIX v9 — Rilevamento colonna "Stato interpello"
   const stateIdx = findIdx([
     /stato\s*interpello/,
     /stato\s*avviso/,
     /\bstato\b/,
+    /situazione/,
   ]);
+
+  if (CONFIG.debug) {
+    console.log('[table-reporter][debug] headers=', headers);
+    console.log(
+      `[table-reporter][debug] mappatura: code=${codeIdx} school=${schoolIdx} deadline=${deadlineIdx} state=${stateIdx}`
+    );
+  }
 
   return {
     codeIdx: codeIdx >= 0 ? codeIdx : 0,
     schoolIdx: schoolIdx >= 0 ? schoolIdx : 1,
+    classIdx,
     deadlineIdx,
     publishDateIdx,
     stateIdx,
@@ -601,13 +776,42 @@ function detectColumns(headers: string[]): ColumnMapping {
   };
 }
 
-// FIX #1: rilevamento scadenza anche dal TESTO della cella (non solo header).
-// §26.72: vale anche per le fonti che chiamano la scadenza «chiusura»
-// («Data chiusura avviso», Umbria) o «termine di presentazione».
+/**
+ * Scadenza di una riga tabellare, letta SOLO da una colonna che la dichiara
+ * (FIX v13, §26.75):
+ *   1. la colonna mappata dalle intestazioni (`intestazioneScadenza`);
+ *   2. una cella che scrive esplicitamente «Scadenza: …» (alcune fonti mettono
+ *      l'etichetta dentro la cella invece che in testata).
+ * `null` = la riga non dichiara una scadenza: il chiamante la scarta, senza
+ * inventare né la data di pubblicazione né la durata della supplenza.
+ */
+function deadlineDichiarata(
+  colTexts: string[],
+  columns: ColumnMapping
+): string | null {
+  const mapped = columns.deadlineIdx;
+  if (mapped >= 0 && mapped < colTexts.length) {
+    const dichiarata = parseDeadline(colTexts[mapped]);
+    if (dichiarata) return dichiarata;
+  }
+
+  const byText = detectDeadlineColumnByCellText(colTexts);
+  if (byText >= 0 && byText !== mapped) {
+    return parseDeadline(colTexts[byText]);
+  }
+
+  return null;
+}
+
+// FIX #1 (v13) — rilevamento scadenza dal TESTO della cella («Scadenza:
+// 16/10/2026»). La cella deve NOMINARE la scadenza e non essere una colonna di
+// durata/pubblicazione: «Durata supplenza: 30 Giugno» o «Data interpello:
+// 07/10/2027» non sono termini per candidarsi (§26.75).
 function detectDeadlineColumnByCellText(colTexts: string[]): number {
   for (let i = 0; i < colTexts.length; i += 1) {
     const cellLower = colTexts[i].toLowerCase();
-    if (/scadenz|chiusur|\btermine\b/.test(cellLower)) {
+    if (RE_COLONNA_NON_SCADENZA.test(cellLower)) continue;
+    if (/scadenz/.test(cellLower)) {
       const d = parseDeadline(colTexts[i]);
       if (d && isFutureOrToday(d)) return i;
     }
@@ -653,11 +857,251 @@ async function fetchHtml(url: string): Promise<FetchResult> {
 // Estrazione record tabellari
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// FIX v11 — LIGURIA: griglia di risultati in <div> (nessuna <table>)
+// ---------------------------------------------------------------------------
+//
+// Dal 2026 `servizi.istruzioneliguria.gov.it` non pubblica più tabelle HTML:
+// la lista è una griglia `div.results-table` con una `div.results-head`
+// (intestazioni) e una `div.results-row` per riga, cinque celle per riga:
+//   1) Codice / Tipologia     → <strong>ADEE</strong><small>Posto intero</small>
+//   2) Istituzione scolastica → <span>IC MARASSI – Genova</span><small>STATALE</small>
+//   3) Ordine di scuola       → "Primaria"
+//   4) Scadenza               → "22/10/2026"
+//   5) Azione                 → <a href="interpello.php?id=1296">
+// Misurato il 22/10/2026 sulla pagina GE: 92 righe, 5 colonne, 0 <table>.
+//
+// FIX v12 — la stessa griglia serve DUE layout, con un numero di celle diverso:
+//   · per provincia (`provincia.php?p=GE`) — 5 celle come sopra;
+//   · nazionale (`nazionali.php`) — 7 celle:
+//       1) Data → «21/10/2026»
+//       2) Regione → «Puglia»
+//       3) Provincia → «Taranto» (nome per esteso, non sigla)
+//       4) Scuola → «IISS “Del Prete-Falcone” – Sava»
+//       5) CDC / posto → «A044» (codice nudo, nessuna descrizione)
+//       6) Interpello → testo lungo con «Scadenza: 22/10/2026 13:00»
+//       7) Azione → <a href="documenti.php…">
+// Letto con le colonne del layout provinciale, il nazionale produceva
+// `school_name` = «Puglia», `province` = 'EE' (fallback) e una scadenza
+// inventata: 11 righe in DB il 22/10/2026.
+
+const LIGURIA_GRID_HEAD_SELECTOR = '.results-head';
+const LIGURIA_GRID_ROW_SELECTOR = '.results-row';
+
+/** Layout della griglia Liguria: 5 celle per provincia, 7 per il nazionale. */
+type LiguriaGridLayout = 'provincia' | 'nazionale';
+
+interface GridColumns {
+  layout: LiguriaGridLayout;
+  codeIdx: number;
+  schoolIdx: number;
+  deadlineIdx: number;
+  /** Solo layout nazionale: cella con il testo dell'interpello (scadenza). */
+  textIdx: number;
+  /** Solo layout nazionale: nome della regione scritto nella riga. */
+  regionIdx: number;
+  /** Solo layout nazionale: provincia per esteso («Taranto»). */
+  provinceNameIdx: number;
+  /** Solo layout nazionale: data di pubblicazione dell'avviso. */
+  publishIdx: number;
+  actionIdx: number;
+}
+
+function detectLiguriaGridColumns($: cheerio.CheerioAPI): GridColumns {
+  const headers = $(`${LIGURIA_GRID_HEAD_SELECTOR} span`)
+    .map((_, el) => normalize($(el).text()).toLowerCase())
+    .get();
+
+  const find = (patterns: RegExp[], fallback: number): number => {
+    for (let i = 0; i < headers.length; i += 1) {
+      if (patterns.some((re) => re.test(headers[i]))) return i;
+    }
+    return fallback;
+  };
+
+  const lastIdx = headers.length > 0 ? headers.length - 1 : 4;
+
+  // Il layout nazionale è l'unico che espone ANCHE la regione: la cella
+  // «Provincia» da sola non basta a distinguerlo (esiste in entrambi).
+  const isNazionale = headers.some((h) => /regione/.test(h));
+
+  if (isNazionale) {
+    return {
+      layout: 'nazionale',
+      codeIdx: find([/\bcdc\b/, /posto/, /codice/, /tipologia/], 4),
+      schoolIdx: find([/scuola/, /istituzione/], 3),
+      deadlineIdx: -1,
+      textIdx: find([/interpello/, /avviso/], 5),
+      regionIdx: find([/regione/], 1),
+      provinceNameIdx: find([/provincia/], 2),
+      publishIdx: find([/^data/, /data/], 0),
+      actionIdx: find([/azione/, /link/, /apri/], 6),
+    };
+  }
+
+  return {
+    layout: 'provincia',
+    codeIdx: find([/codice/, /tipologia/], 0),
+    schoolIdx: find([/istituzione/, /scuola/], 1),
+    deadlineIdx: find([/scadenz/, /termine/], 3),
+    textIdx: -1,
+    regionIdx: -1,
+    provinceNameIdx: -1,
+    publishIdx: -1,
+    actionIdx: find([/azione/, /link/, /apri/], lastIdx),
+  };
+}
+
+function isLiguriaGridPage($: cheerio.CheerioAPI): boolean {
+  return (
+    $(LIGURIA_GRID_HEAD_SELECTOR).length > 0 ||
+    $(LIGURIA_GRID_ROW_SELECTOR).length > 0
+  );
+}
+
+function extractRecordsFromLiguriaGrid(
+  $: cheerio.CheerioAPI,
+  target: DiscoveredLink
+): ExtractionResult {
+  const records: InterpelloRecord[] = [];
+  // Righe scartate perché la scadenza cadrebbe oltre l'orizzonte (§26.75).
+  let scartateOltreOrizzonte = 0;
+  const cols = detectLiguriaGridColumns($);
+
+  // Layout provinciale: la provincia arriva dall'URL (`provincia.php?p=GE`) o
+  // dal target. Nel layout nazionale arriva dalla riga (vedi sotto).
+  const provinciaDelTarget =
+    extractProvinceFromUrl(target.url) ??
+    (target.province || CONFIG.fallbackProvince).toUpperCase();
+
+  $(LIGURIA_GRID_ROW_SELECTOR).each((_, rowEl) => {
+    const $row = $(rowEl);
+    const $cells = $row.children('span');
+    if ($cells.length < 3) return;
+
+    const cellTexts = $cells
+      .map((__, el) => normalize($(el).text()))
+      .get();
+
+    // Azione: senza link non c'è un interpello da aprire.
+    const $link = $cells.eq(cols.actionIdx).find('a[href]').first();
+    const rawHref = $link.attr('href');
+    const href = rawHref ? rawHref.trim() : '';
+    if (!href || href === '#') return;
+
+    const fullRowText = cellTexts.join(' ');
+    const fullRowTextLower = fullRowText.toLowerCase();
+    if (rowIsNoise(fullRowTextLower)) return;
+    if (rowIndicatesClosed(fullRowTextLower)) return;
+
+    // Istituzione scolastica: il badge STATALE/PARITARIA è un <small> di
+    // servizio, non fa parte del nome.
+    if (cols.schoolIdx >= $cells.length) return;
+    const $schoolCell = $cells.eq(cols.schoolIdx).clone();
+    $schoolCell.find('small').remove();
+    const schoolName = normalize($schoolCell.text());
+    if (!schoolName || schoolName.length < CONFIG.minSchoolNameLength) return;
+
+    // ---------------------------------------------------------------------
+    // FIX v12 — riga del layout NAZIONALE: provincia e regione sono scritte
+    // nella riga (la provincia per esteso, «Taranto»). Senza un codice di
+    // provincia riconosciuto la riga non è attribuibile: si scarta, invece di
+    // salvarla con il fallback 'EE'.
+    // ---------------------------------------------------------------------
+    let province = provinciaDelTarget;
+    let region = target.region;
+    let deadlineCellText = cellTexts[cols.deadlineIdx] ?? '';
+
+    if (cols.layout === 'nazionale') {
+      const nomeProvincia = cellTexts[cols.provinceNameIdx] ?? '';
+      const codiceProvincia = provinciaDaCitta(nomeProvincia);
+      if (!codiceProvincia) return;
+      province = codiceProvincia;
+      region = provinciaDaCodice(codiceProvincia)?.regione ?? region;
+      deadlineCellText = cellTexts[cols.textIdx] ?? '';
+    }
+
+    // Codice classe di concorso: <strong> nella cella «Codice / Tipologia».
+    // Il testo della cella inizia con l'icona <i> («▤ ADEE Posto intero»),
+    // perciò il token va letto dal <strong>, non dall'inizio della cella.
+    // Il layout nazionale scrive il codice «nudo» e senza <strong> («A044»).
+    const strongText = normalize(
+      $cells.eq(cols.codeIdx).find('strong').first().text()
+    );
+    const codeCellText = cellTexts[cols.codeIdx] ?? '';
+    const classCode =
+      classCodeNudo(strongText) ??
+      classCodeInTesta(strongText) ??
+      classCodeNudo(codeCellText) ??
+      classCodeInTesta(codeCellText) ??
+      extractSubjectAndClass(fullRowText).classCode;
+
+    // Scadenza: nel layout nazionale il testo porta l'inizio incarico, la data di
+    // protocollo e la FINE del contratto PRIMA della scadenza — conta solo quella
+    // dopo l'etichetta («Scadenza: 22/10/2026 13:00»).
+    //
+    // FIX v13 (§26.75) — caduto il ripiego «data di pubblicazione + 15 giorni»:
+    // una data di pubblicazione NON è una scadenza, e il ripiego fabbricava un
+    // termine che nessuna fonte aveva dichiarato (badge verde su avvisi chiusi).
+    // Senza etichetta la riga si scarta.
+    const deadline = parseDeadlineLabeledOrCell(cols.layout, deadlineCellText);
+    if (!deadline) return;
+    if (isExpired(deadline)) return;
+    // Oltre l'orizzonte la «scadenza» è la FINE dell'incarico: fuori (§26.75).
+    if (!entroOrizzonte(deadline)) {
+      scartateOltreOrizzonte += 1;
+      return;
+    }
+
+    const subject = extractSubjectAndClass(fullRowText).subject;
+    const sourceUrl = resolveUrl(href, target.url);
+    const title = `${schoolName} - Interpello Ufficiale`;
+    // La griglia non espone il codice meccanografico: `school_code` = 'ND'.
+    const hashId = generateHashId(province, 'ND', title, sourceUrl);
+
+    records.push({
+      hash_id: hashId,
+      title,
+      school_name: schoolName,
+      school_code: 'ND',
+      province,
+      region,
+      class_code: classCode,
+      subject,
+      deadline,
+      expiration_date: aExpirationDate(deadline),
+      source_url: sourceUrl,
+    });
+  });
+
+  if (CONFIG.debug) {
+    console.log(
+      `[table-reporter][debug] griglia Liguria: ${records.length} record validi`
+    );
+  }
+
+  if (scartateOltreOrizzonte > 0) {
+    console.log(
+      `[table-reporter] Liguria: ${scartateOltreOrizzonte} righe scartate oltre l'orizzonte di ${GIORNI_ORIZZONTE_OPPORTUNITA} giorni.`
+    );
+  }
+
+  return { records, disqualified: false };
+}
+
 function extractRecordsFromHtml(
   $: cheerio.CheerioAPI,
   target: DiscoveredLink
 ): ExtractionResult {
   const records: InterpelloRecord[] = [];
+  // Righe scartate perché la «scadenza» cadrebbe oltre l'orizzonte (§26.75):
+  // sono le fini di incarico scritte dal portale nella colonna della scadenza.
+  let scartateOltreOrizzonte = 0;
+
+  // FIX v11 — Liguria espone la lista come griglia di <div>, non come <table>.
+  if (isLiguriaGridPage($)) {
+    return extractRecordsFromLiguriaGrid($, target);
+  }
 
   if (!pageContainsInterpelliTable($)) {
     console.log(
@@ -679,10 +1123,37 @@ function extractRecordsFromHtml(
     const headers = getTableHeaders($, tableEl as cheerio.Element);
     const columns = detectColumns(headers);
 
+    // FIX v10: se la colonna stato non è mappata, prova a rilevarla
+    // analizzando i valori delle celle della prima riga di dati.
+    let stateIdxDynamic = columns.stateIdx;
+    if (stateIdxDynamic < 0) {
+      const firstDataRow = $table.find('tr').eq(1);
+      if (firstDataRow.length > 0) {
+        const firstColTexts = firstDataRow
+          .find('td')
+          .map((_, el) => normalize($(el).text()))
+          .get();
+        const detected = detectStateColumnByCellText(firstColTexts);
+        if (detected >= 0) {
+          stateIdxDynamic = detected;
+          if (CONFIG.debug) {
+            console.log(
+              `[table-reporter][debug] Colonna stato rilevata dinamicamente: indice ${detected}`
+            );
+          }
+        }
+      }
+    }
+
     $table.find('tr').each((rowIndex, rowEl) => {
       const $row = $(rowEl);
 
+      // Salta righe header.
       if (rowIndex === 0 && $row.find('th').length > 0) return;
+      if (rowIndex === 0 && headers.length > 0 && $row.find('td').length > 0) {
+        // La prima riga è stata usata come header.
+        return;
+      }
 
       const cols = $row.find('td');
       if (cols.length < 2) return;
@@ -698,53 +1169,89 @@ function extractRecordsFromHtml(
       if (rowIsNoise(fullRowTextLower)) return;
 
       // -----------------------------------------------------------------
-      // FIX v9 — FILTRO STATO INTERPELLO (Piemonte)
+      // FIX v10 — FILTRO STATO
       // -----------------------------------------------------------------
-      // Se la tabella ha una colonna "Stato interpello" identificata,
-      // processa SOLO le righe con stato "aperto".
-      // In assenza di colonna stato, applica il filtro generico chiusi.
-      if (columns.stateIdx >= 0 && columns.stateIdx < colTexts.length) {
-        const stateText = colTexts[columns.stateIdx];
+      // Priorità:
+      //   1) Colonna stato mappata o rilevata dinamicamente.
+      //   2) Fallback: controllo sull'intera riga per "aperto" e assenza
+      //      di "chiuso"/"cancellato".
+      let stateText = '';
+      if (stateIdxDynamic >= 0 && stateIdxDynamic < colTexts.length) {
+        stateText = colTexts[stateIdxDynamic];
+      }
+
+      if (stateText) {
         if (!isRowOpen(stateText)) {
           return;
         }
       } else {
-        // Fallback: filtro generico chiusi/scaduti.
-        if (rowIndicatesClosed(fullRowTextLower)) {
+        // Fallback: se la riga non contiene "aperto" o contiene
+        // esplicitamente "chiuso"/"cancellato", scarta.
+        const hasOpen = /\baperto\b|\battivo\b|\bdisponibile\b/i.test(
+          fullRowTextLower
+        );
+        const hasClosed = rowIndicatesClosed(fullRowTextLower);
+        if (hasClosed && !hasOpen) {
           return;
         }
-      }
-
-      // Link attivo.
-      const $link = $row.find('a').first();
-      const rawHref = $link.attr('href');
-      if (
-        !$link.length ||
-        !rawHref ||
-        rawHref.trim() === '' ||
-        rawHref.trim() === '#'
-      ) {
-        return;
-      }
-
-      const linkText = normalize($link.text());
-      const href = rawHref;
-
-      // -----------------------------------------------------------------
-      // FIX #2 — PROVINCIA: analizza la PRIMISSIMA cella
-      // -----------------------------------------------------------------
-      const firstCellText = colTexts[0] || '';
-      let schoolCode = extractMechCode(firstCellText);
-
-      if (schoolCode === 'ND' && columns.codeIdx !== 0 && columns.codeIdx >= 0) {
-        if (columns.codeIdx < colTexts.length) {
-          schoolCode = extractMechCode(colTexts[columns.codeIdx]);
+        if (!hasOpen && !hasClosed) {
+          // Stato incerto: per i portali Piemonte, se non c'è indicazione,
+          // accetta comunque la riga (potrebbe essere "aperto" implicito).
         }
       }
+
+      // Link attivo (oppure ancora stabile per i portali con form POST).
+      const $link = $row.find('a').first();
+      const rawHref = $link.attr('href');
+      let href = rawHref ? rawHref.trim() : '';
+
+      if (!href || href === '#') {
+        // FIX v11 — Piemonte: le righe non hanno <a>. L'azione è un
+        // <input type="submit" value="Stampa 3574"> dentro un form POST
+        // (`statointerpello_ambito.php`) che in GET restituisce una pagina
+        // vuota (misurato il 22/10/2026: HTTP 200, 2.811 byte, nessun dato).
+        // Si usa quindi la pagina di elenco con un'ancora stabile per riga:
+        // `source_url` resta univoca per interpello e apribile dall'utente.
+        const progr = $row
+          .find('input[name="progr"]')
+          .first()
+          .attr('value');
+        const progrValue = progr ? String(progr).trim() : '';
+        if (!progrValue) return;
+        href = `${target.url}#progr=${progrValue}`;
+      }
+
+      const linkText = $link.length > 0 ? normalize($link.text()) : '';
+
+      // -----------------------------------------------------------------
+      // FIX v10 — CODICE MECCANOGRAFICO da qualsiasi cella
+      // -----------------------------------------------------------------
+      let schoolCode = 'ND';
+
+      // 1) Colonna mappata.
+      if (columns.codeIdx >= 0 && columns.codeIdx < colTexts.length) {
+        schoolCode = extractMechCode(colTexts[columns.codeIdx]);
+      }
+
+      // 2) Prima cella (posizionale).
+      if (schoolCode === 'ND') {
+        schoolCode = extractMechCode(colTexts[0] || '');
+      }
+
+      // 3) Qualsiasi cella (fallback aggressivo).
+      if (schoolCode === 'ND') {
+        for (const cell of colTexts) {
+          schoolCode = extractMechCode(cell);
+          if (schoolCode !== 'ND') break;
+        }
+      }
+
+      // 4) Intera riga.
       if (schoolCode === 'ND') {
         schoolCode = extractMechCode(fullRowText);
       }
 
+      // Provincia.
       let province: string;
       if (schoolCode !== 'ND' && isLikelyMechCode(schoolCode)) {
         const derivedProv = schoolCode.slice(0, 2).toUpperCase();
@@ -769,23 +1276,22 @@ function extractRecordsFromHtml(
       }
 
       // -----------------------------------------------------------------
-      // FIX #3 — NOME SCUOLA PULITO
+      // FIX v10 — NOME SCUOLA da qualsiasi colonna
       // -----------------------------------------------------------------
       let schoolName = '';
 
+      // 1) Colonna mappata.
       if (columns.schoolIdx >= 0 && columns.schoolIdx < colTexts.length) {
-        // §26.72 — il codice meccanografico sta nella STESSA cella del nome
-        // (Umbria, «Ist. scolastica»): si toglie subito, così se la cella
-        // conteneva soltanto il codice la cascata ripiega su link o nome d'ufficio.
-        schoolName = pulisciNomeScuola(colTexts[columns.schoolIdx]);
+        schoolName = colTexts[columns.schoolIdx];
       }
 
+      // 2) Seconda cella (posizionale).
       if (
         !schoolName ||
         schoolName.length < CONFIG.minSchoolNameLength ||
         schoolName.toLowerCase().includes('non specificata')
       ) {
-        const secondCellText = pulisciNomeScuola(colTexts[1] || '');
+        const secondCellText = colTexts[1] || '';
         if (
           secondCellText &&
           secondCellText.length >= CONFIG.minSchoolNameLength &&
@@ -795,6 +1301,7 @@ function extractRecordsFromHtml(
         }
       }
 
+      // 3) Testo del link.
       if (
         !schoolName ||
         schoolName.length < CONFIG.minSchoolNameLength ||
@@ -809,6 +1316,7 @@ function extractRecordsFromHtml(
         }
       }
 
+      // 4) Codice meccanografico come ultima spiaggia.
       if (
         !schoolName ||
         schoolName.length < CONFIG.minSchoolNameLength ||
@@ -824,43 +1332,37 @@ function extractRecordsFromHtml(
       if (href.includes('artov.rm.cnr.it')) return;
 
       // -----------------------------------------------------------------
-      // FIX v9 + FIX #1 — SCADENZA FORZATA
+      // SCADENZA — SOLO la colonna che la dichiara (FIX v13, §26.75)
       // -----------------------------------------------------------------
-      // Priorità:
-      //   1) Colonna header "scadenza" mappata.
-      //   2) Qualsiasi cella con keyword "scadenza" e data futura.
-      //   3) Fallback: +15 giorni oppure scarto.
-      //   4) MAI la colonna "data pubblicazione".
-      let deadline: string | null = null;
-
-      // (1) Header mappato.
-      if (columns.deadlineIdx >= 0 && columns.deadlineIdx < colTexts.length) {
-        deadline = parseDeadline(colTexts[columns.deadlineIdx]);
-      }
-
-      // (2) Ricerca per keyword "scadenza" in qualsiasi cella.
-      if (!deadline) {
-        const byText = detectDeadlineColumnByCellText(colTexts);
-        if (byText >= 0) {
-          deadline = parseDeadline(colTexts[byText]);
-        }
-      }
-
-      // (3) Fallback: +15 giorni oppure scarto.
-      if (!deadline) {
-        if (CONFIG.discardWhenNoDeadline) {
-          return;
-        }
-        deadline = DEFAULT_DEADLINE_ISO;
-      }
-
+      // Prima qui c'erano tre ripieghi in cascata: keyword in qualsiasi cella,
+      // «QUALSIASI data futura in qualsiasi cella» e — se non si trovava nulla —
+      // `oggi + 15 giorni`. Sulla tabella Piemonte il secondo pescava la FINE
+      // dell'incarico dalla colonna «Data Interpello» (07/10/2027, 30/06/2027) e
+      // il terzo inventava una scadenza: entrambi producevano badge verdi «In
+      // corso» su contratti annuali già chiusi.
+      //
+      // Regola nuova: la data si legge SOLO dalla colonna mappata (o da una cella
+      // che scrive «Scadenza»), altrimenti la riga si scarta. Nessuna data di
+      // pubblicazione, nessuna durata della supplenza, nessuna data inventata.
+      const deadline = deadlineDichiarata(colTexts, columns);
+      if (!deadline) return;
       if (isExpired(deadline)) return;
+      // Una «scadenza» oltre l'orizzonte è la FINE dell'incarico travestita da
+      // termine: fuori dal database (e quindi dalla vetrina).
+      if (!entroOrizzonte(deadline)) {
+        scartateOltreOrizzonte += 1;
+        return;
+      }
 
-      // Nelle tabelle la classe di concorso può essere scritta col trattino
-      // («A-40»): si ricompone prima di riconoscerla, altrimenti resta «GENERALE».
-      const { classCode, subject } = extractSubjectAndClass(
-        fullRowText.replace(/\b([A-E])-(\d{2,3})\b/g, '$1$2')
-      );
+      const { classCode, subject } = extractSubjectAndClass(fullRowText);
+      // FIX v12 — prima la colonna «Classe di concorso» (copre anche i codici
+      // nudi, senza descrizione), poi la cella «CODICE - DESCRIZIONE», infine
+      // il match sul testo intero della riga.
+      const classFromColumn =
+        (columns.classIdx >= 0 && columns.classIdx < colTexts.length
+          ? classCodeNudo(colTexts[columns.classIdx])
+          : null) ?? extractClassCodeFromCell(colTexts);
+      const finalClassCode = classFromColumn ?? classCode;
       const sourceUrl = resolveUrl(href, target.url);
       const title = `${schoolName} - Interpello Ufficiale`;
       const hashId = generateHashId(province, schoolCode, title, sourceUrl);
@@ -872,16 +1374,20 @@ function extractRecordsFromHtml(
         school_code: schoolCode,
         province,
         region,
-        class_code: classCode,
+        class_code: finalClassCode,
         subject,
         deadline,
-        // Stessa data, DUE colonne: `expiration_date` è la canonica (timestamptz)
-        // letta dal prodotto, `deadline` lo specchio testuale legacy.
-        expiration_date: deadline,
+        expiration_date: aExpirationDate(deadline),
         source_url: sourceUrl,
       });
     });
   });
+
+  if (scartateOltreOrizzonte > 0) {
+    console.log(
+      `[table-reporter] ${scartateOltreOrizzonte} righe scartate: «scadenza» oltre l'orizzonte di ${GIORNI_ORIZZONTE_OPPORTUNITA} giorni (fine incarico, non termine per candidarsi).`
+    );
+  }
 
   return { records, disqualified: false };
 }
@@ -914,164 +1420,43 @@ function extractSubjectAndClass(text: string): {
   return { classCode, subject };
 }
 
-// ---------------------------------------------------------------------------
-// Scrittura su `interpelli` — insert dei nuovi + allineamento della scadenza
-// ---------------------------------------------------------------------------
+// FIX v12 — codice classe di concorso: le fonti ufficiali usano TRE forme.
+//   · 4-6 lettere            → `AAAA`, `EEEE`, `ADEE`, `AAIRC`
+//   · 2 lettere + 2 cifre    → `AA24`, `AB25`, `BD02`, `AG55`
+//   · 1 lettera + 2/3 cifre  → `A026`, `A029`, `A041`, `A048`
+// Il pattern v11 (`[A-Za-z]{2,6}[0-9]{0,2}`) pretendeva DUE lettere e rifiutava
+// la terza forma: «A041 - Scienze e tecnologie informatiche» ricadeva su
+// `extractSubjectAndClass` → `GENERALE` (17 righe Piemonte, 33 Liguria il
+// 22/10/2026: nessuna poteva fare match con il profilo dell'utente).
+const CLASS_CODE_SHAPE = /^(?:[A-Z]{1,2}[0-9]{2,3}|[A-Z]{4,6})$/;
 
-/**
- * Colonne NON garantite dallo schema documentato (`docs/SYSTEM_HANDOVER.md`
- * §13.11): se il database non le ha, il payload le perde e la scrittura non si
- * rompe. Stesso patto di `COLONNE_OPZIONALI` in `src/scraper/index.ts`.
- *
- * `deadline` è un residuo storico (colonna `text`): lo schema canonico ha
- * `expiration_date` (`timestamptz`). Si continua a tenerla allineata finché la
- * colonna esiste, perché la usano il cleanup dei target e la diagnostica.
- */
-const COLONNE_OPZIONALI: readonly string[] = ['deadline'];
+// Il codice deve essere seguito da un separatore: senza questo vincolo celle
+// come «DIURNO» o «POSTO INTERO» verrebbero lette come codici di 4-5 lettere.
+const CLASS_CODE_HEAD = /^([A-Za-z]{1,2}[0-9]{2,3}|[A-Za-z]{4,6})\s*[-–—]\s*\S/;
 
-/** Payload senza le colonne opzionali non disponibili su questo database. */
-function payloadSenzaColonne(
-  records: InterpelloRecord[],
-  scartate: readonly string[]
-): Array<Record<string, unknown>> {
-  return records.map((r) => {
-    const copia: Record<string, unknown> = { ...r };
-    for (const colonna of scartate) delete copia[colonna];
-    return copia;
-  });
+/** Codice «nudo» in una cella dedicata (`A044`, `ADEE`, `AAIRC`) oppure null. */
+function classCodeNudo(raw: string): string | null {
+  const code = normalize(raw).toUpperCase();
+  return CLASS_CODE_SHAPE.test(code) ? code : null;
 }
 
-/** Colonna OPZIONALE mancante dichiarata dall'errore PostgREST, altrimenti null. */
-function colonnaOpzionaleMancante(messaggio: string): string | null {
-  const trovata = messaggio.match(/Could not find the '([^']+)' column/i);
-  if (!trovata) return null;
-  const colonna = trovata[1];
-  return COLONNE_OPZIONALI.includes(colonna) ? colonna : null;
+/** Codice all'INIZIO di una cella con descrizione (`A041 - Scienze…` → `A041`,
+ *  `ADEE - EH` → `ADEE`) oppure null. */
+function classCodeInTesta(raw: string): string | null {
+  const m = normalize(raw).toUpperCase().match(CLASS_CODE_HEAD);
+  return m ? m[1] : null;
 }
 
-interface EsitoScrittura {
-  error: string | null;
-  /** Righe NUOVE davvero inserite: i conflitti (già in tabella) non si contano. */
-  inseriti: number;
-  /** Righe ESISTENTI a cui la scadenza è stata scritta o sovrascritta. */
-  scadenzeAllineate: number;
-}
-
-/**
- * Il predicato `or` di PostgREST che seleziona SOLO le righe da aggiornare:
- * scadenza assente, oppure scadenza diversa da quella appena estratta. Una riga
- * già in pari non viene riscritta (l'operazione è idempotente).
- */
-function predicatoScadenzaDaAllineare(iso: string, conDeadline: boolean): string {
-  const parti = ['expiration_date.is.null'];
-  if (conDeadline) parti.push('deadline.is.null', `deadline.neq.${iso}`);
-  return parti.join(',');
-}
-
-/** `hash_id` per UPDATE: fette piccole, query leggere e nessun URL gigantesco. */
-const HASH_PER_UPDATE = 50;
-
-/**
- * Allinea `expiration_date` (canonica) e `deadline` (specchio testuale) sulle
- * righe GIÀ PRESENTI, raggruppate per scadenza:
- *
- *   update interpelli
- *      set expiration_date = <iso>, deadline = <iso>
- *    where hash_id in (<fetta>)
- *      and (expiration_date is null or deadline is null or deadline <> <iso>)
- *
- * NON tocca nessun'altra colonna: nome istituto, classi di concorso, materia e
- * recapiti restano quelli arricchiti dalle pipeline dedicate (mai un nome
- * grezzo che riscrive un'anagrafica buona).
- */
-async function allineaScadenze(
-  records: InterpelloRecord[],
-  scartate: readonly string[]
-): Promise<number> {
-  const gruppi = new Map<string, string[]>();
-  for (const record of records) {
-    if (!record.deadline) continue;
-    const hashIds = gruppi.get(record.deadline);
-    if (hashIds) hashIds.push(record.hash_id);
-    else gruppi.set(record.deadline, [record.hash_id]);
+// FIX v11 — codice classe di concorso dalla cella esplicita
+// (Piemonte: «AAAA - INFANZIA», «ADEE - SOSTEGNO SCUOLA PRIMARIA»).
+// Il match sul testo intero della riga può agganciare altri token; la colonna
+// dedicata è la fonte affidabile e ha la precedenza.
+function extractClassCodeFromCell(colTexts: string[]): string | null {
+  for (const raw of colTexts) {
+    const code = classCodeInTesta(raw);
+    if (code) return code;
   }
-
-  const conDeadline = !scartate.includes('deadline');
-  let aggiornate = 0;
-
-  for (const [iso, hashIds] of gruppi) {
-    for (let i = 0; i < hashIds.length; i += HASH_PER_UPDATE) {
-      const fetta = hashIds.slice(i, i + HASH_PER_UPDATE);
-      const patch: Record<string, unknown> = { expiration_date: iso };
-      if (conDeadline) patch.deadline = iso;
-
-      const { data, error } = await supabase
-        .from('interpelli')
-        .update(patch)
-        .in('hash_id', fetta)
-        .or(predicatoScadenzaDaAllineare(iso, conDeadline))
-        .select('hash_id');
-
-      if (error) {
-        console.error(
-          `[table-reporter] Allineamento scadenza ${iso} fallito: ${error.message}`
-        );
-        continue;
-      }
-
-      aggiornate += Array.isArray(data) ? data.length : 0;
-    }
-  }
-
-  return aggiornate;
-}
-
-/**
- * Scrive gli avvisi estratti su `interpelli` in DUE passi.
- *
- * Serve perché l'`hash_id` è `provincia|codice meccanografico|titolo|url` e NON
- * contiene la scadenza: con il solo `ignoreDuplicates` una riga già in banca
- * dati non riceveva mai la scadenza estratta dal parser (era il
- * disallineamento fra ingestione e bacheca pubblica).
- *
- *   1. INSERT dei soli avvisi NUOVI (`ignoreDuplicates: true`): le righe
- *      esistenti non vengono riscritte;
- *   2. ALLINEAMENTO della scadenza sulle righe esistenti (`allineaScadenze`).
- */
-async function salvaRecords(records: InterpelloRecord[]): Promise<EsitoScrittura> {
-  const scartate: string[] = [];
-
-  for (let tentativo = 0; tentativo <= COLONNE_OPZIONALI.length; tentativo += 1) {
-    const { data, error } = await supabase
-      .from('interpelli')
-      .upsert(payloadSenzaColonne(records, scartate), {
-        onConflict: 'hash_id',
-        ignoreDuplicates: true,
-      })
-      .select('hash_id');
-
-    if (!error) {
-      const inseriti = Array.isArray(data) ? data.length : 0;
-      const scadenzeAllineate = await allineaScadenze(records, scartate);
-      return { error: null, inseriti, scadenzeAllineate };
-    }
-
-    const mancante = colonnaOpzionaleMancante(error.message);
-    if (!mancante || scartate.includes(mancante)) {
-      return { error: error.message, inseriti: 0, scadenzeAllineate: 0 };
-    }
-
-    scartate.push(mancante);
-    console.warn(
-      `[table-reporter] Colonna opzionale assente (${mancante}): la tolgo dal payload e riprovo.`
-    );
-  }
-
-  return {
-    error: 'Colonne opzionali non risolvibili dopo tutti i tentativi',
-    inseriti: 0,
-    scadenzeAllineate: 0,
-  };
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1159,7 +1544,26 @@ async function loadTargets(): Promise<DiscoveredLink[]> {
     throw new Error(`Errore query discovered_links: ${error.message}`);
   }
 
-  return (data ?? []) as DiscoveredLink[];
+  const rows = (data ?? []) as DiscoveredLink[];
+
+  if (REGIONI_FILTRO.length === 0) {
+    return rows;
+  }
+
+  return rows.filter((row) =>
+    REGIONI_FILTRO.includes(String(row.region ?? '').toLowerCase())
+  );
+}
+
+// Dry-run: una riga per record, con i campi che il match usa davvero.
+// `class_code = null` = «GENERALE» (nessuna classe riconosciuta): è la firma
+// del bug dei codici «A041» che questa versione corregge.
+function logRecords(records: InterpelloRecord[]): void {
+  for (const r of records) {
+    console.log(
+      `[dry-run] ${r.province} | ${r.region} | ${r.class_code ?? 'GENERALE'} | ${r.deadline} | ${r.school_code} | ${r.school_name} | ${r.source_url}`
+    );
+  }
 }
 
 async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
@@ -1190,21 +1594,25 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
     const records = extraction.records;
 
     if (records.length > 0) {
-      const scrittura = await salvaRecords(records);
+      if (DRY_RUN) {
+        logRecords(records);
+      } else {
+        const { error: upsertError } = await supabase
+          .from('interpelli')
+          .upsert(records, {
+            onConflict: 'hash_id',
+            ignoreDuplicates: true,
+          });
 
-      if (scrittura.error) {
-        return {
-          extracted: 0,
-          status: 'error',
-          signature,
-          error: `Upsert interpelli: ${scrittura.error}`,
-        };
+        if (upsertError) {
+          return {
+            extracted: 0,
+            status: 'error',
+            signature,
+            error: `Upsert interpelli: ${upsertError.message}`,
+          };
+        }
       }
-
-      console.log(
-        `[table-reporter] ${target.url}: ${scrittura.inseriti} nuovi, ` +
-          `${scrittura.scadenzeAllineate} scadenze allineate su righe esistenti.`
-      );
     }
 
     return {
@@ -1245,9 +1653,18 @@ async function writeReport(
 
 async function runTableReporter(): Promise<void> {
   console.log('[table-reporter] Avvio scansione tabellare...');
+  if (REGIONI_FILTRO.length > 0) {
+    console.log(
+      `[table-reporter] Filtro regioni attivo: ${REGIONI_FILTRO.join(', ')}`
+    );
+  }
 
   try {
-    await disableObviousJunkTargets();
+    if (DRY_RUN) {
+      console.log('[table-reporter] Dry-run: cleanup iniziale Umbria saltato.');
+    } else {
+      await disableObviousJunkTargets();
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[table-reporter] Cleanup iniziale fallito: ${msg}`);
@@ -1281,7 +1698,7 @@ async function runTableReporter(): Promise<void> {
     console.log(`\n[table-reporter] Esamino: ${label}`);
 
     const result = await processTarget(target);
-    await writeReport(target, result);
+    if (!DRY_RUN) await writeReport(target, result);
 
     if (result.status === 'success') {
       successCount += 1;
@@ -1291,7 +1708,13 @@ async function runTableReporter(): Promise<void> {
       );
 
       if (result.disqualified) {
-        await disqualifyTarget(target);
+        if (DRY_RUN) {
+          console.log(
+            `[table-reporter] Dry-run: target DA DISATTIVARE (${CONFIG.disqualifiedStatus}) — nessuna tabella interpelli: ${target.url}`
+          );
+        } else {
+          await disqualifyTarget(target);
+        }
         disqualifiedCount += 1;
       }
     } else {

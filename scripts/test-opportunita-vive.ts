@@ -101,8 +101,14 @@ check(
   /from '@\/lib\/scadenza'/.test(bacheca) && /expiration_date\.gte\./.test(bacheca),
 );
 check(
-  'bacheca «Radar Live»: l’espressione è la sola scadenza (nessun ramo `is.null` di codice)',
+  'bacheca «Radar Live»: l’espressione ha i DUE estremi (oggi → orizzonte) e nessun ramo `is.null` di codice',
   true,
+  /return `and\(expiration_date\.gte\.\$\{dal\},expiration_date\.lte\.\$\{al\}\)`;/.test(bacheca) &&
+    /GIORNI_ORIZZONTE_OPPORTUNITA/.test(bacheca),
+);
+check(
+  'bacheca «Radar Live»: il filtro PostgREST non supera l’orizzonte (niente fini incarico)',
+  false,
   /return `expiration_date\.gte\.\$\{dataIsoLocale\(oggi\)\}`;/.test(bacheca),
 );
 check(

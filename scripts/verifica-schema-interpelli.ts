@@ -12,7 +12,10 @@
  *   1. `expiration_date` esiste ed è di tipo data/timestamp;
  *   2. `deadline` esiste e di che tipo è (informativo: è la colonna legacy);
  *   3. quante righe hanno la scadenza nella colonna legacy ma NON nella canonica
- *      (= righe da riparare) e quanti formati non ISO ci sono nello specchio.
+ *      (= righe da riparare) e quanti formati non ISO ci sono nello specchio;
+ *   4. (§26.77) `school_site` — il sito istituzionale dichiarato dall'anagrafica
+ *      MIM che serve a `fonteApribile` per sostituire i link di piattaforma con
+ *      la home `.edu.it` — esiste, e quante righe ne sono ancora prive.
  *
  * SOLA LETTURA: nessuna riga viene inserita, modificata o cancellata.
  *
@@ -35,6 +38,9 @@ const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
 /** Migrazione che ripara le righe storiche (`deadline` → `expiration_date`). */
 const MIGRAZIONE_BACKFILL = '20261015120000_allinea_deadline_expiration_interpelli.sql';
+
+/** Migrazione che aggiunge il sito istituzionale (§26.77: home `.edu.it`). */
+const MIGRAZIONE_SITO = '20261022120000_add_interpelli_school_site.sql';
 
 /** Letterale volutamente NON-data: su una colonna data/timestamp PostgREST risponde 400 (22007). */
 const LETTERALE_NON_DATA = 'non-una-data';
@@ -73,6 +79,27 @@ async function sondaColonna(colonna: string): Promise<TipoColonna> {
       const tipo = corpo.match(/type ([a-z_ ]+):/i)?.[1]?.trim() ?? 'data/timestamp';
       return { ok: true, esiste: true, dettaglio: `esiste · tipo ${tipo} (colonna data)` };
     }
+    if (/does not exist|could not find the/i.test(corpo)) {
+      return { ok: false, esiste: false, dettaglio: `ASSENTE: ${corpo.slice(0, 120)}` };
+    }
+    return { ok: false, esiste: false, dettaglio: `HTTP ${res.status} ${corpo.slice(0, 140)}` };
+  } catch (err) {
+    return { ok: false, esiste: false, dettaglio: `errore di rete: ${(err as Error).message}` };
+  }
+}
+
+/**
+ * Esistenza di una colonna di TESTO (sola lettura): `select=<col>&limit=1`.
+ * Postgres risponde «column … does not exist», PostgREST «Could not find the
+ * '…' column»: entrambe le forme contano come colonna assente.
+ */
+async function sondaColonnaTesto(colonna: string): Promise<Esito & { esiste: boolean }> {
+  try {
+    const res = await fetch(`${BASE}/rest/v1/interpelli?select=${colonna}&limit=1`, {
+      headers: headers(),
+    });
+    const corpo = await res.text().catch(() => '');
+    if (res.ok) return { ok: true, esiste: true, dettaglio: 'esiste' };
     if (/does not exist|could not find the/i.test(corpo)) {
       return { ok: false, esiste: false, dettaglio: `ASSENTE: ${corpo.slice(0, 120)}` };
     }
@@ -140,6 +167,8 @@ async function main(): Promise<void> {
   const legacyPiena = await conta('&deadline=not.is.null');
   const disallineate = await conta('&deadline=not.is.null&expiration_date=is.null');
   const forme = await formeLegacyNonIso();
+  const sito = await sondaColonnaTesto('school_site');
+  const senzaSito = sito.esiste ? await conta('&school_site=is.null') : null;
 
   console.log(`\n1) Colonna CANONICA \`expiration_date\` → ${canonica.ok ? '✅' : '❌'} ${canonica.dettaglio}`);
   console.log(`2) Colonna LEGACY \`deadline\` → ${legacy.esiste ? '•' : '⚠'} ${legacy.dettaglio}`);
@@ -155,10 +184,20 @@ async function main(): Promise<void> {
     `5) Formati non ISO nello specchio legacy: ${forme.nonIso} su ${forme.analizzate} analizzati ` +
       `${forme.analizzate >= 1000 ? '(campione di 1.000)' : ''}`
   );
+  console.log(
+    `6) Colonna SITO ISTITUZIONALE \`school_site\` → ${sito.esiste ? '✅' : '❌'} ${sito.dettaglio}`
+  );
+  if (sito.esiste) {
+    console.log(
+      `7) Righe SENZA sito istituzionale (home \`.edu.it\` da arricchire): ${formatta(senzaSito)} ` +
+        `→ ${(senzaSito ?? 0) > 0 ? 'eseguire `npm run dati:arricchisci -- --apply`' : '✅ tutte servite'}`
+    );
+  }
 
   const problemi: string[] = [];
   if (!canonica.ok) problemi.push('colonna canonica `expiration_date` assente o di tipo non data');
   if ((disallineate ?? 0) > 0) problemi.push(`${disallineate} righe con la scadenza solo in \`deadline\``);
+  if (!sito.esiste) problemi.push('colonna `school_site` assente: le righe con soli link di piattaforma escono dalla bacheca');
 
   if (problemi.length === 0) {
     console.log('\n✅ Scadenza coerente: la colonna canonica è popolata, nessuna riga da riparare.');
@@ -169,6 +208,10 @@ async function main(): Promise<void> {
   for (const problema of problemi) console.log(`   · ${problema}`);
   if ((disallineate ?? 0) > 0) {
     console.log(`   · applicare ${MIGRAZIONE_BACKFILL} (normalizza \`deadline\` e riempie \`expiration_date\`)`);
+    console.log("   Comando: npx supabase db push — oppure incollare il file SQL nell'SQL Editor del progetto.");
+  }
+  if (!sito.esiste) {
+    console.log(`   · applicare ${MIGRAZIONE_SITO} (aggiunge \`school_site\`, solo host del sito MIM)`);
     console.log("   Comando: npx supabase db push — oppure incollare il file SQL nell'SQL Editor del progetto.");
   }
   console.log('   Poi rieseguire `npm run db:verifica-interpelli`.');

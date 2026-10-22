@@ -107,6 +107,8 @@ export interface RigaDaArricchire {
   school_name?: string | null;
   contact_email?: string | null;
   school_pec?: string | null;
+  /** Sito web istituzionale già presente nella riga (`interpelli.school_site`). */
+  school_site?: string | null;
   /** Titolo dell'avviso: da qui si tenta di estrarre il codice meccanografico. */
   title?: string | null;
   /** Provincia dell'avviso (codice): serve al matching per nome non ambiguo. */
@@ -119,6 +121,8 @@ export interface PatchAnagrafica {
   school_name?: string;
   contact_email?: string;
   school_pec?: string;
+  /** Sito istituzionale dall'anagrafica MIM (`SITOWEBSCUOLA`), solo host. */
+  school_site?: string;
 }
 
 /** Esito dell'arricchimento: cosa scrivere, la scuola trovata e come. */
@@ -171,5 +175,9 @@ export function arricchisciDaAnagrafica(
     if (recapito) patch.contact_email = recapito;
   }
   if (!(riga.school_pec ?? '').trim() && scuola.pec) patch.school_pec = scuola.pec;
+  // SITO ISTITUZIONALE (§26.77): è il materiale con cui la bacheca sostituisce i
+  // link alle piattaforme private (Argo/Spaggiari/Nuvola) con la home della
+  // scuola. Solo se manca: un sito già scritto nella riga non si sovrascrive.
+  if (!(riga.school_site ?? '').trim() && scuola.sitoWeb) patch.school_site = scuola.sitoWeb;
   return esito;
 }

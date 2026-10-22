@@ -100,8 +100,12 @@
       senza alcun nome risolvibile (il segnaposto «Scuola non specificata / Più plessi»
       **non** è un'anagrafica) e — come sempre — gli avvisi **non vivi** (scaduti o
       fuori dalla finestra dei 60 giorni). La colonna «Scuola» non mostra **mai** un
-      elenco di codici classe al posto del nome dell'istituto. **Lo stesso gate vale per il responso
-      della prova del Radar** (`nomePresentabileRiga` / `rigaPresentabileVetrina`,
+      elenco di codici classe al posto del nome dell'istituto. **§26.73 (16/10/2026):** il
+      gate riconosce anche le sigle e le abbreviazioni con cui le fonti scrivono davvero
+      il nome (`ICS`, `IT`, `IST. COMPR.`, `I grado`, `CPIA2AL`, «Ottavo Circolo»), ma la
+      regola non cambia: nessun codice, nessun segnaposto, nessun nome senza denominazione.
+      **Lo stesso gate vale per il responso della prova del Radar**
+      (`nomePresentabileRiga` / `rigaPresentabileVetrina`,
       `src/lib/provaRadarEngine.ts`): due superfici pubbliche non possono avere due regole diverse.
 - [ ] **Vetrina pubblica pulita**: la colonna «Scuola» non mostra **mai** messaggi
       tecnici o di errore all'utente, e non mostra il segnaposto neutro «Scuola non
@@ -150,7 +154,21 @@
       specificata / Più plessi» quando il bando non la pubblica) e un **link diretto alla fonte
       ufficiale** con etichetta onesta (`etichettaFonteLink`, nuova scheda
       `target="_blank" rel="noopener noreferrer"`): nessuna vista senza contesto, mai un link interno
-      spacciato per fonte.
+      spacciato per fonte. Sul **Radar Live** il link non può essere morto (§26.76): se la fonte
+      pubblica solo un indirizzo di **piattaforma** (Argo, Nuvola/ClasseViva, moduli Google,
+      OneDrive/SharePoint, WeTransfer) la riga porta alla **home `.edu.it`** dell'istituto e lo
+      dichiara (`tipo: 'sito-scuola'`); se non esiste né un avviso apribile né un dominio
+      istituzionale, la riga **non entra** in bacheca. In vetrina **nessun badge di stato interno**
+      (niente più «anagrafica parziale»): la colonna «Scuola» mostra solo il nome reale.
+- [ ] **Prova a occhio, senza aspettare lo scraper** (§26.77) — `npm run dati:demo` (dry-run)
+      elenca le **10** righe `demo-*` con l'esito dichiarato: **7 in bacheca** (Argo/Forms/Nuvola
+      → home `.edu.it`, avvisi veri, badge **pieni** nei quattro stati di scadenza, nome dal
+      titolo) e **3 fuori** (nessuna fonte apribile, segnaposto, titolo di sola pubblicazione).
+      `npm run dati:demo -- --apply` le scrive (mai in produzione senza `--consenti-produzione`),
+      `npm run dati:demo -- --pulisci --apply` le elimina. La stessa tabella di casi è la guardia
+      `npm run test:board:demo` (esito atteso = esito reale). Il badge d'urgenza è **pieno**
+      (`bg-rose-700`/`bg-amber-600`/`bg-emerald-700`, testo bianco in grassetto) e il totale della
+      pill conta le **stesse** righe che generano le schermate (§26.77).
 - [ ] **Finestra dei 60 giorni: solo FETCH e pulizia, mai vetrina** (§26.71) — lo **stesso** numero
       e la stessa data **locale** vivono in `src/lib/scadenza.ts`
       (`GIORNI_FINESTRA_SENZA_SCADENZA`, `eAvvisoVivo(scadenza, pubblicazione)`) e valgono per la

@@ -9,8 +9,16 @@
 
 import type { RigaBoard } from '../../src/lib/liveBoard.ts';
 
-/** Scadenza lontana: una riga con questa data è sempre «viva». */
-const FUTURO = '2099-12-31';
+/**
+ * Scadenza «viva»: RELATIVA a oggi (§26.75). Una data fissa (2099) uscirebbe
+ * dall'orizzonte di 30 giorni delle opportunità e ogni riga della fixture
+ * verrebbe scartata dal gate — la guardia misurerebbe il gate, non la vetrina.
+ */
+const FUTURO = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() + 5);
+  return d.toISOString().slice(0, 10);
+})();
 
 /** Righe di prova della vetrina: il numero nel commento è il caso della guardia. */
 export const RIGHE_BOARD: RigaBoard[] = [

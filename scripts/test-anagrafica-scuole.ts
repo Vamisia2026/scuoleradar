@@ -29,6 +29,7 @@ import {
   scuolaDaCodice,
   scuolaDaNome,
 } from '../src/lib/anagraficaScuole.ts';
+import { campoSito } from '../src/lib/anagraficaCsv.ts';
 
 let errori = 0;
 function check(nome: string, atteso: unknown, ottenuto: unknown): void {
@@ -70,7 +71,7 @@ const RIGHE_STAT = [
   // PEC assente → null.
   ['202627', 'NORD OVEST', 'PIEMONTE', 'TORINO', 'TOIC84700B', 'I.C. Ferruccio Ulivi', 'TOEE84702C', 'PRIMARIA ULIVI', 'VIA TASSONI 5', '10100', 'B234', 'TORINO', 'NORMALE', 'SCUOLA PRIMARIA', 'NO', 'Non Disponibile', 'TOIC84700B@istruzione.it', 'Non Disponibile', 'www.ulivi.it', 'SI'],
   // Comune con virgola (test del parser) e nome con virgolette.
-  ['202627', 'SUD', 'SICILIA', 'ENNA', 'ENIC80600C', 'I.C. "E. PANTANO"', 'ENAA80601D', 'M.MONTESSORI', 'VIA P. TOGLIATTI, 198', '94010', 'A478', 'ASSORO', 'NORMALE', 'SCUOLA INFANZIA', 'NO', 'Non Disponibile', 'ENIC80600C@istruzione.it', 'Non Disponibile', 'www.assoro.edu.it', 'SI'],
+  ['202627', 'SUD', 'SICILIA', 'ENNA', 'ENIC80600C', 'I.C. "E. PANTANO"', 'ENAA80601D', 'M.MONTESSORI', 'VIA P. TOGLIATTI, 198', '94010', 'A478', 'ASSORO', 'NORMALE', 'SCUOLA INFANZIA', 'NO', 'Non Disponibile', 'ENIC80600C@istruzione.it', 'Non Disponibile', 'https://www.assoro.edu.it/index.php?lang=it', 'SI'],
   // NOME AMBIGUO: due istituti omonimi in province diverse (Milano / Cuneo).
   ['202627', 'NORD OVEST', 'LOMBARDIA', 'MILANO', 'MIIC11100D', 'I.C. Manzoni', 'MIAA11101E', 'MANZONI INFANZIA', 'VIA MANZONI 1', '20100', 'F205', 'MILANO', 'NORMALE', 'SCUOLA INFANZIA', 'NO', 'Non Disponibile', 'MIIC11100D@istruzione.it', 'Non Disponibile', 'Non Disponibile', 'SI'],
   ['202627', 'NORD OVEST', 'PIEMONTE', 'CUNEO', 'CNIC22200F', 'I.C. Manzoni', 'CNAA22201G', 'MANZONI INFANZIA', 'VIA MANZONI 2', '12100', 'H727', 'CUNEO', 'NORMALE', 'SCUOLA INFANZIA', 'NO', 'Non Disponibile', 'CNIC22200F@istruzione.it', 'Non Disponibile', 'Non Disponibile', 'SI'],
@@ -119,6 +120,18 @@ check('colonne allineate nonostante una virgola dentro le virgolette', ['ASSORO'
   scuolaDaCodice(indice, 'ENIC80600C')?.tipo,
 ]);
 
+console.log('\n— 2-bis. Sito istituzionale (`SITOWEBSCUOLA`) → solo host `.edu.it` —');
+// Direttiva 22/10/2026 (§26.77): il sito dichiarato dall'anagrafica MIM sostituisce
+// i link ai portali privati (Argo/Spaggiari/Nuvola) con la home dell'istituto. In
+// tabella resta SOLO l'host: la home si compone in un punto solo
+// (`flightBoard/linkFonte.ts`), così un percorso vecchio non può finire in vetrina.
+check('schema, `www.` e percorso → resta l’host nudo', 'assoro.edu.it', scuolaDaCodice(indice, 'ENIC80600C')?.sitoWeb);
+check('sito senza schema → host nudo', 'ic.it', scuolaDaCodice(indice, 'MBIC80500A')?.sitoWeb);
+check('sito «Non Disponibile» → null', null, scuolaDaCodice(indice, 'GEIC85000H')?.sitoWeb ?? null);
+check('`campoSito` scarta una casella email', null, campoSito('segreteria@iccarducci.edu.it'));
+check('`campoSito` scarta un valore senza dominio', null, campoSito('nd'));
+check('`campoSito` tiene un dominio con sottodominio', 'liceo.marche.edu.it', campoSito('https://liceo.marche.edu.it/'));
+
 console.log('\n— 3. Lookup: sede, istituto di riferimento, nome —');
 check('codice di ISTITUTO → sede rappresentativa', 'MBAA80501B', scuolaDaCodice(indice, 'MBIC80500A')?.codice);
 check('codice di plesso → la sua riga', 'M.MONTESSORI', scuolaDaCodice(indice, 'MBAA80501B')?.nome);
@@ -139,8 +152,8 @@ const daTitolo = arricchisciDaAnagrafica(indice, { title: 'Interpello supplenza 
 check('via: codice estratto dal TITOLO', 'codice', daTitolo.via);
 check(
   'patch completa (nome, codice, PEO, PEC)',
-  ['I.C. "S. ANDREA"', 'MBIC80500A', 'mbic80500a@istruzione.it', 'mbic80500a@pec.istruzione.it'],
-  [daTitolo.patch.school_name, daTitolo.patch.school_code, daTitolo.patch.contact_email, daTitolo.patch.school_pec],
+  ['I.C. "S. ANDREA"', 'MBIC80500A', 'mbic80500a@istruzione.it', 'mbic80500a@pec.istruzione.it', 'ic.it'],
+  [daTitolo.patch.school_name, daTitolo.patch.school_code, daTitolo.patch.contact_email, daTitolo.patch.school_pec, daTitolo.patch.school_site],
 );
 const daNome = arricchisciDaAnagrafica(indice, { school_name: 'I.C. Ferruccio Ulivi', province: 'TO' });
 check(
@@ -154,9 +167,22 @@ const datiPieni = arricchisciDaAnagrafica(indice, {
   school_name: 'I.C. "S. ANDREA"',
   contact_email: 'segreteria@scuola.it',
   school_pec: 'pec@scuola.it',
+  school_site: 'www.ic.it',
   province: 'MB',
 });
-check('dati già presenti: NESSUNA sovrascrittura', {}, datiPieni.patch);
+check('dati già presenti (sito compreso): NESSUNA sovrascrittura', {}, datiPieni.patch);
+const senzaSito = arricchisciDaAnagrafica(indice, {
+  school_code: 'MBIC80500A',
+  school_name: 'I.C. "S. ANDREA"',
+  contact_email: 'segreteria@scuola.it',
+  school_pec: 'pec@scuola.it',
+  province: 'MB',
+});
+check(
+  'solo il sito mancante viene aggiunto (`school_site` dall’anagrafica)',
+  { school_site: 'ic.it' },
+  senzaSito.patch,
+);
 const ambiguo = arricchisciDaAnagrafica(indice, { school_name: 'I.C. Manzoni', province: null });
 check('nome ambiguo → nessun arricchimento', ['nessuna', {}], [ambiguo.via, ambiguo.patch]);
 const sconosciuto = arricchisciDaAnagrafica(indice, { school_code: 'ZZIC99999Z', province: 'ZZ' });

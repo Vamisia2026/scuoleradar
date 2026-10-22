@@ -37,6 +37,13 @@ export interface ScuolaAnagrafica {
   email: string | null;
   /** PEC dichiarata dalla fonte. */
   pec: string | null;
+  /**
+   * Sito web istituzionale dichiarato dalla fonte (`SITOWEBSCUOLA`), ridotto al
+   * solo HOST (`www.iccarducci.edu.it`). Da §26.77 è il materiale con cui il
+   * tabellone sostituisce i link alle piattaforme private (Argo, Spaggiari,
+   * Nuvola): il click porta alla home della scuola, non a una pagina di login.
+   */
+  sitoWeb: string | null;
   /** Nome provincia dichiarato dal file (es. «MONZA E BRIANZA»). */
   provinciaNome: string | null;
   /** Codice provincia (`MB`) risolto sull'elenco ufficiale, quando combacia. */
@@ -68,6 +75,25 @@ function campo(valore?: string | null): string | null {
 /** Campo email CSV → valore utile in MINUSCOLO (`Non Disponibile`/vuoto → `null`). */
 export function campoEmail(valore?: string | null): string | null {
   return campo(valore)?.toLowerCase() ?? null;
+}
+
+/**
+ * Campo `SITOWEBSCUOLA` → HOST normalizzato (`www.iccarducci.edu.it`), altrimenti
+ * `null`.
+ *
+ * L'anagrafica ministeriale scrive il sito in forme diverse: con o senza schema
+ * (`http://`, `https://`), con `www.`, con lo slash finale, a volte con il percorso
+ * dell'indice. Qui resta SOLO l'host: la home si compone come `https://<host>` in
+ * un unico punto (`flightBoard/linkFonte.ts`), quindi non si pubblica mai un URL
+ * con un percorso potenzialmente scaduto. Un valore che non è un dominio
+ * (`Non Disponibile`, `nd`, una casella email) vale `null`.
+ */
+export function campoSito(valore?: string | null): string | null {
+  const grezzo = campo(valore)?.toLowerCase();
+  if (!grezzo) return null;
+  const senzaSchema = grezzo.replace(/^https?:\/\//, '');
+  const host = senzaSchema.split(/[/?#]/)[0]?.replace(/^www\./, '').replace(/\.$/, '') ?? '';
+  return /^(?:[a-z0-9-]+\.)+[a-z]{2,}$/.test(host) ? host : null;
 }
 
 /**
@@ -188,6 +214,7 @@ export function scuolaDaCampi(
     nome: leggi('DENOMINAZIONESCUOLA') ?? '',
     email: campoEmail(leggi('INDIRIZZOEMAILSCUOLA')),
     pec: campoEmail(leggi('INDIRIZZOPECSCUOLA')),
+    sitoWeb: campoSito(leggi('SITOWEBSCUOLA')),
     provinciaNome,
     provinciaCodice: provinciaCodiceDaNome(provinciaNome),
     comune: leggi('DESCRIZIONECOMUNE'),

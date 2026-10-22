@@ -32,7 +32,15 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
   console.log(`${ok ? '✓' : '✗'} ${nome}: atteso=${JSON.stringify(atteso)} ottenuto=${JSON.stringify(ottenuto)}`);
 }
 
-const FUTURO = '2099-12-31';
+/**
+ * Scadenza «viva» RELATIVA a oggi (§26.75): una data fissa (2099) uscirebbe
+ * dall'orizzonte dei 30 giorni e la guardia misurerebbe il gate invece della scala.
+ */
+const FUTURO = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() + 5);
+  return d.toISOString().slice(0, 10);
+})();
 
 /** Riga di prova: nome istituto REALE (supera il gate di vetrina), campi sovrascrivibili. */
 interface RigaProva {

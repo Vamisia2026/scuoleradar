@@ -50,6 +50,36 @@
 //   • STEP 4-bis — disattivazione in `discovered_links` dei link alle stesse
 //     piattaforme: la regola vale anche per i prossimi giri di scansione.
 //
+// FIX v6 (22/10/2026) — A.S. 2026/2027 e target morti:
+//   • PIEMONTE: i target tabellari passano da `/interpello2025/` a
+//     `/interpello2026/`. MISURATO il 22/10/2026 sulla pagina TO:
+//     `interpello2026/ric_interpello_ambito_to.php` → HTTP 200 con **23 righe
+//     «aperto»** e azione «Stampa»; `interpello2025/...` → HTTP 200 ma con
+//     **51 occorrenze di «aperto» su 1.390 righe**, cioè l'archivio dell'anno
+//     scorso. Il path vecchio non è un 404: è **dato stantio**, che è peggio,
+//     perché non fa scattare nessun allarme.
+//   • LIGURIA: gli URL `servizi.istruzioneliguria.gov.it/provincia.php?p=XX`
+//     portano la query string dell'A.S. corrente (`&as=2026%2F2027`); verificato
+//     HTTP 200 su GE/SP/IM/SV il 22/10/2026.
+//   • STEP 3-ter — eliminazione da `interpelli` delle righe che arrivano dalle
+//     FONTI TABELLARI MORTE (A.S. precedente, path `/ric_interpello_ambito_*`
+//     dell'host istituzionale, `alessandria-asti/…`, `servizi.istruzione.liguria.it`):
+//     sono righe che nessun giro di scansione può più aggiornare. Misurato:
+//     **168** righe con `source_url` su `/interpello2025/` (tutte con `region`
+//     NULLA: nessun utente può matcharle).
+//   • STEP 7 — `discovered_links` a LISTA CHIUSA per Piemonte e Liguria: le due
+//     regioni hanno un seed completo e verificato, quindi ogni altro link attivo
+//     è deriva (404, host morto, A.S. vecchio) e viene disattivato. È la ragione
+//     per cui il reporter continuava a interrogare `www.istruzionepiemonte.it/
+//     alessandria-asti/…` e `servizi.istruzione.liguria.it/…`.
+//
+//   • STEP 3-quater — eliminazione delle righe orfane con `region` NULLA sui
+//     domini ufficiali delle regioni a lista chiusa. Misurato: **76** righe su
+//     `/interpello2026/` senza regione, senza scuola e senza scadenza (avanzi
+//     di un'ingestione precedente) + **40** righe di news del portale
+//     istituzionale finite in `interpelli` per errore: invisibili al matching e
+//     indistinguibili dai record nuovi, che il reporter ricrea corretti.
+//
 // Dipendenze: @supabase/supabase-js, dotenv
 // Uso:        npx tsx scripts/clean-and-sync-targets.ts
 //
@@ -199,6 +229,9 @@ const TARGETS: TargetSeed[] = [
   { url: 'https://www.usp-rieti.it/interpelli/', region: 'Lazio', province: 'RI' },
 
   // ── Liguria ───────────────────────────────────────────────────────────────
+  // FIX v6: la query string `as=2026%2F2027` è OBBLIGATORIA — senza, il portale
+  // serve l'elenco dell'anno scolastico precedente. Verificato HTTP 200 su
+  // GE/SP/IM/SV il 22/10/2026 (GE: 9.596 caratteri di griglia «results-row»).
   { url: 'https://servizi.istruzioneliguria.gov.it/provincia.php?p=GE&as=2026%2F2027', region: 'Liguria', province: 'GE' },
   { url: 'https://servizi.istruzioneliguria.gov.it/provincia.php?p=SP&as=2026%2F2027', region: 'Liguria', province: 'SP' },
   { url: 'https://servizi.istruzioneliguria.gov.it/provincia.php?p=IM&as=2026%2F2027', region: 'Liguria', province: 'IM' },
@@ -207,15 +240,18 @@ const TARGETS: TargetSeed[] = [
   { url: 'https://servizi.istruzioneliguria.gov.it/nazionali.php', region: 'Liguria', province: null },
 
   // ── Piemonte ──────────────────────────────────────────────────────────────
+  // FIX v6: A.S. 2026/2027. Il path `/interpello2025/` risponde ancora 200 ma è
+  // l'archivio dell'anno scorso: da lì il reporter estraeva righe chiuse (0
+  // record validi). Verificato HTTP 200 su tutti gli 8 ambiti il 22/10/2026.
   { url: 'https://www.istruzionepiemonte.it/', region: 'Piemonte', province: null },
-  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_to.php', region: 'Piemonte', province: 'TO' },
-  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_al.php', region: 'Piemonte', province: 'AL' },
-  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_at.php', region: 'Piemonte', province: 'AT' },
-  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_bi.php', region: 'Piemonte', province: 'BI' },
-  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_cn.php', region: 'Piemonte', province: 'CN' },
-  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_no.php', region: 'Piemonte', province: 'NO' },
-  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_vb.php', region: 'Piemonte', province: 'VB' },
-  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_vc.php', region: 'Piemonte', province: 'VC' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_to.php', region: 'Piemonte', province: 'TO' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_al.php', region: 'Piemonte', province: 'AL' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_at.php', region: 'Piemonte', province: 'AT' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_bi.php', region: 'Piemonte', province: 'BI' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_cn.php', region: 'Piemonte', province: 'CN' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_no.php', region: 'Piemonte', province: 'NO' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_vb.php', region: 'Piemonte', province: 'VB' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_vc.php', region: 'Piemonte', province: 'VC' },
 
   // ── Sicilia ───────────────────────────────────────────────────────────────
   { url: 'https://www.usr.sicilia.it/', region: 'Sicilia', province: null },
@@ -240,6 +276,44 @@ const TARGETS: TargetSeed[] = [
   { url: 'https://www.mim.gov.it/web/sassari/interpelli-docenti', region: 'Sardegna', province: 'SS' },
   { url: 'https://www.mim.gov.it/web/nuoro/interpelli', region: 'Sardegna', province: 'NU' },
   { url: 'https://www.mim.gov.it/web/cagliari/interpelli-docenti-e-personale-educativo', region: 'Sardegna', province: 'CA' },
+];
+
+// ---------------------------------------------------------------------------
+// FIX v6 — Regioni a LISTA CHIUSA e fonti tabellari morte
+// ---------------------------------------------------------------------------
+
+// Regioni con seed COMPLETO e verificato: per queste la lista TARGETS è l'unica
+// fonte ammessa, quindi qualunque altro link attivo in `discovered_links` è
+// deriva (404, host morto, A.S. precedente) e va disattivato.
+const REGIONI_A_LISTA_CHIUSA = new Set<string>(['Piemonte', 'Liguria']);
+
+// Sorgenti tabellari che non possono più produrre dati: i record che le citano
+// sono immutabili e invisibili al matching (region NULLA o A.S. scaduto).
+const FONTI_TABELLARI_MORTE: Array<{ pattern: string; motivo: string }> = [
+  {
+    pattern: 'servizi.istruzionepiemonte.it/interpello2025/',
+    motivo: 'A.S. 2025/2026 archiviato: sostituito da /interpello2026/',
+  },
+  {
+    pattern: 'www.istruzionepiemonte.it/ric_interpello_ambito_',
+    motivo: 'path inesistente sull\'host istituzionale (404)',
+  },
+  {
+    pattern: 'istruzionepiemonte.it/alessandria-asti/',
+    motivo: 'pagina interpelli non più pubblicata (404)',
+  },
+  {
+    pattern: 'istruzionepiemonte.it/vercelli/interpelli-supplenze',
+    motivo: 'pagina interpelli non più pubblicata (404)',
+  },
+  {
+    pattern: 'servizi.istruzione.liguria.it',
+    motivo: 'host dismesso: il portale è servizi.istruzioneliguria.gov.it',
+  },
+  {
+    pattern: 'www.istruzioneliguria.it',
+    motivo: 'pagina interpelli non più pubblicata (404)',
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -500,6 +574,141 @@ async function deleteInterpelliPiattaformeBloccate(): Promise<number> {
 
   console.log(
     `[clean-and-sync] Eliminati ${count} record da bacheche chiuse (Spaggiari/Nuvola).`
+  );
+  return count;
+}
+
+// ---------------------------------------------------------------------------
+// STEP 3-ter — Eliminazione record che arrivano da FONTI TABELLARI MORTE
+// ---------------------------------------------------------------------------
+//
+// MISURATO il 22/10/2026: 168 righe con `source_url` su `/interpello2025/` e
+// `region` NULLA su tutte. Sono l'archivio dell'A.S. precedente, letto da una
+// pagina che risponde ancora 200 (per questo nessun controllo di stato le
+// segnalava) ma che il reporter non riesaminerà mai più: la sorgente attiva è
+// `/interpello2026/`. Restano solo spazio occupato e rumore nel pool.
+//
+// La guardia `TARGETS.some(...)` impedisce di cancellare una sorgente che nel
+// frattempo è tornata ufficiale.
+
+function filtroFontiTabellariMorte(colonna: string): string {
+  return FONTI_TABELLARI_MORTE
+    // Non toccare una sorgente che è (di nuovo) nella lista ufficiale.
+    .filter((f) => !TARGETS.some((t) => t.url.includes(f.pattern)))
+    .map((f) => `${colonna}.ilike.%${f.pattern}%`)
+    .join(',');
+}
+
+async function deleteInterpelliDaFontiMorte(): Promise<number> {
+  const orFilter = filtroFontiTabellariMorte('source_url');
+  if (!orFilter) {
+    console.log(
+      '[clean-and-sync] Nessuna fonte tabellare morta da ripulire (tutte tornate ufficiali).'
+    );
+    return 0;
+  }
+
+  const { count, error: countErr } = await supabase
+    .from('interpelli')
+    .select('hash_id', { count: 'exact', head: true })
+    .or(orFilter);
+
+  if (countErr) {
+    console.error(
+      `[clean-and-sync] Errore conteggio fonti morte: ${countErr.message}`
+    );
+    return 0;
+  }
+
+  if (!count || count === 0) {
+    console.log('[clean-and-sync] Nessun record da fonti tabellari morte.');
+    return 0;
+  }
+
+  const { error: delErr } = await supabase
+    .from('interpelli')
+    .delete()
+    .or(orFilter);
+
+  if (delErr) {
+    console.error(
+      `[clean-and-sync] Errore delete fonti morte: ${delErr.message}`
+    );
+    return 0;
+  }
+
+  console.log(
+    `[clean-and-sync] Eliminati ${count} record da fonti tabellari morte (A.S. vecchio / URL 404).`
+  );
+  return count;
+}
+
+// ---------------------------------------------------------------------------
+// STEP 3-quater — Eliminazione righe orfane PRIVE DI REGIONE
+// ---------------------------------------------------------------------------
+//
+// Le righe delle tabelle ufficiali devono portare `region` (arriva dal target
+// in `discovered_links`): senza regione il pool non le mostra a nessun utente e
+// nessun giro di scansione le aggiorna, perché l'upsert del reporter usa un
+// hash_id diverso e inserisce righe nuove.
+//
+// MISURATO il 22/10/2026: 76 righe su `/interpello2026/` con `region` NULLA,
+// `school_name` NULLO, `deadline` NULLA ma `class_codes` popolate — avanzi di
+// un'ingestione precedente, invisibili e indistinguibili dai record nuovi —
+// più 40 righe di news del portale istituzionale finite in `interpelli`.
+// Il reporter le ricrea corrette al primo giro: qui si eliminano i fantasmi.
+//
+// Domini ufficiali delle regioni a LISTA CHIUSA (Piemonte, Liguria): lì le
+// uniche sorgenti ammesse sono i portali elencati in TARGETS, che scrivono
+// sempre `region`; una riga senza regione da questi domini è quindi sempre un
+// residuo rotto.
+const DOMINI_UFFICIALI_LISTA_CHIUSA = [
+  'istruzionepiemonte.it',
+  'istruzioneliguria.it',
+];
+
+async function deleteInterpelliSenzaRegione(): Promise<number> {
+  // Le fonti tabellari morte sono già coperte dallo STEP 3-ter, che non filtra
+  // per `region`: qui si intercettano i residui rimasti sui domini ufficiali.
+  const orFilter = DOMINI_UFFICIALI_LISTA_CHIUSA
+    .map((d) => `source_url.ilike.%${d}%`)
+    .join(',');
+
+  const { count, error: countErr } = await supabase
+    .from('interpelli')
+    .select('hash_id', { count: 'exact', head: true })
+    .or(orFilter)
+    .is('region', null);
+
+  if (countErr) {
+    console.error(
+      `[clean-and-sync] Errore conteggio righe senza regione: ${countErr.message}`
+    );
+    return 0;
+  }
+
+  if (!count || count === 0) {
+    console.log(
+      '[clean-and-sync] Nessuna riga orfana senza regione da eliminare.'
+    );
+    return 0;
+  }
+
+  const { error: delErr } = await supabase
+    .from('interpelli')
+    .delete()
+    .or(orFilter)
+    .is('region', null);
+
+  if (delErr) {
+    console.error(
+      `[clean-and-sync] Errore delete righe senza regione: ${delErr.message}`
+    );
+    return 0;
+  }
+
+  console.log(
+    `[clean-and-sync] Eliminate ${count} righe orfane senza regione (invisibili al matching).`
   );
   return count;
 }
@@ -810,6 +1019,73 @@ async function repairMissingDomains(): Promise<number> {
 }
 
 // ---------------------------------------------------------------------------
+// STEP 7 — `discovered_links` a LISTA CHIUSA per Piemonte e Liguria
+// ---------------------------------------------------------------------------
+//
+// Per queste due regioni il seed è completo e verificato: la lista TARGETS è
+// l'unica fonte ammessa. Ogni altro link attivo è deriva — path `/interpello2025/`
+// (archivio), `www.istruzionepiemonte.it/alessandria-asti/…` (404),
+// `servizi.istruzione.liguria.it` (host dismesso) — e il reporter lo
+// interrogherebbe a ogni giro producendo 0 record e rumore nei log.
+//
+// Misurato il 22/10/2026: 17 link attivi fuori lista per il Piemonte (8 path
+// `/interpello2025/`, 7 `www.…/ric_interpello_ambito_*.php`, `alessandria-asti`,
+// `vercelli`) e 5 per la Liguria (4 host dismesso + `www.istruzioneliguria.it`).
+
+async function disableObsoleteTargets(): Promise<number> {
+  const regioni = Array.from(REGIONI_A_LISTA_CHIUSA);
+  const { data, error } = await supabase
+    .from('discovered_links')
+    .select('id, url, region, status')
+    .in('region', regioni)
+    .limit(5000);
+
+  if (error) {
+    console.error(
+      `[clean-and-sync] Errore lettura target fuori lista (${regioni.join(', ')}): ${error.message}`
+    );
+    return 0;
+  }
+
+  const ufficiali = new Set(TARGETS.map((t) => t.url));
+  const daDisattivare = (data ?? []).filter(
+    (row) => row.status !== 'disabled' && !ufficiali.has(String(row.url ?? ''))
+  );
+
+  if (daDisattivare.length === 0) {
+    console.log(
+      '[clean-and-sync] Nessun target fuori lista per le regioni a lista chiusa.'
+    );
+    return 0;
+  }
+
+  let disattivati = 0;
+  for (let i = 0; i < daDisattivare.length; i += 50) {
+    const lotto = daDisattivare.slice(i, i + 50);
+    const { error: updErr } = await supabase
+      .from('discovered_links')
+      .update({ status: 'disabled' })
+      .in('id', lotto.map((row) => row.id));
+
+    if (updErr) {
+      console.error(
+        `[clean-and-sync] Errore disattivazione target fuori lista: ${updErr.message}`
+      );
+      continue;
+    }
+    disattivati += lotto.length;
+    for (const row of lotto) {
+      console.log(`[clean-and-sync]   × [${row.region}] ${row.url}`);
+    }
+  }
+
+  console.log(
+    `[clean-and-sync] Disattivati ${disattivati} target fuori lista (${regioni.join(', ')}).`
+  );
+  return disattivati;
+}
+
+// ---------------------------------------------------------------------------
 // Orchestrazione
 // ---------------------------------------------------------------------------
 
@@ -832,6 +1108,14 @@ async function main(): Promise<void> {
   );
   const bachecheChiuseRemoved = await deleteInterpelliPiattaformeBloccate();
 
+  console.log('\n── STEP 3-ter: eliminazione record da fonti tabellari morte ──');
+  const fontiMorteRemoved = await deleteInterpelliDaFontiMorte();
+
+  console.log(
+    '\n── STEP 3-quater: eliminazione righe orfane senza regione ──'
+  );
+  const righeSenzaRegioneRemoved = await deleteInterpelliSenzaRegione();
+
   console.log('\n── STEP 4: disattivazione link Umbria generici ──');
   const umbriaDisabled = await disableUmbriaTrasparenza();
 
@@ -844,17 +1128,25 @@ async function main(): Promise<void> {
   console.log('\n── STEP 6: riparazione dominio sui record esistenti ──');
   const domainsRepaired = await repairMissingDomains();
 
+  console.log(
+    '\n── STEP 7: disattivazione target fuori lista (regioni a lista chiusa) ──'
+  );
+  const targetObsoleti = await disableObsoleteTargets();
+
   console.log('\n[clean-and-sync] Riepilogo:');
   console.log(`  Record spazzatura eliminati:    ${junkRemoved}`);
   console.log(`  Record scaduti eliminati:       ${expiredRemoved}`);
   console.log(`  Record EE orfani eliminati:     ${eeRemoved}`);
   console.log(`  Record bacheche chiuse eliminati: ${bachecheChiuseRemoved}`);
+  console.log(`  Record fonti morte eliminati:   ${fontiMorteRemoved}`);
+  console.log(`  Righe senza regione eliminate:  ${righeSenzaRegioneRemoved}`);
   console.log(`  Link Umbria disattivati:        ${umbriaDisabled}`);
   console.log(`  Link bacheca chiusa disattivati: ${linkBachecaChiusa}`);
   console.log(`  Target inseriti:                ${stats.inserted}`);
   console.log(`  Target riattivati:              ${stats.reactivated}`);
   console.log(`  Target già attivi (invariati):  ${stats.unchanged}`);
   console.log(`  Domini riparati:                ${domainsRepaired}`);
+  console.log(`  Target fuori lista disattivati: ${targetObsoleti}`);
   console.log(`  Errori durante l'upsert:        ${stats.errors}`);
 
   if (stats.errors > 0) {

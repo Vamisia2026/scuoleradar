@@ -353,8 +353,11 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `testiDomNodi.ts` | 41 | **Puro e isomorfo** — LETTURA dei testi del DOM: era il secondo pezzo della scansione dell'«Editor Testi Rapido» (rimosso il 03/10/2026, §26.38), oggi serve al VISUAL EDITOR (§26.37) con il **tipo minimo `NodoDom`** (permette di ESEGUIRE i testi su un DOM finto negli script Node, senza jsdom) e `etichettaDove` («sezione · Paragrafo»). La scansione dei blocchi e la riscrittura stanno in `visualEditorRegole.ts`. Verificato da `npm run test:visual-editor` |
 | `testiDomRegole.ts` | 61 | **Puro, senza dipendenze** — REGOLE e NOMI dei testi del DOM (condivise col VISUAL EDITOR, §26.37): `normalizzaTesto`, `impronta` (djb2 in base 36), `chiaveTestoDom(tag, testo, occorrenza)` → `p#1a2b3c#0` (identità STABILE del testo: non dipende dalla posizione nel DOM, quindi l'override resta agganciato anche quando React ricrea i nodi e due testi identici restano occorrenze distinte) e `campoDi`/`contenitoreDi` per le etichette umane |
 | `emailScuola.ts` | ~110 | **Puro** — email UFFICIALE della scuola: `normalizzaCodiceMeccanografico`, `estraiCodiceMeccanograficoDaTesto`, `emailDaCodiceMeccanografico` (PEO `@istruzione.it` / PEC `@pec.istruzione.it`), `risolviEmailUfficialeScuola` (email di fonte → convenzione MIM; mai email inventate) |
-| `liveBoard.ts` | 238 | **Puro** — vetrina "Radar Live" (ogni nome passa dal GATE `nomeIstituto.ts`; `titoloLeggibile` per il sottotitolo, `rigaPresentabileVetrina` per la prova): `scuolaDaTitolo` (nome **prima del separatore** quando dopo c'è l'azione amministrativa; respinge frammenti di procedura, elenchi di codici classe e nomi generici), `nomeScuolaRiga` (campo → registro per codice → titolo: l'ente emittente NON è una scuola e non entra in bacheca; un `school_name` fatto solo di codici classe — «ADEE \| EEEE» — **non** è un nome), `nomePresentabileRiga` (per il responso della prova: lo **stesso** gate della bacheca — mai l'ente emittente al posto della scuola, §26.59), `nomeScuolaBoard`/`preparaRigheBoard` (**GATE STRETTO, §26.59**: entra solo una riga con un istituto REALE risolto — campo, registro per codice o titolo; il nome grezzo del bando non è un'anagrafica e non fa più entrare la riga, `nomeGrezzoDaBando` resta come giudizio puro per la qualità dell'ingestione; `anagraficaParziale` è `true` quando il nome è ricostruito (registro/titolo) o lo stato è `parziale`; resta fuori anche l'avviso non vivo). Il tabellone continua a non mostrare mai "Scuola non indicata" né codici in vetrina — e tiene gli **avvisi senza scadenza** pubblicati negli ultimi `GIORNI_FINESTRA_SENZA_SCADENZA`=60 giorni con `scadenza: null` + `senzaScadenza`: mai una data inventata), `diversificaProvince` (round-robin deterministico per provincia: nessuna provincia monopolizza le prime pagine) |
-| `nomeIstituto.ts` | 161 | **Puro, senza dipendenze** — GATE dei nomi in vetrina: `nomeIstitutoPresentabile` accetta una stringa solo se ha una **testa d'istituto** (`IC`, `I.I.S.`, `ITIS`, `Liceo`, `Istituto`, `Convitto`…) **e** una **denominazione** (un nome proprio), senza codici amministrativi (classe di concorso, sostegno, meccanografico, token misto lettere+cifre) e senza 3+ cifre consecutive; **taglia la coda di procedura** («IC ALBIGNASEGO Interpello per copertura posti» → «IC ALBIGNASEGO»). Verificato da `npm run test:nome-istituto` |
+| `liveBoard.ts` | 231 | **Puro** — vetrina "Radar Live" (ogni nome passa dal GATE `nomeIstituto.ts`; `titoloLeggibile` per il sottotitolo, `rigaPresentabileVetrina` per la prova): `scuolaDaTitolo` (nome **prima del separatore** quando dopo c'è l'azione amministrativa; respinge frammenti di procedura, elenchi di codici classe e nomi generici), `nomeScuolaRiga` (campo → registro per codice → titolo: l'ente emittente NON è una scuola e non entra in bacheca; un `school_name` fatto solo di codici classe — «ADEE \| EEEE» — **non** è un nome), `nomePresentabileRiga` (per il responso della prova: lo **stesso** gate della bacheca — mai l'ente emittente al posto della scuola, §26.59), `nomeScuolaBoard`/`preparaRigheBoard` (**GATE STRETTO, §26.59**: entra solo una riga con un istituto REALE risolto — campo, registro per codice o titolo; il nome grezzo del bando non è un'anagrafica e non fa più entrare la riga, `nomeGrezzoDaBando` resta come giudizio puro per la qualità dell'ingestione; `anagraficaParziale` è `true` quando il nome è ricostruito (registro/titolo) o lo stato è `parziale`; resta fuori anche l'avviso non vivo). Il tabellone continua a non mostrare mai "Scuola non indicata" né codici in vetrina — e tiene gli **avvisi senza scadenza** pubblicati negli ultimi `GIORNI_FINESTRA_SENZA_SCADENZA`=60 giorni con `scadenza: null` + `senzaScadenza`: mai una data inventata), `diversificaProvince` — **estratto** in `diversificaProvince.ts` dalla §26.76 e ri-esportato qui (round-robin deterministico per provincia: nessuna provincia monopolizza le prime pagine) — e la lettura del TITOLO in `titoloBoard.ts` (§26.76: `nomeScuolaDaTitolo` + `eTitoloSoloData`, che tiene fuori la riga col titolo di sola pubblicazione) |
+| `diversificaProvince.ts` | 89 | **Puro** — diversità geografica del tabellone (§26.76, estratto da `liveBoard.ts` e lì ri-esportato): `diversificaProvince` mescola in modo **deterministico per giorno** (hash FNV del giorno + Fisher–Yates) e poi alterna le province in round-robin, così nessuna provincia monopolizza le prime pagine e l'ordine è stabile nella giornata ma **ruota** il giorno dopo; `oggi` iniettabile per i test. Verificato da `npm run test:live-board` |
+| `titoloBoard.ts` | 105 | **Puro** — dal TITOLO alla riga del «Radar Live» (§26.76): `nomeScuolaDaTitolo` è l'**ultimo** ripiego del nome dopo `school_name` e il registro per codice — prova i **segmenti** del titolo dall'ultimo al primo («… – IC CICAGNA – Cicagna»), poi le **teste d'istituto** accorciando la coda una parola alla volta («Interpello supplenza IC CARRARESE EUGANEO A-022 del 20/10/2026»), sempre filtrate da `nomeIstitutoPresentabile`: se il gate non approva si restituisce `null` (mai un codice al posto del nome); `eTitoloSoloData` riconosce il titolo fatto della sola riga di pubblicazione/data («PUBBLICATO IL 18/10/2026») — quella riga non entra in bacheca (`preparaRigheBoard`). Verificato da `npm run test:titolo` |
+| `nomeIstituto.ts` | 177 | **Puro** — GATE dei nomi in vetrina: le REGOLE (il vocabolario vive in `nomeIstitutoVocabolario.ts`). `nomeIstitutoPresentabile` accetta una stringa solo se ha una **testa d'istituto** (`IC`, `I.I.S.`, `ITIS`, `Liceo`, `Istituto`, `Convitto`, e dalla §26.73 le abbreviazioni reali delle fonti: `ICS`, `IT`, `IST. COMPR.`, `I grado`, `DIREZIONE DIDATTICA`) **e** una **denominazione** (un nome proprio, un numero/ordinale — «Comprensivo 7», «V Circolo» — o un ordinale a parole accanto a `circolo`: «Ottavo Circolo»), senza codici amministrativi (classe di concorso, sostegno, meccanografico, token misto lettere+cifre) e senza 3+ cifre consecutive; apre le **sigle incollate** («IISLAGRANGIA» → «IIS LAGRANGIA», «CPIA3» → «CPIA 3») e **taglia la coda di procedura** («IC ALBIGNASEGO Interpello per copertura posti» → «IC ALBIGNASEGO»). Verificato da `npm run test:nome-istituto` |
+| `nomeIstitutoVocabolario.ts` | 150 | **Puro, senza dipendenze** — il VOCABOLARIO del gate (§26.73): `PAROLE_GENERICHE`, `SIGLE_ISTITUTO` (teste reali, comprese le abbreviazioni delle fonti), `MARCATORI`, `AZIONI_AVVISO`, `NUMERI_ROMANI`, `ORDINALI_PAROLA`, `RE_MECCANOGRAFICO`/`RE_SIGLA_SOSTEGNO`/`RE_SIGLA_RIPETUTA`/`RE_TRATTINO_CODICE`, `PREFISSI_INCOLLATI` e `apriSigleIncollate` |
 | `school-lookup.ts` | 67 | **Anti-mock** (§26.47) — registro MINIMO delle scuole, solo istituti REALI registrati a mano: **`nomeScuolaDaCodice`** (mai "Istituto &lt;codice&gt;") e `scuolaDaCodice` (`SchoolInfo` completo, `null` se non registrato). Il vecchio **`resolveSchoolByCode`** — che per QUALSIASI codice fabbricava un nome (`Istituto &lt;codice&gt;`) e la città `N/D` — è stato **rimosso**: il recapito ufficiale nasce solo dalla convenzione MIM (`emailScuola.ts`). Verificato da `npm run test:pipeline` |
 | `statoArricchimento.ts` | 84 | **Puro e isomorfo** — STATO dell'anagrafica di una riga (§26.47): `statoArricchimento` (`completo` = istituto identificato + recapito PEO/PEC, altrimenti `parziale`), `istitutoIdentificato`, `recapitoPresente`, `normalizzaStatoArricchimento`, `anagraficaInAggiornamento` (true solo per `parziale`: uno stato ignoto non afferma nulla) e il segnaposto gestito `SCUOLA_NON_SPECIFICATA` («Scuola non specificata / Più plessi», §26.48 — **fuori dalla bacheca dalla §26.59**: resta nella sola scheda del singolo avviso, `src/components/IstitutoEmittente.tsx`). `parziale` non è un motivo di scarto dalla pipeline (la riga entra in `interpelli`), ma **non** fa entrare in vetrina: senza un istituto reale risolto la riga resta fuori dal tabellone (§26.59). Verificato da `npm run test:pipeline` |
 | `provaRadarEngine.ts` | 117 | **Puro** — motore del **Radar di prova** pubblico (si prova con la **sola provincia**): `LIMITE_RISULTATI_PROVA`, `righeAttive` (senza scadenza = attiva), `selezionaRisultatiProva(provincia, nazionali, limite)` (tutte le opportunità ATTIVE della provincia + **completamento nazionale** senza duplicati) e la copy del responso (`messaggioConversione`, `messaggioRadarInScansione`, `CODA_CONVERSIONE_PROVA`); responso `{ gruppo: 'provincia'\|'nazionale'\|'vuoto', righe, daProvincia }`. Mai «zero risultati»: l'elenco resta pieno finché esiste un avviso vivo. Verificato da `npm run test:prova-radar` |
@@ -2551,10 +2554,10 @@ Utilizzi diretti nel codice (`import.meta.env.*` verificati): `DEV`, `MODE`,
 |---|---|
 | Build & qualità | `dev` (vite 5174), `build`, `preview`, `lint`, `typecheck`, `test` (7 suite del motore CFU) |
 | Architettura | `test:architettura` (gate), `arch:check` (= gate), `arch:report` (inventario) |
-| Scraper & dati | `scrape` (`-- --dry-run`, `--no-email`), `scrape:check`, `scrape:notizie`, `scrape:notizie:check`, `dati:arricchisci`, `dati:pulisci`, `dati:pulisci-scaduti`, `scadenze:sync`, `notizie:ripara-archivio`, `fonti:verifica` (network: ricontrolla dal vivo le URL del registro fonti) |
+| Scraper & dati | `scrape` (`-- --dry-run`, `--no-email`), `scrape:check`, `scrape:notizie`, `scrape:notizie:check`, `dati:arricchisci`, `dati:demo` (righe dimostrative `demo-*` nel tabellone: dry-run di default, `--apply`/`--pulisci --apply`, `--consenti-produzione`), `dati:pulisci`, `dati:pulisci-scaduti`, `scadenze:sync`, `notizie:ripara-archivio`, `fonti:verifica` (network: ricontrolla dal vivo le URL del registro fonti) |
 | Scraper (guardie) | `test:scraper:domini` (isolamento Interpelli ↔ Notizie + filtro editoriale), `test:scraper:fonti` (registro, copertura dei capoluoghi, scoperta sezioni hub), `test:scraper:attivi` (solo bandi attivi, categorie ammesse, gate del link/ping fallace) — tutte in `npm test` |
 | Notizie (test) | `test:notizie-feed`, `test:notizie-editoriale`, `test:notizie-nazionale`, `test:notizie-rate` |
-| Radar & matching | `test:matching`, `test:radar`, `test:radar:preferenze`, `test:sostegno`, `test:materia`, `test:interpello-scadenza`, `test:scadenze`, `test:rinnovo-preavvisi`, `test:board`, `test:elenchi`, `test:traccia`, `test:prova-radar`, `test:parser*`, `test:dati-fallback` |
+| Radar & matching | `test:matching`, `test:radar`, `test:radar:preferenze`, `test:sostegno`, `test:materia`, `test:interpello-scadenza`, `test:scadenze`, `test:rinnovo-preavvisi`, `test:board` (`:link`, `:scadenza`, `:metriche`, `:filtro`, `:lettura`, `:demo`), `test:elenchi`, `test:traccia`, `test:prova-radar`, `test:parser*`, `test:dati-fallback` |
 | Notifiche & canali | `test:notifiche`, `test:notifier-dry`, `test:telegram` (`:template`, `:tier`, `:canali`), `test:qualita`, `test:copy`, `test:dedup`, `test:dedup:utente`, `test:frequenza`, `test:digest`, `test:email`, `test:email:scuola`, `test:email-alert`, `test:alert`, `test:link`, `test:link-esterno`, `test:promemoria`, `test:ledger`, `notifiche:digest`, `notifiche:promemoria`, `ledger:unisci` |
 | Modulistica & PDF | `test:moduli`, `test:pdf` (`:breve`, `:brevi`, `:universita`, `:completo`) |
 | Admin & DB | `admin:health`, `admin:dispatch`, `admin:profiles`, `admin:link-telegram`, `admin:fix-pampararo`, `provision:beta` (`:check`), `db:verifica`, `test:migrazioni` |
@@ -6894,6 +6897,14 @@ restano quelli della §26.56/§26.57), `src/departments/**`, la pipeline di cons
 
 ### 26.59 Vetrina: il gate STRETTO del nome scuola — in bacheca (e nella prova) entra solo una riga con un istituto REALE (05/10/2026)
 
+> **Aggiornata dalla §26.73 (16/10/2026) — nel VOCABOLARIO, non nella regola.** In bacheca
+> continua a entrare solo una riga con un istituto reale: restano fuori il nome grezzo del
+> bando, il segnaposto e i codici. Il gate riconosce però le sigle e le abbreviazioni con cui
+> le fonti scrivono davvero il nome («ICS», «IT», «IST. COMPR.», «I grado», «CPIA2AL»,
+> «Ottavo Circolo»): la §26.73 è la **strada (a)** del finding aperto della §26.71 (169 righe
+> con scadenza vera e nome respinto), percorsa dopo la conferma esplicita che quel finding
+> richiedeva.
+
 **Perché.** Direttiva di prodotto del 05/10/2026 sul **Radar Live**: il tabellone è la vetrina del
 servizio e una riga di cui **non si sa quale scuola** emette l'avviso non è verificabile in pubblico —
 sembra un servizio rotto. Le due direttive del 04/10 (§26.47 «nessuno scarto per anagrafica» e §26.48
@@ -7842,6 +7853,15 @@ con l'anagrafica a confermare dove esiste; (b) arricchire `school_code` (le font
 pubblicano la sigla accanto al nome) e lasciare il gate com'è. **Nessuna delle due è
 stata fatta**, e nessun dato è stato toccato in scrittura.
 
+> **Aggiornamento (§26.73, 16/10/2026).** La **strada (a)** è stata percorsa — con la
+> conferma esplicita che questo finding richiedeva — e il gate è stato ammorbidito **solo nel
+> vocabolario**: sulla base attiva (495 avvisi) la vetrina passa da **462 a 484** righe e le
+> righe scartate da **33 a 11**. Le 11 residue **non** sono un problema di gate: **3** avvisi
+> nazionali MIM senza istituto, **1** segnaposto «Avviso», **7** righe Piemonte con il nome
+> fatto da un codice o senza denominazione — per queste serve la **strada (b)**, l'anagrafica
+> per codice meccanografico (`school-lookup.ts` registra oggi **2** istituti). Dettagli in
+> §26.73.
+
 **Verifiche.** `npm run typecheck` ✅ 0 · **`npm test` ✅ exit 0** (catena intera,
 incluse le guardie riallineate `test:board:scadenza`, `test:board:filtro`,
 `test:board:scala`, `test:board`, `test:board:metriche`, `test:board:lettura`,
@@ -7990,3 +8010,599 @@ secondo risultato è di ordine pratico: riconoscere la **riga** (non la tabella)
 in un colpo **94 interpelli veri** dalla Liguria e **10** dall'Umbria, con la scadenza
 qualificata dall'etichetta di colonna invece della data di pubblicazione.
 
+
+### 26.73 «Radar Live»: il gate del nome conosce le sigle che le FONTI usano davvero — vetrina 462 → 484, scartate 33 → 11 (16/10/2026)
+
+**Il punto di partenza.** `npm run board:verifica` sulla base attiva: **495** avvisi,
+**462** in vetrina, **33** scartate dal gate dei nomi (tutte «senza istituto reale»),
+**0** doppioni. Trentatré righe su 495 (6,7%) sparivano dalla superficie pubblica non
+perché il nome fosse un codice, ma perché il gate non conosceva la **forma** con cui la
+fonte lo scrive.
+
+| fonte | righe | nome pubblicato | perché il gate diceva NO |
+|---|---|---|---|
+| `faustini-frank.edu.it` | 13 | «I grado Faustini – Frank – Nicolini» | «I grado» non era una testa |
+| `ottavocircolopiacenza.edu.it` | 1 | «Ottavo Circolo» | ordinale a parole, non riconosciuto |
+| `servizi.istruzionepiemonte.it` | 15 | «IISLAGRANGIA», «IST. COMPR. CURIONI», «ICS CARDUCCI», «IT DA VINCI», «CPIA2AL -NOVI LIGURE», «DIREZIONE DIDATTICA VALENZA»… | sigle incollate, abbreviazioni e teste composte fuori elenco |
+| `www.mim.gov.it` | 3 | — (avvisi nazionali) | nessun istituto pubblicato: è la natura della fonte |
+| `omnicomprensivoorsiniamelia.edu.it` | 1 | «Avviso» | segnaposto, non un nome |
+
+**La diagnosi, in una riga.** La regola del gate era giusta — in una vista pubblica non
+entra mai un codice — ma era scritta come **whitelist lessicale**: testa d'istituto in
+elenco + denominazione. Una whitelist è un contratto con la lingua delle fonti: se manca
+«ICS», «IST. COMPR.», «I grado», o se la sigla è **incollata** al nome, la riga sparisce in
+silenzio e il tabellone sembra più povero di quello che è. Non era un problema di *regola*,
+era un problema di *vocabolario* — e il finding della §26.71 (**169** righe con scadenza
+vera respinte) lo aveva già misurato, lasciando aperte due strade.
+
+**Fix — solo vocabolario (`src/lib/nomeIstituto.ts` + `src/lib/nomeIstitutoVocabolario.ts`).**
+Le regole non cambiano: niente codici amministrativi, niente 3+ cifre consecutive, testa
+**e** denominazione, taglio della coda di procedura. Cambia ciò che il gate sa leggere:
+
+1. **`apriSigleIncollate`**: «IISLAGRANGIA» → «IIS LAGRANGIA», «ICFRANCESCONEGRI» →
+   «IC FRANCESCONEGRI», «CPIA3» → «CPIA 3», «CPIA2AL» → «CPIA 2 AL». Gira **prima** della
+   tokenizzazione, così la testa torna riconoscibile e la cifra non viene più letta come
+   token misto (cioè come codice). La whitelist dei prefissi esclude `it`/`is`/`io`
+   (aprirebbero parole comuni: «ITALIA» → «IT ALIA») e nessun meccanografico viene aperto.
+2. **Teste aggiunte dal lessico reale delle fonti**: `ICS`, `IT`, `IST.`, `COMPR.`,
+   `I grado`/`II grado`, `DIREZIONE DIDATTICA`. Valgono solo come **testa**, mai come
+   denominazione: «ISTITUTO COMPRENSIVO» (senza nome) resta fuori vetrina.
+3. **Denominazione numerale**: numero o ordinale accanto alla testa («Comprensivo 7»,
+   «V Circolo») e ordinale a parole accanto a `circolo` («Ottavo Circolo»). La cifra conta
+   **solo con una testa presente**: da sola resta un codice.
+
+**Misura dopo (stessa base, `npm run board:verifica`).** **484** in vetrina (**+22**),
+**11** scartate (**−22**), 0 doppioni. Recuperate: 13 di Faustini, «Ottavo Circolo» e 8
+righe piemontesi. Le 11 che restano fuori, una per una:
+
+| # | righe | perché resta fuori | chi lo risolve |
+|---|---|---|---|
+| 1 | 3 `www.mim.gov.it` | avvisi **nazionali**: la fonte non pubblica un istituto | decisione di prodotto (un avviso nazionale senza scuola non è una riga di vetrina) |
+| 2 | 1 «Avviso» (`TRIS00600N`) | segnaposto al posto del nome | **ingestione**: il codice c'è, manca il nome |
+| 3 | 4 `BIPS000N`, `cnic84300r`, `CNIC868005`, `toic80500e` | il nome **è** un codice | anagrafica per codice meccanografico (`BIPS000N` è anche un codice **parziale**: il vero è `BIPS01000N`) |
+| 4 | 2 `G. BARUFFI`, `ALESSANDRO ANTONELLI` | solo denominazione, nessuna testa | anagrafica per codice (`CNIS01100D`, `NOPS010004`) |
+| 5 | 1 `ISTITUTO COMPRENSIVO` | solo testa, nessuna denominazione | anagrafica per codice (`ALIC836009`) |
+
+Totale: **3 + 1 + 7 = 11**. Nessuna di queste righe si apre allargando ancora il gate:
+nelle prime due il nome non esiste, nelle altre sette il testo pubblicato è un codice o un
+nome senza denominazione — aprirle significherebbe mostrare in pubblico esattamente ciò che
+la §26.20/§26.59 vietano. Sono **tre problemi diversi** (fonte nazionale, ingestione,
+anagrafica: `school-lookup.ts` registra oggi **2** istituti) e nessuno è «gate troppo stretto».
+
+**Perché la regola resta stretta.** L'invariante non è cambiato: *in vetrina non entra mai un
+codice, un segnaposto o il nome grezzo del bando*. La §26.73 allarga solo il riconoscimento
+di un nome **leggibile**; il gate non è stato reso più tollerante sulle righe ambigue, e la
+prova del Radar usa lo stesso giudizio (`nomePresentabileRiga` / `rigaPresentabileVetrina`,
+`src/lib/provaRadarEngine.ts`).
+
+**Architettura (E-DIM) e baseline.** Con il vocabolario nuovo `nomeIstituto.ts` superava le
+300 righe (E-DIM): il file è stato diviso in **`nomeIstitutoVocabolario.ts`** (150 righe:
+fatti lessicali + `apriSigleIncollate`) e **`nomeIstituto.ts`** (177: regole). Nessuna
+dipendenza nuova, API pubblica invariata (`nomeIstitutoPresentabile`), guardia invariata nei
+casi §26.20/§26.59. Il refactor è stato verificato **neutro**: `board:verifica` ha ridato
+484/11 anche dopo lo split. `npm run test:architettura` ha poi mostrato che le **7 violazioni
+preesistenti** dichiarate dalla §26.72 (`liveBoard.ts` 293 W-DIM; `rigaBoardDati.ts` 319,
+`righeBoard.ts` 392, `clean-and-sync-targets.ts` 869, `discovery-engine.ts` 1.120,
+`import-schools-local.ts` 533, `table-reporter.ts` 1.319) **non erano nella baseline**: il
+gate le contava come nuove. Sono state aggiunte **solo quelle 7 voci** (atto di congelamento
+deliberato, `docs/MODULAR_ARCHITECTURE.md`); un `--baseline` completo avrebbe riscritto 141
+voci non toccate — rumore e deriva nascosta. `test:architettura`: **640 file, 148 violazioni,
+148 congelate — nessuna nuova**.
+
+**Verifiche (da `project/`).** `npm run board:verifica` ✅ **484/495** in vetrina, **11**
+scartate, 0 doppioni · `npm run test:nome-istituto` ✅ («NOMI ISTITUTO: nessun problema»,
+**55 asserzioni**, incluse le righe reali recuperate e quelle che devono restare fuori) ·
+`npm run typecheck` ✅ 0 · `npx eslint` sui file toccati ✅ 0 · `npm run test:architettura` ✅
+nessuna violazione nuova · `npm test` ✅ exit 0 (catena intera) · `npm run build` ✅
+(2.038 moduli).
+
+**Non eseguito (dichiarato).** Nessun `npm run scrape` (scrive sulla base dati di
+produzione): la misura è **in sola lettura** sulla base attiva. Nessuna migrazione, nessun
+cambio di schema, nessun backfill: le 11 righe restano in `interpelli` (fuori dalla vetrina,
+come da §26.59) e il database non è stato toccato.
+
+**File toccati.** *Condivisi essenziali*: `src/lib/nomeIstituto.ts`,
+`src/lib/nomeIstitutoVocabolario.ts` (nuovo). *Guardie*: `scripts/test-nome-istituto.ts`
+(§26.73: sigle incollate, abbreviazioni, numerali — e i casi che restano fuori),
+`scripts/architettura-baseline.json` (solo le 7 voci preesistenti). *Regole di prodotto*:
+`comunicazione/04_canali_regionali/checklist_regionali.md` (§4). *Documentazione*: questa
+sezione, la mappa §2.7, le note di aggiornamento in §26.59/§26.71 e `docs/DEPARTMENT_MAP.md`.
+**Non toccati**: gli altri dipartimenti, `src/scraper/**`, i workflow, le migrazioni, i dati.
+
+**Nota di sessione (16/10/2026).** La lezione non è «il gate era troppo severo»: è che **una
+whitelist va scritta nella lingua delle fonti**, non in quella dei manuali. «I grado», «ICS»,
+«IST. COMPR.», «CPIA2AL» non sono varianti creative: è come le segreterie scrivono il nome
+della scuola. Il numero che conta è **22 righe vere recuperate senza mostrare un solo
+codice**, e il residuo di 11 dice con precisione dove intervenire dopo: **anagrafica** (7),
+**ingestione** (1), **decisione di prodotto sugli avvisi nazionali** (3). Il resto del gate —
+codici, segnaposto, nome grezzo del bando, avvisi non vivi — non si tocca.
+
+### 26.74 Piemonte e Liguria: classi di concorso vere, il tabellone NAZIONALE letto come nazionale — 381 righe rigenerate (22/10/2026)
+
+**Il sintomo, misurato sulla base attiva.** Piemonte **220** righe, Liguria **161**, e in mezzo:
+**17 + 28 = 45** righe con `class_code = 'GENERALE'` (nessuna classe → nessun match, quindi
+invisibili al Radar), **15** righe con `province = 'EE'` (il segnaposto del reporter), di cui
+**11** dal tabellone *nazionale* ligure con `school_name` = «**Puglia**», «Sardegna»… e
+**4** righe con `source_url` su `…/assets/nazionali/…pdf`. In più il Piemonte era fermo su
+`/interpello2025/` (anno scolastico archiviato) e **76** righe di `/interpello2026/` erano
+entrate con `region` **NULLA**.
+
+**Tre cause distinte, nessuna delle quali è «il parser è rotto» in generale.**
+
+1. **Target stantii** (`scripts/clean-and-sync-targets.ts`, già in questa tornata). Misurato:
+   `interpello2026/ric_interpello_ambito_to.php` → **HTTP 200, 52 righe «aperto»**, mentre
+   `/interpello2025/…` risponde **200 ma non ha più righe aperte** (200 non vuol dire vivo);
+   `www.istruzionepiemonte.it/ric_interpello_ambito_*.php` → **404**; `www.istruzioneliguria.it`
+   → host **dismesso** (il portale è `servizi.istruzioneliguria.gov.it`). Da qui gli 8 target
+   Piemonte su `/interpello2026/`, i 4 target Liguria con `&as=2026%2F2027` + `nazionali.php`,
+   e 5 pattern di pulizia (le **168** righe `/interpello2025/` non vengono più rilette).
+2. **Il codice di classe** (`scripts/table-reporter.ts`, v11). Il pattern era
+   `[A-Za-z]{2,6}[0-9]{0,2}`: pretendeva **almeno due lettere**. Le classi del secondo grado
+   scritte «**A041** - Scienze e tecnologie informatiche», «**A026**», «**A048**» non
+   passavano e la riga ricadeva su `extractSubjectAndClass` → **`GENERALE`**.
+3. **La griglia Liguria ha due layout.** `provincia.php` (5 celle: Data · Scuola · CDC ·
+   Interpello · Azione) e `nazionali.php` (**7** celle: Data · **Regione** · **Provincia** ·
+   Scuola · CDC · Interpello · Azione). Il nazionale veniva letto con le colonne del
+   provinciale: «Puglia» finiva in `school_name`, la provincia cadeva sul fallback `EE`, la
+   scadenza era presa dalla prima data della cella «Interpello» (che porta l'**inizio
+   incarico** e la data del protocollo, non la scadenza).
+
+**Fix 1 — il codice di classe in TRE forme.** `CLASS_CODE_SHAPE` = `[A-Z]{1,2}[0-9]{2,3}` |
+`[A-Z]{4,6}`: copre `AAAA`/`ADEE`/`AAIRC` (4-6 lettere), `AA24`/`BD02` (2 lettere + 2 cifre) e
+`A026`/`A041` (1 lettera + 2/3 cifre). Due letture, perché le fonti scrivono in due modi:
+`classCodeNudo` (cella che contiene *solo* il codice) e `classCodeInTesta` (codice seguito da
+« - descrizione »). `detectTableColumns` riconosce anche la colonna «Classe di concorso»
+(`classIdx`) e la **precedenza** è: colonna → cella del codice → `extractSubjectAndClass`.
+
+**Fix 2 — il layout si rileva dagli header** (`.results-head`): il nazionale è l'unico che
+espone l'intestazione «**Regione**». `GridColumns` porta ora `layout` (`'provincia'` |
+`'nazionale'`) e gli indici che servono solo al nazionale (`textIdx`, `regionIdx`,
+`provinceNameIdx`, `publishIdx`). Nel nazionale la provincia è scritta **per esteso**
+(«Taranto», «Reggio Calabria»): `provinciaDaCitta` la traduce in codice e `provinciaDaCodice`
+dà la regione — il **catalogo condiviso** (`src/lib/scanTargets.ts`), non una tabella
+duplicata nello script. Provincia non riconosciuta → la riga si **scarta**: niente più
+`EE` fabbricato.
+
+**Fix 3 — la scadenza dopo l'etichetta.** `parseLabeledDeadline` legge la data che segue
+«Scadenza:»; se l'avviso non la espone, `deadlineDaPubblicazione` (pubblicazione +
+`defaultDeadlineDays` = 15). Riga nazionale **senza** data utilizzabile → scartata. È così che
+le **4** righe `assets/nazionali/*.pdf` (avvisi del 28/09, chiusi il 13/10) **non rientrano**
+più: erano già scadute.
+
+**Fix 4 — `--dry-run` / `DRY_RUN=1`.** Fetch ed estrazione reali, `logRecords()` in chiaro, e
+**nessuna** scrittura: niente upsert, niente `writeReport`, niente `disableObviousJunkTargets`,
+niente `disqualifyTarget`. Serve a validare una correzione di parser **prima** della produzione
+(è la lezione della §26.69/§26.72: la misura viene prima della scrittura).
+
+
+**Misura prima/dopo (base attiva, sola lettura per la diagnosi).**
+
+| | prima | dopo |
+|---|---|---|
+| Piemonte | 220 (64 `ADEE`, 56 `EEEE`, **17 `GENERALE`**) | **225** (CN 68, TO 52, BI 48, AL 36, VB 6, AT 6, VC 5, NO 4) |
+| Liguria provinciali | 146 (58 `EEEE`, 17 `ADEE`, **28 `GENERALE`**) | **146** (GE 92, SP 22, SV 20, IM 12) |
+| Liguria nazionali | 11 con `province='EE'` e `school_name` = regione | **11** con provincia/regione **vere** (TA/Puglia, SS/Sardegna, AG/Sicilia, FI/Toscana, FR+RI/Lazio, PN/FVG, RC/Calabria) |
+| `class_code = 'GENERALE'` (Piemonte+Liguria) | **45** | **0** |
+| `province = 'EE'` (Piemonte+Liguria) | **15** | **0** |
+| `region` NULL sulle due fonti | 76 | **0** |
+| `source_url` su `/interpello2025/` | 168 | **0** |
+| `source_url` su `assets/nazionali/…pdf` | 4 | **0** |
+
+Distribuzione dei codici dopo il re-ingest (reale, non teorica) — Piemonte: `ADEE` 68,
+`EEEE` 56, `AAAA` 40, `ADAA` 37, `A041` 4, `A040` 3, `A011` 2, `AC25` 2, `ADMM` 2, poi `A002`,
+`A022`, `A026`, `A027`, `A028`, `A030`, `A044`, `A051`, `AA24`, `AD24`, `EEMM` (1 ciascuno).
+Liguria: `EEEE` 58, `AAAA` 35, `ADEE` 26, `ADAA` 20, `A026`/`A040`/`A051`/`A011`/`A041`
+(1 ciascuno) e **`AAIRC` 2** — quest'ultimo non è un difetto del parser: è il codice che la
+fonte ligure pubblica (area IRC) e **non esiste nel catalogo** `classiConcorso.ts`, quindi resta
+informativo e non produce match.
+
+**Il dettaglio che rende la correzione operativa: `ignoreDuplicates`.** L'upsert del reporter
+**non aggiorna** le righe esistenti (chiave = hash del contenuto): una correzione di parser su
+righe già in tabella **non si vede**. La bonifica è quindi **purge + re-ingest** — 220 righe
+Piemonte + 161 Liguria = **381** rimosse per `source_url` (ILIKE), poi
+`npx tsx scripts/table-reporter.ts --regioni=Piemonte,Liguria`: 14 target elaborati, 14
+successi, **343** record. Lo script di purge è stato **usa-e-getta** (`scripts/_purge-pie-lig.ts`,
+cancellato a fine sessione): la ricetta resta qui, ed è questa —
+
+```sql
+delete from interpelli
+ where source_url ilike '%servizi.istruzionepiemonte.it/interpello2026/%'
+    or source_url ilike '%servizi.istruzioneliguria.gov.it/%';
+```
+
+— seguita da `npx tsx scripts/table-reporter.ts --regioni=Piemonte,Liguria`. Vale per **ogni**
+correzione di parser su righe già presenti: finché l'upsert è `ignoreDuplicates`, senza purge la
+correzione non arriva in tabella.
+
+**Osservazione onesta sulla fonte (non un bug nostro).** Due run consecutivi hanno dato
+Piemonte TO **13** poi **52** righe «aperto» e VB **6** poi **0**, a fronte di 52 righe aperte
+nella pagina scaricata nello stesso minuto: il portale USR serve **istantanee incoerenti**
+(cache/bilanciatore). L'hash di deduplicazione rende innocuo l'unione dei due run (225 = 219 +
+le 6 righe VB viste aperte nel primo); è però la ragione per cui i conteggi di questa fonte
+**oscillano di qualche unità** tra un run e l'altro e non vanno letti come regressione.
+
+**Effetto collaterale dichiarato.** Il target `https://www.istruzionepiemonte.it/` (home del
+portale, `active_crawler`) non ha tabelle interpelli: il reporter lo ha disattivato
+(`disqualifyTarget`), come i 13 link `www.istruzionepiemonte.it/…` già `disabled`.
+`discovered_links` alimenta **solo** l'ingestione interpelli (`table-reporter`,
+`discovery-engine`, `clean-and-sync-targets`, `import-schools-local`): nessun dipartimento,
+Notizie compreso, legge quella tabella.
+
+**Verifiche (da `project/`).** `npm run typecheck` ✅ 0 · `npm test` ✅ **exit 0** (catena
+intera) · `npm run test:architettura` ✅ **640 file, 148 violazioni, 148 congelate — nessuna
+nuova** · `npm run build` ✅ · `npx eslint scripts/table-reporter.ts
+scripts/clean-and-sync-targets.ts` ✅ 0. Diagnosi DB (sole letture, script temporanei
+cancellati): `interpello2025` **0**, `GENERALE` **0**, `province='EE'` **0**, `region` NULL
+sulle due fonti **0**, nazionali **11** con provincia reale.
+
+**Baseline (E-DIM).** I due script cresciuti in questa tornata restano debito **congelato e
+dichiarato**: `table-reporter.ts` **1.632** righe e `clean-and-sync-targets.ts` **1.161** (le
+voci in `scripts/architettura-baseline.json` riportavano 1.319 e 869: numeri **aggiornati**,
+nessuna voce nuova, nessun debito nascosto). La divisione in sotto-moduli resta un lavoro
+aperto e va fatta **senza** cambiare il comportamento del parser.
+
+**File toccati.** *Ingestione*: `scripts/table-reporter.ts` (v12: codici di classe, doppio
+layout Liguria, scadenza etichettata, `--dry-run`), `scripts/clean-and-sync-targets.ts`
+(target 2026 + pattern di pulizia, tornata precedente). *Debito dichiarato*:
+`scripts/architettura-baseline.json` (2 numeri di riga). *Documentazione*: questa sezione.
+**Non toccati**: gli altri dipartimenti, `src/scraper/**`, le migrazioni, lo schema, i dati di
+altre regioni.
+
+**Nota di sessione (22/10/2026).** Il «parser rotto» erano **tre** cose diverse: un URL
+archiviato che risponde 200 (il codice HTTP non è una prova di vita), una regex scritta sulla
+forma dei codici *di carta* invece di quella dei codici **pubblicati**, e una griglia che cambia
+**numero di colonne** dentro lo stesso portale. La correzione che vale la pena ricordare è la
+terza: il layout si riconosce dagli **header**, e una riga di cui non si sa dire la provincia
+**si scarta** invece di inventarla (`EE` era il sintomo che rendeva invisibile il difetto). Il
+resto è disciplina operativa: prima `--dry-run`, poi la misura, poi purge e re-ingest — perché
+l'upsert non aggiorna e una correzione non applicata sembra una correzione che non funziona.
+
+### 26.75 «Radar Live»: la scadenza è solo quella DICHIARATA — 347 scadenze inventate eliminate, badge pieni, contatore quadrato (22/10/2026)
+
+**Il sintomo, dagli screenshot.** Nella colonna «Scadenza» comparivano avvisi con badge
+**verde «In corso»** e date al **2027** (contratti annuali già assegnati), righe «Pubblicato
+il…» spacciate per opportunità lunghe, tinte **pastello** accanto ai badge pieni, e il pill
+in alto dichiarava **«1.405 AVVISI ATTIVI»** mentre la paginazione ne rendeva **137
+schermate** (685 record). Quattro difetti distinti, nessuno dei quali era «il colore è
+sbagliato».
+
+**Causa 1 — la colonna sbagliata, e una fonte che sbaglia da sé.** La tabella Piemonte
+(`ric_interpello_ambito_*.php`) ha **12 colonne**: `Durata Supplenza` («Disponibile fino a
+10 giorni», «30 Giugno», «04 Febbraio») e `Data Interpello` (`07/10/2027`, `02/10/2026`)
+**non sono termini per candidarsi** — la seconda è la **fine dell'incarico**. Il vecchio
+parser aveva tre ripieghi in cascata (`colTexts` qualsiasi → «qualsiasi data futura»),
+quindi pescava proprio quelle. Misurato sul campione reale: nella colonna corretta
+(«Data Scadenza Interpello») il portale scrive **a volte** `30/06/2027` e `31/05/2027`:
+anche leggendo la colonna giusta, una «scadenza» a otto mesi è la fine del contratto.
+
+**Causa 2 — due scadenze INVENTATE dal nostro codice.** Se una riga non dichiarava alcuna
+scadenza, il reporter ne fabbricava una: `oggi + 15 giorni` (tabelle) e «data di
+pubblicazione + 15» (griglia Liguria). Prova misurata: **347 righe** create il
+**15/10/2026** hanno TUTTE scadenza **30/10/2026** — e in quel lotto **zero** righe avevano
+una scadenza diversa (le altre 10 avevano `null`). Non è una coincidenza di calendario: è
+un solo run che ha scritto `+15`.
+
+**Causa 3 — la colonna LEGACY (la più costosa).** Il reporter scriveva la sola colonna
+`deadline` (text), mentre bacheca, filtro attivi, matching e notifiche leggono
+`expiration_date` (timestamptz). Misurato: **382 righe su 382** di Piemonte + Liguria
+avevano `expiration_date` **NULLO** → righe ingerite, visibili in `/admin`, e **invisibili
+al Radar Live**. La migrazione `20261015120000_allinea_deadline_expiration_interpelli.sql`
+aveva già allineato lo storico, ma le righe *nuove* continuavano a nascere solo legacy.
+
+**Causa 4 — palette e soglie incoerenti.** Le soglie del tabellone erano **3–10 giorni**
+(arancio) mentre `SOGLIA_IMMINENTE`/`SOGLIA_VICINA` condivise e `livelloUrgenza` usano
+**2/7**: un avviso a 9 giorni era «vicino» sul tabellone e «in corso» ovunque altro. Il pill
+del totale era `bg-emerald-50` (il «verde sbiadito» dello screenshot), e accanto ai badge
+pieni convivevano chip pastello (`bg-amber-100`, `bg-rose-100`, `bg-primary-100`).
+
+**Causa 5 — il contatore non poteva quadrare.** Il filtro PostgREST era
+`expiration_date.gte.<oggi>` (**un solo estremo**): includeva le finte scadenze del 2027 che
+il gate in memoria scartava già. Pill e paginazione potevano quindi raccontare due
+popolazioni diverse.
+
+
+**I fix.**
+
+1. **Scadenza STRETTA** (`scripts/table-reporter.ts`, v13): `intestazioneScadenza()` mappa
+   la colonna solo se l'intestazione la dichiara («Data Scadenza Interpello», «Termine
+   presentazione», «Chiusura avviso») e `RE_COLONNA_NON_SCADENZA` esclude a monte
+   `durata|supplenz|incaric|inizio|data interpello|pubblicat|protocoll|cancellazion|note`.
+   `deadlineDichiarata()` legge SOLO quella colonna o una cella che scrive «Scadenza:»: i
+   due ripieghi «qualsiasi data» e `oggi+15` sono stati **rimossi**, e con essi
+   `deadlineDaPubblicazione`. Riga senza scadenza dichiarata → **scartata**.
+2. **Orizzonte di 30 giorni** (`src/lib/scadenza.ts` → `GIORNI_ORIZZONTE_OPPORTUNITA`),
+   applicato in `eOpportunitaConScadenza` (terzo parametro, default 30), in `filtroAttivi`
+   (secondo estremo `lte`) **e all'ingestione** (`entroOrizzonte`, con conteggio delle
+   righe scartate nel log): una «scadenza» oltre i 30 giorni non entra più né nel database
+   né in vetrina.
+3. **Colonna canonica** (`table-reporter.ts`): `InterpelloRecord.expiration_date` =
+   `deadline + T00:00:00+00:00` (mezzanotte UTC, come la migrazione); `deadline` resta
+   scritta per compatibilità. Ora una riga Piemonte/Liguria è **visibile** alla bacheca.
+4. **Palette unica** (`rigaBoardDati.ts`, `lib/scadenza.stileScadenza`,
+   `components/RigaBoard.tsx`, `FlightBoardInterpelli.tsx`): solo badge **pieni** —
+   `bg-rose-700` (≤ 48h / scade oggi), `bg-amber-600` (3–7 giorni), `bg-emerald-700`
+   (> 7 giorni, entro i 30), `bg-slate-600` per l'assenza di dato; soglie allineate a
+   **2/7**; pill del totale in `emerald-700`; chip PDF/«Scuola non specificata»/provincia
+   in tinta piena. Nessun `…-50/100/200` nel tabellone (guardia nel test del badge).
+5. **Quadratura del contatore** (`metricaBoard.ts`): il totale mostrato è
+   `min(dichiarato, righeCaricate, pagine × righePerPagina)` — non può superare i record
+   davvero paginabili e non ne inventa per «riempire» l'ultima schermata. Regressione
+   fissata nel test con il caso reale: 685 record, `totaleReale` 1405 → pill **685**,
+   **137** schermate.
+
+**Misure prima/dopo (produzione, sole letture).**
+
+| Misura | Prima | Dopo |
+| --- | --- | --- |
+| Righe con scadenza = `created_at + 15` (fallback) | **347** (lotto 15/10 → 30/10) | **0** |
+| Righe Piemonte + Liguria con `expiration_date` NULLO | **382 / 382** | **0** (Liguria 28/28; Piemonte da re-ingerire) |
+| Righe con scadenza 2027 nel feed | 3 (`mim.gov.it`) | **0** |
+| Popolazione attiva (filtro con orizzonte) | 350 (di cui 347 finte) | **31** → 29 in vetrina, **6** schermate, pill **29** |
+| Scadenze oltre l'orizzonte rifiutate all'ingestione (Liguria) | — | **4** (log dedicato) |
+
+
+
+
+**Ricetta operativa (l'upsert è `ignoreDuplicates`: senza purge la correzione non arriva).**
+
+```sql
+-- 1) righe con scadenza INVENTATA dal vecchio fallback (lotto omogeneo, verificato:
+--    357 righe create il 15/10, 347 con scadenza 30/10, 10 con null, ZERO con altre date)
+delete from interpelli
+ where created_at::date = '2026-10-15'
+   and expiration_date::date = '2026-10-30';
+
+-- 2) righe Piemonte/Liguria nate con la sola colonna legacy
+delete from interpelli
+ where source_url ilike '%servizi.istruzionepiemonte.it/interpello2026/%'
+    or source_url ilike '%servizi.istruzioneliguria.gov.it/%';
+```
+
+seguite da `npx tsx scripts/table-reporter.ts --regioni=Piemonte,Liguria`. La seconda
+cancellazione è **sicura per costruzione**: quelle righe non avevano `expiration_date`,
+quindi non erano visibili a nessuna superficie pubblica.
+
+**Stato della sorgente al momento della chiusura (onesto).** Il portale USR Piemonte ha
+risposto **HTTP 502** per tutta la finestra di verifica (8 target su 8): la regione è stata
+rigenerata **solo per la Liguria** (28 record, tutti con `expiration_date`, scadenze
+dichiarate tra il 22 e il 31/10). **Follow-up dichiarato**: rilanciare
+`npx tsx scripts/table-reporter.ts --regioni=Piemonte` appena il portale risponde; fino a
+quel momento il Piemonte non è in bacheca — preferibile a 225 righe con scadenza inventata.
+
+**Verifiche (da `project/`).** `npm run typecheck` ✅ 0 · `npm test` ✅ **exit 0** (catena
+intera; adeguate 6 fixture che usavano `2099-12-31` come «sempre viva»: con l'orizzonte
+quelle righe uscivano dal gate e la guardia misurava il gate invece della vetrina) ·
+`npm run test:architettura` ✅ **640 file, 148 violazioni, 148 congelate — nessuna nuova** ·
+`npm run build` ✅ · `npx eslint` sui file toccati ✅ 0. Misure DB: `expiration_date` nullo
+su Liguria **0/28**; scadenze 2027 nel feed **0**; `created_at + 15` **0**.
+
+**Baseline (E-DIM).** Debito **congelato e dichiarato**: `table-reporter.ts` **1.742**
+righe e `rigaBoardDati.ts` **332** (voci aggiornate in `scripts/architettura-baseline.json`;
+nessuna voce nuova). Lo split in sotto-moduli del reporter resta un lavoro aperto e va fatto
+**senza** cambiare il comportamento del parser.
+
+**File toccati.** *Ingestione*: `scripts/table-reporter.ts` (v13: colonna scadenza stretta,
+orizzonte 30, `expiration_date`, niente scadenze inventate). *Dominio condiviso*:
+`src/lib/scadenza.ts` (orizzonte + palette piena), `src/lib/liveBoard.ts` (documentazione
+del gate), `src/scraper/righeTabella.ts` (le colonne di durata non sono più «etichette di
+scadenza»). *UI Radar*: `src/departments/radar/flightBoard/{filtroAttivi,metricaBoard,rigaBoardDati}.ts`,
+`.../components/RigaBoard.tsx`, `src/departments/radar/FlightBoardInterpelli.tsx`.
+*Guardie*: `__tests__/{filtroAttivi,badgeScadenza,metricaBoard}.test.ts`,
+`scripts/test-scadenza.ts`, `scripts/test-opportunita-vive.ts`, `scripts/lib/fixtures-*.ts`
+e le guardie con fixture a `2099` (ora relative a oggi). *Debito dichiarato*:
+`scripts/architettura-baseline.json` (2 numeri di riga). **Non toccati**: gli altri
+dipartimenti, lo schema, le migrazioni, i dati di altre regioni.
+
+**Nota di sessione (22/10/2026).** La lezione è che «scadenza sbagliata» era **tre** cose:
+una colonna letta male (durata/fine incarico), una data **fabbricata da noi** (`+15`) e una
+colonna **canonica mai scritta** (`expiration_date`). Le prime due si vedevano nello
+screenshot; la terza no — e teneva 382 righe fuori dalla vetrina fingendo che il parser
+fosse a posto. Il colore pastello, che sembrava il difetto, era il sintomo più innocuo. E
+il contatore non si «aggiusta» arrotondando: si fa nascere dallo **stesso** numero delle
+schermate, con un tetto che può solo ridurre.
+
+### 26.76 «Radar Live»: via il segnaposto, via i link morti, via i titoli che non dicono nulla (22/10/2026)
+
+**I sintomi, dagli screenshot del cliente.** Tre difetti diversi nella stessa tabella. (1) La
+colonna «Scuola» portava un badge su quasi tutte le righe — la vecchia dicitura
+«Scuola non specificata / Più plessi» / «Anagrafica parziale» — e il messaggio che arrivava era
+l'opposto di quello voluto: *«questo servizio non sa di che scuola parla»*. (2) Il click su
+parecchie righe apriva una **pagina di login** (portale Argo, Nuvola/ClasseViva) o un **modulo
+Google scaduto**: il link formalmente c'era, l'avviso no. (3) La colonna «Descrizione» mostrava
+«PUBBLICATO IL 18/10/2026»: una data al posto della descrizione dell'opportunità.
+
+**Causa 1 — un badge che esponeva lo stato INTERNO.** `RigaBoard.tsx` rendeva
+`anagrafica_parziale` come chip: era nato come segnaposto per le righe *senza* nome (§26.47,
+§26.48) e poi era rimasto anche quando il gate stretto (§26.59) le righe senza istituto le
+aveva già escluse — quindi segnalava un'informazione che in vetrina non serviva più a nessuno,
+sopra righe che il nome ce l'avevano. Lo stato resta nei **dati** (serve alle notifiche
+puntuali), non a schermo.
+
+**Causa 2 — la fonte pubblica un link di PIATTAFORMA, e noi lo trattavamo come «avviso».**
+Bastava `urlValido`: Argo, Nuvola/Spaggiari, ClasseViva, Google Forms/Docs/Drive, OneDrive,
+SharePoint e WeTransfer passano tutti come URL validi e **nessuno** è un avviso verificabile →
+dopo pochi giorni chiedono login o mostrano «modulo non più disponibile». Per l'utente: link
+morto spacciato per fonte ufficiale. Nota: la riga non va persa — la scuola ha quasi sempre una
+**home istituzionale** ricavabile dal recapito che ha pubblicato.
+
+**Causa 3 — il titolo era la riga di pubblicazione.** Molte fonti compilano il titolo con
+«PUBBLICATO IL …» o «Avviso di pubblicazione del …»: in bacheca quella riga occupa una schermata
+senza descrivere nulla (e nella colonna «Descrizione» si legge una data).
+
+**Regola 1 — dove può portare il click (`flightBoard/linkFonte.ts`, un solo punto di verità).**
+(1) l'URL si **pulisce** (`pulisciUrlEsterna`: entità HTML, caporali, punteggiatura incollata) e
+si valida; (2) se l'host è una piattaforma dell'elenco `HOST_PIATTAFORMA`, l'avviso non è
+verificabile e si pubblica la **home `.edu.it`** dell'istituto, ricavata dal primo recapito
+istituzionale della riga (`contact_email`, poi `school_pec`); (3) senza né avviso apribile né
+dominio `.edu.it` la funzione restituisce `null` e la **riga non entra** in bacheca. Il tipo
+restituito distingue i due casi (`avviso` / `sito-scuola`) così l'interfaccia può dire la verità.
+**Assunzione dichiarata**: `*.edu.it` è il dominio assegnato per convenzione alle istituzioni
+scolastiche e la home risponde sul dominio nudo (di norma con redirect su `www.`): non si indovina
+alcun `www.`, si pubblica esattamente il dominio scritto dalla scuola. Per lo stesso motivo **non**
+si accettano `istruzione.it` (caselle di servizio del Ministero), i domini personali (`gmail.com`,
+`libero.it`) né i PEC generici (`pec.it`), e il dominio nudo `edu.it` non è un istituto.
+
+**Regola 2 — un titolo deve descrivere l'avviso (`src/lib/titoloBoard.ts`).** `eTitoloSoloData`
+toglie le parole della pubblicazione (pubblicato/pubblicazione/avviso/protocollo/data/…), le date
+e la punteggiatura: se non resta **nessuna parola di almeno 4 lettere** il titolo non dice nulla e
+la riga resta fuori (`preparaRigheBoard`) — la riga **resta nel database**, nel feed e nelle
+notifiche: cambia la superficie pubblica, non la pipeline (§26.47). Nello stesso modulo vive
+`nomeScuolaDaTitolo`, l'**ultimo** ripiego per il nome dell'istituto, dopo `school_name` e il
+registro per codice meccanografico: prova i **segmenti** del titolo dall'ultimo al primo («… – IC
+CICAGNA – Cicagna», dove il nome sta in coda), poi le **teste d'istituto** accorciando la coda una
+parola alla volta («Interpello supplenza IC CARRARESE EUGANEO A-022 del 20/10/2026»). Ogni
+tentativo passa dal gate `nomeIstitutoPresentabile`: se non approva, `null` e riga fuori — mai un
+codice amministrativo al posto del nome.
+
+**Regola 3 — il badge interno non si mostra.** `RigaBoard.tsx` non rende più `anagrafica_parziale`;
+la colonna «Scuola» mostra solo il nome reale, senza etichette tecniche.
+
+**Struttura (gate a 250/300 righe, `.clinerules` §3).** Il lavoro non stava sotto i limiti:
+`liveBoard.ts` era a **301** righe e `FlightBoardInterpelli.tsx` a **260**. Split, non deroga: la
+diversità geografica esce in `src/lib/diversificaProvince.ts` (**89** righe, ri-esportata da
+`liveBoard` così i test la importano da un solo modulo) → `liveBoard.ts` **231**; l'intestazione
+(titolo + pill del totale) esce in `flightBoard/components/IntestazioneBoard.tsx` (**42** righe) →
+`FlightBoardInterpelli.tsx` **241**, che le passa `etichettaTotale={metrica.etichettaTotale}`: il
+numero resta quello del tabellone, non un secondo conteggio. Voce di baseline
+`W-DIM:src/lib/liveBoard.ts` **rimossa** (debito saldato). Aggiornata la guardia di copy:
+`scripts/test-copy-primo-schermo.ts` verifica il passaggio del contatore **attraverso** i due file
+e l'assenza di totali scritti a mano in entrambi.
+
+**Misure (produzione, sole letture, 22/10/2026).**
+
+| Misura | Valore |
+| --- | --- |
+| Righe del filtro bacheca (`filtroAttivi`) | **31** (Liguria, `servizi.istruzioneliguria.gov.it`) |
+| Righe con una fonte apribile (`fonteApribile`) | **31** → 0 scartate per link morto |
+| Righe in vetrina dopo i gate in memoria | **29** (fuori: 2 di `www.mim.gov.it`, senza istituto risolvibile) |
+| Link di piattaforma nel dataset attuale | **0** → sostituzioni con home `.edu.it`: **0** (regola difensiva, provata con fixture) |
+| Righe con `contact_email` / `school_pec` valorizzati | **0** → «mail: —» su tutte: il recupero della home oggi non ha da che leggere |
+
+**Follow-up dichiarato (onesto).** Il recupero della home `.edu.it` è cablato e verificato, ma sul
+dataset attuale **non ha materiale**: i recapiti della scuola non vengono ancora salvati
+all'ingestione (`contact_email`/`school_pec` vuoti). Finché resta così, una riga che pubblica solo
+un link di piattaforma **esce** dalla vetrina invece di essere recuperata: è il comportamento
+prudente scelto qui, da rivedere popolando i recapiti nel reporter.
+→ **Chiuso dalla §26.77**: il recapito non era la strada giusta, il **sito dichiarato** sì
+(`interpelli.school_site`, dalla `SITOWEBSCUOLA` dell'anagrafica MIM).
+
+**Verifiche (da `project/`).** `npm run typecheck` ✅ 0 · **`npm test` ✅ exit 0**, catena intera
+(la guardia `test:copy:pubblico` ha **beccato** un indirizzo di prova — `mario.rossi@…` —
+finito in `linkFonte.test.ts`: sostituito con un indirizzo neutro) · `npm run test:architettura`
+✅ **646 file, 147 violazioni, 147 congelate — nessuna nuova** (una voce di baseline in meno) ·
+`npm run build` ✅ · `npx eslint` sui file toccati ✅ 0. Guardie nuove: `npm run test:board:link`
+(`flightBoard/__tests__/linkFonte.test.ts`, **38** asserzioni: piattaforme, solo `.edu.it`, home dal
+primo recapito, pulizia URL, `/albo/` della scuola che **non** è piattaforma) e `npm run test:titolo`
+(`scripts/test-titolo-board.ts`, **20** asserzioni: nome dal titolo, titolo-solo-data), entrambe
+agganciate a `npm test`. Contatore verificato: `test:board:metriche` (pill `685 avvisi attivi in
+Italia` = record paginabili, schermate coerenti, pagina parziale a 7 → 2 schermate).
+
+**File toccati.** *Condivisi*: `src/lib/titoloBoard.ts` (nuovo), `src/lib/diversificaProvince.ts`
+(nuovo, estratto), `src/lib/liveBoard.ts` (gate del titolo + ri-esportazioni), `src/lib/nomeIstituto.ts`
+(+ vocabolario dei nomi). *Dipartimento Radar*: `flightBoard/linkFonte.ts` (nuovo),
+`flightBoard/{righeBoard,rigaBoardDati,filtroAttivi,metricaBoard}.ts`,
+`flightBoard/components/{RigaBoard,IntestazioneBoard}.tsx`, `FlightBoardInterpelli.tsx`.
+*Guardie*: `flightBoard/__tests__/{linkFonte,badgeScadenza,metricaBoard,...}.test.ts`,
+`scripts/{test-titolo-board,test-live-board,test-nome-istituto,test-copy-primo-schermo,...}.ts`,
+`scripts/architettura-baseline.json`. **Non toccati**: gli altri dipartimenti, lo schema, le
+migrazioni.
+
+**Nota di sessione (22/10/2026).** I tre difetti sembravano uno solo («la tabella è sporca») e
+invece venivano da tre strati diversi: un'etichetta di **stato interno** mostrata all'utente, un
+**URL valido** scambiato per fonte verificabile, un campo **compilato male dalla fonte** e mai
+giudicato. La lezione: la vetrina non deve mostrare come sta lavorando la pipeline (badge), non deve
+fidarsi della forma di un dato (URL valido ≠ avviso apribile) e deve chiedersi se un testo **dice
+qualcosa** prima di occupare una schermata. E quando un recupero (la home `.edu.it`) dipende da un
+dato che non raccogliamo ancora, va dichiarato: la regola è pronta, il materiale no.
+
+---
+
+### 26.77 «Radar Live»: la home `.edu.it` ha il suo dato — colonna `school_site`, comando demo, un solo array per contatore e schermate (22/10/2026)
+
+**Cosa era rotto (quattro difetti, un solo schermo).**
+1. **Link a portali privati.** La riga portava a `portaleargo.it`, `nuvola.madisoft.it`, a un modulo
+   Google o a una cartella WeTransfer: dopo qualche giorno erano login o «modulo non disponibile»,
+   cioè link morti spacciati per «avviso ufficiale». La §26.76 li aveva già esclusi, ma senza un
+   dato alternativo la riga **usciva** dalla bacheca.
+2. **Badge d'urgenza pastello.** Rosso/arancione/verde in tinte `-100`/`-200` con testo scuro: su un
+   monitor a distanza non si distinguevano.
+3. **Contatore e schermate da popolazioni diverse.** La pill contava una popolazione (le righe
+   lette/limitate), le schermate un'altra (quelle davvero in vetrina): «869 avvisi attivi» accanto a
+   «Schermata 1 di 80».
+4. **Segnaposto in vetrina.** Badge «Scuola non specificata» / «Più plessi» e righe senza istituto
+   reale occupavano una schermata senza dire nulla.
+
+**Le quattro correzioni.**
+1. **Fonte apribile unica** (`flightBoard/linkFonte.ts`, 155 righe): l'URL viene ripulito, poi
+   giudicato; se l'host è nell'elenco `HOST_PIATTAFORMA` si sostituisce con la **home dell'istituto**,
+   altrimenti la riga non entra (`fonteApribile → null`). L'interfaccia dice la verità sul tipo di
+   fonte: `avviso` (pagina dell'avviso) o `sito-scuola` (home ufficiale). Ordine del recupero: sito
+   dichiarato dall'anagrafica MIM (`school_site`) → dominio `.edu.it` di `contact_email`/`school_pec`
+   → fuori. **Nessun `www.` indovinato**, nessun `istruzione.it`, nessun dominio personale.
+2. **Badge pieni** (`rigaBoardDati.URGENZA_TOKENS`): `bg-rose-700` (≤ 48h) · `bg-amber-600` (3–7
+   giorni) · `bg-emerald-700` (oltre 7 giorni), tutti `text-white font-bold`; la pill del totale in
+   `IntestazioneBoard` è `bg-emerald-700` pieno. Guardia `npm run test:board:scadenza`: le tinte
+   `-100`/`-200` sono **rifiutate** e ogni badge deve essere testo bianco in grassetto.
+3. **Un solo array** (`FlightBoardInterpelli.tsx`): `conFonte` (dopo `fonteApribile`) →
+   `preparaRigheBoard` → `diversificaProvince` = **la** popolazione; `totale = righe.length` alimenta
+   sia `metricaBoard` (pill) sia `pagineBoard` (schermate), e la lettura è paginata senza tetto
+   (`letturaBoard` su tutte le pagine, `range` a blocchi). Nessun `LIMIT`, nessun `slice(0, 125)`.
+4. **Niente segnaposto** (`components/RigaBoard.tsx` + `src/lib/liveBoard.nomeScuolaRiga`): la colonna
+   mostra solo nomi reali (campo → registro per codice → titolo); senza istituto risolvibile la riga
+   resta fuori, e `anagrafica_parziale` resta un dato interno, non un badge.
+
+**Il dato che mancava (`school_site`).** Il recupero della home non aveva materiale (§26.76): i
+recapiti non vengono salvati all'ingestione. La strada giusta è il **sito dichiarato** dall'anagrafica
+MIM (`SITOWEBSCUOLA`), che ora ha la sua colonna: migrazione
+`supabase/migrations/20261022120000_add_interpelli_school_site.sql` (`add column if not exists`,
+commento di colonna, indice parziale `interpelli_school_site_mancante_idx` sulle righe ancora da
+arricchire; idempotente). Scrittura: lo scraper (`src/scraper/index.ts`), l'enrichment
+(`src/lib/anagraficaScuole.ts` → `scripts/arricchisci-interpelli.ts`) e la diagnostica
+(`scripts/verifica-schema-interpelli.ts`, voce 6 con il conteggio `school_site is null`).
+
+**Tolleranza alla migrazione (frontend pubblicabile prima).** Una `select` su una colonna che non
+esiste **fallisce**, e la bacheca resterebbe vuota: il contrario del servizio. Perciò la query della
+bacheca vive in un modulo solo (`flightBoard/letturaInterpelli.ts`, 82 righe) con
+`COLONNE_INTERPELLI`, `COLONNE_INTERPELLI_SENZA_SITO` e `colonnaSitoAssente` (Postgres «column
+interpelli.school_site does not exist» **e** PostgREST «Could not find the 'school_site' column»):
+`creaLettoreInterpelli` riprova **una volta sola** senza la colonna e lo dichiara in console. Stessa
+tolleranza in scrittura, lato run di manutenzione (`scripts/lib/interpelliManutenzione.ts`). Si
+perdono le home `.edu.it` — le righe con soli link di piattaforma restano fuori, come prima della
+direttiva — ma il tabellone continua a leggere.
+
+**Comando demo (`npm run dati:demo`).** Serve materiale **vero ma inventato** per guardare il
+tabellone senza aspettare lo scraper: 10 righe `demo-*` con date **relative a oggi** (la demo non
+invecchia), di cui **7 in vetrina** e **3 fuori** proprio per provare i gate. Dry-run di default
+(`npm run dati:demo`), scrittura `--apply`, rimozione `--pulisci --apply`, guardia
+`--consenti-produzione` se `VERCEL_ENV`/`NODE_ENV` è `production`. La scrittura è tollerante **solo**
+a `school_site` (l'unica colonna recente del payload): ogni altro errore resta un errore. La guardia
+`npm run test:board:demo` ricostruisce le stesse righe e pretende che l'esito **atteso = esito
+reale** riga per riga (fonte, stato di scadenza, nome mostrato).
+
+**Struttura (gate a 300 righe, `.clinerules` §3).** Il materiale demo **non** sta in `scripts/`:
+`scripts/` non può importare gli interni del dipartimento (il gate strutturale lo vieta: si entra solo
+dall'entry point pubblico) e `src/` non può importare `scripts/lib/*` — i due `tsconfig`
+risolvono i generici di `supabase-js` in modo diverso e il `typecheck` dell'app **si rompe** (provato:
+`TS2345` su `SupabaseClient`). Quindi i sei file stanno tutti in
+`src/departments/radar/flightBoard/__tests__/`: `demoInterpelliTipi.ts` (65, tipi e `PREFISSO_DEMO`),
+`demoInterpelli.ts` (64, `righeDemo`/`payloadDemo`), `demoInterpelliCasi.ts` (235, la tabella dei
+casi), `demoInterpelliVerifica.ts` (83, `preparaDemo`/`descriviEsito`), `demoInterpelli.test.ts`
+(156, guardia), `seminaDemoBoard.ts` (181, comando). Catena di import
+`Tipi ← Casi ← demoInterpelli ← Verifica` — nessun ciclo.
+
+**Verifiche (da `project/`).** `npm run typecheck` ✅ 0 · **`npm test` ✅ exit 0**, catena intera
+(con `test:board:demo` agganciata) · `npm run test:architettura` ✅ **654 file, 147 violazioni, 147
+congelate — nessuna nuova** · `npm run build` ✅ · `npx eslint` sui file toccati ✅ 0 ·
+`npm run dati:demo` ✅ dry-run (10 righe: 7 in bacheca, 3 fuori, **nessuna scrittura**).
+
+**Follow-up dichiarato.** La migrazione `20261022120000_add_interpelli_school_site.sql` **va
+applicata** (`supabase db push` o SQL editor): finché non lo è, la lettura funziona ma `school_site`
+resta vuoto e le righe con soli link di piattaforma continuano a uscire. Dopo: `npm run
+db:verifica-interpelli` (voce 6), `npm run dati:demo -- --apply` per le righe dimostrative e
+`npm run dati:arricchisci -- --apply` per riempire il sito dalle anagrafiche.
+
+**Nota di sessione (22/10/2026).** Il quarto difetto ha chiuso il cerchio del terzo: la bacheca non
+deve *linkare* un portale privato, ma non può nemmeno *scartare* la riga se non ha un'alternativa —
+l'alternativa è un dato che va **raccolto** (il sito dichiarato), non indovinato. E un comando di
+demo che vive dentro il dipartimento, verificato dalla stessa tabella di casi che il tabellone usa,
+si può finalmente mostrare a chi chiede «ma sono avvisi veri?» senza scrivere righe false a mano.

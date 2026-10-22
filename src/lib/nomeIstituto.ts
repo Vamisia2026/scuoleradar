@@ -19,91 +19,32 @@
  *      («IC ALBIGNASEGO Interpello per copertura posti» → «IC ALBIGNASEGO»).
  */
 
-/** Parole che, DA SOLE, non identificano una scuola (né una denominazione). */
-const PAROLE_GENERICHE = new Set([
-  'scuola', 'scuole', 'istituto', 'istituzione', 'liceo', 'licei', 'secondaria',
-  'primaria', 'infanzia', 'posta', 'posto', 'docente', 'docenti', 'un', 'uno', 'una',
-  'interpello', 'interpelli', 'avviso', 'avvisi', 'bando', 'bandi', 'selezione',
-  'selezioni', 'esperto', 'esperti', 'personale', 'ata', 'supplenza', 'supplenze',
-  'classe', 'classi', 'cattedra', 'cattedre', 'di', 'del', 'della', 'delle', 'dei',
-  'degli', 'il', 'lo', 'la', 'le', 'gli', 'i', 'a', 'al', 'alla', 'allo', 'ai', 'e',
-  'ed', 'per', 'con', 'su', 'in', 'da', 'dal', 'dai', 'non', 'comune', 'grado', 'nel',
-  'nella', 'nello', 'nelle', 'presso', 'tra', 'fra', 'sul', 'sulla', 'sezione',
-  'sezioni', 'plesso', 'statale', 'paritaria', 'pubblica', 'nazionale', 'indirizzo',
-  'primo', 'prima', 'secondo', 'seconda', 'terzo', 'terza', 'quarto', 'quinto',
-  'sesto', 'settimo', 'ottavo', 'nono', 'decimo', 'sostegno',
-  // Descrivono la SCUOLA, non la nominano: senza un nome proprio una riga come
-  // «Circolo Didattico» resta fuori vetrina.
-  'didattico', 'didattici',
-]);
-
-/** Sigle d'istituto REALI (mai codici di classe): valgono come TESTA del nome.
- *
- * Aggiunte del 15/10/2026 (§26.72 — fonti Liguria e Umbria): le sigle BREVI e le
- * forme usate dai portali regionali — `I.S.`, `I.O.`, `S.M.S.`, `ISA`, `Circolo`,
- * `Materna` («I.O. "ROSSELLI-RASETTI"», «D.D. 2^ CIRCOLO "COMPAROZZI"»,
- * «ISA 23 IC LEVANTO»). Restano escluse da `eDenominazione`, quindi NON possono
- * fare da nome proprio: una riga con la sola testa («Circolo Didattico») continua
- * a non essere presentabile.
- */
-const SIGLE_ISTITUTO = new Set([
-  'ic', 'iis', 'isis', 'isiss', 'iiss', 'iss', 'itis', 'ipsia', 'ipsas', 'itc',
-  'ite', 'itg', 'itn', 'iti', 'ips', 'itas', 'ipssar', 'ipsseoa', 'cpia', 'its',
-  'ls', 'lss', 'lsp', 'lc', 'lsc', 'lg', 'lsg', 'sm', 'dds', 'cd', 'dd', 'liceo',
-  'licei', 'istituto', 'istituti', 'istituzione', 'convitto', 'collegio',
-  'educandato', 'comprensivo', 'omnicomprensivo', 'scuola', 'scuole', 'liceale',
-  'is', 'io', 'sms', 'isa', 'circolo', 'circoli', 'materna', 'materne',
-]);
-
-/** Numeri romani: prefissi legittimi del nome («III IC Ricci Curbastro»). */
-const NUMERI_ROMANI = new Set([
-  'i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii',
-]);
-
-/**
- * Marcatori di POSTO/PROCEDURA/MATERIA: presenti negli avvisi, MAI nel nome di un
- * istituto. Da qui in poi il testo è procedura: si taglia.
- */
-const MARCATORI = new Set([
-  'posto', 'posti', 'supplenza', 'supplenze', 'interpello', 'interpelli',
-  'nterpello', 'avviso', 'avvisi', 'bando', 'bandi', 'selezione', 'selezioni',
-  'graduatoria', 'graduatorie', 'esito', 'esiti', 'assegnazione', 'assegnazioni',
-  'immissione', 'immissioni', 'procedura', 'procedure', 'preferenza', 'preferenze',
-  'espressione', 'disponibilita', 'incarico', 'incarichi', 'timbro', 'firmato',
-  'signed', 'protocollo', 'personale', 'docente', 'docenti', 'dsga', 'corso',
-  'corsi', 'coordinatore', 'formatore', 'formatori', 'gps', 'fascia', 'ruolo',
-  'sede', 'sedi', 'metodo', 'materia', 'materie', 'sostegno', 'lingua', 'lingue',
-  'conversazione', 'strumento', 'motoria', 'religione', 'alternativa', 'ordinanza',
-  'decreto', 'rettifica', 'proroga', 'integrazione', 'riapertura', 'reclutamento',
-  'conferimento', 'nomina', 'individuazione', 'lettera', 'lettere', 'comma', 'art',
-  'nota', 'scelta', 'provincia', 'regione', 'regionale', 'provinciale',
-  'territoriale', 'ambito', 'orario', 'ore', 'elenco', 'elenchi', 'indice',
-]);
-
-/**
- * Azioni amministrative degli avvisi: un testo che COMINCIA così è il corpo
- * dell'avviso, non il nome di una scuola («Interpello per la copertura…»).
- */
-const AZIONI_AVVISO =
-  /^(?:interpello|nterpello|avviso|bando|selezione|graduatoria|esito|decreto|rettifica|riapertura|integrazione|proroga|nomina|conferimento|procedura|mobilit[àa]|reclutamento|disponibilit[àa]|manifestazione|annotazione|dal|dall|fino|entro|decorrenza|termine)(?![a-zà-ù])/i;
-
-/** Codici amministrativi: meccanografico, sigla di sostegno, sigla ripetuta. */
-const RE_MECCANOGRAFICO = /^[A-Z]{2}[A-Z]{2}\d{5}[A-Z0-9]$/;
-/**
- * Sigla di sostegno: SEMPRE `AD…` — «in Italia ogni classe di sostegno inizia per
- * `AD`, quindi il pattern è chiuso» (`data/classiConcorso.ts`). Il vecchio
- * `A[DS][A-Z]{2}` scartava nomi veri che contengono toponimi da 4 lettere
- * («ASTI» = A+S+TI, «ADRO», «ASIA»): «I.C. VILLAFRANCA D'ASTI» non entrava in
- * vetrina per colpa di una sigla di sostegno che non esiste.
- */
-const RE_SIGLA_SOSTEGNO = /^AD(?:[A-Z]{2,3}|\d{2})$/;
-const RE_SIGLA_RIPETUTA = /^([A-Z])\1{3}$/;
-/** Codice di classe con il trattino, che la tokenizzazione spezzerebbe («A-48»). */
-const RE_TRATTINO_CODICE = /(?:^|\s)[A-Z]{1,2}-\d{2,4}(?:\s|$)/;
+// Il VOCABOLARIO (parole generiche, sigle d'istituto, marcatori di procedura,
+// codici amministrativi e apertura delle sigle incollate) vive in
+// `nomeIstitutoVocabolario.ts`: qui restano solo le REGOLE del gate.
+import {
+  AZIONI_AVVISO,
+  MARCATORI,
+  NUMERI_ROMANI,
+  ORDINALI_PAROLA,
+  PAROLE_GENERICHE,
+  RE_MECCANOGRAFICO,
+  RE_SIGLA_RIPETUTA,
+  RE_SIGLA_SOSTEGNO,
+  RE_TRATTINO_CODICE,
+  SIGLE_ISTITUTO,
+  apriSigleIncollate,
+} from './nomeIstitutoVocabolario.ts';
 
 /** Token del testo (le sigle puntate «I.I.S.» diventano «i», «i», «s»). */
 function tokenizza(testo: string): string[] {
   return testo.split(/[^A-Za-zÀ-ÿ0-9]+/).filter(Boolean);
+}
+
+/** True se il nome è di un CIRCOLO numerato a parole («Ottavo Circolo»). */
+function eCircoloNumerato(tokens: string[]): boolean {
+  const circolo = tokens.some((t) => /^circol[oi]$/i.test(t));
+  return circolo && tokens.some((t) => ORDINALI_PAROLA.has(t.toLowerCase()));
 }
 
 /**
@@ -192,20 +133,56 @@ function tagliaAllaProcedura(testo: string): string | null {
   return tagliato.length >= 4 ? tagliato : null;
 }
 
+/**
+ * SEGNAPOSTO gestiti che NON sono un nome d'istituto (§26.77, 22/10/2026).
+ *
+ * Direttiva cliente: in nessuna superficie pubblica deve comparire il badge/testo
+ * «Scuola non specificata / Più plessi». Quel testo è una DICHIARAZIONE di dato
+ * mancante, non una denominazione: se arriva in `school_name` il gate lo rifiuta,
+ * così la riga del tabellone ricade sul nome ricavato dal titolo e — quando non
+ * esiste — resta fuori (`lib/liveBoard.preparaRigheBoard`). Il confronto ignora
+ * accenti, maiuscole e separatori: «SCUOLA NON SPECIFICATA / PIÙ PLESSI», «Scuola
+ * non specificata - Piu plessi» e la sola prima metà sono lo stesso segnaposto.
+ */
+const SEGNAPOSTO =
+  /^(?:scuola|istituto)\s+non\s+specificat[oa](?:\s*[/·|\-–—]?\s*pi[uù]\s+plessi)?$/;
+
+/** True se il testo (o il frammento) è un segnaposto gestito, mai un nome. */
+function eSegnaposto(testo: string): boolean {
+  const normalizzato = testo
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  return SEGNAPOSTO.test(normalizzato);
+}
+
 /** Nome d'istituto di UN frammento (già separato dai dump), altrimenti `null`. */
 function nomeDaFrammento(frammento: string): string | null {
   const base = frammento.replace(/\s+/g, ' ').trim();
   if (base.length < 4 || /\d{3,}/.test(base)) return null;
+  // Prima di ogni altra regola: un segnaposto non è un istituto, nemmeno se ha
+  // una parola «da nome» («Plessi», «Specificata»).
+  if (eSegnaposto(base)) return null;
   if (RE_TRATTINO_CODICE.test(base)) return null;
   const tagliato = tagliaAllaProcedura(base);
   if (!tagliato || AZIONI_AVVISO.test(tagliato)) return null;
-  const tokens = tokenizza(tagliato);
+  // §26.73: le fonti scrivono spesso la sigla INCOLLATA al nome («IISLAGRANGIA»,
+  // «CPIA2AL»): si apre prima di leggere, così la testa torna riconoscibile.
+  const aperto = apriSigleIncollate(tagliato);
+  const tokens = tokenizza(aperto);
   if (tokens.some(eCodiceAmministrativo)) return null;
   if (!contieneTesta(tokens)) return null;
-  // Denominazione: nome proprio oppure NUMERO/ordinale («Istituto Comprensivo 7»,
-  // «V Circolo»). La cifra conta solo con una testa presente: da sola resta un codice.
-  if (!tokens.some(eDenominazione) && !tokens.some(eDenominazioneNumerale)) return null;
-  return tagliato;
+  // Denominazione: nome proprio, NUMERO/ordinale («Istituto Comprensivo 7»,
+  // «V Circolo») o ordinale a parole accanto a `circolo` («Ottavo Circolo»).
+  // La cifra conta solo con una testa presente: da sola resta un codice.
+  const haDenominazione =
+    tokens.some(eDenominazione) ||
+    tokens.some(eDenominazioneNumerale) ||
+    eCircoloNumerato(tokens);
+  if (!haDenominazione) return null;
+  return aperto;
 }
 
 /**

@@ -77,6 +77,12 @@ export interface InterpelloParsato {
   contactEmail: string | null;
   /** PEC dell'istituto dall'anagrafica nazionale, quando disponibile (colonna `interpelli.school_pec`). */
   schoolPec?: string | null;
+  /**
+   * Sito istituzionale dall'anagrafica nazionale (`SITOWEBSCUOLA`, solo host),
+   * quando disponibile (colonna `interpelli.school_site`). Serve alla bacheca per
+   * sostituire i link alle piattaforme private con la home della scuola (§26.77).
+   */
+  schoolSite?: string | null;
   /** Link candidati della voce (dettaglio + allegati) usati per l'arricchimento contatti. */
   linkCandidati?: string[];
 }
