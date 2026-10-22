@@ -133,6 +133,27 @@ export interface EsitoArricchimento {
 }
 
 /**
+ * SITO ISTITUZIONALE di una scuola: quello della riga, altrimenti quello
+ * dichiarato da un'altra riga dello STESSO istituto (§26.77).
+ *
+ * Il file ministeriale non è coerente dentro l'istituto: la riga dell'istituto
+ * può scrivere `SITOWEBSCUOLA = Non Disponibile` mentre le sue sedi dichiarano il
+ * sito. In quel caso il sito delle sedi È il sito dell'istituto (stessa
+ * intestazione, stesso dominio) e va usato: senza, la bacheca non riesce a
+ * sostituire il link al portale privato con la home `.edu.it`.
+ */
+export function sitoIstituzionale(
+  indice: IndiceAnagrafica,
+  scuola: ScuolaAnagrafica | null,
+): string | null {
+  if (!scuola) return null;
+  if (scuola.sitoWeb) return scuola.sitoWeb;
+  const codice = chiaveCodiceScuola(scuola.istitutoCodice) ?? chiaveCodiceScuola(scuola.codice);
+  if (!codice) return null;
+  return indice.sitoPerIstituto.get(codice) ?? null;
+}
+
+/**
  * Arricchimento di UNA riga d'interpello dall'anagrafica:
  *   1. il codice meccanografico della riga (o estratto dal titolo/nome);
  *   2. `school_code`, `school_name` (denominazione presentabile), `contact_email`
@@ -178,6 +199,9 @@ export function arricchisciDaAnagrafica(
   // SITO ISTITUZIONALE (§26.77): è il materiale con cui la bacheca sostituisce i
   // link alle piattaforme private (Argo/Spaggiari/Nuvola) con la home della
   // scuola. Solo se manca: un sito già scritto nella riga non si sovrascrive.
-  if (!(riga.school_site ?? '').trim() && scuola.sitoWeb) patch.school_site = scuola.sitoWeb;
+  if (!(riga.school_site ?? '').trim()) {
+    const sito = sitoIstituzionale(indice, scuola);
+    if (sito) patch.school_site = sito;
+  }
   return esito;
 }

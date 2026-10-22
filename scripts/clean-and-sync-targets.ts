@@ -52,21 +52,16 @@
 //
 // FIX v6 (22/10/2026) — A.S. 2026/2027 e target morti:
 //   • PIEMONTE: i target tabellari passano da `/interpello2025/` a
-//     `/interpello2026/`. MISURATO il 22/10/2026 sulla pagina TO:
-//     `interpello2026/ric_interpello_ambito_to.php` → HTTP 200 con **23 righe
-//     «aperto»** e azione «Stampa»; `interpello2025/...` → HTTP 200 ma con
-//     **51 occorrenze di «aperto» su 1.390 righe**, cioè l'archivio dell'anno
-//     scorso. Il path vecchio non è un 404: è **dato stantio**, che è peggio,
-//     perché non fa scattare nessun allarme.
+//     `/interpello2026/`. [SUPERATO dalla FIX v7: la pagina 2026 serve le
+//     stesse righe della 2025 ma con la colonna «Stato interpello» non
+//     aggiornata — vedi sotto.]
 //   • LIGURIA: gli URL `servizi.istruzioneliguria.gov.it/provincia.php?p=XX`
 //     portano la query string dell'A.S. corrente (`&as=2026%2F2027`); verificato
 //     HTTP 200 su GE/SP/IM/SV il 22/10/2026.
 //   • STEP 3-ter — eliminazione da `interpelli` delle righe che arrivano dalle
-//     FONTI TABELLARI MORTE (A.S. precedente, path `/ric_interpello_ambito_*`
+//     FONTI TABELLARI MORTE (path su host dismesso, `/ric_interpello_ambito_*`
 //     dell'host istituzionale, `alessandria-asti/…`, `servizi.istruzione.liguria.it`):
-//     sono righe che nessun giro di scansione può più aggiornare. Misurato:
-//     **168** righe con `source_url` su `/interpello2025/` (tutte con `region`
-//     NULLA: nessun utente può matcharle).
+//     sono righe che nessun giro di scansione può più aggiornare.
 //   • STEP 7 — `discovered_links` a LISTA CHIUSA per Piemonte e Liguria: le due
 //     regioni hanno un seed completo e verificato, quindi ogni altro link attivo
 //     è deriva (404, host morto, A.S. vecchio) e viene disattivato. È la ragione
@@ -79,6 +74,26 @@
 //     di un'ingestione precedente) + **40** righe di news del portale
 //     istituzionale finite in `interpelli` per errore: invisibili al matching e
 //     indistinguibili dai record nuovi, che il reporter ricrea corretti.
+//
+// FIX v7 (22/10/2026) — PIEMONTE: si torna a `/interpello2025/`.
+//   • MISURATO il 22/10/2026 sulle pagine AT/TO/AL/BI/CN/NO/VB/VC: i due path
+//     (`/interpello2025/` e `/interpello2026/`) servono **lo stesso elenco**.
+//     Su AT: 164 chiavi `meccanografico|classe|data interpello` comuni, **0**
+//     righe esclusive dell'uno o dell'altro; identici anche i numeri `progr`
+//     dell'azione «Stampa» (2442, 2438, 3546, …), cioè gli stessi interpelli.
+//   • Cambia solo la colonna «Stato interpello», e la 2026 è quella SBAGLIATA:
+//     su AT dichiara **112 righe «aperto»** contro le **6** della 2025, e **93**
+//     di quelle 112 hanno la scadenza già passata (es. scadenza 2026-09-11
+//     marcata «aperto» dalla 2026 e «chiuso» dalla 2025). Un flag fermo su
+//     «aperto» non è un dato in più: è un avviso che nessuno può più
+//     candidare. La 2025 è quindi la sorgente veritiera.
+//   • Conseguenza sul DB: `source_url` entra nell'hash (`province|school_code|
+//     title|url`), quindi le righe ingerite da `/interpello2026/` NON vengono
+//     sovrascritte da quelle della 2025: restano duplicate accanto alle nuove.
+//     Per questo `/interpello2026/` diventa una FONTE TABELLARE MORTA (STEP
+//     3-ter le elimina) e `/interpello2025/` rientra in TARGETS (la guardia
+//     `TARGETS.some(...)` impedisce di cancellare una sorgente tornata
+//     ufficiale). Ordine di esecuzione: questo script, poi il reporter.
 //
 // Dipendenze: @supabase/supabase-js, dotenv
 // Uso:        npx tsx scripts/clean-and-sync-targets.ts
@@ -240,18 +255,20 @@ const TARGETS: TargetSeed[] = [
   { url: 'https://servizi.istruzioneliguria.gov.it/nazionali.php', region: 'Liguria', province: null },
 
   // ── Piemonte ──────────────────────────────────────────────────────────────
-  // FIX v6: A.S. 2026/2027. Il path `/interpello2025/` risponde ancora 200 ma è
-  // l'archivio dell'anno scorso: da lì il reporter estraeva righe chiuse (0
-  // record validi). Verificato HTTP 200 su tutti gli 8 ambiti il 22/10/2026.
+  // FIX v7: `/interpello2025/` è la sorgente VERITIERA. Il path 2026 serve le
+  // stesse righe (164 chiavi comuni su AT, 0 esclusive) ma dichiara «aperto» su
+  // 112 avvisi di cui 93 già scaduti: il flag di stato non è aggiornato.
+  // Verificato HTTP 200 su tutti gli 8 ambiti il 22/10/2026 (6–71 righe
+  // «aperto» per ambito, tutte con scadenza futura).
   { url: 'https://www.istruzionepiemonte.it/', region: 'Piemonte', province: null },
-  { url: 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_to.php', region: 'Piemonte', province: 'TO' },
-  { url: 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_al.php', region: 'Piemonte', province: 'AL' },
-  { url: 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_at.php', region: 'Piemonte', province: 'AT' },
-  { url: 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_bi.php', region: 'Piemonte', province: 'BI' },
-  { url: 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_cn.php', region: 'Piemonte', province: 'CN' },
-  { url: 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_no.php', region: 'Piemonte', province: 'NO' },
-  { url: 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_vb.php', region: 'Piemonte', province: 'VB' },
-  { url: 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_vc.php', region: 'Piemonte', province: 'VC' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_to.php', region: 'Piemonte', province: 'TO' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_al.php', region: 'Piemonte', province: 'AL' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_at.php', region: 'Piemonte', province: 'AT' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_bi.php', region: 'Piemonte', province: 'BI' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_cn.php', region: 'Piemonte', province: 'CN' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_no.php', region: 'Piemonte', province: 'NO' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_vb.php', region: 'Piemonte', province: 'VB' },
+  { url: 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_vc.php', region: 'Piemonte', province: 'VC' },
 
   // ── Sicilia ───────────────────────────────────────────────────────────────
   { url: 'https://www.usr.sicilia.it/', region: 'Sicilia', province: null },
@@ -291,8 +308,9 @@ const REGIONI_A_LISTA_CHIUSA = new Set<string>(['Piemonte', 'Liguria']);
 // sono immutabili e invisibili al matching (region NULLA o A.S. scaduto).
 const FONTI_TABELLARI_MORTE: Array<{ pattern: string; motivo: string }> = [
   {
-    pattern: 'servizi.istruzionepiemonte.it/interpello2025/',
-    motivo: 'A.S. 2025/2026 archiviato: sostituito da /interpello2026/',
+    pattern: 'servizi.istruzionepiemonte.it/interpello2026/',
+    motivo:
+      'stato interpello non aggiornato (112 «aperto» su AT di cui 93 già scaduti): la sorgente ufficiale è /interpello2025/',
   },
   {
     pattern: 'www.istruzionepiemonte.it/ric_interpello_ambito_',
@@ -582,11 +600,14 @@ async function deleteInterpelliPiattaformeBloccate(): Promise<number> {
 // STEP 3-ter — Eliminazione record che arrivano da FONTI TABELLARI MORTE
 // ---------------------------------------------------------------------------
 //
-// MISURATO il 22/10/2026: 168 righe con `source_url` su `/interpello2025/` e
-// `region` NULLA su tutte. Sono l'archivio dell'A.S. precedente, letto da una
-// pagina che risponde ancora 200 (per questo nessun controllo di stato le
-// segnalava) ma che il reporter non riesaminerà mai più: la sorgente attiva è
-// `/interpello2026/`. Restano solo spazio occupato e rumore nel pool.
+// MISURATO il 22/10/2026: le righe con `source_url` su `/interpello2025/`
+// avevano `region` NULLA perché lette quando la sorgente era già stata
+// dichiarata morta (v6). Con la FIX v7 il rapporto si inverte: la pagina
+// veritiera è `/interpello2025/` e i morti sono i path `/interpello2026/`,
+// che servono le stesse righe con la colonna «Stato interpello» ferma su
+// «aperto» (su AT: 112 aperte di cui 93 con scadenza già passata). Poiché
+// `source_url` entra nell'hash del record, quelle righe non verrebbero
+// sovrascritte: vanno eliminate e ricreate una sola volta dalla 2025.
 //
 // La guardia `TARGETS.some(...)` impedisce di cancellare una sorgente che nel
 // frattempo è tornata ufficiale.
@@ -1023,14 +1044,17 @@ async function repairMissingDomains(): Promise<number> {
 // ---------------------------------------------------------------------------
 //
 // Per queste due regioni il seed è completo e verificato: la lista TARGETS è
-// l'unica fonte ammessa. Ogni altro link attivo è deriva — path `/interpello2025/`
-// (archivio), `www.istruzionepiemonte.it/alessandria-asti/…` (404),
+// l'unica fonte ammessa. Ogni altro link attivo è deriva — path
+// `/interpello2026/` (stato non aggiornato, FIX v7),
+// `www.istruzionepiemonte.it/alessandria-asti/…` (404),
 // `servizi.istruzione.liguria.it` (host dismesso) — e il reporter lo
-// interrogherebbe a ogni giro producendo 0 record e rumore nei log.
+// interrogherebbe a ogni giro producendo record sbagliati o rumore nei log.
 //
 // Misurato il 22/10/2026: 17 link attivi fuori lista per il Piemonte (8 path
-// `/interpello2025/`, 7 `www.…/ric_interpello_ambito_*.php`, `alessandria-asti`,
-// `vercelli`) e 5 per la Liguria (4 host dismesso + `www.istruzioneliguria.it`).
+// `/interpello2025/` quando la lista puntava alla 2026, 7
+// `www.…/ric_interpello_ambito_*.php`, `alessandria-asti`, `vercelli`) e 5 per
+// la Liguria (4 host dismesso + `www.istruzioneliguria.it`). Con la FIX v7 il
+// set si ribalta: restano fuori lista gli 8 path `/interpello2026/`.
 
 async function disableObsoleteTargets(): Promise<number> {
   const regioni = Array.from(REGIONI_A_LISTA_CHIUSA);

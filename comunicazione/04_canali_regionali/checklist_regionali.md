@@ -94,8 +94,11 @@
 - [ ] **Nessuna riga in vetrina senza la sua scuola** (direttiva cliente 05/10/2026,
       §26.59 — corregge la §26.47 del 04/10/2026): in bacheca entra solo una riga con
       il nome di un **istituto reale** risolto per anagrafica (campo `school_name` al
-      gate `nomeIstituto.ts`, registro scolastico per codice meccanografico, oppure
-      nome leggibile ricavato dal titolo — `nomeScuolaRiga`, `src/lib/liveBoard.ts`).
+      gate `nomeIstituto.ts`, registro scolastico per codice meccanografico, **denominazione
+      certificata dal codice meccanografico statale** (§26.81: il MIM scrive alcune denominazioni
+      ufficiali senza la testa d'istituto — «G. PASCOLI», «RIVALTA B.DA - "N. BOBBIO"» — e il
+      codice `XXYY12345Z` è la prova d'identità), oppure nome leggibile ricavato dal titolo —
+      `nomeScuolaRiga`, `src/lib/nomeScuolaRiga.ts`, ri-esportato da `src/lib/liveBoard.ts`).
       Restano fuori: le righe con il solo **nome grezzo pubblicato dal bando**, quelle
       senza alcun nome risolvibile (il segnaposto «Scuola non specificata / Più plessi»
       **non** è un'anagrafica) e — come sempre — gli avvisi **non vivi** (scaduti o

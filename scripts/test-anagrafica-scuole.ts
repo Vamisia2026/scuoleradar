@@ -28,6 +28,7 @@ import {
   parseCsv,
   scuolaDaCodice,
   scuolaDaNome,
+  sitoIstituzionale,
 } from '../src/lib/anagraficaScuole.ts';
 import { campoSito } from '../src/lib/anagraficaCsv.ts';
 
@@ -77,6 +78,11 @@ const RIGHE_STAT = [
   ['202627', 'NORD OVEST', 'PIEMONTE', 'CUNEO', 'CNIC22200F', 'I.C. Manzoni', 'CNAA22201G', 'MANZONI INFANZIA', 'VIA MANZONI 2', '12100', 'H727', 'CUNEO', 'NORMALE', 'SCUOLA INFANZIA', 'NO', 'Non Disponibile', 'CNIC22200F@istruzione.it', 'Non Disponibile', 'Non Disponibile', 'SI'],
   // Denominazione SENZA sigla: l'avviso scrive «I.C. Daniele Manin», l'anagrafica «Daniele Manin».
   ['202627', 'NORD OVEST', 'LIGURIA', 'GENOVA', 'GEIC85000H', 'Daniele Manin', 'GEAA85001L', 'MANIN INFANZIA', 'VIA MANIN 3', '16100', 'D969', 'GENOVA', 'NORMALE', 'SCUOLA INFANZIA', 'NO', 'Non Disponibile', 'GEIC85000H@istruzione.it', 'GEIC85000H@pec.istruzione.it', 'Non Disponibile', 'SI'],
+  // SITO solo sui PLESSI: la riga dell'istituto scrive «Non Disponibile» mentre la
+  // sede dichiara il sito, con lo schema malformato del file ministeriale
+  // (`https//host/`, senza i due punti). Il sito va ereditato a livello di istituto.
+  ['202627', 'NORD OVEST', 'PIEMONTE', 'BIELLA', 'BIIC815007', 'I.C. San Francesco', 'BIIC815007', 'I.C. SAN FRANCESCO D ASSISI', 'VIA ROMA 4', '13900', 'A859', 'BIELLA', 'NORMALE', 'SCUOLA SECONDARIA I GRADO', 'SI', 'SI', 'BIIC815007@istruzione.it', 'Non Disponibile', 'Non Disponibile', 'SI'],
+  ['202627', 'NORD OVEST', 'PIEMONTE', 'BIELLA', 'BIIC815007', 'I.C. San Francesco', 'BIAA815047', 'INFANZIA S. FRANCESCO', 'VIA ROMA 6', '13900', 'A859', 'BIELLA', 'NORMALE', 'SCUOLA INFANZIA', 'NO', 'Non Disponibile', 'BIIC815007@istruzione.it', 'Non Disponibile', 'https//www.icsanfrancescobiella.it/', 'SI'],
 ].map(rigaCsv);
 
 const RIGHE_PAR = [
@@ -100,10 +106,10 @@ console.log('\n— 2. Indice: file per prefisso, conteggi, provincia, PEC assent
 const indice = caricaAnagrafica({ cartella, refresh: true });
 check('solo file anagrafici .csv (prefisso SCUANAGRAFE)', 2, fileAnagrafici(cartella).length);
 check('anagrafica disponibile', true, indice.disponibile);
-check('codici indicizzati (6 statali + 1 paritaria)', 7, indice.totale);
+check('codici indicizzati (8 statali + 1 paritaria)', 9, indice.totale);
 check(
   'file letti con i loro conteggi',
-  [['SCUANAGRAFEPAR20262720260901.csv', 1], ['SCUANAGRAFESTAT20262720260901.csv', 6]],
+  [['SCUANAGRAFEPAR20262720260901.csv', 1], ['SCUANAGRAFESTAT20262720260901.csv', 8]],
   indice.fileLetti.map((f) => [f.file, f.righe]),
 );
 check('PEC «Non Disponibile» → null', null, scuolaDaCodice(indice, 'TOIC84700B')?.pec ?? null);
@@ -131,6 +137,23 @@ check('sito «Non Disponibile» → null', null, scuolaDaCodice(indice, 'GEIC850
 check('`campoSito` scarta una casella email', null, campoSito('segreteria@iccarducci.edu.it'));
 check('`campoSito` scarta un valore senza dominio', null, campoSito('nd'));
 check('`campoSito` tiene un dominio con sottodominio', 'liceo.marche.edu.it', campoSito('https://liceo.marche.edu.it/'));
+// Grafie REALI del file ministeriale (verificate il 22/10/2026 su
+// SCUANAGRAFESTAT20262720260901.csv): lo schema senza i due punti e il punto
+// finale sull'host. Con la regola precedente entrambe davano `null`.
+check(
+  'schema senza i due punti (`https//host/`) → host nudo',
+  'istitutocomprensivo4asti.edu.it',
+  campoSito('https//istitutocomprensivo4asti.edu.it/')
+);
+check(
+  'host con punto finale → punto tolto',
+  'istitutocomprensivo1asti.edu.it',
+  campoSito('www.istitutocomprensivo1asti.edu.it.')
+);
+check('`campoSito` non inventa un host da uno schema nudo', null, campoSito('https//'));
+// Sito «in comune» dell'istituto: la riga dell'istituto non lo dichiara, la sede sì.
+check('sito del plesso (schema senza i due punti) → host nudo', 'icsanfrancescobiella.it', scuolaDaCodice(indice, 'BIAA815047')?.sitoWeb);
+check('istituto senza sito proprio → sito preso dalle sue sedi', 'icsanfrancescobiella.it', sitoIstituzionale(indice, scuolaDaCodice(indice, 'BIIC815007')));
 
 console.log('\n— 3. Lookup: sede, istituto di riferimento, nome —');
 check('codice di ISTITUTO → sede rappresentativa', 'MBAA80501B', scuolaDaCodice(indice, 'MBIC80500A')?.codice);
@@ -183,6 +206,15 @@ check(
   { school_site: 'ic.it' },
   senzaSito.patch,
 );
+// Istituto che NON dichiara il sito ma le cui sedi sì (§26.77): la riga
+// dell'istituto deve comunque ricevere `school_site`, altrimenti in bacheca
+// resta il link alla piattaforma privata.
+const senzaSitoIstituto = arricchisciDaAnagrafica(indice, {
+  school_code: 'BIIC815007',
+  school_name: 'Istituto Comprensivo San Francesco d Assisi',
+  province: 'BI',
+});
+check('istituto senza sito proprio → eredita quello dei plessi', 'icsanfrancescobiella.it', senzaSitoIstituto.patch.school_site);
 const ambiguo = arricchisciDaAnagrafica(indice, { school_name: 'I.C. Manzoni', province: null });
 check('nome ambiguo → nessun arricchimento', ['nessuna', {}], [ambiguo.via, ambiguo.patch]);
 const sconosciuto = arricchisciDaAnagrafica(indice, { school_code: 'ZZIC99999Z', province: 'ZZ' });

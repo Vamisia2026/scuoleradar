@@ -8606,3 +8606,134 @@ deve *linkare* un portale privato, ma non può nemmeno *scartare* la riga se non
 l'alternativa è un dato che va **raccolto** (il sito dichiarato), non indovinato. E un comando di
 demo che vive dentro il dipartimento, verificato dalla stessa tabella di casi che il tabellone usa,
 si può finalmente mostrare a chi chiede «ma sono avvisi veri?» senza scrivere righe false a mano.
+
+### 26.78 Piemonte: la sorgente veritiera è `/interpello2025/`, non il path dell'anno nuovo (22/10/2026)
+
+**Cosa era rotto.** La FIX v6 aveva spostato i target tabellari piemontesi da
+`/interpello2025/` a `/interpello2026/` sul presupposto che il path vecchio fosse l'archivio
+dell'anno scorso. Misurato il 22/10/2026 sulle otto province: **i due path servono lo stesso
+elenco**. Su AT le chiavi `meccanografico|classe|data interpello` comuni sono **164**, quelle
+esclusive dell'uno o dell'altro **0**; identici anche i numeri `progr` dell'azione «Stampa»
+(2442, 2438, 3546…), cioè gli stessi interpelli. Cambia **solo** la colonna «Stato interpello»,
+e la 2026 è quella sbagliata: su AT dichiara **112 righe «aperto»** contro le **6** della 2025,
+e **93** di quelle 112 hanno la scadenza già passata (scadenza 2026-09-11 marcata «aperto» dalla
+2026 e «chiuso» dalla 2025). Un flag fermo su «aperto» non è un dato in più: è un avviso che
+nessuno può più candidare.
+
+**La correzione (`scripts/clean-and-sync-targets.ts`, FIX v7).** I target Piemonte tornano su
+`/interpello2025/`; `/interpello2026/` entra fra le **fonti tabellari morte** (STEP 3-ter) e le
+sue righe vengono eliminate. Serviva perché `source_url` entra nell'hash
+(`province|school_code|title|url`): le righe ingerite dal path 2026 non sarebbero state
+sovrascritte, sarebbero rimaste **duplicate** accanto alle nuove. La guardia `TARGETS.some(...)`
+impedisce di cancellare una sorgente tornata ufficiale. Ordine di esecuzione: questo script,
+poi il reporter.
+
+**Misura dopo il ripristino (probe sul database di produzione).** `interpelli` = **691** righe,
+di cui **142 Piemonte** (TO 43 · AL 39 · BI 28 · CN 14 · VB 7 · NO 5 · AT 4 · VC 2), **0**
+righe `demo-%`, **0** righe Piemonte senza `region`. `discovered_links`: 8 target Piemonte
+`active_crawler` sul 2025, 8 `disabled` sul 2026.
+
+### 26.79 Piemonte: decide la SCADENZA, non lo stato — ingestione deterministica (reporter v15)
+
+**Cosa era rotto.** `servizi.istruzionepiemonte.it` restituisce, a minuti di distanza, due
+snapshot con le **stesse** righe e la colonna «Stato interpello» **ribaltata**: 7 aperte / 202
+chiuse, oppure 139 aperte / 70 chiuse. Nel secondo le 139 «aperte» hanno la scadenza già passata
+e le 7 con scadenza futura sono marcate «chiuse». Su TO le righe «aperto» sono variate **58 → 471
+in cinque fetch**, mentre quelle entro l'orizzonte restavano **43**. Con il filtro sullo stato il
+risultato dell'ingestione dipendeva da quale backend rispondeva: da 0 record a centinaia di
+righe morte.
+
+**La correzione (`scripts/table-reporter.ts`, FIX v15).** Per i target tabellari Piemonte il flag
+di stato viene **ignorato** (si scarta solo una cancellazione esplicita): conta la **scadenza
+dichiarata**, già filtrata da `isExpired` e dall'orizzonte di `GIORNI_ORIZZONTE_OPPORTUNITA`
+(§26.75). Effetto: ingestione deterministica (VB 7, TO 43, AL 39 su qualunque snapshot) invece
+di zero record quando capitava il backend con lo stato fermo.
+
+### 26.80 Piemonte: due snapshot, uno solo è usabile — e la scadenza canonica si riempie (reporter v16)
+
+**Cosa era rotto (due difetti).**
+1. Il portale non riallinea sempre stato **e** azioni nello stesso snapshot: capitava la risposta
+   con le scadenze giuste e la colonna «Azione» vuota, quindi zero record estratti.
+2. Le righe Piemonte/Liguria entravano con la scadenza **solo** nella colonna legacy `deadline` e
+   `expiration_date` NULLA: in bacheca la colonna «Scadenza» restava **vuota** e il tabellone
+   mostrava solo la data di pubblicazione. Misurato: **76 righe Piemonte su 142**.
+
+**La correzione.**
+1. `scripts/table-reporter.ts` FIX v16 — per il tabellare Piemonte si fanno **due fetch**
+   (`PIEMONTE_TENTATIVI`, attesa fra i due) e si tiene l'estrazione con **più righe**; il conteggio
+   `righeSenzaAzione` è il segnale che lo snapshot non è allineato e fa ritentare. La scadenza si
+   calcola **prima** del link, così una riga senza data non consuma un tentativo.
+2. `npm run db:allinea-scadenze` (`scripts/allinea-scadenze-interpelli.ts`) — equivalente runtime
+   della migrazione `20261015120000_allinea_deadline_expiration_interpelli.sql` (un blocco `do $$`
+   non eseguibile via PostgREST): normalizza le forme legacy riconosciute, riempie
+   `expiration_date` (mezzanotte UTC) **solo** dove è NULLA, non tocca nient'altro e non indovina.
+   `--dry-run` misura.
+
+**Esito misurato (22/10/2026).** `--dry-run`: 247 scadenze legacy, **76 da riempire**, 0 da
+normalizzare, 0 non riconoscibili. Applicazione: **76 riempite**, 0 rimaste. Verifica:
+`npm run db:verifica-interpelli` → «RIGHE DA RIPARARE: 0» · «Formati non ISO: 0 su 247»; probe
+Piemonte → **`expiration_date` NULLA: 0/142**.
+
+**Nota tecnica (perché il reporter da solo non bastava).** L'upsert del reporter usa
+`ignoreDuplicates: true`: le righe **già presenti** non vengono aggiornate, quindi il riempimento
+delle righe storiche è compito del comando di allineamento — il reporter garantisce solo che le
+righe **nuove** nascono con entrambe le colonne.
+
+
+### 26.81 «Radar Live»: il sito è quello dell'istituto, e il codice certifica la denominazione (22/10/2026)
+
+**Difetto 1 — il sito dell'istituto non c'era, ma le sue sedi lo dichiaravano.** Il file
+ministeriale non è coerente **dentro lo stesso istituto**: `BIIC815007` (riga dell'istituto)
+dichiara `SITOWEBSCUOLA = Non Disponibile`, mentre i suoi plessi (`BIAA815047`, `BIEE81501*`, …)
+dichiarano `www.icsanfrancescobiella.it`. Senza quel dato la bacheca non poteva sostituire il link
+al portale privato con la home `.edu.it` (§26.77) e la riga usciva.
+
+- `src/lib/anagraficaIndice.ts` — nuovo `sitoPerIstituto: Map<string, string>`: codice istituto →
+  **primo** sito non nullo fra la riga dell'istituto e quelle delle sue sedi (`istitutoCodice ??
+  codice`).
+- `src/lib/anagraficaScuole.ts` — `sitoIstituzionale(indice, scuola)`: sito della riga, altrimenti
+  quello condiviso dell'istituto; `arricchisciDaAnagrafica` lo usa per `school_site` e **non
+  sovrascrive** un sito già scritto nella riga.
+- `src/lib/anagraficaCsv.ts` — `campoSito` accetta anche lo schema **senza i due punti**
+  (`https//www.icpascoligozzano.edu.it/`): con la sola regola `^https?://` l'`https` restava in testa
+  e il dominio veniva scartato per intero (**53 righe Piemonte su 142** perdevano la home).
+- Esito: `npm run dati:arricchisci -- --apply` → **28 righe** aggiornate (esattamente gli istituti
+  che dichiaravano «Non Disponibile»); probe: **`school_site` presente su 142/142** righe Piemonte.
+
+**Difetto 2 — denominazioni ufficiali scartate dal gate del nome.** `npm run board:verifica`
+segnalava **5 righe Piemonte su 248** fuori dalla vetrina come «senza istituto reale». Non erano
+righe sporche: il Ministero scrive quelle denominazioni **senza la testa d'istituto** che
+`nomeIstitutoPresentabile` pretende — `ALIC809001` → «RIVALTA B.DA - "N. BOBBIO"», `ALIC807009` →
+«SERRAVALLE SCRIVIA-M.BENEDICTA», `NOIC80800E` → «G. PASCOLI». Sono istituti reali: il codice
+meccanografico statale (`XXYY12345Z`) lo prova, ed è lo **stesso** codice che l'anagrafica indica
+come chiave.
+
+- `src/lib/nomeScuolaRiga.ts` (nuovo, 121 righe) — `nomeScuolaRiga` aggiunge un terzo passo fra il
+  registro e il titolo: se `school_code` è un meccanografico statale valido
+  (`normalizzaCodiceMeccanografico`) e `school_name` è una denominazione **leggibile**
+  (`nomeGrezzoDaBando`: niente dump di codici, classi di concorso, date) e non una dichiarazione di
+  dato mancante (`NON_UN_NOME`: «Non Disponibile», «n/d», «da definire»…), allora la riga ha il suo
+  istituto e `approssimativo` resta **false**. Il codice è la prova d'identità: nessun nome
+  inventato, nessun dump ammesso, nessuna etichetta di posto/materia.
+- Struttura: la risoluzione del nome è stata **estratta** da `liveBoard.ts` (208 → 186 righe) per
+  restare sotto le 250 righe del gate strutturale; `liveBoard.ts` ri-esporta
+  `nomeScuolaRiga`/`nomeScuolaBoard`/`nomeGrezzoDaBando`, quindi le superfici pubbliche non
+  cambiano (`RigaBoard.tsx`, `ResponsoProva.tsx`, `preparaRigheBoard`, `rigaPresentabileVetrina`).
+
+**Esito misurato.** Vetrina **242 → 247** righe su 248 avvisi attivi; resta fuori **1** sola riga,
+un avviso ministeriale nazionale (`www.mim.gov.it`, nessun codice, nessun istituto): corretto.
+«Schermata 1 di 50» coincide fra etichetta degli avvisi attivi ed etichetta reale delle schermate.
+
+**Verifiche (da `project/`).** `npm run typecheck` ✅ 0 · **`npm test` ✅ exit 0** (catena intera,
+`test:nome-istituto` e `test:anagrafica` compresi) · `npm run test:architettura` ✅ **655 file, 147
+violazioni, 147 congelate — nessuna nuova** · `npm run build` ✅ · `npx eslint` sui file toccati ✅ 0
+· `npm run board:verifica` ✅ · `npm run db:verifica-interpelli` ✅.
+
+**Nota di sessione (22/10/2026).** Due dati «mancanti» non mancavano affatto: il sito era scritto
+nella riga accanto dello stesso istituto, e il nome era quello **ufficiale** — solo senza la parola
+che il gate si aspettava. La lezione è la stessa della §26.73: prima di dichiarare che un dato non
+c'è, si guarda **dove** la fonte lo scrive. E quando la fonte è un'anagrafica, il codice
+meccanografico è una prova d'identità più forte di qualunque euristica sul testo: usarlo costa meno
+che allargare il gate a mano. Il corollario della §26.80 resta valido: un upsert che ignora i
+doppioni non ripara lo storico — per quello c'è `db:allinea-scadenze`.
+

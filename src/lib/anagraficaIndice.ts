@@ -35,6 +35,18 @@ export interface IndiceAnagrafica {
   perCodice: Map<string, ScuolaAnagrafica>;
   /** Codice ISTITUTO → sede rappresentativa (per i codici di istituto). */
   perIstituto: Map<string, ScuolaAnagrafica>;
+  /**
+   * Codice ISTITUTO → sito web dichiarato da UNA QUALSIASI delle sue righe.
+   *
+   * Perché serve: il file ministeriale non è coerente dentro lo stesso istituto.
+   * Misurato il 22/10/2026 su `SCUANAGRAFESTAT20262720260901.csv` — BIIC815007
+   * (riga dell'istituto) dichiara `SITOWEBSCUOLA = Non Disponibile`, mentre le
+   * sue sedi (BIAA815047, BIEE81501*, …) dichiarano `www.icsanfrancescobiella.it`.
+   * Senza questo secondo indice la riga d'interpello dell'istituto restava senza
+   * `school_site` e il tabellone non poteva sostituire il link alla piattaforma
+   * privata con la home `.edu.it` (§26.77).
+   */
+  sitoPerIstituto: Map<string, string>;
   /** Nome normalizzato → candidati (per il matching per nome, solo se univoco). */
   perNome: Map<string, ScuolaAnagrafica[]>;
   totale: number;
@@ -79,6 +91,7 @@ export function caricaAnagrafica(
   const indice: IndiceAnagrafica = {
     perCodice: new Map(),
     perIstituto: new Map(),
+    sitoPerIstituto: new Map(),
     perNome: new Map(),
     totale: 0,
     fileLetti: [],
@@ -108,6 +121,12 @@ export function caricaAnagrafica(
       indice.perCodice.set(scuola.codice, scuola);
       if (scuola.istitutoCodice && !indice.perIstituto.has(scuola.istitutoCodice)) {
         indice.perIstituto.set(scuola.istitutoCodice, scuola);
+      }
+      // Sito dell'istituto «in comune»: si tiene il PRIMO non nullo fra le righe
+      // dell'istituto e dei suoi plessi (il file non è coerente al suo interno).
+      const codiceIstituto = scuola.istitutoCodice ?? scuola.codice;
+      if (codiceIstituto && scuola.sitoWeb && !indice.sitoPerIstituto.has(codiceIstituto)) {
+        indice.sitoPerIstituto.set(codiceIstituto, scuola.sitoWeb);
       }
       for (const chiaveNome of [scuola.istitutoNome, scuola.nome]) {
         const chiave = normalizzaNomeScuola(chiaveNome);

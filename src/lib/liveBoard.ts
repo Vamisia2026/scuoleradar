@@ -7,7 +7,8 @@
  * REGOLA DI VETRINA (§26.59, direttiva 05/10/2026 — ripristina il gate STRETTO e
  * corregge la §26.47/§26.48 del 04/10/2026): in vetrina entra SOLO una riga con il
  * nome di un istituto REALE risolto per anagrafica — `school_name` passato dal gate
- * `nomeIstituto.ts`, registro scolastico per codice meccanografico, oppure nome
+ * `nomeIstituto.ts`, registro scolastico per codice meccanografico, denominazione
+ * CERTIFICATA dal codice meccanografico statale (§26.81) oppure nome
  * leggibile ricavato dal titolo (`nomeScuolaRiga`). Restano FUORI:
  *   1. le righe con il solo nome GREZZO pubblicato dal bando (`nomeGrezzoDaBando`):
  *      è il dato della fonte, non un'anagrafica;
@@ -38,8 +39,7 @@
  */
 
 import { eOpportunitaConScadenza, GIORNI_FINESTRA_SENZA_SCADENZA } from './scadenza.ts';
-import { nomeScuolaDaCodice } from './school-lookup.ts';
-import { nomeIstitutoPresentabile } from './nomeIstituto.ts';
+import { nomeScuolaBoard, nomeScuolaRiga } from './nomeScuolaRiga.ts';
 import { eTitoloSoloData, nomeScuolaDaTitolo } from './titoloBoard.ts';
 import { pulisciTitoloAvviso } from './alertInterpello';
 import { anagraficaInAggiornamento } from './statoArricchimento';
@@ -105,61 +105,16 @@ export function scuolaDaTitolo(titolo?: string | null): string | null {
   return nomeScuolaDaTitolo(titolo);
 }
 
-/**
- * Nome REALE della scuola, in ordine di affidabilità:
- *   1. `school_name` (comunque passato dal gate `nomeIstituto`);
- *   2. registro scuole per codice meccanografico;
- *   3. dal titolo (`scuolaDaTitolo`).
- * `null` quando non resta un nome in chiaro: è il GATE STRETTO della vetrina
- * (§26.59) — senza un istituto reale la riga non entra (`preparaRigheBoard`).
- */
-export function nomeScuolaRiga(r: RigaBoard): string | null {
-  return (
-    nomeIstitutoPresentabile(r.school_name) ??
-    nomeIstitutoPresentabile(nomeScuolaDaCodice(r.school_code ?? null)) ??
-    scuolaDaTitolo(r.title)
-  );
-}
-
-/**
- * Nome GREZZO pubblicato dal BANDO. Da §26.59 NON è più un ripiego di vetrina: la
- * stringa di una fonte non è un'anagrafica, quindi non fa entrare una riga
- * (`preparaRigheBoard`). Resta il giudizio PURO «nome leggibile o dump di codici?»,
- * usato dalle verifiche di qualità dell'ingestione. Si accetta SOLO se resta un nome
- * leggibile: un dump di codici («EEEE | A246», «BA02 | AR04», «ADEE») o una sequenza
- * amministrativa (date, protocolli, classi) vale `null`.
- */
-export function nomeGrezzoDaBando(testo?: string | null): string | null {
-  const pulito = (testo ?? '').replace(/\s+/g, ' ').trim();
-  if (pulito.length < 4) return null;
-  if (/\d{3,}/.test(pulito)) return null; // date, protocolli, progressivi
-  if (/\b[A-Z]{1,2}-?\d{2,3}\b/i.test(pulito)) return null; // classi di concorso (A-22, A042)
-  if (/\bAD[A-Z]{2,3}\b/i.test(pulito)) return null; // sostegno (ADEE, ADSS, AD24)
-  if (/\b[A-Z]{1,3}\d{2,4}\b/i.test(pulito)) return null; // codici misti (A246, BA02)
-  if (!/[A-Za-zÀ-ÿ]{4,}/.test(pulito)) return null; // nessuna parola "da nome"
-  return pulito;
-}
-
-/** Nome della scuola per la colonna «Scuola»: solo un istituto REALE (§26.59). */
-export interface NomeScuolaBoard {
-  /** Denominazione risolta: mai vuota, mai un segnaposto. */
-  nome: string;
-  /** True se il nome NON viene da `school_name` (registro o titolo): anagrafica da completare. */
-  approssimativo: boolean;
-}
-
-/**
- * Nome per la colonna «Scuola» della BACHECA — `null` quando la riga non ha un
- * istituto REALE risolto (`nomeScuolaRiga`): è il GATE STRETTO della vetrina
- * (§26.59) e `null` significa «riga fuori», non «mostra un ripiego». Nessun nome
- * grezzo del bando e nessun segnaposto: non sono anagrafiche.
- */
-export function nomeScuolaBoard(r: RigaBoard): NomeScuolaBoard | null {
-  const reale = nomeIstitutoPresentabile(r.school_name);
-  if (reale) return { nome: reale, approssimativo: false };
-  const risolto = nomeScuolaRiga(r);
-  return risolto ? { nome: risolto, approssimativo: true } : null;
-}
+// La risoluzione del nome (gate §26.59 + denominazione certificata §26.81) vive in
+// `nomeScuolaRiga.ts` dal 22/10/2026: `liveBoard.ts` è il gate della vetrina e sta
+// al limite di 250 righe del gate strutturale. Si ri-esporta perché il tabellone e
+// i suoi test la importino da un solo modulo.
+export {
+  nomeGrezzoDaBando,
+  nomeScuolaBoard,
+  nomeScuolaRiga,
+  type NomeScuolaBoard,
+} from './nomeScuolaRiga.ts';
 
 /**
  * Nome d'istituto della riga nelle viste pubbliche (`responso della prova`): è lo
@@ -225,7 +180,4 @@ export function preparaRigheBoard<R extends RigaBoard>(
   }
   return pronte;
 }
-
-
-
 

@@ -63,6 +63,19 @@
 //     (griglia Liguria senza etichetta). Una riga senza scadenza dichiarata si
 //     scarta: niente più badge verdi «In corso» su avvisi che nessuno ha datato.
 //
+// VERSIONE v15 (22/10/2026) — PIEMONTE: decide la SCADENZA, non lo stato (§26.79):
+//   • FIX v15 — su `servizi.istruzionepiemonte.it` la stessa URL restituisce, a
+//     minuti di distanza, due snapshot con le STESSE 221 righe e la colonna
+//     «Stato interpello» ribaltata: 7 aperte / 202 chiuse, oppure 139 aperte / 70
+//     chiuse. Nel secondo le 139 «aperte» hanno la scadenza già passata e le 7
+//     con scadenza futura sono marcate «chiuso». Su TO le righe «aperto» sono
+//     variate 58→471 in cinque fetch, mentre quelle entro l'orizzonte restavano
+//     43. Per i target tabellari Piemonte il flag di stato viene quindi ignorato
+//     (si scarta solo una cancellazione esplicita): conta la scadenza
+//     dichiarata, già filtrata da `isExpired` e dall'orizzonte (§26.75).
+//     Effetto: ingestione deterministica (VB 7, TO 43, AL 39 su qualunque
+//     snapshot) invece di 0 record quando capitava il backend con lo stato fermo.
+//
 // Legge i target da discovered_links (status = 'active_crawler'),
 // estrae le righe delle tabelle interpelli e fa upsert su interpelli.
 //
@@ -227,6 +240,13 @@ interface ProcessResult {
 interface ExtractionResult {
   records: InterpelloRecord[];
   disqualified: boolean;
+  /**
+   * Righe con scadenza dichiarata fra oggi e l'orizzonte ma SENZA azione
+   * (`progr`), tipiche dello snapshot Piemonte con lo stato non aggiornato:
+   * l'interpello è candidabile ma la pagina non espone il link. Se > 0 conviene
+   * rifetchare il target (FIX v16, §26.80).
+   */
+  righeSenzaAzione?: number;
 }
 
 interface ColumnMapping {
@@ -674,7 +694,8 @@ function getTableHeaders(
 /**
  * Colonne che NON sono MAI la scadenza di candidatura — FIX v13 (§26.75).
  *
- * Il caso reale (Piemonte, `interpello2026`): la tabella ha DODICI colonne e la
+ * Il caso reale (Piemonte, tabelle `ric_interpello_ambito_*`): la tabella ha
+ * DODICI colonne e la
  * «Data Interpello» contiene la FINE dell'incarico (`07/10/2027`, `30/06/2027`),
  * mentre la «Durata Supplenza» contiene «Disponibile fino a 10 giorni»,
  * «30 Giugno», «04 Febbraio». Il vecchio fallback «cerca QUALSIASI data futura in
@@ -1097,6 +1118,10 @@ function extractRecordsFromHtml(
   // Righe scartate perché la «scadenza» cadrebbe oltre l'orizzonte (§26.75):
   // sono le fini di incarico scritte dal portale nella colonna della scadenza.
   let scartateOltreOrizzonte = 0;
+  // Righe candidabili (scadenza fra oggi e l'orizzonte) ma prive di azione
+  // `progr`: sintomo dello snapshot Piemonte con lo stato non aggiornato
+  // (FIX v16, §26.80).
+  let righeSenzaAzione = 0;
 
   // FIX v11 — Liguria espone la lista come griglia di <div>, non come <table>.
   if (isLiguriaGridPage($)) {
@@ -1169,18 +1194,62 @@ function extractRecordsFromHtml(
       if (rowIsNoise(fullRowTextLower)) return;
 
       // -----------------------------------------------------------------
+      // SCADENZA — SOLO la colonna che la dichiara (FIX v13, §26.75)
+      // -----------------------------------------------------------------
+      // Prima qui c'erano tre ripieghi in cascata: keyword in qualsiasi cella,
+      // «QUALSIASI data futura in qualsiasi cella» e — se non si trovava nulla —
+      // `oggi + 15 giorni`. Sulla tabella Piemonte il secondo pescava la FINE
+      // dell'incarico dalla colonna «Data Interpello» (07/10/2027, 30/06/2027) e
+      // il terzo inventava una scadenza: entrambi producevano badge verdi «In
+      // corso» su contratti annuali già chiusi.
+      //
+      // Regola nuova: la data si legge SOLO dalla colonna mappata (o da una cella
+      // che scrive «Scadenza»), altrimenti la riga si scarta. Nessuna data di
+      // pubblicazione, nessuna durata della supplenza, nessuna data inventata.
+      //
+      // FIX v16 (§26.80): la scadenza si calcola PRIMA del link. Serve a
+      // distinguere «riga chiusa» da «riga candidabile senza azione», che è il
+      // sintomo dello snapshot Piemonte con lo stato non aggiornato.
+      const deadline = deadlineDichiarata(colTexts, columns);
+      if (!deadline) return;
+      if (isExpired(deadline)) return;
+      // Una «scadenza» oltre l'orizzonte è la FINE dell'incarico travestita da
+      // termine: fuori dal database (e quindi dalla vetrina).
+      if (!entroOrizzonte(deadline)) {
+        scartateOltreOrizzonte += 1;
+        return;
+      }
+
+      // -----------------------------------------------------------------
       // FIX v10 — FILTRO STATO
       // -----------------------------------------------------------------
       // Priorità:
       //   1) Colonna stato mappata o rilevata dinamicamente.
       //   2) Fallback: controllo sull'intera riga per "aperto" e assenza
       //      di "chiuso"/"cancellato".
+      // FIX v15 (§26.79) — PIEMONTE: la colonna «Stato interpello» NON è
+      // affidabile. Misurato il 22/10/2026 su VB (221 righe, due snapshot
+      // serviti a minuti di distanza dallo stesso URL):
+      //   · snapshot A: 7 «aperto», 202 «chiuso» → le 7 aperte sono esattamente
+      //     le righe con scadenza futura (coerente);
+      //   · snapshot B: 139 «aperto», 70 «chiuso» → le 139 aperte hanno tutte la
+      //     scadenza PASSATA e le 7 con scadenza FUTURA sono marcate «chiuso».
+      // Il flag è quindi rumore: se lo si segue si perdono gli avvisi veri
+      // (snapshot B) o si accettano quelli impossibili (snapshot A/B misti).
+      // Qui decide la SCADENZA dichiarata (isExpired + orizzonte, §26.75); lo
+      // stato si usa solo per scartare una CANCELLAZIONE esplicita.
+      const statoInaffidabile = isPiemonteTabellare(target.url);
+
       let stateText = '';
       if (stateIdxDynamic >= 0 && stateIdxDynamic < colTexts.length) {
         stateText = colTexts[stateIdxDynamic];
       }
 
-      if (stateText) {
+      if (statoInaffidabile) {
+        if (/\bcancellat|\bannullat|\brevocat/i.test(`${stateText} ${fullRowTextLower}`)) {
+          return;
+        }
+      } else if (stateText) {
         if (!isRowOpen(stateText)) {
           return;
         }
@@ -1217,7 +1286,12 @@ function extractRecordsFromHtml(
           .first()
           .attr('value');
         const progrValue = progr ? String(progr).trim() : '';
-        if (!progrValue) return;
+        if (!progrValue) {
+          // Riga candidabile ma senza link: è lo snapshot Piemonte in cui il
+          // portale non ha ancora riallineato stato e azioni (FIX v16, §26.80).
+          righeSenzaAzione += 1;
+          return;
+        }
         href = `${target.url}#progr=${progrValue}`;
       }
 
@@ -1331,28 +1405,7 @@ function extractRecordsFromHtml(
       if (schoolName.toLowerCase().includes('scuola non specificata')) return;
       if (href.includes('artov.rm.cnr.it')) return;
 
-      // -----------------------------------------------------------------
-      // SCADENZA — SOLO la colonna che la dichiara (FIX v13, §26.75)
-      // -----------------------------------------------------------------
-      // Prima qui c'erano tre ripieghi in cascata: keyword in qualsiasi cella,
-      // «QUALSIASI data futura in qualsiasi cella» e — se non si trovava nulla —
-      // `oggi + 15 giorni`. Sulla tabella Piemonte il secondo pescava la FINE
-      // dell'incarico dalla colonna «Data Interpello» (07/10/2027, 30/06/2027) e
-      // il terzo inventava una scadenza: entrambi producevano badge verdi «In
-      // corso» su contratti annuali già chiusi.
-      //
-      // Regola nuova: la data si legge SOLO dalla colonna mappata (o da una cella
-      // che scrive «Scadenza»), altrimenti la riga si scarta. Nessuna data di
-      // pubblicazione, nessuna durata della supplenza, nessuna data inventata.
-      const deadline = deadlineDichiarata(colTexts, columns);
-      if (!deadline) return;
-      if (isExpired(deadline)) return;
-      // Una «scadenza» oltre l'orizzonte è la FINE dell'incarico travestita da
-      // termine: fuori dal database (e quindi dalla vetrina).
-      if (!entroOrizzonte(deadline)) {
-        scartateOltreOrizzonte += 1;
-        return;
-      }
+      // (La scadenza è già stata validata sopra, prima del link: FIX v16.)
 
       const { classCode, subject } = extractSubjectAndClass(fullRowText);
       // FIX v12 — prima la colonna «Classe di concorso» (copre anche i codici
@@ -1389,7 +1442,13 @@ function extractRecordsFromHtml(
     );
   }
 
-  return { records, disqualified: false };
+  if (righeSenzaAzione > 0) {
+    console.log(
+      `[table-reporter] ${righeSenzaAzione} righe candidabili ma SENZA azione (snapshot con stato non aggiornato).`
+    );
+  }
+
+  return { records, disqualified: false, righeSenzaAzione };
 }
 
 // ---------------------------------------------------------------------------
@@ -1566,70 +1625,118 @@ function logRecords(records: InterpelloRecord[]): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// FIX v16 (§26.80) — PIEMONTE: due snapshot, uno solo è usabile
+// ---------------------------------------------------------------------------
+// MISURATO il 22/10/2026 su `servizi.istruzionepiemonte.it` (VB, stesso URL a
+// pochi secondi di distanza): le 221 righe sono identiche, ma il portale serve
+// due varianti della tabella —
+//   · coerente:   7 righe «aperto», 202 «chiuso», e l'azione `progr` (il link
+//     «Stampa») presente SOLO sulle 7 righe candidabili;
+//   · non allineata: 139 «aperto» (tutte con scadenza passata), 70 «chiuso» e
+//     azione presente SOLO su quelle 139; le 7 righe con scadenza FUTURA
+//     restano «chiuso» e SENZA `progr`.
+// Nella seconda variante le righe vere non hanno né stato né link: senza azione
+// non esiste `source_url` e quindi non sono ingeribili. Su TO le righe «aperto»
+// sono variate 58→471 in cinque fetch, mentre quelle con scadenza entro
+// l'orizzonte restavano 43: la parte stabile del dato è la SCADENZA.
+// Qui: i target tabellari Piemonte ignorano il flag di stato (conta la scadenza,
+// §26.75) e, se resta una riga candidabile senza azione, il target viene
+// rifetchato (max 6 tentativi, 3 s) tenendo il tentativo con più record.
+const PIEMONTE_TENTATIVI = 6;
+const PIEMONTE_ATTESA_MS = 3000;
+
+function isPiemonteTabellare(url: string): boolean {
+  return /servizi\.istruzionepiemonte\.it\/interpello\d{4}\/ric_interpello_ambito_/i.test(
+    url
+  );
+}
+
+function attesa(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
-  try {
-    const { status, contentType, html } = await fetchHtml(target.url);
+  const tentativi = isPiemonteTabellare(target.url) ? PIEMONTE_TENTATIVI : 1;
+  let migliore: { records: InterpelloRecord[]; signature: string | null } | null =
+    null;
+  let disqualified = false;
 
-    if (status >= 400) {
-      return {
-        extracted: 0,
-        status: 'error',
-        signature: null,
-        error: `HTTP ${status}`,
-      };
+  for (let tentativo = 1; tentativo <= tentativi; tentativo += 1) {
+    try {
+      const { status, contentType, html } = await fetchHtml(target.url);
+
+      if (status >= 400) {
+        return {
+          extracted: 0,
+          status: 'error',
+          signature: null,
+          error: `HTTP ${status}`,
+        };
+      }
+
+      if (!contentType.includes('text/html') && !contentType.includes('xml')) {
+        return {
+          extracted: 0,
+          status: 'error',
+          signature: null,
+          error: `Content-Type non HTML: ${contentType}`,
+        };
+      }
+
+      const $ = cheerio.load(html);
+      const signature = getStructuralSignature($);
+      const extraction = extractRecordsFromHtml($, target);
+      const senzaAzione = extraction.righeSenzaAzione ?? 0;
+      disqualified = extraction.disqualified;
+
+      if (!migliore || extraction.records.length > migliore.records.length) {
+        migliore = { records: extraction.records, signature };
+      }
+
+      if (senzaAzione === 0 || tentativo === tentativi) break;
+
+      console.log(
+        `[table-reporter] ${target.province ?? target.region}: ${senzaAzione} righe candidabili senza azione — snapshot non allineato, ritento (${tentativo}/${tentativi}).`
+      );
+      await attesa(PIEMONTE_ATTESA_MS);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { extracted: 0, status: 'error', signature: null, error: msg };
     }
+  }
 
-    if (!contentType.includes('text/html') && !contentType.includes('xml')) {
-      return {
-        extracted: 0,
-        status: 'error',
-        signature: null,
-        error: `Content-Type non HTML: ${contentType}`,
-      };
-    }
+  const records = migliore?.records ?? [];
+  const signature = migliore?.signature ?? null;
 
-    const $ = cheerio.load(html);
-    const signature = getStructuralSignature($);
-    const extraction = extractRecordsFromHtml($, target);
-    const records = extraction.records;
+  if (records.length > 0) {
+    if (DRY_RUN) {
+      logRecords(records);
+    } else {
+      const { error: upsertError } = await supabase
+        .from('interpelli')
+        .upsert(records, {
+          onConflict: 'hash_id',
+          ignoreDuplicates: true,
+        });
 
-    if (records.length > 0) {
-      if (DRY_RUN) {
-        logRecords(records);
-      } else {
-        const { error: upsertError } = await supabase
-          .from('interpelli')
-          .upsert(records, {
-            onConflict: 'hash_id',
-            ignoreDuplicates: true,
-          });
-
-        if (upsertError) {
-          return {
-            extracted: 0,
-            status: 'error',
-            signature,
-            error: `Upsert interpelli: ${upsertError.message}`,
-          };
-        }
+      if (upsertError) {
+        return {
+          extracted: 0,
+          status: 'error',
+          signature,
+          error: `Upsert interpelli: ${upsertError.message}`,
+        };
       }
     }
-
-    return {
-      extracted: records.length,
-      status: 'success',
-      signature,
-      disqualified: extraction.disqualified,
-    };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return {
-      extracted: 0,
-      status: 'error',
-      signature: null,
-      error: msg,
-    };
   }
+
+  return {
+    extracted: records.length,
+    status: 'success',
+    signature,
+    disqualified,
+  };
 }
 
 async function writeReport(

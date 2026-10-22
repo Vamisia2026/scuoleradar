@@ -91,7 +91,12 @@ export function campoEmail(valore?: string | null): string | null {
 export function campoSito(valore?: string | null): string | null {
   const grezzo = campo(valore)?.toLowerCase();
   if (!grezzo) return null;
-  const senzaSchema = grezzo.replace(/^https?:\/\//, '');
+  // FIX 22/10/2026 (§26.77) — l'anagrafica MIM scrive spesso lo schema SENZA i
+  // due punti (`https//www.icpascoligozzano.edu.it/`): con la sola regola
+  // `^https?://` il «https» restava in testa e il dominio veniva scartato per
+  // intero (`null`). Su 142 righe Piemonte appena ingerite, 53 perdevano così il
+  // link alla home dell'istituto. La regex accetta entrambe le grafie.
+  const senzaSchema = grezzo.replace(/^https?:?\/\//, '');
   const host = senzaSchema.split(/[/?#]/)[0]?.replace(/^www\./, '').replace(/\.$/, '') ?? '';
   return /^(?:[a-z0-9-]+\.)+[a-z]{2,}$/.test(host) ? host : null;
 }

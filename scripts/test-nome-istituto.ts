@@ -208,5 +208,39 @@ check(
   Boolean(nomeScuolaBoard(rigaProva(null, 'Interpello supplenza — Liceo Scientifico Galilei'))?.approssimativo),
 );
 
+console.log('\n— Denominazione certificata dal CODICE meccanografico (§26.81) —');
+// Il MIM scrive alcune denominazioni ufficiali SENZA la testa d'istituto: il gate
+// del nome le scartava e le loro opportunità restavano invisibili in bacheca. Il
+// codice statale è la prova d'identità; la stringa deve restare leggibile.
+const conCodice = (school_code: string | null, school_name: string | null) => ({
+  ...rigaProva(school_name, 'Albo pretorio — elenco avvisi'),
+  school_code,
+});
+check(
+  'denominazione senza testa + codice statale valido → in vetrina col nome ufficiale',
+  { nome: 'RIVALTA B.DA - "N. BOBBIO"', approssimativo: false },
+  nomeScuolaBoard(conCodice('ALIC809001', 'RIVALTA B.DA - "N. BOBBIO"')),
+);
+check(
+  'stessa denominazione SENZA codice → resta fuori (gate §26.59)',
+  null,
+  nomeScuolaBoard(conCodice(null, 'RIVALTA B.DA - "N. BOBBIO"')),
+);
+check(
+  'codice non meccanografico → la denominazione non basta',
+  null,
+  nomeScuolaBoard(conCodice('ABC', 'G. PASCOLI')),
+);
+check(
+  'codice valido ma nome = dump di codici → fuori',
+  null,
+  nomeScuolaBoard(conCodice('NOIC80800E', 'ADEE | EEEE | A042')),
+);
+check(
+  'codice valido e solo segnaposto → fuori',
+  null,
+  nomeScuolaBoard(conCodice('NOIC80800E', 'Non Disponibile')),
+);
+
 console.log(errori === 0 ? '\n✅ NOMI ISTITUTO: nessun problema' : `\n❌ NOMI ISTITUTO: ${errori} errore/i`);
 process.exitCode = errori === 0 ? 0 : 1;
