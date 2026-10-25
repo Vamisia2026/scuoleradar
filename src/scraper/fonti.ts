@@ -4,9 +4,12 @@
  * degli INTERPELLI di lavoro (src/scraper/). Nessuna fonte editoriale, nessun
  * comunicato stampa, nessuna rassegna: le notizie del MIM vivono in
  * src/departments/notizie/ e non entrano MAI nella bacheca degli interpelli.
- * I DATI (URL verificate) stanno in fontiRegistro.ts; qui ci sono i tipi, la
- * costruzione del registro e la SELEZIONE delle fonti per provincia/run. La
- * copertura dichiarata (regioni e capoluoghi) sta in fontiCopertura.ts.
+ * I DATI (URL verificate) stanno in tre blocchi: fontiRegistro.ts (USR dei
+ * capoluoghi + archivi dell'aggregatore), fontiTerritoriali.ts (elenchi degli
+ * Uffici Territoriali, provincia per provincia) e fontiEsclusiVerifica.ts (URL
+ * non verificabili, con il motivo). Qui ci sono i tipi, la costruzione del
+ * registro e la SELEZIONE delle fonti per provincia/run. La copertura
+ * dichiarata (regioni e capoluoghi) sta in fontiCopertura.ts.
  * 
  * Tipi di fonte:
  * · aggregatore       → landing dell'aggregatore di interpelli: i post
@@ -22,33 +25,13 @@
 
 import { province } from '../data/province.ts';
 import { AGGREGATORI_REGIONALI, HUB_ATTIVI, HUB_ESCLUSI } from './fontiRegistro.ts';
+import { DATA_VERIFICA_TERRITORI, HUB_TERRITORIALI } from './fontiTerritoriali.ts';
+import { HUB_ESCLUSI_VERIFICA } from './fontiEsclusiVerifica.ts';
+import type { FonteInterpelli, TipoFonte } from './fontiTipi.ts';
 
-export type TipoFonte = 'aggregatore' | 'hub-istituzionale';
-
-export interface FonteInterpelli {
-  /** Chiave stabile (log e test). */
-  id: string;
-  /** Nome leggibile della fonte. */
-  etichetta: string;
-  url: string;
-  tipo: TipoFonte;
-  /** Regioni coperte (vuoto = fonte nazionale). */
-  regioni: string[];
-  /**
-   * Provincia di riferimento (capoluogo/hub) usata come fallback per le fonti
-   * LOCALI. Le fonti nazionali non hanno fallback: la riga deve dichiarare la
-   * propria provincia, altrimenti si scarta (mai una provincia inventata).
-   */
-  capoluogo: string | null;
-  /** Feed nazionale: la provincia si rileva riga per riga. */
-  nazionale: boolean;
-  /** Fonte interrogata nei run (false = registrata ma non usata). */
-  attiva: boolean;
-  /** Data ISO dell'ultima verifica HTTP (null = mai verificata → non attiva). */
-  verificata: string | null;
-  /** Motivo dell'esclusione (obbligatorio quando attiva è false). */
-  note?: string;
-}
+// I tipi restano importabili da qui (superficie pubblica invariata): la forma
+// dei dati vive in `fontiTipi.ts`, così questo file resta sotto le 250 righe.
+export type { FonteInterpelli, TipoFonte };
 
 /** Data dell'ultima verifica HTTP del registro. */
 export const DATA_VERIFICA_FONTI = '2026-09-28';
@@ -67,6 +50,18 @@ export const MAX_FONTI_PER_PROVINCIA = 5;
 
 /** Massimo numero di fonti interrogate in un run (feed nazionale + hub locali). */
 export const MAX_FONTI_PER_RUN = 12;
+
+/**
+ * Tetti degli hub interrogati per regione in un run (§26.89).
+ *
+ * Gli hub territoriali verificati sono molti (un elenco per provincia), il
+ * budget di rete di un run no. Restano tutti ATTIVI e verificati: questo tetto
+ * sceglie solo quali interrogare ORA, con due garanzie:
+ *   1. gli hub della provincia richiesta passano sempre per primi;
+ *   2. la finestra sui restanti RUOTA ogni giorno (giorno UTC), così nell'arco
+ *      della settimana tutti gli hub della regione vengono interrogati.
+ */
+export const MAX_HUB_PER_REGIONE = 6;
 
 /** Registro completo: feed dell'aggregatore + hub istituzionali dei capoluoghi. */
 export const FONTI_INTERPELLI: FonteInterpelli[] = [
@@ -115,6 +110,33 @@ export const FONTI_INTERPELLI: FonteInterpelli[] = [
     verificata: null,
     note,
   })),
+  // Blocco territoriale (verifica 2026-10-23 + aggiornamento 2026-10-25): elenchi
+  // di interpelli degli Uffici Territoriali, provincia per provincia. La data di
+  // verifica è quella dichiarata dalla singola voce (sesto campo della tupla).
+  ...HUB_TERRITORIALI.map(([id, etichetta, url, regioni, capoluogo, data]) => ({
+    id: `hub-${id}`,
+    etichetta,
+    url,
+    tipo: 'hub-istituzionale' as TipoFonte,
+    regioni,
+    capoluogo,
+    nazionale: false,
+    attiva: true,
+    verificata: data ?? DATA_VERIFICA_TERRITORI,
+  })),
+  // Stesse URL escluse: registrate con il motivo, mai interrogate.
+  ...HUB_ESCLUSI_VERIFICA.map(([id, etichetta, url, regioni, capoluogo, note]) => ({
+    id: `hub-${id}`,
+    etichetta,
+    url,
+    tipo: 'hub-istituzionale' as TipoFonte,
+    regioni,
+    capoluogo: capoluogo || null,
+    nazionale: !capoluogo,
+    attiva: false,
+    verificata: null,
+    note,
+  })),
 ];
 
 /* ----------------------------- Selezione fonti ----------------------------- */
@@ -143,8 +165,36 @@ export function dedupPerUrl(fonti: FonteInterpelli[]): FonteInterpelli[] {
 }
 
 /**
+ * Hub della REGIONE da interrogare ORA, in ordine di priorità: prima le
+ * province richieste (i loro bandi contano di più), poi gli altri hub del
+ * territorio con la finestra ROTANTE di `MAX_HUB_PER_REGIONE`.
+ *
+ * La rotazione usa il GIORNO UTC: due run dello stesso giorno scelgono gli
+ * stessi hub (run ripetibili e testabili) e, con il passare dei giorni, la
+ * finestra scorre su tutti gli hub della regione (un ciclo completo del
+ * `resto` li copre tutti). `giorno` è un parametro solo per i test.
+ */
+export function hubDellaRegione(
+  regione: string,
+  priorita: string[] = [],
+  giorno = Math.floor(Date.now() / 86_400_000),
+): FonteInterpelli[] {
+  const hub = fontiAttive().filter((f) => f.tipo === 'hub-istituzionale' && f.regioni.includes(regione));
+  const pos = (f: FonteInterpelli) => {
+    const i = priorita.indexOf(f.capoluogo ?? '');
+    return i === -1 ? priorita.length : i;
+  };
+  const ordinati = [...hub].sort((a, b) => pos(a) - pos(b));
+  if (ordinati.length <= MAX_HUB_PER_REGIONE) return ordinati;
+  const fissi = ordinati.filter((f) => pos(f) < priorita.length);
+  const resto = ordinati.slice(fissi.length);
+  const k = resto.length > 0 ? giorno % resto.length : 0;
+  return [...fissi, ...resto.slice(k), ...resto.slice(0, k)].slice(0, MAX_HUB_PER_REGIONE);
+}
+
+/**
  * Fonti da interrogare per una provincia, in ordine di priorità:
- * 1. hub istituzionali della regione (USR/USP del capoluogo);
+ * 1. hub istituzionali della regione (USP/ATP della provincia in testa);
  * 2. aggregatore nazionale (post del giorno — feed NAZIONALE);
  * 3. archivio regionale dell'aggregatore (recupero dei post precedenti).
  * Le province non mappate su una regione restano coperte dal feed nazionale.
@@ -152,9 +202,12 @@ export function dedupPerUrl(fonti: FonteInterpelli[]): FonteInterpelli[] {
 export function fontiPerProvincia(provincia: string, max = MAX_FONTI_PER_PROVINCIA): FonteInterpelli[] {
   const regione = regioneDiProvincia(provincia);
   const attive = fontiAttive();
-  const hub = attive.filter((f) => f.tipo === 'hub-istituzionale' && regione && f.regioni.includes(regione));
   const nazionale = attive.filter((f) => f.tipo === 'aggregatore' && f.regioni.length === 0);
   const archivio = attive.filter((f) => f.tipo === 'aggregatore' && regione && f.regioni.includes(regione));
+  // Il feed nazionale è l'unica fonte che vede TUTTE le province: si tiene
+  // sempre un posto per lui, anche quando la regione ha molti hub territoriali.
+  const riserva = nazionale.length > 0 ? 1 : 0;
+  const hub = regione ? hubDellaRegione(regione, [provincia]).slice(0, Math.max(1, max - riserva)) : [];
   return dedupPerUrl([...hub, ...nazionale, ...archivio]).slice(0, max);
 }
 
@@ -164,24 +217,24 @@ export function fontiPerProvincia(provincia: string, max = MAX_FONTI_PER_PROVINC
  * regionali dell'aggregatore sono opt-in (includiArchivi): contengono gli
  * stessi post NAZIONALI dei giorni precedenti, quindi servono solo al backfill
  * manuale (SCRAPER_ARCHIVI=1) e non al run quotidiano.
+ *
+ * Anche qui il feed nazionale ha un posto RISERVATO (`max - 1`): sarebbe
+ * inutile riempire il budget con 12 hub di due regioni e perdere l'indice
+ * nazionale, che è la fonte più produttiva.
  */
 export function fontiPerRun(
   provincie: string[],
   max = MAX_FONTI_PER_RUN,
   opts: { includiArchivi?: boolean } = {},
 ): FonteInterpelli[] {
+  const attive = fontiAttive();
+  const regioni = [...new Set(provincie.map(regioneDiProvincia).filter((r): r is string => Boolean(r)))];
   const hub: FonteInterpelli[] = [];
-  const nazionali: FonteInterpelli[] = [];
-  const archivi: FonteInterpelli[] = [];
-  for (const p of provincie) {
-    const regione = regioneDiProvincia(p);
-    for (const f of fontiAttive()) {
-      if (f.tipo === 'hub-istituzionale' && regione && f.regioni.includes(regione)) hub.push(f);
-      else if (f.tipo === 'aggregatore' && f.regioni.length === 0) nazionali.push(f);
-      else if (opts.includiArchivi && f.tipo === 'aggregatore' && regione && f.regioni.includes(regione)) {
-        archivi.push(f);
-      }
-    }
-  }
-  return dedupPerUrl([...hub, ...nazionali, ...archivi]).slice(0, max);
+  for (const regione of regioni) hub.push(...hubDellaRegione(regione, provincie));
+  const nazionali = attive.filter((f) => f.tipo === 'aggregatore' && f.regioni.length === 0);
+  const archivi = opts.includiArchivi
+    ? attive.filter((f) => f.tipo === 'aggregatore' && regioni.some((r) => f.regioni.includes(r)))
+    : [];
+  const tettoHub = Math.max(1, max - (nazionali.length > 0 ? 1 : 0));
+  return dedupPerUrl([...hub.slice(0, tettoHub), ...nazionali, ...archivi]).slice(0, max);
 }

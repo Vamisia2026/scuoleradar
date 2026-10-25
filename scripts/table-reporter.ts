@@ -96,6 +96,27 @@ import * as crypto from 'crypto';
 import { provinciaDaCitta, provinciaDaCodice } from '../src/lib/scanTargets.ts';
 // FIX v13 — l'orizzonte della scadenza è lo stesso della vetrina: un solo numero.
 import { GIORNI_ORIZZONTE_OPPORTUNITA } from '../src/lib/scadenza.ts';
+// Pre-filtro semantico condiviso col discovery engine: atti di gara, circolari
+// per le famiglie e burocrazia del personale si scartano PRIMA del parsing.
+import { isAdministrativeNoise } from '../src/lib/noiseFilter.ts';
+// Lettura euristica universale (§26.84): layout e voci della pagina così come
+// li vede un lettore che non conosce il portale — il segnale di quarantena per
+// le sorgenti che nessun parser specifico spiega.
+import { parseUniversalHtml } from '../src/lib/universalEuristica.ts';
+// Telemetria delle fonti (§26.85): ogni run lascia un segno e una fonte che
+// sbaglia tre volte di fila finisce in QUARANTENA, dove i giri ordinari la
+// saltano. `source_health` non raggiungibile → elenco vuoto, si scansiona
+// comunque (meglio una richiesta sprecata che una regione non letta).
+import {
+  filtraFontiSane,
+  fontiInQuarantena,
+  recordSourceRun,
+  type EsitoRun,
+} from '../src/lib/sourceTelemetry.ts';
+// Coda delle notifiche (§26.86): questo script e' un PRODUTTORE. Scrive le righe
+// e accoda la voce; la consegna la fa `npm run notifiche:processa`. Un timeout di
+// Telegram non puo' piu' far fallire (o allungare) la scansione.
+import { accodaInterpelli } from '../src/lib/notificationQueue.ts';
 
 dotenv.config();
 
@@ -109,6 +130,9 @@ const CONFIG = {
   minSchoolNameLength: 4,
   fallbackProvince: 'EE',
   disqualifiedStatus: 'disabled',
+  // Stato dedicato al rumore semantico (`src/lib/noiseFilter.ts`): distingue
+  // «pagina senza tabella» da «pagina che non è un'opportunità».
+  noiseStatus: 'disqualified_noise',
   // Debug: se true, stampa header e colonne rilevate per ogni tabella.
   debug: process.env.DEBUG === '1' || process.env.DEBUG === 'true',
 } as const;
@@ -137,6 +161,13 @@ const REGIONI_FILTRO: string[] = (() => {
 // parser PRIMA di toccare la produzione.
 const DRY_RUN =
   process.argv.includes('--dry-run') || process.env.DRY_RUN === '1';
+
+// `--ignora-quarantena` (o `IGNORA_QUARANTENA=1`): lavora anche le fonti isolate
+// dalla telemetria (§26.85). È il giro di ri-validazione dopo una correzione di
+// parser: un run riuscito le riabilita da solo, senza toccare il database.
+const IGNORA_QUARANTENA =
+  process.argv.includes('--ignora-quarantena') ||
+  process.env.IGNORA_QUARANTENA === '1';
 
 const supabaseUrl =
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -235,6 +266,10 @@ interface ProcessResult {
   signature: string | null;
   error?: string;
   disqualified?: boolean;
+  /** Pagina scartata dal pre-filtro semantico (atto di gara, circolare, TFR). */
+  noise?: boolean;
+  /** Layout della pagina secondo l'euristica universale (§26.84). */
+  layout?: string;
 }
 
 interface ExtractionResult {
@@ -484,6 +519,42 @@ function rowIsNoise(fullRowTextLower: string): boolean {
     if (fullRowTextLower.includes(kw)) return true;
   }
   return false;
+}
+
+/**
+ * Pre-filtro semantico di RIGA (`src/lib/noiseFilter.ts`): scarta in due regex
+ * gli atti amministrativi e i documenti non di reclutamento, PRIMA del parsing
+ * di date, classi e codici. Il log è di livello DEBUG: in produzione tace.
+ */
+function rowIsSemanticNoise(fullRowText: string, etichetta: string): boolean {
+  const esito = isAdministrativeNoise(fullRowText, fullRowText);
+  if (!esito.isNoise) return false;
+  if (CONFIG.debug) {
+    console.log(
+      `[table-reporter][debug] rumore semantico (${esito.reason}) — ${etichetta}`
+    );
+  }
+  return true;
+}
+
+/**
+ * Pre-filtro semantico di PAGINA: titolo + contenuto principale, senza menu e
+ * footer. Restituisce il motivo dello scarto (o `null`), così `processTarget`
+ * può disattivare il target con lo stato dedicato.
+ */
+function pageSemanticNoiseReason($: cheerio.CheerioAPI): string | null {
+  const titolo = normalize($('title').text());
+  const $principale = $('main, article, #content, .content, #main, .main').first();
+  const grezzo = $principale.length > 0 ? $principale.text() : $('body').text();
+  const testo = normalize(grezzo.slice(0, 30_000));
+  const esito = isAdministrativeNoise(testo, titolo);
+  if (!esito.isNoise) return null;
+  if (CONFIG.debug) {
+    console.log(
+      `[table-reporter][debug] rumore semantico (${esito.reason}) — pagina ${titolo.slice(0, 80)}`
+    );
+  }
+  return esito.reason ?? 'rumore amministrativo';
 }
 
 // ---------------------------------------------------------------------------
@@ -1013,6 +1084,7 @@ function extractRecordsFromLiguriaGrid(
     const fullRowText = cellTexts.join(' ');
     const fullRowTextLower = fullRowText.toLowerCase();
     if (rowIsNoise(fullRowTextLower)) return;
+    if (rowIsSemanticNoise(fullRowText, target.url)) return;
     if (rowIndicatesClosed(fullRowTextLower)) return;
 
     // Istituzione scolastica: il badge STATALE/PARITARIA è un <small> di
@@ -1192,6 +1264,10 @@ function extractRecordsFromHtml(
 
       // Anti-spam sindacale.
       if (rowIsNoise(fullRowTextLower)) return;
+
+      // Pre-filtro semantico: una riga con CIG, determine, TFR o circolari per
+      // le famiglie non è un'opportunità, qualunque colonna la contenga.
+      if (rowIsSemanticNoise(fullRowText, target.url)) return;
 
       // -----------------------------------------------------------------
       // SCADENZA — SOLO la colonna che la dichiara (FIX v13, §26.75)
@@ -1572,10 +1648,13 @@ async function disableObviousJunkTargets(): Promise<number> {
   return ids.length;
 }
 
-async function disqualifyTarget(target: DiscoveredLink): Promise<void> {
+async function disqualifyTarget(
+  target: DiscoveredLink,
+  status: string = CONFIG.disqualifiedStatus
+): Promise<void> {
   const { error } = await supabase
     .from('discovered_links')
-    .update({ status: CONFIG.disqualifiedStatus })
+    .update({ status })
     .eq('id', target.id);
 
   if (error) {
@@ -1584,7 +1663,7 @@ async function disqualifyTarget(target: DiscoveredLink): Promise<void> {
     );
   } else {
     console.log(
-      `[table-reporter] Target disattivato (${CONFIG.disqualifiedStatus}) — nessuna tabella interpelli: ${target.url}`
+      `[table-reporter] Target disattivato (${status}): ${target.url}`
     );
   }
 }
@@ -1661,6 +1740,12 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
   let migliore: { records: InterpelloRecord[]; signature: string | null } | null =
     null;
   let disqualified = false;
+  // Distingue lo scarto semantico (atto di gara/circolare) dalla pagina senza
+  // tabella: il primo merita lo stato `disqualified_noise`.
+  let rumoreSemantico = false;
+  // Layout dell'ultima lettura: è il motivo di quarantena (§26.85) quando la
+  // pagina non dà voci — «layout_changed» se è ignoto, «zero_items» se è noto.
+  let layoutRilevato: string | undefined;
 
   for (let tentativo = 1; tentativo <= tentativi; tentativo += 1) {
     try {
@@ -1685,6 +1770,29 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
       }
 
       const $ = cheerio.load(html);
+
+      // Pre-filtro semantico PRIMA di firma strutturale ed estrazione: una
+      // determina o una circolare per le famiglie non è un'opportunità.
+      if (pageSemanticNoiseReason($)) {
+        disqualified = true;
+        rumoreSemantico = true;
+        break;
+      }
+
+      // §26.84 — la stessa pagina letta dall'euristica universale (nessuna
+      // rete, nessuna scrittura): dice se il layout è tabella, griglia ARIA o
+      // lista WordPress. Non sostituisce il parser specifico, che conosce
+      // provincia e hash: è il segnale con cui mettere in quarantena (Task 4)
+      // una sorgente che nessun layout spiega, e il modo per accorgersi subito
+      // di un rifacimento grafico.
+      const universale = parseUniversalHtml(html, target.url);
+      layoutRilevato = universale.layoutDetected;
+      if (CONFIG.debug || !universale.success) {
+        console.log(
+          `[table-reporter] Euristica universale: layout=${universale.layoutDetected} voci=${universale.items.length}${universale.error ? ` (${universale.error})` : ''}`
+        );
+      }
+
       const signature = getStructuralSignature($);
       const extraction = extractRecordsFromHtml($, target);
       const senzaAzione = extraction.righeSenzaAzione ?? 0;
@@ -1702,7 +1810,9 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
       await attesa(PIEMONTE_ATTESA_MS);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      return { extracted: 0, status: 'error', signature: null, error: msg };
+      // Il layout letto prima dell'errore resta: se è ignoto il motivo sarà
+      // `layout_changed`, altrimenti `timeout` (il messaggio parla di rete).
+      return { extracted: 0, status: 'error', signature: null, error: msg, layout: layoutRilevato };
     }
   }
 
@@ -1713,12 +1823,17 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
     if (DRY_RUN) {
       logRecords(records);
     } else {
-      const { error: upsertError } = await supabase
+      // `.select('id')` con `ignoreDuplicates` restituisce SOLO le righe davvero
+      // inserite (l'ON CONFLICT DO NOTHING non fa RETURNING per i duplicati):
+      // sono esattamente i nuovi interpelli da accodare, senza una query in piu'
+      // e senza rischiare di notificare l'archivio storico (§26.86).
+      const { data: inseriti, error: upsertError } = await supabase
         .from('interpelli')
         .upsert(records, {
           onConflict: 'hash_id',
           ignoreDuplicates: true,
-        });
+        })
+        .select('id');
 
       if (upsertError) {
         return {
@@ -1728,6 +1843,19 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
           error: `Upsert interpelli: ${upsertError.message}`,
         };
       }
+
+      // PRODUTTORE: nessun invio qui. `accodaInterpelli` non lancia mai e, se la
+      // tabella `notification_queue` non e' ancora migrata, lascia un avviso e
+      // non ferma l'ingestione.
+      const nuoviIds = ((inseriti ?? []) as Array<{ id?: string | null }>)
+        .map((riga) => riga.id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0);
+      if (nuoviIds.length > 0) {
+        const accodati = await accodaInterpelli(nuoviIds, { client: supabase });
+        console.log(
+          `[table-reporter] Coda notifiche: ${accodati}/${nuoviIds.length} nuove voci READY.`,
+        );
+      }
     }
   }
 
@@ -1736,7 +1864,17 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
     status: 'success',
     signature,
     disqualified,
+    noise: rumoreSemantico,
+    layout: layoutRilevato,
   };
+}
+
+// Esito per la telemetria (§26.85): un errore di fetch è `quarantine`, un run
+// riuscito senza voci è `empty` (conta come fallimento: la pagina non pubblica
+// più nulla di leggibile), un run con voci è `success` e azzera i contatori.
+function esitoTelemetria(result: ProcessResult): EsitoRun {
+  if (result.status === 'error') return 'quarantine';
+  return result.extracted > 0 ? 'success' : 'empty';
 }
 
 async function writeReport(
@@ -1793,6 +1931,30 @@ async function runTableReporter(): Promise<void> {
     return;
   }
 
+  // Telemetria (§26.85): le fonti isolate si saltano. UNA query per giro; se
+  // `source_health` non è raggiungibile `fontiInQuarantena` torna l'elenco
+  // vuoto e si scansiona tutto — meglio una richiesta sprecata che una regione
+  // non letta per un guasto di telemetria.
+  const quarantena = await fontiInQuarantena({ client: supabase });
+  const sane = filtraFontiSane(targets, quarantena, { ignora: IGNORA_QUARANTENA });
+  if (IGNORA_QUARANTENA && quarantena.size > 0) {
+    console.log(
+      `[table-reporter] Ri-validazione forzata: ${quarantena.size} fonti in quarantena vengono rilette (un successo le riabilita).`
+    );
+  } else if (sane.length !== targets.length) {
+    console.log(
+      `[table-reporter] Saltate ${targets.length - sane.length} fonti in quarantena: ${[...quarantena].join(', ')}`
+    );
+  }
+  targets = sane;
+
+  if (targets.length === 0) {
+    console.warn(
+      '[table-reporter] Tutti i target sono in quarantena: nessuna fonte da leggere. Usa --ignora-quarantena per ri-validarli.'
+    );
+    return;
+  }
+
   console.log(`[table-reporter] Trovati ${targets.length} target da analizzare.`);
 
   let totalExtracted = 0;
@@ -1807,6 +1969,22 @@ async function runTableReporter(): Promise<void> {
     const result = await processTarget(target);
     if (!DRY_RUN) await writeReport(target, result);
 
+    // Telemetria (§26.85): solo in un giro reale — un dry-run non deve lasciare
+    // segni. Le pagine scartate dal pre-filtro semantico non si registrano: sono
+    // fuori perimetro per scelta (vengono disattivate), non fonti rotte.
+    if (!DRY_RUN && !result.noise) {
+      await recordSourceRun(
+        target.url,
+        esitoTelemetria(result),
+        {
+          itemsCount: result.extracted,
+          layoutDetected: result.layout,
+          error: result.error,
+        },
+        { client: supabase }
+      );
+    }
+
     if (result.status === 'success') {
       successCount += 1;
       totalExtracted += result.extracted;
@@ -1815,12 +1993,15 @@ async function runTableReporter(): Promise<void> {
       );
 
       if (result.disqualified) {
+        const statoScarto = result.noise
+          ? CONFIG.noiseStatus
+          : CONFIG.disqualifiedStatus;
         if (DRY_RUN) {
           console.log(
-            `[table-reporter] Dry-run: target DA DISATTIVARE (${CONFIG.disqualifiedStatus}) — nessuna tabella interpelli: ${target.url}`
+            `[table-reporter] Dry-run: target DA DISATTIVARE (${statoScarto}): ${target.url}`
           );
         } else {
-          await disqualifyTarget(target);
+          await disqualifyTarget(target, statoScarto);
         }
         disqualifiedCount += 1;
       }

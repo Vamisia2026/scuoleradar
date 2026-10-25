@@ -211,6 +211,9 @@ console.log('\n— Griglia ARIA senza <table> (portali provinciali, Liguria) —
 const vociLiguria = estraiVociElenco(GRIGLIA_ARIA, URL_LIGURIA);
 check('righe ARIA estratte, riga di intestazione esclusa (3)', 3, vociLiguria.length);
 check('celle con <span> non incollano le parole', true, /IC Genova Bolzaneto/.test(vociLiguria[0]?.contesto ?? ''));
+// L'icona della cella (`<i class="doc-icon">▤</i>`, portale reale) è DECORATIVA:
+// senza il filtro il testo della voce cominciava col glifo («▤EEEE Posto intero»).
+check('icona decorativa fuori dal testo della voce', false, /▤/.test(vociLiguria[1]?.contesto ?? ''));
 check('scadenza dalla colonna «Scadenza»', true, /Scadenza: 18\/10\/2026/.test(vociLiguria[0]?.suggerimenti ?? ''));
 const avvisiLiguria = espandiElencoInAvvisi(GRIGLIA_ARIA, {
   baseUrl: URL_LIGURIA,
@@ -218,27 +221,22 @@ const avvisiLiguria = espandiElencoInAvvisi(GRIGLIA_ARIA, {
 });
 check('un avviso per riga ARIA (3)', 3, avvisiLiguria.length);
 check('scadenza della prima riga', '2026-10-18', avvisiLiguria[0]?.expirationDate ?? null);
+check('titolo dell’avviso senza il glifo dell’icona', false, /▤/.test(avvisiLiguria[1]?.title ?? ''));
 check('nessun avviso punta alla griglia', true, !avvisiLiguria.some((a) => a.link === URL_LIGURIA));
 
 console.log('\n— Percorso del CRAWLER (parseAvvisi): testata, menu e footer esclusi —');
 const avvisiCrawler = parseAvvisi(TABELLA_UMBRIA, 'PG', URL_UMBRIA);
 check('un avviso per riga-dati (2)', 2, avvisiCrawler.length);
-check(
-  'nessun avviso da menu, footer o testata',
-  [],
-  avvisiCrawler.filter((a) => /pon-pn|contatti|privacy|index\.php/.test(a.link ?? '')),
-);
+const linkRumoreCrawler = avvisiCrawler.filter((a) => /pon-pn|contatti|privacy|index\.php/.test(a.link ?? ''));
+check('nessun avviso da menu, footer o testata', [], linkRumoreCrawler);
 check('scadenza qualificata dall’etichetta di colonna', '2026-10-20', avvisiCrawler[0]?.expirationDate ?? null);
 // Portale provinciale: testata in un semplice `<div>` (site-brand) e menu in un
 // `<nav>` senza `<header>`; la riga «Graduatoria ATA», atto informativo senza
 // parola chiave, resta fuori (sembraOpportunita / GATE 1).
 const avvisiLiguriaCrawler = parseAvvisi(GRIGLIA_ARIA, 'GE', URL_LIGURIA);
 check('griglia ARIA: un avviso per riga di opportunità (2)', 2, avvisiLiguriaCrawler.length);
-check(
-  'griglia ARIA: nessun avviso da testata o menu',
-  [],
-  avvisiLiguriaCrawler.filter((a) => /index\.php|provincia\.php/.test(a.link ?? '')),
-);
+const linkRumore = avvisiLiguriaCrawler.filter((a) => /index\.php|provincia\.php/.test(a.link ?? ''));
+check('griglia ARIA: nessun avviso da testata o menu', [], linkRumore);
 check('griglia ARIA: link della riga, mai la griglia', true, avvisiLiguriaCrawler.every((a) => /\/albo\/.*\.pdf$/.test(a.link ?? '')));
 check('griglia ARIA: scadenza dalla colonna «Scadenza»', '2026-10-21', avvisiLiguriaCrawler[0]?.expirationDate ?? null);
 

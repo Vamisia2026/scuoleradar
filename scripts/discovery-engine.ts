@@ -7,11 +7,28 @@
 //
 // NOTA SCHEMA: gli stati 'disqualified_noise' e 'empty_view' devono essere
 // accettati da eventuali CHECK constraint su discovered_links.status.
+//
+// CONFINE PRODUCER/CONSUMER (§26.86): questo script e' un PRODUTTORE puro. Non
+// scrive su `interpelli` (scrive solo link e punteggi su `discovered_links`) e
+// non invia MAI notifiche: nessun import del notifier, nessuna chiamata a
+// Telegram o Resend. La consegna vive in `scripts/process-notifications.ts`
+// (`npm run notifiche:processa`), che consuma `public.notification_queue`.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import * as cheerio from 'cheerio';
 import * as dotenv from 'dotenv';
 import * as crypto from 'crypto';
+import { isAdministrativeNoise } from '../src/lib/noiseFilter.ts';
+// Telemetria delle fonti (§26.85): i fallimenti di fetch alimentano la
+// quarantena e le fonti isolate si saltano nei giri ordinari. Il discovery NON
+// scrive stati in `discovered_links` per saltarle: le esclude dalla finestra di
+// lavoro, così restano `pending` e tornano candidate da sole quando un run
+// riuscito (o un reset) le riabilita.
+import {
+  filtraFontiSane,
+  fontiInQuarantena,
+  recordSourceRun,
+} from '../src/lib/sourceTelemetry.ts';
 
 dotenv.config();
 
@@ -25,6 +42,10 @@ const CONFIG = {
   fetchRetries: 2,
   fetchRetryBaseMs: 800,
   maxTextLength: 400_000,
+
+  // Pre-filtro semantico (`src/lib/noiseFilter.ts`): log solo con DEBUG=1.
+  debug: process.env.DEBUG === '1' || process.env.DEBUG === 'true',
+  noiseStatus: 'disqualified_noise',
 
   // Limiti di espansione
   maxDepth: 2,
@@ -94,6 +115,25 @@ const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey, {
 
 function normalize(input: string): string {
   return input.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Testo su cui gira il pre-filtro semantico: titolo, meta description e
+ * contenuto principale (senza menu, header e footer). Il giudizio costa due
+ * regex e avviene PRIMA dello scoring: una determina non arriva mai al parsing.
+ */
+function prefilterText($: cheerio.CheerioAPI): { titolo: string; testo: string } {
+  const titolo = normalize($('title').text());
+  const descrizione = normalize($('meta[name="description"]').attr('content') ?? '');
+  const $principale = $('main, article, #content, .content, #main, .main').first();
+  const grezzo = $principale.length > 0 ? $principale.text() : $('body').text();
+  const contenuto = normalize(grezzo.slice(0, 30_000));
+  return { titolo, testo: `${titolo} ${descrizione} ${contenuto}` };
+}
+
+/** Log di DEBUG del pre-filtro: in produzione resta silenzioso. */
+function logPrefilter(message: string): void {
+  if (CONFIG.debug) console.log(message);
 }
 
 function extractDomain(urlStr: string): string {
@@ -504,11 +544,6 @@ function scoreContentPage(url: string, html: string): ContentScore {
   );
   const textLower = fullText.toLowerCase();
 
-  const title = normalize($('title').text()).toLowerCase();
-  const metaDesc = normalize(
-    $('meta[name="description"]').attr('content') || ''
-  ).toLowerCase();
-
   const tags: string[] = [];
   let score = 0;
 
@@ -891,6 +926,14 @@ async function processTarget(target: Target): Promise<void> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`  [timeout] ${target.url}: ${msg}`);
+    // Telemetria (§26.85): un timeout è il fallimento tipico di una fonte
+    // morta; tre di fila la isolano.
+    await recordSourceRun(
+      target.url,
+      'quarantine',
+      { itemsCount: 0, error: msg },
+      { client: supabase }
+    );
     await supabase
       .from('discovered_links')
       .update({
@@ -906,6 +949,18 @@ async function processTarget(target: Target): Promise<void> {
     (!result.contentType.includes('text/html') &&
       !result.contentType.includes('xml'))
   ) {
+    await recordSourceRun(
+      target.url,
+      'quarantine',
+      {
+        itemsCount: 0,
+        error:
+          result.status >= 400
+            ? `HTTP ${result.status}`
+            : `Content-Type non HTML: ${result.contentType}`,
+      },
+      { client: supabase }
+    );
     await supabase
       .from('discovered_links')
       .update({
@@ -930,6 +985,35 @@ async function processTarget(target: Target): Promise<void> {
       })
       .eq('id', target.id);
     console.log(`  [home] ${target.url} → ${inserted} sub-link`);
+    // Telemetria (§26.85): la home risponde, quindi la fonte è viva anche se
+    // non ha prodotto link nuovi (0 = già tutti conosciuti, non un guasto).
+    await recordSourceRun(
+      target.url,
+      'success',
+      { itemsCount: inserted },
+      { client: supabase }
+    );
+    return;
+  }
+
+  // Pre-filtro semantico PRIMA dello scoring: un atto di gara, una circolare per
+  // le famiglie o un documento di quiescenza non diventa mai un'opportunità.
+  // Costa due regex sul contenuto principale e risparmia tutto il parsing.
+  const prefilter = prefilterText($);
+  const noise = isAdministrativeNoise(prefilter.testo, prefilter.titolo);
+  if (noise.isNoise) {
+    logPrefilter(`  [debug] pre-filtro: scartato (${noise.reason}) ${target.url}`);
+    await supabase
+      .from('discovered_links')
+      .update({
+        status: CONFIG.noiseStatus,
+        score: 0,
+        content_type_tags: ['prefilter_noise', `noise: ${noise.reason}`],
+        content_hash: sha256(result.html),
+        last_scanned_at: new Date().toISOString(),
+        last_updated_at: new Date().toISOString(),
+      })
+      .eq('id', target.id);
     return;
   }
 
@@ -992,6 +1076,17 @@ async function processTarget(target: Target): Promise<void> {
       console.log(`  [d${target.depth}] → espanso in ${inserted} figli`);
     }
   }
+
+  // Telemetria (§26.85): la pagina è stata letta e classificata — `success`
+  // azzera gli eventuali fallimenti della stessa URL. Le pagine scartate dal
+  // pre-filtro semantico escono prima e non si registrano: sono fuori perimetro
+  // per scelta, non fonti rotte.
+  await recordSourceRun(
+    target.url,
+    'success',
+    { itemsCount: scored.opportunitySignals },
+    { client: supabase }
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1000,21 +1095,28 @@ async function processTarget(target: Target): Promise<void> {
 
 async function fetchPendingTargets(
   limit: number,
-  provinceFilter?: string
+  provinceFilter?: string,
+  escluse: ReadonlySet<string> = new Set()
 ): Promise<Target[]> {
+  // Le fonti isolate occupano spazio nella finestra: se ne chiedono altre in più
+  // (tetto 500) e si filtrano in memoria. Nessuno stato viene riscritto, così
+  // una fonte in quarantena resta `pending` e torna candidabile da sola quando
+  // un run riuscito o un reset la riabilita.
+  const extra = Math.min(escluse.size, 500);
   let q = supabase
     .from('discovered_links')
     .select('id, url, region, province, depth, path_score, parent_url')
     .eq('status', 'pending')
     .order('depth', { ascending: true })
     .order('path_score', { ascending: false })
-    .limit(limit);
+    .limit(limit + extra);
 
   if (provinceFilter) q = q.eq('province', provinceFilter);
 
   const { data, error } = await q;
   if (error) throw new Error(error.message);
-  return (data ?? []) as Target[];
+  const righe = (data ?? []) as Target[];
+  return filtraFontiSane(righe, escluse).slice(0, limit);
 }
 
 async function runDiscoveryEngine(): Promise<void> {
@@ -1023,6 +1125,10 @@ async function runDiscoveryEngine(): Promise<void> {
     .find((a) => a.startsWith('--provincia='))
     ?.split('=')[1]
     ?.toUpperCase();
+  // `--ignora-quarantena` (§26.85): ri-validazione manuale delle fonti isolate.
+  const ignoraQuarantena =
+    args.includes('--ignora-quarantena') ||
+    process.env.IGNORA_QUARANTENA === '1';
 
   console.log(
     `[discovery-engine] Avvio BFS${
@@ -1030,16 +1136,24 @@ async function runDiscoveryEngine(): Promise<void> {
     }...`
   );
 
+  // UNA query per run: le fonti isolate non consumano richieste.
+  const quarantena = ignoraQuarantena
+    ? new Set<string>()
+    : await fontiInQuarantena({ client: supabase });
+  if (quarantena.size > 0) {
+    console.log(
+      `[discovery-engine] ${quarantena.size} fonti in quarantena saltate (--ignora-quarantena per ri-validarle).`
+    );
+  }
+
   const BATCH_SIZE = 40;
   let totalProcessed = 0;
-  let disqualifiedCount = 0;
-  let emptyCount = 0;
   let emptyRounds = 0;
 
   while (true) {
     let targets: Target[];
     try {
-      targets = await fetchPendingTargets(BATCH_SIZE, provinceArg);
+      targets = await fetchPendingTargets(BATCH_SIZE, provinceArg, quarantena);
     } catch (err) {
       console.error(
         `[discovery-engine] Errore lettura coda: ${

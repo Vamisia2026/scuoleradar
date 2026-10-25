@@ -49,6 +49,14 @@ const RE_INTESTAZIONE_NON_SCADENZA =
 const RE_CELLA_VUOTA = /^[-–—.…]*$/;
 
 /**
+ * Elementi DECORATIVI: il loro glifo (icona-font, `<svg>`) non è testo della
+ * cella. La griglia del USR Liguria inizia ogni riga con `<i class="doc-icon">▤</i>`:
+ * senza questo filtro il titolo dell'avviso diventava «▤EEEE Posto intero …».
+ */
+const SELETTORE_ICONA =
+  'svg, i[class*="icon"], span[class*="icon"], .fa, .fas, .far, .fab, .dashicons, .glyphicon, .material-icons';
+
+/**
  * Testo di una cella con uno spazio dove due nodi adiacenti INCOLLEREBBERO due
  * parole (`Genova` + `STATALE` → `Genova STATALE`, `A051` + `Spezzone` →
  * `A051 Spezzone`). Le giunzioni con la punteggiatura restano intatte: le date
@@ -61,6 +69,7 @@ function testoNodi($: cheerio.CheerioAPI, el: NodoHtml): string {
   let out = '';
   figli.each((_, figlio) => {
     const $figlio = $(figlio);
+    if ($figlio.is(SELETTORE_ICONA)) return;
     // Un nodo con figli-elemento va aperto (i suoi `<span>` adiacenti possono
     // incollare due parole); un nodo di testo o senza figli si legge diretto.
     const pezzo = $figlio.children().length > 0 ? testoNodi($, figlio) : $figlio.text();

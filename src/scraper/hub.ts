@@ -12,6 +12,7 @@
  */
 
 import * as cheerio from 'cheerio';
+import { eUrlArticolo } from './paginaElenco.ts';
 
 /** Percorsi tipici di una sezione di reclutamento/interpelli. */
 const RE_PATH_RECLUTAMENTO =
@@ -23,6 +24,16 @@ const RE_PATH_RUMORE =
 
 /** Estensioni di documento: non sono sezioni da esplorare. */
 const RE_DOCUMENTO = /\.(?:pdf|docx?|odt|xlsx?|pptx?|zip|rar|jpe?g|png|gif|svg|mp4)$/i;
+
+/**
+ * Script di DETTAGLIO di un portale provinciale (`interpello.php?id=1322`): con
+ * una query identifica UN avviso, non un elenco da esplorare. Senza questo
+ * filtro le tre posizioni di `MAX_SEZIONI_HUB` venivano spese sulle prime tre
+ * righe già lette della griglia (USR Liguria, `provincia.php`, 23/10/2026) e
+ * l'elenco provinciale restava l'unica pagina davvero interrogata.
+ * L'elenco plurale (`interpelli.php?cat=…`) non è toccato: cambia la radice.
+ */
+const RE_PATH_DETTAGLIO = /\/(?:interpello|avviso|bando|comunicato|supplenza)[a-z0-9_-]*\.php$/i;
 
 /** Massimo numero di sezioni seguite per hub (budget di fetch per run). */
 export const MAX_SEZIONI_HUB = 3;
@@ -44,7 +55,16 @@ export function eTitoloNavigazione(titolo?: string | null): boolean {
   return RE_TITOLO_NAVIGAZIONE.test(t);
 }
 
-/** True se l'URL è una sezione di reclutamento/interpelli da esplorare. */
+/**
+ * True se l'URL è una sezione di reclutamento/interpelli da esplorare.
+ *
+ * Un ARTICOLO non è una sezione (`eUrlArticolo`): gli e-portfolio Liferay del MIM
+ * linkano gli avvisi con slug «…interpelli-ricerca-supplenti-86», che sembrano
+ * sezioni ma sono post. Seguirli consumava le `MAX_SEZIONI_HUB` posizioni senza
+ * arrivare mai all'elenco vero (`/web/<territorio>/interpelli-ricerca-supplenti`).
+ * Stessa regola per le pagine di dettaglio con query (`RE_PATH_DETTAGLIO`):
+ * `interpello.php?id=1322` è un avviso, non un elenco.
+ */
 export function eUrlSezioneReclutamento(url?: string | null): boolean {
   const u = (url ?? '').trim();
   if (!/^https?:\/\//i.test(u)) return false;
@@ -54,6 +74,8 @@ export function eUrlSezioneReclutamento(url?: string | null): boolean {
     if (RE_DOCUMENTO.test(p.pathname)) return false;
     if (RE_PATH_RUMORE.test(percorso)) return false;
     if (p.pathname === '/' && !p.search) return false;
+    if (eUrlArticolo(u)) return false;
+    if (p.search && RE_PATH_DETTAGLIO.test(p.pathname)) return false;
     return RE_PATH_RECLUTAMENTO.test(percorso);
   } catch {
     return false;

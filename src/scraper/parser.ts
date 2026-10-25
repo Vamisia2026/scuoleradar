@@ -566,6 +566,21 @@ export function verificaAvviso(a: {
 }
 
 /**
+ * TIPOLOGIA DEL POSTO: è il vocabolario con cui i portali provinciali
+ * dichiarano un interpello dentro la RIGA («A042 Posto intero IPSIA Odero»,
+ * «A051 Spezzone IIS Giannini»). La parola «interpello» lì non c'è — sta solo
+ * nel link della riga («Vai all'interpello›») — quindi senza questo segnale la
+ * voce veniva scartata dal GATE 1 come «nessun segnale di opportunità» e un
+ * elenco di 93 interpelli (USR Liguria, `provincia.php?p=GE`, 23/10/2026)
+ * restava vuoto. «Posto intero» è anche la tipologia mostrata in bacheca.
+ * «Preventivo ≤ 10 giorni» è la supplenza preventiva breve: stessa famiglia,
+ * stessa riga di griglia, quindi stesso segnale (il numero di giorni evita di
+ * confonderla con i «preventivi di spesa»).
+ */
+const RE_POSTO_SUPPLENZA =
+  /\bposto (?:intero|orario|parziale)\b|\bspezzone\b|\bsostituzione breve\b|preventiv\w*\s*(?:≤|<|entro)?\s*\d{0,3}\s*giorn/i;
+
+/**
  * Categoria dell'opportunità rilevata dal testo (copre tutte le tipologie
  * gestite dallo scraper): Interpelli/Supplenze, PON, POR, PNRR e bandi per
  * esperti (ricerca esperti / selezione esperti).
@@ -579,7 +594,7 @@ export function rilevaCategoriaAvviso(testo: string): string {
   if (/\bpon\b|programma operativo nazionale|\bfse\b/.test(t)) return 'PON';
   if (/\bpor\b|programma operativo regionale|\bfesr\b/.test(t)) return 'POR';
   if (/espert|reclutamento/.test(t)) return 'Bando Esperti';
-  if (/interpell|supplenz/.test(t)) return 'Interpello / Supplenza';
+  if (/interpell|supplenz/.test(t) || RE_POSTO_SUPPLENZA.test(t)) return 'Interpello / Supplenza';
   if (/bando|avviso|pubblicazione|selezione|incarico|procedura|manifestazione di interesse/.test(t)) {
     return 'Bando / Avviso';
   }
@@ -593,12 +608,16 @@ export function rilevaCategoriaAvviso(testo: string): string {
  * esperti) e i fondi PON / POR / PNRR (es. "Bando per esperto esterno PNRR").
  */
 export function sembraOpportunita(contesto: string): boolean {
-  // Copre TUTTE le tipologie gestite: interpelli/supplenze, bandi/avvisi,
-  // selezioni di esperti (ricerca esperti / reclutamento esperti) e i fondi
-  // PON / POR / PNRR, anche con le denominazioni estese (FSE, FESR,
-  // Programma Operativo, Next Generation EU).
-  return /interpell|supplenz|avviso|bando|pubblicazione|selezione|espert|pnrr|next generation eu|pon\b|por\b|fse\b|fesr\b|programma operativo|fondi strutturali|incarico|procedura|manifestazione di interesse|finanziamento/i.test(
-    contesto,
+  // Copre TUTTE le tipologie gestite: interpelli/supplenze (anche nella forma
+  // delle righe provinciali, `RE_POSTO_SUPPLENZA`), bandi/avvisi, selezioni di
+  // esperti (ricerca esperti / reclutamento esperti) e i fondi PON / POR /
+  // PNRR, anche con le denominazioni estese (FSE, FESR, Programma Operativo,
+  // Next Generation EU).
+  return (
+    RE_POSTO_SUPPLENZA.test(contesto) ||
+    /interpell|supplenz|avviso|bando|pubblicazione|selezione|espert|pnrr|next generation eu|pon\b|por\b|fse\b|fesr\b|programma operativo|fondi strutturali|incarico|procedura|manifestazione di interesse|finanziamento/i.test(
+      contesto,
+    )
   );
 }
 

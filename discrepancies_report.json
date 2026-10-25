@@ -1,0 +1,41 @@
+{
+  "meta": {
+    "generatoIl": "2026-10-24T13:33:59+00:00",
+    "script": "process_anagrafica.py",
+    "cartella": "C:\\Users\\barto\\OneDrive\\Documents\\Vamisia\\ScuoleRadar\\ScuoleRadar_app\\project\\anagrafica_ministeriale",
+    "annoScolastico": "202627",
+    "chiave": "CODICESCUOLA",
+    "fileLetti": [
+      {
+        "file": "SCUANAGRAFESTAT20262720260901.csv",
+        "righe": 50273,
+        "scartate": 0,
+        "separatore": ","
+      },
+      {
+        "file": "SCUANAAUTSTAT20262720260901.csv",
+        "righe": 1178,
+        "scartate": 0,
+        "separatore": ","
+      },
+      {
+        "file": "SCUANAGRAFEPAR20262720260901.csv",
+        "righe": 11331,
+        "scartate": 0,
+        "separatore": ","
+      }
+    ],
+    "fileIgnorati": [],
+    "confrontatoCon": [
+      "anagrafica_scuole_master.json"
+    ],
+    "totaleScuole": 62782,
+    "totaleCampiConflitto": 0,
+    "scuoleConConflitti": 0,
+    "duplicatiInterni": 0,
+    "scuoleSoloInEsistente": [],
+    "totaleScuoleConflitto": 0,
+    "duplicatiNelloStessoFile": []
+  },
+  "discrepanze": []
+}

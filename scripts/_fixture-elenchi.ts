@@ -59,8 +59,7 @@ export const TABELLA_UMBRIA = `
 </body></html>`;
 
 /** Elenco provinciale Liguria (`provincia.php`): griglia ARIA, nessun `<table>`. */
-export const URL_LIGURIA =
-  'https://servizi.istruzioneliguria.gov.it/provincia.php?p=GE&as=2026%2F2027';
+export const URL_LIGURIA = 'https://servizi.istruzioneliguria.gov.it/provincia.php?p=GE';
 
 /** Griglia ARIA provinciale: righe `role="row"` con celle `role="cell"`. */
 export const GRIGLIA_ARIA = `
@@ -80,7 +79,7 @@ export const GRIGLIA_ARIA = `
   </div></div>
   <nav class="site-nav-band">
     <a href="index.php">Liguria</a>
-    <a href="provincia.php?provincia=GE" aria-current="page">Genova</a>
+    <a href="provincia.php?p=GE" aria-current="page">Genova</a>
   </nav>
   <h1>Avvisi di selezione — Provincia di Genova</h1>
   <div role="table" aria-label="Avvisi di selezione">
@@ -99,7 +98,7 @@ export const GRIGLIA_ARIA = `
       <div role="cell"><a href="/albo/graduatoria-ata-bolzaneto.pdf">Documento prot. 9001</a></div>
     </div>
     <div role="row">
-      <div role="cell">9002</div>
+      <div role="cell"><i class="doc-icon">▤</i>9002</div>
       <div role="cell"><span>IC Genova</span><span>Sestri</span></div>
       <div role="cell">Interpello A-022 scienze motorie</div>
       <div role="cell">21/10/2026</div>

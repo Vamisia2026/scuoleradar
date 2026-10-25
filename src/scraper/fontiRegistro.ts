@@ -3,8 +3,11 @@
  *
  * Solo DATI: le URL verificate, le regioni coperte e il capoluogo di riferimento.
  * La logica di selezione e i tipi stanno in `fonti.ts`; la copertura dichiarata in
- * `fontiCopertura.ts`. Nessuna URL inventata: ogni voce è verificata (HTTP 200 con
- * contenuto di reclutamento) oppure è elencata fra gli ESCLUSI con il motivo.
+ * `fontiCopertura.ts`. Questo file copre il PRIMO blocco (USR dei capoluoghi di
+ * regione, verifica 2026-09-28); gli elenchi degli Uffici Territoriali stanno in
+ * `fontiTerritoriali.ts` e le URL non verificabili in `fontiEsclusiVerifica.ts`.
+ * Nessuna URL inventata: ogni voce è verificata (HTTP 200 con contenuto di
+ * reclutamento) oppure è elencata fra gli ESCLUSI con il motivo.
  *
  * Tuple:
  *   AGGREGATORI_REGIONALI: [regione, slug]  →  https://www.scuolainterpelli.it/<slug>/
@@ -46,7 +49,9 @@ export const HUB_ATTIVI: [string, string, string, string[], string][] = [
   ['istruzionepiemonte-avvisi', 'USR Piemonte — Avvisi pubblici (Torino)', 'https://www.istruzionepiemonte.it/avvisi-pubblici-3/', ['Piemonte'], 'TO'],
   ['istruzionepiemonte-docenti', 'USR Piemonte — Reclutamento personale docente (Torino)', 'https://www.istruzionepiemonte.it/area-immissioni-in-ruolo/reclutamento-personale-docente/', ['Piemonte'], 'TO'],
   ['istruzionepiemonte-ata', 'USR Piemonte — Reclutamento personale ATA (Torino)', 'https://www.istruzionepiemonte.it/area-immissioni-in-ruolo/reclutamento-personale-ata/', ['Piemonte'], 'TO'],
-  ['istruzioneliguria-interpelli', 'USR Liguria — Interpelli e comunicati (Genova)', 'https://www.istruzioneliguria.gov.it/pagine/interpelli-e-comunicati', ['Liguria'], 'GE'],
+  // Liguria: `pagine/interpelli-e-comunicati` è solo un <iframe> (0 voci) → esclusa
+  // in `fontiEsclusiVerifica.ts`; gli elenchi veri sono le pagine per provincia
+  // del portale dei servizi (`fontiTerritoriali.ts`).
   ['istruzioneer-avvisi', 'USR Emilia-Romagna — Avvisi (Bologna)', 'https://www.istruzioneer.gov.it/category/avvisi-incarichi-dirigenziali-ii-fascia/', ['Emilia-Romagna'], 'BO'],
   ['istruzioneer-home', 'USR Emilia-Romagna — Home istituzionale (Bologna)', 'https://www.istruzioneer.gov.it/', ['Emilia-Romagna'], 'BO'],
   ['usrlazio-concorsi', 'USR Lazio — Concorsi e nomine (Roma)', 'https://www.ufficioscolasticoregionalelazio.it/category/aree-tematiche/concorsi-e-nomine/', ['Lazio'], 'RM'],

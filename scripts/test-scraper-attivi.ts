@@ -23,7 +23,7 @@ import {
   motivoScartoOpportunita,
   valutaGateLink,
 } from '../src/scraper/qualitaOpportunita.ts';
-import { verificaAvviso } from '../src/scraper/parser.ts';
+import { rilevaCategoriaAvviso, verificaAvviso } from '../src/scraper/parser.ts';
 
 let errori = 0;
 function check(nome: string, atteso: unknown, ottenuto: unknown): void {
@@ -105,6 +105,40 @@ check(
   'feed strutturato: la notizia resta comunque fuori',
   true,
   motivoScartoOpportunita({ title: 'Comunicato stampa del Ministro sulla scuola' }, OGGI, { daFonteInterpelli: true }) !== null,
+);
+
+/* ---------- B3 · Righe provinciali: la tipologia del posto è il segnale ---------- */
+
+console.log('\n— B3. Righe dei portali provinciali («Posto intero», «Spezzone») —');
+// USR Liguria (`provincia.php`): la riga dichiara la TIPOLOGIA del posto e non
+// ripete «interpello» (sta solo nel link «Vai all'interpello›»). Senza il segnale
+// di tipologia l'intero elenco provinciale veniva scartato come «nessun segnale
+// di opportunità»: 93 voci a GE, 0 in bacheca (23/10/2026).
+const RIGA_LIGURIA = 'A042 Posto intero IPSIA A. ODERO – Genova STATALE Secondaria II grado 27/10/2026';
+check('riga «Posto intero» → ammessa', null, motivoScartoOpportunita({ title: RIGA_LIGURIA }, OGGI));
+check('categoria della riga «Posto intero»', 'Interpello / Supplenza', rilevaCategoriaAvviso(RIGA_LIGURIA));
+check(
+  'riga «Spezzone» → ammessa',
+  null,
+  motivoScartoOpportunita(
+    { title: 'A041 Spezzone IIS A. P. GIANNINI – Chiavari STATALE Secondaria II grado 30/10/2026' },
+    OGGI,
+  ),
+);
+// «Preventivo ≤ 10 giorni» è la supplenza preventiva breve della stessa griglia.
+const RIGA_PREVENTIVO = 'EEEE Preventivo ≤ 10 giorni IC SANTA MARGHERITA LIGURE – S. Margherita Ligure';
+check('riga «Preventivo ≤ 10 giorni» → ammessa', null, motivoScartoOpportunita({ title: RIGA_PREVENTIVO }, OGGI));
+check('categoria della riga «Preventivo»', 'Interpello / Supplenza', rilevaCategoriaAvviso(RIGA_PREVENTIVO));
+check(
+  'preventivo di spesa resta fuori target',
+  'nessun segnale di opportunità di lavoro',
+  motivoScartoOpportunita({ title: 'Preventivo di spesa per il viaggio di istruzione a Bruxelles' }, OGGI),
+);
+// Il confine resta: la tipologia del posto non apre la porta alle notizie.
+check(
+  'notizia con «posto» generico resta fuori target',
+  'nessun segnale di opportunità di lavoro',
+  motivoScartoOpportunita({ title: 'Il posto di docente nel nuovo organico 2026/27' }, OGGI),
 );
 
 /* ------------------------ C · Record strutturato ------------------------ */

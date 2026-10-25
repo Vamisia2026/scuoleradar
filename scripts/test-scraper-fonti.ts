@@ -16,11 +16,14 @@ import {
   FONTI_INTERPELLI,
   MAX_FONTI_PER_PROVINCIA,
   MAX_FONTI_PER_RUN,
+  MAX_HUB_PER_REGIONE,
   fontiAttive,
   fontiPerProvincia,
   fontiPerRun,
+  hubDellaRegione,
   regioneDiProvincia,
 } from '../src/scraper/fonti.ts';
+import { DATA_VERIFICA_AGGIORNATI, DATA_VERIFICA_TERRITORI } from '../src/scraper/fontiTerritoriali.ts';
 import {
   CAPOLUOGHI_PRINCIPALI,
   capoluoghiScoperti,
@@ -40,16 +43,8 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
 /* ------------------------------ A · Igiene registro ------------------------------ */
 
 console.log('— A. Igiene del registro fonti —');
-check(
-  'id unici',
-  FONTI_INTERPELLI.length,
-  new Set(FONTI_INTERPELLI.map((f) => f.id)).size,
-);
-check(
-  'URL uniche',
-  FONTI_INTERPELLI.length,
-  new Set(FONTI_INTERPELLI.map((f) => f.url)).size,
-);
+check('id unici', FONTI_INTERPELLI.length, new Set(FONTI_INTERPELLI.map((f) => f.id)).size);
+check('URL uniche', FONTI_INTERPELLI.length, new Set(FONTI_INTERPELLI.map((f) => f.url)).size);
 check(
   'URL http(s) reali (nessun mock)',
   [],
@@ -63,9 +58,16 @@ check(
   FONTI_INTERPELLI.filter((f) => !f.attiva && (!f.note || f.note.length < 20 || f.verificata !== null)).map((f) => f.id),
 );
 check(
-  'fonti attive: verifica datata',
+  'fonti attive: verifica datata (blocchi 2026-09-28 / 2026-10-23 / 2026-10-25)',
   [],
-  fontiAttive().filter((f) => f.verificata !== DATA_VERIFICA_FONTI).map((f) => f.id),
+  fontiAttive()
+    .filter((f) => ![DATA_VERIFICA_FONTI, DATA_VERIFICA_TERRITORI, DATA_VERIFICA_AGGIORNATI].includes(f.verificata ?? ''))
+    .map((f) => f.id),
+);
+check(
+  'fonti attive: data di verifica in formato ISO',
+  [],
+  fontiAttive().filter((f) => !/^\d{4}-\d{2}-\d{2}$/.test(f.verificata ?? '')).map((f) => f.id),
 );
 check(
   'hub attivi con capoluogo; aggregatori senza capoluogo',
@@ -83,12 +85,28 @@ check('regioni con fonte attiva (19/20)', 19, regioniCoperte(true).length);
 check('regione senza hub dedicato (dichiarata)', ["Valle d'Aosta"], regioniScoperte());
 check('esiste il feed nazionale', true, fontiAttive().some((f) => f.nazionale && f.regioni.length === 0));
 check('capoluoghi principali scoperti', [], capoluoghiScoperti());
-check(
-  'ogni capoluogo principale ha almeno una fonte attiva',
-  [],
-  CAPOLUOGHI_PRINCIPALI.filter((c) => fontiPerCapoluogo(c.provincia).length === 0).map((c) => c.nome),
-);
+check('ogni capoluogo principale ha almeno una fonte attiva', [], CAPOLUOGHI_PRINCIPALI.filter((c) => fontiPerCapoluogo(c.provincia).length === 0).map((c) => c.nome));
 check('Torino/Milano/Genova/Bologna/Firenze/Roma/Napoli coperti', true, ['TO', 'MI', 'GE', 'BO', 'FI', 'RM', 'NA'].every((p) => fontiPerCapoluogo(p).length > 0));
+// Blocco territoriale (§26.89) + aggiornamento 2026-10-25: in Liguria le fonti sono le pagine per provincia (URL senza anno); il modulo «per ambito» del Piemonte resta escluso (righe senza link).
+const liguriaAttive = fontiAttive().filter((f) => f.regioni.includes('Liguria') && /provincia\.php/.test(f.url));
+check('Liguria: le 4 province hanno un elenco attivo', ['GE', 'IM', 'SP', 'SV'], [
+  ...new Set(liguriaAttive.map((f) => f.capoluogo ?? '')),
+].sort());
+check('Liguria: nessuna fonte legata a un anno scolastico', [], liguriaAttive.filter((f) => /[?&]as=/.test(f.url)).map((f) => f.id));
+// La home del portale NON è una fonte: le sue righe sono i quattro indici provinciali, non interpelli.
+check('Liguria: la home del portale non è una fonte', [], FONTI_INTERPELLI.filter((f) => /servizi\.istruzioneliguria\.gov\.it\/?$/.test(f.url)).map((f) => f.id));
+check('Piemonte: il modulo «per ambito» resta escluso', 0, fontiAttive().filter((f) => /ric_interpello_ambito/.test(f.url)).length);
+check('Piemonte: gli esclusi del modulo dichiarano il motivo', [], FONTI_INTERPELLI.filter((f) => /ric_interpello_ambito/.test(f.url) && (!f.note || f.note.length < 40)).map((f) => f.id));
+
+/* Aggiornamento 2026-10-25: territori prima scoperti e ora con un elenco verificato. */
+const provinceAttive = (regione: string) => [...new Set(fontiAttive().filter((f) => f.regioni.includes(regione) && f.capoluogo).map((f) => f.capoluogo ?? ''))];
+check('Molise: entrambe le province coperte', ['CB', 'IS'], provinceAttive('Molise').filter((p) => ['CB', 'IS'].includes(p)).sort());
+check('Veneto: le sei province dell’aggiornamento sono attive', ['PD', 'RO', 'TV', 'VE', 'VI', 'VR'], provinceAttive('Veneto').sort());
+check('Sardegna: Oristano coperta', true, provinceAttive('Sardegna').includes('OR'));
+check('Emilia-Romagna: Rimini coperta', true, provinceAttive('Emilia-Romagna').includes('RN'));
+// Le province provate e non servibili restano DICHIARATE scoperte, mai coperte «per finta».
+check('Veneto: Belluno dichiarata scoperta', [], fontiAttive().filter((f) => f.capoluogo === 'BL').map((f) => f.id));
+check('Campania: Salerno e Benevento scoperte', [], fontiAttive().filter((f) => ['SA', 'BN'].includes(f.capoluogo ?? '')).map((f) => f.id));
 check('regione di MI = Lombardia', 'Lombardia', regioneDiProvincia('MI'));
 check('provincia inesistente → null', null, regioneDiProvincia('ZZ'));
 
@@ -106,6 +124,35 @@ check(
   true,
   perMilano.filter((f) => f.tipo === 'hub-istituzionale').every((f) => f.regioni.includes('Lombardia')),
 );
+
+/* Blocco territoriale: tetti e rotazione degli hub per regione (§26.89). */
+const hubLombardia = hubDellaRegione('Lombardia');
+check('regione: hub entro il tetto per regione', true, hubLombardia.length <= MAX_HUB_PER_REGIONE);
+check('regione: nessuna URL ripetuta', hubLombardia.length, new Set(hubLombardia.map((f) => f.url)).size);
+check(
+  'regione: solo hub della regione richiesta',
+  true,
+  hubLombardia.every((f) => f.tipo === 'hub-istituzionale' && f.regioni.includes('Lombardia')),
+);
+check(
+  'provincia: il suo hub passa davanti agli altri',
+  'MI',
+  fontiPerProvincia('MI').filter((f) => f.tipo === 'hub-istituzionale')[0]?.capoluogo,
+);
+check(
+  'provincia: il feed nazionale resta nel budget',
+  true,
+  fontiPerProvincia('MI').some((f) => f.nazionale && f.regioni.length === 0),
+);
+const hubLombardiaTutti = fontiAttive()
+  .filter((f) => f.tipo === 'hub-istituzionale' && f.regioni.includes('Lombardia'))
+  .map((f) => f.id)
+  .sort();
+const vistiInRotazione = new Set<string>();
+for (let g = 0; g < hubLombardiaTutti.length; g += 1) {
+  for (const f of hubDellaRegione('Lombardia', [], g)) vistiInRotazione.add(f.id);
+}
+check('regione: la rotazione copre TUTTI gli hub nel ciclo', hubLombardiaTutti, [...vistiInRotazione].sort());
 
 const run = fontiPerRun(['MI', 'TO']);
 check('run: entro il tetto globale', true, run.length <= MAX_FONTI_PER_RUN);
@@ -139,6 +186,16 @@ check(
   true,
   eUrlSezioneReclutamento('https://www.istruzionepiemonte.it/area-immissioni-in-ruolo/reclutamento-personale-ata/'),
 );
+// Liferay del MIM: l'avviso è un POST con slug «…interpelli-…» (`/web/<territorio>/-/`);
+// senza `eUrlArticolo` occupava le posizioni di `MAX_SEZIONI_HUB` e la sezione vera
+// (`/web/<territorio>/interpelli`) non veniva mai raggiunta.
+const SEZIONE_MIM = 'https://www.mim.gov.it/web/bergamo/-/interpelli-per-il-conferimento-di-supplenza-n-65';
+check('post Liferay del MIM non è una sezione', false, eUrlSezioneReclutamento(SEZIONE_MIM));
+check('sezione dell’e-portfolio MIM riconosciuta', true, eUrlSezioneReclutamento('https://www.mim.gov.it/web/milano/interpelli'));
+// Portali provinciali: `interpello.php?id=1322` è UN avviso (pagina di dettaglio),
+// non un elenco da esplorare; seguirla spendeva le posizioni di `MAX_SEZIONI_HUB`.
+const AVVISO_LIGURIA = 'https://servizi.istruzioneliguria.gov.it/interpello.php?id=1322';
+check('pagina di dettaglio provinciale non è una sezione', false, eUrlSezioneReclutamento(AVVISO_LIGURIA));
 
 const HUB_HTML = `
 <html><head><title>USR di prova</title></head><body>
