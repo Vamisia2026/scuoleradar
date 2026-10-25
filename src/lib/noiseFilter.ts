@@ -1,29 +1,28 @@
 /**
  * ScuoleRadar.it — PREFILTRO SEMANTICO DEL RUMORE AMMINISTRATIVO (modulo PURO).
  *
- * Le fonti scolastiche pubblicano sullo stesso albo cose che NON sono
- * opportunità di lavoro: atti di gara (`CIG`, `CUP`, determine, forniture,
- * MEPA), circolari per le famiglie (viaggi, uscite, orari, organi collegiali),
- * assemblee sindacali e burocrazia del personale (`quiescenza`, `TFR`/`TFS`,
- * ricostruzione di carriera). Se entrano nel motore costano parsing, punteggi e
- * perfino righe in bacheca. Qui vive il giudizio MINIMO che le scarta subito:
+ * L'albo scolastico pubblica anche ciò che NON è un'opportunità di lavoro. Qui
+ * vive il giudizio MINIMO che lo scarta prima del parsing:
  *
  *   1. **Il TITOLO è l'atto.** Un «avviso di selezione» nel corpo non trasforma
  *      una determina in un interpello (stessa regola dello scoring, §26.72).
- *   2. **Gare e previdenza sono bloccanti** (`hard: true`): un `CIG` o una
- *      `quiescenza` nel corpo scartano anche una gara B2B intitolata «avviso di
- *      selezione». Li salva solo un indicatore SPECIFICO nel titolo.
- *   3. **Il rumore di vita scolastica** (soft) si salva con un qualsiasi
- *      `RECRUITMENT_INDICATORS`: una circolare citata di sfuggita non basta.
+ *   2. **Gare e previdenza sono bloccanti** (`hard`): `CIG`, `CUP`, determine,
+ *      forniture, MEPA, quiescenza, TFR/TFS scartano anche una gara B2B
+ *      intitolata «avviso di selezione»; li salva solo un indicatore SPECIFICO
+ *      nel titolo.
+ *   3. **Il rumore di vita scolastica** (soft: circolari, viaggi, orari,
+ *      assemblee) si salva con un qualsiasi `RECRUITMENT_INDICATORS`.
+ *   4. **Le pagine informative non sono avvisi** (§26.82): «scuola in ospedale»,
+ *      «formazione scuola-lavoro», «PCTO», «corsi di formazione», «progetti» e
+ *      gli elenchi statici di scuole restano fuori a meno che il TITOLO dichiari
+ *      un reclutamento specifico **e** il testo dica ENTRO QUANDO candidarsi.
+ *      Una pagina che parla di un progetto non è un bando solo perché il menu
+ *      del sito contiene la parola «interpelli».
  *
- * Un testo senza segnali NON è giudicato qui: quello è compito dello scoring a
- * valle, che conosce tabelle, scadenze e codici meccanografici.
- *
- * Invarianti: zero dipendenze; lavoro limitato a `MAX_SCAN_CHARS` caratteri con
- * regex precompilate (meno di 2 ms per voce, quindi utilizzabile PRIMA del
- * parsing); stessa verità per `discovery-engine`, `table-reporter` e guardia.
- *
- * Guardia: `npm run test:noise-filter` (incluso in `npm test`).
+ * Un testo senza segnali NON è giudicato qui: decide lo scoring a valle. Zero
+ * dipendenze, regex precompilate, lavoro limitato a `MAX_SCAN_CHARS`: la stessa
+ * verità per `discovery-engine`, `table-reporter`, ingestion e guardia
+ * (`npm run test:noise-filter`, in `npm test`).
  */
 
 /** Esito del pre-filtro: con `isNoise` true la voce si scarta subito. */
@@ -37,24 +36,18 @@ export interface NoiseVerdict {
 export interface NoisePattern {
   re: RegExp;
   reason: string;
-  /**
-   * Atto di gara o documento previdenziale: blocca anche in presenza di un
-   * generico «avviso di selezione» nel corpo (le gare B2B si intitolano così).
-   */
+  /** Atto di gara/previdenza: blocca anche un generico «avviso di selezione». */
   hard?: boolean;
+  /** Pagina INFORMATIVA: salva solo con titolo SPECIFICO + finestra (§26.82). */
+  informativa?: boolean;
 }
 
-/**
- * Quanti caratteri si analizzano. Un documento di reclutamento dichiara il suo
- * segnale nelle prime righe; oltre questa soglia si sta leggendo una pagina
- * (indice, footer, allegati), non l'atto da giudicare.
- */
+/** Quanti caratteri si analizzano: oltre, si legge una pagina, non l'atto. */
 const MAX_SCAN_CHARS = 20_000;
 
 /**
- * Segnali NEGATIVI. Sono volutamente ancorati alle forme reali degli atti:
- * niente «gara», «bando» o «selezione» da soli (sono anche parole di un
- * interpello), ma i codici e le formule che identificano un atto amministrativo.
+ * Segnali NEGATIVI ancorati alle forme reali degli atti: niente «gara», «bando»
+ * o «selezione» da soli (sono anche parole di un interpello).
  */
 export const ADMIN_NOISE_PATTERNS: readonly NoisePattern[] = [
   // --- Appalti, forniture, finanza (bloccanti) ---
@@ -62,25 +55,13 @@ export const ADMIN_NOISE_PATTERNS: readonly NoisePattern[] = [
   { re: /\bcig\s*[:#]\s*[a-z0-9]/i, reason: 'CIG (codice identificativo di gara)', hard: true },
   { re: /\bCUP\b/, reason: 'CUP', hard: true },
   { re: /\bcup\s*[:#]\s*[a-z0-9]/i, reason: 'CUP', hard: true },
-  {
-    re: /codice\s+identificativo\s+(?:di\s+)?gara/i,
-    reason: 'codice identificativo di gara',
-    hard: true,
-  },
+  { re: /codice\s+identificativo\s+(?:di\s+)?gara/i, reason: 'codice identificativo di gara', hard: true },
   { re: /\bdetermina(?:zion[ei])?\b/i, reason: 'determina', hard: true },
   { re: /\bdeliber(?:a|e|zion[ei])\b/i, reason: 'delibera', hard: true },
-  {
-    re: /prospett[oi]\s+(?:di\s+)?liquidazione/i,
-    reason: 'prospetto di liquidazione',
-    hard: true,
-  },
+  { re: /prospett[oi]\s+(?:di\s+)?liquidazione/i, reason: 'prospetto di liquidazione', hard: true },
   { re: /\bfornitur[ae]\b/i, reason: 'fornitura', hard: true },
   { re: /\bMEPA\b/i, reason: 'MEPA', hard: true },
-  {
-    re: /affidamento\s+(?:diretto|di\s+servizi|di\s+forniture|del\s+servizio)/i,
-    reason: 'affidamento diretto',
-    hard: true,
-  },
+  { re: /affidamento\s+(?:diretto|di\s+servizi|di\s+forniture|del\s+servizio)/i, reason: 'affidamento diretto', hard: true },
 
   // --- Circolari interne e vita scolastica (non reclutamento) ---
   { re: /circolar[ei].{0,40}(?:famigli|genitori|alunni|studenti)/i, reason: 'circolare per le famiglie' },
@@ -91,19 +72,48 @@ export const ADMIN_NOISE_PATTERNS: readonly NoisePattern[] = [
   { re: /assemble[ae].{0,20}sindacal/i, reason: 'assemblea sindacale' },
 
   // --- Burocrazia del personale e previdenza (bloccanti) ---
-  {
-    re: /ricostruzione\s+(?:di\s+|della\s+)?carriera/i,
-    reason: 'ricostruzione della carriera',
-    hard: true,
-  },
+  { re: /ricostruzione\s+(?:di\s+|della\s+)?carriera/i, reason: 'ricostruzione della carriera', hard: true },
   { re: /\bquiescenza\b/i, reason: 'quiescenza', hard: true },
-  {
-    re: /trattamento\s+di\s+fine\s+rapporto/i,
-    reason: 'trattamento di fine rapporto',
-    hard: true,
-  },
+  { re: /trattamento\s+di\s+fine\s+rapporto/i, reason: 'trattamento di fine rapporto', hard: true },
   { re: /\bTFR\b/, reason: 'TFR', hard: true },
   { re: /\bTFS\b/, reason: 'TFS', hard: true },
+
+  // --- Contenuto INFORMATIVO/ISTITUZIONALE (§26.82) ---
+  // Non sono atti amministrativi ma PAGINE che parlano di scuola: restano SOLO
+  // con un titolo di reclutamento SPECIFICO e una finestra di candidatura nel
+  // testo (`haFinestraCandidatura`). Senza finestra non si ingerisce.
+  { re: /\bscuol[ae]\s+in\s+ospedale\b/i, reason: 'progetto «scuola in ospedale»', informativa: true },
+  { re: /\bformazione\s+scuola[\s-]+lavoro\b/i, reason: 'formazione scuola-lavoro', informativa: true },
+  { re: /\bPCTO\b/i, reason: 'PCTO', informativa: true },
+  { re: /\balternanza\s+scuola[\s-]*lavoro\b/i, reason: 'alternanza scuola-lavoro', informativa: true },
+  {
+    re: /\bcorsi?\s+(?:di\s+)?(?:formazione|aggiornamento|recupero|extracurricolar\w*|pomeridiani)\b/i,
+    reason: 'corso di formazione',
+    informativa: true,
+  },
+  // PNRR/PON restano FUORI: il reclutamento di tutor/esperti su progetto PNRR è
+  // una categoria AMMESSA (`CATEGORIE_AMMESSE`), non una pagina informativa.
+  {
+    re: /\bprogetti\s+(?:europei|extracurricolar\w*|di\s+istituto|di\s+ampliamento|d'istituto)\b/i,
+    reason: 'progetto didattico',
+    informativa: true,
+  },
+  {
+    re: /\bpercorsi\s+(?:di\s+)?(?:orientamento|competenze\s+trasversali)\b/i,
+    reason: 'percorso di orientamento',
+    informativa: true,
+  },
+  // Indirizzari statici (USP Rieti, «Ravenna Dante» e simili): nessun bando.
+  {
+    re: /\belenco\s+(?:delle\s+|dei\s+|degli\s+)?(?:scuole|istituti|plessi)\b/i,
+    reason: 'elenco statico di scuole/istituti',
+    informativa: true,
+  },
+  {
+    re: /\b(?:mappa\s+del\s+sito|indice\s+dei\s+contenuti|siti\s+web\s+delle\s+scuole)\b/i,
+    reason: 'indice/mappa del sito',
+    informativa: true,
+  },
 ];
 
 /**
@@ -140,6 +150,29 @@ export const STRONG_RECRUITMENT_INDICATORS: readonly RegExp[] = [
   /post[oi]\s+vacant/i,
 ];
 
+/**
+ * Finestra di CANDIDATURA dichiarata («entro il 30/10/2026», «entro e non oltre
+ * il 05/11/2026», «termine di presentazione delle domande», «domanda entro 10
+ * giorni»): è l'unica prova che una pagina informativa contenga un bando vero e
+ * non il racconto di un'attività già in corso (§26.82).
+ */
+const FINESTRA_CANDIDATURA: readonly RegExp[] = [
+  /\bentro\s+(?:e\s+non\s+oltre\s+)?(?:il|le)\s+\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}/i,
+  /\bnon\s+oltre\s+(?:il|le)\s+\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}/i,
+  /\bentro\s+\d{1,2}\s+giorni\b/i,
+  /\btermine\s+(?:ultimo\s+)?(?:per\s+la\s+)?presentazione\b/i,
+  /\bpresentazione\s+(?:delle\s+)?(?:domande|candidature|manifestazioni\s+di\s+interesse)\b/i,
+  /\bscadenza\s+(?:delle\s+|dei\s+)?(?:domande|candidature|termini)\b/i,
+  /\bdomand[ae]\s+(?:entro|non\s+oltre)\b/i,
+];
+
+/** True se il testo dichiara ENTRO QUANDO presentare domanda. */
+export function haFinestraCandidatura(testo?: string | null): boolean {
+  const t = normalizza(testo);
+  if (!t) return false;
+  return FINESTRA_CANDIDATURA.some((re) => re.test(t));
+}
+
 /** Normalizza gli spazi (NBSP compresi) e limita il lavoro sul testo. */
 function normalizza(testo: string | null | undefined): string {
   if (typeof testo !== 'string' || testo.length === 0) return '';
@@ -167,25 +200,41 @@ export function hasRecruitmentIndicator(testo: string): boolean {
 }
 
 /**
- * Decide se una voce è rumore amministrativo e va scartata PRIMA del parsing.
- *
- * Ordine dei gradini (documentato anche nell'intestazione):
- *   1. rumore nel TITOLO → sempre rumore;
+ * Decide se una voce è rumore amministrativo e va scartata PRIMA del parsing:
+ *   1. rumore nel TITOLO (atto amministrativo) → sempre rumore;
  *   2. nessun rumore (né in titolo né in testo) → non giudicata qui;
- *   3. rumore bloccante nel corpo → si salva solo con un indicatore SPECIFICO
- *      nel titolo (una pagina «Interpelli» che cita un CIG resta);
- *   4. rumore soft nel corpo + qualsiasi indicatore di reclutamento → NON rumore;
- *   5. altrimenti rumore, con la sua `reason`.
+ *   3. pagina INFORMATIVA → resta SOLO con titolo di reclutamento SPECIFICO **e**
+ *      finestra di candidatura (prima bastava «interpello» nel menu del sito);
+ *   4. rumore bloccante nel corpo → salvo solo con un indicatore SPECIFICO nel
+ *      titolo (una pagina «Interpelli» che cita un CIG resta);
+ *   5. rumore soft + qualsiasi indicatore di reclutamento → NON rumore;
+ *   6. altrimenti rumore, con la sua `reason`.
  */
 export function isAdministrativeNoise(text: string, title: string): NoiseVerdict {
   const testo = normalizza(text);
   const titolo = normalizza(title);
 
   const rumoreTitolo = primoRumore(titolo);
-  if (rumoreTitolo) return { isNoise: true, reason: rumoreTitolo.reason };
+  // Un atto amministrativo nel TITOLO è sempre rumore. Un segnale INFORMATIVO nel
+  // titolo no: «Interpello … progetto PCTO» è un bando vero, e lo decide il
+  // gradino 3 con la finestra di candidatura.
+  if (rumoreTitolo && !rumoreTitolo.informativa) {
+    return { isNoise: true, reason: rumoreTitolo.reason };
+  }
 
-  const rumoreCorpo = primoRumore(testo);
+  const rumoreCorpo = rumoreTitolo ?? primoRumore(testo);
   if (!rumoreCorpo) return { isNoise: false };
+
+  if (rumoreCorpo.informativa) {
+    const bandoNelTitolo = STRONG_RECRUITMENT_INDICATORS.some((re) => re.test(titolo));
+    const finestra = haFinestraCandidatura(`${titolo} ${testo}`);
+    return bandoNelTitolo && finestra
+      ? { isNoise: false }
+      : {
+          isNoise: true,
+          reason: `${rumoreCorpo.reason} (pagina informativa senza finestra di candidatura)`,
+        };
+  }
 
   if (rumoreCorpo.hard) {
     const salvoDaTitolo = STRONG_RECRUITMENT_INDICATORS.some((re) => re.test(titolo));

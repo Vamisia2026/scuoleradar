@@ -4,14 +4,14 @@
  * Perché esiste: la direttiva del 22/10/2026 ha cambiato TRE comportamenti della
  * bacheca che sui dati reali si vedono solo a tratti (poche righe hanno un link di
  * piattaforma, poche hanno il sito istituzionale, quasi nessuna ha una scadenza
- * entro l'orizzonte dei 30 giorni). Per verificare — a occhio e con una guardia
- * automatica — che cosa mostra il tabellone serve un insieme di righe che copra
- * TUTTI i casi:
+ * entro la finestra di candidatura dei 15 giorni). Per verificare — a occhio e con
+ * una guardia automatica — che cosa mostra il tabellone serve un insieme di righe
+ * che copra TUTTI i casi:
  *
  *   1. link di piattaforma (Argo, Nuvola, Google Forms) → il click apre la HOME
  *      `.edu.it` dell'istituto (`school_site`, poi i recapiti) — `../linkFonte.ts`;
- *   2. tre badge PIENI con etichetta fissa di stato («Scade oggi/domani» /
- *      «Ultima settimana» / «In corso»), soglie 2/7 giorni — `../rigaBoardDati.ts`;
+ *   2. badge PIENI con etichetta fissa di stato («Scade oggi/domani» /
+ *      «Ultime 48h» / «In corso»), due soli colori — `../rigaBoardDati.ts`;
  *   3. riga senza alcuna fonte apribile → NON entra in bacheca;
  *   4. riga con il solo segnaposto «Scuola non specificata / Più plessi» → NON
  *      entra; riga senza `school_name` ma con l'istituto nel titolo → entra col

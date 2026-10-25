@@ -62,8 +62,6 @@
     "W-UI:src/departments/radar/preferenze/PannelloMaterie.tsx": "componente fuori da components/ o pages/",
     "W-UI:src/departments/radar/preferenze/PannelloOrdini.tsx": "componente fuori da components/ o pages/",
     "W-UI:src/departments/radar/preferenze/PannelloProvince.tsx": "componente fuori da components/ o pages/",
-    "E-DIM:src/departments/radar/flightBoard/rigaBoardDati.ts": "332 righe (> 300): dividere in sotto-moduli (SRP)",
-    "E-DIM:src/departments/radar/flightBoard/righeBoard.ts": "392 righe (> 300): dividere in sotto-moduli (SRP)",
     "E-DIM:src/departments/radar/PreferenzeRadar.tsx": "341 righe (> 300): dividere in sotto-moduli (SRP)",
     "E-ROOT:src/departments/radar/PreferenzeRadar.tsx": "file di codice nella radice del dominio: va in components/ | hooks/ | services/ | data/",
     "W-UI:src/departments/radar/PreferenzeRadar.tsx": "componente fuori da components/ o pages/",

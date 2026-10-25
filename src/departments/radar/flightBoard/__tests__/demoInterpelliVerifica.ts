@@ -45,7 +45,7 @@ function motivoScarto(riga: RigaDemo, fonte: FonteApribile | null, oggi: Date): 
     return 'nessuna fonte apribile: il click non porterebbe né a un avviso né a un sito .edu.it';
   }
   if (!eOpportunitaConScadenza(riga.expiration_date, oggi)) {
-    return 'scadenza fuori dall’orizzonte dei 30 giorni (o già passata)';
+    return 'scadenza fuori dalla finestra di candidatura (15 giorni) o già passata';
   }
   if (eTitoloSoloData(riga.title)) return 'titolo di sola pubblicazione: non descrive l’avviso';
   if (!nomeScuolaBoard(riga)) return 'nessun istituto reale (segnaposto o titolo inutilizzabile)';

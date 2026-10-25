@@ -1,13 +1,13 @@
 /**
  * TEST — PREFILTRO DEL RUMORE AMMINISTRATIVO (`src/lib/noiseFilter.ts`).
  *
- * Il pre-filtro gira PRIMA del parsing: se sbaglia in eccesso brucia
- * opportunità vere, se sbaglia in difetto riempie il motore di gare e
- * circolari. La guardia fissa i due lati: SCARTARE gare, circolari per le
- * famiglie, assemblee sindacali e burocrazia del personale; TENERE interpelli
- * e supplenze (A-22, sostegno ADEE), tutor PNRR, CPIA e le pagine di interpelli
- * che citano un CIG. Verifica inoltre la precedenza del titolo, la purezza del
- * modulo (nessun import) e il cablaggio in `discovery-engine`/`table-reporter`.
+ * Il pre-filtro gira PRIMA del parsing: se sbaglia in eccesso brucia opportunità
+ * vere, se sbaglia in difetto riempie il motore di gare e circolari. La guardia
+ * fissa i due lati: SCARTARE gare, circolari, burocrazia e pagine informative
+ * (§26.82); TENERE interpelli e supplenze (A-22, sostegno ADEE), tutor PNRR,
+ * CPIA e le pagine di interpelli che citano un CIG. Verifica inoltre la
+ * precedenza del titolo, la purezza del modulo e il cablaggio in
+ * `discovery-engine`/`table-reporter`.
  *
  * Uso: npm run test:noise-filter  (incluso in `npm test`)
  */
@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs';
 import {
   ADMIN_NOISE_PATTERNS,
   RECRUITMENT_INDICATORS,
+  haFinestraCandidatura,
   hasRecruitmentIndicator,
   isAdministrativeNoise,
 } from '../noiseFilter.ts';
@@ -35,170 +36,175 @@ const leggi = (p: string): string => readFileSync(p, 'utf8');
 const rumore = (testo: string, titolo = ''): boolean =>
   isAdministrativeNoise(testo, titolo).isNoise;
 
+/** Casi [nome, testo, titolo, atteso]: una tabella, nessuna ripetizione. */
+type Caso = [string, string, string, boolean];
+function tabella(righe: readonly Caso[]): void {
+  for (const [nome, testo, titolo, atteso] of righe) check(nome, atteso, rumore(testo, titolo));
+}
+
 /* --------------------- 1) GARE, DETERMINE E FORNITURE -------------------- */
 
 console.log('\n— Gli atti di gara non sono opportunità —');
-check(
-  'una determina a contrarre con CIG',
-  true,
-  rumore(
+tabella([
+  [
+    'una determina a contrarre con CIG',
     'Oggetto: affidamento diretto della fornitura di cancelleria. CIG Z4C3F2A1B9, CUP J11E23000120006.',
     'DETERMINA A CONTRARRE N. 77/2026',
-  ),
-);
-check(
-  'un avviso B2B senza titolo utile (CIG nel corpo)',
-  true,
-  rumore('Avviso di selezione per affidamento diretto del servizio di pulizia. CIG: Z4C3F2A1B9.'),
-);
-check(
-  'l’«avviso di selezione» non salva una gara di forniture',
-  true,
-  rumore('Avviso di selezione per la fornitura di arredi scolastici. Scadenza offerte 30/11.'),
-);
-check(
-  'prospetto di liquidazione / MEPA',
-  true,
-  rumore('Prospetto di liquidazione dei compensi. Acquisto effettuato su MEPA.'),
-);
-check(
-  'il CUP da solo è rumore',
-  true,
-  rumore('CUP J11E23000120006 — lavori di adeguamento palestra.'),
-);
-check(
-  '«determinazione» è la stessa famiglia di «determina»',
-  true,
-  rumore('Determinazione del Dirigente Scolastico n. 412 del 3 ottobre.'),
-);
-
+    true,
+  ],
+  [
+    'un avviso B2B senza titolo utile (CIG nel corpo)',
+    'Avviso di selezione per affidamento diretto del servizio di pulizia. CIG: Z4C3F2A1B9.',
+    '',
+    true,
+  ],
+  [
+    'l’«avviso di selezione» non salva una gara di forniture',
+    'Avviso di selezione per la fornitura di arredi scolastici. Scadenza offerte 30/11.',
+    '',
+    true,
+  ],
+  ['prospetto di liquidazione / MEPA', 'Prospetto di liquidazione dei compensi. Acquisto effettuato su MEPA.', '', true],
+  ['il CUP da solo è rumore', 'CUP J11E23000120006 — lavori di adeguamento palestra.', '', true],
+  [
+    '«determinazione» è la stessa famiglia di «determina»',
+    'Determinazione del Dirigente Scolastico n. 412 del 3 ottobre.',
+    '',
+    true,
+  ],
+]);
 
 /* ------------- 2) CIRCOLARI, SCUOLA E BUROCRAZIA DEL PERSONALE ------------ */
 
 console.log('\n— Le circolari per le famiglie non sono opportunità —');
-check(
-  'una circolare con viaggio di istruzione',
-  true,
-  rumore(
+tabella([
+  [
+    'una circolare con viaggio di istruzione',
     'Si comunicano alle famiglie gli allegati e le autorizzazioni per il viaggio di istruzione a Roma.',
     'Circolare n. 45 — Viaggio di istruzione a Roma',
-  ),
-);
+    true,
+  ],
+  ['circolare per i genitori senza titolo parlante', 'Circolare per le famiglie: orario scolastico definitivo dal 15 ottobre.', '', true],
+  ['uscita didattica e orario scolastico', 'Uscita didattica al museo: modifiche all’orario scolastico del plesso.', '', true],
+  ['elezione degli organi collegiali', 'Elezioni degli organi collegiali: liste entro il 30 ottobre.', '', true],
+  [
+    'assemblea sindacale',
+    'Convocazione assemblea sindacale del 10 novembre per tutto il personale docente.',
+    'Assemblea sindacale',
+    true,
+  ],
+  [
+    'quiescenza, TFR e ricostruzione di carriera',
+    'Domanda di ricostruzione della carriera ai fini del trattamento di fine rapporto (TFR).',
+    '',
+    true,
+  ],
+  ['il TFS è rumore quanto il TFR', 'Modulistica per la cessazione dal servizio: TFS e buonuscita.', '', true],
+  [
+    'una circolare citata di sfuggita salvata da un interpello',
+    'Si ricorda che è attivo un interpello per supplenza; la circolare alle famiglie resta separata.',
+    '',
+    false,
+  ],
+]);
+
+/* ------------------- 3b) PAGINE INFORMATIVE (PCTO, progetti) -------------- */
+
+console.log('\n— Le pagine informative non sono avvisi (§26.82) —');
+// Un segnale informativo scarta da solo: sono pagine che RACCONTANO la scuola.
+tabella([
+  ['scuola in ospedale', 'Il progetto Scuola in Ospedale garantisce il diritto allo studio agli alunni ricoverati.', 'Scuola in ospedale', true],
+  ['PCTO col menu «interpelli»', 'Percorsi per le competenze trasversali e l’orientamento (PCTO): aziende convenzionate. Interpelli · Supplenze · Albo.', 'PCTO — aziende convenzionate', true],
+  ['formazione scuola-lavoro', 'Attività di formazione scuola lavoro per le classi terze e quarte.', 'Formazione scuola lavoro', true],
+  ['corso di formazione per docenti', 'Corso di formazione per docenti sulla didattica inclusiva: iscrizioni su SOFIA.', 'Corsi di formazione 2026', true],
+  ['elenco statico di scuole (USP)', 'Elenco delle scuole della provincia: istituti comprensivi, licei e istituti tecnici.', 'Elenco delle scuole — USP Rieti', true],
+  ['mappa del sito', 'Mappa del sito: Home, Didattica, Interpelli, Albo, Contatti.', 'Mappa del sito', true],
+]);
+
+// …ma un BANDO VERO che parla di PCTO resta: titolo specifico + finestra.
 check(
-  'una circolare per i genitori senza titolo parlante',
-  true,
-  rumore('Circolare per le famiglie: orario scolastico definitivo dal 15 ottobre.'),
-);
-check(
-  'uscita didattica e orario scolastico',
-  true,
-  rumore('Uscita didattica al museo: modifiche all’orario scolastico del plesso centrale.'),
-);
-check(
-  'elezione degli organi collegiali',
-  true,
-  rumore('Elezioni degli organi collegiali: presentazione delle liste entro il 30 ottobre.'),
-);
-check(
-  'assemblea sindacale',
-  true,
-  rumore('Convocazione assemblea sindacale del 10 novembre per tutto il personale docente.', 'Assemblea sindacale'),
-);
-check(
-  'quiescenza, TFR e ricostruzione di carriera',
-  true,
-  rumore('Domanda di ricostruzione della carriera ai fini del trattamento di fine rapporto (TFR).'),
-);
-check(
-  'il TFS è rumore quanto il TFR',
-  true,
-  rumore('Modulistica per la cessazione dal servizio: TFS e buonuscita.'),
-);
-check(
-  'una circolare citata di sfuggita salvata da un interpello',
+  'interpello per esperto PCTO con termine dichiarato → resta',
   false,
-  rumore('Si ricorda che è attivo un interpello per supplenza; la circolare alle famiglie resta separata.'),
+  rumore('Avviso di selezione per esperto PCTO. Presentare domanda entro il 30/10/2026.', 'Interpello esperto PCTO'),
+);
+check(
+  'senza finestra la pagina informativa resta fuori anche col titolo forte',
+  true,
+  rumore('Interpello per esperto PCTO: le attività inizieranno a novembre.', 'Interpello esperto PCTO'),
+);
+check(
+  'la finestra è riconosciuta in forma esplicita',
+  true,
+  haFinestraCandidatura('Le domande vanno presentate entro e non oltre il 05/11/2026.'),
 );
 
-/* ------------------ 3) LE OPPORTUNITÀ VERE NON SI TOCCANO --------------- */
+/* ------------------ 3c) LE OPPORTUNITÀ VERE NON SI TOCCANO --------------- */
 
 console.log('\n— Interpelli, sostegno e PNRR restano —');
-check(
-  'interpello con classe di concorso e sostegno',
-  false,
-  rumore(
+tabella([
+  [
+    'interpello con classe di concorso e sostegno',
     'Interpello per la copertura di n. 2 posti di sostegno scuola primaria, classe di concorso ADEE. Scadenza 12/11/2026.',
     'Interpelli a.s. 2026/2027',
-  ),
-);
-check(
-  'supplenza su A-22 (italiano, storia, geografia)',
-  false,
-  rumore(
+    false,
+  ],
+  [
+    'supplenza su A-22 (italiano, storia, geografia)',
     'Avviso di selezione per il conferimento di supplenza annuale, classe di concorso A-22 (Italiano, storia, geografia).',
     'Avviso di selezione',
-  ),
-);
-check(
-  'tutor e orientatori PNRR',
-  false,
-  rumore(
+    false,
+  ],
+  [
+    'tutor e orientatori PNRR',
     'Avviso di selezione per il conferimento di incarichi di tutor e orientatore, progetto PNRR. Candidatura entro il 5 novembre.',
     'Avviso selezione tutor PNRR',
-  ),
-);
-check(
-  'CPIA e corsi serali',
-  false,
-  rumore(
+    false,
+  ],
+  [
+    'CPIA e corsi serali',
     'Interpello per supplenza presso il CPIA, corsi serali, classe di concorso A-24. Disponibilità entro il 9 novembre.',
     'Interpello CPIA — corsi serali',
-  ),
-);
-check(
-  'una pagina di interpelli che cita il CIG degli affidamenti',
-  false,
-  rumore(
+    false,
+  ],
+  [
+    'una pagina di interpelli che cita il CIG degli affidamenti',
     'Interpelli e supplenze in corso. Per la trasparenza si pubblica il CIG degli affidamenti: CIG Z4C3F2A1B9.',
     'Interpelli e supplenze',
-  ),
-);
-check(
-  'la fornitura citata in una pagina di interpelli non la scarta',
-  false,
-  rumore(
+    false,
+  ],
+  [
+    'la fornitura citata in una pagina di interpelli non la scarta',
     'Interpello per supplenza: la fornitura didattica sarà consegnata al plesso. Disponibilità entro il 12/11.',
     'Interpello supplenza',
-  ),
-);
-check(
-  'un testo neutro non è giudicato dal pre-filtro',
-  false,
-  rumore('Elenco dei documenti pubblicati nella sezione dedicata.', 'Amministrazione trasparente'),
-);
-check('testo e titolo vuoti', false, rumore('', ''));
+    false,
+  ],
+  [
+    'un testo neutro non è giudicato dal pre-filtro',
+    'Elenco dei documenti pubblicati nella sezione dedicata.',
+    'Amministrazione trasparente',
+    false,
+  ],
+  ['testo e titolo vuoti', '', '', false],
+]);
 
 /* --------------------- 4) PRECEDENZA DEL TITOLO ------------------------- */
 
 console.log('\n— Il titolo è l’atto: la precedenza non si aggira —');
-check(
-  'una determina non diventa un interpello per il corpo',
-  true,
-  rumore(
+tabella([
+  [
+    'una determina non diventa un interpello per il corpo',
     'Avviso di selezione per interpello volto alla copertura di posti vacanti. CIG Z4C3F2A1B9.',
     'Determina n. 12 del 7 ottobre',
-  ),
-);
-check(
-  '«interpello» nel titolo salva l’atto bloccante',
-  false,
-  rumore('Documento con CIG Z4C3F2A1B9 citato per trasparenza.', 'Interpello per supplenza'),
-);
-check(
-  'un titolo generico non salva un atto bloccante',
-  true,
-  rumore('Documento con CIG Z4C3F2A1B9.', 'Avviso di selezione'),
-);
+    true,
+  ],
+  [
+    '«interpello» nel titolo salva l’atto bloccante',
+    'Documento con CIG Z4C3F2A1B9 citato per trasparenza.',
+    'Interpello per supplenza',
+    false,
+  ],
+  ['un titolo generico non salva un atto bloccante', 'Documento con CIG Z4C3F2A1B9.', 'Avviso di selezione', true],
+]);
 
 /* --------------------- 5) PUREZZA E LISTE DI SEGNALI -------------------- */
 

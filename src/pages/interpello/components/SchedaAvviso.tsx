@@ -140,7 +140,7 @@ export function SchedaAvviso({ interpello }: SchedaAvvisoProps) {
       {/* GUIDA OPERATIVA: come trovare la riga e candidarsi quando la fonte è un
           elenco/"Stampa" o non è disponibile. */}
       {guida && (
-        <p className="mt-4 rounded-xl border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-900">
+        <p className="mt-4 rounded-xl border-l-4 border-primary-400 bg-primary-50 px-4 py-3 text-sm leading-relaxed text-primary-800">
           ℹ️ {guida}
         </p>
       )}

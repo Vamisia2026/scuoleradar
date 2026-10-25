@@ -34,7 +34,7 @@ import process from 'node:process';
 import { createClient } from '@supabase/supabase-js';
 import { nomeIstitutoPresentabile } from '../src/lib/nomeIstituto.ts';
 import { normalizzaCodiceMeccanografico } from '../src/lib/emailScuola.ts';
-import { calcolaUrgenza } from '../src/lib/urgency.ts';
+import { stileScadenza, giorniRimanenti, eOpportunitaConScadenza } from '../src/lib/scadenza.ts';
 import { creaRisolutore, type RigaInterpello } from './lib/scuolaDaPagina.ts';
 
 process.loadEnvFile?.();
@@ -135,15 +135,18 @@ async function main(): Promise<void> {
     modificate.push({ ...riga, ...patch });
   }
 
-  // ── Impatto in bacheca: `preparaRigheBoard` mostra solo righe con scadenza VALIDA e
-  // con un nome d'istituto reale (`nomeScuolaRiga`): qui si contano le righe che dopo il
-  // backfill hanno entrambe le cose, con la banda di urgenza (§26.22).
+  // ── Impatto in bacheca: `preparaRigheBoard` mostra solo righe con scadenza VALIDA
+  // (dentro l'orizzonte di candidatura, §26.82) e con un nome d'istituto reale
+  // (`nomeScuolaRiga`): qui si contano le righe che dopo il backfill hanno entrambe
+  // le cose, con la banda unica di `lib/scadenza.stileScadenza`.
   const visibili = modificate.filter(
-    (r) => Boolean(r.expiration_date) && Boolean(nomeIstitutoPresentabile(r.school_name)),
+    (r) =>
+      eOpportunitaConScadenza(r.expiration_date, oggi) &&
+      Boolean(nomeIstitutoPresentabile(r.school_name)),
   );
   const bande = new Map<string, number>();
   for (const r of visibili) {
-    const banda = calcolaUrgenza(r.expiration_date, oggi).banda;
+    const banda = stileScadenza(giorniRimanenti(r.expiration_date, oggi)).livello;
     bande.set(banda, (bande.get(banda) ?? 0) + 1);
   }
 
@@ -169,7 +172,7 @@ async function main(): Promise<void> {
   if (visibili.length > 0) {
     console.log('\n  Righe che la bacheca mostra ora (scuola · banda · scadenza):');
     for (const r of visibili.slice(0, 12)) {
-      const u = calcolaUrgenza(r.expiration_date, oggi);
+      const u = stileScadenza(giorniRimanenti(r.expiration_date, oggi));
       console.log(
         `   · [${r.province ?? '--'}] ${r.school_name} · ${u.label} · ${(r.expiration_date ?? '').slice(0, 10)}`,
       );

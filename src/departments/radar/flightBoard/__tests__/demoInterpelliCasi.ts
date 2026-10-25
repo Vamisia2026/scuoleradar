@@ -36,7 +36,7 @@ export const CASI_DEMO: readonly CasoDemo[] = [
     atteso: {
       esito: 'mostrata',
       fonte: 'sito-scuola',
-      badge: 'Ultima settimana',
+      badge: 'In corso',
       nota: 'Argo → home .edu.it dal sito istituzionale (school_site)',
     },
   },
@@ -73,7 +73,7 @@ export const CASI_DEMO: readonly CasoDemo[] = [
     materia: 'Scuola primaria',
     // Nuvola/Spaggiari: link di piattaforma.
     source_url: 'https://icmarconi.madisoft.it/didattica/interpelli',
-    giorniAllaScadenza: 21,
+    giorniAllaScadenza: 12,
     // Nessun `school_site` (colonna vuota): la home si ricava dalla PEO .edu.it.
     contact_email: 'segreteria@icmarconi.edu.it',
     school_pec: null,
@@ -123,8 +123,8 @@ export const CASI_DEMO: readonly CasoDemo[] = [
     atteso: {
       esito: 'mostrata',
       fonte: 'avviso',
-      badge: 'Ultima settimana',
-      nota: 'Pagina dell’avviso sul sito dell’istituto: badge arancione pieno (3–7 giorni)',
+      badge: 'In corso',
+      nota: 'Pagina dell’avviso sul sito dell’istituto: badge verde pieno (in corso)',
     },
   },
   {
@@ -137,8 +137,8 @@ export const CASI_DEMO: readonly CasoDemo[] = [
     school_code: null,
     materia: 'Discipline letterarie',
     source_url: 'https://www.liceovirgilio.edu.it/interpelli/a012-2026',
-    // Ultimo giorno utile dell'orizzonte (30 giorni): deve restare in bacheca.
-    giorniAllaScadenza: 29,
+    // Ultimo giorno utile della finestra di candidatura (15 giorni): resta in bacheca.
+    giorniAllaScadenza: 14,
     contact_email: null,
     school_pec: null,
     school_site: 'www.liceovirgilio.edu.it',
@@ -146,7 +146,7 @@ export const CASI_DEMO: readonly CasoDemo[] = [
       esito: 'mostrata',
       fonte: 'avviso',
       badge: 'In corso',
-      nota: 'Bordo dell’orizzonte dei 30 giorni: badge verde pieno',
+      nota: 'Bordo della finestra di candidatura (15 giorni): badge verde pieno',
     },
   },
   {
@@ -188,7 +188,7 @@ export const CASI_DEMO: readonly CasoDemo[] = [
     atteso: {
       esito: 'mostrata',
       fonte: 'avviso',
-      badge: 'Ultima settimana',
+      badge: 'In corso',
       nota: 'school_name nullo → nome ricavato dal titolo (nessuna etichetta «non specificata»)',
     },
   },

@@ -2,9 +2,11 @@
  * Dashboard · «Opportunità mappate» (accordion console con le card avviso).
  *
  * Tre stati: invito a completare il profilo (utente loggato senza preferenze),
- * coda vuota con le etichette dei filtri del profilo, elenco delle card con
- * color-coding di urgenza (<48h · entro 5 giorni · attiva). Per gli utenti Base
- * l'accordion resta bloccato: badge «🔒 PRO» e click che apre la vetrina.
+ * coda vuota con le etichette dei filtri del profilo, elenco delle card con il
+ * badge della scadenza. Il badge NON ha una palette propria: usa
+ * `lib/scadenza.stileScadenza` (rosso ≤ 48h · verde in corso · ardesia per
+ * scaduto/assente/fuori finestra, §26.82). Per gli utenti Base l'accordion resta
+ * bloccato: badge «🔒 PRO» e click che apre la vetrina.
  *
  * Presentazione pura: dati, stato di apertura e azioni arrivano dal contenitore.
  */
@@ -12,34 +14,10 @@ import { SlidersHorizontal } from 'lucide-react';
 import { Accordion } from '@/components/Accordion';
 import { InterpelloCard } from '@/components/InterpelloCard';
 import { etichettaScadenzaAvviso } from '@/lib/alertInterpello';
+import { giorniRimanenti, stileScadenza } from '@/lib/scadenza';
 import { classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import type { Interpello } from '@/data/interpelli';
-
-/** Urgenza in base ai giorni rimanenti: <48h urgente · <5 giorni media · oltre regolare. */
-type UrgenzaScadenza = 'urgente' | 'media' | 'regolare';
-
-function urgenzaScadenza(dataScadenza: string): UrgenzaScadenza {
-  const ms = new Date(dataScadenza).getTime() - Date.now();
-  if (ms <= 2 * 86_400_000) return 'urgente'; // < 48 ore
-  if (ms <= 5 * 86_400_000) return 'media'; // < 5 giorni
-  return 'regolare';
-}
-
-const URGENZA_STILE: Record<UrgenzaScadenza, { etichetta: string; cls: string }> = {
-  urgente: {
-    etichetta: '⏳ Urgente · <48h',
-    cls: 'bg-error-50 text-error-700 ring-1 ring-inset ring-error-200',
-  },
-  media: {
-    etichetta: '🕐 Entro 5 giorni',
-    cls: 'bg-warning-50 text-warning-700 ring-1 ring-inset ring-warning-300',
-  },
-  regolare: {
-    etichetta: '✓ Opportunità attiva',
-    cls: 'bg-accent-50 text-accent-700 ring-1 ring-inset ring-accent-200',
-  },
-};
 
 interface ElencoOpportunitaProps {
   /** Opportunità da mostrare (già filtrate, ordinate e limitate al piano). */
@@ -118,7 +96,11 @@ export function ElencoOpportunita({
         ) : (
           <div className="animate-fade-in space-y-3">
             {lista.map((i) => {
-              const urg = urgenzaScadenza(i.dataScadenza);
+              // UNA sola regola/palette per la scadenza (§26.82): la stessa del
+              // «Radar Live» e della scheda avviso. Prima qui viveva una terza
+              // scala (<48h / <5 giorni) con tinte pastello warning/accent che
+              // contraddiceva il rosso/verde pieno del tabellone.
+              const scadenza = stileScadenza(giorniRimanenti(i.dataScadenza));
               return (
                 <div
                   key={i.id}
@@ -129,9 +111,9 @@ export function ElencoOpportunita({
                       {etichettaScadenzaAvviso(i.dataScadenza, i.dataPubblicazione)}
                     </span>
                     <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${URGENZA_STILE[urg].cls}`}
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${scadenza.className}`}
                     >
-                      {URGENZA_STILE[urg].etichetta}
+                      {scadenza.label}
                     </span>
                   </div>
                   <InterpelloCard interpello={i} />

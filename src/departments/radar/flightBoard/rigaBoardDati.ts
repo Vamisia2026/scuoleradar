@@ -1,92 +1,35 @@
 /**
  * ScuoleRadar.it — Dipartimento Radar · DATI DERIVATI di una riga del tabellone
- * «Radar Live» (`FlightBoardInterpelli`).
+ * «Radar Live» (`FlightBoardInterpelli`): tipologia, badge della scadenza, date
+ * brevi. Nessun rendering, nessuna rete: il JSX sta in `components/RigaBoard.tsx`.
  *
- * Da una riga di `interpelli` alle informazioni che la tavola mostra ma il
- * database non contiene: la tipologia (classe di concorso o categoria), la
- * banda di urgenza/anzianità della scadenza e le date brevi. Nessun rendering,
- * nessuna rete, nessuno stato: il JSX sta in `components/RigaBoard.tsx`.
- *
- * REGOLA DI PRODOTTO (§scadenza-prioritaria, §26.67):
+ * REGOLA DI PRODOTTO (§26.67, §26.82):
  *  - Il badge della colonna «Scadenza» deriva SOLO da `expiration_date`:
- *    `created_at` non entra MAI nel calcolo, nemmeno quando la scadenza manca.
- *    La data di pubblicazione NON è una scadenza: la cella mostra il trattino
- *    `—` con la banda neutra «Scadenza n/d», mai un surrogato spacciato per
- *    scadenza.
- *  - Se `expiration_date` è presente e parsabile, la banda viene calcolata
- *    INTERNAMENTE ed è deterministica: `calcolaUrgenza` non è più consultato.
- *    Così le soglie di prodotto non possono essere scavalcate da un modulo
- *    esterno che cambia palette o etichette sotto (es. sfumature arancioni
- *    a 30 giorni, conflitti con il giallo del design system).
- *  - Il campo `fonte` del badge rende esplicito al componente da dove
- *    proviene l'informazione: `scadenza` (scadenza vera) oppure `nessuna`
- *    (nessun dato — il vuoto si dichiara, non si riempie).
- *
- * REGOLA DI DESIGN (§badge-urgenza):
- *  - I token di colore vivono SOLO in `URGENZA_TOKENS`.
- *  - Il ritorno pubblico è SEMPRE `{ label, className, fonte }`.
- *
- * COLOUR CODING (§badge-urgenza, §26.75 del 22/10/2026 — allineato a
- * `lib/scadenza.stileScadenza` e a `righeBoard.livelloUrgenza`):
- *   differenza <= 2 giorni (<= 48h) → ROSSO PIENO     «Scaduto» / «Scade oggi» /
- *                                                      «Scade domani» / «Ultime 48h»
- *   differenza 3–7 giorni           → ARANCIONE PIENO «Ultima settimana»
- *   differenza > 7 giorni           → VERDE PIENO     «In corso»
- * I giorni sono di CALENDARIO (regola condivisa), mai una differenza fra istanti.
- * Le soglie erano 3–10: la banda arancione si sovrapponeva a un semaforo diverso
- * da quello dei `SOGLIA_IMMINENTE`/`SOGLIA_VICINA` condivisi, e un avviso a 9
- * giorni risultava «vicino» sul tabellone e «in corso» ovunque altro.
- *
- * ETICHETTE FISSE (direttiva 22/10/2026): i tre badge dicono lo STATO, non un
- * conto alla rovescia. Il vecchio «Scade tra 5g» cambiava parola ogni giorno,
- * rendeva la colonna rumorosa e sembrava un'offerta a tempo; ora la banda
- * arancione dice «Ultima settimana» e quella rossa al massimo «Ultime 48h».
- *
- * PALETTE PIENA (§26.72, direttiva 15/10/2026; confermata §26.75): le bande di
- * urgenza usano SOLO colori SATURI (emerald-700 / amber-600 / rose-700) su testo
- * BIANCO in grassetto, così il colore si vede anche di sfuggita e su schermo
- * piccolo. Le tinte pastello (…-100, …-200) erano troppo deboli per un segnale di
- * urgenza e sono state rimosse da tutto il tabellone. Anche la banda `neutro`
- * (assenza di un dato pubblicato) è piena — ardesia scuro, mai un colore
- * d'allarme: non deve gridare, ma nemmeno sparire; nel «Radar Live» non è
- * comunque più raggiungibile, perché una riga senza scadenza non entra (§26.71).
- *
- * REGOLA DI PRODOTTO (§denominazione-fonte):
- *  La denominazione della scuola mostrata in riga proviene SEMPRE dalla
- *  fonte (`school_name` / testo dell'avviso) quando disponibile. Il decode
- *  del codice meccanografico è solo un'ultima spiaggia e, se fallisce, NON
- *  deve produrre «SCUOLA NON SPECIFICATA»: si restituisce `null` e il
- *  chiamante decide come rendere il vuoto.
+ *    `created_at` non è nemmeno un parametro, nemmeno quando la scadenza manca
+ *    (la cella mostra `—` con la banda neutra «Scadenza n/d», mai un surrogato
+ *    spacciato per scadenza).
+ *  - Banda, etichetta e colori arrivano da `lib/scadenza.stileScadenza`: UNA
+ *    regola per tabellone, scheda avviso e feed della dashboard.
+ *  - I giorni sono di CALENDARIO: ≤ 48h rosso pieno (rose-700) · dal terzo
+ *    giorno all'orizzonte di 15 verde pieno (emerald-700) · oltre l'orizzonte
+ *    ardesia «Scadenza fuori finestra» (fine incarico, avvio progetto: non è un
+ *    termine per candidarsi). Nessun giallo/arancio e nessuna banda che pulsa:
+ *    le etichette dicono lo STATO («Scade oggi», «Ultime 48h», «In corso»), non
+ *    un conto alla rovescia — il colore non deve invitare a correre.
+ *  - Il campo `fonte` dichiara la provenienza: `scadenza` o `nessuna`
+ *    (il vuoto si dichiara, non si riempie).
+ *  - La denominazione della scuola viene SEMPRE dalla fonte; se il decode del
+ *    meccanografico fallisce si restituisce `null`, mai «SCUOLA NON SPECIFICATA».
  */
 import { materiaClasse } from '@/data/classiConcorso';
-import { giorniRimanenti } from '@/lib/scadenza';
+import { giorniRimanenti, SCADENZA_TOKENS, stileScadenza } from '@/lib/scadenza';
 import type { InterpelloLive } from './righeBoard';
 
-// ---------------------------------------------------------------------------
-// Token del design system
-// ---------------------------------------------------------------------------
+// I token vivono in `lib/scadenza.SCADENZA_TOKENS` (un solo posto per tabellone,
+// scheda avviso e feed): qui si ri-esportano, senza una seconda palette.
+export { SCADENZA_TOKENS };
 
-/**
- * Token Tailwind associati alle bande di urgenza. Le chiavi sono semantiche,
- * non cromatiche: se il design system cambierà palette, si aggiorna solo
- * questo oggetto.
- */
-export const URGENZA_TOKENS = {
-  verde: 'bg-emerald-700 text-white font-bold shadow-sm',
-  giallo: 'bg-amber-600 text-white font-bold shadow-sm',
-  rosso: 'bg-rose-700 text-white font-bold shadow-sm',
-  // NON è una banda di urgenza: dichiara l'ASSENZA di una scadenza pubblicata.
-  // Piena anche lei (nessun pastello nel tabellone), ma su ardesia: non confondibile
-  // con i tre semafori. Nel «Radar Live» non è raggiungibile (§26.71).
-  neutro: 'bg-slate-600 text-white font-bold shadow-sm',
-} as const;
-
-export type UrgenzaBand = keyof typeof URGENZA_TOKENS;
-
-/**
- * Da dove deriva il badge: `scadenza` = scadenza vera dichiarata dalla fonte,
- * `nessuna` = nessun dato di scadenza (la cella mostra il trattino `—`).
- */
+/** `scadenza` = data vera dichiarata dalla fonte · `nessuna` = dato assente. */
 export type FonteBadge = 'scadenza' | 'nessuna';
 
 /** Forma pubblica del badge. */
@@ -156,53 +99,19 @@ export function dataItBreve(iso?: string | null): string {
 }
 
 // ---------------------------------------------------------------------------
-// Calcolo banda ed etichetta dalla scadenza (INTERNO, deterministico)
+// Badge dalla scadenza (INTERNO, deterministico)
 // ---------------------------------------------------------------------------
 
 /**
- * Assegna una banda in base ai giorni di calendario che mancano alla scadenza.
- *   <= 2 giorni (<= 48h) → rosso   (scaduta / oggi / domani / ultime 48h)
- *   3–7 giorni           → arancio (vicina)
- *   > 7 giorni           → verde   (in corso, entro l'orizzonte dei 30 giorni
- *                                   già garantito dal gate `eOpportunitaConScadenza`)
- *
- * Le soglie sono le STESSE di `lib/scadenza` (`SOGLIA_IMMINENTE` = 2,
- * `SOGLIA_VICINA` = 7) e di `righeBoard.livelloUrgenza` (≤ 2 / ≤ 7 / oltre):
- * un solo semaforo in tutta l'applicazione.
- */
-function calcolaBandaDaScadenza(scad: Date): UrgenzaBand {
-  const giorni = giorniRimanenti(scad.toISOString().slice(0, 10)) ?? Number.POSITIVE_INFINITY;
-  if (giorni <= 2) return 'rosso';
-  if (giorni <= 7) return 'giallo';
-  return 'verde';
-}
-
-/**
- * Etichetta leggibile dello STATO rispetto alla scadenza (mai un conto alla
- * rovescia: cfr. «ETICHETTE FISSE» in testa al modulo).
- */
-function etichettaDaScadenza(scad: Date): string {
-  const giorni = giorniRimanenti(scad.toISOString().slice(0, 10)) ?? Number.POSITIVE_INFINITY;
-
-  if (giorni < 0) return 'Scaduto';
-  if (giorni <= 2) {
-    if (giorni === 0) return 'Scade oggi';
-    if (giorni === 1) return 'Scade domani';
-    return 'Ultime 48h';
-  }
-  if (giorni <= 7) return 'Ultima settimana';
-  return 'In corso';
-}
-
-/**
  * Costruisce il badge dalla sola scadenza. Percorso unico e deterministico:
- * nessuna dipendenza esterna, nessuna euristica sul colore.
+ * la banda, l'etichetta e le classi arrivano da `lib/scadenza.stileScadenza`
+ * (UNA regola per tabellone, scheda avviso e feed della dashboard, §26.82).
  */
 function badgeDaScadenza(scad: Date): BadgeUrgenza {
-  const band = calcolaBandaDaScadenza(scad);
+  const stile = stileScadenza(giorniRimanenti(scad.toISOString().slice(0, 10)));
   return {
-    label: etichettaDaScadenza(scad),
-    className: URGENZA_TOKENS[band],
+    label: stile.label,
+    className: stile.className,
     fonte: 'scadenza',
     dataRif: scad.toISOString().slice(0, 10),
   };
@@ -215,10 +124,11 @@ function badgeDaScadenza(scad: Date): BadgeUrgenza {
 /**
  * Badge di urgenza della colonna «Scadenza» del tabellone.
  *
- * Colour coding di prodotto (unica fonte di verità):
+ * Colour coding di prodotto (UNICA fonte di verità, `lib/scadenza.stileScadenza`
+ * §26.82):
  *   <= 2 giorni (<= 48h) → rosso pieno   (rose-700)
- *   3–7 giorni           → arancio pieno (amber-600)
- *   > 7 giorni           → verde pieno   (emerald-700)
+ *   3 … 15 giorni        → verde pieno   (emerald-700)
+ *   oltre 15 giorni      → ardesia       «Scadenza fuori finestra»
  *
  * Ordine di risoluzione RIGOROSO:
  *   1. `expirationDate` assente → banda NEUTRA dichiarata («Scadenza n/d»).
@@ -233,7 +143,7 @@ export function badgeScadenza(expirationDate?: string | null): BadgeUrgenza {
   if (!scadRaw) {
     return {
       label: 'Scadenza n/d',
-      className: URGENZA_TOKENS.neutro,
+      className: SCADENZA_TOKENS.neutro,
       fonte: 'nessuna',
     };
   }
@@ -243,54 +153,12 @@ export function badgeScadenza(expirationDate?: string | null): BadgeUrgenza {
   if (!scad) {
     return {
       label: 'Scadenza non valida',
-      className: URGENZA_TOKENS.neutro,
+      className: SCADENZA_TOKENS.neutro,
       fonte: 'scadenza',
     };
   }
 
   return badgeDaScadenza(scad);
-}
-
-// ---------------------------------------------------------------------------
-// Denominazione della scuola — priorità alla fonte
-// ---------------------------------------------------------------------------
-
-/** Placeholder noti prodotti dai decoder di meccanografico quando falliscono. */
-const PLACEHOLDER_SCUOLA =
-  /scuola\s+non\s+specificata|non\s+specificat[oa]|n\/?d|sconosciut[oa]/i;
-
-/**
- * Estrae il nome della scuola con PRECEDENZA ASSOLUTA alla fonte.
- *
- * Ordine:
- *   1. `school_name` (denominazione ufficiale già normalizzata a monte)
- *   2. `schoolName` / `denominazione` / `istituto` (alias difensivi)
- *   3. `null` → il chiamante renderizza il vuoto dichiarato.
- *
- * NON si tenta MAI di ricostruire la denominazione dal codice meccanografico:
- * quel decode fallace produceva «SCUOLA NON SPECIFICATA» e riempiva il vuoto
- * con una stringa-spazzatura. Il meccanografico resta utile solo per la
- * provincia (vedi `scripts/repair-piemonte-provinces.ts`), non per il nome.
- */
-export function denominazioneScuola(r: InterpelloLive): string | null {
-  const fonte = r as unknown as Record<string, unknown>;
-
-  const candidati = [
-    fonte.school_name,
-    fonte.schoolName,
-    fonte.denominazione,
-    fonte.istituto,
-  ];
-
-  for (const c of candidati) {
-    if (typeof c !== 'string') continue;
-    const s = c.trim();
-    if (!s) continue;
-    if (PLACEHOLDER_SCUOLA.test(s)) continue;
-    return s;
-  }
-
-  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -300,10 +168,9 @@ export function denominazioneScuola(r: InterpelloLive): string | null {
 /**
  * Determina la tipologia o categoria dal titolo o dai codici se mancanti.
  *
- * NB: questa funzione riguarda la CATEGORIA dell'avviso (classe di concorso,
- * ATA, sostegno, educativo). La denominazione della scuola NON passa da qui:
- * vedi `denominazioneScuola`, che ha priorità di fonte e non produce mai
- * «SCUOLA NON SPECIFICATA».
+ * NB: riguarda la CATEGORIA dell'avviso (classe di concorso, ATA, sostegno,
+ * educativo). La denominazione della scuola NON passa da qui: viene da
+ * `lib/liveBoard.nomeScuolaRiga` (§26.59), l'unico gate del nome.
  */
 export function inferisciTipologia(
   r: InterpelloLive,

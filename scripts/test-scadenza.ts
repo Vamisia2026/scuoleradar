@@ -76,22 +76,34 @@ check('senza scadenza né pubblicazione → NON vivo', false, eAvvisoVivo(null, 
 check('pubblicazione illeggibile → NON vivo', false, eAvvisoVivo(null, 'non-una-data', OGGI));
 check('senza scadenza e stringa vuota → NON vivo', false, eAvvisoVivo('', '', OGGI));
 
-console.log('\n— Semaforo (colori pieni, unica palette §26.75) —');
-check('lungo (10gg) → verde', 'lungo', stileScadenza(10).livello);
-check('lungo (10gg) label', 'In corso', stileScadenza(10).label);
-check('vicino (5gg) → giallo', 'vicino', stileScadenza(5).livello);
-check('vicino (5gg) label', 'Tra 5 giorni', stileScadenza(5).label);
+console.log('\n— Semaforo UNICO (due colori d’allarme, §26.82) —');
+// Verde = opportunità in corso (3 … 15 giorni). Rosso = termine imminente.
+// Ardesia = nessun allarme: scaduto, data assente, data fuori finestra.
+check('in corso (10gg) → verde', 'in-corso', stileScadenza(10).livello);
+check('in corso (10gg) label', 'In corso', stileScadenza(10).label);
+check('in corso (3gg) → verde, non giallo', 'in-corso', stileScadenza(3).livello);
+check('in corso (3gg) label', 'In corso', stileScadenza(3).label);
+check('bordo finestra (15gg) → verde', 'in-corso', stileScadenza(15).livello);
+check('oltre la finestra (16gg) → dichiarata', 'fuori-finestra', stileScadenza(16).livello);
+check('oltre la finestra label', 'Scadenza fuori finestra', stileScadenza(16).label);
 check('imminente (2gg) → rosso', 'imminente', stileScadenza(2).livello);
-check('imminente (2gg) label', 'Ultimi 2 giorni', stileScadenza(2).label);
+check('imminente (2gg) label', 'Ultime 48h', stileScadenza(2).label);
+check('domani (1gg) label', 'Scade domani', stileScadenza(1).label);
 check('oggi (0gg) label', 'Scade oggi', stileScadenza(0).label);
-check('scaduto → grigio', 'scaduto', stileScadenza(-3).livello);
+check('scaduto → ardesia', 'scaduto', stileScadenza(-3).livello);
 check('sconosciuto → n/d', 'sconosciuto', stileScadenza(null).livello);
 check('verde usa la tinta piena emerald-700', true, stileScadenza(10).className.includes('bg-emerald-700'));
-check('giallo/arancio usa la tinta piena amber-600', true, stileScadenza(5).className.includes('bg-amber-600'));
 check('rosso usa la tinta piena rose-700', true, stileScadenza(1).className.includes('bg-rose-700'));
-check('nessuna banda pastello (…-100/…-200)', false, /-(?:50|100|200)\b/.test(stileScadenza(10).className + stileScadenza(5).className + stileScadenza(1).className));
+check(
+  'nessun giallo/arancio in nessuna banda',
+  false,
+  [10, 3, 2, 1, 0, 16, -3, null].some((g) => /bg-(?:amber|orange|yellow)-/.test(stileScadenza(g as number | null).className)),
+);
+check('nessuna banda pastello (…-100/…-200)', false, /-(?:50|100|200)\b/.test(stileScadenza(10).className + stileScadenza(2).className + stileScadenza(1).className));
 check('senza scadenza → ardesia piena, non un colore d’allarme', true, stileScadenza(null).className.includes('bg-slate-600'));
 check('scaduto → ardesia scura', true, stileScadenza(-3).className.includes('bg-slate-700'));
+check('fuori finestra → ardesia, mai verde', true, stileScadenza(30).className.includes('bg-slate-600'));
+check('nessuna banda pulsa', false, [10, 2, 1, 0, -3, null].some((g) => stileScadenza(g as number | null).className.includes('animate-')));
 check('testo bianco in grassetto su tutte le bande', true, [10, 5, 1, 0, -3, null].every((g) => {
   const c = stileScadenza(g as number | null).className;
   return c.includes('text-white') && c.includes('font-bold');

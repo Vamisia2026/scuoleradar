@@ -209,7 +209,7 @@ export function TabAccount() {
                         title={attivaAnnuale ? 'Piano attuale: PRO Annuale' : 'Assegna il piano PRO annuale'}
                         className={`${btnAdmin} ${
                           attivaAnnuale
-                            ? 'cursor-default bg-orange-500 text-white shadow-soft'
+                            ? 'cursor-default bg-secondary-500 text-white shadow-soft'
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                       >
@@ -222,7 +222,7 @@ export function TabAccount() {
                         title={attivaMensile ? 'Piano attuale: PRO Mensile' : 'Assegna il piano PRO mensile'}
                         className={`${btnAdmin} ${
                           attivaMensile
-                            ? 'cursor-default bg-yellow-400 text-slate-900 shadow-soft'
+                            ? 'cursor-default bg-warning-500 text-slate-900 shadow-soft'
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                       >

@@ -22,7 +22,7 @@ export type EsitoAtteso =
       /** Tipo di fonte che il click deve aprire. */
       fonte: 'avviso' | 'sito-scuola';
       /** Etichetta ESATTA del badge della colonna «Scadenza». */
-      badge: 'Scade oggi' | 'Scade domani' | 'Ultima settimana' | 'In corso';
+      badge: 'Scade oggi' | 'Scade domani' | 'Ultime 48h' | 'In corso';
       nota: string;
     }
   | { esito: 'scartata'; nota: string };

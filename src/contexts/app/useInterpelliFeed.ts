@@ -28,6 +28,18 @@ import { supabase } from '@/lib/supabase';
 import { mapNoticiaToInterpello } from './helpers';
 import type { Preferenze } from './types';
 
+/**
+ * Righe chieste al database per il feed della dashboard.
+ *
+ * Era **100**: un tetto arbitrario che mostrava 100 opportunità su 400 attive
+ * senza dichiararlo — il conteggio dell'accordion e le card parlavano di una
+ * popolazione troncata. 1.000 è la pagina massima che PostgREST consegna in una
+ * risposta; oltre quella soglia si pagina (il «Radar Live» lo fa già con
+ * `flightBoard/letturaBoard.ts`). Un limite ESPLICITO, non un numero scelto a
+ * caso nel chiamante.
+ */
+const RIGHE_FEED = 1_000;
+
 /** Feed di interpelli pronto per la dashboard. */
 export interface FeedInterpelli {
   /** Avvisi ricevuti dal DB (vuoto se non c'è nulla di attivo). */
@@ -85,6 +97,7 @@ export function useInterpelliFeed(
         const feed = await getFeedInterpelli(supabase, {
           province: provinceRicerca,
           classi: classiAttive,
+          limit: RIGHE_FEED,
         });
         if (!attivo) return;
         if (feed && feed.length > 0) {
@@ -96,12 +109,22 @@ export function useInterpelliFeed(
           return;
         }
 
-        // Fallback: tabella legacy `notices` (popolata dallo scraper)
+        // Calcolo della data limite a 15 giorni per il fallback su notices
+        const oggiIso = new Date().toISOString();
+        const dataLimite = new Date();
+        dataLimite.setDate(dataLimite.getDate() + 15);
+        const limiteIso = dataLimite.toISOString();
+
+        // Fallback: tabella legacy `notices` (popolata dallo scraper) filtrata rigorosamente entro 15 giorni
         const { data, error } = await supabase
           .from('notices')
           .select('*')
+          .gte('expiration_date', oggiIso)
+          .lte('expiration_date', limiteIso)
           .order('expiration_date', { ascending: true })
-          .limit(100);
+          .order('id', { ascending: true })
+          .limit(RIGHE_FEED);
+
         if (!attivo) return;
         if (!error && data && data.length > 0) {
           setFontiInterpelli(data.map(mapNoticiaToInterpello));

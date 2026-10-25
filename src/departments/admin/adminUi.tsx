@@ -24,7 +24,15 @@ export function BadgePiano({ piano }: { piano?: string | null }) {
   );
 }
 
-/** Badge piano COMPATTO con color coding: B / PRO1M / PRO1A / FFE. */
+/**
+ * Badge piano COMPATTO con color coding: B / PRO1M / PRO1A / FFE.
+ *
+ * I quattro stati restano distinguibili, ma i colori vengono dai token di palette
+ * del progetto — `warning` per il mensile, `secondary` per l'annuale — e non dalle
+ * scale giallo/arancio di Tailwind: qui il colore è un'etichetta di categoria, non
+ * un allarme, e non deve confondersi con il rosso/ambra dello stato di scadenza
+ * (§26.83/§26.84 di docs/SYSTEM_HANDOVER.md).
+ */
 export function BadgePianoCompatto({ utente }: { utente: AdminUtente }) {
   const piano = utente.piano ?? 'base';
   const tipo = String(
@@ -39,13 +47,13 @@ export function BadgePianoCompatto({ utente }: { utente: AdminUtente }) {
   } else if (piano === 'pro') {
     if (tipo.includes('mensile')) {
       label = 'PRO1M';
-      classe = 'bg-yellow-100 text-yellow-800 ring-1 ring-inset ring-yellow-300';
+      classe = 'bg-warning-50 text-warning-700 ring-1 ring-inset ring-warning-500/40';
     } else if (tipo.includes('annuale')) {
       label = 'PRO1A';
-      classe = 'bg-orange-500 text-white';
+      classe = 'bg-secondary-500 text-white';
     } else {
       label = 'PRO';
-      classe = 'bg-orange-500 text-white';
+      classe = 'bg-secondary-500 text-white';
     }
   }
   const titolo =

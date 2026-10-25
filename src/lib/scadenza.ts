@@ -12,25 +12,57 @@
  *     senza una scadenza dichiarata e non ancora passata la riga NON è
  *     un'opportunità attiva (le pagine di archivio e gli indici di codici restano
  *     fuori da bacheca, punteggio e conteggi); dentro vale anche l'ORIZZONTE
- *     (`GIORNI_ORIZZONTE_OPPORTUNITA`, §26.75): una «scadenza» a 8 mesi è la fine
- *     di un contratto, non il termine per candidarsi;
- *   · `stileScadenza(giorni)`  → semaforo del badge: 🟢 lungo · 🟡 vicino · 🔴 imminente.
+ *     (`GIORNI_ORIZZONTE_OPPORTUNITA`, §26.82): un termine di candidatura oltre
+ *     15 giorni non è una finestra di candidatura, è la FINE di un incarico o la
+ *     data d'avvio di un progetto;
+ *   · `stileScadenza(giorni)`  → UNICO badge della scadenza (§26.82): rosso
+ *     imminente · verde in corso · ardesia per scaduto/assente/fuori finestra.
  */
 
-/** Soglie (in giorni) del semaforo di scadenza. */
-export const SOGLIA_IMMINENTE = 2; // ≤ 2 giorni  → ROSSO (ultimi giorni / scade oggi)
-export const SOGLIA_VICINA = 7;    // 3–7 giorni  → GIALLO (in avvicinamento)
-//                                   > 7 giorni  → VERDE (lungo termine)
+/**
+ * Soglia del badge ROSSO (in giorni): 0 (scade oggi), 1 (domani), 2 (ultime 48h).
+ * Oltre questa soglia — e dentro l'orizzonte di candidatura — il badge è VERDE.
+ */
+export const SOGLIA_IMMINENTE = 2;
 
-export type LivelloScadenza = 'scaduto' | 'imminente' | 'vicino' | 'lungo' | 'sconosciuto';
+/**
+ * Soglia «in avvicinamento» (3–7 giorni): NON è più una banda del badge (§26.82:
+ * un solo semaforo, due soli colori d'allarme). Resta come livello informativo
+ * dei PROMEMORIA via email (`lib/resend.ts`), dove serve distinguere un avviso
+ * che scade domani da uno che scade fra sei giorni senza colorare nulla.
+ */
+export const SOGLIA_VICINA = 7;
+
+export type LivelloScadenza =
+  | 'scaduto'
+  | 'imminente'
+  | 'in-corso'
+  | 'fuori-finestra'
+  | 'sconosciuto';
 
 export interface StileScadenza {
   livello: LivelloScadenza;
-  /** Classi Tailwind per il badge. */
+  /** Classi Tailwind del badge (token di `SCADENZA_TOKENS`, mai composte a mano). */
   className: string;
-  /** Etichetta breve ("In corso", "Tra 3 giorni", "Ultimi 2 giorni", "Scade oggi", "Scaduto"). */
+  /** Etichetta di STATO: «In corso», «Scade oggi», «Ultime 48h», «Scaduto»… */
   label: string;
 }
+
+/**
+ * TOKEN del badge scadenza — UNICA palette dell'applicazione (§26.82).
+ * Due soli colori d'allarme, pieni su testo bianco: 🔴 `rosso` = termine
+ * imminente (oggi / domani / ultime 48h) · 🟢 `verde` = opportunità in corso
+ * (3 giorni … orizzonte) · ⚫ `scaduto`/`neutro` = nessun allarme (già passata,
+ * data assente o fuori finestra). Il giallo/arancio è stato rimosso da ogni
+ * superficie: tabellone, scheda avviso e feed della dashboard coloravano lo
+ * stesso dato con tre soglie diverse.
+ */
+export const SCADENZA_TOKENS = {
+  rosso: 'bg-rose-700 text-white font-bold',
+  verde: 'bg-emerald-700 text-white font-bold',
+  scaduto: 'bg-slate-700 text-white font-bold',
+  neutro: 'bg-slate-600 text-white font-bold',
+} as const;
 
 /** Mezzanotte (locale) del giorno indicato. */
 function mezzanotte(oggi: Date): Date {
@@ -126,21 +158,20 @@ export function eAvvisoVivo(
 }
 
 /**
- * ORIZZONTE di un'opportunità (§26.75, direttiva 22/10/2026): una candidatura si
- * apre a ridosso del termine. Oltre i 30 giorni la «scadenza» che si legge nei
- * dati reali non è un termine per candidarsi ma la FINE dell'incarico
- * («supplenza dal 23/10/2026 al 30/06/2027», «Durata Supplenza: fino al
- * 23/03/2027»): quelle righe restano fuori da bacheca e dal Radar Live.
+ * ORIZZONTE di un'opportunità (§26.82, direttiva 25/10/2026): un termine di
+ * candidatura vive dentro le due settimane. Oltre i 15 giorni la «scadenza» dei
+ * dati reali è la FINE dell'incarico, l'avvio del progetto o la chiusura
+ * dell'anno scolastico («supplenza dal 23/10/2026 al 30/06/2027»).
  *
- * Perché serve un tetto esplicito: senza di esso il badge verde «In corso»
- * segnalava come lunghe opportunità che erano in realtà contratti annuali già
- * assegnati (sintomo misurato: 3 righe con scadenza 2027 su una popolazione di
- * 353 avvisi attivi).
+ * Era 30 giorni (§26.75): la finestra larga teneva in vetrina contratti annuali
+ * già assegnati, che il badge verde presentava come opportunità lunghe. Il tetto
+ * è UNO solo: `eOpportunitaConScadenza`, `filtroAttivi`, `table-reporter` e
+ * `stileScadenza` leggono questo numero, mai una copia.
  */
-export const GIORNI_ORIZZONTE_OPPORTUNITA = 30;
+export const GIORNI_ORIZZONTE_OPPORTUNITA = 15;
 
 /**
- * REGOLA FERREA DELL'OPPORTUNITÀ (§26.71, direttiva 16/10/2026; orizzonte §26.75):
+ * REGOLA FERREA DELL'OPPORTUNITÀ (§26.71, direttiva 16/10/2026; finestra §26.82):
  * senza una `expiration_date` dichiarata — o con una data già passata, o oltre
  * l'orizzonte dei `GIORNI_ORIZZONTE_OPPORTUNITA` — la riga NON è un'opportunità
  * di lavoro attiva.
@@ -172,35 +203,47 @@ export function eOpportunitaConScadenza(
 }
 
 /**
- * Semaforo di scadenza per i badge — PALETTE PIENA ad alto contrasto
- * (§26.75, direttiva 22/10/2026): le tinte pastello (`…-100`, `…-200`) non si
- * leggono di sfuggita e sul tabellone convivevano con le bande sature del
- * «Radar Live». Qui valgono gli stessi token del tabellone
- * (`rigaBoardDati.URGENZA_TOKENS`): colore PIENO, testo BIANCO, grassetto.
- *   🟢 verde   → lungo termine (> 7 giorni)   `bg-emerald-700`
- *   🟠 arancio → in avvicinamento (3–7 giorni) `bg-amber-600`
- *   🔴 rosso   → imminente / ultimi giorni (≤ 2 giorni, "scade oggi") `bg-rose-700`
- *   ⚫ ardesia → scaduto o scadenza non indicata (assenza di dato, non allarme)
+ * BADGE della scadenza — UNA sola regola per tutta l'applicazione (§26.82).
+ *
+ *   🔴 rosso   → 0 giorni «Scade oggi» · 1 «Scade domani» · 2 «Ultime 48h»
+ *   🟢 verde   → 3 … `GIORNI_ORIZZONTE_OPPORTUNITA` giorni → «In corso»
+ *   ⚫ ardesia → già passata («Scaduto»), data assente («Scadenza n/d») oppure
+ *                OLTRE la finestra di candidatura («Scadenza fuori finestra»)
+ *
+ * I giorni sono di CALENDARIO (`giorniRimanenti`). Nessuna banda pulsa: il
+ * pulsare faceva sembrare l'avviso un'offerta a tempo e non è un token del
+ * design system. Nessun giallo/arancio: le soglie medie non dicono all'utente
+ * nulla che il verde «In corso» già non dica, mentre il rosso resta l'unico
+ * segnale di fretta.
+ *
+ * `fuori-finestra` non è un errore di lettura: è il DATO CHE NON È UNA SCADENZA
+ * di candidatura (fine incarico, avvio progetto, chiusura anno scolastico). La
+ * vetrina lo scarta a monte (`eOpportunitaConScadenza`); qui serve alle superfici
+ * che mostrano la riga comunque (scheda dell'avviso) perché non la colorino di
+ * verde come se fosse aperta.
  */
 export function stileScadenza(giorni: number | null): StileScadenza {
   if (giorni === null) {
-    return { livello: 'sconosciuto', className: 'bg-slate-600 text-white font-bold', label: 'Scadenza n/d' };
+    return { livello: 'sconosciuto', className: SCADENZA_TOKENS.neutro, label: 'Scadenza n/d' };
   }
   if (giorni < 0) {
-    return { livello: 'scaduto', className: 'bg-slate-700 text-white font-bold', label: 'Scaduto' };
+    return { livello: 'scaduto', className: SCADENZA_TOKENS.scaduto, label: 'Scaduto' };
   }
   if (giorni === 0) {
-    return { livello: 'imminente', className: 'bg-rose-700 text-white font-bold animate-pulse', label: 'Scade oggi' };
+    return { livello: 'imminente', className: SCADENZA_TOKENS.rosso, label: 'Scade oggi' };
+  }
+  if (giorni === 1) {
+    return { livello: 'imminente', className: SCADENZA_TOKENS.rosso, label: 'Scade domani' };
   }
   if (giorni <= SOGLIA_IMMINENTE) {
+    return { livello: 'imminente', className: SCADENZA_TOKENS.rosso, label: 'Ultime 48h' };
+  }
+  if (giorni > GIORNI_ORIZZONTE_OPPORTUNITA) {
     return {
-      livello: 'imminente',
-      className: 'bg-rose-700 text-white font-bold animate-pulse',
-      label: `Ultimi ${giorni} ${giorni === 1 ? 'giorno' : 'giorni'}`,
+      livello: 'fuori-finestra',
+      className: SCADENZA_TOKENS.neutro,
+      label: 'Scadenza fuori finestra',
     };
   }
-  if (giorni <= SOGLIA_VICINA) {
-    return { livello: 'vicino', className: 'bg-amber-600 text-white font-bold', label: `Tra ${giorni} giorni` };
-  }
-  return { livello: 'lungo', className: 'bg-emerald-700 text-white font-bold', label: 'In corso' };
+  return { livello: 'in-corso', className: SCADENZA_TOKENS.verde, label: 'In corso' };
 }

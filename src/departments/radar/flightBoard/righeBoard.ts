@@ -50,17 +50,6 @@ export interface InterpelloLive {
   anagrafica_parziale?: boolean;
 }
 
-/** Livello di urgenza calcolato dalla sola `expiration_date`. */
-export type Urgenza =
-  | 'scaduto'
-  | 'imminente'
-  | 'vicino'
-  | 'lontano'
-  | 'senza-scadenza';
-
-/** Colore semantico associato all'urgenza (token UI, non CSS). */
-export type ColoreUrgenza = 'verde' | 'giallo' | 'rosso' | 'grigio';
-
 // ---------------------------------------------------------------------------
 // Codici provincia ISTAT validi (incluso EE per estero/indefinita)
 // ---------------------------------------------------------------------------
@@ -191,180 +180,16 @@ export function estraiProvincia(r: InterpelloLive): string {
   return FALLBACK_PROVINCE;
 }
 
-/**
- * Variante bulk: arricchisce un array di righe con la provincia risolta.
- * Utile quando il chiamante vuole una sola passata senza toccare la riga
- * originale (pattern immutabile).
- */
-export function arricchisciProvince(
-  righe: readonly InterpelloLive[],
-): Array<InterpelloLive & { province_risolta: string }> {
-  return righe.map((r) => ({ ...r, province_risolta: estraiProvincia(r) }));
-}
+// Rimosse con la banda gialla anche `arricchisciProvince`, `estraiCitta` ed
+// `estraiScuolaDaTitolo` (§26.82): nessuna superficie le chiamava. Il nome
+// mostrato viene da `lib/liveBoard.nomeScuolaRiga` (§26.59), non da qui.
 
 // ---------------------------------------------------------------------------
-// Città e scuola
+// Scadenza: SOLO il badge condiviso (`lib/scadenza`)
 // ---------------------------------------------------------------------------
-
-/**
- * Estrae la città dall'interpello quando è affidabile:
- * nome provincia completo presente nel titolo (es. "... , Milano");
- * nessuna deduzione "creativa" (se non trovata → null).
- */
-export function estraiCitta(r: InterpelloLive): string | null {
-  if (!r.title) return null;
-  const nome = nomeProvincia(estraiProvincia(r));
-  if (nome && r.title.includes(nome)) return nome;
-  return null;
-}
-
-/**
- * Fallback scuola rigoroso: quando `school_name` è vuoto o non valido,
- * prova a ricavare l'istituto dal titolo escludendo materie, classi e
- * termini generici.
- */
-export function estraiScuolaDaTitolo(r: InterpelloLive): string | null {
-  if (!r.title) return null;
-  const t = r.title.trim();
-
-  const lower = t.toLowerCase();
-  if (
-    lower.startsWith('matematica') ||
-    lower.startsWith('conversazione') ||
-    lower.startsWith('annotazione') ||
-    lower.includes('classe di concorso')
-  ) {
-    return null;
-  }
-
-  const frame = (t.split(/[—–]/).pop() ?? '').trim();
-  if (!frame) return null;
-  const parte = (frame.split(',')[0] ?? '').replace(/\s+/g, ' ').trim();
-
-  if (!parte || parte.length < 3 || /\d/.test(parte)) return null;
-
-  const generici =
-    /^(interpello|avviso|bando|selezione|esperto|supplenza|scuola|istituto|liceo|secondaria|primaria|infanzia|sostegno|posta|religione|posto|matematica|fisica)\b/i;
-  return generici.test(parte) ? null : parte;
-}
-
-// ---------------------------------------------------------------------------
-// Scadenza: normalizzazione e urgenza
-// ---------------------------------------------------------------------------
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-/**
- * Normalizza `expiration_date` a un oggetto Date, gestendo i formati che
- * i portali USR usano realmente:
- *
- *   - ISO completo           "2026-10-15T12:00:00Z"
- *   - ISO data               "2026-10-15"
- *   - Italiano con slash     "16/10/2026"
- *   - Italiano con trattino  "15-10-2026"
- *   - Italiano con punto     "15.10.2026"
- *
- * Restituisce `null` per input vuoto, non parsabile o non plausibile
- * (anno fuori dal range 2000-2100). NON ripiega mai su `created_at`.
- */
-export function normalizzaDataScadenza(
-  raw: string | null | undefined,
-): Date | null {
-  if (!raw) return null;
-  const s = raw.trim();
-  if (!s) return null;
-
-  // ISO (con o senza orario): deleghiamo a Date, ma solo se il match è stretto.
-  if (/^\d{4}-\d{2}-\d{2}(T|$)/.test(s)) {
-    const d = new Date(s);
-    return isPlausibile(d) ? d : null;
-  }
-
-  // Formato italiano dd[/.-]mm[/.-]yyyy (o yy)
-  const m = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
-  if (m) {
-    const day = Number(m[1]);
-    const month = Number(m[2]);
-    const yearRaw = m[3];
-    const year = yearRaw.length === 2 ? 2000 + Number(yearRaw) : Number(yearRaw);
-    if (day < 1 || day > 31 || month < 1 || month > 12) return null;
-    const d = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
-    return isPlausibile(d) ? d : null;
-  }
-
-  return null;
-}
-
-function isPlausibile(d: Date): boolean {
-  if (Number.isNaN(d.getTime())) return false;
-  const y = d.getUTCFullYear();
-  return y >= 2000 && y <= 2100;
-}
-
-/**
- * Giorni interi rimanenti fino alla scadenza. `null` se la data non è
- * parsabile. Valori negativi indicano scadenza già passata.
- *
- * Il parametro `now` è iniettabile per i test; in produzione si omette.
- */
-export function giorniAllaScadenza(
-  r: InterpelloLive,
-  now: Date = new Date(),
-): number | null {
-  const scad = normalizzaDataScadenza(r.expiration_date);
-  if (!scad) return null;
-  const diff = scad.getTime() - now.getTime();
-  return Math.floor(diff / MS_PER_DAY);
-}
-
-/**
- * Livello di urgenza, calcolato SOLO da `expiration_date`.
- *
- *   senza-scadenza  → data mancante o non parsabile
- *   scaduto         → giorni < 0
- *   imminente       → 0 ≤ giorni ≤ 2
- *   vicino          → 3 ≤ giorni ≤ 7
- *   lontano         → giorni > 7
- */
-export function livelloUrgenza(
-  r: InterpelloLive,
-  now: Date = new Date(),
-): Urgenza {
-  const g = giorniAllaScadenza(r, now);
-  if (g === null) return 'senza-scadenza';
-  if (g < 0) return 'scaduto';
-  if (g <= 2) return 'imminente';
-  if (g <= 7) return 'vicino';
-  return 'lontano';
-}
-
-/** Mappa il livello di urgenza al colore semantico della board. */
-export function coloreUrgenza(livello: Urgenza): ColoreUrgenza {
-  switch (livello) {
-    case 'lontano':
-      return 'verde';
-    case 'vicino':
-      return 'giallo';
-    case 'imminente':
-    case 'scaduto':
-      return 'rosso';
-    case 'senza-scadenza':
-      return 'grigio';
-  }
-}
-
-/**
- * Etichetta umana dell'urgenza. Utile per tooltip e aria-label.
- * Non contiene HTML: la presentazione visiva resta al componente.
- */
-export function etichettaUrgenza(r: InterpelloLive, now: Date = new Date()): string {
-  const g = giorniAllaScadenza(r, now);
-  if (g === null) return 'Scadenza non indicata';
-  if (g < 0) return `Scaduto da ${Math.abs(g)} ${Math.abs(g) === 1 ? 'giorno' : 'giorni'}`;
-  if (g === 0) return 'Scade oggi';
-  if (g === 1) return 'Scade domani';
-  return `Scade tra ${g} giorni`;
-}
+// Qui viveva una seconda macchina di urgenza (`giorniAllaScadenza`,
+// `livelloUrgenza`, `coloreUrgenza`, un colore giallo che nessuna superficie
+// usava): il badge è `rigaBoardDati.badgeScadenza` → `lib/scadenza.stileScadenza`.
 
 // ---------------------------------------------------------------------------
 // URL

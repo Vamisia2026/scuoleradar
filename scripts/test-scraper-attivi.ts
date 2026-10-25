@@ -131,7 +131,9 @@ check('riga «Preventivo ≤ 10 giorni» → ammessa', null, motivoScartoOpportu
 check('categoria della riga «Preventivo»', 'Interpello / Supplenza', rilevaCategoriaAvviso(RIGA_PREVENTIVO));
 check(
   'preventivo di spesa resta fuori target',
-  'nessun segnale di opportunità di lavoro',
+  // Il verdetto resta lo stesso (fuori), il motivo è più preciso: è una pagina
+  // di viaggio d'istruzione, cioè RUMORE, prima ancora che una non-opportunità.
+  "rumore amministrativo/informativo (viaggio d'istruzione)",
   motivoScartoOpportunita({ title: 'Preventivo di spesa per il viaggio di istruzione a Bruxelles' }, OGGI),
 );
 // Il confine resta: la tipologia del posto non apre la porta alle notizie.

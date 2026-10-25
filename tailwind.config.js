@@ -15,6 +15,9 @@ export default {
           700: '#1b4768',
           800: '#14354e',
           900: '#0c2235',
+          // 950 aggiunto in §26.87: `to-primary-950` (StepDossier, barra del documento) era orfano
+          // e il gradiente sfumava nel trasparente, lasciando testo chiaro su fondo bianco.
+          950: '#091825',
         },
         secondary: {
           50: '#fdf5ec',
@@ -46,17 +49,40 @@ export default {
           600: '#168044',
           700: '#136637',
         },
+        // Scala `warning` COMPLETA 50→900. La tinta è un oro attenuato (hue ≈ 43°) e i gradini
+        // 50/500/600/700 sono quelli già in uso nel progetto: 100/200/300/400/800/900 sono
+        // derivati dagli stessi ancoraggi, non presi da `amber` di Tailwind (che è più rosso).
+        // Perché la scala deve restare completa: Tailwind scarta in silenzio le classi il cui
+        // token non esiste, senza errori di build né di typecheck. Una scala parziale fa
+        // sparire bordi e anelli dichiarati nel JSX (vedi §26.85-§26.86 di SYSTEM_HANDOVER).
         warning: {
           50: '#fff8e6',
+          100: '#fef2d5',
+          200: '#fbe3a7',
+          300: '#f8d377',
+          400: '#f4c54e',
           500: '#e2b33c',
           600: '#c79820',
           700: '#a87d12',
+          800: '#785f21',
+          900: '#6a4f0c',
         },
+        // Scala `error` COMPLETA 50→900, stessa regola della scala `warning` (sopra): gradini
+        // 50/500/600/700 invariati, i sei mancanti derivati dagli stessi ancoraggi (hue ≈ 2°,
+        // saturazione 51%→81%, luminanza 95,9%→22,2%), non copiati da `red` di Tailwind.
+        // Senza i gradini 100/200/800 sparivano in silenzio i `border-error-200` di toast,
+        // form e health-check (15 occorrenze sanate in §26.87 di SYSTEM_HANDOVER).
         error: {
           50: '#fdecec',
+          100: '#fbdcdb',
+          200: '#f7bcb9',
+          300: '#f1938f',
+          400: '#e9716d',
           500: '#d9534f',
           600: '#b9403c',
           700: '#93332f',
+          800: '#742724',
+          900: '#571c1a',
         },
         // Token allineati alla palette ufficiale ScuolaRadar:
         //  · sky.700  = Primary Blu Radar #2B6F9E (hover sky.800 = #1E5276)

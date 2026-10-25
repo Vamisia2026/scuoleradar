@@ -2,16 +2,18 @@
  * ScuoleRadar.it — Dipartimento Radar · Flight Board: FILTRO di lettura della bacheca.
  *
  * La bacheca pubblica è fatta di OPPORTUNITÀ: entra solo una riga con una scadenza
- * dichiarata, non ancora passata e DENTRO L'ORIZZONTE dei 30 giorni (§26.71 e
- * §26.75, direttiva 22/10/2026):
+ * dichiarata, non ancora passata e DENTRO LA FINESTRA DI CANDIDATURA di 15 giorni
+ * (§26.71 e §26.82, direttiva 25/10/2026):
  *
- *   and(expiration_date.gte.<oggi>,expiration_date.lte.<oggi+30>)
+ *   and(expiration_date.gte.<oggi>,expiration_date.lte.<oggi+15>)
  *
  * Il secondo ramo non è un dettaglio: senza di esso il conteggio del database
  * includeva le «scadenze» che in realtà sono la FINE dell'incarico («supplenza
  * dal 23/10/2026 al 30/06/2027»), che il gate in memoria
  * (`eOpportunitaConScadenza`) scarta già — e il pill in alto diceva più avvisi di
  * quelli che il tabellone poteva paginare (§26.75, «1.405 avvisi» con 137 pagine).
+ * La finestra era di 30 giorni: un termine di candidatura non vive un mese, e la
+ * finestra larga teneva in vetrina contratti annuali già assegnati.
  *
  * La finestra dei 60 giorni per gli avvisi che la fonte NON data è stata ritirata
  * da questa superficie: nei dati reali quelle righe sono pagine di archivio,

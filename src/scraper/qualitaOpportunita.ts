@@ -17,6 +17,7 @@
 
 import { eScaduto } from '../lib/scadenza.ts';
 import { emailAvviso } from '../lib/alertInterpello.ts';
+import { isAdministrativeNoise } from '../lib/noiseFilter.ts';
 import { rilevaCategoriaAvviso, sembraOpportunita } from './parser.ts';
 
 /* ----------------------- 1 · Filtro editoriale (domini) ----------------------- */
@@ -117,7 +118,8 @@ export function motivoScartoEditoriale(testo?: string | null): string | null {
 
 /**
  * Motivo per cui un avviso NON entra nella bacheca (`null` = ammesso).
- * Ordine: contenuto editoriale → non-opportunità → categoria fuori target → scaduto.
+ * Ordine: contenuto editoriale → atto informativo → rumore amministrativo/
+ * informativo → non-opportunità → categoria fuori target → scaduto.
  * Con `daFonteInterpelli` si salta il solo controllo "parola chiave nel titolo".
  */
 export function motivoScartoOpportunita(
@@ -134,6 +136,13 @@ export function motivoScartoOpportunita(
   if (eTitoloInformativo(a.title)) {
     return 'atto informativo/esito (non un\'opportunità aperta)';
   }
+  // PREFILTRO SEMANTICO (§26.82): la STESSA regola del discovery engine e del
+  // table-reporter — gare, circolari, burocrazia e PAGINE INFORMATIVE (PCTO,
+  // progetti, corsi, elenchi di scuole) con una sola verità. Una pagina
+  // informativa resta solo se il titolo dichiara un reclutamento specifico e il
+  // testo una finestra di candidatura: qui si ingerisce l'avviso, non il contorno.
+  const rumore = isAdministrativeNoise(testo, a.title ?? '');
+  if (rumore.isNoise) return `rumore amministrativo/informativo (${rumore.reason})`;
   if (!opts.daFonteInterpelli) {
     if (!sembraOpportunita(testo)) return 'nessun segnale di opportunità di lavoro';
     const categoria = rilevaCategoriaAvviso(testo);

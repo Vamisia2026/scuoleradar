@@ -134,11 +134,20 @@
       (`bachecaInterpelli` → contatore `senzaScadenza`, scarto **dichiarato**).
       Un solo grado di urgenza senza data resta possibile: la riga **fuori dal feed**
       che il chiamante ha già deciso di mostrare (banda grigia, mai una data inventata).
-- [ ] **Bande di urgenza della colonna «Scadenza»**: il colore dice quanto manca —
-      scade oggi · ultime 48h · entro 3 giorni · entro 7 giorni · in corso — sempre
-      accanto alla DATA di scadenza (o alla data di **pubblicazione** quando la
-      fonte non ne dichiara una), senza conti alla rovescia né inviti a correre
-      (`src/lib/urgency.ts`). Gli avvisi scaduti non compaiono mai in bacheca.
+- [ ] **Badge della colonna «Scadenza»: DUE soli colori** (§26.82) — il colore dice
+      quanto manca — scade oggi · scade domani · ultime 48h (rosso, ≤ 2 giorni) ·
+      in corso (verde, dal terzo giorno alla finestra di candidatura) — sempre
+      accanto alla DATA di scadenza; oltre la finestra o senza data la banda è
+      ardesia e dichiara «Scadenza fuori finestra» / «Scadenza n/d» (mai una data
+      inventata, mai una tinta pastello, nessuna banda che pulsa). Un solo modulo:
+      `stileScadenza` in `src/lib/scadenza.ts` (`SCADENZA_TOKENS`), usato da
+      tabellone, scheda avviso e feed della dashboard. Niente giallo/arancio —
+      erano due soglie in più per lo stesso dato. Gli avvisi scaduti non compaiono
+      mai in bacheca.
+- [ ] **Finestra di CANDIDATURA = 15 giorni** (§26.82) — `GIORNI_ORIZZONTE_OPPORTUNITA`
+      in `src/lib/scadenza.ts`: oltre, la «scadenza» letta dalle fonti è la fine di
+      un incarico o l'avvio di un progetto, non un termine per candidarsi, e la riga
+      resta fuori da bacheca, Radar Live e feed.
 - [ ] **«Prova il Radar»: si prova con la SOLA provincia** — il box pubblico legge quella provincia e
       nient'altro (`src/departments/radar/services/provaRadarQuery.ts`, `.eq('province')`;
       `src/lib/provaRadarEngine.ts`): **nessun pool nazionale, nessun ripiego, nessun dato di
@@ -165,12 +174,13 @@
       (niente più «anagrafica parziale»): la colonna «Scuola» mostra solo il nome reale.
 - [ ] **Prova a occhio, senza aspettare lo scraper** (§26.77) — `npm run dati:demo` (dry-run)
       elenca le **10** righe `demo-*` con l'esito dichiarato: **7 in bacheca** (Argo/Forms/Nuvola
-      → home `.edu.it`, avvisi veri, badge **pieni** nei quattro stati di scadenza, nome dal
+      → home `.edu.it`, avvisi veri, badge **pieni** nei tre stati di scadenza, nome dal
       titolo) e **3 fuori** (nessuna fonte apribile, segnaposto, titolo di sola pubblicazione).
       `npm run dati:demo -- --apply` le scrive (mai in produzione senza `--consenti-produzione`),
       `npm run dati:demo -- --pulisci --apply` le elimina. La stessa tabella di casi è la guardia
-      `npm run test:board:demo` (esito atteso = esito reale). Il badge d'urgenza è **pieno**
-      (`bg-rose-700`/`bg-amber-600`/`bg-emerald-700`, testo bianco in grassetto) e il totale della
+      `npm run test:board:demo` (esito atteso = esito reale). Il badge della scadenza è **pieno**
+      e ha **due soli colori** (`bg-rose-700` ≤ 48h · `bg-emerald-700` in corso, testo bianco in
+      grassetto, ardesia per scaduto/non databile: §26.82) e il totale della
       pill conta le **stesse** righe che generano le schermate (§26.77).
 - [ ] **Finestra dei 60 giorni: solo FETCH e pulizia, mai vetrina** (§26.71) — lo **stesso** numero
       e la stessa data **locale** vivono in `src/lib/scadenza.ts`

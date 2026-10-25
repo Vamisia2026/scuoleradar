@@ -2,9 +2,9 @@
  * ScuoleRadar.it — Dipartimento Radar · Flight Board: FILTRO di lettura della bacheca.
  *
  * `filtroAttivi` è la traduzione in sintassi PostgREST della REGOLA FERREA della
- * scadenza (§26.71, direttiva 16/10/2026; orizzonte §26.75, 22/10/2026): in
+ * scadenza (§26.71, direttiva 16/10/2026; finestra §26.82, 25/10/2026): in
  * bacheca entra solo un avviso con una `expiration_date` dichiarata, non ancora
- * passata e NON OLTRE 30 GIORNI. La finestra dei 60 giorni per le righe che la
+ * passata e NON OLTRE 15 GIORNI. La finestra dei 60 giorni per le righe che la
  * fonte NON data è stata ritirata da questa superficie: nei dati reali erano
  * pagine di archivio, regolamenti e indici di classi di concorso. Qui si fissano:
  *
@@ -38,24 +38,30 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
 /** Data fissa: 29 settembre 2026, ore 14:30 locali. */
 const OGGI = new Date(2026, 8, 29, 14, 30);
 
-console.log('— 1. La regola ferrea: scadenza dichiarata, non passata, entro 30 giorni —');
+console.log('— 1. La regola ferrea: scadenza dichiarata, non passata, entro 15 giorni —');
 check('senza scadenza NON è un’opportunità', false, eOpportunitaConScadenza(null, OGGI));
 check('scadenza vuota NON è un’opportunità', false, eOpportunitaConScadenza('   ', OGGI));
 check('scadenza di ieri NON è un’opportunità', false, eOpportunitaConScadenza('2026-09-28', OGGI));
 check('scadenza di oggi È un’opportunità', true, eOpportunitaConScadenza('2026-09-29', OGGI));
-check('scadenza futura È un’opportunità', true, eOpportunitaConScadenza('2026-10-20', OGGI));
-// §26.75 — ORIZZONTE: una «scadenza» a 8 mesi è la FINE di un contratto annuale,
-// non un termine per candidarsi (misura reale: 3 righe con expiration 2027).
-check('al limite dell’orizzonte (30 giorni) È un’opportunità', true, eOpportunitaConScadenza('2026-10-29', OGGI));
-check('oltre l’orizzonte (31 giorni) NON è un’opportunità', false, eOpportunitaConScadenza('2026-10-30', OGGI, 29));
+check('scadenza futura È un’opportunità', true, eOpportunitaConScadenza('2026-10-10', OGGI));
+// §26.82 — ORIZZONTE STRETTO: una «scadenza» a 8 mesi è la FINE di un contratto
+// annuale, non un termine per candidarsi (misura reale: 3 righe con expiration
+// 2027). Oltre i 15 giorni non è più una finestra di candidatura.
+check('al limite dell’orizzonte (15 giorni) È un’opportunità', true, eOpportunitaConScadenza('2026-10-14', OGGI));
+check('oltre l’orizzonte (16 giorni) NON è un’opportunità', false, eOpportunitaConScadenza('2026-10-15', OGGI));
+check(
+  'l’orizzonte è un parametro, non un numero sparso',
+  false,
+  eOpportunitaConScadenza('2026-10-15', OGGI, 14),
+);
 check('scadenza 2027 (fine contratto) NON è un’opportunità', false, eOpportunitaConScadenza('2027-06-30', OGGI));
-check('l’orizzonte è dichiarato: 30 giorni', 30, GIORNI_ORIZZONTE_OPPORTUNITA);
+check('l’orizzonte è dichiarato: 15 giorni', 15, GIORNI_ORIZZONTE_OPPORTUNITA);
 
 console.log('\n— 2. Sintassi PostgREST: due estremi, nessuna riga senza scadenza —');
 const filtro = filtroAttivi(OGGI);
 check(
   'espressione completa (dal giorno corrente all’orizzonte)',
-  'and(expiration_date.gte.2026-09-29,expiration_date.lte.2026-10-29)',
+  'and(expiration_date.gte.2026-09-29,expiration_date.lte.2026-10-14)',
   filtro,
 );
 check('nessun ramo `is.null` che riammetta le righe non datate', false, filtro.includes('is.null'));
@@ -77,7 +83,7 @@ check('ultimo minuto dell’anno', '2026-12-31', dataIsoLocale(new Date(2026, 11
 check('mese e giorno a due cifre', '2026-01-05', dataIsoLocale(new Date(2026, 0, 5, 8, 0)));
 check(
   'la data del filtro è quella locale anche a cavallo di mezzanotte',
-  'and(expiration_date.gte.2026-09-29,expiration_date.lte.2026-10-29)',
+  'and(expiration_date.gte.2026-09-29,expiration_date.lte.2026-10-14)',
   filtroAttivi(new Date('2026-09-29T00:30:00')),
 );
 

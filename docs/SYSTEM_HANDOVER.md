@@ -622,6 +622,8 @@ Guardie: `npm run test:sostegno`, `npm run test:migrazioni`, `npm run test:copy:
 | `scripts/test-copy-primo-schermo.ts` | **`npm run test:copy:schermo`** — COPY PRIMO SCHERMO: hero su **due righe** (`span block`, nessuna interruzione di markup), box «Prova il Radar» **non stirato** (`items-start`, niente `h-full`) con ripartizione verticale `lg:items-center` e i pulsanti **SUBITO SOTTO il box su due colonne simmetriche** (`mt-3 grid w-full gap-3 sm:grid-cols-2`, entrambi `w-full`), responso a scorrimento (`max-h-[24rem]`), nessun riquadro ridondante fra Radar Live e offerta PRO (§26.15, §26.16, §26.19) |
 | `scripts/test-qualita-invio.ts` | **`npm run test:qualita`** — gate di qualità: link diretto (`eUrlAvvisoDiretto`), gate link+recapito, mappatura province (Forlì → FC), brand/anteprime, frequenza CTA Radar ~20% |
 | `scripts/test-canali-telegram.ts` | **`npm run test:telegram:canali`** — post dei canali regionali: brand cliccabile in testa, 7 sezioni, testate tipografiche (nessuna fascia colorata/`[BADGE]`, nessuna immagine), **URL ufficiali mai in chiaro** (solo il bottone `👉 Apri l'avviso ufficiale`), **gate link diretto** (home regionale, elenco/tag, landing regionale, ricerca e "nessun link" → post senza link e pubblicazione annullata) + matrice di routing delle 9 regioni + ATA nazionale |
+| `scripts/test-token-palette.ts` (+ `scripts/lib/paletteToken.ts`) | **`npm run test:palette`** — GUARDIA DEI TOKEN COLORE (§26.88): importa `theme.extend.colors` da `tailwind.config.js` (nessuna lista duplicata da tenere allineata) e scansiona gli stessi `content` della build (536 file) cercando classi il cui gradino la palette non genera — Tailwind le scarta **senza** errori di build, typecheck o lint, quindi il bordo/l'anello dichiarato nel JSX semplicemente non compare. Distingue le scale custom (`success-200` è orfano: la scala è esaustiva) da quelle che estendono la palette (`slate-700` esiste comunque); 9 casi di autotest con la stessa funzione della scansione, hex a 6 cifre obbligatori, glob non espandibili segnalati, autodifesa «sono nella catena di `npm test`» |
+
 
 | `docs/MODULAR_ARCHITECTURE.md` | **Regola architetturale vincolante**: SRP, limiti di righe (250/300), gerarchia a 3 livelli, codici del gate, regole di baseline |
 | `docs/DEPARTMENT_MAP.md` | Mappa dei dipartimenti: isolamento per dominio, gerarchia degli import, inventario con numeri reali, debito congelato e backlog |
@@ -3151,7 +3153,7 @@ Con `isSupabaseConfigurato() === false` (`supabase === null`):
 | `promemoria.ts` | 122 | `ePromemoriaDovuto`, `motivoPromemoria`, `chiavePromemoria`, `eVoceUrgente`, `oreTrascorse`, `ORE_PROMEMORIA` |
 | `dedupAvvisi.ts` | 97 | `improntaAvviso`, `normalizzaPerImpronta`, `GIORNI_IMPRONTA` |
 | `emailScuola.ts` | 92 | `risolviEmailUfficialeScuola`, `emailDaCodiceMeccanografico`, `normalizzaCodiceMeccanografico`, `estraiCodiceMeccanograficoDaTesto` |
-| `scadenza.ts` | 91 | `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `stileScadenza`, `SOGLIA_IMMINENTE`, `SOGLIA_VICINA` |
+| `scadenza.ts` | 249 | `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `eOpportunitaConScadenza`, `stileScadenza`, `SCADENZA_TOKENS`, `SOGLIA_IMMINENTE`, `SOGLIA_VICINA`, `GIORNI_ORIZZONTE_OPPORTUNITA` |
 | `liveBoard.ts` | 116 | `preparaRigheBoard`, `nomeScuolaRiga`, `nomePresentabileRiga`, `scuolaDaTitolo`, `titoloLeggibile`, `rigaPresentabileVetrina` (scarto dei codici classe e delle azioni amministrative) |
 | `nomeIstituto.ts` | 161 | `nomeIstitutoPresentabile` (gate: testa d'istituto + denominazione, mai codici amministrativi; taglio della coda di procedura) |
 | `radarValidation.ts` | 81 | `validaConfigRadar`, `messaggioCampiMancanti`, `impostaPassoRadar`, `STORAGE_KEY_RADAR_WIZARD_STEP` |
@@ -8736,4 +8738,508 @@ c'è, si guarda **dove** la fonte lo scrive. E quando la fonte è un'anagrafica,
 meccanografico è una prova d'identità più forte di qualunque euristica sul testo: usarlo costa meno
 che allargare il gate a mano. Il corollario della §26.80 resta valido: un upsert che ignora i
 doppioni non ripara lo storico — per quello c'è `db:allinea-scadenze`.
+
+
+---
+
+### 26.82 «Radar Live»: UN solo badge di scadenza (rosso/verde), finestra di candidatura a 15 giorni, pagine informative fuori dal motore (25/10/2026)
+
+**Perché.** Lo stesso dato aveva **tre** scale di colore e **tre** soglie: il tabellone
+(`rigaBoardDati.URGENZA_TOKENS`: rose-700 ≤ 2 gg · amber-600 3–7 gg · emerald-700 > 7), la scheda
+avviso (`lib/scadenza.stileScadenza`: le stesse tinte con etichette diverse) e il feed della
+dashboard (`ElencoOpportunita`: `error-50`/`warning-50`/`accent-50` con soglie 48h/5 giorni). In più
+`lib/urgency.calcolaUrgenza` — una quarta scala (`orange-500`/`amber-500`, con banda che pulsa) —
+restava in piedi **senza alcun consumatore in produzione**: la usava solo il proprio script di
+guardia e un conteggio diagnostico del backfill dei nomi istituto. Tre soglie per lo stesso numero
+significano tre verità diverse per l'utente, e il giallo «vicino» contraddiceva il verde «In corso»
+che l'utente vedeva ovunque altro.
+
+**La regola unica (`src/lib/scadenza.ts`).**
+- `SCADENZA_TOKENS` = **unica** palette: `rosso` `bg-rose-700` · `verde` `bg-emerald-700` ·
+  `scaduto` `bg-slate-700` · `neutro` `bg-slate-600`, tutte `text-white font-bold`, nessuna tinta
+  pastello e nessuna pulsazione.
+- `stileScadenza(giorni)` = **unico** classificatore: ≤ 2 giorni → rosso («Scade oggi» / «Scade
+  domani» / «Ultime 48h»); 3 … 15 giorni → verde «In corso»; oltre → ardesia «Scadenza fuori
+  finestra»; data assente → «Scadenza n/d»; data passata → «Scaduto».
+- `GIORNI_ORIZZONTE_OPPORTUNITA` scende **30 → 15**: oltre le due settimane la «scadenza» letta dalle
+  fonti è la fine dell'incarico, l'avvio del progetto o la chiusura dell'anno scolastico. Il tetto è
+  UNO: `eOpportunitaConScadenza`, `filtroAttivi` (PostgREST `lte`), `table-reporter` e
+  `stileScadenza`.
+- `SOGLIA_VICINA` resta **solo** come livello informativo dei promemoria email (`lib/resend.ts`):
+  non è più una banda del badge.
+
+**Consumatori allineati (uno solo per superficie).** `rigaBoardDati.badgeScadenza` delega a
+`stileScadenza` (niente più banda calcolata in casa); `ElencoOpportunita` usa `stileScadenza` +
+`giorniRimanenti` (via la palette pastello warning/accent e le soglie 48h/5 giorni);
+`SchedaAvviso` continua a usare `stileScadenza`. **Rimosso** `src/lib/urgency.ts` con la sua guardia
+`scripts/test-urgenza.ts` (e le voci `test:urgenza`/`npm test`): il backfill dei nomi istituto ora
+conta le bande con `stileScadenza(giorniRimanenti(...))` e filtra con `eOpportunitaConScadenza`.
+
+**Scraper: le pagine informative non sono avvisi (§26.82, `src/lib/noiseFilter.ts`).**
+Nuovo gruppo di segnali `informativa` — «scuola in ospedale», «formazione scuola-lavoro», «PCTO»,
+«alternanza scuola-lavoro», «corsi di formazione/aggiornamento/recupero/extracurricolari»,
+«progetti europei/extracurricolari/di istituto/di ampliamento», «percorsi di orientamento», «elenco
+di scuole/istituti/plessi», «mappa del sito / indice dei contenuti» — con una regola più stretta
+delle altre soft: la pagina resta **solo** se il TITOLO ha un indicatore di reclutamento SPECIFICO
+(`STRONG_RECRUITMENT_INDICATORS`) **e** il testo dichiara una finestra di candidatura
+(`haFinestraCandidatura`: «entro il 30/10/2026», «entro e non oltre il …», «termine di presentazione
+delle domande», «domanda entro N giorni»). Prima bastava la parola «interpelli» nel menu del sito per
+tenere in vita un elenco di scuole (USP Rieti) o un progetto PCTO. PNRR/PON restano **fuori** da
+questi segnali: il reclutamento di tutor/esperti su progetto PNRR è una categoria ammessa.
+
+
+La stessa regola è ora applicata **anche in ingestione**:
+`scraper/qualitaOpportunita.motivoScartoOpportunita` chiama `isAdministrativeNoise` (prima il
+pre-filtro girava solo in `discovery-engine` e `table-reporter`), così la verità su cosa è rumore è
+una sola per crawler, tabellari e pipeline.
+
+**Feed della dashboard: via il tetto arbitrario di 100 righe.** `useInterpelliFeed` chiedeva 100
+righe (e altre 100 al fallback `notices`) senza dirlo: l'accordion «Opportunità mappate» contava e
+mostrava una popolazione troncata. Ora chiede `RIGHE_FEED = 1.000` — la pagina massima che PostgREST
+consegna in una risposta — con il limite **esplicito** nel chiamante e documentato; oltre quella
+soglia si pagina (il tabellone pubblico lo fa già con `flightBoard/letturaBoard.ts`). Il conteggio
+della dashboard resta quello delle righe davvero in vetrina: nessun `+`, nessun numero fisso.
+
+**Pulizia (nessun file nuovo, nessuna dipendenza).** Rimossi come codice morto:
+`righeBoard.livelloUrgenza`/`coloreUrgenza`/`etichettaUrgenza`/`giorniAllaScadenza`/
+`normalizzaDataScadenza` (una seconda macchina di urgenza a 4 livelli, mai chiamata),
+`righeBoard.arricchisciProvince`/`estraiCitta`/`estraiScuolaDaTitolo` (nessun consumatore),
+`rigaBoardDati.URGENZA_TOKENS` (sostituito da `SCADENZA_TOKENS`). Rimossi gli artefatti di
+backup/testo `src/**/*.ts.u8` (5 file, non importati da nessuno) e i log `scripts/_tc-footer.log`,
+`scripts/_tce.log`. `righeBoard.ts` 401 → 226 righe, `rigaBoardDati.ts` 340 → 250, `scadenza.ts`
+206 → 249 (la regola unica), `noiseFilter.ts` 197 → 246: le due voci `E-DIM` della baseline
+(`rigaBoardDati.ts`, `righeBoard.ts`) sono state **rimosse** perché il debito è risolto.
+
+**Verifiche (da `project/`).** `npm run typecheck` ✅ 0 · `npm test` ✅ exit 0 (catena intera,
+`test:board:scadenza`, `test:board:filtro`, `test:board:demo`, `test-scadenza`, `test:noise-filter`,
+`test:scraper:attivi` compresi) · `npm run test:architettura` ✅ **686 file, 145 violazioni, 145
+congelate — nessuna nuova** · `npm run build` ✅ · `npx eslint` sui file toccati ✅ 0. *Nota onesta*:
+`npm run scrape:check` segnala due errori **preesistenti** di tipizzazione Cheerio
+(`scraper/articoloPost.ts:160`, `scraper/postElenco.ts:151`), in file non toccati da questa sessione;
+non sono stati corretti per non allargare il perimetro.
+
+**Nota di sessione.** Il colore non è decorazione: è una promessa sul tempo che resta. Con tre scale
+diverse la stessa riga poteva essere «in corso» sul tabellone e «vicino» nella scheda; con una sola,
+la promessa è verificabile. E la finestra di candidatura è un dato di prodotto, non una preferenza
+estetica: se la «scadenza» supera le due settimane, quasi sempre non è una scadenza — è la fine di un
+contratto. Meglio dichiararla «fuori finestra» che colorarla di verde.
+
+---
+
+### 26.83 Sanificazione del database `interpelli`: fuori finestra marcato nel DB, feed 575 → 130, segnaposto del nome a NULL (25/10/2026)
+
+**Perché.** La finestra di 15 giorni era una regola **solo di lettura**: `filtroAttivi`
+(PostgREST) e `eOpportunitaConScadenza` (in memoria) la applicavano, ma il database continuava a
+considerare «attiva» ogni riga con `expiration_date >= current_date` — senza confine superiore — e,
+soprattutto, ogni riga **senza scadenza** pubblicata negli ultimi 60 giorni. Misura sul progetto di
+produzione prima dell'intervento: la RPC `match_interpelli` consegnava **575 righe su 575**, cioè
+tutta la tabella, di cui 440 senza scadenza e 5 con la «scadenza» a fine incarico. Ogni lettore che
+non passasse dalla bacheca (notifiche, edge functions, futuro export) vedeva contratti annuali come
+opportunità aperte.
+
+**Cosa (migrazione `20261025120000_finestra_opportunita_interpelli.sql`, applicata).**
+1. Colonne `fuori_finestra boolean not null default false` e `finestra_verificata_at timestamptz`
+   (data della VERIFICA, non della scadenza) + indice parziale `interpelli_fuori_finestra_idx`.
+2. La regola in SQL, in un punto solo: `giorni_orizzonte_opportunita()` → `15` (gemello di
+   `GIORNI_ORIZZONTE_OPPORTUNITA`) e `in_finestra_opportunita(scadenza, oggi)` = «dichiarata, non
+   passata, entro 15 giorni». Verificata in produzione: 25/10 → `true`, 09/11 → `true`, 10/11 →
+   `false`, `null` → `false`.
+3. **Sanificazione**: `aggiorna_finestra_interpelli()` marca fuori chi è fuori e rimette dentro chi
+   è rientrato (tocca solo le righe col marcatore sbagliato, `is distinct from`: idempotente).
+4. Il marcatore nasce giusto all'ingestione: trigger `trg_marca_finestra` su
+   `INSERT/UPDATE OF expiration_date`. E invecchia bene: job pg_cron
+   `finestra-opportunita-interpelli` alle 03:20 (creato solo se `pg_cron` è installato; altrimenti
+   resta il comando manuale).
+5. **Gate del feed**: `match_interpelli` riscritta — via il ramo dei 60 giorni, dentro
+   `in_finestra_opportunita(expiration_date)`. Tutto il resto (province, forme tolleranti delle
+   classi, ramo sostegno, ordinamento, limiti) è identico: cambia **una** regola e cambia in un punto.
+6. `school_name`: `UPDATE … WHERE school_name ~* 'scuola\s+non\s+specificat[oa]|pi[uù]\s*[''’]?\s*plessi'`
+   → `NULL` (§26.77). Misura: **0 righe** da azzerare (312 erano già `NULL` per la pulizia
+   precedente), quindi l'istruzione è rimasta come guardia idempotente e come contratto per le righe
+   che arriveranno.
+
+**Perché il marcatore NON è il gate.** `fuori_finestra` è una fotografia del giorno; la finestra è
+relativa a `current_date`. Una scadenza a 20 giorni è fuori oggi e diventa opportunità fra 5 giorni
+senza che nessuno scriva quella riga: se il feed si fidasse del marcatore, una cron notturna fallita
+nasconderebbe un'opportunità vera. Il verdetto autorevole resta la **data**; il marcatore serve a
+contare, elencare e sorvegliare (e a non far divergere le superfici).
+
+**Misure (produzione, sole letture).** `interpelli` 575 righe · RPC `match_interpelli` **575 → 130**
+(era: 135 con scadenza + 440 senza) · marcatore **445 fuori / 130 dentro** (motivi: 440 senza data,
+5 oltre i 15 giorni, 0 scadute, 0 illeggibili) · `school_name` nulli **312** · segnaposto residui
+**0 → 0**. Il trigger è stato provato con due righe temporanee (`expiration_date` 31/12 → `true`,
+30/10 → `false`) e poi **cancellate**: la tabella è tornata a 575 righe.
+
+**Codice (nuovo, 3 file).** `scripts/lib/sanificaInterpelli.ts` (regola pura: `costruisciPiano`,
+`motivoFuoriFinestra`, `eNomeSegnaposto`, `descriviPiano`), `scripts/sanifica-interpelli.ts`
+(applicazione idempotente via service role, **dry-run di default**, `--apply` per scrivere, exit 2 se
+la migrazione non è applicata), `scripts/test-sanifica-interpelli.ts` (verifiche sui confini 15/16
+giorni, sui segnaposto in 4 grafie, sui conteggi del piano e — soprattutto — che la **migrazione**
+porti la stessa regola e la stessa espressione SQL del segnaposto: se una delle due cambia senza
+l'altra, il test lo dice). Comandi: `npm run db:sanifica`, `npm run test:sanifica` (in catena a
+`npm test`, subito dopo `test-scadenza`).
+
+**Colori: il grep chiesto, con l'esito vero.** Su `src/` restavano **2** riquadri informativi (non
+semafori) con `border-amber-500 bg-amber-50 text-amber-900` — la «guida operativa» di
+`SchedaAvviso.tsx:143` e di `InterpelloDettaglioModal.tsx:195` → portati sulla palette semantica
+(`border-primary-400 bg-primary-50 text-primary-800`), così l'unica tinta d'allarme resta il
+rosso/verde della scadenza. Restano **5** occorrenze in `departments/admin` (`TabAccount.tsx:212,225`,
+`adminUi.tsx:42,45,48`: `bg-orange-500`, `bg-yellow-400`, `bg-yellow-100 text-yellow-800
+ring-yellow-300`): è un **altro dipartimento**, e la regola §1 vieta di modificarlo senza sblocco
+congiunto — sono segnalate, non toccate (→ chiuse in **§26.84** dopo lo sblocco congiunto autorizzato). Le altre occorrenze sono le **guardie** dei test
+(`badgeScadenza.test.ts`, `demoInterpelli.test.ts`) che verificano l'ASSENZA di quei colori.
+
+**Verifiche (da `project/`).** `npm run typecheck` ✅ 0 · **`npm test` ✅ exit 0** (catena intera, 94
+comandi, `test:sanifica` compreso) · `npm run test:architettura` ✅ **689 file, 145 violazioni, 145
+congelate — nessuna nuova** · `npm run build` ✅ (10,43 s) · `npx eslint` sui 5 file toccati ✅ 0 ·
+`npx supabase db push --dry-run --linked` → una sola migrazione pendente, poi applicata (storico
+remoto allineato: 60 → 61).
+
+**Nota di sessione.** Una regola di prodotto che vive solo nel codice di lettura è una buona
+intenzione; nel database è un fatto. Il feed è passato da «tutto quello che c'è» a «quello che si può
+davvero fare» (575 → 130) senza cancellare una riga: il dato che non è un'opportunità resta
+consultabile e **dichiarato** (`fuori_finestra`, `finestra_verificata_at`), invece di sparire. È la
+stessa scelta del segnaposto del nome: meglio un `NULL` onesto — che l'interfaccia sa spiegare — di un
+testo che finge di essere una denominazione.
+
+---
+
+### 26.84 Sblocco congiunto admin + radar: i 5 colori hardcoded del pannello amministratore passano ai token di palette (25/10/2026)
+
+**Perché.** Chiude il punto (4) della §26.83: su `src/` restavano cinque classi fuori palette, tutte
+in `departments/admin`. La regola §1 ne vietava la modifica senza **sblocco congiunto**, che l'utente
+ha autorizzato in questa sessione («completa la pulizia dei colori residui»).
+
+**Cosa (5 sostituzioni, 2 file).**
+| Dove | Prima | Dopo |
+|---|---|---|
+| `adminUi.tsx` badge `PRO1M` | `bg-yellow-100 text-yellow-800 ring-1 ring-inset ring-yellow-300` | `bg-warning-50 text-warning-700 ring-1 ring-inset ring-warning-500/40` |
+| `adminUi.tsx` badge `PRO1A` e `PRO` | `bg-orange-500 text-white` | `bg-secondary-500 text-white` |
+| `tabs/TabAccount.tsx` bottone attivo «PRO Anno» | `bg-orange-500 text-white shadow-soft` | `bg-secondary-500 text-white shadow-soft` |
+| `tabs/TabAccount.tsx` bottone attivo «PRO Mese» | `bg-yellow-400 text-slate-900 shadow-soft` | `bg-warning-500 text-slate-900 shadow-soft` |
+
+I token sono quelli già in uso nel progetto per lo stesso ruolo: `warning-50/700` per le pillole ambra
+(`HealthCheckModal.tsx`, `TabDipartimenti.tsx`) e `secondary-500` per il badge PRO «pieno»
+(`components/header/BadgePianoCompatto.tsx`, `BadgePianoRiga.tsx`). I quattro stati del pannello
+restano **distinguibili** — Base `cyan-100`, PRO1M `warning`, PRO1A/PRO `secondary`, Free Forever
+`red-100` — e non sono stati allineati cromaticamente all'header (dove PRO è `accent-500` e FFE è
+`secondary-500`) di proposito: l'header distingue due famiglie, il pannello quattro, e uniformare le
+tinte avrebbe reso `PRO1M` e `PRO1A` indistinguibili a colpo d'occhio.
+
+**Perché `ring-warning-500/40` e non `ring-warning-200`.** In `tailwind.config.js` la scala `warning`
+definisce **solo** `50/500/600/700`: `ring-warning-200` non esiste, e Tailwind non segnala l'errore —
+scarta la classe e l'anello semplicemente non compare. Verificato sul CSS compilato dopo il build:
+`.ring-warning-200` **assente**, `.ring-warning-500` **presente**. Resta un caso latente in un altro
+dipartimento, **non toccato**: `cfu/calcolatore/components/documenti/ArchivioEsami.tsx:27,42` usa
+`ring-warning-200` e quindi oggi non disegna l'anello previsto — da correggere in una passata sul `cfu`
+con il suo sblocco — **fatto in §26.85**.
+
+**Verifiche (da `project/`).** grep `(yellow|amber|orange)` su `src/**/*.{ts,tsx,css}` → **4
+occorrenze, nessuna di colore vero**: 3 sono le guardie dei test radar che ne verificano l'ASSENZA,
+1 era il commento esplicativo (riformulato senza token letterali, così il grep resta pulito).
+`npx tsc --noEmit -p tsconfig.app.json` ✅ 0 · **`npm test` ✅ exit 0** (catena intera, ultima voce
+`src/lib/__tests__/notificationQueueConsumer.test.ts`) · `npm run test:architettura` ✅ 689 file · 145
+violazioni = 145 congelate · nessuna nuova · `npm run build` ✅ (10,75 s) · `npx eslint` sui 2 file
+toccati ✅ 0 errori (2 warning `react-refresh` preesistenti, su linee non toccate) · classi nuove
+presenti nel CSS compilato: `.bg-secondary-500`, `.bg-warning-50`, `.bg-warning-500`,
+`.text-warning-700`, `.ring-warning-500`.
+
+**Nota di sessione.** Un token di palette che non esiste è peggio di un colore hardcoded: il primo
+fallisce in silenzio, il secondo almeno si vede nel diff. La riga `ring-warning-200` era la prova che
+«usare i token» non basta — va verificato che il token ci sia, e l'unico modo onesto è guardare il CSS
+che esce dal build.
+
+---
+
+### 26.85 Sblocco CFU: `ring-warning-200` (token inesistente) → `ring-warning-500/40` in `ArchivioEsami` (25/10/2026)
+
+**Perché.** Chiude il caso latente segnalato in §26.84. `tailwind.config.js` definisce per `warning`
+solo `50/500/600/700`: `ring-warning-200` non esiste, e Tailwind **scarta la classe in silenzio**.
+Conseguenza: le due pillole «N senza settore SSD» e «settore non dichiarato» di
+`cfu/calcolatore/components/documenti/ArchivioEsami.tsx` non hanno mai disegnato l'anello previsto — il
+fatto che il documento sia incompleto restava affidato al solo sfondo ambra, senza contorno.
+
+**Cosa.** Due righe, nessun'altra modifica (testi, layout e semantica invariati): `ArchivioEsami.tsx:27`
+e `:42`, `ring-1 ring-warning-200` → `ring-1 ring-warning-500/40`, esattamente come in §26.84. Il
+dipartimento `cfu` è stato sbloccato dall'utente per questa correzione.
+
+**Verifiche.** `npx eslint` sul file ✅ 0 · `npm run typecheck` ✅ 0 · **`npm test` ✅ exit 0** (catena
+intera, 3460 righe di log, ultima voce `src/lib/__tests__/notificationQueueConsumer.test.ts`).
+`.ring-warning-500` era già nel CSS compilato (generata dalla §26.84): nessuna classe nuova da
+rigenerare.
+
+**Cosa resta (misurato, non toccato).** Lo stesso errore di token inesistente compare **18 volte in 10
+file** — sono decorazioni che oggi mancano, non guasti funzionali:
+
+| File | Occorrenze | Tinte non definite |
+|---|---|---|
+| `cfu/…/risultato/SezioneNote.tsx` | 1 (r. 87) | `ring-warning-200`, `text-warning-900` |
+| `cfu/…/risultato/stileEsito.ts` | 2 (r. 39, 64) | `border-warning-200`, `bg-warning-100`, `text-warning-800`, `ring-warning-200` |
+| `cfu/…/StepEsami.tsx` | 1 (r. 156) | `text-warning-800`, `ring-warning-200` |
+| `departments/radar/RadarStatusToggle.tsx` | 4 (r. 144, 175, 205, 206) | `ring-warning-300`, `border-warning-200` |
+| `components/HealthCheckModal.tsx` | 4 (r. 26, 39, 152, 185) | `border-warning-200` |
+| `components/documenti/MieiDocumenti.tsx` | 1 (r. 124) | `border-warning-200`, `text-warning-800` |
+| `departments/admin/components/TabEmailAutomazioni.tsx` | 1 (r. 74) | `border-warning-200` |
+| `pages/AdminPage.tsx` | 1 (r. 131) | `border-warning-200` |
+| `pages/dashboard/components/BannerBozzaOnboarding.tsx` | 2 (r. 17, 22) | `border-warning-200` |
+| `lib/compatibilita.ts` | 1 (r. 76) | `ring-warning-300` |
+
+Due strade, da scegliere **una** e applicarla ovunque (non in una passata di pulizia colori): **(a)**
+completare la scala `warning` in `tailwind.config.js` con `100/200/300/800/900` (coerenti con le altre
+scale) — una modifica, tutti i bordi tornano e nessun file di componente va toccato (**strada scelta,
+§26.86**);
+**(b)** convertire ogni uso su `warning-500/40` per contorni/anelli e su `warning-700`/`warning-50` per
+testo e sfondi — nessun token nuovo, ma 18 punti da toccare. Raccomandata la **(a)** per i bordi e gli
+anelli, perché il problema non è il colore scelto: è che il token non esiste.
+
+**Nota di sessione.** Tre sessioni di fila hanno trovato lo stesso difetto in punti diversi: non è
+distrazione, è che Tailwind non distingue «classe assente perché voluta» da «classe assente perché il
+token non c'è». Finché la palette è scritta a mano scala per scala, il grep del CSS compilato è
+l'unico collaudo che dice la verità.
+---
+
+### 26.86 Scala `warning` completata 50→900 in `tailwind.config.js`: chiusi i 18 token orfani (25/10/2026)
+
+**Decisione.** Applicata la **strada (a)** di §26.85: la scala `warning` passa da 4 gradini
+(`50/500/600/700`) a **10** (`50→900`). È una modifica di sola configurazione: **nessuna riga di
+componente toccata**, quindi i tre dipartimenti dell'inventario (`cfu`, `radar`, `admin`) e i condivisi
+(`components/**`, `pages/**`, `lib/**`) tornano a disegnare bordi e anelli **senza sblocchi di perimetro
+né edit nei file di dipartimento**. È il motivo per cui questa strada vince sulla (b): una sola riga di
+verità invece di 18 edit sparsi in quattro perimetri.
+
+**La riserva di §26.85 è caduta guardando il file.** Avevo scritto che la (a) avrebbe aggiunto «tinte
+fuori dai cinque token semantici»: falso. In `tailwind.config.js` `primary`, `secondary` e `accent`
+hanno **già dieci gradini** (`50→900`); le uniche troncate sono `warning`, `error` e `success`. Completare
+`warning` non introduce un'eccezione: **allinea la scala alle tre già complete**. Il difetto non era la
+quantità di token, era la disomogeneità fra scale della stessa palette.
+
+**Rampa.** Gli ancoraggi esistenti sono rimasti **identici** (nessun colore in produzione cambia tono); i
+sei nuovi gradini sono derivati dagli stessi ancoraggi — hue ≈ 43°, saturazione 72–100% — e **non**
+copiati da `amber` di Tailwind, che è più rosso (`amber-700 = #b45309` contro il nostro `#a87d12`) e
+avrebbe rotto l'identità «oro attenuato» delle pillole.
+
+| Gradino | Hex | Stato | Uso tipico |
+|---|---|---|---|
+| `warning-50` | `#fff8e6` | invariato | sfondo pillole avviso |
+| `warning-100` | `#fef2d5` | **nuovo** | sfondo icone/stato in pausa (`RadarStatusToggle:144`, `stileEsito:64`) |
+| `warning-200` | `#fbe3a7` | **nuovo** | bordi e anelli tenui (`border-warning-200`, `ring-warning-200`) |
+| `warning-300` | `#f8d377` | **nuovo** | anelli più marcati (`ring-warning-300`) |
+| `warning-400` | `#f4c54e` | **nuovo** | gradino ponte 300↔500 (non usato oggi, vedi sotto) |
+| `warning-500` | `#e2b33c` | invariato | accento pieno, base dei contorni `500/40` |
+| `warning-600` | `#c79820` | invariato | hover |
+| `warning-700` | `#a87d12` | invariato | testo delle pillole |
+| `warning-800` | `#785f21` | **nuovo** | testo su sfondo `warning-50/100` (5,25:1 su `200`, 5,7:1 su `50`) |
+| `warning-900` | `#6a4f0c` | **nuovo** | testo più marcato (`SezioneNote:87`) |
+
+Luminanza monotona decrescente verificata su tutta la scala (`95,1% → 91,6% → 82,0% → 72,0% → 63,1% →
+56,1% → 45,3% → 36,5% → 30,0% → 23,1%`): nessun gradino è più chiaro del precedente, quindi i salti di
+contrasto restano regolari.
+
+**Perché anche `400`, che non serviva.** Perché il difetto non era «manca il 200»: era che la scala si
+poteva troncare **senza sintomi**. Una scala bucata invita la prossima sessione a scrivere `warning-400` e
+a perdere di nuovo l'anello in silenzio. Nel commento del config la ragione è scritta esplicitamente
+(«Tailwind scarta in silenzio…»), così nessuno la riaccorcia per pulizia.
+
+**Verifiche** (tutte sullo stato definitivo, config + documentazione comprese). `npm run typecheck` ✅
+exit 0 · **`npm test` ✅ exit 0** (catena intera, 3460 righe di log, ultima voce
+`notificationQueueConsumer.test.ts`) · `npm run test:architettura` ✅ exit 0 (689 file, 145 violazioni =
+baseline congelata, nessuna nuova) · `npm run build` ✅ exit 0 (23,83 s, `index-*.css` 70,68 kB · gzip
+12,24 kB) · `npx eslint tailwind.config.js` ✅ 0 problemi.
+
+**Prova nel CSS compilato** — non dedotta, letta da `dist/assets/index-*.css`. Le sei classi prima
+inesistenti ora esistono **con il valore atteso**:
+
+```
+.ring-warning-200    → rgb(251 227 167)        .ring-warning-300  → rgb(248 211 119)
+.border-warning-200  → rgb(251 227 167)        .bg-warning-100    → rgb(254 242 213)
+.text-warning-800    → rgb(120 95 33)          .text-warning-900  → rgb(106 79 12)
+.ring-warning-500/40 → rgb(226 179 60 / 0.4)   (già presente da §26.84)
+```
+
+`.bg-warning-200` e `.border-warning-800` risultano invece **assenti**: è corretto, il JIT elimina le
+classi non citate nei sorgenti. Non è più un token mancante, è una classe non usata.
+
+**Controllo orfani (collaudo riutilizzabile).** Si estrae dal config il set dei gradini definiti nel
+blocco `warning`, si raccolgono in `src/**` tutte le occorrenze
+`(bg|text|border|ring|from|to|via|divide|outline|fill|stroke|shadow|decoration|placeholder|accent|caret)-warning-<n>`
+e si fa la differenza. Esito: definiti `50,100,200,300,400,500,600,700,800,900` · usati
+`50,100,200,300,500,600,700,800,900` · **orfani 0**. Va ripetuto a ogni modifica di palette: è l'unico
+controllo che distingue «classe assente perché voluta» da «token che non esiste». Da §26.88 non è più una
+procedura da ricordare: `npm run test:palette` (in `npm test`) la esegue su tutte le scale a ogni giro.
+
+**Effetto visibile atteso (nessuna funzionalità cambia).** L'anello di `ArchivioEsami` resta com'è
+(corretto a mano in §26.85). Si «accendono» i contorni che il JSX dichiarava già e che il browser non
+disegnava: badge «IN PAUSA» e riquadro del trial in preavviso del radar, riquadri d'avviso in
+`HealthCheckModal`, `MieiDocumenti`, `AdminPage`, `BannerBozzaOnboarding`, `TabEmailAutomazioni`, le
+pillole di `stileEsito`/`SezioneNote`/`StepEsami` del CFU e la pillola «arancio» di compatibilità
+(`lib/compatibilita.ts:76`). Sono decorazioni: prima mancavano e il testo restava leggibile perché su
+fondo `warning-50`, ma un riquadro senza bordo su fondo chiaro perde il confine e su mobile si confonde
+con il resto della pagina.
+
+**Dato nuovo emerso dal collaudo: `error` ha lo stesso difetto, `success` no.** Applicando il controllo
+orfani alle altre due scale troncate: `success` → definiti `50/500/600/700`, **nessuna** classe con
+gradino in uso (0 orfani); `error` → definiti `50/500/600/700`, ma in uso anche **`100`, `200`, `800`:
+15 occorrenze orfane in 13 file** —
+
+`components/documenti/MieiDocumenti.tsx:147` · `components/header/MenuMobile.tsx:139` ·
+`components/ContactForm.tsx:271` · `components/DevToolbar.tsx:211` · `components/HealthCheckModal.tsx:31,
+155, 186` · `components/Toast.tsx:42` · `departments/admin/components/TabEmailAutomazioni.tsx:92` ·
+`departments/cfu/…/risultato/SezioneNote.tsx:56` (`text-error-800`) ·
+`departments/cfu/…/risultato/stileEsito.ts:44, 62` (`bg-error-100`) ·
+`departments/radar/RadarWizardModal.tsx:777` · `lib/compatibilita.ts:77` (`ring-error-200`) ·
+`pages/ProfiloPage.tsx:121`.
+
+Tutti sono `border-error-200`: **i riquadri d'errore di form, toast e health-check oggi non hanno
+bordo**, e `bg-error-100` / `text-error-800` non colorano nulla. È lo stesso difetto, ma su una scala
+rossa — quindi l'impatto visivo è maggiore di quello appena chiuso. La correzione è identica (un blocco
+in `tailwind.config.js`, zero file di componente, zero sblocchi di perimetro), **ma non è stata applicata
+in questa sessione** perché l'incarico §26.86 riguardava `warning`: serve una decisione esplicita —
+**deciso e chiuso in §26.87**.
+
+---
+
+### 26.87 Scala `error` completata 50→900, `ArchivioEsami` riallineato su `ring-warning-200`, chiuso l'ultimo orfano (`primary-950`) (25/10/2026)
+
+**Tre chiusure in un turno.** (1) Rampa `error` completa: sanate in un colpo le 15 occorrenze orfane
+rimaste aperte da §26.86. (2) `ArchivioEsami.tsx:27,42` tornano su `ring-warning-200` (dipartimento `cfu`
+sbloccato dall'utente per queste due righe): ora che il token esiste, il `500/40` di §26.85 era rimasto il
+**cerotto** e rendeva le due pillole diverse dalle tre sorelle (`stileEsito.ts`, `SezioneNote.tsx`,
+`StepEsami.tsx`) che usano `warning-200`. (3) Il collaudo orfani, esteso a tutte le scale, ha trovato un
+**sedicesimo caso che nessuno dei due aveva in elenco**: `primary-950`.
+
+**Rampa `error`.** Ancoraggi invariati (`50 #fdecec`, `500 #d9534f`, `600 #b9403c`, `700 #93332f`); sei
+gradini derivati con la stessa ricetta della §26.86 — hue ≈ 2°, saturazione 51–81%, luminanza monotona
+`95,9 → 92,2 → 84,7 → 75,3 → 67,1 → 58,0 → 48,0 → 38,0 → 29,8 → 22,2%`.
+
+| Gradino | Hex | Stato |
+|---|---|---|
+| `error-50` | `#fdecec` | invariato |
+| `error-100` | `#fbdcdb` | **nuovo** — `bg-error-100` (stileEsito:62) |
+| `error-200` | `#f7bcb9` | **nuovo** — 13 dei 15 orfani (`border-error-200`, `ring-error-200`) |
+| `error-300` | `#f1938f` | **nuovo** |
+| `error-400` | `#e9716d` | **nuovo** (ponte, nessun uso oggi) |
+| `error-500` | `#d9534f` | invariato |
+| `error-600` | `#b9403c` | invariato |
+| `error-700` | `#93332f` | invariato |
+| `error-800` | `#742724` | **nuovo** — `text-error-800` (SezioneNote:56) |
+| `error-900` | `#571c1a` | **nuovo** |
+
+Due scelte deliberate: (a) `error-200` è **più marcato** del `red-200` di Tailwind (`#fecaca`, luminanza
+89,4% contro il nostro 84,7%) — un bordo d'errore deve vedersi, non solo esserci; (b) `text-error-800` su
+`bg-error-50` dà **8,93:1**, ben oltre AA, perché è il testo del messaggio d'errore nei form.
+
+**Le 15 occorrenze sanate** (erano tutte senza effetto, elenco completo in §26.86): ora ogni riquadro
+d'errore di `Toast`, `ContactForm`, `HealthCheckModal`, `MenuMobile`, `DevToolbar`, `ProfiloPage`,
+`MieiDocumenti`, `RadarWizardModal`, `TabEmailAutomazioni` e `stileEsito` ha bordo e anello. Verificato nel
+CSS compilato: `.border-error-200` e `.ring-error-200` → `rgb(247 188 185)`, `.bg-error-100` →
+`rgb(251 220 219)`, `.text-error-800` → `rgb(116 39 36)`.
+
+**`ArchivioEsami`: perché tornare indietro.** Il `ring-warning-500/40` di §26.85 non era una scelta di
+design, era l'unico contorno colorato che il browser disegnasse. Con `warning-200` disponibile, tenerlo
+avrebbe significato due anelli di peso diverso in pillole identiche dello stesso pannello. Restano su
+`500/40` solo i casi dove è **voluto**: il badge `PRO1M` dell'admin (§26.84). Nessun testo, layout o
+semantica toccati: rispetto a `HEAD` il file torna **identico** (la modifica di §26.85 era una deviazione
+temporanea: `git diff` sul file = 0 righe). È il modo migliore di chiudere un cerotto: sparire.
+
+**Il sedicesimo orfano: `primary-950`, e non era una decorazione.** Estendendo il collaudo a tutte e sei le
+scale, `primary` risultava con 11 gradini definiti e un uso a `to-primary-950` in
+`cfu/calcolatore/components/StepDossier.tsx:48`. Sembrava cosmetics; non lo era. `.from-primary-800`
+imposta da sé `--tw-gradient-to: rgb(20 53 78 / 0)`, quindi senza la stop la barra del documento di sintesi
+sfumava **nel trasparente**: sul lato destro restava il bianco della card sotto un testo chiaro
+(`text-accent-200`, badge `text-primary-100`). Aggiunto `950: '#091825'` (luminanza 9,0%, contro 12,7% del
+`900 #0c2235`); dopo il build il CSS contiene `.to-primary-950{--tw-gradient-to: #091825 …}` e la barra
+torna piena. È il caso che dimostra perché il collaudo va fatto **su tutte le scale**, non solo su quella
+che ha fatto rumore.
+
+**Collaudo orfani finale (gradini definiti / gradini in uso / orfani):** `warning` 10/9/**0** · `error`
+10/7/**0** · `success` 4/0/**0** · `primary` 11/11/**0** · `secondary` 10/10/**0** · `accent` 10/10/**0** →
+**totale 0**. `success` resta volutamente a quattro gradini: nessuna classe la usa con un gradino
+intermedio, e allargarla senza uso sarebbe la stessa disomogeneità al contrario. La ricetta, se servirà, è
+quella appena scritta due volte.
+
+**Verifiche** (stato definitivo, documentazione compresa). `npm run typecheck` ✅ exit 0 · **`npm test` ✅
+exit 0** (catena intera, 3460 righe, ultima voce `notificationQueueConsumer.test.ts`; da §26.88 la coda
+della catena è la guardia palette) · `npm run
+test:architettura` ✅ exit 0 (689 file, 145 = baseline congelata, nessuna nuova) · `npm run build` ✅ exit 0
+(7,89 s, CSS 71,34 kB · gzip 12,33 kB) · `npx eslint tailwind.config.js` + `ArchivioEsami.tsx` ✅ 0.
+
+**Nota sul collaudo (perché la cifra di §26.86 era sbagliata).** Il primo giro dello script stampava
+`warning 50 = L 100,0%`: non era la palette, era lo script — `[Math]::Min(Int32, Double)` in PowerShell
+risolveva l'overload `(int,int)` e arrotondava `0,902 → 1`, perché il canale `ff` produce un `Int32` mentre
+`f8`/`e6` producono `Double`. Corretto con cast `[double]` esplicito: il valore vero è **95,1%** (la cifra
+errata è stata corretta in §26.86 e in `DEPARTMENT_MAP`). Lezione: un numero che sembra troppo pulito
+(`100,0%`) è un sintomo; e anche il collaudo va collaudato, altrimenti produce documentazione sicura e
+sbagliata.
+
+**Cosa resta.** Sul tema «token che non esistono» non c'è più nulla di aperto: sei scale, 55 gradini
+definiti, 47 in uso, 0 orfani. Il collaudo, che qui era una procedura scritta a mano e quindi dipendeva
+da chi se la ricordava, è diventato uno script: §26.88 (`npm run test:palette`, in `npm test`).
+
+**Nota di sessione.** Quattro passaggi (admin → cfu → warning → il residuo `error`) hanno mostrato lo
+stesso schema: si trova il sintomo in un file, poi il difetto vero sta nella palette, poi nella palette
+accanto. Le scale `primary`/`secondary`/`accent` sono complete e non hanno mai prodotto un solo orfano;
+le tre troncate ne hanno prodotti 33 (18 `warning` ora chiusi + 15 `error` aperti). Completare le scale è
+la correzione strutturale; convertire le singole classi è il cerotto.
+
+### 26.88 Guardia permanente sui token colore: `scripts/test-token-palette.ts` entra in `npm test` (25/10/2026)
+
+**Il buco che restava aperto.** §26.87 si chiudeva con una frase onesta: il collaudo orfani era una
+procedura scritta in documentazione, quindi dipendeva da chi se la ricordava. Un difetto che non produce
+errori — Tailwind scarta in silenzio le classi il cui token non esiste — non può vivere di memoria: chi
+domani scrive `border-warning-300` non ha motivo di leggere novemila righe di handover. Da qui lo script.
+
+**Cosa verifica (16 asserzioni).**
+1. **Palette leggibile**: `theme.extend.colors` viene IMPORTATO da `tailwind.config.js` — nessuna seconda
+   lista di colori da tenere allineata, la config resta l'unica fonte di verità. Per ogni scala stampa i
+   gradini dichiarati; ogni valore deve essere un hex a 6 cifre (un `#fff8e` è invisibile quanto un token
+   mancante).
+2. **Due regole distinte, non una.** Per le scale CUSTOM (`primary`, `secondary`, `accent`, `success`,
+   `warning`, `error`) i gradini dichiarati sono esaustivi: `success-200` non esiste da nessuna parte.
+   Per le scale che ESTENDONO la palette (`sky`, `slate`) `extend` FONDE i default di Tailwind, quindi
+   `slate-700` esiste anche se la config dichiara solo `slate.50`: lì è orfano solo un numero che Tailwind
+   non prevede (`sky-750`). Confondere le due regole avrebbe prodotto **15 falsi positivi** su
+   `slate`/`sky` — ed è il motivo per cui il gate non si può ridurre a «gradino non dichiarato = orfano».
+3. **Stessi `content` della build**: lo script espande i glob di `content` della config
+   (`./index.html`, `./src/**/*.{js,ts,jsx,tsx}` → **536 file**) e fallisce se una voce non è espandibile,
+   invece di restringere la scansione in silenzio.
+4. **Autotest**: 9 casi (orfano vero, opacità `ring-warning-200/40`, prefisso composto
+   `border-t-error-200`, fusione dei default, `bg-error` senza gradino, token più lungo `text-error-2000`)
+   con la STESSA funzione usata sulla scansione reale, così l'autotest non può divergere dalla regola.
+5. **Autodifesa**: verifica di essere in `npm test` e di avere l'alias `test:palette`. Un gate invocabile
+   a mano ma fuori dalla catena non protegge nessuno (stessa convenzione di `noiseFilter`,
+   `sourceTelemetry`, `letturaBoardCablaggio`).
+
+**Il difetto che la prova negativa ha trovato.** Provando il gate con un orfano vero (sonda temporanea in
+`src/` con `ring-success-200` + `bg-error`, poi rimossa) la scansione ne segnalava **uno** e non due: il
+ciclo sui file usava solo il regex `prefisso-scala-gradino`, mentre il caso «scala senza `DEFAULT` usata
+senza gradino» esisteva soltanto nell'autotest. Corretto facendo chiamare al ciclo la stessa
+`palette.orfaniDi(...)`: ora autotest e scansione non possono divergere. Lezione: **un autotest verde non
+dimostra che il percorso di produzione usi quella regola** — il gate va provato dall'esterno, con un
+campionamento reale e la sonda poi cancellata.
+
+**W-DIM e lo split.** La prima versione era un unico file da 271 righe: `test:architettura` è passato a
+EXIT 1 con 146 violazioni contro 145 di baseline (`W-DIM`, > 250 righe). Lo split segue la forma di
+§26.83: la REGOLA in `scripts/lib/paletteToken.ts` (189 righe: modello della scala, regex, `orfaniDi`,
+`gradiniValidiDi`, `espandiContent`), le ASSERZIONI in `scripts/test-token-palette.ts` (144 righe).
+Stesso `&&` in `npm test`, nessuna violazione nuova.
+
+**Esito sulla palette attuale (coincide con il collaudo manuale di §26.87).** Gradini in uso:
+`primary` 11/11 · `secondary` 10/10 · `accent` 10/10 · `warning` 9/10 · `error` 7/10 · `success` 0/4 →
+**47 in uso su 55 definiti, 0 orfani**. `success` stampa una nota «scala non continua» (4 gradini su 10):
+non è un errore, è il promemoria che l'unica scala ancora troncata è quella — e che il giorno in cui
+qualcuno scriverà `success-200` il gate lo dirà subito, invece di lasciare un bordo invisibile.
+
+**Verifiche.** `npm run typecheck` ✅ exit 0 · **`npm test` ✅ exit 0** (catena intera, **3.509 righe**: le
+3.460 di §26.87 più le 49 del nuovo gate; l'ultima riga stampata è `✅ Palette: nessun token orfano su 536
+file`) · `npm run test:architettura` ✅ exit 0 (691 file, 145 = baseline, nessuna nuova) · `npm run build`
+✅ exit 0 (7,64 s, CSS 71,34 kB · gzip 12,33 kB) · `npx eslint` sui 2 file nuovi ✅ 0 · **prova negativa**
+✅ (sonda con 2 orfani → EXIT 1, `border-error-200` valido non segnalato, sonda rimossa).
+
+**Nota di sessione.** Tre turni (§26.86, §26.87, §26.88) hanno chiuso lo stesso tema in tre modi diversi:
+completare la scala (correzione strutturale), convertire le classi (cerotto), rendere il collaudo
+automatico (prevenzione). Solo il terzo impedisce il ritorno del difetto: gli altri due valgono finché
+qualcuno si ricorda di rifarli. Costo: un test da 144 righe, un lib da 189, e 49 righe di output in più in
+`npm test` — che ora finisce proprio con la risposta alla domanda «esiste un token orfano?».
+
+
 

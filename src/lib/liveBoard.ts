@@ -20,9 +20,9 @@
  * nome, per nessuna strada. La riga che entra ha sempre la sua scuola e
  * `anagraficaParziale` dichiara lo stato dell'anagrafica (`completo`/`parziale`).
  *
- * REGOLA FERREA DELLA SCADENZA (§26.71, direttiva 16/10/2026; orizzonte §26.75,
- * 22/10/2026): la vetrina è fatta di OPPORTUNITÀ — senza una `expiration_date`
- * dichiarata, non ancora passata e DENTRO I 30 GIORNI la riga NON entra
+ * REGOLA FERREA DELLA SCADENZA (§26.71, direttiva 16/10/2026; finestra §26.82,
+ * 25/10/2026): la vetrina è fatta di OPPORTUNITÀ — senza una `expiration_date`
+ * dichiarata, non ancora passata e DENTRO I 15 GIORNI la riga NON entra
  * (`eOpportunitaConScadenza`). Le pagine di archivio, i regolamenti e gli indici
  * di classi di concorso che la fonte non data restano fuori: grazie alla vecchia
  * finestra dei 60 giorni entravano in bacheca come «Scadenza n/d» e gonfiavano il
@@ -180,4 +180,3 @@ export function preparaRigheBoard<R extends RigaBoard>(
   }
   return pronte;
 }
-
