@@ -34,7 +34,8 @@ import {
   ETICHETTA_SCUOLA_PREFERITA,
 } from '@/lib/compatibilita';
 import { scuolaPreferita } from '@/lib/filtriScuole';
-import { giorniRimanenti, stileScadenza } from '@/lib/scadenza';
+import { giorniRimanenti } from '@/lib/scadenza';
+import { eTermineProssimo, stileScadenza } from '@/lib/scadenzaSemaforo';
 import { InterpelloDettaglioModal } from './InterpelloDettaglioModal';
 import { IstitutoEmittente } from './IstitutoEmittente';
 
@@ -43,7 +44,7 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
   const { incrementaNotifica, interpelliNotificati, preferenze } = useApp();
   const giorni = giorniRimanenti(interpello.dataScadenza);
   const stile = stileScadenza(giorni);
-  const inScadenza = stile.livello === 'imminente' || stile.livello === 'scaduto';
+  const inScadenza = eTermineProssimo(stile.livello);
   // Etichetta leggibile: CODICE + nome ufficiale della materia/classe.
   // Si sceglie la classe COERENTE con il titolo (evita "Primaria" + titolo della
   // secondaria: Ordine di scuola e Classe/Materia restano allineati).

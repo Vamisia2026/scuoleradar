@@ -4,12 +4,12 @@
  * La colonna «Scadenza» della tavola «Radar Live» ha UNA sola fonte:
  * `expiration_date`. Qui si fissano le tre invarianti di prodotto:
  *
- *   1. il colore è quello dei GIORNI DI CALENDARIO mancanti da oggi (rosso
- *      imminente → verde in corso), con la regola condivisa
- *      (`lib/scadenza.giorniRimanenti`): scade oggi / entro 48h → rosso,
- *      dal terzo giorno all'orizzonte dei 15 giorni → verde «In corso», oltre
- *      l'orizzonte → ardesia «Scadenza fuori finestra» (§26.82: UN solo badge,
- *      il giallo/arancio è stato rimosso da tutte le superfici). Il conto NON è
+ *   1. il colore è quello dei GIORNI DI CALENDARIO mancanti da oggi, con la
+ *      regola condivisa (`lib/scadenza.giorniRimanenti` + il semaforo
+ *      `lib/scadenzaSemaforo`): 🔴 rosso SOLO nelle prossime 24 ore («Scade
+ *      oggi»), 🟠 arancio fra 24 e 72 ore («Scade domani», «Ultime 72h»), 🟢
+ *      verde dal terzo giorno all'orizzonte dei 15 giorni («In corso»), oltre
+ *      l'orizzonte → ardesia «Scadenza fuori finestra» (§26.89). Il conto NON è
  *      una differenza fra istanti: un avviso che scade oggi è «Scade oggi», mai
  *      «Scade domani» (era il bug corretto il 16/10/2026, §26.71);
  *   2. senza scadenza NON si inventa nulla: banda neutra «Scadenza n/d» — mai la
@@ -47,23 +47,29 @@ function fra(giorni: number): string {
   return dataIsoLocale(d);
 }
 
-console.log('— 0. Palette UNICA e PIENA: solo rosso/verde d’allarme (§26.82) —');
+console.log('— 0. Palette UNICA e PIENA: tre luci, nessun giallo (§26.89) —');
 // Direttiva di prodotto: il colore di urgenza deve vedersi di sfuggita, anche su
-// schermo piccolo → tinta SATURA con testo bianco in grassetto. Niente giallo e
-// niente arancio: erano una seconda e una terza scala per lo stesso dato.
+// schermo piccolo → tinta SATURA con testo bianco in grassetto. Le luci sono
+// TRE (rosso · arancio · verde) e l'arancio è UNO: il giallo/ambra resta fuori,
+// era la quarta scala dello stesso dato.
 const ePieno = (token: string): boolean =>
   /\bbg-\w+-[5-9]00\b/.test(token) && token.includes('text-white') && token.includes('font-bold');
 check('verde: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.verde));
+check('arancio: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.arancio));
 check('rosso: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.rosso));
 check('scaduto: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.scaduto));
 check('neutro: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.neutro));
 check('verde del design system: `bg-emerald-700`', true, SCADENZA_TOKENS.verde.includes('bg-emerald-700'));
+check('arancio del design system: `bg-orange-800`', true, SCADENZA_TOKENS.arancio.includes('bg-orange-800'));
 check('rosso del design system: `bg-rose-700`', true, SCADENZA_TOKENS.rosso.includes('bg-rose-700'));
+// Tre luci, tre tinte: se due token coincidessero il semaforo non sarebbe
+// leggibile a colpo d'occhio (rosso vs arancio sono i due più vicini).
+check('ogni banda ha una tinta DIVERSA (5 token distinti)', 5, new Set(Object.values(SCADENZA_TOKENS)).size);
 check(
-  'nessun giallo/arancio fra i token',
+  'nessun giallo/ambra fra i token (una sola luce d’avviso media)',
   [],
   Object.entries(SCADENZA_TOKENS)
-    .filter(([, token]) => /\b(?:bg-amber|bg-orange|bg-yellow)-/.test(token))
+    .filter(([, token]) => /\b(?:bg-amber|bg-yellow)-/.test(token))
     .map(([banda]) => banda),
 );
 // Nessuna tinta pastello (…-50 / …-100 / …-200) in nessun token: la direttiva
@@ -76,7 +82,7 @@ check(
     .map(([banda]) => banda),
 );
 
-console.log('\n— 1. Colore = giorni di CALENDARIO mancanti: rosso imminente, verde in corso —');
+console.log('\n— 1. Colore = giorni di CALENDARIO mancanti: rosso < 24h · arancio 24–72h · verde ≥ 3 gg —');
 const oggi = badgeScadenza(fra(0));
 check('scade oggi → etichetta', 'Scade oggi', oggi.label);
 check('scade oggi → banda `SCADENZA_TOKENS.rosso`', SCADENZA_TOKENS.rosso, oggi.className);
@@ -90,16 +96,17 @@ check(
 
 const domani = badgeScadenza(fra(1));
 check('scade domani → etichetta', 'Scade domani', domani.label);
-check('scade domani → rosso', SCADENZA_TOKENS.rosso, domani.className);
+check('scade domani → ARANCIO, non più rosso (§26.89)', SCADENZA_TOKENS.arancio, domani.className);
+check('scade domani → non è la luce rossa', false, domani.className === SCADENZA_TOKENS.rosso);
 
 const due = badgeScadenza(fra(2));
-check('entro 48h → etichetta', 'Ultime 48h', due.label);
-check('entro 48h → rosso', SCADENZA_TOKENS.rosso, due.className);
+check('entro 72h → etichetta', 'Ultime 72h', due.label);
+check('entro 72h → arancio (azione richiesta)', SCADENZA_TOKENS.arancio, due.className);
 
-// §26.82 — LA BANDA GIALLA NON ESISTE PIÙ: dal terzo giorno in poi l'avviso è
-// «In corso» (verde), cioè lo stesso verdetto della scheda avviso e del feed.
+// §26.89 — IL GIALLO NON ESISTE, L'ARANCIO SÌ: dal terzo giorno in poi l'avviso
+// è «In corso» (verde), cioè lo stesso verdetto della scheda avviso e del feed.
 const tre = badgeScadenza(fra(3));
-check('3 giorni → verde (una sola regola, nessun arancio)', SCADENZA_TOKENS.verde, tre.className);
+check('3 giorni → verde (abbondanza, non più allarme)', SCADENZA_TOKENS.verde, tre.className);
 check('3 giorni → etichetta di STATO, non un conto alla rovescia', 'In corso', tre.label);
 check('nessuna etichetta è un «Scade tra Ng»', false, /Scade tra \d/.test(tre.label));
 
@@ -129,7 +136,7 @@ const assente = badgeScadenza(null);
 check('null → banda neutra piena (ardesia)', true, assente.className.includes('bg-slate-600'));
 check('null → etichetta dichiarata', 'Scadenza n/d', assente.label);
 check('null → fonte «nessuna»', 'nessuna', assente.fonte);
-check('null → nessun colore d’allarme', false, /bg-(rose|amber|emerald)-/.test(assente.className));
+check('null → nessun colore d’allarme', false, /bg-(rose|orange|amber|emerald)-/.test(assente.className));
 check('null → nessun pulsare', false, assente.className.includes('animate-pulse'));
 check('stringa vuota → stessa banda', 'Scadenza n/d', badgeScadenza('').label);
 check('soli spazi → stessa banda', 'Scadenza n/d', badgeScadenza('   ').label);

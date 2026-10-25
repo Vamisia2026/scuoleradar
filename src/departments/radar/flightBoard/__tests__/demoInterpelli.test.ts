@@ -11,7 +11,7 @@
  * Sezioni:
  *   1. struttura del dato (prefisso, uuid, host `.edu.it`, fonti dichiarate);
  *   2. esito: dentro con la fonte e il badge dichiarati, oppure fuori;
- *   3. i badge PIENI (rose-700 / emerald-700 su testo bianco) — un solo semaforo;
+ *   3. i badge PIENI (rose-700 / orange-800 / emerald-700 su testo bianco) — un solo semaforo;
  *   4. un solo array filtrato → totale mostrato e schermate coerenti.
  *
  * Uso: `npm run test:board:demo` (incluso in `npm test`).
@@ -114,14 +114,15 @@ check(
   daTitolo?.esito === 'mostrata' ? daTitolo.scuola : null,
 );
 
-console.log('— 3. I badge PIENI, un solo semaforo (nessun pastello nel tabellone) —');
+console.log('— 3. I badge PIENI, un solo semaforo a tre luci (nessun pastello) —');
 const className = (hash: string): string => {
   const riga = righe.find((r) => r.hash_id === `${PREFISSO_DEMO}${hash}`);
   return riga ? badgeScadenza(riga.expiration_date).className : '';
 };
 check('rosso pieno (scade oggi)', true, className('04-avviso-pdf').includes('bg-rose-700'));
-check('rosso pieno (scade domani)', true, className('02-forms-sito').includes('bg-rose-700'));
-// §26.82 — niente giallo/arancio: dal terzo giorno in poi il badge è VERDE.
+// §26.89 — il rosso si ferma alle 24 ore: da domani il badge è ARANCIO.
+check('arancio pieno (scade domani)', true, className('02-forms-sito').includes('bg-orange-800'));
+check('non più rosso (scade domani)', false, className('02-forms-sito').includes('bg-rose-700'));
 check('verde pieno (3 giorni)', true, className('01-argo-sito').includes('bg-emerald-700'));
 check('verde pieno (oltre 7 giorni)', true, className('03-nuvola-pec').includes('bg-emerald-700'));
 const tutteLeBande = righe.map((r) => badgeScadenza(r.expiration_date).className);
@@ -131,8 +132,8 @@ vero(
 );
 vero('nessuna tinta pastello (…-100 / …-200)', tutteLeBande.every((c) => !/-100\b|-200\b/.test(c)));
 vero(
-  'nessun giallo/arancio in nessun badge',
-  tutteLeBande.every((c) => !/bg-(?:amber|orange|yellow)-/.test(c)),
+  'nessun giallo/ambra in nessun badge (l’arancio è la luce media, non il giallo)',
+  tutteLeBande.every((c) => !/bg-(?:amber|yellow)-/.test(c)),
 );
 
 console.log('— 4. Un solo array filtrato: totale mostrato = schermate —');

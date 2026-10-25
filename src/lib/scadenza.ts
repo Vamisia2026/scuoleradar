@@ -15,54 +15,19 @@
  *     (`GIORNI_ORIZZONTE_OPPORTUNITA`, §26.82): un termine di candidatura oltre
  *     15 giorni non è una finestra di candidatura, è la FINE di un incarico o la
  *     data d'avvio di un progetto;
- *   · `stileScadenza(giorni)`  → UNICO badge della scadenza (§26.82): rosso
- *     imminente · verde in corso · ardesia per scaduto/assente/fuori finestra.
+ *   · il SEMAFORO (tre luci) vive in `lib/scadenzaSemaforo` — `stileScadenza`,
+ *     `SCADENZA_TOKENS`, `SOGLIA_ROSSO`, `SOGLIA_ARANCIO` (§26.89) — perché
+ *     questo file è alla soglia dei 250 righe del gate strutturale. La
+ *     dipendenza va in un senso solo: semaforo → giorni e orizzonte.
  */
 
 /**
- * Soglia del badge ROSSO (in giorni): 0 (scade oggi), 1 (domani), 2 (ultime 48h).
- * Oltre questa soglia — e dentro l'orizzonte di candidatura — il badge è VERDE.
- */
-export const SOGLIA_IMMINENTE = 2;
-
-/**
- * Soglia «in avvicinamento» (3–7 giorni): NON è più una banda del badge (§26.82:
- * un solo semaforo, due soli colori d'allarme). Resta come livello informativo
- * dei PROMEMORIA via email (`lib/resend.ts`), dove serve distinguere un avviso
- * che scade domani da uno che scade fra sei giorni senza colorare nulla.
+ * Soglia «in avvicinamento» (3–7 giorni) dei PROMEMORIA via email
+ * (`lib/resend.ts`): non è una banda del badge — quello ha le tre luci di
+ * `lib/scadenzaSemaforo` — ma serve a distinguere un avviso che scade domani da
+ * uno che scade fra sei giorni senza colorare nulla.
  */
 export const SOGLIA_VICINA = 7;
-
-export type LivelloScadenza =
-  | 'scaduto'
-  | 'imminente'
-  | 'in-corso'
-  | 'fuori-finestra'
-  | 'sconosciuto';
-
-export interface StileScadenza {
-  livello: LivelloScadenza;
-  /** Classi Tailwind del badge (token di `SCADENZA_TOKENS`, mai composte a mano). */
-  className: string;
-  /** Etichetta di STATO: «In corso», «Scade oggi», «Ultime 48h», «Scaduto»… */
-  label: string;
-}
-
-/**
- * TOKEN del badge scadenza — UNICA palette dell'applicazione (§26.82).
- * Due soli colori d'allarme, pieni su testo bianco: 🔴 `rosso` = termine
- * imminente (oggi / domani / ultime 48h) · 🟢 `verde` = opportunità in corso
- * (3 giorni … orizzonte) · ⚫ `scaduto`/`neutro` = nessun allarme (già passata,
- * data assente o fuori finestra). Il giallo/arancio è stato rimosso da ogni
- * superficie: tabellone, scheda avviso e feed della dashboard coloravano lo
- * stesso dato con tre soglie diverse.
- */
-export const SCADENZA_TOKENS = {
-  rosso: 'bg-rose-700 text-white font-bold',
-  verde: 'bg-emerald-700 text-white font-bold',
-  scaduto: 'bg-slate-700 text-white font-bold',
-  neutro: 'bg-slate-600 text-white font-bold',
-} as const;
 
 /** Mezzanotte (locale) del giorno indicato. */
 function mezzanotte(oggi: Date): Date {
@@ -203,47 +168,7 @@ export function eOpportunitaConScadenza(
 }
 
 /**
- * BADGE della scadenza — UNA sola regola per tutta l'applicazione (§26.82).
- *
- *   🔴 rosso   → 0 giorni «Scade oggi» · 1 «Scade domani» · 2 «Ultime 48h»
- *   🟢 verde   → 3 … `GIORNI_ORIZZONTE_OPPORTUNITA` giorni → «In corso»
- *   ⚫ ardesia → già passata («Scaduto»), data assente («Scadenza n/d») oppure
- *                OLTRE la finestra di candidatura («Scadenza fuori finestra»)
- *
- * I giorni sono di CALENDARIO (`giorniRimanenti`). Nessuna banda pulsa: il
- * pulsare faceva sembrare l'avviso un'offerta a tempo e non è un token del
- * design system. Nessun giallo/arancio: le soglie medie non dicono all'utente
- * nulla che il verde «In corso» già non dica, mentre il rosso resta l'unico
- * segnale di fretta.
- *
- * `fuori-finestra` non è un errore di lettura: è il DATO CHE NON È UNA SCADENZA
- * di candidatura (fine incarico, avvio progetto, chiusura anno scolastico). La
- * vetrina lo scarta a monte (`eOpportunitaConScadenza`); qui serve alle superfici
- * che mostrano la riga comunque (scheda dell'avviso) perché non la colorino di
- * verde come se fosse aperta.
+ * Il BADGE della scadenza (tre luci) NON vive qui: `lib/scadenzaSemaforo`. Qui
+ * restano i GIORNI e l'ORIZZONTE, che il semaforo importa (dipendenza a senso
+ * unico, nessun ciclo): il colore è una funzione del numero, non il contrario.
  */
-export function stileScadenza(giorni: number | null): StileScadenza {
-  if (giorni === null) {
-    return { livello: 'sconosciuto', className: SCADENZA_TOKENS.neutro, label: 'Scadenza n/d' };
-  }
-  if (giorni < 0) {
-    return { livello: 'scaduto', className: SCADENZA_TOKENS.scaduto, label: 'Scaduto' };
-  }
-  if (giorni === 0) {
-    return { livello: 'imminente', className: SCADENZA_TOKENS.rosso, label: 'Scade oggi' };
-  }
-  if (giorni === 1) {
-    return { livello: 'imminente', className: SCADENZA_TOKENS.rosso, label: 'Scade domani' };
-  }
-  if (giorni <= SOGLIA_IMMINENTE) {
-    return { livello: 'imminente', className: SCADENZA_TOKENS.rosso, label: 'Ultime 48h' };
-  }
-  if (giorni > GIORNI_ORIZZONTE_OPPORTUNITA) {
-    return {
-      livello: 'fuori-finestra',
-      className: SCADENZA_TOKENS.neutro,
-      label: 'Scadenza fuori finestra',
-    };
-  }
-  return { livello: 'in-corso', className: SCADENZA_TOKENS.verde, label: 'In corso' };
-}

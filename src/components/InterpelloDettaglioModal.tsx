@@ -44,7 +44,7 @@ interface InterpelloDettaglioModalProps {
   linkEsterno: string | null;
   /** Guida operativa (`suggerimentoRicercaAvviso`), o `null`. */
   guida: string | null;
-  /** True quando la scadenza è imminente o già passata. */
+  /** True quando il termine è prossimo — luce rossa/arancione — o già scaduto (`eTermineProssimo`). */
   inScadenza: boolean;
 }
 

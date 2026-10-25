@@ -3,30 +3,32 @@
  * «Radar Live» (`FlightBoardInterpelli`): tipologia, badge della scadenza, date
  * brevi. Nessun rendering, nessuna rete: il JSX sta in `components/RigaBoard.tsx`.
  *
- * REGOLA DI PRODOTTO (§26.67, §26.82):
+ * REGOLA DI PRODOTTO (§26.67, §26.82, §26.89):
  *  - Il badge della colonna «Scadenza» deriva SOLO da `expiration_date`:
  *    `created_at` non è nemmeno un parametro, nemmeno quando la scadenza manca
  *    (la cella mostra `—` con la banda neutra «Scadenza n/d», mai un surrogato
  *    spacciato per scadenza).
- *  - Banda, etichetta e colori arrivano da `lib/scadenza.stileScadenza`: UNA
- *    regola per tabellone, scheda avviso e feed della dashboard.
- *  - I giorni sono di CALENDARIO: ≤ 48h rosso pieno (rose-700) · dal terzo
- *    giorno all'orizzonte di 15 verde pieno (emerald-700) · oltre l'orizzonte
- *    ardesia «Scadenza fuori finestra» (fine incarico, avvio progetto: non è un
- *    termine per candidarsi). Nessun giallo/arancio e nessuna banda che pulsa:
- *    le etichette dicono lo STATO («Scade oggi», «Ultime 48h», «In corso»), non
- *    un conto alla rovescia — il colore non deve invitare a correre.
+ *  - Banda, etichetta e colori arrivano da `lib/scadenzaSemaforo.stileScadenza`:
+ *    UNA regola per tabellone, scheda avviso e feed della dashboard.
+ *  - I giorni sono di CALENDARIO, semaforo a TRE luci: < 24 ore rosso pieno
+ *    (rose-700, «Scade oggi») · 24–72 ore arancio pieno (orange-800, «Scade
+ *    domani» / «Ultime 72h») · dal terzo giorno all'orizzonte di 15 verde pieno
+ *    (emerald-700, «In corso») · oltre l'orizzonte ardesia «Scadenza fuori
+ *    finestra» (fine incarico, avvio progetto: non è un termine per candidarsi).
+ *    Nessun giallo/ambra e nessuna banda che pulsa: le etichette dicono lo
+ *    STATO, non un conto alla rovescia — il colore non deve invitare a correre.
  *  - Il campo `fonte` dichiara la provenienza: `scadenza` o `nessuna`
  *    (il vuoto si dichiara, non si riempie).
  *  - La denominazione della scuola viene SEMPRE dalla fonte; se il decode del
  *    meccanografico fallisce si restituisce `null`, mai «SCUOLA NON SPECIFICATA».
  */
 import { materiaClasse } from '@/data/classiConcorso';
-import { giorniRimanenti, SCADENZA_TOKENS, stileScadenza } from '@/lib/scadenza';
+import { giorniRimanenti } from '@/lib/scadenza';
+import { SCADENZA_TOKENS, stileScadenza } from '@/lib/scadenzaSemaforo';
 import type { InterpelloLive } from './righeBoard';
 
-// I token vivono in `lib/scadenza.SCADENZA_TOKENS` (un solo posto per tabellone,
-// scheda avviso e feed): qui si ri-esportano, senza una seconda palette.
+// I token vivono in `lib/scadenzaSemaforo.SCADENZA_TOKENS` (un solo posto per
+// tabellone, scheda avviso e feed): qui si ri-esportano, senza una seconda palette.
 export { SCADENZA_TOKENS };
 
 /** `scadenza` = data vera dichiarata dalla fonte · `nessuna` = dato assente. */
@@ -104,8 +106,8 @@ export function dataItBreve(iso?: string | null): string {
 
 /**
  * Costruisce il badge dalla sola scadenza. Percorso unico e deterministico:
- * la banda, l'etichetta e le classi arrivano da `lib/scadenza.stileScadenza`
- * (UNA regola per tabellone, scheda avviso e feed della dashboard, §26.82).
+ * la banda, l'etichetta e le classi arrivano da `lib/scadenzaSemaforo.stileScadenza`
+ * (UNA regola per tabellone, scheda avviso e feed della dashboard, §26.82-§26.89).
  */
 function badgeDaScadenza(scad: Date): BadgeUrgenza {
   const stile = stileScadenza(giorniRimanenti(scad.toISOString().slice(0, 10)));
@@ -124,10 +126,11 @@ function badgeDaScadenza(scad: Date): BadgeUrgenza {
 /**
  * Badge di urgenza della colonna «Scadenza» del tabellone.
  *
- * Colour coding di prodotto (UNICA fonte di verità, `lib/scadenza.stileScadenza`
- * §26.82):
- *   <= 2 giorni (<= 48h) → rosso pieno   (rose-700)
- *   3 … 15 giorni        → verde pieno   (emerald-700)
+ * Colour coding di prodotto (UNICA fonte di verità,
+ * `lib/scadenzaSemaforo.stileScadenza`, §26.89):
+ *   0 giorni (< 24h)     → rosso pieno   (rose-700)    «Scade oggi»
+ *   1–2 giorni (24–72h)  → arancio pieno (orange-800)  «Scade domani» · «Ultime 72h»
+ *   3 … 15 giorni        → verde pieno   (emerald-700) «In corso»
  *   oltre 15 giorni      → ardesia       «Scadenza fuori finestra»
  *
  * Ordine di risoluzione RIGOROSO:

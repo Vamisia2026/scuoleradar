@@ -134,15 +134,16 @@
       (`bachecaInterpelli` → contatore `senzaScadenza`, scarto **dichiarato**).
       Un solo grado di urgenza senza data resta possibile: la riga **fuori dal feed**
       che il chiamante ha già deciso di mostrare (banda grigia, mai una data inventata).
-- [ ] **Badge della colonna «Scadenza»: DUE soli colori** (§26.82) — il colore dice
-      quanto manca — scade oggi · scade domani · ultime 48h (rosso, ≤ 2 giorni) ·
-      in corso (verde, dal terzo giorno alla finestra di candidatura) — sempre
-      accanto alla DATA di scadenza; oltre la finestra o senza data la banda è
-      ardesia e dichiara «Scadenza fuori finestra» / «Scadenza n/d» (mai una data
-      inventata, mai una tinta pastello, nessuna banda che pulsa). Un solo modulo:
-      `stileScadenza` in `src/lib/scadenza.ts` (`SCADENZA_TOKENS`), usato da
-      tabellone, scheda avviso e feed della dashboard. Niente giallo/arancio —
-      erano due soglie in più per lo stesso dato. Gli avvisi scaduti non compaiono
+- [ ] **Badge della colonna «Scadenza»: TRE luci** (§26.89) — il colore dice quanto
+      manca e ogni luce ha UN solo significato — **rossa** `bg-rose-700` per «Scade oggi»
+      (meno di 24 ore) · **arancio** `bg-orange-800` per «Scade domani» e «Ultime 72h»
+      (24–72 ore) · **verde** `bg-emerald-700` per «In corso» (dal terzo giorno alla
+      finestra di candidatura) — sempre accanto alla DATA di scadenza; oltre la finestra
+      o senza data la banda è ardesia e dichiara «Scadenza fuori finestra» / «Scadenza
+      n/d» (mai una data inventata, mai una tinta pastello, nessuna banda che pulsa).
+      Un solo modulo: `stileScadenza` in `src/lib/scadenzaSemaforo.ts`
+      (`SCADENZA_TOKENS`), usato da tabellone, scheda avviso e feed della dashboard.
+      Niente giallo/ambra — sarebbe una quarta soglia per lo stesso dato. Gli avvisi scaduti non compaiono
       mai in bacheca.
 - [ ] **Finestra di CANDIDATURA = 15 giorni** (§26.82) — `GIORNI_ORIZZONTE_OPPORTUNITA`
       in `src/lib/scadenza.ts`: oltre, la «scadenza» letta dalle fonti è la fine di
@@ -179,9 +180,9 @@
       `npm run dati:demo -- --apply` le scrive (mai in produzione senza `--consenti-produzione`),
       `npm run dati:demo -- --pulisci --apply` le elimina. La stessa tabella di casi è la guardia
       `npm run test:board:demo` (esito atteso = esito reale). Il badge della scadenza è **pieno**
-      e ha **due soli colori** (`bg-rose-700` ≤ 48h · `bg-emerald-700` in corso, testo bianco in
-      grassetto, ardesia per scaduto/non databile: §26.82) e il totale della
-      pill conta le **stesse** righe che generano le schermate (§26.77).
+      e ha **tre luci** (`bg-rose-700` solo oggi · `bg-orange-800` 24–72h ·
+      `bg-emerald-700` in corso, testo bianco in grassetto, ardesia per scaduto/non databile:
+      §26.89) e il totale della pill conta le **stesse** righe che generano le schermate (§26.77).
 - [ ] **Finestra dei 60 giorni: solo FETCH e pulizia, mai vetrina** (§26.71) — lo **stesso** numero
       e la stessa data **locale** vivono in `src/lib/scadenza.ts`
       (`GIORNI_FINESTRA_SENZA_SCADENZA`, `eAvvisoVivo(scadenza, pubblicazione)`) e valgono per la

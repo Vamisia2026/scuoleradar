@@ -34,7 +34,8 @@ import process from 'node:process';
 import { createClient } from '@supabase/supabase-js';
 import { nomeIstitutoPresentabile } from '../src/lib/nomeIstituto.ts';
 import { normalizzaCodiceMeccanografico } from '../src/lib/emailScuola.ts';
-import { stileScadenza, giorniRimanenti, eOpportunitaConScadenza } from '../src/lib/scadenza.ts';
+import { giorniRimanenti, eOpportunitaConScadenza } from '../src/lib/scadenza.ts';
+import { stileScadenza } from '../src/lib/scadenzaSemaforo.ts';
 import { creaRisolutore, type RigaInterpello } from './lib/scuolaDaPagina.ts';
 
 process.loadEnvFile?.();
@@ -138,7 +139,7 @@ async function main(): Promise<void> {
   // ── Impatto in bacheca: `preparaRigheBoard` mostra solo righe con scadenza VALIDA
   // (dentro l'orizzonte di candidatura, §26.82) e con un nome d'istituto reale
   // (`nomeScuolaRiga`): qui si contano le righe che dopo il backfill hanno entrambe
-  // le cose, con la banda unica di `lib/scadenza.stileScadenza`.
+  // le cose, con il semaforo unico di `lib/scadenzaSemaforo.stileScadenza`.
   const visibili = modificate.filter(
     (r) =>
       eOpportunitaConScadenza(r.expiration_date, oggi) &&

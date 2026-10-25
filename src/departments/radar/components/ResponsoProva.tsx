@@ -11,7 +11,8 @@
 import { ArrowRight, BellRing, ExternalLink, Radar } from 'lucide-react';
 import { nomePresentabileRiga, titoloLeggibile, type RigaBoard } from '@/lib/liveBoard';
 import { nomeProvincia } from '../flightBoard/righeBoard';
-import { giorniRimanenti, stileScadenza } from '@/lib/scadenza';
+import { giorniRimanenti } from '@/lib/scadenza';
+import { stileScadenza } from '@/lib/scadenzaSemaforo';
 import {
   messaggioConversione,
   messaggioRadarInScansione,

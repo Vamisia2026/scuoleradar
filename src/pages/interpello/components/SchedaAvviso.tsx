@@ -26,7 +26,8 @@ import {
   suggerimentoRicercaAvviso,
   urlEsterna,
 } from '@/lib/alertInterpello';
-import { giorniRimanenti, stileScadenza } from '@/lib/scadenza';
+import { giorniRimanenti } from '@/lib/scadenza';
+import { stileScadenza } from '@/lib/scadenzaSemaforo';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 
 interface SchedaAvvisoProps {

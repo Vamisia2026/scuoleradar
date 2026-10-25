@@ -4,9 +4,9 @@
  * Tre stati: invito a completare il profilo (utente loggato senza preferenze),
  * coda vuota con le etichette dei filtri del profilo, elenco delle card con il
  * badge della scadenza. Il badge NON ha una palette propria: usa
- * `lib/scadenza.stileScadenza` (rosso ≤ 48h · verde in corso · ardesia per
- * scaduto/assente/fuori finestra, §26.82). Per gli utenti Base l'accordion resta
- * bloccato: badge «🔒 PRO» e click che apre la vetrina.
+ * `lib/scadenzaSemaforo.stileScadenza` (rosso < 24h · arancio 24–72h · verde in
+ * corso · ardesia per scaduto/assente/fuori finestra, §26.89). Per gli utenti
+ * Base l'accordion resta bloccato: badge «🔒 PRO» e click che apre la vetrina.
  *
  * Presentazione pura: dati, stato di apertura e azioni arrivano dal contenitore.
  */
@@ -14,7 +14,8 @@ import { SlidersHorizontal } from 'lucide-react';
 import { Accordion } from '@/components/Accordion';
 import { InterpelloCard } from '@/components/InterpelloCard';
 import { etichettaScadenzaAvviso } from '@/lib/alertInterpello';
-import { giorniRimanenti, stileScadenza } from '@/lib/scadenza';
+import { giorniRimanenti } from '@/lib/scadenza';
+import { stileScadenza } from '@/lib/scadenzaSemaforo';
 import { classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import type { Interpello } from '@/data/interpelli';
@@ -96,10 +97,10 @@ export function ElencoOpportunita({
         ) : (
           <div className="animate-fade-in space-y-3">
             {lista.map((i) => {
-              // UNA sola regola/palette per la scadenza (§26.82): la stessa del
-              // «Radar Live» e della scheda avviso. Prima qui viveva una terza
-              // scala (<48h / <5 giorni) con tinte pastello warning/accent che
-              // contraddiceva il rosso/verde pieno del tabellone.
+              // UNA sola regola/palette per la scadenza (§26.82, §26.89): la
+              // stessa del «Radar Live» e della scheda avviso. Prima qui viveva
+              // una terza scala (<48h / <5 giorni) con tinte pastello
+              // warning/accent che contraddiceva il semaforo del tabellone.
               const scadenza = stileScadenza(giorniRimanenti(i.dataScadenza));
               return (
                 <div

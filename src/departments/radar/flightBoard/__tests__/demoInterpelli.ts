@@ -10,8 +10,8 @@
  *
  *   1. link di piattaforma (Argo, Nuvola, Google Forms) → il click apre la HOME
  *      `.edu.it` dell'istituto (`school_site`, poi i recapiti) — `../linkFonte.ts`;
- *   2. badge PIENI con etichetta fissa di stato («Scade oggi/domani» /
- *      «Ultime 48h» / «In corso»), due soli colori — `../rigaBoardDati.ts`;
+ *   2. badge PIENI con etichetta fissa di stato («Scade oggi» / «Scade domani» /
+ *      «Ultime 72h» / «In corso»), semaforo a tre luci — `../rigaBoardDati.ts`;
  *   3. riga senza alcuna fonte apribile → NON entra in bacheca;
  *   4. riga con il solo segnaposto «Scuola non specificata / Più plessi» → NON
  *      entra; riga senza `school_name` ma con l'istituto nel titolo → entra col

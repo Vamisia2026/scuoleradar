@@ -9,8 +9,8 @@ import {
   eInterpelloAttivo,
   eScaduto,
   giorniRimanenti,
-  stileScadenza,
 } from '../src/lib/scadenza.ts';
+import { SOGLIA_ARANCIO, SOGLIA_ROSSO, eTermineProssimo, stileScadenza } from '../src/lib/scadenzaSemaforo.ts';
 
 declare const process: { exitCode?: number };
 
@@ -76,38 +76,48 @@ check('senza scadenza né pubblicazione → NON vivo', false, eAvvisoVivo(null, 
 check('pubblicazione illeggibile → NON vivo', false, eAvvisoVivo(null, 'non-una-data', OGGI));
 check('senza scadenza e stringa vuota → NON vivo', false, eAvvisoVivo('', '', OGGI));
 
-console.log('\n— Semaforo UNICO (due colori d’allarme, §26.82) —');
-// Verde = opportunità in corso (3 … 15 giorni). Rosso = termine imminente.
-// Ardesia = nessun allarme: scaduto, data assente, data fuori finestra.
+console.log('\n— Semaforo a TRE luci: rosso < 24h · arancio 24–72h · verde ≥ 3 gg (§26.89) —');
+// Rosso = SOLO le prossime 24 ore. Arancio = azione richiesta (24–72 ore).
+// Verde = c'è tempo (3 … 15 giorni). Ardesia = nessun allarme: scaduto, data
+// assente, data fuori finestra.
+check('soglia rossa = solo oggi', 0, SOGLIA_ROSSO);
+check('soglia arancio = 2 giorni (72 ore)', 2, SOGLIA_ARANCIO);
 check('in corso (10gg) → verde', 'in-corso', stileScadenza(10).livello);
 check('in corso (10gg) label', 'In corso', stileScadenza(10).label);
-check('in corso (3gg) → verde, non giallo', 'in-corso', stileScadenza(3).livello);
+check('in corso (3gg) → verde: dal terzo giorno c’è tempo', 'in-corso', stileScadenza(3).livello);
 check('in corso (3gg) label', 'In corso', stileScadenza(3).label);
 check('bordo finestra (15gg) → verde', 'in-corso', stileScadenza(15).livello);
 check('oltre la finestra (16gg) → dichiarata', 'fuori-finestra', stileScadenza(16).livello);
 check('oltre la finestra label', 'Scadenza fuori finestra', stileScadenza(16).label);
-check('imminente (2gg) → rosso', 'imminente', stileScadenza(2).livello);
-check('imminente (2gg) label', 'Ultime 48h', stileScadenza(2).label);
-check('domani (1gg) label', 'Scade domani', stileScadenza(1).label);
-check('oggi (0gg) label', 'Scade oggi', stileScadenza(0).label);
+check('2 giorni (48–72h) → arancio', 'urgente', stileScadenza(2).livello);
+check('2 giorni (48–72h) label', 'Ultime 72h', stileScadenza(2).label);
+check('domani (24–48h) → arancio', 'urgente', stileScadenza(1).livello);
+check('domani (24–48h) label', 'Scade domani', stileScadenza(1).label);
+check('oggi (< 24h) → ROSSO', 'critico', stileScadenza(0).livello);
+check('oggi (< 24h) label', 'Scade oggi', stileScadenza(0).label);
 check('scaduto → ardesia', 'scaduto', stileScadenza(-3).livello);
 check('sconosciuto → n/d', 'sconosciuto', stileScadenza(null).livello);
 check('verde usa la tinta piena emerald-700', true, stileScadenza(10).className.includes('bg-emerald-700'));
-check('rosso usa la tinta piena rose-700', true, stileScadenza(1).className.includes('bg-rose-700'));
+check('arancio usa la tinta piena orange-800', true, stileScadenza(2).className.includes('bg-orange-800'));
+check('rosso usa la tinta piena rose-700 (solo a 0 giorni)', true, stileScadenza(0).className.includes('bg-rose-700'));
+check('il rosso NON si estende a domani', false, stileScadenza(1).className === stileScadenza(0).className);
+check('l’arancio NON si estende al terzo giorno', false, stileScadenza(3).className === stileScadenza(2).className);
 check(
-  'nessun giallo/arancio in nessuna banda',
+  'nessun giallo/ambra in nessuna banda',
   false,
-  [10, 3, 2, 1, 0, 16, -3, null].some((g) => /bg-(?:amber|orange|yellow)-/.test(stileScadenza(g as number | null).className)),
+  [10, 3, 2, 1, 0, 16, -3, null].some((g) => /bg-(?:amber|yellow)-/.test(stileScadenza(g as number | null).className)),
 );
 check('nessuna banda pastello (…-100/…-200)', false, /-(?:50|100|200)\b/.test(stileScadenza(10).className + stileScadenza(2).className + stileScadenza(1).className));
 check('senza scadenza → ardesia piena, non un colore d’allarme', true, stileScadenza(null).className.includes('bg-slate-600'));
 check('scaduto → ardesia scura', true, stileScadenza(-3).className.includes('bg-slate-700'));
 check('fuori finestra → ardesia, mai verde', true, stileScadenza(30).className.includes('bg-slate-600'));
 check('nessuna banda pulsa', false, [10, 2, 1, 0, -3, null].some((g) => stileScadenza(g as number | null).className.includes('animate-')));
-check('testo bianco in grassetto su tutte le bande', true, [10, 5, 1, 0, -3, null].every((g) => {
+check('testo bianco in grassetto su TUTTE le bande', true, [10, 5, 3, 2, 1, 0, -3, null].every((g) => {
   const c = stileScadenza(g as number | null).className;
   return c.includes('text-white') && c.includes('font-bold');
 }));
+check('«In scadenza» acceso per rosso/arancio/scaduto', true, [0, 1, 2, -1].every((g) => eTermineProssimo(stileScadenza(g).livello)));
+check('«In scadenza» spento per verde e ardesia', false, [3, 10, 30, 16].some((g) => eTermineProssimo(stileScadenza(g).livello)));
 
 console.log('\n──────────────────────────────────────────────────────────');
 if (falliti === 0) {

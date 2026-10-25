@@ -340,7 +340,7 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 
 | `materieClassi.ts` | 41 | **Puro** — MATERIE COPERTE dalle classi di concorso (§26.62), derivazione **unica** di Admin e vista utente: `materieDelleClassi(codici)` normalizza i codici (`normalizzaClasse`: `A-018` ≡ `A18`), legge `materie[]` dal catalogo `src/data/classiConcorso.ts` e risolve gli id nel NOME (`src/data/ordiniMaterie.ts`), senza duplicati e nell'ordine delle classi scelte; un codice fuori catalogo resta codice, senza righe inventate. La usano la scheda utente dell'Admin (`departments/admin/components/derivaPreferenzeUtente.ts`, campo `materieClassi`) e il box «In cosa puoi lavorare» del Radar (`departments/radar/components/RiepilogoLavoro.tsx`) |
 | `bachecaInterpelli.ts` | 191 | **Puro** (§26.56 → §26.65) — PIPELINE della bacheca, un solo punto: avviso vivo → **la riga è un avviso?** (`motivoRigaNonOpportunitaAvviso`, §26.65: il contorno del feed non entra e lo scarto è contato) → filtri scuole (blacklist fuori, whitelist dentro d'ufficio) → **PORTA D'INGRESSO PRIMARIA** (conferma del motore, oppure classe almeno «stessa area» 85: una competenza trovata NON apre la bacheca) → punteggio (media ponderata delle modali primarie **+ la sfumatura del livello secondario**) → esclusione secca dei riempitivi non pertinenti (§26.60) → cap dei riempitivi con protezione delle scuole preferite. `bachecaInterpelli(fonti, profilo)` restituisce lista + conti (`righeNonOpportunita`, `esclusiBlacklist`, `forzate`, `riempitiviEsclusi`, `riempitiviNascosti`) e scrive sull'interpello `compatibilita`, `motivoCompatibilita`, `scuolaPreferita` e **`competenzaSecondaria`** (§26.63), così `useInterpelliFeed` resta un contenitore di stato |
-| `scadenza.ts` | ~90 | Helper scadenza (puro): `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `stileScadenza` (semaforo 🟢 lungo / 🟡 vicino / 🔴 imminente) |
+| `scadenza.ts` | 174 | Helper scadenza (puro): `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `eAvvisoVivo`, `eOpportunitaConScadenza`, `GIORNI_ORIZZONTE_OPPORTUNITA`, `GIORNI_FINESTRA_SENZA_SCADENZA` — il **calcolo del tempo**; il **badge** (semaforo a TRE luci) vive in `scadenzaSemaforo.ts` (§26.89) |
 | `alertInterpello.ts` | ~480 | Costruttore dell'**avviso strutturato** (gerarchia obbligatorie/opzionali + campo `email` dell'avviso), `pulisciTitoloAvviso` (via i dump di codici classe), **`emailAvviso`** + costanti condivise `EMAIL_ICONA`/`EMAIL_ETICHETTA`/`EMAIL_ETICHETTA_WEB`, **`ISTRUZIONE_AVVISO_UFFICIALE`** (direttiva standard "clicca STAMPA") e **`suggerimentoRicercaAvviso({ compatto })`** (guida operativa per elenchi/"Stampa" o fonte mancante), **`emailAvviso`** ed **`etichettaFonteLink`/`classificaFonteLink`/`ePaginaRiepilogo`** (etichetta ONESTA del link: PDF / Albo Pretorio / **pagina di riepilogo "Stampa"** / avviso — mai "Candidati"), **GATE DI QUALITÀ**: `eUrlAvvisoDiretto` (link = avviso specifico, mai home/elenco/ricerca/archivio regionale), `motivoAvvisoNonInviabile` e `avvisoInviabile` (**LINK DIRETTO obbligatorio**; da §26.68 il **recapito mancante NON blocca più** l'invio: `avvisoSenzaRecapito` + `MOTIVO_RECAPITO_MANCANTE` sono l'avvertenza che il dispatch logga e che il monitor conta), **PULIZIA DELL'URL**: `pulisciUrlEsterna` (entità `&amp;`, virgolette/angolari/caporalia di markdown, spazi e punteggiatura di contorno) e **`urlFonteAvviso`** = stringa pulita + UNICO gate `eUrlAvvisoDiretto` (il punto unico dell'`href` per Telegram, email e canali — §26.45). Verificato da `npm run test:qualita` |
 | `tailoringContatti.ts` | 103 | **Puro** (§26.68) — il **TAILORING DEL RECAPITO**, punto unico di decisione: `risolviContattoAvviso({ emailFonte, anagrafica, storico, convenzione })` risponde `{ email, pec, provenienza, daRevisionare }` nella gerarchia di autorevolezza **fonte → anagrafica (SCUANAGRAFE) → storico interno → convenzione MIM**; `Email malformata` scende alla fonte successiva, `daRevisionare` è l'esito onesto quando nessuna fonte produce un recapito (l'avviso si invia lo stesso, senza blocco contatto). `ETICHETTA_PROVENIENZA` per log e report. Verificato da `npm run test:tailoring` |
 | `interpelloRouting.ts` | ~40 | Deep link LEGACY `/interpello/:id` (puro): `eUuid`, `chiaveInterpelloDaParam` (uuid → `id`, hash → `hash_id`). **Policy**: le notifiche non generano più link interni; la rotta resta solo per i deep link storici (che reindirizzano subito alla fonte esterna) |
@@ -924,9 +924,11 @@ Pipeline `npm run scrape` (flags: `--dry-run`, `--no-email`):
   navigare. Verificato da `npm run test:sessione`.
 - **Filtri avanzati**: `ignoredSchools` (blacklist) nasconde gli avvisi
   (match su `istituto + titolo`); `favoriteSchools` (whitelist) marca badge prioritario.
-- **Scadenze (semaforo)**: badge colorati via `src/lib/scadenza.ts` — 🟢 verde > 7 giorni,
-  🟡 giallo 3–7 giorni, 🔴 rosso ≤ 2 giorni / "scade oggi". Ogni record mostra la DATA di
-  scadenza; se assente → "Scadenza n/d".
+- **Scadenze (semaforo a tre luci)**: badge colorati via `src/lib/scadenzaSemaforo.ts` (§26.89) —
+  🔴 rosso `rose-700` < 24 ore («Scade oggi»), 🟠 arancio `orange-800` 24–72 ore («Scade domani» /
+  «Ultime 72h»), 🟢 verde `emerald-700` da 3 a 15 giorni («In corso»), ardesia per scaduto, data
+  assente («Scadenza n/d») e oltre la finestra dei 15 giorni. Ogni record mostra la DATA di
+  scadenza.
 - **Esclusione scaduti**: gli interpelli SCADUTI non compaiono mai nelle liste attive —
   filtro query (`searchInterpelli`: `expiration_date.is.null,expiration_date.gte.<oggi>`)
   **e** filtro UI (`FlightBoardInterpelli`, `interpelliFiltrati` via `eInterpelloAttivo`).
@@ -3138,7 +3140,7 @@ Con `isSupabaseConfigurato() === false` (`supabase === null`):
 
 ## 23. Confini dei moduli e superfici pubbliche
 
-### 23.1 `src/lib/` — API pubbliche verificate (27 moduli)
+### 23.1 `src/lib/` — API pubbliche verificate (28 moduli)
 
 | Modulo | Righe | Superficie pubblica (principali) |
 |---|---|---|
@@ -3153,7 +3155,8 @@ Con `isSupabaseConfigurato() === false` (`supabase === null`):
 | `promemoria.ts` | 122 | `ePromemoriaDovuto`, `motivoPromemoria`, `chiavePromemoria`, `eVoceUrgente`, `oreTrascorse`, `ORE_PROMEMORIA` |
 | `dedupAvvisi.ts` | 97 | `improntaAvviso`, `normalizzaPerImpronta`, `GIORNI_IMPRONTA` |
 | `emailScuola.ts` | 92 | `risolviEmailUfficialeScuola`, `emailDaCodiceMeccanografico`, `normalizzaCodiceMeccanografico`, `estraiCodiceMeccanograficoDaTesto` |
-| `scadenza.ts` | 249 | `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `eOpportunitaConScadenza`, `stileScadenza`, `SCADENZA_TOKENS`, `SOGLIA_IMMINENTE`, `SOGLIA_VICINA`, `GIORNI_ORIZZONTE_OPPORTUNITA` |
+| `scadenza.ts` | 174 | `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `eAvvisoVivo`, `eOpportunitaConScadenza`, `SOGLIA_VICINA`, `GIORNI_ORIZZONTE_OPPORTUNITA`, `GIORNI_FINESTRA_SENZA_SCADENZA` |
+| `scadenzaSemaforo.ts` | 142 | `stileScadenza` (semaforo a **TRE** luci: rosso < 24h · arancio 24–72h · verde ≥ 3 giorni, §26.89), `SCADENZA_TOKENS`, `SOGLIA_ROSSO`, `SOGLIA_ARANCIO`, `eTermineProssimo`, `LivelloScadenza`, `StileScadenza` |
 | `liveBoard.ts` | 116 | `preparaRigheBoard`, `nomeScuolaRiga`, `nomePresentabileRiga`, `scuolaDaTitolo`, `titoloLeggibile`, `rigaPresentabileVetrina` (scarto dei codici classe e delle azioni amministrative) |
 | `nomeIstituto.ts` | 161 | `nomeIstitutoPresentabile` (gate: testa d'istituto + denominazione, mai codici amministrativi; taglio della coda di procedura) |
 | `radarValidation.ts` | 81 | `validaConfigRadar`, `messaggioCampiMancanti`, `impostaPassoRadar`, `STORAGE_KEY_RADAR_WIZARD_STEP` |
@@ -8744,6 +8747,13 @@ doppioni non ripara lo storico — per quello c'è `db:allinea-scadenze`.
 
 ### 26.82 «Radar Live»: UN solo badge di scadenza (rosso/verde), finestra di candidatura a 15 giorni, pagine informative fuori dal motore (25/10/2026)
 
+> **Nota (25/10/2026, §26.89).** La palette descritta qui sotto è stata **superata poche ore
+> dopo**: il badge è ora un semaforo a **TRE luci** — rosso < 24h · arancio 24–72h · verde
+> ≥ 3 giorni — e il classificatore vive in `src/lib/scadenzaSemaforo.ts`. Restano validi e
+> invariati: l'**unicità** del classificatore per tabellone/scheda/feed, la finestra di
+> candidatura a **15 giorni**, il divieto di tinte pastello e di pulsazioni, e la rimozione di
+> `urgency.ts`. Cambia solo il numero di luci (due → tre) e quindi le etichette.
+
 **Perché.** Lo stesso dato aveva **tre** scale di colore e **tre** soglie: il tabellone
 (`rigaBoardDati.URGENZA_TOKENS`: rose-700 ≤ 2 gg · amber-600 3–7 gg · emerald-700 > 7), la scheda
 avviso (`lib/scadenza.stileScadenza`: le stesse tinte con etichette diverse) e il feed della
@@ -9240,6 +9250,104 @@ completare la scala (correzione strutturale), convertire le classi (cerotto), re
 automatico (prevenzione). Solo il terzo impedisce il ritorno del difetto: gli altri due valgono finché
 qualcuno si ricorda di rifarli. Costo: un test da 144 righe, un lib da 189, e 49 righe di output in più in
 `npm test` — che ora finisce proprio con la risposta alla domanda «esiste un token orfano?».
+
+---
+
+### 26.89 «Radar Live»: semaforo a TRE luci per la scadenza — rosso < 24h, arancio 24–72h, verde ≥ 3 giorni (25/10/2026)
+
+**Perché.** Con **due** sole luci (§26.82) un avviso che scade **oggi** e uno che scade **dopodomani**
+avevano lo stesso colore: il rosso restava acceso 48 ore, quindi smetteva di significare «adesso». Una
+luce accesa due giorni non è un allarme, è uno sfondo. La direttiva di prodotto chiede un semaforo
+vero: **tre** stati, un solo significato ciascuno, e il colore deve dire *quanto tempo ho* — non
+*quanto è urgente in astratto*.
+
+| Luce | Giorni di calendario | Token (§26.75: tinta piena) | Etichetta |
+|---|---|---|---|
+| 🔴 rossa | **0** (`< 24h`) | `bg-rose-700` | «Scade oggi» |
+| 🟠 arancio | **1–2** (24–72h) | `bg-orange-800` | «Scade domani» · «Ultime 72h» |
+| 🟢 verde | **3 … 15** | `bg-emerald-700` | «In corso» |
+| ⚪ ardesia | oltre 15 · scaduto · data assente | `bg-slate-600` / `bg-slate-700` | «Scadenza fuori finestra» · «Scaduto» · «Scadenza n/d» |
+
+**Perché il rosso si ferma a 24 ore.** Il rosso è la luce che ordina di agire **adesso**: se resta
+accesa anche domani, chi la vede oggi può rimandare — e il colore perde il suo unico potere, che è
+togliere la scelta sul *quando*. Il rosso quindi copre solo il giorno stesso (`SOGLIA_ROSSO = 0`).
+
+**Perché l'arancio e non il giallo.** L'arancio copre la finestra in cui la domanda **si può ancora
+produrre** (24–72 ore: `SOGLIA_ARANCIO = 2`), e le sue due etichette sono distinte perché il lavoro è
+diverso — «Scade domani» (preparare) e «Ultime 72h» (ultimo giro). Il **giallo/ambra resta fuori**:
+era la quarta scala dello stesso dato (§26.22, `urgency.ts`, poi rimossa in §26.82) e su fondo bianco
+non regge il contrasto. La tinta scelta è `orange-800`, non `orange-500/600`: il badge è testo bianco
+in grassetto a 10 px, e `orange-800` su bianco dà **7,3:1** (AAA) contro il ~3:1 delle tinte chiare.
+Il verde invece **parte dal terzo giorno**: 72 ore sono il tempo minimo perché «c'è tempo» sia vero.
+
+**Soglie sul calendario, non sull'istante.** `giorniRimanenti` conta i **giorni di calendario**
+(§26.71): 0 = oggi (rosso), 1–2 = arancio, da 3 verde. Un avviso che scade stasera alle 23:59 e uno
+che scadeva stamattina hanno lo stesso `0`: la differenza la dice la data in cella, non il colore.
+Nessuna soglia oraria: un badge che cambia colore a mezzanotte è verificabile, uno che cambia alle
+14:37 no.
+
+**Perché un modulo nuovo e non `scadenza.ts`.** Alla vigilia del cambio, `scadenza.ts` era a **249
+righe**, una riga sotto il gate `W-DIM` (250, `.clinerules` §3): aggiungere il badge lì avrebbe prodotto
+una violazione nuova, e con essa un debito da congelare in baseline. Lo split è per **responsabilità**:
+
+- `src/lib/scadenza.ts` (249 → **174**) = il **calcolo del tempo**: `giorniRimanenti`, `eScaduto`,
+  `eInterpelloAttivo`, `eAvvisoVivo`, `eOpportunitaConScadenza`, `GIORNI_ORIZZONTE_OPPORTUNITA`,
+  `GIORNI_FINESTRA_SENZA_SCADENZA`, `SOGLIA_VICINA` (promemoria email).
+- `src/lib/scadenzaSemaforo.ts` (**nuovo**, 142) = la **presentazione del tempo**: `SOGLIA_ROSSO`,
+  `SOGLIA_ARANCIO`, `LivelloScadenza` (`critico` · `urgente` · `in-corso` · `fuori-finestra` ·
+  `scaduto` · `sconosciuto`), `StileScadenza`, `SCADENZA_TOKENS`, `stileScadenza`, `eTermineProssimo`.
+
+La dipendenza è a **senso unico** (semaforo → scadenza): `scadenza.ts` non importa il semaforo, quindi
+nessun `E-CICLO`, e la regola dei 15 giorni resta una sola (nel modulo che calcola il tempo). Effetto
+collaterale positivo: `scadenza.ts` scende sotto la soglia e il file che ospita la palette è piccolo
+abbastanza da leggerlo tutto.
+
+**Consumatori allineati (uno solo per superficie).** `rigaBoardDati.badgeScadenza` (tabellone),
+`pages/interpello/components/SchedaAvviso.tsx` (scheda avviso),
+`pages/dashboard/components/ElencoOpportunita.tsx` (feed console), `components/InterpelloCard.tsx`,
+`departments/radar/components/ResponsoProva.tsx`. Due dettagli che non sono cosmetici: `InterpelloCard`
+usa **`eTermineProssimo(stile.livello)`** al posto del confronto inline sul livello («In scadenza»
+acceso per `critico`/`urgente`/`scaduto`, spento per verde e ardesia: la lista dei livelli d'allarme ora
+è dichiarata in un punto solo, e una luce nuova non può sfuggire); `lib/resend.ts` lega il gruppo
+«urgente» dei promemoria email a **`SOGLIA_ARANCIO`** invece della vecchia `SOGLIA_IMMINENTE` —
+comportamento identico (≤ 2 giorni), ma la soglia non è più un numero duplicato. Allineato anche
+`scripts/backfill-nomi-istituto.ts` (import + commento).
+
+**Guardie aggiornate (e un presupposto demolito).** `test:board:scadenza` ora asserisce: le **tre**
+luci; `orange-800` per «Scade domani»/«Ultime 72h»; `rose-700` **solo** a 0 giorni; il rosso che non si
+estende a domani e l'arancio che non si estende al terzo giorno; **5 token distinti** (due bande con la
+stessa classe renderebbero il semaforo illeggibile); nessun giallo/ambra e nessun pastello;
+`eTermineProssimo` acceso per rosso/arancio/scaduto e spento per verde/ardesia. `test:board:demo`: il
+caso «scade domani» della demo è ora **arancio** (e non più rosso), mentre il divieto resta su
+giallo/ambra. `test:interpello-scadenza`: assert sulle due soglie e sulle etichette, più la verifica che
+nessuna banda pulsi. Il presupposto «due soli colori» è stato **rimosso dalle asserzioni** — non
+ribaltato: era giusto per §26.82, non per un semaforo. Invariati: finestra a 15 giorni, testo bianco in
+grassetto, nessuna pulsazione, nessun colore d'allarme su data illeggibile, «Scadenza n/d» dichiarata e
+mai surrogata.
+
+**Verifiche (da `project/`).** `npm run typecheck` ✅ · `npm run test:board:scadenza` ✅ ·
+`test:board:demo` ✅ · `test:interpello-scadenza` ✅ · `test:scadenze` ✅ · `test:board` ✅ ·
+`test:opportunita` ✅ · `test:digest` ✅ · `test:promemoria` ✅ · `npm run test:architettura` ✅ (692
+file, 145 violazioni = baseline, **nessuna nuova**) · `npm run test:palette` ✅ (537 file, 0 orfani) ·
+`npm run build` ✅ (8,24 s · CSS 71,43 kB · gzip 12,35 kB) · `npx eslint` sui file toccati ✅ 0.
+
+**File toccati.** *Condivisi essenziali*: `src/lib/scadenzaSemaforo.ts` (**nuovo**),
+`src/lib/scadenza.ts` (§26.82 → questo), `src/lib/resend.ts`. *Dipartimento Radar*:
+`flightBoard/rigaBoardDati.ts`, `flightBoard/components/RigaBoard.tsx` (commenti di palette),
+`flightBoard/__tests__/{badgeScadenza,demoInterpelli,demoInterpelliTipi,demoInterpelli.test}.ts`,
+`components/ResponsoProva.tsx`. *Pagine*: `dashboard/components/ElencoOpportunita.tsx`,
+`interpello/components/SchedaAvviso.tsx`, `components/InterpelloCard.tsx`. *Script*:
+`scripts/test-scadenza.ts`, `scripts/backfill-nomi-istituto.ts`. *Docs*: questo handover (§23.1, §26.82
+nota, §26.89) e `docs/DEPARTMENT_MAP.md`.
+
+**Nota di sessione.** Tre luci costano una classe in più e restituiscono l'unica cosa che il badge deve
+dire: **quanto tempo ho**. Con due luci la frase era «presto o tardi», e la differenza fra «presto» e
+«adesso» — l'unica che cambia il lavoro della giornata — non si vedeva. Il vincolo delle 250 righe ha
+fatto il resto: separare *calcolare* il tempo da *colorarlo* ha reso leggibili entrambi i moduli e ha
+messo la palette dove la si cerca, in un file che si chiama come ciò che contiene.
+
+
+
 
 
 

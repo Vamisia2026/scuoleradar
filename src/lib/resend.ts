@@ -13,7 +13,8 @@
  */
 
 import { Resend } from 'resend';
-import { SOGLIA_IMMINENTE, SOGLIA_VICINA, eInterpelloAttivo, giorniRimanenti } from './scadenza';
+import { SOGLIA_VICINA, eInterpelloAttivo, giorniRimanenti } from './scadenza';
+import { SOGLIA_ARANCIO } from './scadenzaSemaforo';
 import { province as provinceData } from '../data/province';
 import { gateEmail } from '../config/gateNotifiche';
 import {
@@ -941,8 +942,9 @@ function involucroDigest(titolo: string, introHtml: string, elencoHtml: string, 
 }
 
 /**
- * Gruppi di URGENZA del digest: stesse soglie del semaforo dell'app
- * (`scadenza.ts`). L'ordine è crescente per urgenza e MONOTONO rispetto
+ * Gruppi di URGENZA del digest: le soglie arrivano dal semaforo dell'app
+ * (`scadenzaSemaforo.ts`) — il gruppo «urgente» copre le luci rossa e arancione
+ * (≤ 2 giorni). L'ordine è crescente per urgenza e MONOTONO rispetto
  * all'ordinamento per scadenza, quindi non "sparpaglia" le voci.
  */
 const GRUPPI_DIGEST: Array<{ chiave: string; titolo: string }> = [
@@ -956,7 +958,7 @@ const GRUPPI_DIGEST: Array<{ chiave: string; titolo: string }> = [
 function chiaveGruppoDigest(scadenza?: string | null): string {
   const giorni = giorniRimanenti(scadenza);
   if (giorni === null) return 'nd';
-  if (giorni <= SOGLIA_IMMINENTE) return 'urgente';
+  if (giorni <= SOGLIA_ARANCIO) return 'urgente';
   if (giorni <= SOGLIA_VICINA) return 'vicino';
   return 'lungo';
 }
