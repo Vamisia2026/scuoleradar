@@ -54,16 +54,10 @@ import { caricaStoricoContatti } from './storicoContatti.ts';
 import {
   parseInterpello,
   estraiDataPubblicazione,
-  estraiDataScadenza,
-  estraiEmails,
-  deoffuscaEmail,
   estraiProvincia,
-  punteggioEmailScuola,
   rilevaCategoriaAvviso,
   sembraOpportunita,
   urlIstituzionaleEnte,
-  eSorgenteVerificata,
-  eUrlDocumento,
   verificaAvviso,
   type InterpelloParsato,
 } from './parser.ts';
@@ -73,20 +67,18 @@ import {
   espandiElencoInAvvisi,
   sembraTitoloElenco,
 } from './elenchi.ts';
+import { ePaginaPostElenco } from './postElenco.ts';
+import { eFeedDocumento } from './postFeed.ts';
+import { espandiPostInAvvisi } from './postRaccolta.ts';
 import { datiRiga, titoloVoce } from './righeTabella.ts';
-import { eUrlHome } from './paginaElenco.ts';
+import { eUrlArticolo, eUrlHome } from './paginaElenco.ts';
 import { MAX_FONTI_PER_RUN, fontiPerRun, type FonteInterpelli } from './fonti.ts';
 import { sintesiCopertura } from './fontiCopertura.ts';
 import { MAX_SEZIONI_HUB, eTitoloNavigazione, scopriSezioniReclutamento } from './hub.ts';
 import { motivoScartoOpportunita, valutaGateLink, eRecordStrutturato } from './qualitaOpportunita.ts';
 import { statoArricchimento } from '../lib/statoArricchimento.ts';
+import { arricchisciContatti, arricchisciScadenze } from './arricchimento.ts';
 import { inviaAlertTelegramTempoReale } from '../lib/notifier.ts';
-import {
-  emailDaCodiceMeccanografico,
-  estraiCodiceMeccanograficoDaTesto,
-  normalizzaCodiceMeccanografico,
-  risolviEmailUfficialeScuola,
-} from '../lib/emailScuola.ts';
 import {
   CHIAVE_CANALE_ATA_NAZIONALE,
   getTelegramCanaliRegionali,
@@ -528,18 +520,49 @@ async function raccogliDaAggregatore(
 }
 
 /**
+ * POST di una pagina indice (§26.88): feed RSS della categoria o pagina con
+ * articoli linkati (WordPress, Elementor, e-portfolio Liferay del MIM).
+ *
+ * Restituisce `[]` quando la pagina NON è un indice di post: in quel caso il
+ * chiamante usa righe di tabella/elenchi. Se i post ci sono, ogni post diventa
+ * un avviso con il testo dell'articolo, la sua data e i suoi allegati — titolo
+ * e link sono quelli del POST, mai della pagina indice.
+ */
+async function espandiPaginaPost(
+  html: string,
+  pagina: string,
+  provincia: string,
+  maxPost: number,
+): Promise<AvvisoRilevato[]> {
+  if (!eFeedDocumento(html) && !ePaginaPostElenco(html, pagina)) return [];
+  const esito = await espandiPostInAvvisi(
+    html,
+    { baseUrl: pagina, provincia, source: pagina },
+    { max: maxPost, scarica: scaricaPagina },
+  );
+  if (esito.avvisi.length === 0) return [];
+  console.log(
+    `    · ${pagina} → indice di post: ${esito.avvisi.length} avvisi (${esito.postLetti}/${esito.postTrovati} pagine lette, tipo ${esito.tipo})`,
+  );
+  return esito.avvisi;
+}
+
+/**
  * CONNETTORE · HUB ISTITUZIONALE DEL CAPOLUOGO (USR/USP).
  *
  * 1. scarica la pagina dell'hub;
  * 2. scopre le SEZIONI di reclutamento presenti (`scopriSezioniReclutamento`,
  *    max `MAX_SEZIONI_HUB` fetch per hub) e le esplora;
- * 3. per ogni pagina: righe d'avviso (`parseAvvisi`) + espansione elenchi.
+ * 3. per ogni pagina: se è un INDICE DI POST (feed della categoria o articoli
+ *    linkati) si legge OGNI post (`espandiPaginaPost`); altrimenti righe
+ *    d'avviso (`parseAvvisi`) + espansione elenchi.
  * La provincia di fallback è quella del capoluogo dell'hub: le voci che citano
  * la scuola/città reale vengono comunque riattribuite dal parser.
  */
 async function raccogliDaHub(
   fonte: FonteInterpelli,
   stats: StatsRaccolta,
+  maxPost = 8,
 ): Promise<AvvisoRilevato[]> {
   const avvisi: AvvisoRilevato[] = [];
   const fallback = fonte.capoluogo ?? '';
@@ -563,10 +586,17 @@ async function raccogliDaHub(
         continue;
       }
     }
-    const candidati = [
-      ...parseAvvisi(paginaHtml, fallback, pagina),
-      ...espandiElencoInAvvisi(paginaHtml, { baseUrl: pagina, provincia: fallback, source: pagina }),
-    ];
+    // Indice di post: le voci sono ARTICOLI (testo, data, allegati) e non righe.
+    // Se i post si leggono, sono LORO gli avvisi della pagina: le righe della
+    // stessa pagina sarebbero gli stessi avvisi senza contenuto.
+    const daPost = await espandiPaginaPost(paginaHtml, pagina, fallback, maxPost);
+    const candidati: AvvisoRilevato[] =
+      daPost.length > 0
+        ? daPost
+        : [
+            ...parseAvvisi(paginaHtml, fallback, pagina),
+            ...espandiElencoInAvvisi(paginaHtml, { baseUrl: pagina, provincia: fallback, source: pagina }),
+          ];
     let aggiunti = 0;
     for (const a of candidati) {
       if (hashVisti.has(a.hashId)) continue;
@@ -600,6 +630,7 @@ async function raccogliAvvisiReali(
   province: string[],
   maxFonti = MAX_FONTI_PER_RUN,
   includiArchivi = false,
+  maxPost = 8,
 ): Promise<{ avvisi: AvvisoRilevato[]; fonti: string; stats: StatsRaccolta }> {
   const avvisi: AvvisoRilevato[] = [];
   const descrizioneFonti: string[] = [];
@@ -613,7 +644,7 @@ async function raccogliAvvisiReali(
     descrizioneFonti.push(fonte.id);
     const estratti =
       fonte.tipo === 'hub-istituzionale'
-        ? await raccogliDaHub(fonte, stats)
+        ? await raccogliDaHub(fonte, stats, maxPost)
         : await raccogliDaAggregatore(fonte, postVisitati, stats);
 
     // GATE 1 — CONFORMITÀ: solo opportunità di lavoro, mai contenuto editoriale.
@@ -652,28 +683,47 @@ async function raccogliAvvisiReali(
  * Un indice che non produce voci viene SCARTATO (non si pubblica mai il link
  * alla lista master come se fosse un avviso). Best-effort e limitato da
  * `SCRAPER_ELENCHI_MAX` (default 25 pagine per run).
+ *
+ * Due famiglie di indice, stesso esito (un avviso per voce):
+ *   1. TABELLARE — righe `<tr>`/`<li>`/griglie ARIA (`elenchi.ts`);
+ *   2. DI POST — feed RSS o pagina con articoli linkati (WordPress, Elementor,
+ *      e-portfolio Liferay del MIM): `postRaccolta.ts` legge OGNI post, così il
+ *      parser vede titolo, testo, data e allegati dell'articolo, non la riga
+ *      di un elenco (`SCRAPER_POST_MAX`, default 8 post per indice).
  */
 async function espandiElenchi(
   avvisi: AvvisoRilevato[],
   max = 25,
+  maxPost = 8,
 ): Promise<{
   avvisi: AvvisoRilevato[];
   indiciEspansi: number;
   vociCreate: number;
   indiciScartati: string[];
+  /** Indici riconosciuti come elenchi di POST (feed/articoli). */
+  elenchiPost: number;
+  /** Pagine di post lette davvero (le altre: solo anteprima dell'elenco). */
+  postLetti: number;
 }> {
   const out: AvvisoRilevato[] = [];
   const indiciScartati: string[] = [];
   let indiciEspansi = 0;
   let vociCreate = 0;
+  let elenchiPost = 0;
+  let postLetti = 0;
   let fetchEffettuati = 0;
 
   for (const a of avvisi) {
     const link = (a.link ?? '').trim();
     // Solo pagine che "sembrano" un indice (percorso da elenco + titolo/dati
     // coerenti): così i post giornalieri già strutturati non vengono ri-espansi.
+    // Un URL di ARTICOLO è una foglia e non si ri-espande (i «leggi anche» di un
+    // articolo non sono gli avvisi dell'articolo). Il criterio è STRETTO
+    // (`eUrlArticolo`: data nell'URL, `/-/` di Liferay, `?p=`): le SEZIONI degli
+    // enti (`/web/milano/interpelli`, `/avvisi-pubblici-3/`) restano espandibili.
     const probabileIndice =
       Boolean(link) &&
+      !eUrlArticolo(link) &&
       eUrlElenco(link) &&
       (sembraTitoloElenco(a.title) || a.classCodes.length === 0);
     if (!probabileIndice || fetchEffettuati >= max) {
@@ -689,293 +739,58 @@ async function espandiElenchi(
       out.push(a); // pagina non raggiungibile: si tiene l'avviso com'è
       continue;
     }
-    if (!ePaginaElenco(html, link, link)) {
-      out.push(a); // non è un indice: è l'avviso vero
+    if (ePaginaElenco(html, link, link)) {
+      const figli = espandiElencoInAvvisi(html, {
+        baseUrl: link,
+        provincia: a.province,
+        source: link,
+        dataPubblicazione: a.publishedAt ?? null,
+      }).filter((f) => (f.link ?? '') !== link);
+
+      if (figli.length === 0) {
+        // Indice senza voci estraibili: si scarta (mai il link alla lista master).
+        indiciScartati.push(link);
+        console.warn(`  ✗ indice senza voci estraibili, scartato: ${link}`);
+        continue;
+      }
+
+      indiciEspansi += 1;
+      vociCreate += figli.length;
+      out.push(...figli);
       continue;
     }
 
-    const figli = espandiElencoInAvvisi(html, {
-      baseUrl: link,
-      provincia: a.province,
-      source: link,
-      dataPubblicazione: a.publishedAt ?? null,
-    }).filter((f) => (f.link ?? '') !== link);
-
-    if (figli.length === 0) {
-      // Indice senza voci estraibili: si scarta (mai il link alla lista master).
-      indiciScartati.push(link);
-      console.warn(`  ✗ indice senza voci estraibili, scartato: ${link}`);
+    // ELENCHI DI POST (§26.88): WordPress/Elementor e e-portfolio Liferay del MIM.
+    // La pagina non è una tabella ma un elenco di ARTICOLI (o un feed RSS):
+    // ogni post diventa un avviso con il testo dell'articolo e i suoi allegati.
+    if (eFeedDocumento(html) || ePaginaPostElenco(html, link)) {
+      const esito = await espandiPostInAvvisi(
+        html,
+        {
+          baseUrl: link,
+          provincia: a.province,
+          source: link,
+          dataPubblicazione: a.publishedAt ?? null,
+        },
+        { max: maxPost, scarica: scaricaPagina },
+      );
+      if (esito.avvisi.length === 0) {
+        indiciScartati.push(link);
+        console.warn(`  ✗ indice di post senza voci estraibili, scartato: ${link}`);
+        continue;
+      }
+      indiciEspansi += 1;
+      elenchiPost += 1;
+      vociCreate += esito.avvisi.length;
+      postLetti += esito.postLetti;
+      out.push(...esito.avvisi);
       continue;
     }
 
-    indiciEspansi += 1;
-    vociCreate += figli.length;
-    out.push(...figli);
+    out.push(a); // né elenco né indice di post: è l'avviso vero
   }
 
-  return { avvisi: out, indiciEspansi, vociCreate, indiciScartati };
-}
-
-/**
- * Arricchisce la SCADENZA degli avvisi che non la dichiarano nell'elenco:
- * scarica la PAGINA UFFICIALE e prova a estrarre "scadenza / entro il / termine…"
- * dal suo testo. Best-effort e limitato (max N richieste); non inventa mai date.
- */
-async function arricchisciScadenze(avvisi: AvvisoRilevato[], max = 20): Promise<number> {
-  const senzaScadenza = avvisi.filter((a) => !a.expirationDate && a.link);
-  if (senzaScadenza.length === 0) return 0;
-  let arricchiti = 0;
-  for (const a of senzaScadenza.slice(0, max)) {
-    try {
-      const html = await scaricaPagina(a.link as string);
-      const testo = testoLeggibile(html);
-      const scad = estraiDataScadenza(testo);
-      if (scad) {
-        a.expirationDate = scad;
-        arricchiti += 1;
-      }
-    } catch {
-      // pagina non raggiungibile: l'avviso resta senza scadenza (nessuna data inventata)
-    }
-  }
-  console.log(
-    `• Scadenze: ${arricchiti}/${Math.min(senzaScadenza.length, max)} arricchite dalla pagina ufficiale (${senzaScadenza.length} avvisi senza data dichiarata).`,
-  );
-  return arricchiti;
-}
-
-/* ------------------------- Arricchimento contatti ------------------------- */
-
-/**
- * Testo della pagina con SEPARATORI tra i blocchi HTML. Senza separatori cheerio
- * incolla le parole di tag adiacenti ("…@istruzione.it" + "posta" →
- * "…@istruzione.itposta", oppure "15/09/2026Scadenza"). Serve per email e scadenze.
- */
-function testoLeggibile(html: string): string {
-  const separato = html
-    .replace(/<br\s*\/?>/gi, ' ')
-    .replace(/<\/(?:p|div|li|tr|td|th|h[1-6]|section|article|table|ul|ol|blockquote|span|a)>/gi, ' ');
-  return cheerio.load(separato).text().replace(/\s+/g, ' ');
-}
-
-/** Email estratte da un HTML: testo della pagina (anche tabelle) + link `mailto:`. */
-function emailDaHtml(html: string): string[] {
-  const emails = new Set<string>(estraiEmails(testoLeggibile(html)));
-  const $ = cheerio.load(html);
-  $('a[href^="mailto:"]').each((_, a) => {
-    // De-offusca anche l'href: alcune fonti scrivono `mailto:` con entità HTML.
-    const href = (
-      deoffuscaEmail($(a).attr('href') ?? '').replace(/^mailto:/i, '').split(/[?;,]/)[0] ?? ''
-    )
-      .trim()
-      .toLowerCase();
-    if (href.includes('@')) emails.add(href);
-  });
-  return [...emails];
-}
-
-/** Sottolink documentali della pagina di dettaglio (allegati/circolari/avvisi). */
-function sottolinkCandidati(html: string, baseUrl: string, max = 2): string[] {
-  const $ = cheerio.load(html);
-  const out = new Set<string>();
-  $('a[href]').each((_, a) => {
-    const href = ($(a).attr('href') ?? '').trim();
-    if (!href || href.startsWith('#') || /^(mailto|tel|javascript):/i.test(href)) return;
-    let assoluto: string;
-    try {
-      assoluto = new URL(href, baseUrl).href;
-    } catch {
-      return;
-    }
-    if (!/^https?:\/\//i.test(assoluto)) return;
-    if (!eUrlDocumento(assoluto) && !eSorgenteVerificata(assoluto)) return;
-    if (
-      /(bando|avviso|interpell|supplenz|allegato|circolare|documento|protocollo|convocazione|domanda|graduator)/i.test(
-        assoluto,
-      )
-    ) {
-      out.add(assoluto);
-    }
-  });
-  return [...out].slice(0, max);
-}
-
-/** True per URL di cui NON possiamo leggere il testo (documenti binari). */
-function eDocumentoBinario(url: string): boolean {
-  return /\.(pdf|docx?|odt|xlsx?|pptx?|zip)($|\?)/i.test(url);
-}
-
-/**
- * Cerca l'email di candidatura su PIÙ fonti collegate all'avviso:
- *   1. il link di dettaglio e gli altri link candidati della voce;
- *   2. i sottolink documentali (allegati/circolari) della pagina di dettaglio.
- * Sceglie l'indirizzo più pertinente all'istituto. Non inventa nulla.
- */
-async function cercaEmailNelleFonti(
-  a: AvvisoRilevato,
-): Promise<{ email: string | null; codice: string | null }> {
-  const tuttiLink = [
-    ...new Set([a.link, ...(a.linkCandidati ?? [])].filter((u): u is string => Boolean(u))),
-  ];
-  // Il codice meccanografico può stare ANCHE nell'URL di un documento binario
-  // (PDF) o di una pagina di riepilogo/"Stampa" — es. `…/ASTF01000X-interpello.pdf`.
-  // Va letto PRIMA di scartare i link non leggibili come testo, altrimenti si
-  // perde la casella ufficiale (PEO) proprio sugli avvisi più "poveri".
-  let codice =
-    normalizzaCodiceMeccanografico(a.schoolCode) ??
-    estraiCodiceMeccanograficoDaTesto(tuttiLink.join(' '));
-  const radici = tuttiLink
-    .filter((u) => /^https?:\/\//i.test(u) && !eDocumentoBinario(u))
-    .slice(0, 2);
-  if (radici.length === 0) return { email: null, codice };
-
-  const visitate = new Set<string>();
-  const emailTrovate = new Set<string>();
-  const pagine: { html: string; url: string }[] = [];
-
-  // Livello 1: pagine di dettaglio / link candidati (testo + mailto:).
-  for (const url of radici) {
-    if (visitate.has(url)) continue;
-    visitate.add(url);
-    try {
-      const html = await scaricaPagina(url);
-      pagine.push({ html, url });
-      codice = codice ?? estraiCodiceMeccanograficoDaTesto(testoLeggibile(html));
-      for (const e of emailDaHtml(html)) emailTrovate.add(e);
-    } catch {
-      // pagina non raggiungibile: si prosegue
-    }
-  }
-
-  // Livello 2 (solo se ancora nulla): un livello di profondità verso gli allegati.
-  if (emailTrovate.size === 0) {
-    for (const { html, url } of pagine) {
-      for (const sub of sottolinkCandidati(html, url, 2)) {
-        if (visitate.has(sub) || eDocumentoBinario(sub)) continue;
-        visitate.add(sub);
-        try {
-          const htmlAllegato = await scaricaPagina(sub);
-          codice = codice ?? estraiCodiceMeccanograficoDaTesto(testoLeggibile(htmlAllegato));
-          for (const e of emailDaHtml(htmlAllegato)) emailTrovate.add(e);
-        } catch {
-          // allegato non raggiungibile
-        }
-      }
-    }
-  }
-
-  let migliore: string | null = null;
-  let migliorPunteggio = -Infinity;
-  // Il codice (anche quello appena ricavato da URL/pagina) aiuta a preferire la
-  // casella effettivamente legata all'istituto.
-  const ctxFinale = { schoolCode: codice ?? a.schoolCode, schoolName: a.schoolName };
-  for (const e of emailTrovate) {
-    const p = punteggioEmailScuola(e, ctxFinale);
-    if (p > migliorPunteggio) {
-      migliorPunteggio = p;
-      migliore = e;
-    }
-  }
-  return {
-    email:
-      risolviEmailUfficialeScuola({
-        emailsTrovate: migliore ? [migliore] : [],
-        schoolCode: codice ?? a.schoolCode,
-      })?.email ?? null,
-    codice,
-  };
-}
-
-/**
- * Email istituzionale derivata dal codice meccanografico.
- *
- * SOLO la convenzione UFFICIALE del Ministero (`codice@istruzione.it`,
- * `emailDaCodiceMeccanografico`): nessuna email costruita su un codice
- * malformato e nessun nome di scuola inventato per giustificarla (direttiva
- * 04/10/2026, §26.47 — bonifica dei mock: il vecchio `resolveSchoolByCode`
- * fabbricava «Istituto &lt;codice&gt;» e un recapito anche per codici non validi).
- */
-function emailIstituzionaleDaCodice(schoolCode?: string | null): string | null {
-  return emailDaCodiceMeccanografico(schoolCode ?? '')?.peo ?? null;
-}
-
-/** Sotto questa soglia l'email è considerata debole → vale la pena approfondire. */
-const SOGLIA_EMAIL_AFFIDABILE = 30;
-
-/**
- * Arricchisce l'EMAIL di candidatura scavando su più fonti (pagina di dettaglio,
- * allegati, altri link candidati) e confrontando la pertinenza con l'istituto.
- * Ultima ratio: email istituzionale derivata dal codice meccanografico
- * (convenzione MIM, vedi `school-lookup.ts`). "Email non disponibile" resta solo
- * se NESSUNA fonte produce un indirizzo. Non inventa nulla oltre tale convenzione.
- */
-async function arricchisciContatti(
-  avvisi: AvvisoRilevato[],
-  max = 20,
-  usaCodice = true,
-): Promise<number> {
-  if (avvisi.length === 0) return 0;
-
-  // Priorità agli avvisi SENZA email (poi a quelli con email).
-  const ordinati = [...avvisi].sort(
-    (x, y) => (x.contactEmail ? 1 : 0) - (y.contactEmail ? 1 : 0),
-  );
-  const campione = ordinati.slice(0, max);
-
-  let migliorati = 0;
-  let daPagine = 0;
-  let daCodice = 0;
-  for (const a of campione) {
-    const ctx = { schoolCode: a.schoolCode, schoolName: a.schoolName };
-    const attuale = a.contactEmail ?? null;
-    let migliore = attuale;
-    let migliorPunteggio = attuale ? punteggioEmailScuola(attuale, ctx) : -Infinity;
-
-    // Approfondisce su più fonti solo se manca l'email o è debole.
-    if (migliorPunteggio < SOGLIA_EMAIL_AFFIDABILE) {
-      const esito = await cercaEmailNelleFonti(a);
-      // Il codice meccanografico può emergere anche dalla pagina ufficiale:
-      // salvarlo permette la risoluzione PEO/PEC e il nome reale della scuola.
-      if (esito.codice && !a.schoolCode) a.schoolCode = esito.codice;
-      const trovata = esito.email;
-      if (trovata) {
-        const p = punteggioEmailScuola(trovata, ctx);
-        if (p > migliorPunteggio) {
-          migliore = trovata;
-          migliorPunteggio = p;
-          daPagine += 1;
-        }
-      }
-    }
-
-    // Ultima ratio / RINFORZO: convenzione MIM sul codice meccanografico.
-    // Si usa l'email derivata sia quando manca un contatto, sia quando quello
-    // trovato è DEBOLE (es. dominio personale) e la derivata è più pertinente:
-    // così si evita "Email non disponibile" (o un contatto sbagliato) quando
-    // l'istituto ha una casella istituzionale desumibile dal codice.
-    if (usaCodice && a.schoolCode && (!migliore || migliorPunteggio < SOGLIA_EMAIL_AFFIDABILE)) {
-      const derivata = emailIstituzionaleDaCodice(a.schoolCode);
-      if (derivata) {
-        const p = punteggioEmailScuola(derivata, ctx);
-        if (!migliore || p > migliorPunteggio) {
-          migliore = derivata;
-          migliorPunteggio = p;
-          daCodice += 1;
-        }
-      }
-    }
-
-    if (migliore && migliore !== attuale) {
-      a.contactEmail = migliore;
-      migliorati += 1;
-    }
-  }
-
-  console.log(
-    `• Contatti: ${migliorati} email trovate/migliorate su ${campione.length} avvisi ` +
-      `(${daPagine} dalle pagine collegate, ${daCodice} derivate dal codice meccanografico).`,
-  );
-  return migliorati;
+  return { avvisi: out, indiciEspansi, vociCreate, indiciScartati, elenchiPost, postLetti };
 }
 
 /* ------------------- Nessun seed di test nella pipeline ------------------- */
@@ -1426,6 +1241,7 @@ async function main(provinceOverride?: string[]) {
     province,
     Number(env.SCRAPER_FONTI_MAX ?? MAX_FONTI_PER_RUN),
     env.SCRAPER_ARCHIVI === '1',
+    Number(env.SCRAPER_POST_MAX ?? 8),
   );
   let trovati: AvvisoRilevato[] = avvisi;
   console.log(`• Fonti interrogate: ${fonti}`);
@@ -1445,7 +1261,11 @@ async function main(provinceOverride?: string[]) {
 
   // ELENCHI: ogni voce di una pagina indice (es. elenchi USR) diventa un avviso
   // indipendente con il proprio link (mai il link alla lista master).
-  const elenchi = await espandiElenchi(trovati, Number(env.SCRAPER_ELENCHI_MAX ?? 25));
+  const elenchi = await espandiElenchi(
+    trovati,
+    Number(env.SCRAPER_ELENCHI_MAX ?? 25),
+    Number(env.SCRAPER_POST_MAX ?? 8),
+  );
   if (elenchi.indiciEspansi > 0 || elenchi.indiciScartati.length > 0) {
     console.log(
       `• Elenchi: ${elenchi.indiciEspansi} indice/i espanso/i in ${elenchi.vociCreate} avvisi individuali` +
@@ -1454,18 +1274,26 @@ async function main(provinceOverride?: string[]) {
           : ''),
     );
   }
+  if (elenchi.elenchiPost > 0) {
+    console.log(
+      `• Elenchi di post: ${elenchi.elenchiPost} indice/i di articoli/feed · ${elenchi.postLetti} pagine di post lette`,
+    );
+  }
   trovati = elenchi.avvisi;
 
   // Scadenze mancanti: prova a estrarle dalla pagina ufficiale (best-effort).
-  await arricchisciScadenze(trovati, Number(env.SCRAPER_SCADENZA_MAX ?? 20));
+  await arricchisciScadenze(trovati, {
+    scarica: scaricaPagina,
+    max: Number(env.SCRAPER_SCADENZA_MAX ?? 20),
+  });
 
   // Email mancanti/deboli: arricchimento multi-fonte (pagina di dettaglio,
   // allegati, altri link) + ultima ratio dal codice meccanografico (MIM).
-  await arricchisciContatti(
-    trovati,
-    Number(env.SCRAPER_CONTATTI_MAX ?? 60),
-    env.SCRAPER_EMAIL_DA_CODICE !== '0',
-  );
+  await arricchisciContatti(trovati, {
+    scarica: scaricaPagina,
+    max: Number(env.SCRAPER_CONTATTI_MAX ?? 60),
+    usaCodice: env.SCRAPER_EMAIL_DA_CODICE !== '0',
+  });
 
   // TAILORING (§26.68): precarica il NOSTRO storico dei contatti (scuola → recapito
   // già risolto) e azzera i contatori del run. È la fonte che copre ciò che
