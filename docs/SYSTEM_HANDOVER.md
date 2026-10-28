@@ -10309,3 +10309,105 @@ numero di contrasto; il rumore era «roba sindacale» senza un elenco; il conteg
 soglia misurata e una guardia in `npm test`: chi la cambia domani lo scopre subito, e chi
 la legge trova il perché accanto al come.
 
+
+## §26.99 «Un avviso si apre su un avviso»: le pagine indice non entrano mai in bacheca (27/10/2026)
+
+Direttiva cliente del 27/10/2026, una riga sola: **un avviso si apre su un avviso**. In
+bacheca non può stare una riga che, al click, apre un **elenco** invece del testo di una
+opportunità. La regola mancava in due punti diversi — la vetrina e l'ingestione — e i due
+punti non si parlavano: per questo la correzione non è una lista di URL vietati, ma **un
+modulo unico** che entrambi importano.
+
+### 1. Il difetto: cinque portali aggregati pubblicati come se fossero bandi
+
+Gli Uffici Scolastici pubblicano gli interpelli come **post di una sezione**. La sezione è
+il contenitore, non l'avviso:
+
+| portale | URL che finiva in bacheca |
+|---|---|
+| USP Arezzo | `arezzoistruzione.it/usparezzo/index.php/interpelli` |
+| USR Puglia / Bari | `pugliausr.gov.it/index.php/docenti/reclutamento` |
+| USP Livorno | `ustli.it/usp_livorno/index.php/docenti/interpelli` |
+| ATP Cagliari (e-portfolio) | `mim.gov.it/web/cagliari` |
+| USR Friuli-Venezia Giulia | `usrfvg.gov.it/it/home/menu/uffici/…/Interpelli/` |
+
+Tre difetti, tutti visibili all'utente:
+
+1. **una riga che non scade mai** — una sezione non ha una data di scadenza, quindi la
+   riga restava in vetrina con «Scadenza n/d»: un segnaposto travestito da opportunità;
+2. **il click non verifica niente** — apre una lista di titoli, non il testo del bando,
+   quindi la riga non è controllabile dalla scuola che l'ha pubblicata;
+3. **la stessa sezione gonfiava il conto** — una riga per ogni scansione, sempre lo
+   stesso indirizzo, tra gli «avvisi attivi in Italia».
+
+### 2. La regola: `src/lib/urlAvviso.ts`, un modulo puro e volutamente asimmetrico
+
+Una sola funzione esportata, `eUrlIndicePortale(url): boolean`, in un modulo **senza
+import**: nessuna dipendenza dal DB, dalla rete o dal browser, così la stessa decisione
+gira nel job Node dell'ingestione e nel bundle della vetrina senza due copie da
+allineare. Il riconoscimento è **strutturale**, mai una lista di siti — un ente nuovo
+funziona dal primo giorno. I sette passi, nell'ordine:
+
+1. un **documento** (`.pdf`, `.docx`, `.zip`, `.p7m`…) è sempre specifico → non è indice;
+2. gli **slug di articolo già noti** (Liferay `/-/`, WordPress con data nel percorso)
+   sono contenuti → non sono indici; l'archivio di sola data (`/2026/10/`) invece sì;
+3. **query**: prima l'id di contenuto (`?id=`, `?p=`, `?news=`), poi i filtri di elenco
+   (`?s=`, `?page=`, `?view=category`, `?anno=`);
+4. **percorso**: radice del dominio, paginazione (`/page/2/`), nomi di indice
+   (`index.php`, `home`, `default.asp`);
+5. **e-portfolio MIM**: `/web/<territorio>` è la sezione dell'ufficio;
+6. **sottosito di una parola sola** (`/usparezzo`, `/usp_livorno`): una sezione, non un
+   avviso — un avviso ha sempre un id o una data, quindi una cifra;
+7. **segmento finale di sezione**, composto solo da parole di sezione e connettivi
+   (`/interpelli/`, `/avvisi-pubblici-3/`, `/interpelli-docenti-e-personale-educativo/`).
+
+Il criterio è **asimmetrico di proposito**: dichiara «indice» solo ciò che è riconoscibile
+con certezza. Un falso positivo toglierebbe dalla bacheca un avviso vero — danno peggiore
+di un falso negativo — quindi un URL che la regola non sa leggere (vuoto, protocollo non
+http, testo qualunque) risponde `false` e **non** svuota la vetrina.
+
+### 3. Tre consumatori, una sola decisione
+
+| consumatore | cosa fa con la regola |
+|---|---|
+| `departments/radar/flightBoard/linkFonte.ts` (tabellone) | un URL indice **non** viene mai etichettato `avviso`: si ripiega sulla home dell'istituto dichiarata `sito-scuola` (anagrafica MIM, poi i recapiti dell'avviso, poi la home del dominio `.edu.it`) e, se non esiste, la funzione torna `null` e la riga resta fuori |
+| `src/scraper/index.ts` (ingestione, GATE 1) | l'indice si **espande** nei suoi post/allegati; `probabileIndice` ora scatta anche su `eUrlIndicePortale` e un indice che non si riesce a leggere (budget di rete esaurito o pagina non raggiungibile) viene **scartato** con un `console.warn`, mai pubblicato. Ultimo presidio: dopo l'espansione, qualunque pagina indice sopravvissuta viene eliminata |
+| `src/scraper/postRaccolta.ts` (espansione dell'elenco) | ogni voce che è **a sua volta** un indice (paginazione `?start=10`, sotto-sezione collegata) viene saltata e contata in `indiciScartati`, che risale fino al log di `index.ts` |
+
+Il contratto di `espandiPostInAvvisi` è cambiato con la regola: `EsitoPostElenco` porta
+ora `indiciScartati`, così la rinuncia è **misurabile** e non silenziosa.
+
+La separazione dei ruoli resta netta: `lib/urlAvviso.ts` decide *solo* «indice o
+avviso specifico»; l'**espandibilità** continua a deciderla `eUrlArticolo`
+(`scraper/paginaElenco.ts`: data nel percorso, Liferay `/-/`, `?p=`). Per questo le
+sezioni-entità — `/web/milano/interpelli`, `/avvisi-pubblici-3/` — restano espandibili:
+sono indici ai fini della bacheca, ma non foglie.
+
+### 4. Le guardie
+
+| comando | cosa fissa |
+|---|---|
+| `npm run test:url-avviso` (nuovo, in `npm test`) | **47 controlli**: i cinque portali reali sono indici; PDF, Joomla con id, Liferay MIM e WordPress con data restano avvisi (nessun falso positivo); home, archivi, paginazione, ricerche e filtri sono elenchi; gli input non interpretabili sono `false` senza eccezioni; **proprietà della regola** — una sola dichiarazione in `src/lib/urlAvviso.ts`, importata dai tre consumatori, script in catena, modulo senza import |
+| `npm run test:scraper:post` (sezione I) | indice Joomla di USP Arezzo (fixture `AREZZO_INDICE` in `scripts/fixtures/postElencoHtml.ts`): **un solo avviso**, quello vero; `indiciScartati === 2` (sotto-sezione e pagina 2); nessun link pubblicato che sia un indice o che contenga `index.php/interpelli` |
+| `npm run test:board:link` · `npm run test:board:demo` | la riga con URL indice non è mai `avviso`; la bacheca demo resta completa |
+| `npm run test:architettura` | il modulo nuovo non crea violazioni e i file toccati restano sotto soglia (fixture e test separati apposta) |
+
+### 5. Verifiche (da `project/`)
+
+`npm run typecheck` ✅ exit 0 · **`npm test` ✅ exit 0** (la nuova guardia è in catena e la
+catena arriva in fondo) · `npm run test:architettura` ✅ (731 file, **145 = baseline, 0
+nuove**) · `npx eslint` sui 7 file toccati ✅ (nessun problema) · `npm run build` ✅ (17,4 s)
+· `npm run board:verifica` ✅ (156 righe in vetrina, **0 pubblicate senza scadenza**, 3
+scartate per nome istituto) · `npm run test:scraper:post` ✅ (sezione I inclusa) ·
+`npm run test:url-avviso` ✅ (47/47).
+
+**Nota di sessione.** La riga del cliente («un avviso si apre su un avviso») sembrava una
+richiesta di pulizia dell'output; era invece una **regola di prodotto mancante in due
+punti**. Scrivendo la lista dei portali "da bloccare" si sarebbe ricreato il difetto di
+§26.98 in versione URL: una regola che vive solo nella testa di chi l'ha decisa, e che il
+primo ente nuovo smentisce. Per questo la scelta è stata un modulo puro + **un'asserzione
+di proprietà nel test** che fallisce se domani qualcuno riscrive la regola nel tabellone o
+nell'ingestione: la coerenza tra vetrina e dati non è più un accordo, è verificata. La
+rinuncia è anche **contata** (`indiciScartati`), perché una riga che sparisce in silenzio
+è indistinguibile da un bug.
+

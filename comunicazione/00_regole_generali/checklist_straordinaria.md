@@ -70,6 +70,13 @@
 - [ ] Il link all'avviso è **la fonte ufficiale specifica** (`eUrlAvvisoDiretto`),
       `href` esattamente sull'URL dell'avviso. Mai home di ente, elenchi,
       archivi, pagine di ricerca, landing regionali o URL della piattaforma.
+- [ ] **«Un avviso si apre su un avviso»** (direttiva 27/10/2026, §26.99): la stessa
+      regola vale **a monte**, sulla bacheca e sull'ingestione, dove vive in un unico
+      modulo puro (`src/lib/urlAvviso.ts`, `eUrlIndicePortale`) importato da
+      `flightBoard/linkFonte.ts`, `scraper/index.ts` e `scraper/postRaccolta.ts`.
+      Una pagina indice si **espande** nei suoi post; se non si espande, **non si
+      pubblica** (mai una riga con «Scadenza n/d» che apre un elenco). Guardie:
+      `npm run test:url-avviso`, `npm run test:scraper:post`.
 - [ ] Etichette di fonte (uniche, mai varianti):
       · messaggi **personali** (email/Telegram/alert) → `Guarda la fonte ufficiale`;
       · post dei **canali pubblici** → `🔗 Leggi la Fonte Ufficiale` (mai URL in chiaro).

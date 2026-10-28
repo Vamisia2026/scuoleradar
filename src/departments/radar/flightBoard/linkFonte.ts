@@ -18,7 +18,12 @@
  *      (`school_site`, ex `SITOWEBSCUOLA`) e, in mancanza, dal dominio `.edu.it`
  *      della PEO/PEC che la scuola ha pubblicato nell'avviso (`contact_email`,
  *      poi `school_pec`);
- *   3. se non esiste né un avviso apribile né un dominio `.edu.it`, la funzione
+ *   3. se l'URL è la pagina INDICE/LANDING di un portale (la sezione
+ *      «Interpelli» di un USP/USR, la home di un sito, un archivio, una
+ *      ricerca: regola condivisa `lib/urlAvviso.ts`) non è un avviso: un click
+ *      aprirebbe un elenco e non il testo dell'opportunità, quindi si usa la
+ *      home dell'istituto e la si dichiara `sito-scuola`;
+ *   4. se non esiste né un avviso apribile né un dominio `.edu.it`, la funzione
  *      restituisce `null` e la riga NON entra in bacheca: meglio una riga in meno
  *      che una riga che promette un avviso e apre una pagina di login.
  *
@@ -35,6 +40,7 @@
  */
 import { pulisciUrlEsterna } from '@/lib/alertInterpello';
 import { HOST_PIATTAFORMA_PRIVATA } from '@/lib/piattaformeLink';
+import { eUrlIndicePortale } from '@/lib/urlAvviso';
 import { urlValido } from './righeBoard';
 
 /**
@@ -121,15 +127,25 @@ export interface RigaConRecapiti {
  *
  * Ordine di risoluzione della home (§26.77): prima il SITO ISTITUZIONALE
  * dichiarato dall'anagrafica MIM (`school_site`), poi i recapiti pubblicati
- * nell'avviso (`contact_email`, `school_pec`). Il primo è un dato ufficiale e
- * indipendente dal bando; i secondi spesso mancano o sono caselle
- * `@istruzione.it` (scartate da `dominioIstituzionale`).
+ * nell'avviso (`contact_email`, `school_pec`), infine — solo se l'URL è una
+ * pagina indice su un dominio `.edu.it` — la home di quel dominio: la riga
+ * resta in vetrina, ma dichiarata `sito-scuola` e non «avviso».
+ * Il primo è un dato ufficiale e indipendente dal bando; i secondi spesso
+ * mancano o sono caselle `@istruzione.it` (scartate da `dominioIstituzionale`).
+ *
+ * Un URL che è una pagina INDICE/LANDING (`eUrlIndicePortale`, direttiva
+ * cliente 27/10/2026) non è mai «l'avviso»: aprirebbe un elenco, non il testo
+ * dell'opportunità. La regola vive in `lib/urlAvviso.ts` perché la stessa
+ * decisione serve all'ingestione, che quelle pagine le espande nei singoli post.
  */
 export function fonteApribile(riga: RigaConRecapiti): FonteApribile | null {
   const url = urlValido(pulisciUrlEsterna(riga.source_url));
-  if (url && !ePiattaformaNonApribile(url)) return { url, tipo: 'avviso' };
+  if (url && !ePiattaformaNonApribile(url) && !eUrlIndicePortale(url)) {
+    return { url, tipo: 'avviso' };
+  }
   const home =
     homepageDaSito(riga.school_site) ??
-    homepageIstituzionale([riga.contact_email, riga.school_pec]);
+    homepageIstituzionale([riga.contact_email, riga.school_pec]) ??
+    homepageDaSito(url);
   return home ? { url: home, tipo: 'sito-scuola' } : null;
 }

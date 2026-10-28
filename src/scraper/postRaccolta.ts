@@ -8,6 +8,9 @@
  *
  * Regole di prodotto rispettate:
  *   · si pubblica sempre il link del POST, mai quello della pagina indice;
+ *   · una voce che è a sua volta un INDICE (paginazione dell'indice, sezione
+ *     collegata) viene scartata: «un avviso si apre su un avviso» (direttiva
+ *     27/10/2026, regola condivisa col tabellone in `lib/urlAvviso.ts`);
  *   · provincia e fonte sono quelle dell'indice (il post non le ridiscute);
  *   · la data di pubblicazione segue questo ordine: dati dell'articolo →
  *     `<time>`/`data` dell'elenco → data dichiarata dalla fonte;
@@ -18,6 +21,7 @@
  * modulo resta puro e testabile (vedi `scripts/test-post-elenco.ts`).
  */
 
+import { eUrlIndicePortale } from '../lib/urlAvviso.ts';
 import { estraiContenutoArticolo, type ContenutoArticolo } from './articoloPost.ts';
 import { eFeedDocumento, estraiPostDaFeed } from './postFeed.ts';
 import { estraiPostElenco, type PostElenco } from './postElenco.ts';
@@ -35,6 +39,8 @@ export interface EsitoPostElenco {
   postTrovati: number;
   /** Post la cui pagina è stata letta davvero (gli altri: solo anteprima). */
   postLetti: number;
+  /** Voci scartate perché erano a loro volta un indice/elenco. */
+  indiciScartati: number;
 }
 
 export interface ContestoPostElenco {
@@ -64,16 +70,27 @@ export async function espandiPostInAvvisi(
     ? estraiPostDaFeed(html, ctx.baseUrl, max)
     : estraiPostElenco(html, ctx.baseUrl, { max });
 
-  if (post.length === 0) return { tipo: 'nessuno', avvisi: [], postTrovati: 0, postLetti: 0 };
+  if (post.length === 0)
+    return { tipo: 'nessuno', avvisi: [], postTrovati: 0, postLetti: 0, indiciScartati: 0 };
 
   const base = ctx.baseUrl.split('#')[0].replace(/\/+$/, '');
   const avvisi: InterpelloParsato[] = [];
   const hashVisti = new Set<string>();
   let postLetti = 0;
+  let indiciScartati = 0;
 
   for (const p of post) {
     // Il post non può essere l'indice stesso (feed che linka la categoria).
     if (p.url.split('#')[0].replace(/\/+$/, '') === base) continue;
+
+    // Né può essere un'ALTRA pagina indice (paginazione dell'indice, sezione
+    // collegata, archivio): pubblicarla rimetterebbe in bacheca una riga che
+    // apre una lista. La regola è la STESSA del tabellone (`lib/urlAvviso.ts`),
+    // così ingestione e vetrina non possono divergere.
+    if (eUrlIndicePortale(p.url)) {
+      indiciScartati += 1;
+      continue;
+    }
 
     let contenuto: ContenutoArticolo = {
       titolo: p.titolo,
@@ -110,5 +127,11 @@ export async function espandiPostInAvvisi(
     avvisi.push(avviso);
   }
 
-  return { tipo: daFeed ? 'feed' : 'elenco', avvisi, postTrovati: post.length, postLetti };
+  return {
+    tipo: daFeed ? 'feed' : 'elenco',
+    avvisi,
+    postTrovati: post.length,
+    postLetti,
+    indiciScartati,
+  };
 }

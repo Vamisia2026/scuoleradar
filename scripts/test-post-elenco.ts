@@ -22,7 +22,10 @@ import { eFeedDocumento, estraiPostDaFeed } from '../src/scraper/postFeed.ts';
 import { eUrlArticolo } from '../src/scraper/paginaElenco.ts';
 import { ePaginaPostElenco, eUrlPost, estraiPostElenco } from '../src/scraper/postElenco.ts';
 import { espandiPostInAvvisi } from '../src/scraper/postRaccolta.ts';
+import { eUrlIndicePortale } from '../src/lib/urlAvviso.ts';
 import {
+  AREZZO_BASE,
+  AREZZO_INDICE,
   ARTICOLO_MIM,
   ARTICOLO_WP,
   FEED,
@@ -32,6 +35,7 @@ import {
   WP_BASE,
   WP_ELENCO,
 } from './fixtures/postElencoHtml.ts';
+
 
 let errori = 0;
 function check(nome: string, atteso: unknown, ottenuto: unknown): void {
@@ -197,6 +201,31 @@ const nessuno = await espandiPostInAvvisi(
 );
 check('articolo: nessuna espansione', 'nessuno', nessuno.tipo);
 check('articolo: nessun avviso inventato', 0, nessuno.avvisi.length);
+
+console.log('\n— I. L’indice di un portale aggregato non si pubblica mai (USP Arezzo) —');
+check('la sezione Joomla è una pagina indice', true, eUrlIndicePortale(AREZZO_BASE));
+check('la pagina è riconosciuta come indice di post', true, ePaginaPostElenco(AREZZO_INDICE, AREZZO_BASE));
+const avvisiArezzo = await espandiPostInAvvisi(
+  AREZZO_INDICE,
+  { baseUrl: AREZZO_BASE, provincia: 'AR', source: AREZZO_BASE },
+  {
+    max: 5,
+    scarica: async () =>
+      articoloDelPost(
+        'Interpello per supplenza su classe di concorso A022 – Italiano',
+        '2026-10-23',
+      ),
+  },
+);
+check('un solo avviso: quello vero', 1, avvisiArezzo.avvisi.length);
+check('voci che erano a loro volta indici: scartate', 2, avvisiArezzo.indiciScartati);
+check('nessun avviso con un link da indice', [], avvisiArezzo.avvisi.filter((a) => eUrlIndicePortale(a.link)));
+check(
+  'link pubblicato = il post, non la sezione né la pagina 2',
+  [],
+  avvisiArezzo.avvisi.filter((a) => /index\.php\/interpelli(?:\?|$)/.test(a.link ?? '')),
+);
+
 
 console.log(`\n${errori === 0 ? '✅' : '❌'} ELENCHI DI POST: ${errori} errore/i`);
 if (errori > 0) process.exitCode = 1;

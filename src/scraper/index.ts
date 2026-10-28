@@ -19,7 +19,9 @@
  *   4. GATE 1 — conformità: contenuti editoriali, atti informativi (esiti,
  *      graduatorie), voci fuori target e righe senza provincia rilevabile sono
  *      scartati a monte (`qualitaOpportunita.ts`); le pagine indice diventano
- *      avvisi individuali (`elenchi.ts`, mai il link alla lista master);
+ *      avvisi individuali (`elenchi.ts`, mai il link alla lista master) e una
+ *      pagina indice che NON si riesce a espandere non viene mai pubblicata
+ *      (regola condivisa col tabellone: `lib/urlAvviso.ts`);
  *   5. arricchimento di scadenze ed email di candidatura (fonti ufficiali);
  *   6. GATE 2 — solo bandi ATTIVI: gli scaduti non entrano in bacheca;
  *   7. GATE 3 — link: un ping fallito (403/anti-bot/timeout dei server regionali)
@@ -72,6 +74,7 @@ import { eFeedDocumento } from './postFeed.ts';
 import { espandiPostInAvvisi } from './postRaccolta.ts';
 import { datiRiga, titoloVoce } from './righeTabella.ts';
 import { eUrlArticolo, eUrlHome } from './paginaElenco.ts';
+import { eUrlIndicePortale } from '../lib/urlAvviso.ts';
 import { MAX_FONTI_PER_RUN, fontiPerRun, type FonteInterpelli } from './fonti.ts';
 import { sintesiCopertura } from './fontiCopertura.ts';
 import { MAX_SEZIONI_HUB, eTitoloNavigazione, scopriSezioniReclutamento } from './hub.ts';
@@ -542,7 +545,8 @@ async function espandiPaginaPost(
   );
   if (esito.avvisi.length === 0) return [];
   console.log(
-    `    · ${pagina} → indice di post: ${esito.avvisi.length} avvisi (${esito.postLetti}/${esito.postTrovati} pagine lette, tipo ${esito.tipo})`,
+    `    · ${pagina} → indice di post: ${esito.avvisi.length} avvisi (${esito.postLetti}/${esito.postTrovati} pagine lette, tipo ${esito.tipo})` +
+      (esito.indiciScartati > 0 ? ` · ${esito.indiciScartati} voci-indice scartate` : ''),
   );
   return esito.avvisi;
 }
@@ -715,6 +719,15 @@ async function espandiElenchi(
 
   for (const a of avvisi) {
     const link = (a.link ?? '').trim();
+    // UNA PAGINA INDICE NON È UN AVVISO (direttiva cliente 27/10/2026): o si
+    // espande nei suoi post/allegati, oppure non entra in bacheca. `indicePortale`
+    // (`eUrlIndicePortale`, `lib/urlAvviso.ts`: la STESSA regola che usa il
+    // tabellone) riconosce anche gli indici che la vecchia euristica non vedeva —
+    // la sezione Joomla `/index.php/ata/reclutamento`, la landing e-portfolio
+    // `/web/cagliari`, l'archivio `/2026/10/` — così i cinque portali aggregati
+    // (USP Arezzo, USR Puglia/Bari, USP Livorno, ATP Cagliari, USR FVG) vengono
+    // espansi e mai pubblicati come riga che apre una lista.
+    const indicePortale = eUrlIndicePortale(link);
     // Solo pagine che "sembrano" un indice (percorso da elenco + titolo/dati
     // coerenti): così i post giornalieri già strutturati non vengono ri-espansi.
     // Un URL di ARTICOLO è una foglia e non si ri-espande (i «leggi anche» di un
@@ -724,9 +737,21 @@ async function espandiElenchi(
     const probabileIndice =
       Boolean(link) &&
       !eUrlArticolo(link) &&
-      eUrlElenco(link) &&
-      (sembraTitoloElenco(a.title) || a.classCodes.length === 0);
-    if (!probabileIndice || fetchEffettuati >= max) {
+      (eUrlElenco(link) || indicePortale) &&
+      (indicePortale || sembraTitoloElenco(a.title) || a.classCodes.length === 0);
+    if (!probabileIndice) {
+      out.push(a);
+      continue;
+    }
+
+    if (fetchEffettuati >= max) {
+      // Budget di rete esaurito: l'indice non si può leggere, quindi NON si
+      // pubblica (sarebbe il segnaposto che il cliente ha segnalato).
+      if (indicePortale) {
+        indiciScartati.push(link);
+        console.warn(`  ✗ indice non espanso (budget di rete), scartato: ${link}`);
+        continue;
+      }
       out.push(a);
       continue;
     }
@@ -736,6 +761,11 @@ async function espandiElenchi(
     try {
       html = await scaricaPagina(link);
     } catch {
+      if (indicePortale) {
+        indiciScartati.push(link);
+        console.warn(`  ✗ indice non raggiungibile, scartato: ${link}`);
+        continue;
+      }
       out.push(a); // pagina non raggiungibile: si tiene l'avviso com'è
       continue;
     }
@@ -783,7 +813,22 @@ async function espandiElenchi(
       elenchiPost += 1;
       vociCreate += esito.avvisi.length;
       postLetti += esito.postLetti;
+      if (esito.indiciScartati > 0) {
+        // Voci dell'elenco che erano a loro volta una pagina indice: scartate.
+        console.warn(
+          `    · ${esito.indiciScartati} voce/i dell'indice erano indici: scartate (${link})`,
+        );
+      }
       out.push(...esito.avvisi);
+      continue;
+    }
+
+    // Né elenco di righe né indice di post: se resta una PAGINA INDICE (landing
+    // di un portale, sezione senza voci estraibili) non è un avviso e non entra
+    // in bacheca: meglio una riga in meno che una riga che apre una lista.
+    if (indicePortale) {
+      indiciScartati.push(link);
+      console.warn(`  ✗ pagina indice non espandibile, scartata: ${link}`);
       continue;
     }
 

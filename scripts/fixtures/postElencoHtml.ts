@@ -6,6 +6,10 @@
  *   · il test resta sotto la soglia di 250 righe (`scripts/check-architettura.ts`);
  *   · gli stessi frammenti servono a più prove (indice, articolo, feed → avvisi).
  *
+ *   · indice Joomla di un portale aggregato (USP Arezzo, direttiva 27/10/2026),
+ *     in cui accanto al post vero compaiono due voci che sono a loro volta un
+ *     INDICE (la sotto-sezione e la pagina 2): non devono mai essere pubblicate.
+ *
  * Nessuna rete e nessuna logica: solo stringhe costanti.
  */
 
@@ -99,3 +103,26 @@ export const FEED = `<?xml version="1.0" encoding="UTF-8"?>
     <description><![CDATA[<p>Interpello classe A042.</p>]]></description>
   </item>
 </channel></rss>`;
+
+/**
+ * Indice Joomla di un portale aggregato (USP Arezzo): il post VERO più due voci
+ * che sono a loro volta un indice — la sotto-sezione `graduatorie-e-interpelli`
+ * e la pagina 2 (`?start=10`). Nessuna delle due deve diventare un avviso:
+ * «un avviso si apre su un avviso» (direttiva 27/10/2026).
+ */
+export const AREZZO_BASE = 'https://www.arezzoistruzione.it/usparezzo/index.php/interpelli';
+export const AREZZO_INDICE = `
+<html><head><title>Interpelli – USP Arezzo</title></head><body>
+  <nav class="menu">
+    <a href="/usparezzo/">USP Arezzo</a>
+    <a href="/usparezzo/index.php/interpelli">Interpelli degli istituti aretini</a>
+  </nav>
+  <main id="content">
+    <h2><a href="/usparezzo/index.php/interpelli/2159-interpello-per-supplenza-a022-italiano">Interpello per supplenza su classe di concorso A022 – Italiano</a></h2>
+    <h2><a href="/usparezzo/index.php/interpelli/graduatorie-e-interpelli-docenti">Graduatorie e interpelli docenti: elenco aggiornato dell’ufficio</a></h2>
+    <div class="pagination">
+      <a href="/usparezzo/index.php/interpelli?start=10">Pagina successiva degli interpelli pubblicati</a>
+    </div>
+  </main>
+</body></html>`;
+
