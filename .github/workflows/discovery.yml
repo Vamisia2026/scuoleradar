@@ -1,0 +1,62 @@
+# ============================================================
+# Scoperta quotidiana dei target — «Daily exploration routine»
+#
+# - Pianificazione: OGNI GIORNO alle 09:00 UTC (anche sabato e domenica:
+#   i siti delle scuole non pubblicano solo nei giorni di scuola e la coda
+#   non deve fermarsi nel weekend).
+# - Trigger manuale: workflow_dispatch (GitHub → Actions → Run workflow)
+#   oppure il pulsante «Lancia scansione whitelist ora» del System Health
+#   Check DEV (Edge Function `crawler-admin`, che fa il dispatch di QUESTO
+#   workflow).
+# - Cosa fa: `npm run scopri:target -- --max-target=…` espande la coda con
+#   l'algoritmo BFS (`scripts/discovery-engine.ts`) — dai target già noti
+#   scopre le SOTTOPAGINE e i NUOVI DOMINI di scuole e Uffici Scolastici e li
+#   registra in `discovered_links` (`pending` → `active_crawler` se il
+#   contenuto è di reclutamento). È il motore che va oltre la whitelist
+#   statica: nessun elenco scritto a mano.
+#
+# Secrets richiesti: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+# ============================================================
+name: Scoperta Target (discovery BFS)
+
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: discovery-target
+  cancel-in-progress: false
+
+jobs:
+  scopri:
+    name: Espansione della coda (nuovi domini → discovered_links)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Installazione dipendenze
+        run: npm ci
+
+      - name: Validazione TypeScript (informativa)
+        continue-on-error: true
+        run: npm run scrape:check
+
+      - name: Scoperta BFS con tetto al giro
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Tetto prudente: 120 target ≈ 25 minuti sul runner standard.
+          # Alzalo (o lancia il workflow a mano) per recuperare arretrati.
+          DISCOVERY_MAX_TARGET: '120'
+        run: npm run scopri:target -- --max-target=${DISCOVERY_MAX_TARGET}

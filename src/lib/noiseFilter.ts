@@ -20,27 +20,18 @@
  *      del sito contiene la parola «interpelli».
  *
  * Un testo senza segnali NON è giudicato qui: decide lo scoring a valle. Zero
- * dipendenze, regex precompilate, lavoro limitato a `MAX_SCAN_CHARS`: la stessa
- * verità per `discovery-engine`, `table-reporter`, ingestion e guardia
- * (`npm run test:noise-filter`, in `npm test`).
+ * dipendenze ESTERNE: le regex viaggiano in due moduli sorelli puri — i tipi
+ * (`noiseFilterTipi.ts`) e la vita sindacale (`noiseFilterSindacale.ts`, §26.91)
+ * — così questo file resta sotto la soglia di attenzione dei 250 righe
+ * (`npm run test:architettura`). Regex precompilate, lavoro limitato a
+ * `MAX_SCAN_CHARS`: la stessa verità per `discovery-engine`, `table-reporter`,
+ * ingestion e guardia (`npm run test:noise-filter`, in `npm test`).
  */
+import { PATTERN_VITA_SINDACALE } from './noiseFilterSindacale.ts';
+import type { NoisePattern, NoiseVerdict } from './noiseFilterTipi.ts';
 
-/** Esito del pre-filtro: con `isNoise` true la voce si scarta subito. */
-export interface NoiseVerdict {
-  isNoise: boolean;
-  /** Segnale che ha deciso, in forma leggibile (presente solo se `isNoise`). */
-  reason?: string;
-}
-
-/** Segnale negativo con l'etichetta che finisce nei log e nei test. */
-export interface NoisePattern {
-  re: RegExp;
-  reason: string;
-  /** Atto di gara/previdenza: blocca anche un generico «avviso di selezione». */
-  hard?: boolean;
-  /** Pagina INFORMATIVA: salva solo con titolo SPECIFICO + finestra (§26.82). */
-  informativa?: boolean;
-}
+/** I tipi restano importabili da qui: la superficie pubblica non cambia. */
+export type { NoisePattern, NoiseVerdict } from './noiseFilterTipi.ts';
 
 /** Quanti caratteri si analizzano: oltre, si legge una pagina, non l'atto. */
 const MAX_SCAN_CHARS = 20_000;
@@ -69,7 +60,11 @@ export const ADMIN_NOISE_PATTERNS: readonly NoisePattern[] = [
   { re: /uscit[ae]\s+didattic/i, reason: 'uscita didattica' },
   { re: /orari[oi]\s+scolastic/i, reason: 'orario scolastico' },
   { re: /organi\s+collegiali/i, reason: 'elezione degli organi collegiali' },
-  { re: /assemble[ae].{0,20}sindacal/i, reason: 'assemblea sindacale' },
+
+  // --- Vita sindacale (§26.91) — regole in `noiseFilterSindacale.ts` ---
+  // SOFT: un interpello che descrive l'assemblea di domani si salva con
+  // l'indicatore di reclutamento; un titolo di sciopero non ne ha e cade subito.
+  ...PATTERN_VITA_SINDACALE,
 
   // --- Burocrazia del personale e previdenza (bloccanti) ---
   { re: /ricostruzione\s+(?:di\s+|della\s+)?carriera/i, reason: 'ricostruzione della carriera', hard: true },

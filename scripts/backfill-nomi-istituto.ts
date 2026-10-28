@@ -1,33 +1,8 @@
 /**
  * ScuoleRadar.it — Manutenzione DATI: BACKFILL del nome istituto sulle righe ESISTENTI.
  *
- * Perché serve: lo scraper inserisce con `ignoreDuplicates` sull'`hash_id`
- * (`provincia|titolo|scadenza`), che NON contiene il nome della scuola. Una volta che
- * un avviso è in tabella, un nuovo run dello scraper non lo aggiorna più: le righe
- * salvate PRIMA della correzione dell'estrazione (`scuolaDaRiga`) restano senza nome,
- * il gate di vetrina (`preparaRigheBoard`) le scarta e la bacheca resta corta e
- * mono-banda (§26.22/§26.23 di docs/SYSTEM_HANDOVER.md).
- *
- * Qui si colma SOLO quel buco, sulle righe che possono entrare in bacheca (scadenza
- * non passata), in ordine rigoroso di affidabilità:
- *   1. nome ricavato dal TITOLO con lo stesso parser dello scraper (`estraiScuola`);
- *   2. nome che la FONTE pubblica accanto al codice meccanografico (`scuolaDaRiga`,
- *      pagina `source_url`, al massimo un fetch per pagina);
- *   3. registro scuole per codice (`nomeScuolaDaCodice`).
- *
- * Regole rispettate:
- *  · non si sovrascrive MAI un nome già presentabile (`nomeIstitutoPresentabile`);
- *  · niente inventato: se nessuna delle tre strade supera il gate la riga resta com'è
- *    e finisce fra le «non risolte» (mai un'etichetta di materia in `school_name`);
- *  · si scrivono SOLO `school_name` e — se mancava — `school_code`: titolo, date,
- *    link e classi non vengono toccati;
- *  · dry-run per default, `--apply` per scrivere (service role), `--max-fetch=N` per
- *    limitare le richieste alle fonti regionali.
- *
- * Uso:
- *   npm run dati:backfill-scuole                  # dry-run (mostra cosa cambierebbe)
- *   npm run dati:backfill-scuole -- --apply       # applica le modifiche
- *   npm run dati:backfill-scuole -- --max-fetch=15
+ * Utilizza l'anagrafica ufficiale e i resolver per riempire i campi scuola mancanti
+ * sulle righe esistenti, preservando il rigore del gate di vetrina.
  */
 
 import process from 'node:process';
@@ -136,10 +111,6 @@ async function main(): Promise<void> {
     modificate.push({ ...riga, ...patch });
   }
 
-  // ── Impatto in bacheca: `preparaRigheBoard` mostra solo righe con scadenza VALIDA
-  // (dentro l'orizzonte di candidatura, §26.82) e con un nome d'istituto reale
-  // (`nomeScuolaRiga`): qui si contano le righe che dopo il backfill hanno entrambe
-  // le cose, con il semaforo unico di `lib/scadenzaSemaforo.stileScadenza`.
   const visibili = modificate.filter(
     (r) =>
       eOpportunitaConScadenza(r.expiration_date, oggi) &&
@@ -153,7 +124,7 @@ async function main(): Promise<void> {
 
   console.log('\n— Esito —');
   console.log(`  · nome già presentabile (non toccate): ${conteggi.giaOk}`);
-  console.log(`  · corrette dal titolo:   ${conteggi.titolo}`);
+  console.log(`  · corrette dal titolo:    ${conteggi.titolo}`);
   console.log(`  · corrette dalla fonte:  ${conteggi.fonte}`);
   console.log(`  · corrette dal registro: ${conteggi.registro}`);
   console.log(`  · NON risolte (restano fuori bacheca): ${conteggi.nonRisolte}`);
@@ -175,17 +146,17 @@ async function main(): Promise<void> {
     for (const r of visibili.slice(0, 12)) {
       const u = stileScadenza(giorniRimanenti(r.expiration_date, oggi));
       console.log(
-        `   · [${r.province ?? '--'}] ${r.school_name} · ${u.label} · ${(r.expiration_date ?? '').slice(0, 10)}`,
+        `    · [${r.province ?? '--'}] ${r.school_name} · ${u.label} · ${(r.expiration_date ?? '').slice(0, 10)}`,
       );
     }
-    if (visibili.length > 12) console.log(`   … e altre ${visibili.length - 12}`);
+    if (visibili.length > 12) console.log(`    … e altre ${visibili.length - 12}`);
   }
   if (nonRisolte.length > 0) {
     console.log("\n  Righe non risolte (nessun nome d'istituto ricavabile, invariate):");
     for (const r of nonRisolte.slice(0, 8)) {
-      console.log(`   · [${r.province ?? '--'}] ${(r.title ?? '').slice(0, 78)}`);
+      console.log(`    · [${r.province ?? '--'}] ${(r.title ?? '').slice(0, 78)}`);
     }
-    if (nonRisolte.length > 8) console.log(`   … e altre ${nonRisolte.length - 8}`);
+    if (nonRisolte.length > 8) console.log(`    … e altre ${nonRisolte.length - 8}`);
   }
   console.log(
     apply

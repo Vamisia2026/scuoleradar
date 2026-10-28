@@ -18,9 +18,10 @@
  * non dichiara una scadenza la riga NON entra nel tabellone (§26.71), quindi il
  * caso «Scadenza n/d» non è più raggiungibile in vetrina. La data di
  * pubblicazione NON è una scadenza e non compare in questa colonna.
- * Palette: SOLO badge pieni ad alto contrasto (rose-700 < 24h · orange-800 24–72h ·
+ * Palette: SOLO badge pieni ad alto contrasto (rose-700 < 24h · yellow-700 24–72h ·
  * emerald-700 in corso, ardesia per scaduto o fuori finestra) su testo bianco;
- * nessuna tinta pastello e nessun giallo/ambra nel tabellone (§26.89).
+ * nessuna tinta pastello; il giallo oro `yellow-700` è ammesso solo a 4,92:1
+ * sul bianco (§26.97), i gialli chiari no (§26.88, §26.89).
  */
 import { ExternalLink } from 'lucide-react';
 import { nomeScuolaRiga, titoloLeggibile } from '@/lib/liveBoard';

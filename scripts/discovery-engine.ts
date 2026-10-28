@@ -13,6 +13,12 @@
 // non invia MAI notifiche: nessun import del notifier, nessuna chiamata a
 // Telegram o Resend. La consegna vive in `scripts/process-notifications.ts`
 // (`npm run notifiche:processa`), che consuma `public.notification_queue`.
+//
+// USO: `npm run scopri:target` (nessun tetto) oppure
+//      `npx tsx scripts/discovery-engine.ts --max-target=120 [--provincia=RM]
+//      [--ignora-quarantena]`. Il tetto serve ai giri automatici: la coda
+//      nazionale è di decine di migliaia di righe e un giro senza limite non
+//      finisce dentro il timeout del runner.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import * as cheerio from 'cheerio';
@@ -1129,11 +1135,21 @@ async function runDiscoveryEngine(): Promise<void> {
   const ignoraQuarantena =
     args.includes('--ignora-quarantena') ||
     process.env.IGNORA_QUARANTENA === '1';
+  // `--max-target=N` (2026-10-26): tetto ai target processati in un giro. Il
+  // motore consuma `pending` in cicli da 40 finché la coda non è vuota: con la
+  // coda nazionale (oltre 14.000 righe) un giro senza tetto non finisce mai e il
+  // runner lo interrompe a metà, senza riepilogo. Default 0 = nessun tetto
+  // (comportamento storico dei lanci manuali).
+  const maxTargetArg = Number(
+    args.find((a) => a.startsWith('--max-target='))?.split('=')[1] ?? '0',
+  );
+  const maxTarget =
+    Number.isFinite(maxTargetArg) && maxTargetArg > 0 ? Math.floor(maxTargetArg) : Infinity;
 
   console.log(
     `[discovery-engine] Avvio BFS${
       provinceArg ? ` (provincia=${provinceArg})` : ''
-    }...`
+    }${Number.isFinite(maxTarget) ? ` (max ${maxTarget} target)` : ''}...`
   );
 
   // UNA query per run: le fonti isolate non consumano richieste.
@@ -1150,10 +1166,11 @@ async function runDiscoveryEngine(): Promise<void> {
   let totalProcessed = 0;
   let emptyRounds = 0;
 
-  while (true) {
+  while (totalProcessed < maxTarget) {
     let targets: Target[];
+    const batch = Math.min(BATCH_SIZE, maxTarget - totalProcessed);
     try {
-      targets = await fetchPendingTargets(BATCH_SIZE, provinceArg, quarantena);
+      targets = await fetchPendingTargets(batch, provinceArg, quarantena);
     } catch (err) {
       console.error(
         `[discovery-engine] Errore lettura coda: ${
@@ -1179,6 +1196,9 @@ async function runDiscoveryEngine(): Promise<void> {
     );
 
     for (const t of targets) {
+      // Tetto del giro: si esce senza toccare il target successivo, così la
+      // riga resta `pending` e il prossimo giro la riprende da dove si è fermato.
+      if (totalProcessed >= maxTarget) break;
       try {
         await processTarget(t);
         totalProcessed++;
@@ -1224,7 +1244,10 @@ async function runDiscoveryEngine(): Promise<void> {
   }
 
   console.log(
-    `[discovery-engine] Scansione completata. Target processati: ${totalProcessed}.`
+    `[discovery-engine] Scansione completata. Target processati: ${totalProcessed}.` +
+      (Number.isFinite(maxTarget) && totalProcessed >= maxTarget
+        ? ` Tetto del giro raggiunto (${maxTarget}): i target restanti restano in coda.`
+        : '')
   );
 }
 

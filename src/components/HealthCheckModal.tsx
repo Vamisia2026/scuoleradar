@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
 import { Modal } from '@/components/Modal';
+import { CrawlerTelemetry } from '@/components/CrawlerTelemetry';
 import { eseguiHealthCheck, type HealthCheckResult } from '@/services/healthCheck';
 import { supabase } from '@/lib/supabase';
 import {
@@ -206,6 +207,9 @@ export function HealthCheckModal({ open, onClose }: { open: boolean; onClose: ()
             ))}
           </div>
         )}
+
+        {/* Crawler Telemetry (§26.97): coda di scansione + trigger manuale */}
+        <CrawlerTelemetry />
 
         {/* Gestione rapida Promo Codes / Coupons */}
         <section className="rounded-lg border border-primary-100 bg-white p-2">

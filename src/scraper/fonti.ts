@@ -27,6 +27,7 @@ import { province } from '../data/province.ts';
 import { AGGREGATORI_REGIONALI, HUB_ATTIVI, HUB_ESCLUSI } from './fontiRegistro.ts';
 import { DATA_VERIFICA_TERRITORI, HUB_TERRITORIALI } from './fontiTerritoriali.ts';
 import { HUB_ESCLUSI_VERIFICA } from './fontiEsclusiVerifica.ts';
+import { FONTI_WHITELIST_2610 } from './fontiWhitelist2610.ts';
 import type { FonteInterpelli, TipoFonte } from './fontiTipi.ts';
 
 // I tipi restano importabili da qui (superficie pubblica invariata): la forma
@@ -137,6 +138,9 @@ export const FONTI_INTERPELLI: FonteInterpelli[] = [
     verificata: null,
     note,
   })),
+  // Whitelist UST/USR verificata il 26/10/2026 (blocco autonomo in
+  // `fontiWhitelist2610.ts`: 85 fonti attive + 27 spente con il motivo).
+  ...FONTI_WHITELIST_2610,
 ];
 
 /* ----------------------------- Selezione fonti ----------------------------- */

@@ -208,7 +208,7 @@ check(
   'import solo dai moduli condivisi',
   true,
   (sorgente.match(/^import .*$/gm) ?? []).every((riga) =>
-    /from '\.\/(?:noiseFilter|pdfDeterminist|universalHtml)'/.test(riga),
+    /from '\.\/(?:noiseFilter|pdfDeterminist|universalElenchi|universalHtml)'/.test(riga),
   ),
 );
 

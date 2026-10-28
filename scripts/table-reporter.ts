@@ -102,7 +102,68 @@ import { isAdministrativeNoise } from '../src/lib/noiseFilter.ts';
 // Lettura euristica universale (§26.84): layout e voci della pagina così come
 // li vede un lettore che non conosce il portale — il segnale di quarantena per
 // le sorgenti che nessun parser specifico spiega.
-import { parseUniversalHtml } from '../src/lib/universalEuristica.ts';
+import {
+  parseUniversalHtml,
+  type ExtractedInterpello,
+  type UniversalExtractionResult,
+} from '../src/lib/universalEuristica.ts';
+// Whitelist nazionale (§26.93): le fonti verificate del registro (hub USR/USP di
+// ogni regione) diventano target del giro `--nazionale`, senza aspettare che la
+// coda `discovered_links` sia stata seminata a mano.
+import { targetWhitelist } from '../src/scraper/whitelistTargets.ts';
+// Nome dell'istituto scritto dalla fonte accanto al codice: serve alla lettura
+// adattiva degli elenchi, dove la scuola è nel titolo dell'avviso.
+import { scuolaDaRiga } from '../src/scraper/scuolaDaRiga.ts';
+// `schools_master` (§26.88): codice meccanografico → istituto CERTIFICATO
+// dall'anagrafica MIM (nome, PEO/PEC, `SITOWEBSCUOLA`). Serve alla lettura
+// profonda delle tabelle UST, dove la fonte scrive un codice e un nome
+// abbreviato; senza certificazione la riga non entra (meglio nessun avviso che
+// un avviso di una scuola che non esiste).
+import { caricaAnagrafica } from '../src/lib/anagraficaIndice.ts';
+import {
+  scuolaCertificata,
+  scuoleDaTesto,
+  urlUfficiale,
+  urlVerificabile,
+  type ScuolaCertificata,
+} from '../src/lib/scuoleMaster.ts';
+// §26.94, §26.96 — la scadenza DICHIARATA nel testo dell'avviso si legge con
+// `campiDocumento`, che a sua volta usa `lib/scadenzaTesto` (etichetta
+// obbligatoria): quando la tabella o l'elenco non la riportano, la si cerca nel
+// corpo del documento prima di scartare una riga valida come «senza scadenza».
+import { testo as testoHtml } from '../src/lib/universalHtml.ts';
+// §26.94 — deep crawl degli istituti: dalla scuola certificata alla sua HOME
+// ufficiale, poi ai link «Interpelli / Albo» che la scuola pubblica davvero.
+import { leggiPagineInterpelli } from '../src/scraper/deepCrawlScuole.ts';
+import { linkAllegatiInterpello } from '../src/scraper/linkScuola.ts';
+// §26.96 — ALLEGATI su piattaforma documentale (Gecodoc, Argo, Nuvola/Spaggiari):
+// un `.pdf` servito da quelle piattaforme È l'avviso (la pagina di login no), e
+// quando la piattaforma risponde con un viewer il PDF va cercato dentro.
+import {
+  eAllegatoPiattaforma,
+  urlDocumentoInHtml,
+} from '../src/scraper/allegatiPiattaforma.ts';
+// §26.96 — i cinque campi che il DOCUMENTO dichiara (classi, codice, provincia,
+// scadenza, recapiti): la pagina-elenco spesso non li ha.
+import { campiDaDocumento } from '../src/scraper/campiDocumento.ts';
+// §26.96 — vicolo cieco su una bacheca di piattaforma: dal codice meccanografico
+// dell'URL alla home istituzionale, senza inventare né URL né province.
+import { meritaFallback } from '../src/scraper/fallbackPiattaforma.ts';
+// La piattaforma di un host (Argo, Nuvola, Spaggiari, ClasseViva, Gecodoc): serve
+// a distinguere un viewer che contiene il PDF da una pagina qualsiasi.
+import { piattaformaScolastica } from '../src/lib/piattaformeLink.ts';
+// §26.95 — gli allegati sono PDF: si legge il TESTO (stream compressi + CMap
+// `/ToUnicode`) delle prime pagine. Senza questo, «senza scadenza» è un limite
+// del lettore, non un dato che manca.
+import { MAX_BYTE_PDF, estraiTestoPdf } from '../src/scraper/pdfTesto.ts';
+// Lettura PROFONDA delle tabelle non mappabili + gate semantico stretto
+// (`scraper/tabellaUst.ts`): scioperi, assemblee, avvisi chiusi, graduatorie e
+// righe senza scadenza dichiarata non diventano opportunità.
+import {
+  leggiRigheTabellaUst,
+  scadenzaDaRiga,
+  valutaRigaUst,
+} from '../src/scraper/tabellaUst.ts';
 // Telemetria delle fonti (§26.85): ogni run lascia un segno e una fonte che
 // sbaglia tre volte di fila finisce in QUARANTENA, dove i giri ordinari la
 // saltano. `source_health` non raggiungibile → elenco vuoto, si scansiona
@@ -143,18 +204,119 @@ const CONFIG = {
 // una riga senza scadenza DICHIARATA si scarta: la colonna «Scadenza» del
 // tabellone deve potere essere sempre vera.
 
-// Filtro regioni opzionale (case-insensitive): `--regioni=Piemonte,Liguria`
-// oppure variabile d'ambiente `REGIONI=Piemonte,Liguria`. Vuoto = tutte.
+// VERSIONE v17 (26/10/2026) — INGESTIONE NAZIONALE (§26.93):
+//   • `--nazionale` (o `NATIONALE=1`): giro su TUTTE le regioni — la coda
+//     `discovered_links` PIÙ gli hub USR/USP verificati del registro fonti
+//     (`src/scraper/fonti.ts`), deduplicati per URL. `--regioni` diventa un
+//     filtro per SOTTOSTRINGA normalizzata: «Valle» trova «Valle d'Aosta».
+//   • Lettore ADATTIVO: dove non c'è una `<table>` (liste `<li>`, card, post
+//     WordPress, archivi paginati) le voci si leggono con l'euristica universale
+//     e diventano record SOLO con una scadenza DICHIARATA (§26.75).
+//   • Un elenco riconosciuto ma senza scadenze NON disattiva più il target:
+//     una fonte viva che oggi non pubblica un termine non è una fonte rotta.
+//   • Errori classificati (dns · tls · timeout · 5xx · 4xx · non-HTML) con UN
+//     ritentativo sui guasti transitori; il riepilogo per regione distingue
+//     record estratti, scarti oltre l'orizzonte, voci senza scadenza ed errori
+//     con la causa. Un giro nazionale in dry-run chiude con exit 0.
+//
+// VERSIONE v19 (26/10/2026) — ALLEGATI PDF LETTI, ALBI VERIFICATI IN CODA (§26.95):
+//   • Motore PDF senza dipendenze nuove (`src/scraper/pdfTesto.ts`): stream
+//     `FlateDecode`, font Identity-H con CMap `/ToUnicode`, operatori `Tj`/`TJ`.
+//     Il termine scritto nell'allegato («entro le ore 12:00 del 12/11/2026») non
+//     va più perso perché il documento non è HTML.
+//   • Ogni pagina «Interpelli / Albo» VERIFICATA su un istituto (stesso dominio
+//     della home certificata e con almeno una voce d'interpello dentro) viene
+//     iscritta in `discovered_links` come `active_crawler`: il giro successivo la
+//     legge come target, senza riscoprirla.
+//
+// VERSIONE v18 (26/10/2026) — CODA ATTIVA, DEEP CRAWL, SCADENZA DAL CORPO (§26.94):
+//   • `--attiva` / `--disabilita-morti` nel seminatore della whitelist: le fonti
+//     verificate passano da `pending` a `active_crawler` (entrano nei giri del
+//     runner) e i domini NXDOMAIN vengono spenti con motivazione.
+//   • Deep crawl degli istituti: le scuole CITATE negli avvisi vengono risolte
+//     sull'anagrafica MIM e visitate sulla loro home, alla ricerca della pagina
+//     «Interpelli / Albo» che la scuola linka davvero (`deepCrawlScuole.ts`).
+//   • Scadenza dal CORPO dell'avviso: quando né la tabella né l'elenco la
+//     dichiarano, il documento viene letto e il termine cercato con le forme
+//     italiane standard («entro le ore … del», «termine per la presentazione
+//     delle domande», «non oltre il», «a pena di esclusione») — con un tetto di
+//     richieste per target e per giro. Una data di pubblicazione resta esclusa.
+//
+// Filtro regioni opzionale: `--regioni=Piemonte,Liguria`, `--regioni=Valle`
+// oppure variabile d'ambiente `REGIONI=…`. Vuoto = tutte le regioni.
+//
+// §26.93 — il confronto è per SOTTOSTRINGA normalizzata (minuscolo, senza
+// accenti né punteggiatura): «Valle» trova «Valle d'Aosta», «emilia romagna»
+// trova «Emilia-Romagna». Prima era un'uguaglianza esatta sulla stringa
+// minuscola, e un nome parziale non selezionava NESSUN target (trappola muta).
+function normalizzaRegione(nome: string): string {
+  return (nome ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
 const REGIONI_FILTRO: string[] = (() => {
   const arg = process.argv.find((a) => a.startsWith('--regioni='));
-  const raw = arg
-    ? arg.slice('--regioni='.length)
-    : process.env.REGIONI ?? '';
-  return raw
-    .split(',')
-    .map((r) => r.trim().toLowerCase())
-    .filter(Boolean);
+  const raw = arg ? arg.slice('--regioni='.length) : process.env.REGIONI ?? '';
+  return raw.split(',').map(normalizzaRegione).filter(Boolean);
 })();
+
+/** True se la regione del target rientra nel filtro (vuoto = tutte). */
+function regioneCorrisponde(regione: string | null): boolean {
+  if (REGIONI_FILTRO.length === 0) return true;
+  const r = normalizzaRegione(regione ?? '');
+  if (!r) return false;
+  return REGIONI_FILTRO.some((filtro) => r.includes(filtro) || filtro.includes(r));
+}
+
+// `--nazionale` (o `NATIONALE=1`): GIRO NAZIONALE — tutti i target attivi di
+// `discovered_links` di ogni regione PIÙ gli hub USR/USP verificati della
+// whitelist (`src/scraper/fonti.ts`), deduplicati per URL. Ignora `--regioni`.
+const NAZIONALE =
+  process.argv.includes('--nazionale') || process.env.NATIONALE === '1';
+
+// `--max-per-regione=N` (o `MAX_PER_REGIONE=N`): campione per la verifica
+// nazionale — N target per regione, 0 = tutti. Serve a provare il giro su tutto
+// il Paese senza scaricare 100+ portali in un colpo solo.
+const MAX_PER_REGIONE = (() => {
+  const arg = process.argv.find((a) => a.startsWith('--max-per-regione='));
+  const n = Number(arg?.split('=')[1] ?? process.env.MAX_PER_REGIONE ?? 0);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+})();
+
+// §26.94 — DEEP CRAWL degli istituti: quante scuole visitare in un giro
+// (`--max-scuole=N`, 0 = nessuna) e quante pagine per istituto. Il tetto esiste
+// perché un albo pretorio può essere enorme: due pagine per scuola sono già
+// ~180 richieste su un giro nazionale.
+const MAX_SCUOLE_DEEP = (() => {
+  const arg = process.argv.find((a) => a.startsWith('--max-scuole='));
+  const n = Number(arg?.split('=')[1] ?? process.env.MAX_SCUOLE ?? 60);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 60;
+})();
+const DEEP_CRAWL = !process.argv.includes('--no-deep') && MAX_SCUOLE_DEEP > 0;
+const MAX_PAGINE_SCUOLA = 2;
+
+// §26.94/§26.95 — scadenze lette nel CORPO di un avviso quando l'elenco non la
+// dichiara: tetto per target e per giro (è rete, non parsing). Dal 26/10/2026 il
+// corpo comprende gli ALLEGATI PDF, quindi le riserve si possono alzare senza
+// toccare il numero di target: `APPROFONDIMENTI_RUN` / `APPROFONDIMENTI_SCUOLE_RUN`.
+const MAX_APPROFONDIMENTI_TARGET = 10;
+function riservaDaAmbiente(chiave: string, predefinito: number): number {
+  const n = Number(process.env[chiave] ?? predefinito);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : predefinito;
+}
+const MAX_APPROFONDIMENTI_RUN = riservaDaAmbiente('APPROFONDIMENTI_RUN', 200);
+const MAX_APPROFONDIMENTI_SCUOLE_RUN = riservaDaAmbiente('APPROFONDIMENTI_SCUOLE_RUN', 180);
+const APPROFONDIMENTO_TIMEOUT_MS = 10_000;
+/** Riserve separate: il deep crawl non consuma quella del giro sugli hub. */
+let approfondimentiTarget = MAX_APPROFONDIMENTI_RUN;
+let approfondimentiScuole = MAX_APPROFONDIMENTI_SCUOLE_RUN;
+
+/** §26.95 — allegati PDF aperti nel giro: letti, con testo, con scadenza. */
+const statisticaPdf = { aperti: 0, conTesto: 0, conScadenza: 0 };
 
 // `--dry-run` (o `DRY_RUN=1`): esegue fetch ed estrazione e stampa i record
 // trovati, senza scrivere su Supabase. Serve a validare una correzione di
@@ -237,6 +399,16 @@ interface DiscoveredLink {
   region: string | null;
   province: string | null;
   status: string;
+  /** Da dove arriva il target: coda DB oppure whitelist in memoria (§26.93). */
+  origine?: 'db' | 'whitelist';
+  /**
+   * §26.94 — la riga del DB corrisponde a una fonte VERIFICATA del registro
+   * (`fonti.ts`). Una fonte verificata non si disattiva per un giro a vuoto: il
+   * suo stato lo decide il registro, non l'assenza di record di oggi.
+   */
+  verificata?: boolean;
+  /** Etichetta della fonte nel registro (solo whitelist). */
+  etichetta?: string;
 }
 
 interface InterpelloRecord {
@@ -270,6 +442,60 @@ interface ProcessResult {
   noise?: boolean;
   /** Layout della pagina secondo l'euristica universale (§26.84). */
   layout?: string;
+  /** Righe/voci scartate perché la scadenza è oltre l'orizzonte (§26.75). */
+  oltreOrizzonte?: number;
+  /** Voci di elenco lette dalla pagina ma senza scadenza dichiarata (§26.93). */
+  senzaScadenza?: number;
+  /** Voci lette dal lettore adattivo (elenchi/card/paginazione). */
+  vociAdattive?: number;
+  /** Scadenze recuperate leggendo il CORPO dell'avviso (§26.94). */
+  scadenzeDaCorpo?: number;
+  /** Codici meccanografici degli istituti citati: alimentano il deep crawl. */
+  scuole?: string[];
+  /** Causa classificata di un errore: serve al riepilogo nazionale. */
+  cause?: CausaErrore;
+}
+
+/**
+ * Cause di un target non letto. Servono a distinguere un guasto del MONDO
+ * (dominio morto, TLS sbagliato, 503) da un problema di PARSER: nel riepilogo
+ * nazionale la prima colonna che conta è «perché».
+ */
+type CausaErrore =
+  | 'dns'
+  | 'tls'
+  | 'timeout'
+  | 'http_5xx'
+  | 'http_4xx'
+  | 'content_type'
+  | 'rete'
+  | 'altro';
+
+/** Etichetta leggibile di una causa (log e riepilogo). */
+const ETICHETTA_CAUSA: Readonly<Record<CausaErrore, string>> = {
+  dns: 'dominio non risolto',
+  tls: 'certificato TLS non valido',
+  timeout: 'timeout di rete',
+  http_5xx: 'errore del server (5xx)',
+  http_4xx: 'pagina non trovata (4xx)',
+  content_type: 'risposta non HTML',
+  rete: 'connessione fallita',
+  altro: 'errore non classificato',
+};
+
+/** Classifica un errore di fetch/HTTP senza dipendere dal testo esatto di Node. */
+function causaDaErrore(messaggio: string): CausaErrore {
+  if (/ENOTFOUND|EAI_AGAIN|getaddrinfo|name_not_resolved/i.test(messaggio)) return 'dns';
+  if (/CERT_|certificate|self.signed|ERR_TLS|SSL|TLS/i.test(messaggio)) return 'tls';
+  if (/abort|timed?\s?out|ETIMEDOUT|UND_ERR_(?:HEADERS|CONNECT)_TIMEOUT/i.test(messaggio)) {
+    return 'timeout';
+  }
+  if (/ECONNREFUSED|ECONNRESET|EHOSTUNREACH|ENETUNREACH|fetch failed|socket hang up/i.test(messaggio)) {
+    return 'rete';
+  }
+  const http = /HTTP\s+(\d{3})/i.exec(messaggio);
+  if (http) return Number(http[1]) >= 500 ? 'http_5xx' : 'http_4xx';
+  return 'altro';
 }
 
 interface ExtractionResult {
@@ -282,6 +508,12 @@ interface ExtractionResult {
    * rifetchare il target (FIX v16, §26.80).
    */
   righeSenzaAzione?: number;
+  /** Righe scartate perché la scadenza è oltre l'orizzonte di vetrina. */
+  oltreOrizzonte?: number;
+  /** Voci lette dal lettore adattivo (elenchi/card), se è stato usato. */
+  vociAdattive?: number;
+  /** Voci di elenco senza scadenza dichiarata: nessun record, nessuno scarto. */
+  senzaScadenza?: number;
 }
 
 interface ColumnMapping {
@@ -921,7 +1153,11 @@ interface FetchResult {
   html: string;
 }
 
-async function fetchHtml(url: string): Promise<FetchResult> {
+/** Tentativi di rete per target: un 5xx/timeout isolato non è un target morto. */
+const TENTATIVI_FETCH = 2;
+const ATTESA_FETCH_MS = 1_200;
+
+async function fetchHtmlUnaVolta(url: string): Promise<FetchResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), CONFIG.fetchTimeoutMs);
 
@@ -943,6 +1179,29 @@ async function fetchHtml(url: string): Promise<FetchResult> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Fetch con UN ritentativo sui guasti transitori (5xx, timeout, DNS, TLS).
+ *
+ * §26.93 — un giro nazionale tocca decine di portali: senza ritentativo un 503
+ * di dieci secondi faceva sembrare «morta» una fonte che risponde al secondo
+ * colpo, e il riepilogo attribuiva l'errore al parser. Un 4xx NON si ritenta:
+ * la pagina non c'è, insistere è solo rumore.
+ */
+async function fetchHtml(url: string): Promise<FetchResult> {
+  let ultimo: unknown = null;
+  for (let tentativo = 1; tentativo <= TENTATIVI_FETCH; tentativo += 1) {
+    try {
+      const esito = await fetchHtmlUnaVolta(url);
+      if (esito.status < 500 || tentativo === TENTATIVI_FETCH) return esito;
+      ultimo = new Error(`HTTP ${esito.status}`);
+    } catch (err) {
+      ultimo = err;
+    }
+    if (tentativo < TENTATIVI_FETCH) await attesa(ATTESA_FETCH_MS);
+  }
+  throw ultimo instanceof Error ? ultimo : new Error(String(ultimo));
 }
 
 // ---------------------------------------------------------------------------
@@ -1182,10 +1441,528 @@ function extractRecordsFromLiguriaGrid(
   return { records, disqualified: false };
 }
 
-function extractRecordsFromHtml(
+// ---------------------------------------------------------------------------
+// LETTURA PROFONDA DELLE TABELLE (§26.88)
+// ---------------------------------------------------------------------------
+
+/** Conta uno scarto della lettura profonda, per motivo (il report lo stampa). */
+function contaIneleggibile(motivi: Map<string, number>, motivo: string): void {
+  motivi.set(motivo, (motivi.get(motivo) ?? 0) + 1);
+}
+
+/**
+ * Righe di una pagina che NESSUNA mappatura di colonne spiega: tabelle degli UST
+ * (Arezzo, Grosseto) con intestazioni atipiche, celle unite, elenchi a sei-sette
+ * colonne, albi con la scadenza in fondo. Fino a ieri queste pagine finivano
+ * `disqualified` con zero avvisi, pur contenendo decine di interpelli veri.
+ *
+ * Qui la riga si legge con `scraper/tabellaUst.ts` (celle unite, etichette di
+ * colonna, link scelto fra quelli della riga), passa il GATE SEMANTICO STRETTO
+ * (`valutaRigaUst`) e viene CERTIFICATA sull'anagrafica MIM (`scuoleMaster`):
+ * nome presentabile, provincia dal codice, home `.edu.it`.
+ *
+ * PERCHÉ QUI SI PUÒ RISOLVERE LA SCUOLA E NEL GIRO ORDINARIO NO: queste righe non
+ * sono mai state ingerite (la pagina era `disqualified`), quindi non esiste un
+ * `hash_id` storico da rispettare. Nel giro ordinario `title`/`province`/
+ * `source_url` fanno parte dell'identità dell'avviso e cambiarli creerebbe
+ * duplicati (vedi `lib/scuoleMaster.ts` → `urlUfficiale`).
+ *
+ * §26.96 — LA RIGA SENZA SCADENZA SI LEGGE NEL DOCUMENTO. Quando la riga è
+ * candidabile ma non dichiara il termine, il link della riga (spesso un PDF su
+ * Gecodoc/Argo) si apre con `leggiAvvisoCompleto`: se il documento scrive «entro
+ * il …», la riga diventa un record, e le classi lette nel PDF completano quelle
+ * della tabella. Tetto `MAX_DOCUMENTI_UST` per pagina: è rete, non parsing.
+ */
+/**
+ * §26.96 — quante righe di tabella, prive di scadenza, si approfondiscono sul
+ * DOCUMENTO linkato (tabella d'albo → PDF su Gecodoc/Argo). È rete: tetto basso e
+ * per giro, come gli altri approfondimenti.
+ */
+const MAX_DOCUMENTI_UST = 6;
+
+function extractRecordsFromUstTables(
   $: cheerio.CheerioAPI,
   target: DiscoveredLink
-): ExtractionResult {
+): Promise<InterpelloRecord[]> {
+  return leggiTabelleUst($, target);
+}
+
+async function leggiTabelleUst(
+  $: cheerio.CheerioAPI,
+  target: DiscoveredLink
+): Promise<InterpelloRecord[]> {
+  const anagrafica = caricaAnagrafica();
+  const defaultProvince = (target.province || CONFIG.fallbackProvince).toUpperCase();
+  const urlProvince = extractProvinceFromUrl(target.url);
+  const motivi = new Map<string, number>();
+  const records: InterpelloRecord[] = [];
+  const visti = new Set<string>();
+  let documentiLetti = 0;
+
+  for (const riga of leggiRigheTabellaUst($, target.url)) {
+    const esito = valutaRigaUst(riga);
+    if (esito.stato !== 'candidabile') {
+      contaIneleggibile(motivi, esito.motivo ?? 'scarto senza motivo');
+      continue;
+    }
+
+    const codice = esito.codice === 'ND' ? null : esito.codice;
+    const scuola = scuolaCertificata(anagrafica, {
+      codice,
+      nome: esito.scuola,
+      provincia: defaultProvince,
+    });
+    if (!scuola) {
+      // Codice sconosciuto all'anagrafica o nome ambiguo: nessuna certificazione,
+      // nessun avviso. La riga resta fuori e il motivo finisce nel log.
+      contaIneleggibile(
+        motivi,
+        `scuola non certificata (${codice ?? esito.scuola ?? 'senza codice'})`
+      );
+      continue;
+    }
+
+    let deadline = esito.data;
+    let classi = esito.classi;
+    // §26.96 — la riga è candidabile ma non dichiara il termine: sulla tabella di
+    // Arezzo il termine (e la classe) stanno nel PDF linkato, spesso su Gecodoc.
+    // Si legge il DOCUMENTO, una volta per riga e con un tetto per pagina.
+    if (!deadline && esito.link && documentiLetti < MAX_DOCUMENTI_UST) {
+      documentiLetti += 1;
+      const documento = await leggiAvvisoCompleto(esito.link, 'target', defaultProvince);
+      deadline = documento.deadline ?? null;
+      if (classi.length === 0) classi = documento.classi;
+      if (!deadline) {
+        contaIneleggibile(motivi, 'documento senza scadenza dichiarata');
+        continue;
+      }
+    }
+
+    // `urlUfficiale`: il link della riga se è apribile, altrimenti la home
+    // dell'istituto (mai una pagina di login Argo/Nuvola spacciata per avviso).
+    const sourceUrl = urlUfficiale(esito.link, scuola);
+    if (!deadline || !sourceUrl) {
+      contaIneleggibile(motivi, 'riga senza scadenza o senza URL apribile');
+      continue;
+    }
+
+    const schoolCode = scuola.codice ?? codice ?? 'ND';
+    const schoolName = esito.scuola ?? scuola.nome ?? `Istituto ${schoolCode}`;
+    const province = isLikelyMechCode(schoolCode)
+      ? schoolCode.slice(0, 2).toUpperCase()
+      : scuola.provincia ?? urlProvince ?? defaultProvince;
+
+    // Il titolo porta l'OGGETTO della riga: sulla stessa scuola convivono più
+    // interpelli (classi diverse) e `hash_id` è costruito anche sul titolo.
+    const title = `${schoolName} - ${esito.titolo}`;
+    const hashId = generateHashId(province, schoolCode, title, sourceUrl);
+    if (visti.has(hashId)) continue;
+    visti.add(hashId);
+
+    const { classCode, subject } = extractSubjectAndClass(esito.testo);
+    records.push({
+      hash_id: hashId,
+      title,
+      school_name: schoolName,
+      school_code: schoolCode,
+      province,
+      region: target.region,
+      class_code: classi[0] ?? classCode,
+      subject,
+      deadline,
+      expiration_date: aExpirationDate(deadline),
+      source_url: sourceUrl,
+    });
+  }
+
+  if (records.length > 0 || motivi.size > 0) {
+    const scarti = [...motivi].map(([motivo, n]) => `${n}× ${motivo}`).join(' · ');
+    console.log(
+      `[table-reporter] Lettura profonda: ${records.length} righe valide${scarti ? ` — scarti: ${scarti}` : ''}`
+    );
+  }
+
+  return records;
+}
+
+// ---------------------------------------------------------------------------
+// LETTURA ADATTIVA DEGLI ELENCHI (§26.93)
+// ---------------------------------------------------------------------------
+
+interface EsitoAdattivo {
+  records: InterpelloRecord[];
+  oltreOrizzonte: number;
+  voci: number;
+  senzaScadenza: number;
+}
+
+/**
+ * Voci dell'euristica universale → record ingeribili.
+ *
+ * Serve ai portali che non hanno `<table>`: liste di `<li>`, card, `<article>`
+ * di WordPress, archivi paginati. Le regole sono quelle di sempre — la scadenza
+ * deve essere DICHIARATA (`expirationDate`, mai una data di pubblicazione), la
+ * scuola va CERTIFICATA sull'anagrafica MIM (codice o nome univoco) e l'URL
+ * deve essere apribile. Una voce senza scadenza non è un errore: è una notizia
+ * senza termine, e non entra.
+ */
+/**
+ * Voce adattiva + scadenza dichiarata → record ingeribile, `null` se la scuola
+ * non è certificabile, se manca un URL apribile o se è un duplicato del giro.
+ * Una sola traduzione: la usano sia la lettura della pagina sia il recupero
+ * della scadenza dal corpo dell'avviso (§26.94).
+ */
+function recordDaVoceAdattiva(
+  voce: ExtractedInterpello,
+  deadline: string,
+  target: DiscoveredLink,
+  anagrafica: ReturnType<typeof caricaAnagrafica>,
+  visti: Set<string>,
+  scuolaForzata?: ScuolaCertificata,
+  // §26.96 — classi lette DENTRO il documento quando l'elenco non le dichiara.
+  classiDocumento: string[] = [],
+): InterpelloRecord | null {
+  const defaultProvince = (target.province || CONFIG.fallbackProvince).toUpperCase();
+  const daCodice =
+    voce.schoolCode && isLikelyMechCode(voce.schoolCode) ? voce.schoolCode : null;
+  const dalTitolo = extractMechCode(`${voce.title} ${voce.schoolName ?? ''}`);
+  const codice = daCodice ?? (dalTitolo === 'ND' ? null : dalTitolo);
+  const nome =
+    voce.schoolName ?? scuolaDaRiga(`${voce.title} ${voce.schoolName ?? ''}`, codice);
+  const scuola =
+    scuolaForzata ??
+    scuolaCertificata(anagrafica, { codice, nome, provincia: defaultProvince });
+  // Nessuna certificazione → nessun avviso: mai una scuola inventata.
+  if (!scuola) return null;
+
+  const sourceUrl = urlUfficiale(voce.directUrl, scuola);
+  if (!sourceUrl) return null;
+
+  const schoolCode = scuola.codice ?? codice ?? 'ND';
+  const province = isLikelyMechCode(schoolCode)
+    ? schoolCode.slice(0, 2).toUpperCase()
+    : scuola.provincia ?? defaultProvince;
+  const title = normalize(voce.title);
+  const hashId = generateHashId(province, schoolCode, title, sourceUrl);
+  if (visti.has(hashId)) return null;
+  visti.add(hashId);
+
+  // §26.96 — se l'elenco non dichiara la classe ma il documento sì, vale quella:
+  // è il caso delle tabelle che linkano solo il PDF su Gecodoc/Argo.
+  const classi = voce.classCodes.length > 0 ? voce.classCodes : classiDocumento;
+  const { classCode, subject } = extractSubjectAndClass(`${title} ${classi.join(' ')}`);
+  const classCodeVoce = (classi[0] ?? '').replace(/[-_\s]/g, '');
+  return {
+    hash_id: hashId,
+    title,
+    school_name: scuolaForzata
+      ? scuola.nome ?? `Istituto ${schoolCode}`
+      : voce.schoolName ?? scuola.nome ?? `Istituto ${schoolCode}`,
+    school_code: schoolCode,
+    province,
+    region: target.region,
+    class_code: CLASS_CODE_SHAPE.test(classCodeVoce) ? classCodeVoce : classCode,
+    subject,
+    deadline,
+    expiration_date: aExpirationDate(deadline),
+    source_url: sourceUrl,
+  };
+}
+
+function recordsDaElencoAdattivo(
+  universale: UniversalExtractionResult | undefined,
+  target: DiscoveredLink
+): EsitoAdattivo {
+  const esito: EsitoAdattivo = { records: [], oltreOrizzonte: 0, voci: 0, senzaScadenza: 0 };
+  if (!universale?.success || universale.items.length === 0) return esito;
+
+  const anagrafica = caricaAnagrafica();
+  const visti = new Set<string>();
+
+  for (const voce of universale.items) {
+    esito.voci += 1;
+    const deadline = voce.expirationDate ?? null;
+    if (!deadline) {
+      esito.senzaScadenza += 1;
+      continue;
+    }
+    if (isExpired(deadline)) continue;
+    if (!entroOrizzonte(deadline)) {
+      esito.oltreOrizzonte += 1;
+      continue;
+    }
+
+    const record = recordDaVoceAdattiva(voce, deadline, target, anagrafica, visti);
+    if (record) esito.records.push(record);
+  }
+
+  if (esito.voci > 0) {
+    console.log(
+      `[table-reporter] Elenco adattivo (${universale.layoutDetected}): ${esito.voci} voci → ` +
+        `${esito.records.length} record (senza scadenza: ${esito.senzaScadenza}, ` +
+        `oltre orizzonte: ${esito.oltreOrizzonte}).`
+    );
+  }
+  return esito;
+}
+
+// ---------------------------------------------------------------------------
+// SCADENZA DAL CORPO DELL'AVVISO (§26.94)
+// ---------------------------------------------------------------------------
+// Una voce d'elenco senza termine non è per forza «senza scadenza»: spesso il
+// termine è nella pagina del documento («Le domande vanno presentate entro le
+// ore 12:00 del 12/11/2026»). Si scarica il documento — solo per le voci che
+// ne hanno bisogno, con un tetto per target e per giro — e si legge il testo
+// con le regole di `scadenzaTesto.ts` (etichetta obbligatoria, protocollo e
+// pubblicazione esclusi).
+
+/** Esito della lettura di un documento: termine, scuole CITATE, classi. */
+interface EsitoAvviso {
+  deadline: string | null;
+  scuole: ScuolaCertificata[];
+  /** §26.96 — classi di concorso DICHIARATE nel documento (vuoto se non le scrive). */
+  classi: string[];
+  /** True se il documento è stato scaricato (anche senza termine). */
+  letto: boolean;
+}
+
+/**
+ * §26.96 — scarica SOLO il documento annidato in un viewer di piattaforma
+ * (Gecodoc/Argo/Nuvola che rispondono con una pagina contenitore). `null` se non
+ * è un PDF raggiungibile: nessuna eccezione, nessun byte tenuto in memoria qui.
+ */
+async function scaricaDocumentoPdf(url: string): Promise<Response | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), APPROFONDIMENTO_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'User-Agent': CONFIG.userAgent,
+        Accept: 'application/pdf,*/*;q=0.4',
+      },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+    if (!response.ok) return null;
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+    return contentType.includes('pdf') ? response : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Apre un avviso e ne legge il testo: scadenza DICHIARATA e istituti CITATI.
+ * Non lancia mai; `letto: false` quando la riserva è esaurita, il documento non
+ * è né HTML né PDF, o non risponde. Dal 26/10/2026 gli allegati PDF si leggono
+ * (`pdfTesto.ts`): il termine è spesso solo lì.
+ */
+async function leggiAvvisoCompleto(
+  url: string,
+  da: 'target' | 'scuola' = 'target',
+  provincia?: string | null,
+): Promise<EsitoAvviso> {
+  const vuoto: EsitoAvviso = { deadline: null, scuole: [], classi: [], letto: false };
+  const residuo = da === 'scuola' ? approfondimentiScuole : approfondimentiTarget;
+  if (residuo <= 0) return vuoto;
+  if (da === 'scuola') approfondimentiScuole -= 1;
+  else approfondimentiTarget -= 1;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), APPROFONDIMENTO_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'User-Agent': CONFIG.userAgent,
+        Accept: 'text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.4',
+        'Accept-Language': 'it-IT,it;q=0.9',
+      },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+    if (!response.ok) return vuoto;
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+    if (contentType.includes('pdf') || /\.pdf(?:$|[?#])/i.test(url)) {
+      return await leggiAvvisoPdf(response, provincia);
+    }
+    if (!contentType.includes('html')) return vuoto;
+    const html = await response.text();
+    // §26.96 — la piattaforma documentale risponde con un VIEWER: il PDF sta
+    // dentro un `<iframe>`/`<embed>` (o in un link). UN salto, con la stessa
+    // riserva: se non c'è riserva, si resta alla pagina (niente sorprese di rete).
+    const residuoAnnidato = da === 'scuola' ? approfondimentiScuole : approfondimentiTarget;
+    if (piattaformaScolastica(url) && residuoAnnidato > 0) {
+      const annidato = urlDocumentoInHtml(html, url, 1)[0];
+      if (annidato) {
+        if (da === 'scuola') approfondimentiScuole -= 1;
+        else approfondimentiTarget -= 1;
+        const documento = await scaricaDocumentoPdf(annidato);
+        if (documento) return await leggiAvvisoPdf(documento, provincia);
+      }
+    }
+    // Il contenuto dell'avviso, non il menu del sito: se c'è un contenitore
+    // semantico si legge quello, altrimenti la pagina intera.
+    const $ = cheerio.load(html);
+    const contenuto = $('article, main, .entry-content, .avviso, #content, .contenuto').first();
+    const frammento = contenuto.length > 0 ? contenuto.html() ?? html : html;
+    const testoAvviso = testoHtml(frammento.slice(0, 400_000));
+    // §26.96 — i campi si leggono con la STESSA regola del PDF: classi e
+    // scadenza dal documento, scuola CITATA nel corpo con il codice meccanografico.
+    const campi = campiDaDocumento(testoAvviso);
+    return {
+      deadline: campi.scadenza,
+      scuole: scuoleDaTesto(caricaAnagrafica(), testoAvviso, provincia ?? null),
+      classi: campi.classi,
+      letto: true,
+    };
+  } catch {
+    return vuoto;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * §26.95 — l'allegato è un PDF: si scaricano i byte (con tetto, `MAX_BYTE_PDF`)
+ * e si legge il testo delle prime pagine. Nel PDF la scuola è citata per esteso
+ * o con il codice meccanografico: la certificazione dal corpo vale come per
+ * l'HTML. Non lancia mai; un PDF scansionato ha solo immagini → `letto: false`.
+ */
+async function leggiAvvisoPdf(
+  response: Response,
+  provincia?: string | null,
+): Promise<EsitoAvviso> {
+  const vuoto: EsitoAvviso = { deadline: null, scuole: [], classi: [], letto: false };
+  const dichiarata = Number(response.headers.get('content-length') ?? 0);
+  if (Number.isFinite(dichiarata) && dichiarata > MAX_BYTE_PDF) return vuoto;
+  const buffer = new Uint8Array(await response.arrayBuffer());
+  if (buffer.byteLength === 0 || buffer.byteLength > MAX_BYTE_PDF) return vuoto;
+  statisticaPdf.aperti += 1;
+  const esito = estraiTestoPdf(buffer);
+  if (!esito.testo) return vuoto;
+  statisticaPdf.conTesto += 1;
+  // §26.96 — i cinque campi del documento (classi, codice, provincia, scadenza,
+  // recapiti) si leggono con UNA regola sola, la stessa dell'HTML.
+  const campi = campiDaDocumento(esito.testo);
+  const deadline = campi.scadenza;
+  if (deadline) statisticaPdf.conScadenza += 1;
+  return {
+    deadline,
+    scuole: scuoleDaTesto(caricaAnagrafica(), esito.testo, provincia ?? null),
+    classi: campi.classi,
+    letto: true,
+  };
+}
+
+/** Solo la scadenza dichiarata nel corpo (usata dal deep crawl, §26.94). */
+async function scadenzaDaCorpoAvviso(
+  url: string,
+  da: 'target' | 'scuola' = 'target',
+): Promise<string | null> {
+  return (await leggiAvvisoCompleto(url, da)).deadline;
+}
+
+/**
+ * Recupera la scadenza dal corpo delle voci che non la dichiarano e le
+ * converte in record. Tetti: `MAX_APPROFONDIMENTI_TARGET` per pagina,
+ * `MAX_APPROFONDIMENTI_RUN` per giro (è rete, non parsing).
+ */
+async function approfondisciVociSenzaScadenza(
+  universale: UniversalExtractionResult | undefined,
+  target: DiscoveredLink,
+  giaPresenti: readonly InterpelloRecord[],
+): Promise<{
+  records: InterpelloRecord[];
+  richieste: number;
+  trovate: number;
+  daCorpoScuola: number;
+  oltreOrizzonte: number;
+}> {
+  const esito = {
+    records: [],
+    richieste: 0,
+    trovate: 0,
+    daCorpoScuola: 0,
+    oltreOrizzonte: 0,
+  } as {
+    records: InterpelloRecord[];
+    richieste: number;
+    trovate: number;
+    daCorpoScuola: number;
+    oltreOrizzonte: number;
+  };
+  if (!universale?.success) return esito;
+  const senzaScadenza = universale.items.filter((voce) => !voce.expirationDate);
+  if (senzaScadenza.length === 0) return esito;
+
+  const anagrafica = caricaAnagrafica();
+  const visti = new Set(giaPresenti.map((record) => record.hash_id));
+  const tetto = Math.min(MAX_APPROFONDIMENTI_TARGET, approfondimentiTarget);
+
+  for (const voce of senzaScadenza) {
+    if (esito.richieste >= tetto) break;
+    esito.richieste += 1;
+    const documento = await leggiAvvisoCompleto(voce.directUrl, 'target', target.province);
+    if (!documento.deadline) continue;
+    esito.trovate += 1;
+    if (isExpired(documento.deadline)) continue;
+    if (!entroOrizzonte(documento.deadline)) {
+      esito.oltreOrizzonte += 1;
+      continue;
+    }
+    // Prima certificazione dal TITOLO (come sempre); se la fonte non nomina la
+    // scuola lì ma la cita nel CORPO con il codice, vale quella (§26.94). Le
+    // classi lette nel documento completano quelle dell'elenco (§26.96).
+    let record = recordDaVoceAdattiva(
+      voce,
+      documento.deadline,
+      target,
+      anagrafica,
+      visti,
+      undefined,
+      documento.classi,
+    );
+    if (!record && documento.scuole.length > 0) {
+      record = recordDaVoceAdattiva(
+        voce,
+        documento.deadline,
+        target,
+        anagrafica,
+        visti,
+        documento.scuole[0],
+        documento.classi,
+      );
+      if (record) esito.daCorpoScuola += 1;
+    }
+    if (record) esito.records.push(record);
+  }
+
+  if (esito.richieste > 0) {
+    console.log(
+      `[table-reporter] Scadenze dal corpo dell'avviso: ${esito.richieste} documenti letti → ` +
+        `${esito.trovate} termini dichiarati, ${esito.records.length} record ` +
+        `(${esito.daCorpoScuola} con scuola dal corpo; riserva: ${approfondimentiTarget}).`
+    );
+  }
+  return esito;
+}
+
+function extractRecordsFromHtml(
+  $: cheerio.CheerioAPI,
+  target: DiscoveredLink,
+  universale?: UniversalExtractionResult
+): Promise<ExtractionResult> {
+  return leggiRecordsDaHtml($, target, universale);
+}
+
+async function leggiRecordsDaHtml(
+  $: cheerio.CheerioAPI,
+  target: DiscoveredLink,
+  universale?: UniversalExtractionResult
+): Promise<ExtractionResult> {
   const records: InterpelloRecord[] = [];
   // Righe scartate perché la «scadenza» cadrebbe oltre l'orizzonte (§26.75):
   // sono le fini di incarico scritte dal portale nella colonna della scadenza.
@@ -1201,6 +1978,49 @@ function extractRecordsFromHtml(
   }
 
   if (!pageContainsInterpelliTable($)) {
+    // §26.88 — prima di dichiarare vuota una pagina: le tabelle degli UST e gli
+    // albi a colonne atipiche non hanno una mappatura riconoscibile, ma le righe
+    // sono dati veri. La lettura profonda le ricompone, le filtra col gate
+    // semantico e le certifica sull'anagrafica MIM.
+    const profonde = await extractRecordsFromUstTables($, target);
+    // §26.93 — e se non c'è nemmeno una tabella, gli elenchi/card/paginazione:
+    // il lettore adattivo restituisce solo voci con scadenza DICHIARATA.
+    const adattivo = recordsDaElencoAdattivo(universale, target);
+    if (profonde.length > 0) {
+      return {
+        records: profonde,
+        disqualified: false,
+        oltreOrizzonte: adattivo.oltreOrizzonte,
+        vociAdattive: adattivo.voci,
+        senzaScadenza: adattivo.senzaScadenza,
+      };
+    }
+    if (adattivo.records.length > 0) {
+      return {
+        records: adattivo.records,
+        disqualified: false,
+        oltreOrizzonte: adattivo.oltreOrizzonte,
+        vociAdattive: adattivo.voci,
+        senzaScadenza: adattivo.senzaScadenza,
+      };
+    }
+    // Layout RICONOSCIUTO senza scadenze dichiarate (tipico: elenco di avvisi
+    // con la sola data di pubblicazione): la fonte è viva e resta attiva. Non
+    // si disattiva un portale perché oggi non pubblica un termine — si
+    // disattiva una pagina che non è un elenco di interpelli.
+    if (universale?.success && universale.layoutDetected !== 'table') {
+      console.log(
+        `[table-reporter] Layout «${universale.layoutDetected}» senza scadenze dichiarate ` +
+          `(voci=${universale.items.length}, senza scadenza=${adattivo.senzaScadenza}) — target mantenuto attivo.`
+      );
+      return {
+        records: [],
+        disqualified: false,
+        oltreOrizzonte: adattivo.oltreOrizzonte,
+        vociAdattive: adattivo.voci,
+        senzaScadenza: adattivo.senzaScadenza,
+      };
+    }
     console.log(
       '[table-reporter] Pagina priva di tabella interpelli riconoscibile — skip.'
     );
@@ -1286,7 +2106,15 @@ function extractRecordsFromHtml(
       // FIX v16 (§26.80): la scadenza si calcola PRIMA del link. Serve a
       // distinguere «riga chiusa» da «riga candidabile senza azione», che è il
       // sintomo dello snapshot Piemonte con lo stato non aggiornato.
-      const deadline = deadlineDichiarata(colTexts, columns);
+      //
+      // §26.88 — RIPIEGO DICHIARATO: se né la colonna mappata né una cella
+      // scrivono la data, si accetta la scadenza che la riga DICHIARA con
+      // un'etichetta («Scadenza», «entro il», «termine per la presentazione»,
+      // vedi `estraiDataScadenza`). Non è un'invenzione: è la stessa regola del
+      // §26.75 (nessuna data dedotta dalla pubblicazione o dalla durata), estesa
+      // ai casi in cui l'etichetta e la data stanno in due celle diverse, come
+      // nelle tabelle degli UST.
+      const deadline = deadlineDichiarata(colTexts, columns) ?? scadenzaDaRiga(fullRowText);
       if (!deadline) return;
       if (isExpired(deadline)) return;
       // Una «scadenza» oltre l'orizzonte è la FINE dell'incarico travestita da
@@ -1524,7 +2352,7 @@ function extractRecordsFromHtml(
     );
   }
 
-  return { records, disqualified: false, righeSenzaAzione };
+  return { records, disqualified: false, righeSenzaAzione, oltreOrizzonte: scartateOltreOrizzonte };
 }
 
 // ---------------------------------------------------------------------------
@@ -1682,14 +2510,417 @@ async function loadTargets(): Promise<DiscoveredLink[]> {
     throw new Error(`Errore query discovered_links: ${error.message}`);
   }
 
-  const rows = (data ?? []) as DiscoveredLink[];
+  const rows = ((data ?? []) as DiscoveredLink[]).map((row) => ({
+    ...row,
+    origine: 'db' as const,
+    // §26.94 — una riga del DB che corrisponde a una fonte verificata resta
+    // "verificata" anche quando arriva dalla coda: non si disattiva da sola.
+    verificata: CHIAVI_WHITELIST.has(chiaveUrl(row.url)),
+  }));
 
-  if (REGIONI_FILTRO.length === 0) {
-    return rows;
+  // Giro nazionale: la coda del DB si prende TUTTA, senza filtro di regione.
+  if (NAZIONALE || REGIONI_FILTRO.length === 0) return rows;
+
+  return rows.filter((row) => regioneCorrisponde(row.region));
+}
+
+/**
+ * Target in memoria dalla whitelist verificata (§26.93): gli hub USR/USP di
+ * OGNI regione, nella forma che il loop si aspetta. Nessuna scrittura su
+ * `discovered_links`: il giro nazionale legge e basta, così una dry-run non
+ * lascia segni e un `--apply` non crea record senza storia.
+ */
+function targetDaWhitelist(): DiscoveredLink[] {
+  return targetWhitelist(undefined, { soliHub: true }).map((target) => ({
+    id: `whitelist:${target.fonte}`,
+    url: target.url,
+    region: target.region,
+    province: target.province,
+    status: 'active_crawler',
+    origine: 'whitelist' as const,
+    etichetta: target.etichetta,
+  }));
+}
+
+/** Unione per URL canonica: il record del DB vince (id, telemetria, storia). */
+function unisciTarget(db: DiscoveredLink[], whitelist: DiscoveredLink[]): DiscoveredLink[] {
+  const visti = new Set(db.map((target) => chiaveUrl(target.url)));
+  return [...db, ...whitelist.filter((target) => !visti.has(chiaveUrl(target.url)))];
+}
+
+/** Campione deterministico per regione (0 = nessun limite). */
+function limitaPerRegione(targets: DiscoveredLink[]): DiscoveredLink[] {
+  if (MAX_PER_REGIONE === 0) return targets;
+  const conteggio = new Map<string, number>();
+  const out = targets.filter((target) => {
+    const chiave = target.region ?? 'N/D';
+    const n = conteggio.get(chiave) ?? 0;
+    if (n >= MAX_PER_REGIONE) return false;
+    conteggio.set(chiave, n + 1);
+    return true;
+  });
+  console.log(
+    `[table-reporter] Campione: max ${MAX_PER_REGIONE} target per regione (${out.length}/${targets.length}).`
+  );
+  return out;
+}
+
+/** Host + percorso, senza slash finale né query: stessa pagina = stesso target. */
+function chiaveUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.origin}${u.pathname.replace(/\/+$/, '')}`.toLowerCase();
+  } catch {
+    return String(url ?? '').trim().toLowerCase().replace(/\/+$/, '');
+  }
+}
+
+/**
+ * §26.94 — URL canoniche delle fonti VERIFICATE del registro. Una riga della
+ * coda che corrisponde a una di queste non viene disattivata da un giro a
+ * vuoto: la fonte è verificata nel registro, non «promossa» dall'ingestione.
+ */
+const CHIAVI_WHITELIST = new Set(targetWhitelist().map((target) => chiaveUrl(target.url)));
+
+// ---------------------------------------------------------------------------
+// DEEP CRAWL DEGLI ISTITUTI (§26.94)
+// ---------------------------------------------------------------------------
+// L'hub USR/USP dice CHE la scuola assume; l'albo della scuola dice TUTTO ciò
+// che quella scuola ha pubblicato. Qui, per ogni istituto citato negli avvisi
+// del giro, si visita la sua casa ufficiale (risolta da `schools_master`) e si
+// leggono le pagine «Interpelli / Albo» che la home linka davvero.
+
+/** Titoli che sono davvero un interpello: l'albo pubblica anche altro. */
+const RE_TITOLO_INTERPELLO =
+  /interpell|supplenz|incaric|disponibilit|messa\s+a\s+disposizione/i;
+
+/** True se l'URL appartiene allo STESSO istituto della home certificata. */
+function stessoSito(url: string, home: string | null): boolean {
+  if (!home) return false;
+  try {
+    const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    const hostHome = new URL(home).hostname.toLowerCase().replace(/^www\./, '');
+    return host === hostHome || host.endsWith(`.${hostHome}`) || hostHome.endsWith(`.${host}`);
+  } catch {
+    return false;
+  }
+}
+
+/** Tetto di record per istituto: un albo può contenere anni di storia. */
+const MAX_RECORD_SCUOLA = 40;
+/**
+ * Tetto di documenti aperti per istituto (scadenza nel corpo, §26.94).
+ * Dal 26/10/2026 questi documenti sono spesso PDF: sei aperture leggono un albo
+ * realistico senza trasformare il deep crawl in un crawler del sito.
+ */
+const MAX_APPROFONDIMENTI_SCUOLA = 6;
+/** Allegati PDF letti da una pagina d'albo quando l'elenco non dà voci. */
+const MAX_ALLEGATI_PAGINA = 2;
+/**
+ * Albi nuovi iscritti in coda per giro: senza tetto un solo giro può aggiungere
+ * centinaia di URL e il giro successivo diventa ingestibile. 120 copre gli
+ * istituti che il deep crawl visita davvero.
+ */
+const MAX_ALBI_CODA = 120;
+/** URL d'albo già promossi in questo giro: la stessa pagina può ricomparire. */
+const alboVisti = new Set<string>();
+
+/** Scaricatore leggero per le pagine degli istituti: 10 s, nessun ritentativo. */
+async function scaricaPaginaLeggera(
+  url: string,
+): Promise<{ status: number; contentType: string; html: string }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), APPROFONDIMENTO_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'User-Agent': CONFIG.userAgent,
+        Accept: 'text/html,application/xhtml+xml',
+        'Accept-Language': 'it-IT,it;q=0.9',
+      },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+    const html = await response.text();
+    return {
+      status: response.status,
+      contentType: response.headers.get('content-type') || '',
+      html,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Ciò che serve a un record: una voce dell'albo (`ExtractedInterpello`) oppure un
+ * allegato PDF (dove il «titolo» è il testo del link o il nome del file).
+ */
+interface VoceAlbo {
+  title: string;
+  schoolName?: string | null;
+  classCodes?: string[];
+  directUrl?: string | null;
+  expirationDate?: string | null;
+}
+
+/** Voce dell'albo di un istituto → record con la scuola CERTIFICATA. */
+function recordDaVoceScuola(
+  voce: VoceAlbo,
+  deadline: string,
+  scuola: ScuolaCertificata,
+  visti: Set<string>,
+): InterpelloRecord | null {
+  const title = normalize(voce.title);
+  if (title.length < 8 || !RE_TITOLO_INTERPELLO.test(title)) return null;
+  const schoolCode = scuola.codice ?? extractMechCode(`${title} ${voce.schoolName ?? ''}`);
+  if (!isLikelyMechCode(schoolCode)) return null;
+  const province = schoolCode.slice(0, 2).toUpperCase();
+  // L'avviso deve essere un documento APRIBILE della scuola stessa: mai la home
+  // (non identifica l'avviso) e mai un albo su piattaforma privata (Argo).
+  // §26.96 — UN'ECCEZIONE DICHIARATA: un FILE su una piattaforma documentale
+  // (`…/avviso.pdf` su Argo, Gecodoc, Nuvola) è l'avviso ufficiale, non un login:
+  // la regola dello «stesso sito» non si applica e il documento resta apribile.
+  const sourceUrl = (voce.directUrl ?? '').trim();
+  const allegato = eAllegatoPiattaforma(sourceUrl);
+  if (!allegato && (!urlVerificabile(sourceUrl) || !stessoSito(sourceUrl, scuola.home))) {
+    return null;
+  }
+  const hashId = generateHashId(province, schoolCode, title, sourceUrl);
+  if (visti.has(hashId)) return null;
+  visti.add(hashId);
+
+  const classCodes = voce.classCodes ?? [];
+  const { classCode, subject } = extractSubjectAndClass(`${title} ${classCodes.join(' ')}`);
+  const classCodeVoce = (classCodes[0] ?? '').replace(/[-_\s]/g, '');
+  return {
+    hash_id: hashId,
+    title,
+    school_name: scuola.nome ?? voce.schoolName ?? `Istituto ${schoolCode}`,
+    school_code: schoolCode,
+    province,
+    // La regione viene dal catalogo province: mai dal target che ha citato la
+    // scuola (un hub nazionale cita istituti di mezza Italia).
+    region: provinciaDaCodice(province)?.regione ?? null,
+    class_code: CLASS_CODE_SHAPE.test(classCodeVoce) ? classCodeVoce : classCode,
+    subject,
+    deadline,
+    expiration_date: aExpirationDate(deadline),
+    source_url: sourceUrl,
+  };
+}
+
+/**
+ * §26.95 — ALBO VERIFICATO → CODA PERMANENTE.
+ *
+ * Un albo che QUESTA scuola linka dalla propria home e che contiene almeno una
+ * voce d'interpello non è un link scoperto per caso: è una fonte. Si iscrive in
+ * `discovered_links` come `active_crawler`, così il giro successivo la legge
+ * come target e non deve più riscoprirla (né dipendere da una citazione).
+ *
+ * Regole (le stesse della certificazione): stesso istituto della home
+ * certificata, URL http(s) verificabile, mai una piattaforma privata. Un URL già
+ * attivo non si riscrive; uno disattivato torna attivo (la pagina esiste
+ * davvero). In dry-run non si scrive nulla e si conta come `nuovo`.
+ */
+async function promuoviPaginaAlbo(
+  url: string,
+  scuola: ScuolaCertificata,
+): Promise<'nuovo' | 'riattivato' | 'gia-attivo' | null> {
+  if (!urlVerificabile(url) || !stessoSito(url, scuola.home)) return null;
+  let domain: string;
+  try {
+    domain = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+  if (DRY_RUN) return 'nuovo';
+  try {
+    const { data, error } = await supabase
+      .from('discovered_links')
+      .select('status')
+      .eq('url', url)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    // `active_crawler` = STATO_ATTIVO di `lib/codaTargets.ts`.
+    const stato = (data as { status?: string } | null)?.status ?? null;
+    if (stato === 'active_crawler') return 'gia-attivo';
+    const adesso = new Date().toISOString();
+    const esito = stato
+      ? await supabase
+          .from('discovered_links')
+          .update({ status: 'active_crawler', last_scanned_at: adesso })
+          .eq('url', url)
+      : await supabase.from('discovered_links').insert({
+          url,
+          domain,
+          region: null,
+          province: scuola.provincia?.toUpperCase() ?? null,
+          status: 'active_crawler',
+          depth: 2,
+          parent_url: scuola.home,
+          last_scanned_at: adesso,
+        });
+    if (esito.error) throw new Error(esito.error.message);
+    return stato ? 'riattivato' : 'nuovo';
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[table-reporter] Albo non accodato (${url}): ${msg}`);
+    return null;
+  }
+}
+
+/**
+ * Fase 2 del giro: visita le case degli istituti citati e ingerisce i loro
+ * interpelli attivi. `scuole` è codice meccanografico → nome visto in fonte.
+ * Nessuna eccezione esce da qui: un sito rotto è una riga di log, non un giro
+ * perso.
+ */
+async function deepCrawlScuole(scuole: Map<string, string>): Promise<void> {
+  if (!DEEP_CRAWL) {
+    console.log(
+      '[table-reporter] Deep crawl degli istituti disattivato (--no-deep o --max-scuole=0).',
+    );
+    return;
+  }
+  if (scuole.size === 0) {
+    console.log('[table-reporter] Deep crawl: nessun istituto citato in questo giro.');
+    return;
+  }
+  const anagrafica = caricaAnagrafica();
+  const elenco = [...scuole.entries()].slice(0, MAX_SCUOLE_DEEP);
+  console.log(
+    `[table-reporter] Deep crawl: ${elenco.length} istituti su ${scuole.size} citati ` +
+      `(tetto ${MAX_SCUOLE_DEEP}, ${MAX_PAGINE_SCUOLA} pagine per istituto).`,
+  );
+
+  let visitati = 0;
+  let senzaSito = 0;
+  let pagine = 0;
+  let trovati = 0;
+  let nuovi = 0;
+  let errori = 0;
+  let albiNuovi = 0;
+  let albiRiattivati = 0;
+  let albiGiaAttivi = 0;
+
+  for (const [codice, nome] of elenco) {
+    const scuola = scuolaCertificata(anagrafica, { codice });
+    if (!scuola?.home) {
+      senzaSito += 1;
+      continue;
+    }
+    const esito = await leggiPagineInterpelli(
+      { codice: scuola.codice, nome: scuola.nome ?? nome, home: scuola.home },
+      scaricaPaginaLeggera,
+      { maxPagine: MAX_PAGINE_SCUOLA },
+    );
+    if (esito.pagine.length === 0) {
+      if (esito.errori.length > 0) {
+        errori += 1;
+        if (CONFIG.debug) {
+          console.log(`[table-reporter] Deep crawl ${codice}: ${esito.errori.join('; ')}`);
+        }
+      }
+      continue;
+    }
+    visitati += 1;
+    const visti = new Set<string>();
+    const records: InterpelloRecord[] = [];
+    let approfondimentiScuola = 0;
+    let voci = 0;
+    let vociInterpello = 0;
+    for (const pagina of esito.pagine) {
+      pagine += 1;
+      const universale = parseUniversalHtml(pagina.html, pagina.url);
+      let interpelliPagina = 0;
+      if (universale.success) {
+        for (const voce of universale.items) {
+          if (records.length >= MAX_RECORD_SCUOLA) break;
+          voci += 1;
+          if (RE_TITOLO_INTERPELLO.test(voce.title)) {
+            vociInterpello += 1;
+            interpelliPagina += 1;
+          }
+          let deadline = voce.expirationDate ?? null;
+          if (!deadline && approfondimentiScuola < MAX_APPROFONDIMENTI_SCUOLA) {
+            approfondimentiScuola += 1;
+            deadline = await scadenzaDaCorpoAvviso(voce.directUrl, 'scuola');
+          }
+          if (!deadline || isExpired(deadline) || !entroOrizzonte(deadline)) continue;
+          const record = recordDaVoceScuola(voce, deadline, scuola, visti);
+          if (record) records.push(record);
+        }
+      }
+      // §26.95 — albo che elenca SOLO file: l'elenco non dà voci, ma i PDF sono
+      // documenti veri. Se ne leggono al massimo due, col termine dentro.
+      if (interpelliPagina === 0) {
+        for (const allegato of linkAllegatiInterpello(
+          pagina.html,
+          pagina.url,
+          MAX_ALLEGATI_PAGINA,
+        )) {
+          if (approfondimentiScuola >= MAX_APPROFONDIMENTI_SCUOLA) break;
+          approfondimentiScuola += 1;
+          const deadline = await scadenzaDaCorpoAvviso(allegato.url, 'scuola');
+          if (!deadline || isExpired(deadline) || !entroOrizzonte(deadline)) continue;
+          const record = recordDaVoceScuola(
+            {
+              title: allegato.testo || decodeURIComponent(allegato.url.split('/').pop() ?? ''),
+              schoolName: scuola.nome,
+              classCodes: [],
+              directUrl: allegato.url,
+            },
+            deadline,
+            scuola,
+            visti,
+          );
+          if (record) records.push(record);
+        }
+      }
+      // §26.95 — pagina-elenco VERIFICATA (almeno una voce d'interpello dentro):
+      // diventa una fonte permanente della coda, una volta per giro.
+      if (interpelliPagina > 0 && alboVisti.size < MAX_ALBI_CODA && alboVisti.add(pagina.url)) {
+        const esitoAlbo = await promuoviPaginaAlbo(pagina.url, scuola);
+        if (esitoAlbo === 'nuovo') albiNuovi += 1;
+        else if (esitoAlbo === 'riattivato') albiRiattivati += 1;
+        else if (esitoAlbo === 'gia-attivo') albiGiaAttivi += 1;
+        if (CONFIG.debug && esitoAlbo) {
+          console.log(`[table-reporter] Albo in coda (${esitoAlbo}): ${pagina.url}`);
+        }
+      }
+    }
+    if (CONFIG.debug) {
+      console.log(
+        `[table-reporter] Deep crawl ${codice}: ${esito.linkTrovati} link · ` +
+          `${esito.pagine.length} pagine · ${voci} voci (${vociInterpello} interpelli) · ` +
+          `${records.length} record` +
+          (esito.errori.length > 0 ? ` — ${esito.errori.join('; ')}` : ''),
+      );
+    }
+    trovati += records.length;
+    if (records.length === 0) continue;
+    if (DRY_RUN) {
+      logRecords(records);
+      continue;
+    }
+    try {
+      nuovi += await salvaRecords(records);
+    } catch (err) {
+      errori += 1;
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[table-reporter] Deep crawl ${codice}: upsert fallito — ${msg}`);
+    }
   }
 
-  return rows.filter((row) =>
-    REGIONI_FILTRO.includes(String(row.region ?? '').toLowerCase())
+  console.log(
+    `[table-reporter] Deep crawl: ${visitati} siti letti · ${pagine} pagine · ` +
+      `${trovati} record · ${nuovi} nuovi in DB · ${senzaSito} senza sito · ${errori} errori.`,
+  );
+  console.log(
+    `[table-reporter] Albi verificati in coda: ${albiNuovi} nuovi · ` +
+      `${albiRiattivati} riattivati · ${albiGiaAttivi} già attivi.`,
   );
 }
 
@@ -1735,10 +2966,120 @@ function attesa(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Upsert dei record + accodamento delle NUOVE voci (§26.86).
+ *
+ * `.select('id')` con `ignoreDuplicates` restituisce SOLO le righe davvero
+ * inserite (l'ON CONFLICT DO NOTHING non fa RETURNING per i duplicati): sono
+ * esattamente i nuovi interpelli da accodare, senza rischio di notificare
+ * l'archivio storico. Lancia in caso di errore: il chiamante decide se è un
+ * errore del target (ingestione) o solo del deep crawl (§26.94).
+ */
+async function salvaRecords(records: readonly InterpelloRecord[]): Promise<number> {
+  if (records.length === 0) return 0;
+  const { data: inseriti, error } = await supabase
+    .from('interpelli')
+    .upsert(records, {
+      onConflict: 'hash_id',
+      ignoreDuplicates: true,
+    })
+    .select('id');
+
+  if (error) throw new Error(error.message);
+
+  const nuoviIds = ((inseriti ?? []) as Array<{ id?: string | null }>)
+    .map((riga) => riga.id)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+  if (nuoviIds.length > 0) {
+    const accodati = await accodaInterpelli(nuoviIds, { client: supabase });
+    console.log(
+      `[table-reporter] Coda notifiche: ${accodati}/${nuoviIds.length} nuove voci READY.`,
+    );
+  }
+  return nuoviIds.length;
+}
+
+/**
+ * §26.96 — BACHECA SU PIATTAFORMA SENZA AVVISI → ALBO DELLA SCUOLA.
+ *
+ * Il giro legge i target della coda: se uno punta alla bacheca di Argo /
+ * Nuvola–Spaggiari / Gecodoc e quella non dà nulla (login, archivio chiuso,
+ * pagina vuota), il target verrebbe conteggiato come fonte morta e disattivato.
+ * La scuola però esiste: dal CODICE MECCANOGRAFICO scritto nell'URL si risolve
+ * la sua scheda su `schools_master` (nome, recapiti, home `.edu.it`) e si punta
+ * l'ALBO della home — la stessa lettura del deep crawl, con le stesse regole di
+ * scadenza e di certificazione. Nessun URL costruito a mano, nessun codice
+ * inventato: se l'URL non dichiara il codice, non si fa nulla e lo si scrive.
+ */
+async function recuperaDaBachecaPiattaforma(target: DiscoveredLink): Promise<InterpelloRecord[]> {
+  const decisione = meritaFallback(target.url, '', 0);
+  if (!decisione.attivo || !decisione.codice) {
+    if (decisione.piattaforma) {
+      console.log(
+        `[table-reporter] Piattaforma ${decisione.piattaforma.etichetta}: nessun fallback (${decisione.motivo}).`,
+      );
+    }
+    return [];
+  }
+  const scuola = scuolaCertificata(caricaAnagrafica(), { codice: decisione.codice });
+  if (!scuola?.home) {
+    console.log(
+      `[table-reporter] Piattaforma ${decisione.piattaforma?.etichetta ?? ''}: ${decisione.codice} non ha una home istituzionale in anagrafica.`,
+    );
+    return [];
+  }
+  const esito = await leggiPagineInterpelli(
+    { codice: scuola.codice, nome: scuola.nome, home: scuola.home },
+    scaricaPaginaLeggera,
+    { maxPagine: MAX_PAGINE_SCUOLA },
+  );
+  if (esito.pagine.length === 0) {
+    console.log(
+      `[table-reporter] Piattaforma → albo ${decisione.codice}: nessuna pagina-elenco (${esito.errori.join('; ') || 'home senza link'}).`,
+    );
+    return [];
+  }
+  const records: InterpelloRecord[] = [];
+  const visti = new Set<string>();
+  let approfondimenti = 0;
+  for (const pagina of esito.pagine) {
+    const universale = parseUniversalHtml(pagina.html, pagina.url);
+    if (!universale.success) continue;
+    let interpelliPagina = 0;
+    for (const voce of universale.items) {
+      if (records.length >= MAX_RECORD_SCUOLA) break;
+      if (RE_TITOLO_INTERPELLO.test(voce.title)) interpelliPagina += 1;
+      let deadline = voce.expirationDate ?? null;
+      if (!deadline && approfondimenti < MAX_APPROFONDIMENTI_SCUOLA) {
+        approfondimenti += 1;
+        deadline = await scadenzaDaCorpoAvviso(voce.directUrl, 'scuola');
+      }
+      if (!deadline || isExpired(deadline) || !entroOrizzonte(deadline)) continue;
+      const record = recordDaVoceScuola(voce, deadline, scuola, visti);
+      if (record) records.push(record);
+    }
+    // L'albo verificato entra in coda come per il deep crawl: il giro successivo
+    // lo legge come target, senza dipendere dalla bacheca della piattaforma.
+    if (interpelliPagina > 0 && alboVisti.size < MAX_ALBI_CODA && alboVisti.add(pagina.url)) {
+      await promuoviPaginaAlbo(pagina.url, scuola);
+    }
+  }
+  console.log(
+    `[table-reporter] Piattaforma ${decisione.piattaforma?.etichetta ?? ''} → albo ${decisione.codice} ` +
+      `(${scuola.home}): ${esito.pagine.length} pagine · ${records.length} record.`,
+  );
+  return records;
+}
+
 async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
   const tentativi = isPiemonteTabellare(target.url) ? PIEMONTE_TENTATIVI : 1;
-  let migliore: { records: InterpelloRecord[]; signature: string | null } | null =
-    null;
+  let migliore: {
+    records: InterpelloRecord[];
+    signature: string | null;
+    oltreOrizzonte: number;
+    senzaScadenza: number;
+    vociAdattive: number;
+  } | null = null;
   let disqualified = false;
   // Distingue lo scarto semantico (atto di gara/circolare) dalla pagina senza
   // tabella: il primo merita lo stato `disqualified_noise`.
@@ -1746,6 +3087,9 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
   // Layout dell'ultima lettura: è il motivo di quarantena (§26.85) quando la
   // pagina non dà voci — «layout_changed» se è ignoto, «zero_items» se è noto.
   let layoutRilevato: string | undefined;
+  // Ultima lettura dell'euristica universale: serve anche DOPO il loop per
+  // recuperare la scadenza dal corpo degli avvisi che non la dichiarano (§26.94).
+  let universale: UniversalExtractionResult | undefined;
 
   for (let tentativo = 1; tentativo <= tentativi; tentativo += 1) {
     try {
@@ -1757,6 +3101,7 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
           status: 'error',
           signature: null,
           error: `HTTP ${status}`,
+          cause: status >= 500 ? 'http_5xx' : 'http_4xx',
         };
       }
 
@@ -1766,6 +3111,7 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
           status: 'error',
           signature: null,
           error: `Content-Type non HTML: ${contentType}`,
+          cause: 'content_type',
         };
       }
 
@@ -1773,7 +3119,10 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
 
       // Pre-filtro semantico PRIMA di firma strutturale ed estrazione: una
       // determina o una circolare per le famiglie non è un'opportunità.
-      if (pageSemanticNoiseReason($)) {
+      // §26.94 — NON si applica alle fonti VERIFICATE del registro: un hub USR
+      // che pubblica anche un bando di gara non diventa «rumore» (e non si
+      // disattiva per questo). Le righe restano filtrate dal gate di riga.
+      if (!target.verificata && pageSemanticNoiseReason($)) {
         disqualified = true;
         rumoreSemantico = true;
         break;
@@ -1785,7 +3134,7 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
       // provincia e hash: è il segnale con cui mettere in quarantena (Task 4)
       // una sorgente che nessun layout spiega, e il modo per accorgersi subito
       // di un rifacimento grafico.
-      const universale = parseUniversalHtml(html, target.url);
+      universale = parseUniversalHtml(html, target.url);
       layoutRilevato = universale.layoutDetected;
       if (CONFIG.debug || !universale.success) {
         console.log(
@@ -1794,12 +3143,18 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
       }
 
       const signature = getStructuralSignature($);
-      const extraction = extractRecordsFromHtml($, target);
+      const extraction = await extractRecordsFromHtml($, target, universale);
       const senzaAzione = extraction.righeSenzaAzione ?? 0;
       disqualified = extraction.disqualified;
 
       if (!migliore || extraction.records.length > migliore.records.length) {
-        migliore = { records: extraction.records, signature };
+        migliore = {
+          records: extraction.records,
+          signature,
+          oltreOrizzonte: extraction.oltreOrizzonte ?? 0,
+          senzaScadenza: extraction.senzaScadenza ?? 0,
+          vociAdattive: extraction.vociAdattive ?? 0,
+        };
       }
 
       if (senzaAzione === 0 || tentativo === tentativi) break;
@@ -1812,49 +3167,53 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
       const msg = err instanceof Error ? err.message : String(err);
       // Il layout letto prima dell'errore resta: se è ignoto il motivo sarà
       // `layout_changed`, altrimenti `timeout` (il messaggio parla di rete).
-      return { extracted: 0, status: 'error', signature: null, error: msg, layout: layoutRilevato };
+      // §26.93 — la causa si classifica qui: un dominio morto (DNS), un TLS
+      // sbagliato e un 503 sono tre cose diverse nel riepilogo nazionale.
+      return {
+        extracted: 0,
+        status: 'error',
+        signature: null,
+        error: msg,
+        layout: layoutRilevato,
+        cause: causaDaErrore(msg),
+      };
     }
   }
 
-  const records = migliore?.records ?? [];
+  const recordsBase = migliore?.records ?? [];
   const signature = migliore?.signature ?? null;
+
+  // §26.94 — le voci d'elenco senza scadenza si riprovano sul CORPO
+  // dell'avviso: se il documento dichiara il termine («entro le ore 12:00 del
+  // …»), la voce diventa un record invece di essere scartata come «senza
+  // scadenza». Tetto per target e per giro: è rete, non parsing.
+  const approfondimento = await approfondisciVociSenzaScadenza(
+    universale,
+    target,
+    recordsBase,
+  );
+  const records = [...recordsBase, ...approfondimento.records];
+  // §26.96 — NESSUN avviso e il target è una bacheca di piattaforma (Argo,
+  // Nuvola–Spaggiari, Gecodoc): si riparte dall'ALBO della scuola, risolta sul
+  // codice meccanografico scritto nell'URL. Se il codice non c'è, non si indovina.
+  if (records.length === 0) {
+    records.push(...(await recuperaDaBachecaPiattaforma(target)));
+  }
 
   if (records.length > 0) {
     if (DRY_RUN) {
       logRecords(records);
     } else {
-      // `.select('id')` con `ignoreDuplicates` restituisce SOLO le righe davvero
-      // inserite (l'ON CONFLICT DO NOTHING non fa RETURNING per i duplicati):
-      // sono esattamente i nuovi interpelli da accodare, senza una query in piu'
-      // e senza rischiare di notificare l'archivio storico (§26.86).
-      const { data: inseriti, error: upsertError } = await supabase
-        .from('interpelli')
-        .upsert(records, {
-          onConflict: 'hash_id',
-          ignoreDuplicates: true,
-        })
-        .select('id');
-
-      if (upsertError) {
+      try {
+        await salvaRecords(records);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
         return {
           extracted: 0,
           status: 'error',
           signature,
-          error: `Upsert interpelli: ${upsertError.message}`,
+          error: `Upsert interpelli: ${msg}`,
         };
-      }
-
-      // PRODUTTORE: nessun invio qui. `accodaInterpelli` non lancia mai e, se la
-      // tabella `notification_queue` non e' ancora migrata, lascia un avviso e
-      // non ferma l'ingestione.
-      const nuoviIds = ((inseriti ?? []) as Array<{ id?: string | null }>)
-        .map((riga) => riga.id)
-        .filter((id): id is string => typeof id === 'string' && id.length > 0);
-      if (nuoviIds.length > 0) {
-        const accodati = await accodaInterpelli(nuoviIds, { client: supabase });
-        console.log(
-          `[table-reporter] Coda notifiche: ${accodati}/${nuoviIds.length} nuove voci READY.`,
-        );
       }
     }
   }
@@ -1866,15 +3225,27 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
     disqualified,
     noise: rumoreSemantico,
     layout: layoutRilevato,
+    oltreOrizzonte: (migliore?.oltreOrizzonte ?? 0) + approfondimento.oltreOrizzonte,
+    senzaScadenza: migliore?.senzaScadenza ?? 0,
+    vociAdattive: migliore?.vociAdattive ?? 0,
+    scadenzeDaCorpo: approfondimento.trovate,
+    // Istituti citati: alimentano il deep crawl (§26.94).
+    scuole: [...new Set(records.map((record) => record.school_code))]
+      .filter((codice) => isLikelyMechCode(codice)),
   };
 }
 
 // Esito per la telemetria (§26.85): un errore di fetch è `quarantine`, un run
 // riuscito senza voci è `empty` (conta come fallimento: la pagina non pubblica
 // più nulla di leggibile), un run con voci è `success` e azzera i contatori.
+// §26.93 — un ELENCO riconosciuto e letto senza scadenze dichiarate NON è un
+// fallimento: senza questa eccezione una fonte viva (avvisi con la sola data di
+// pubblicazione) finirebbe in quarantena dopo tre giri.
 function esitoTelemetria(result: ProcessResult): EsitoRun {
   if (result.status === 'error') return 'quarantine';
-  return result.extracted > 0 ? 'success' : 'empty';
+  if (result.extracted > 0) return 'success';
+  if ((result.vociAdattive ?? 0) > 0) return 'success';
+  return 'empty';
 }
 
 async function writeReport(
@@ -1896,9 +3267,99 @@ async function writeReport(
   }
 }
 
+interface StatRegione {
+  regione: string;
+  target: number;
+  letti: number;
+  record: number;
+  oltreOrizzonte: number;
+  senzaScadenza: number;
+  vociAdattive: number;
+  /** Scadenze recuperate leggendo il corpo dell'avviso (§26.94). */
+  scadenzeDaCorpo: number;
+  errori: number;
+  disattivati: number;
+  cause: Map<CausaErrore, number>;
+}
+
+function statRegione(stats: Map<string, StatRegione>, regione: string | null): StatRegione {
+  const chiave = regione ?? 'N/D';
+  const esistente = stats.get(chiave);
+  if (esistente) return esistente;
+  const nuova: StatRegione = {
+    regione: chiave,
+    target: 0,
+    letti: 0,
+    record: 0,
+    oltreOrizzonte: 0,
+    senzaScadenza: 0,
+    vociAdattive: 0,
+    scadenzeDaCorpo: 0,
+    errori: 0,
+    disattivati: 0,
+    cause: new Map<CausaErrore, number>(),
+  };
+  stats.set(chiave, nuova);
+  return nuova;
+}
+
+function totaleRegioni(stats: Map<string, StatRegione>): StatRegione {
+  const totale = statRegione(new Map(), null);
+  for (const r of stats.values()) {
+    totale.target += r.target;
+    totale.letti += r.letti;
+    totale.record += r.record;
+    totale.oltreOrizzonte += r.oltreOrizzonte;
+    totale.senzaScadenza += r.senzaScadenza;
+    totale.vociAdattive += r.vociAdattive;
+    totale.scadenzeDaCorpo += r.scadenzeDaCorpo;
+    totale.errori += r.errori;
+    totale.disattivati += r.disattivati;
+    for (const [causa, n] of r.cause) {
+      totale.cause.set(causa, (totale.cause.get(causa) ?? 0) + n);
+    }
+  }
+  return totale;
+}
+
+/** Riepilogo per regione: record ESTRATTI contro voci SCARTATE, con la causa. */
+function stampaRiepilogoRegioni(stats: Map<string, StatRegione>): void {
+  const righe = [...stats.values()].sort((a, b) => a.regione.localeCompare(b.regione, 'it'));
+  const larg = 22;
+  const formatta = (r: StatRegione): string => {
+    const cause = [...r.cause.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([causa, n]) => `${causa}=${n}`)
+      .join(' · ');
+    return (
+      `  ${r.regione.padEnd(larg)}${String(r.target).padStart(7)}${String(r.record).padStart(9)}` +
+      `${String(r.oltreOrizzonte).padStart(12)}${String(r.senzaScadenza).padStart(12)}` +
+      `${String(r.scadenzeDaCorpo).padStart(14)}` +
+      `${String(r.errori).padStart(8)}  ${cause || '—'}`
+    );
+  };
+
+  console.log(
+    '\n[table-reporter] Riepilogo per regione (record estratti · scarti · errori):'
+  );
+  console.log(
+    `  ${'Regione'.padEnd(larg)}${'Target'.padStart(7)}${'Record'.padStart(9)}` +
+      `${'Oltre 15gg'.padStart(12)}${'Senza scad.'.padStart(12)}${'Da corpo'.padStart(14)}` +
+      `${'Errori'.padStart(8)}  Cause`
+  );
+  for (const r of righe) console.log(formatta(r));
+  console.log(formatta({ ...totaleRegioni(stats), regione: 'NAZIONALE' }));
+}
+
 async function runTableReporter(): Promise<void> {
   console.log('[table-reporter] Avvio scansione tabellare...');
-  if (REGIONI_FILTRO.length > 0) {
+  if (NAZIONALE) {
+    console.log(
+      `[table-reporter] Giro NAZIONALE: tutte le regioni` +
+        (REGIONI_FILTRO.length > 0 ? ' (filtro --regioni IGNORATO)' : '') +
+        '.'
+    );
+  } else if (REGIONI_FILTRO.length > 0) {
     console.log(
       `[table-reporter] Filtro regioni attivo: ${REGIONI_FILTRO.join(', ')}`
     );
@@ -1923,6 +3384,21 @@ async function runTableReporter(): Promise<void> {
     console.error(`[table-reporter] ${msg}`);
     process.exit(1);
   }
+
+  // §26.93 — giro nazionale: alla coda del DB si aggiungono gli hub USR/USP
+  // VERIFICATI del registro fonti (17 regioni, 54 province). Nessuna scrittura
+  // su `discovered_links`: è una lettura completa del Paese, non un seeding.
+  if (NAZIONALE) {
+    const whitelist = targetDaWhitelist();
+    const uniti = unisciTarget(targets, whitelist);
+    console.log(
+      `[table-reporter] Whitelist nazionale: ${whitelist.length} hub USR/USP · ` +
+        `${uniti.length - targets.length} aggiunti ai ${targets.length} della coda.`
+    );
+    targets = uniti;
+  }
+
+  targets = limitaPerRegione(targets);
 
   if (targets.length === 0) {
     console.warn(
@@ -1961,33 +3437,65 @@ async function runTableReporter(): Promise<void> {
   let successCount = 0;
   let errorCount = 0;
   let disqualifiedCount = 0;
+  const stats = new Map<string, StatRegione>();
+  // §26.94 — istituti citati negli avvisi di questo giro: alimentano il deep
+  // crawl (codice meccanografico → nome visto in fonte, dedup per codice).
+  const scuoleDaVisitare = new Map<string, string>();
 
   for (const target of targets) {
+    const stat = statRegione(stats, target.region);
+    stat.target += 1;
     const label = `${target.region ?? 'N/D'} / ${target.province ?? 'N/D'} — ${target.url}`;
     console.log(`\n[table-reporter] Esamino: ${label}`);
 
-    const result = await processTarget(target);
-    if (!DRY_RUN) await writeReport(target, result);
+    // Un target che lancia non ferma il giro: diventa un errore classificato.
+    let result: ProcessResult;
+    try {
+      result = await processTarget(target);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      result = { extracted: 0, status: 'error', signature: null, error: msg, cause: causaDaErrore(msg) };
+    }
 
-    // Telemetria (§26.85): solo in un giro reale — un dry-run non deve lasciare
-    // segni. Le pagine scartate dal pre-filtro semantico non si registrano: sono
-    // fuori perimetro per scelta (vengono disattivate), non fonti rotte.
-    if (!DRY_RUN && !result.noise) {
-      await recordSourceRun(
-        target.url,
-        esitoTelemetria(result),
-        {
-          itemsCount: result.extracted,
-          layoutDetected: result.layout,
-          error: result.error,
-        },
-        { client: supabase }
-      );
+    // Scritture «di contorno» protette: un errore di `scrape_reports` o della
+    // telemetria non deve interrompere la lettura degli altri portali (§26.93).
+    try {
+      // Un target della whitelist non ha un id in `discovered_links`: la FK di
+      // `scrape_reports` lo rifiuterebbe. Il report si scrive solo per la coda.
+      if (!DRY_RUN && target.origine !== 'whitelist') await writeReport(target, result);
+
+      // Telemetria (§26.85): solo in un giro reale — un dry-run non deve
+      // lasciare segni. Le pagine scartate dal pre-filtro semantico non si
+      // registrano: sono fuori perimetro per scelta, non fonti rotte.
+      if (!DRY_RUN && !result.noise) {
+        await recordSourceRun(
+          target.url,
+          esitoTelemetria(result),
+          {
+            itemsCount: result.extracted,
+            layoutDetected: result.layout,
+            error: result.error,
+          },
+          { client: supabase }
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[table-reporter] Telemetria/report non scritti per ${target.url}: ${msg}`);
     }
 
     if (result.status === 'success') {
       successCount += 1;
       totalExtracted += result.extracted;
+      stat.letti += 1;
+      stat.record += result.extracted;
+      stat.oltreOrizzonte += result.oltreOrizzonte ?? 0;
+      stat.senzaScadenza += result.senzaScadenza ?? 0;
+      stat.vociAdattive += result.vociAdattive ?? 0;
+      stat.scadenzeDaCorpo += result.scadenzeDaCorpo ?? 0;
+      for (const codice of result.scuole ?? []) {
+        if (!scuoleDaVisitare.has(codice)) scuoleDaVisitare.set(codice, codice);
+      }
       console.log(
         `[table-reporter] Estratti ${result.extracted} record validi da ${target.url}`
       );
@@ -1996,20 +3504,39 @@ async function runTableReporter(): Promise<void> {
         const statoScarto = result.noise
           ? CONFIG.noiseStatus
           : CONFIG.disqualifiedStatus;
-        if (DRY_RUN) {
+        const protetto = target.origine === 'whitelist' || target.verificata;
+        if (protetto) {
+          console.log(
+            `[table-reporter] Target VERIFICATO: nessuna disattivazione (${statoScarto}) — ${target.url}`
+          );
+        } else if (DRY_RUN) {
           console.log(
             `[table-reporter] Dry-run: target DA DISATTIVARE (${statoScarto}): ${target.url}`
           );
+          disqualifiedCount += 1;
+          stat.disattivati += 1;
         } else {
           await disqualifyTarget(target, statoScarto);
+          disqualifiedCount += 1;
+          stat.disattivati += 1;
         }
-        disqualifiedCount += 1;
       }
     } else {
       errorCount += 1;
-      console.error(`[table-reporter] Errore su ${target.url}: ${result.error}`);
+      stat.errori += 1;
+      const causa = result.cause ?? 'altro';
+      stat.cause.set(causa, (stat.cause.get(causa) ?? 0) + 1);
+      console.error(
+        `[table-reporter] Errore (${causa}: ${ETICHETTA_CAUSA[causa]}) su ${target.url}: ${result.error}`
+      );
     }
   }
+
+  // Fase 2 (§26.94): gli istituti citati vengono visitati sulla loro casa
+  // ufficiale. Gira anche in dry-run (nessuna scrittura: solo `[dry-run]`).
+  await deepCrawlScuole(scuoleDaVisitare);
+
+  stampaRiepilogoRegioni(stats);
 
   console.log('\n[table-reporter] Riepilogo:');
   console.log(`  Target elaborati: ${targets.length}`);
@@ -2017,9 +3544,26 @@ async function runTableReporter(): Promise<void> {
   console.log(`  Errori: ${errorCount}`);
   console.log(`  Target disattivati (no tabella): ${disqualifiedCount}`);
   console.log(`  Record totali processati: ${totalExtracted}`);
+  // §26.95 — trasparenza: quanti allegati PDF sono stati APERTI e quanti hanno
+  // dichiarato un termine. Un numero basso qui spiega un «senza scadenza» alto.
+  if (statisticaPdf.aperti > 0) {
+    console.log(
+      `  PDF aperti: ${statisticaPdf.aperti} · con testo: ${statisticaPdf.conTesto} · ` +
+        `con scadenza dichiarata: ${statisticaPdf.conScadenza}`,
+    );
+  }
 
+  // Un giro nazionale in dry-run è un REPORT: le fonti morte restano nel
+  // riepilogo (con la causa) ma non fanno fallire la verifica. In un giro
+  // reale l'exit code resta l'allarme di sempre.
   if (errorCount > 0) {
-    process.exitCode = 2;
+    if (NAZIONALE && DRY_RUN) {
+      console.log(
+        `[table-reporter] Giro nazionale in dry-run: ${errorCount} fonti non lette (cause sopra), exit 0.`
+      );
+    } else {
+      process.exitCode = 2;
+    }
   }
 }
 

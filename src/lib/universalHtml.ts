@@ -109,12 +109,42 @@ export function urlUtile(href: string, baseUrl: string): string | undefined {
   return url.href;
 }
 
-/** Primo collegamento utile di un frammento, con il testo dell'ancora. */
-export function primoLink(frammento: string, baseUrl: string): { url: string; testo: string } | undefined {
+/** Metadati dichiarati sull'ancora: `title` e `aria-label` (§26.94). */
+export interface MetadatiAncora {
+  titolo?: string;
+  ariaLabel?: string;
+}
+
+const RE_TITLE_ATTR = /title\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
+const RE_ARIA_ATTR = /aria-label\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
+
+/**
+ * `title` / `aria-label` di un'ancora, già decodificati: su molti portali il
+ * termine è scritto lì e non nel testo visibile («Scarica l'avviso — scadenza
+ * 12/11/2026»).
+ */
+export function metadatiAncora(attributi: string): MetadatiAncora {
+  const titolo = RE_TITLE_ATTR.exec(attributi);
+  const aria = RE_ARIA_ATTR.exec(attributi);
+  const out: MetadatiAncora = {};
+  const valore = (m: RegExpExecArray | null): string =>
+    m ? testo(m[1] ?? m[2] ?? '') : '';
+  const testoTitle = valore(titolo);
+  const testoAria = valore(aria);
+  if (testoTitle) out.titolo = testoTitle;
+  if (testoAria) out.ariaLabel = testoAria;
+  return out;
+}
+
+/** Primo collegamento utile di un frammento, con testo e metadati dell'ancora. */
+export function primoLink(
+  frammento: string,
+  baseUrl: string,
+): { url: string; testo: string; metadati: MetadatiAncora } | undefined {
   for (const m of frammento.matchAll(RE_ANCORA)) {
     const href = RE_HREF.exec(m[1]);
     const url = href ? urlUtile(href[1] ?? href[2] ?? href[3] ?? '', baseUrl) : undefined;
-    if (url) return { url, testo: testo(m[2]) };
+    if (url) return { url, testo: testo(m[2]), metadati: metadatiAncora(m[1]) };
   }
   return undefined;
 }

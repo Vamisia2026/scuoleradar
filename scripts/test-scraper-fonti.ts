@@ -24,6 +24,7 @@ import {
   regioneDiProvincia,
 } from '../src/scraper/fonti.ts';
 import { DATA_VERIFICA_AGGIORNATI, DATA_VERIFICA_TERRITORI } from '../src/scraper/fontiTerritoriali.ts';
+import { DATA_VERIFICA_WHITELIST } from '../src/scraper/fontiWhitelist2610.ts';
 import {
   CAPOLUOGHI_PRINCIPALI,
   capoluoghiScoperti,
@@ -42,6 +43,11 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
 
 /* ------------------------------ A · Igiene registro ------------------------------ */
 
+/** Blocchi di verifica HTTP dichiarati dal registro (le date sono contratti). */
+const DATE_VERIFICA = new Set([
+  DATA_VERIFICA_FONTI, DATA_VERIFICA_TERRITORI, DATA_VERIFICA_AGGIORNATI, DATA_VERIFICA_WHITELIST,
+]);
+
 console.log('— A. Igiene del registro fonti —');
 check('id unici', FONTI_INTERPELLI.length, new Set(FONTI_INTERPELLI.map((f) => f.id)).size);
 check('URL uniche', FONTI_INTERPELLI.length, new Set(FONTI_INTERPELLI.map((f) => f.url)).size);
@@ -58,11 +64,9 @@ check(
   FONTI_INTERPELLI.filter((f) => !f.attiva && (!f.note || f.note.length < 20 || f.verificata !== null)).map((f) => f.id),
 );
 check(
-  'fonti attive: verifica datata (blocchi 2026-09-28 / 2026-10-23 / 2026-10-25)',
+  'fonti attive: verifica datata (blocchi 2026-09-28 / 2026-10-23 / 2026-10-25 / 2026-10-26)',
   [],
-  fontiAttive()
-    .filter((f) => ![DATA_VERIFICA_FONTI, DATA_VERIFICA_TERRITORI, DATA_VERIFICA_AGGIORNATI].includes(f.verificata ?? ''))
-    .map((f) => f.id),
+  fontiAttive().filter((f) => !DATE_VERIFICA.has(f.verificata ?? '')).map((f) => f.id),
 );
 check(
   'fonti attive: data di verifica in formato ISO',
@@ -87,13 +91,16 @@ check('esiste il feed nazionale', true, fontiAttive().some((f) => f.nazionale &&
 check('capoluoghi principali scoperti', [], capoluoghiScoperti());
 check('ogni capoluogo principale ha almeno una fonte attiva', [], CAPOLUOGHI_PRINCIPALI.filter((c) => fontiPerCapoluogo(c.provincia).length === 0).map((c) => c.nome));
 check('Torino/Milano/Genova/Bologna/Firenze/Roma/Napoli coperti', true, ['TO', 'MI', 'GE', 'BO', 'FI', 'RM', 'NA'].every((p) => fontiPerCapoluogo(p).length > 0));
-// Blocco territoriale (§26.89) + aggiornamento 2026-10-25: in Liguria le fonti sono le pagine per provincia (URL senza anno); il modulo «per ambito» del Piemonte resta escluso (righe senza link).
+// Blocco territoriale (§26.89) + aggiornamento 2026-10-25 + whitelist 2026-10-26:
+// in Liguria le fonti sono le pagine per provincia (URL senza anno); il modulo
+// «per ambito» del Piemonte resta escluso (righe senza link).
 const liguriaAttive = fontiAttive().filter((f) => f.regioni.includes('Liguria') && /provincia\.php/.test(f.url));
 check('Liguria: le 4 province hanno un elenco attivo', ['GE', 'IM', 'SP', 'SV'], [
   ...new Set(liguriaAttive.map((f) => f.capoluogo ?? '')),
 ].sort());
 check('Liguria: nessuna fonte legata a un anno scolastico', [], liguriaAttive.filter((f) => /[?&]as=/.test(f.url)).map((f) => f.id));
 // La home del portale NON è una fonte: le sue righe sono i quattro indici provinciali, non interpelli.
+// §26.97 — la whitelist 26/10/2026 la riproponeva: resta fuori (in `ALIAS_SCARTATI`), con la stessa regola.
 check('Liguria: la home del portale non è una fonte', [], FONTI_INTERPELLI.filter((f) => /servizi\.istruzioneliguria\.gov\.it\/?$/.test(f.url)).map((f) => f.id));
 check('Piemonte: il modulo «per ambito» resta escluso', 0, fontiAttive().filter((f) => /ric_interpello_ambito/.test(f.url)).length);
 check('Piemonte: gli esclusi del modulo dichiarano il motivo', [], FONTI_INTERPELLI.filter((f) => /ric_interpello_ambito/.test(f.url) && (!f.note || f.note.length < 40)).map((f) => f.id));
@@ -106,7 +113,9 @@ check('Sardegna: Oristano coperta', true, provinceAttive('Sardegna').includes('O
 check('Emilia-Romagna: Rimini coperta', true, provinceAttive('Emilia-Romagna').includes('RN'));
 // Le province provate e non servibili restano DICHIARATE scoperte, mai coperte «per finta».
 check('Veneto: Belluno dichiarata scoperta', [], fontiAttive().filter((f) => f.capoluogo === 'BL').map((f) => f.id));
-check('Campania: Salerno e Benevento scoperte', [], fontiAttive().filter((f) => ['SA', 'BN'].includes(f.capoluogo ?? '')).map((f) => f.id));
+// §26.97 — Salerno non è più scoperta (ATP Salerno verificato il 26/10/2026); Benevento resta scoperta (403 anti-bot).
+check('Campania: Benevento resta scoperta (Salerno coperta dall’ATP)', [], fontiAttive().filter((f) => f.capoluogo === 'BN').map((f) => f.id));
+check('Campania: Salerno coperta da una fonte attiva', true, fontiAttive().some((f) => f.capoluogo === 'SA'));
 check('regione di MI = Lombardia', 'Lombardia', regioneDiProvincia('MI'));
 check('provincia inesistente → null', null, regioneDiProvincia('ZZ'));
 

@@ -14,13 +14,13 @@
  * con `layoutDetected: 'unknown'` (segnale di quarantena, Task 4) invece di
  * lanciare: la scansione non si interrompe mai.
  *
- * Riuso: classi, scadenze, recapiti e nome d'istituto da `pdfDeterminist`
- * (§26.83); rumore amministrativo da `noiseFilter` (§26.80).
- * Guardia: `npm run test:universal-euristica` (incluso in `npm test`).
+ * Riuso: `pdfDeterminist` (§26.83) e `noiseFilter` (§26.80). Guardia:
+ * `npm run test:universal-euristica` (incluso in `npm test`).
  */
 
 import { isAdministrativeNoise } from './noiseFilter';
 import { estraiCodiciClasse, parsePdfDeterminist } from './pdfDeterminist';
+import { vociDaElenco } from './universalElenchi';
 import { blocchi, celle, primoLink, testo } from './universalHtml';
 
 /** Una voce apribile: solo ciò che la fonte dichiara, niente dati inventati. */
@@ -36,7 +36,7 @@ export interface ExtractedInterpello {
 }
 
 /** Come è stata letta la pagina (serve alla quarantena e ai log del runner). */
-export type LayoutRilevato = 'table' | 'aria_grid' | 'wp_posts' | 'unknown';
+export type LayoutRilevato = 'table' | 'aria_grid' | 'wp_posts' | 'link_list' | 'unknown';
 
 export interface UniversalExtractionResult {
   success: boolean;
@@ -211,10 +211,8 @@ function daWordPress(html: string, baseUrl: string): ExtractedInterpello[] {
 
 /**
  * Legge una pagina scolastica e restituisce gli avvisi apribili. Ordine dei
- * lettori: tabella → griglia di `<div>` → lista WordPress. Se nessuno produce
- * voci valide la risposta è `success: false` + `layoutDetected: 'unknown'`: è
- * il segnale che manda la sorgente in quarantena invece di far fallire la
- * scansione.
+ * lettori: tabella → griglia → post WordPress → elenchi/card. Nessun layout
+ * riconosciuto = `success: false` + `unknown` (quarantena, mai un'eccezione).
  */
 export function parseUniversalHtml(html: string, sourceUrl: string): UniversalExtractionResult {
   if (typeof html !== 'string' || html.trim() === '') {
@@ -235,6 +233,10 @@ export function parseUniversalHtml(html: string, sourceUrl: string): UniversalEx
 
   const post = daWordPress(documento, sourceUrl);
   if (post.length > 0) return { success: true, items: post, layoutDetected: 'wp_posts' };
+
+  // Ultimo lettore (§26.93): elenchi e card senza wrapper semantico.
+  const elenco = vociDaElenco(documento, sourceUrl);
+  if (elenco.length > 0) return { success: true, items: elenco, layoutDetected: 'link_list' };
 
   return {
     success: false,

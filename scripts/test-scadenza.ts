@@ -77,7 +77,7 @@ check('pubblicazione illeggibile → NON vivo', false, eAvvisoVivo(null, 'non-un
 check('senza scadenza e stringa vuota → NON vivo', false, eAvvisoVivo('', '', OGGI));
 
 console.log('\n— Semaforo a TRE luci: rosso < 24h · arancio 24–72h · verde ≥ 3 gg (§26.89) —');
-// Rosso = SOLO le prossime 24 ore. Arancio = azione richiesta (24–72 ore).
+// Rosso = SOLO le prossime 24 ore. Giallo scuro = azione richiesta (24–72 ore).
 // Verde = c'è tempo (3 … 15 giorni). Ardesia = nessun allarme: scaduto, data
 // assente, data fuori finestra.
 check('soglia rossa = solo oggi', 0, SOGLIA_ROSSO);
@@ -98,14 +98,18 @@ check('oggi (< 24h) label', 'Scade oggi', stileScadenza(0).label);
 check('scaduto → ardesia', 'scaduto', stileScadenza(-3).livello);
 check('sconosciuto → n/d', 'sconosciuto', stileScadenza(null).livello);
 check('verde usa la tinta piena emerald-700', true, stileScadenza(10).className.includes('bg-emerald-700'));
-check('arancio usa la tinta piena orange-800', true, stileScadenza(2).className.includes('bg-orange-800'));
+check('luce media: giallo oro pieno yellow-700 (§26.97)', true, stileScadenza(2).className.includes('bg-yellow-700'));
 check('rosso usa la tinta piena rose-700 (solo a 0 giorni)', true, stileScadenza(0).className.includes('bg-rose-700'));
 check('il rosso NON si estende a domani', false, stileScadenza(1).className === stileScadenza(0).className);
-check('l’arancio NON si estende al terzo giorno', false, stileScadenza(3).className === stileScadenza(2).className);
+check('la luce media NON si estende al terzo giorno', false, stileScadenza(3).className === stileScadenza(2).className);
 check(
-  'nessun giallo/ambra in nessuna banda',
+  'nessun giallo chiaro o ambra sotto AA in nessuna banda',
   false,
-  [10, 3, 2, 1, 0, 16, -3, null].some((g) => /bg-(?:amber|yellow)-/.test(stileScadenza(g as number | null).className)),
+  [10, 3, 2, 1, 0, 16, -3, null].some((g) =>
+    /bg-(?:amber|yellow)-(?:50|100|200|300|400|500|600)\b/.test(
+      stileScadenza(g as number | null).className,
+    ),
+  ),
 );
 check('nessuna banda pastello (…-100/…-200)', false, /-(?:50|100|200)\b/.test(stileScadenza(10).className + stileScadenza(2).className + stileScadenza(1).className));
 check('senza scadenza → ardesia piena, non un colore d’allarme', true, stileScadenza(null).className.includes('bg-slate-600'));

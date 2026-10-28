@@ -7,8 +7,8 @@
  * feed della dashboard (`ElencoOpportunita`), responso della prova Radar.
  *
  *   🔴 rosso   `bg-rose-700`   0 giorni   → le prossime 24 ore  «Scade oggi»
- *   🟠 arancio `bg-orange-800` 1–2 giorni → 24–72 ore           «Scade domani»
- *                                                              «Ultime 72h»
+ *   🟡 giallo  `bg-yellow-700` 1–2 giorni → 24–72 ore           «Scade domani»
+ *     scuro                                                      «Ultime 72h»
  *   🟢 verde   `bg-emerald-700` 3 … 15 giorni, dentro l'orizzonte «In corso»
  *   ⚫ ardesia `bg-slate-600`   oltre l'orizzonte  «Scadenza fuori finestra»
  *              `bg-slate-700`   già passata       «Scaduto»
@@ -32,12 +32,19 @@
  * questo file importa i giorni e l'orizzonte da `lib/scadenza.ts`, che NON lo
  * importa — quindi non si crea nessun ciclo fra moduli (`E-CICLO`).
  *
- * Nota sui token: `rose`, `emerald`, `slate` e `orange` sono gradini della
+ * **Perché la luce media è GIALLO ORO (§26.97).** Fino a §26.96 era ambra
+ * `amber-700` (#b45309): corretta sul contrasto (5,02:1), ma a dieci pixel la sua
+ * tonalità (28°) resta a due passi dal rosso `rose-700` (347°) — e il badge
+ * chiede di distinguere a colpo d'occhio «oggi» da «domani». La direttiva del
+ * 26/10/2026 chiede un giallo caldo, oro/senape: `yellow-700` (#a16207, 4,92:1
+ * sul bianco, **AA** — sopra la soglia 4,5:1) ha tonalità 45°, cioè la distanza
+ * di tinta massima dal rosso fra i gradini scuri che tengono il testo bianco in
+ * grassetto. Restano fuori `amber-600` (#d97706, **3,19:1**) e `amber-500`
+ * (**2,15:1**): sotto AA, quindi mai in palette (§26.88).
+ *
+ * Nota sui token: `rose`, `emerald`, `slate` e `amber` sono gradini della
  * palette Tailwind (non di `theme.extend.colors`), quindi la guardia
- * `npm run test:palette` li valida contro la palette completa. `orange-800`
- * regge il testo bianco in grassetto con un contrasto di 7,3:1, come le altre
- * luci piene; nessuna tinta pastello e nessuna pulsazione: il colore dichiara
- * lo STATO, non invita a correre.
+ * `npm run test:palette` li valida contro la palette completa.
  */
 import { GIORNI_ORIZZONTE_OPPORTUNITA } from './scadenza';
 
@@ -82,7 +89,10 @@ export interface StileScadenza {
  */
 export const SCADENZA_TOKENS = {
   rosso: 'bg-rose-700 text-white font-bold',
-  arancio: 'bg-orange-800 text-white font-bold',
+  // §26.97 — luce media: GIALLO ORO `yellow-700` (#a16207, 4,92:1 sul bianco).
+  // La chiave resta `arancio` perché il livello del semaforo è sempre `urgente`:
+  // rinominarla obbligherebbe ogni superficie a cambiare per un colore.
+  arancio: 'bg-yellow-700 text-white font-bold',
   verde: 'bg-emerald-700 text-white font-bold',
   scaduto: 'bg-slate-700 text-white font-bold',
   neutro: 'bg-slate-600 text-white font-bold',

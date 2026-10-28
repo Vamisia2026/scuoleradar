@@ -5,9 +5,8 @@
  * vere, se sbaglia in difetto riempie il motore di gare e circolari. La guardia
  * fissa i due lati: SCARTARE gare, circolari, burocrazia e pagine informative
  * (§26.82); TENERE interpelli e supplenze (A-22, sostegno ADEE), tutor PNRR,
- * CPIA e le pagine di interpelli che citano un CIG. Verifica inoltre la
- * precedenza del titolo, la purezza del modulo e il cablaggio in
- * `discovery-engine`/`table-reporter`.
+ * CPIA e le pagine che citano un CIG. Verifica inoltre la precedenza del titolo,
+ * la purezza del modulo e il cablaggio in `discovery-engine`/`table-reporter`.
  *
  * Uso: npm run test:noise-filter  (incluso in `npm test`)
  */
@@ -210,16 +209,17 @@ tabella([
 
 console.log('\n— Il pre-filtro è puro e le liste sono vive —');
 const sorgente = leggi('src/lib/noiseFilter.ts');
-check('nessun import (zero dipendenze)', false, /(^|\n)\s*import\s/.test(sorgente));
-check('nessun require dinamico', false, /require\s*\(/.test(sorgente));
-check('nessuna chiamata di rete', false, /fetch\s*\(|axios|supabase/i.test(sorgente));
+const esterne = [...sorgente.matchAll(/from\s+'([^']+)'/g)].map((m) => m[1]).filter((s) => !s.startsWith('./'));
+check('dipendenze: solo file sorelli (`./…`, §26.91)', [], esterne);
+check('nessun require dinamico né chiamata di rete', false, /require\s*\(|fetch\s*\(|axios|supabase/i.test(sorgente));
 check('segnale CIG presente', true, ADMIN_NOISE_PATTERNS.some((p) => /CIG/.test(p.re.source)));
 check('segnale determina presente', true, ADMIN_NOISE_PATTERNS.some((p) => /determina/.test(p.re.source)));
 check('segnale TFR presente', true, ADMIN_NOISE_PATTERNS.some((p) => /TFR/.test(p.re.source)));
-check('almeno 20 segnali negativi', true, ADMIN_NOISE_PATTERNS.length >= 20);
-check('almeno 8 indicatori positivi', true, RECRUITMENT_INDICATORS.length >= 8);
+check('liste vive (≥ 20 segnali negativi, ≥ 8 positivi)', true, ADMIN_NOISE_PATTERNS.length >= 20 && RECRUITMENT_INDICATORS.length >= 8);
 check('stringa vuota: nessun indicatore', false, hasRecruitmentIndicator(''));
 check('spazi e NBSP non nascondono il segnale', true, rumore('CIG:\u00a0Z4C3F2A1B9'));
+
+
 
 /* ------------------- 6) CABLAGGIO NELL’INGESTIONE ----------------------- */
 

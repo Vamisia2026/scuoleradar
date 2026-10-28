@@ -47,11 +47,13 @@ function fra(giorni: number): string {
   return dataIsoLocale(d);
 }
 
-console.log('— 0. Palette UNICA e PIENA: tre luci, nessun giallo (§26.89) —');
+console.log('— 0. Palette UNICA e PIENA: tre luci distinte (§26.89, §26.96) —');
 // Direttiva di prodotto: il colore di urgenza deve vedersi di sfuggita, anche su
 // schermo piccolo → tinta SATURA con testo bianco in grassetto. Le luci sono
-// TRE (rosso · arancio · verde) e l'arancio è UNO: il giallo/ambra resta fuori,
-// era la quarta scala dello stesso dato.
+// TRE (rosso · giallo oro · verde) e ognuna ha UNA tinta: dal §26.97 la luce
+// media è `yellow-700` (#a16207), il giallo caldo che regge il bianco con
+// 4,92:1 (AA) e sta a 45° di tonalità, lontano dal rosso. Restano fuori
+// `amber-600` (3,19:1) e i gialli chiari.
 const ePieno = (token: string): boolean =>
   /\bbg-\w+-[5-9]00\b/.test(token) && token.includes('text-white') && token.includes('font-bold');
 check('verde: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.verde));
@@ -60,16 +62,19 @@ check('rosso: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.rosso)
 check('scaduto: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.scaduto));
 check('neutro: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.neutro));
 check('verde del design system: `bg-emerald-700`', true, SCADENZA_TOKENS.verde.includes('bg-emerald-700'));
-check('arancio del design system: `bg-orange-800`', true, SCADENZA_TOKENS.arancio.includes('bg-orange-800'));
+check('luce media: giallo oro `bg-yellow-700` (§26.97)', true, SCADENZA_TOKENS.arancio.includes('bg-yellow-700'));
 check('rosso del design system: `bg-rose-700`', true, SCADENZA_TOKENS.rosso.includes('bg-rose-700'));
 // Tre luci, tre tinte: se due token coincidessero il semaforo non sarebbe
-// leggibile a colpo d'occhio (rosso vs arancio sono i due più vicini).
+// leggibile a colpo d'occhio (rosso vs giallo scuro sono i due più vicini).
 check('ogni banda ha una tinta DIVERSA (5 token distinti)', 5, new Set(Object.values(SCADENZA_TOKENS)).size);
+// §26.96 — il giallo entra nella palette SOLO nel gradino che regge AA. Il
+// gradino «di moda» (#D97706 = amber-600) resta fuori per contrasto misurato e
+// i gialli chiari non devono comparire in nessun token.
 check(
-  'nessun giallo/ambra fra i token (una sola luce d’avviso media)',
+  'nessun giallo chiaro o ambra sotto AA fra i token',
   [],
   Object.entries(SCADENZA_TOKENS)
-    .filter(([, token]) => /\b(?:bg-amber|bg-yellow)-/.test(token))
+    .filter(([, token]) => /\bbg-(?:amber|yellow)-(?:50|100|200|300|400|500|600)\b/.test(token))
     .map(([banda]) => banda),
 );
 // Nessuna tinta pastello (…-50 / …-100 / …-200) in nessun token: la direttiva
@@ -96,15 +101,15 @@ check(
 
 const domani = badgeScadenza(fra(1));
 check('scade domani → etichetta', 'Scade domani', domani.label);
-check('scade domani → ARANCIO, non più rosso (§26.89)', SCADENZA_TOKENS.arancio, domani.className);
+check('scade domani → GIALLO SCURO, non più rosso (§26.89, §26.96)', SCADENZA_TOKENS.arancio, domani.className);
 check('scade domani → non è la luce rossa', false, domani.className === SCADENZA_TOKENS.rosso);
 
 const due = badgeScadenza(fra(2));
 check('entro 72h → etichetta', 'Ultime 72h', due.label);
-check('entro 72h → arancio (azione richiesta)', SCADENZA_TOKENS.arancio, due.className);
+check('entro 72h → giallo scuro (azione richiesta)', SCADENZA_TOKENS.arancio, due.className);
 
-// §26.89 — IL GIALLO NON ESISTE, L'ARANCIO SÌ: dal terzo giorno in poi l'avviso
-// è «In corso» (verde), cioè lo stesso verdetto della scheda avviso e del feed.
+// §26.89, §26.96 — LA LUCE MEDIA È IL GIALLO SCURO: dal terzo giorno in poi
+// l'avviso è «In corso» (verde), cioè lo stesso verdetto della scheda avviso.
 const tre = badgeScadenza(fra(3));
 check('3 giorni → verde (abbondanza, non più allarme)', SCADENZA_TOKENS.verde, tre.className);
 check('3 giorni → etichetta di STATO, non un conto alla rovescia', 'In corso', tre.label);

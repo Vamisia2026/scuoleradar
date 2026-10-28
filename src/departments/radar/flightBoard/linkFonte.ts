@@ -11,11 +11,13 @@
  * Regola (una sola, in questo modulo):
  *   1. l'URL viene PRIMA ripulito (`pulisciUrlEsterna`: entità HTML, caporali,
  *      punteggiatura incollata) e poi validato (`urlValido`);
- *   2. se l'host è una piattaforma dell'elenco `HOST_PIATTAFORMA`, l'avviso non è
- *      verificabile: si sostituisce con la HOME ISTITUZIONALE dell'istituto,
- *      presa dal sito dichiarato dall'anagrafica MIM (`school_site`, ex
- *      `SITOWEBSCUOLA`) e, in mancanza, dal dominio `.edu.it` della PEO/PEC che la
- *      scuola ha pubblicato nell'avviso (`contact_email`, poi `school_pec`);
+ *   2. se l'host è una piattaforma dell'elenco `HOST_PIATTAFORMA_PRIVATA`
+ *      (`lib/piattaformeLink.ts`: UN elenco per tabellone e ingestione),
+ *      l'avviso non è verificabile: si sostituisce con la HOME ISTITUZIONALE
+ *      dell'istituto, presa dal sito dichiarato dall'anagrafica MIM
+ *      (`school_site`, ex `SITOWEBSCUOLA`) e, in mancanza, dal dominio `.edu.it`
+ *      della PEO/PEC che la scuola ha pubblicato nell'avviso (`contact_email`,
+ *      poi `school_pec`);
  *   3. se non esiste né un avviso apribile né un dominio `.edu.it`, la funzione
  *      restituisce `null` e la riga NON entra in bacheca: meglio una riga in meno
  *      che una riga che promette un avviso e apre una pagina di login.
@@ -32,45 +34,23 @@
  * `avviso` = pagina dell'avviso, `sito-scuola` = home ufficiale dell'istituto.
  */
 import { pulisciUrlEsterna } from '@/lib/alertInterpello';
+import { HOST_PIATTAFORMA_PRIVATA } from '@/lib/piattaformeLink';
 import { urlValido } from './righeBoard';
-
-/** Piattaforme che NON servono un avviso pubblico verificabile. */
-const HOST_PIATTAFORMA: readonly RegExp[] = [
-  // Registro elettronico / portale Argo (direttiva cliente 22/10/2026: mai un
-  // link a `portaleargo.it`, nemmeno nel formato per-istituto).
-  /(^|\.)argo\.it$/,
-  /(^|\.)portaleargo\.it$/,
-  /(^|\.)argoweb\.it$/,
-  // Nuvola e ClasseViva (gruppo Spaggiari): `spaggiari.eu`, `nuvola.madisoft.it`.
-  /(^|\.)madisoft\.it$/,
-  /(^|\.)spaggiari\.eu$/,
-  /(^|\.)spaggiari\.it$/,
-  /(^|\.)classeviva\.it$/,
-  // Moduli e documenti Google.
-  /(^|\.)docs\.google\.com$/,
-  /(^|\.)drive\.google\.com$/,
-  /(^|\.)forms\.google\.com$/,
-  /(^|\.)forms\.gle$/,
-  /(^|\.)script\.google\.com$/,
-  /(^|\.)classroom\.google\.com$/,
-  // Cartelle e file con scadenza.
-  /(^|\.)1drv\.ms$/,
-  /(^|\.)sharepoint\.com$/,
-  /(^|\.)onedrive\.live\.com$/,
-  /(^|\.)we\.tl$/,
-  /(^|\.)wetransfer\.com$/,
-];
 
 /**
  * True se il link punta a una piattaforma dell'elenco: una pagina che dopo pochi
  * giorni chiede il login o non esiste più. `www.` è irrilevante per il confronto.
+ *
+ * L'elenco vive in `lib/piattaformeLink.ts` perché serve anche all'ingestione
+ * (`lib/scuoleMaster.ts` → `table-reporter`): due elenchi divergerebbero, e la
+ * regola «mai un link di login» diventerebbe una questione di superficie.
  */
 export function ePiattaformaNonApribile(url?: string | null): boolean {
   const valido = urlValido(url);
   if (!valido) return false;
   try {
     const host = new URL(valido).host.toLowerCase().replace(/^www\./, '');
-    return HOST_PIATTAFORMA.some((re) => re.test(host));
+    return HOST_PIATTAFORMA_PRIVATA.some((re) => re.test(host));
   } catch {
     return false;
   }
