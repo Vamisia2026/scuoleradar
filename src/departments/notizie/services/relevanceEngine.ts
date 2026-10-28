@@ -7,6 +7,11 @@
  * reali in ingresso e applica le regole editoriali STRETTE:
  *  - ZERO rumore: RIFIUTA comunicati stampa, discorsi, interviste, campagne e
  *    qualsiasi annuncio NON vincolante;
+ *  - RUMORE SEMANTICO (§26.98): fuori anche scioperi, assemblee sindacali,
+ *    proteste, comunicati di sigla e avvisi temporanei (chiusura uffici, orario
+ *    estivo). La regola vive in `filtroRumore.ts` e si applica all'ingestione,
+ *    alla riserva settimanale e all'igiene dell'archivio: una notizia entra solo
+ *    se resta utile per almeno sei mesi (`DURATA_UTILE_MINIMA_MESI`);
  *  - ACCETTA SOLO provvedimenti vincolanti: decreti, ordinanze ministeriali,
  *    note, circolari, bandi e scadenze operative per il personale scolastico
  *    (GPS, Mobilità, Concorsi, Pensioni, Sostegno, …);
@@ -45,6 +50,7 @@ import {
   TEMI_OPERATIVI,
 } from './editorialStandard';
 import { FRASI_FLUFF, GLOSSARIO_ACRONIMI, PAROLE_OPERATIVE } from './lessicoScuola';
+import { articoloRumoroso, rilevaRumoreEditoriale } from './filtroRumore';
 import { èFonteCanonica, èFonteNazionale, validaUrlDeepLink } from './fontiUfficiali';
 import { classificaLink, linkNonValidiInHtml } from './linkUfficiale';
 import {
@@ -265,6 +271,10 @@ export function èRiservaSettimanale(
   if (attoBurocraticoVuoto(titolo)) return false;
   // Mai un comunicato/lettera/evento, nemmeno come riserva: il fluff resta fuori.
   if (titoloDaUfficioStampa(titolo)) return false;
+  // Mai un rumore come riserva (§26.98): uno sciopero, un'assemblea o un avviso
+  // di orario non possono occupare lo slot settimanale che serve a una notizia
+  // utile per mesi.
+  if (rilevaRumoreEditoriale(testo)) return false;
   if (riferimentiObsoleti(testo, dataFonte)) return false;
   return PAROLE_IMPATTO.test(titolo) && PAROLE_SCUOLA.test(titolo);
 }
@@ -546,6 +556,21 @@ export function valutaRilevanza(voce: VoceInValutazione): ValutazioneNotizia {
     };
   }
 
+  // 0-quater) RUMORE SEMANTICO (§26.98): scioperi, assemblee sindacali,
+  //    proteste, comunicati di sigla e avvisi temporanei (chiusura uffici,
+  //    orario estivo). Non restano utili per sei mesi, quindi non sono notizie —
+  //    nemmeno quando il testo cita un interpello o una scadenza. Il filtro vive
+  //    in `filtroRumore.ts`: qui si applica e basta, prima di ogni altra regola.
+  const rumore = rilevaRumoreEditoriale(`${voce.title} ${voce.description ?? ''}`);
+  if (rumore) {
+    return {
+      rilevante: false,
+      categoria: null,
+      deadline: null,
+      motivo: `Rumore sindacale/politico («${rumore}»): nessun valore duraturo`,
+    };
+  }
+
   // 0) BUROCRAZIA VUOTA: un titolo che è SOLO il riferimento formale di un atto
   //    ("Decreto Direttoriale n. 1095 del 10 settembre 2026", "Ordinanza
   //    Ministeriale n. 163 del 7 agosto 2026") non dice al lettore che cosa
@@ -660,6 +685,14 @@ export function articoloValido(a: NewsArticle): boolean {
     Boolean(a.official_source_url) &&
     a.official_source_url.startsWith('http');
   if (!base) return false;
+  // IGIENE EDITORIALE (§26.98): un articolo che parla di scioperi, assemblee
+  // sindacali, proteste o avvisi temporanei non sta in bacheca, nemmeno se è
+  // entrato prima della regola: al primo passaggio di validazione esce.
+  const rumore = articoloRumoroso(a);
+  if (rumore) {
+    console.warn(`✗ Articolo scartato (${a.id}): rumore editoriale («${rumore}»)`);
+    return false;
+  }
   const motivo = validaUrlDeepLink(a.official_source_url);
   if (motivo) {
     console.warn(`✗ Articolo scartato (${a.id}): URL fonte non valido — ${motivo}`);
@@ -813,3 +846,16 @@ export {
   espandiAcronimi,
 } from './editorialVoice';
 export type { ValutazioneNotizia, VoceInValutazione } from './valutazioneTipi';
+export {
+  ANCORAGGIO_DURATURO,
+  AVVISI_TEMPORANEI,
+  DURATA_UTILE_MINIMA_MESI,
+  RUMORE_SINDACALE,
+  SIGLE_SINDACALI,
+  articoloRumoroso,
+  haValoreDuraturo,
+  rilevaRumoreEditoriale,
+  rumoreSindacale,
+  rumoreTemporaneo,
+} from './filtroRumore';
+export type { SegnaleRumore } from './filtroRumore';

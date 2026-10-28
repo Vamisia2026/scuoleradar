@@ -47,35 +47,41 @@ function fra(giorni: number): string {
   return dataIsoLocale(d);
 }
 
-console.log('— 0. Palette UNICA e PIENA: tre luci distinte (§26.89, §26.96) —');
+console.log('— 0. Palette UNICA e PIENA: tre luci distinte (§26.89, §26.98) —');
 // Direttiva di prodotto: il colore di urgenza deve vedersi di sfuggita, anche su
-// schermo piccolo → tinta SATURA con testo bianco in grassetto. Le luci sono
-// TRE (rosso · giallo oro · verde) e ognuna ha UNA tinta: dal §26.97 la luce
-// media è `yellow-700` (#a16207), il giallo caldo che regge il bianco con
-// 4,92:1 (AA) e sta a 45° di tonalità, lontano dal rosso. Restano fuori
-// `amber-600` (3,19:1) e i gialli chiari.
+// schermo piccolo → tinta SATURA e BRILLANTE con etichetta quasi nera in
+// grassetto. Le luci sono TRE (rosso · oro · verde): dal §26.98 sono `rose-500`,
+// `amber-400` e `emerald-500` con `text-slate-950`, la combinazione che regge AA
+// (5,50:1 · 12,07:1 · 7,96:1) restando viva sulla tavola bianca. Il bianco su
+// queste tinte sta sotto AA (amber-400: 1,67:1), quindi non si usa più.
 const ePieno = (token: string): boolean =>
-  /\bbg-\w+-[5-9]00\b/.test(token) && token.includes('text-white') && token.includes('font-bold');
-check('verde: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.verde));
-check('arancio: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.arancio));
-check('rosso: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.rosso));
+  /\bbg-\w+-(?:400|500|600|700|800|900)\b/.test(token) &&
+  (token.includes('text-slate-950') || token.includes('text-white')) &&
+  token.includes('font-bold');
+check('verde: colore pieno su etichetta scura', true, ePieno(SCADENZA_TOKENS.verde));
+check('arancio: colore pieno su etichetta scura', true, ePieno(SCADENZA_TOKENS.arancio));
+check('rosso: colore pieno su etichetta scura', true, ePieno(SCADENZA_TOKENS.rosso));
 check('scaduto: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.scaduto));
 check('neutro: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.neutro));
-check('verde del design system: `bg-emerald-700`', true, SCADENZA_TOKENS.verde.includes('bg-emerald-700'));
-check('luce media: giallo oro `bg-yellow-700` (§26.97)', true, SCADENZA_TOKENS.arancio.includes('bg-yellow-700'));
-check('rosso del design system: `bg-rose-700`', true, SCADENZA_TOKENS.rosso.includes('bg-rose-700'));
+check('verde: tinta brillante `bg-emerald-500`', true, SCADENZA_TOKENS.verde.includes('bg-emerald-500'));
+check('luce media: oro brillante `bg-amber-400` (§26.98)', true, SCADENZA_TOKENS.arancio.includes('bg-amber-400'));
+check('rosso: tinta piena `bg-rose-500`', true, SCADENZA_TOKENS.rosso.includes('bg-rose-500'));
+check('le tre luci d’allarme usano l’etichetta scura `text-slate-950`', true, [SCADENZA_TOKENS.verde, SCADENZA_TOKENS.arancio, SCADENZA_TOKENS.rosso].every((t) => t.includes('text-slate-950')));
 // Tre luci, tre tinte: se due token coincidessero il semaforo non sarebbe
-// leggibile a colpo d'occhio (rosso vs giallo scuro sono i due più vicini).
+// leggibile a colpo d'occhio (rosso vs oro sono i due più vicini).
 check('ogni banda ha una tinta DIVERSA (5 token distinti)', 5, new Set(Object.values(SCADENZA_TOKENS)).size);
-// §26.96 — il giallo entra nella palette SOLO nel gradino che regge AA. Il
-// gradino «di moda» (#D97706 = amber-600) resta fuori per contrasto misurato e
-// i gialli chiari non devono comparire in nessun token.
+// §26.88, §26.98 — nel semaforo l'unico giallo ammesso è `amber-400` (luminoso,
+// etichetta scura). Restano fuori gli ambra/gialli scuri (500–900: sotto AA) e i
+// pastelli: nessun token deve contenerli.
 check(
-  'nessun giallo chiaro o ambra sotto AA fra i token',
+  'nessun giallo scuro o pastello fra i token (solo `amber-400`)',
   [],
   Object.entries(SCADENZA_TOKENS)
-    .filter(([, token]) => /\bbg-(?:amber|yellow)-(?:50|100|200|300|400|500|600)\b/.test(token))
-    .map(([banda]) => banda),
+    .flatMap(([banda, token]) =>
+      (token.match(/bg-(?:amber|yellow)-\d{3}/g) ?? [])
+        .filter((t) => t !== 'bg-amber-400')
+        .map((t) => `${banda}: ${t}`),
+    ),
 );
 // Nessuna tinta pastello (…-50 / …-100 / …-200) in nessun token: la direttiva
 // §26.75 chiede SOLO colori pieni ad alto contrasto.

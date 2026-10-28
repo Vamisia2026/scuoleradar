@@ -76,8 +76,8 @@ check('senza scadenza né pubblicazione → NON vivo', false, eAvvisoVivo(null, 
 check('pubblicazione illeggibile → NON vivo', false, eAvvisoVivo(null, 'non-una-data', OGGI));
 check('senza scadenza e stringa vuota → NON vivo', false, eAvvisoVivo('', '', OGGI));
 
-console.log('\n— Semaforo a TRE luci: rosso < 24h · arancio 24–72h · verde ≥ 3 gg (§26.89) —');
-// Rosso = SOLO le prossime 24 ore. Giallo scuro = azione richiesta (24–72 ore).
+console.log('\n— Semaforo a TRE luci: rosso < 24h · oro 24–72h · verde ≥ 3 gg (§26.89, §26.98) —');
+// Rosso = SOLO le prossime 24 ore. Oro brillante = azione richiesta (24–72 ore).
 // Verde = c'è tempo (3 … 15 giorni). Ardesia = nessun allarme: scaduto, data
 // assente, data fuori finestra.
 check('soglia rossa = solo oggi', 0, SOGLIA_ROSSO);
@@ -97,29 +97,74 @@ check('oggi (< 24h) → ROSSO', 'critico', stileScadenza(0).livello);
 check('oggi (< 24h) label', 'Scade oggi', stileScadenza(0).label);
 check('scaduto → ardesia', 'scaduto', stileScadenza(-3).livello);
 check('sconosciuto → n/d', 'sconosciuto', stileScadenza(null).livello);
-check('verde usa la tinta piena emerald-700', true, stileScadenza(10).className.includes('bg-emerald-700'));
-check('luce media: giallo oro pieno yellow-700 (§26.97)', true, stileScadenza(2).className.includes('bg-yellow-700'));
-check('rosso usa la tinta piena rose-700 (solo a 0 giorni)', true, stileScadenza(0).className.includes('bg-rose-700'));
+check('verde: tinta piena brillante emerald-500 (§26.98)', true, stileScadenza(10).className.includes('bg-emerald-500'));
+check('luce media: oro brillante amber-400 (§26.98)', true, stileScadenza(2).className.includes('bg-amber-400'));
+check('rosso: tinta piena rose-500 (solo a 0 giorni)', true, stileScadenza(0).className.includes('bg-rose-500'));
 check('il rosso NON si estende a domani', false, stileScadenza(1).className === stileScadenza(0).className);
 check('la luce media NON si estende al terzo giorno', false, stileScadenza(3).className === stileScadenza(2).className);
+// §26.88, §26.98 — nel semaforo l'unico giallo ammesso è `amber-400` (luminoso,
+// etichetta scura: 12:1). Fuori i gialli scuri (yellow/amber 500–900: sotto AA
+// sul bianco) e i pastelli.
 check(
-  'nessun giallo chiaro o ambra sotto AA in nessuna banda',
-  false,
-  [10, 3, 2, 1, 0, 16, -3, null].some((g) =>
-    /bg-(?:amber|yellow)-(?:50|100|200|300|400|500|600)\b/.test(
-      stileScadenza(g as number | null).className,
+  'nessun giallo scuro o pastello: l’unico ammesso è amber-400',
+  [],
+  [10, 5, 3, 2, 1, 0, 16, -3, null]
+    .map((g) => [g, stileScadenza(g as number | null).className] as const)
+    .flatMap(([g, c]) =>
+      (c.match(/bg-(?:amber|yellow)-\d{3}/g) ?? [])
+        .filter((t) => t !== 'bg-amber-400')
+        .map((t) => `${g}: ${t}`),
     ),
-  ),
 );
 check('nessuna banda pastello (…-100/…-200)', false, /-(?:50|100|200)\b/.test(stileScadenza(10).className + stileScadenza(2).className + stileScadenza(1).className));
 check('senza scadenza → ardesia piena, non un colore d’allarme', true, stileScadenza(null).className.includes('bg-slate-600'));
 check('scaduto → ardesia scura', true, stileScadenza(-3).className.includes('bg-slate-700'));
 check('fuori finestra → ardesia, mai verde', true, stileScadenza(30).className.includes('bg-slate-600'));
 check('nessuna banda pulsa', false, [10, 2, 1, 0, -3, null].some((g) => stileScadenza(g as number | null).className.includes('animate-')));
-check('testo bianco in grassetto su TUTTE le bande', true, [10, 5, 3, 2, 1, 0, -3, null].every((g) => {
+// Etichetta in grassetto su TUTTE le bande: bianca sulle ardesia (nessun
+// allarme), quasi nera sulle tre luci brillanti (è il contrasto che regge AA).
+check('etichetta scura o bianca in grassetto su TUTTE le bande', true, [10, 5, 3, 2, 1, 0, -3, null].every((g) => {
   const c = stileScadenza(g as number | null).className;
-  return c.includes('text-white') && c.includes('font-bold');
+  return (c.includes('text-white') || c.includes('text-slate-950')) && c.includes('font-bold');
 }));
+
+console.log('\n— Contrasto MISURATO (WCAG 2.1) delle bande: nessuna tinta sotto AA 4,5:1 —');
+// I valori non si copiano a mano: si calcolano dall'esadecimale del token, così
+// una futura sostituzione di tinta non può passare sotto la soglia in silenzio.
+const HEX: Record<string, string> = {
+  'bg-rose-500': '#f43f5e',
+  'bg-amber-400': '#fbbf24',
+  'bg-emerald-500': '#10b981',
+  'bg-slate-600': '#475569',
+  'bg-slate-700': '#334155',
+  'text-white': '#ffffff',
+  'text-slate-950': '#020617',
+};
+function luminanzaRelativa(hex: string): number {
+  const canali = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const [r, g, b] = canali.map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function contrasto(sfondo: string, testo: string): number {
+  const [a, b] = [luminanzaRelativa(sfondo), luminanzaRelativa(testo)].sort((x, y) => y - x);
+  return Math.round(((a + 0.05) / (b + 0.05)) * 100) / 100;
+}
+const tonalitaBanda = (className: string): { sfondo: string; testo: string } | null => {
+  const sfondo = className.match(/bg-[\w-]+/)?.[0] ?? '';
+  const testo = className.match(/text-(?:white|slate-950)/)?.[0] ?? '';
+  return HEX[sfondo] && HEX[testo] ? { sfondo, testo } : null;
+};
+for (const g of [10, 5, 3, 2, 1, 0, -3, null]) {
+  const classe = stileScadenza(g as number | null).className;
+  const tinta = tonalitaBanda(classe);
+  // Dalle CLASSI (bg-…/text-…) ai due esadecimali: il rapporto si misura sui colori.
+  const rapporto = tinta ? contrasto(HEX[tinta.sfondo], HEX[tinta.testo]) : 0;
+  check(`contrasto AA (≥ 4,5:1) — ${g ?? 'n/d'} giorni · ${tinta?.testo ?? 'testo?'}`, true, rapporto >= 4.5);
+}
+check('«Scade oggi»: rose-500 su etichetta scura ≥ 5:1', true, contrasto('#f43f5e', '#020617') >= 5);
+check('«Scade domani»: amber-400 su etichetta scura ≥ 10:1 (AAA)', true, contrasto('#fbbf24', '#020617') >= 10);
+check('«In corso»: emerald-500 su etichetta scura ≥ 7:1 (AAA)', true, contrasto('#10b981', '#020617') >= 7);
+check('testo bianco sulle tinte brillanti: fuori AA (perché l’etichetta è scura)', true, contrasto('#fbbf24', '#ffffff') < 4.5);
 check('«In scadenza» acceso per rosso/arancio/scaduto', true, [0, 1, 2, -1].every((g) => eTermineProssimo(stileScadenza(g).livello)));
 check('«In scadenza» spento per verde e ardesia', false, [3, 10, 30, 16].some((g) => eTermineProssimo(stileScadenza(g).livello)));
 

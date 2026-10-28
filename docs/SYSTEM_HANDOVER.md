@@ -10174,3 +10174,138 @@ e, se tornano leggibili, si spostano di blocco con una riga.
 
 
 
+
+
+---
+
+## §26.98 Palette brillante del semaforo, filtro semantico delle Notizie e conto alla rovescia delle vacanze (26/10/2026)
+
+Tre difetti di prodotto, tre cause diverse: un colore **spento** che non si legge di
+sfuggita, una bacheca che pubblicava **scioperi e avvisi di orario**, un numero che
+restava **congelato** in pagina («56 giorni»). Nessuno dei tre era un errore di
+calcolo: erano tre regole che nessuno aveva scritto. Ora sono scritte, cablate e
+verificate.
+
+### 1. Semaforo della scadenza: da «Gotham City» a tinte piene e luminose
+
+Il §26.97 aveva scelto `yellow-700` (#a16207) per la luce media: contrasto AA sul
+bianco, tonalità a 45° lontana dal rosso — ma il tabellone restava su toni spenti e il
+badge «Scade domani» si confondeva con la tavola. La direttiva del 26/10/2026 (seconda)
+chiede il registro opposto: **tinte piene e brillanti**, etichetta quasi nera, lo stesso
+tono allegro della barra DEV.
+
+| luce | prima (§26.97) | ora (§26.98) | contrasto misurato |
+|---|---|---|---|
+| 🔴 «Scade oggi» (0 gg) | `bg-rose-700` bianco | **`bg-rose-500` + `text-slate-950`** | **5,49:1** (AA) |
+| 🟡 «Scade domani» / «Ultime 72h» | `bg-yellow-700` bianco | **`bg-amber-400` + `text-slate-950`** | **12,08:1** (AAA) |
+| 🟢 «In corso» (3–15 gg) | `bg-emerald-700` bianco | **`bg-emerald-500` + `text-slate-950`** | **7,95:1** (AAA) |
+| ⚫ «Scaduto» | `bg-slate-700` bianco | invariato | 10,35:1 |
+| ⚫ «Scadenza n/d» / fuori finestra | `bg-slate-600` bianco | invariato | 7,58:1 |
+
+**Perché l'etichetta è scura.** Il testo bianco non regge più queste tinte: `amber-400`
+sta a **1,67:1**, `emerald-500` a **2,54:1**, `rose-500` a **3,67:1** — tutte sotto la
+soglia AA di 4,5:1. La scelta non è estetica: è l'unico modo per avere la tinta più viva
+**e** un'etichetta leggibile. Le due bande ardesia restano bianche perché non sono
+allarmi e non devono attirare l'occhio.
+
+I token restano UNO (in `src/lib/scadenzaSemaforo.ts`, `SCADENZA_TOKENS`): tabellone
+(`rigaBoardDati.ts` → `RigaBoard.tsx`), scheda dell'avviso e feed della dashboard
+cambiano insieme, senza una seconda palette da tenere allineata. Le guardie sono state
+riscritte per la nuova regola:
+`npm run test:interpello-scadenza` ora **misura** il contrasto WCAG dai colori (funzione
+di luminanza nel test, nessun numero copiato a mano) e rifiuta qualsiasi giallo diverso
+da `amber-400`; `npm run test:board:scadenza` e `npm run test:board:demo` verificano i
+cinque token e l'etichetta ad alto contrasto in grassetto.
+
+### 2. Notizie: il rumore sindacale e gli avvisi temporanei fuori dalla bacheca
+
+L'allow-list dei temi scartava la comunicazione istituzionale, ma non ciò che è
+**cronaca di un giorno**: scioperi, assemblee sindacali, proteste, comunicati di sigla,
+chiusure degli uffici, orario estivo. Due articoli di sciopero erano effettivamente in
+`notizieIngestite.ts` (§26.97 li aveva pubblicati) e nessun gate li nominava.
+
+La regola vive nel nuovo modulo **`src/departments/notizie/services/filtroRumore.ts`**
+(puro, nessuna rete) e distingue tre famiglie:
+
+| famiglia | segnali | effetto |
+|---|---|---|
+| **Sindacale/politica** (HARD) | `sciopero/scioperi`, `assemblea sindacale`, `protesta/proteste/presidi`, `cobas`, `flc cgil`, `manifestazione sindacale` | **sempre fuori** |
+| **Avvisi temporanei** (HARD) | `chiusura/sospensione/variazione … uffici/segreteria/servizio/lezioni`, `orario estivo/invernale/ridotto`, `disservizio`, `manutenzione straordinaria` | **sempre fuori** |
+| **Sigle come contesto** (SOFT) | `sindacato/sindacati/sindacale`, `cgil`, `cisl`, `uil`, `snals`, `gilda`, `anief`, `andoc`, `confsal` | fuori **solo se** il testo non ha un ancoraggio duraturo |
+
+L'ancoraggio (`ANCORAGGIO_DURATURO`) è la lista di ciò che resta vero per mesi: CCNL e
+contrattazione, decreti, ordinanze, leggi, linee guida e Indicazioni nazionali, PNRR,
+immissioni in ruolo, concorsi, GPS/GAE, graduatorie, mobilità, organico, classi di
+concorso, TFA/CFU, esami di Stato, sostegno, ATA, CPIA, pensioni, welfare, sicurezza,
+formazione. Così **un CCNL firmato dalle sigle resta** — è la notizia più utile
+dell'anno — mentre **un comunicato della sigla no**. La soglia dichiarata è
+`DURATA_UTILE_MINIMA_MESI = 6`: la cadenza di 1–3 articoli a settimana resta in
+`cadenzaArticoli.ts`, qui si decide la QUALITÀ di ciò che entra.
+
+**Tre richiami, un solo punto di verità** (`relevanceEngine.ts`):
+1. `valutaRilevanza` — ingestione, subito dopo il filtro delle parole non vincolanti e
+   **prima di ogni chiamata HTTP**; il motivo dello scarto esce nei log come
+   «Rumore sindacale/politico («sciopero»): nessun valore duraturo»;
+2. `èRiservaSettimanale` — un rumore non può occupare lo slot di riserva settimanale;
+3. `articoloValido` — igiene dell'archivio: la voce che viola la regola esce al primo
+   passaggio di validazione (`articoloRumoroso` legge titolo, sintesi e corpo HTML).
+
+Il prompt del filtro assistito (`promptEditoriale.promptFiltroLLM`) ha la stessa regola
+in chiaro, così l'eventuale filtro LLM non reintroduce ciò che il codice scarta.
+**Archivio ripulito:** rimossi i 2 articoli di sciopero (16 e 2 ottobre 2026) da
+`notizieIngestite.ts`; la guardia verifica che nessun titolo pubblicato contenga rumore.
+Nuova guardia `npm run test:notizie-rumore` (29 controlli), in catena a `npm test`.
+
+
+### 3. Conto alla rovescia delle vacanze: dal numero congelato all'orologio vero
+
+Il «56 giorni alle vacanze di Natale» non era un calcolo sbagliato: era un calcolo
+**fatto una volta e mai più rifatto**. `prossimeVacanze` era già pura e corretta — con
+la data del 26/10/2026 restituisce 58 giorni — ma la pagina mostrava un valore vecchio,
+fermo al giorno in cui era stato letto. Due cause possibili, entrambe coperte:
+
+* **orologio non riletto**: la scheda poteva restare aperta per giorni, tornare in primo
+  piano dopo un `bfcache` o essere ripristinata dalla cronologia; l'unico aggiornamento
+  era un timer di un minuto, che i browser in background rallentano o sospendono;
+* **nessuna dichiarazione della data**: l'utente vedeva un numero senza sapere *fino a
+  quando*, quindi non aveva modo di accorgersi che era vecchio.
+
+Cosa è cambiato (senza toccare il layout):
+
+1. **Ancora all'anno scolastico**, non all'anno solare: `annoScolasticoCorrente` (da
+   settembre a dicembre = anno in corso, da gennaio ad agosto = anno precedente) e
+   `inizioVacanzeNatale(annoScolastico)` = **23 dicembre** dell'anno scolastico. Un solo
+   posto (`GIORNO_INIZIO_VACANZE_NATALE`) da cambiare se il calendario si sposta.
+2. **Esito che dichiara la data**: `ContoVacanze` porta `dataTarget` (ISO) e
+   `annoScolastico`; il widget mostra nel tooltip «Vacanze dal 23 dicembre 2026
+   (calendario scolastico 2026/2027)». Se il numero è sbagliato, ora si vede *perché*.
+3. **Orologio riletto davvero** (`NotizieHero.tsx`): al montaggio, ogni minuto (il timer
+   riallinea anche la mezzanotte), a `visibilitychange`, `focus` e `pageshow`. Il valore
+   non può più invecchiare in pagina: `oggi` cambia solo quando cambia il GIORNO, quindi
+   nessun render inutile.
+4. **Nessun salto di un giorno**: le differenze sono in giorni civili
+   (`Date.UTC`), immuni al cambio di ora legale (25/10/2026) e a ogni offset di fuso.
+
+Nuova guardia `npm run test:vacanze` (39 controlli): su settembre, ottobre (cambio ora
+legale), novembre e dicembre verifica che il numero cali **esattamente di uno al giorno**;
+fissa i confini (estate 30/6–31/8, 23/12 → Pasqua, Pasqua → 30/6) e la purezza della
+funzione. Il caso segnalato è un controllo esplicito: 26/10 → **58**, 27/10 → **57**,
+28/10 → **56** — cioè il valore che restava fermo.
+
+### 4. Verifiche (da `project/`)
+
+`npm run typecheck` ✅ exit 0 · **`npm test` ✅ exit 0** (le due nuove guardie sono in
+catena) · `npm run test:architettura` ✅ (729 file, **145 = baseline, 0 nuove**) ·
+`npm run test:palette` ✅ **565 file** (nessun token orfano: `rose-500`, `amber-400`,
+`emerald-500`, `slate-950` esistono) · `npm run test:interpello-scadenza` ✅ (contrasto
+misurato) · `npm run test:board:scadenza` ✅ · `npm run test:board:demo` ✅ ·
+`npm run test:notizie-editoriale` ✅ · `npm run test:notizie-rumore` ✅ ·
+`npm run test:vacanze` ✅ · `npm run build` ✅.
+
+**Nota di sessione.** Le tre direttive avevano lo stesso difetto di fondo: una regola
+esisteva **solo nella testa di chi l'aveva decisa**. Il colore era «giallo» senza un
+numero di contrasto; il rumore era «roba sindacale» senza un elenco; il conteggio era
+«dinamico» senza un orologio che lo rileggesse. Adesso ogni regola ha un modulo, una
+soglia misurata e una guardia in `npm test`: chi la cambia domani lo scopre subito, e chi
+la legge trova il perché accanto al come.
+

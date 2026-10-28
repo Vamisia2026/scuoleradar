@@ -7,7 +7,7 @@
  */
 import { DepartmentErrorBoundary } from '@/components/DepartmentErrorBoundary';
 import { RevolverScadenze } from '@/departments/scadenze';
-import type { ContoVacanze } from '../../vacanzeScolastiche';
+import { dataLungaIt, type ContoVacanze } from '../../vacanzeScolastiche';
 
 interface WidgetScadenzeProps {
   /** Conto alla rovescia corrente (determina anche la modalità estate). */
@@ -42,7 +42,14 @@ export function WidgetScadenze({ contoVacanze }: WidgetScadenzeProps) {
                   <>
                     <div className="mx-5 shrink-0 border-b-2 border-gray-300" />
                     <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-3 pb-3 pt-1.5 text-center sm:px-5">
-                      <p className="font-display text-2xl font-black leading-none tracking-tight text-primary-900 sm:text-3xl">
+                      <p
+                        className="font-display text-2xl font-black leading-none tracking-tight text-primary-900 sm:text-3xl"
+                        title={
+                          contoVacanze.dataTarget
+                            ? `Vacanze dal ${dataLungaIt(contoVacanze.dataTarget)} (calendario scolastico ${contoVacanze.annoScolastico}/${contoVacanze.annoScolastico + 1})`
+                            : undefined
+                        }
+                      >
                         {contoVacanze.giorni}
                         <span className="ml-2 align-baseline text-sm font-bold uppercase tracking-[0.16em] text-primary-500 sm:text-base">
                           {contoVacanze.giorni === 1 ? 'giorno' : 'giorni'}

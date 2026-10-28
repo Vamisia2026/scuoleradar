@@ -199,6 +199,15 @@
   premiazione, premio letterario, spettacolo, spot, campagna di comunicazione,
   campagna social, webinar, seminario, podcast, mostra, fiera, concorso
   artistico, festa, evento sportivo, manifestazione, sondaggio…
+- **RUMORE SINDACALE E TEMPORANEO** (`services/filtroRumore.ts`, §26.98): fuori
+  **sempre** scioperi, assemblee sindacali, proteste e presidi, comunicati di
+  sigla (Cobas, Flc Cgil) e avvisi temporanei (chiusura degli uffici, orario
+  estivo, disservizi, manutenzioni). Le sigle citate **dentro** un CCNL o un
+  decreto sono contesto e restano ammesse (`ANCORAGGIO_DURATURO`). La regola
+  vale in tre punti — `valutaRilevanza` (ingestione), `èRiservaSettimanale`
+  (riserva) e `articoloValido` (igiene dell'archivio) — ed è la ragione per cui
+  l'orizzonte minimo di una notizia è **sei mesi** (`DURATA_UTILE_MINIMA_MESI`):
+  quello che vale una settimana non entra.
 - La categoria viene dedotta dall'**allow-list dei temi** (`TEMI_OPERATIVI` +
   `classificaTemaPersonale`, in ordine di priorità): CCNL, Pensioni, Welfare,
   Mobilità, Sostegno, ATA, Istruzione Adulti, GPS, Organico, Formazione,

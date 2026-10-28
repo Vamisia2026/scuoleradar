@@ -18,10 +18,11 @@
  * non dichiara una scadenza la riga NON entra nel tabellone (§26.71), quindi il
  * caso «Scadenza n/d» non è più raggiungibile in vetrina. La data di
  * pubblicazione NON è una scadenza e non compare in questa colonna.
- * Palette: SOLO badge pieni ad alto contrasto (rose-700 < 24h · yellow-700 24–72h ·
- * emerald-700 in corso, ardesia per scaduto o fuori finestra) su testo bianco;
- * nessuna tinta pastello; il giallo oro `yellow-700` è ammesso solo a 4,92:1
- * sul bianco (§26.97), i gialli chiari no (§26.88, §26.89).
+ * Palette: SOLO badge pieni brillanti ad alto contrasto (rose-500 < 24h ·
+ * amber-400 24–72h · emerald-500 in corso, ardesia per scaduto o fuori finestra);
+ * le tre luci d'allarme portano l'etichetta quasi nera `text-slate-950` in
+ * grassetto — è ciò che permette la tinta più viva restando AA (§26.98) —
+ * mentre le bande ardesia restano su testo bianco. Nessuna tinta pastello.
  */
 import { ExternalLink } from 'lucide-react';
 import { nomeScuolaRiga, titoloLeggibile } from '@/lib/liveBoard';

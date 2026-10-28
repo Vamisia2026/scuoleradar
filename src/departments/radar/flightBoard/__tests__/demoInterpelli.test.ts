@@ -11,7 +11,7 @@
  * Sezioni:
  *   1. struttura del dato (prefisso, uuid, host `.edu.it`, fonti dichiarate);
  *   2. esito: dentro con la fonte e il badge dichiarati, oppure fuori;
- *   3. i badge PIENI (rose-700 / yellow-700 / emerald-700 su testo bianco) — un solo semaforo;
+ *   3. i badge PIENI (rose-500 / amber-400 / emerald-500 su etichetta scura) — un solo semaforo;
  *   4. un solo array filtrato → totale mostrato e schermate coerenti.
  *
  * Uso: `npm run test:board:demo` (incluso in `npm test`).
@@ -119,21 +119,23 @@ const className = (hash: string): string => {
   const riga = righe.find((r) => r.hash_id === `${PREFISSO_DEMO}${hash}`);
   return riga ? badgeScadenza(riga.expiration_date).className : '';
 };
-check('rosso pieno (scade oggi)', true, className('04-avviso-pdf').includes('bg-rose-700'));
-// §26.89, §26.97 — il rosso si ferma alle 24 ore: da domani il badge è GIALLO ORO.
-check('giallo oro pieno (scade domani)', true, className('02-forms-sito').includes('bg-yellow-700'));
-check('non più rosso (scade domani)', false, className('02-forms-sito').includes('bg-rose-700'));
-check('verde pieno (3 giorni)', true, className('01-argo-sito').includes('bg-emerald-700'));
-check('verde pieno (oltre 7 giorni)', true, className('03-nuvola-pec').includes('bg-emerald-700'));
+check('rosso pieno (scade oggi)', true, className('04-avviso-pdf').includes('bg-rose-500'));
+// §26.89, §26.98 — il rosso si ferma alle 24 ore: da domani il badge è ORO.
+check('oro brillante (scade domani)', true, className('02-forms-sito').includes('bg-amber-400'));
+check('non più rosso (scade domani)', false, className('02-forms-sito').includes('bg-rose-500'));
+check('verde pieno (3 giorni)', true, className('01-argo-sito').includes('bg-emerald-500'));
+check('verde pieno (oltre 7 giorni)', true, className('03-nuvola-pec').includes('bg-emerald-500'));
 const tutteLeBande = righe.map((r) => badgeScadenza(r.expiration_date).className);
 vero(
-  'ogni badge è testo bianco in grassetto',
-  tutteLeBande.every((c) => c.includes('text-white') && c.includes('font-bold')),
+  'ogni badge ha etichetta ad alto contrasto in grassetto',
+  tutteLeBande.every(
+    (c) => (c.includes('text-slate-950') || c.includes('text-white')) && c.includes('font-bold'),
+  ),
 );
 vero('nessuna tinta pastello (…-100 / …-200)', tutteLeBande.every((c) => !/-100\b|-200\b/.test(c)));
 vero(
-  'il giallo oro è l’unica tinta gialla ammessa (yellow-700, 4,92:1)',
-  tutteLeBande.every((c) => !/bg-(?:amber|yellow)-(?:50|100|200|300|400|500|600)\b/.test(c)),
+  'l’unica tinta gialla ammessa è `amber-400` (brillante, etichetta scura)',
+  tutteLeBande.every((c) => (c.match(/bg-(?:amber|yellow)-\d{3}/g) ?? []).every((t) => t === 'bg-amber-400')),
 );
 
 console.log('— 4. Un solo array filtrato: totale mostrato = schermate —');

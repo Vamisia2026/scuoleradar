@@ -35,29 +35,45 @@ export interface NotizieHeroProps {
   onCategoriaChange?: (categoria: string) => void;
 }
 
+/** Oggi a mezzanotte locale: l'unità di misura del conto alla rovescia. */
+function oggiAMezzanotte(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 export function NotizieHero({
   categorie = [],
   conteggi = {},
   categoria = 'Tutte',
   onCategoriaChange,
 }: NotizieHeroProps = {}) {
-  const [oggi, setOggi] = useState<Date>(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  });
+  const [oggi, setOggi] = useState<Date>(oggiAMezzanotte);
 
-  // Aggiornamento automatico alla mezzanotte: quando una scadenza passa,
-  // il widget passa subito alla successiva senza ricaricare la pagina.
+  // OROLOGIO DINAMICO (§26.98): il conteggio delle vacanze si ricalcola
+  // SEMPRE dal tempo reale, mai da un valore congelato al primo render. Si
+  // rilegge l'orologio subito (dopo un ripristino da bfcache lo stato può
+  // essere vecchio di giorni), una volta al minuto — così alla mezzanotte
+  // cambia anche il giorno — e a ogni ritorno sulla scheda o focus finestra:
+  // era il caso che lasciava «56 giorni» fermo in pagina.
   useEffect(() => {
-    const timer = setInterval(() => {
+    const leggiOrologio = () =>
       setOggi((prev) => {
-        const ora = new Date();
-        ora.setHours(0, 0, 0, 0);
+        const ora = oggiAMezzanotte();
         return ora.getTime() === prev.getTime() ? prev : ora;
       });
-    }, 60_000);
-    return () => clearInterval(timer);
+
+    leggiOrologio();
+    const timer = setInterval(leggiOrologio, 60_000);
+    document.addEventListener('visibilitychange', leggiOrologio);
+    window.addEventListener('focus', leggiOrologio);
+    window.addEventListener('pageshow', leggiOrologio);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', leggiOrologio);
+      window.removeEventListener('focus', leggiOrologio);
+      window.removeEventListener('pageshow', leggiOrologio);
+    };
   }, []);
 
   // Conto alla rovescia per le vacanze (in estate il box mostra solo la scadenza).

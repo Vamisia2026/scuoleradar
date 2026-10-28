@@ -6,10 +6,9 @@
  * (`radar/flightBoard/rigaBoardDati.badgeScadenza`), card e scheda dell'avviso,
  * feed della dashboard (`ElencoOpportunita`), responso della prova Radar.
  *
- *   🔴 rosso   `bg-rose-700`   0 giorni   → le prossime 24 ore  «Scade oggi»
- *   🟡 giallo  `bg-yellow-700` 1–2 giorni → 24–72 ore           «Scade domani»
- *     scuro                                                      «Ultime 72h»
- *   🟢 verde   `bg-emerald-700` 3 … 15 giorni, dentro l'orizzonte «In corso»
+ *   🔴 rosso   `bg-rose-500`    0 giorni   → le prossime 24 ore  «Scade oggi»
+ *   🟡 oro     `bg-amber-400`   1–2 giorni → 24–72 ore           «Scade domani»
+ *   🟢 verde   `bg-emerald-500` 3 … 15 giorni, dentro l'orizzonte «In corso»
  *   ⚫ ardesia `bg-slate-600`   oltre l'orizzonte  «Scadenza fuori finestra»
  *              `bg-slate-700`   già passata       «Scaduto»
  *              `bg-slate-600`   data assente      «Scadenza n/d»
@@ -32,19 +31,31 @@
  * questo file importa i giorni e l'orizzonte da `lib/scadenza.ts`, che NON lo
  * importa — quindi non si crea nessun ciclo fra moduli (`E-CICLO`).
  *
- * **Perché la luce media è GIALLO ORO (§26.97).** Fino a §26.96 era ambra
- * `amber-700` (#b45309): corretta sul contrasto (5,02:1), ma a dieci pixel la sua
- * tonalità (28°) resta a due passi dal rosso `rose-700` (347°) — e il badge
- * chiede di distinguere a colpo d'occhio «oggi» da «domani». La direttiva del
- * 26/10/2026 chiede un giallo caldo, oro/senape: `yellow-700` (#a16207, 4,92:1
- * sul bianco, **AA** — sopra la soglia 4,5:1) ha tonalità 45°, cioè la distanza
- * di tinta massima dal rosso fra i gradini scuri che tengono il testo bianco in
- * grassetto. Restano fuori `amber-600` (#d97706, **3,19:1**) e `amber-500`
- * (**2,15:1**): sotto AA, quindi mai in palette (§26.88).
+ * **Perché la luce media è GIALLO ORO BRILLANTE (§26.97 → §26.98).** Fino a
+ * §26.96 la luce media era ambra `amber-700` (#b45309): corretta sul contrasto
+ * (5,02:1), ma a dieci pixel la sua tonalità (28°) restava a due passi dal rosso
+ * `rose-700` (347°). Il §26.97 era passato a `yellow-700` (#a16207, 4,92:1 sul
+ * bianco), un giallo senape scuro: distanza di tinta giusta, ma il tabellone
+ * restava su toni spenti. La direttiva del 26/10/2026 (seconda) cambia il
+ * REGISTRO: la tavola è bianca, il semaforo deve saltare all'occhio come la
+ * barra DEV — tinte PIENE e LUMINOSE, etichetta quasi nera in grassetto
+ * (`text-slate-950`), zero «Gotham City».
+ *
+ *   🔴 `rose-500`    #f43f5e → 5,50:1 su `slate-950` (AA)
+ *   🟡 `amber-400`   #fbbf24 → 12,07:1 su `slate-950` (AAA)
+ *   🟢 `emerald-500` #10b981 → 7,96:1 su `slate-950` (AAA)
+ *
+ * Il testo BIANCO del §26.97 non regge più questi gradini — `amber-400` sta a
+ * 1,67:1, `emerald-500` a 2,54:1, `rose-500` a 3,67:1 sul bianco: tutti sotto
+ * AA, quindi mai in palette (§26.88). L'etichetta scura è ciò che permette la
+ * tinta più brillante restando leggibile. «Scaduto» e «Scadenza n/d» restano
+ * ardesia con testo bianco: non sono allarmi e non devono lampeggiare.
  *
  * Nota sui token: `rose`, `emerald`, `slate` e `amber` sono gradini della
  * palette Tailwind (non di `theme.extend.colors`), quindi la guardia
- * `npm run test:palette` li valida contro la palette completa.
+ * `npm run test:palette` li valida contro la palette completa; i rapporti di
+ * contrasto sono misurati da `npm run test:interpello-scadenza` (funzione WCAG
+ * nel test, nessun numero copiato a mano).
  */
 import { GIORNI_ORIZZONTE_OPPORTUNITA } from './scadenza';
 
@@ -83,17 +94,17 @@ export interface StileScadenza {
 }
 
 /**
- * TOKEN del semaforo — UNICA palette dell'applicazione (§26.82, §26.89).
- * Tutte le luci sono piene, con testo bianco in grassetto: il badge deve
- * leggersi di sfuggita, anche su schermo piccolo.
+ * TOKEN del semaforo — UNICA palette dell'applicazione (§26.82, §26.89, §26.98).
+ * Le tre luci d'ALLARME sono tinte piene e brillanti con etichetta quasi nera in
+ * grassetto: pop immediato e contrasto AA/AAA misurato. Le due bande ARDESIA —
+ * «Scaduto» e «Scadenza n/d» — non sono allarmi: restano scritte in bianco.
  */
 export const SCADENZA_TOKENS = {
-  rosso: 'bg-rose-700 text-white font-bold',
-  // §26.97 — luce media: GIALLO ORO `yellow-700` (#a16207, 4,92:1 sul bianco).
+  rosso: 'bg-rose-500 text-slate-950 font-bold',
   // La chiave resta `arancio` perché il livello del semaforo è sempre `urgente`:
   // rinominarla obbligherebbe ogni superficie a cambiare per un colore.
-  arancio: 'bg-yellow-700 text-white font-bold',
-  verde: 'bg-emerald-700 text-white font-bold',
+  arancio: 'bg-amber-400 text-slate-950 font-bold',
+  verde: 'bg-emerald-500 text-slate-950 font-bold',
   scaduto: 'bg-slate-700 text-white font-bold',
   neutro: 'bg-slate-600 text-white font-bold',
 } as const;

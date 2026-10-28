@@ -134,21 +134,22 @@
       (`bachecaInterpelli` → contatore `senzaScadenza`, scarto **dichiarato**).
       Un solo grado di urgenza senza data resta possibile: la riga **fuori dal feed**
       che il chiamante ha già deciso di mostrare (banda grigia, mai una data inventata).
-- [ ] **Badge della colonna «Scadenza»: TRE luci** (§26.89) — il colore dice quanto
-      manca e ogni luce ha UN solo significato — **rossa** `bg-rose-700` per «Scade oggi»
-      (meno di 24 ore) · **giallo oro** `bg-yellow-700` per «Scade domani» e «Ultime 72h»
-      (24–72 ore) · **verde** `bg-emerald-700` per «In corso» (dal terzo giorno alla
+- [ ] **Badge della colonna «Scadenza»: TRE luci** (§26.89, §26.98) — il colore dice quanto
+      manca e ogni luce ha UN solo significato — **rossa** `bg-rose-500` per «Scade oggi»
+      (meno di 24 ore) · **oro brillante** `bg-amber-400` per «Scade domani» e «Ultime 72h»
+      (24–72 ore) · **verde** `bg-emerald-500` per «In corso» (dal terzo giorno alla
       finestra di candidatura) — sempre accanto alla DATA di scadenza; oltre la finestra
       o senza data la banda è ardesia e dichiara «Scadenza fuori finestra» / «Scadenza
       n/d» (mai una data inventata, mai una tinta pastello, nessuna banda che pulsa).
       Un solo modulo: `stileScadenza` in `src/lib/scadenzaSemaforo.ts`
       (`SCADENZA_TOKENS`), usato da tabellone, scheda avviso e feed della dashboard.
-      Niente giallo/ambra chiaro: la luce media è UN solo giallo caldo, il gradino che
-      regge AA — `yellow-700` `#a16207` (4,92:1 sul bianco, §26.97); `amber-700`
-      (`#b45309`) resta fuori perché la sua tonalità è troppo vicina al rosso,
-      `amber-600` (`#d97706`, 3,19:1) e i gialli chiari per contrasto, così il colore
-      si stacca dal rosso senza creare una quarta soglia per lo stesso dato. Gli avvisi
-      scaduti non compaiono mai in bacheca.
+      Le tre luci d'allarme sono tinte PIENE e LUMINOSE con etichetta quasi nera
+      (`text-slate-950` in grassetto): è l'unica combinazione che regge **AA** con la
+      tinta più viva — `rose-500` 5,49:1 · `amber-400` 12,08:1 · `emerald-500` 7,95:1.
+      Il testo bianco su queste tinte sta sotto AA (1,67–3,67:1) e non si usa; restano
+      fuori anche i gialli scuri (`yellow-700`, `amber-600`) perché il tabellone non deve
+      avere toni spenti (§26.97 → §26.98, misura in `npm run test:interpello-scadenza`).
+      Gli avvisi scaduti non compaiono mai in bacheca.
 - [ ] **Allegati su gestori documentali: il FILE è l'avviso** (§26.96) — una tabella d'albo che linka
       solo il PDF su Gecodoc / Argo / Nuvola–Spaggiari si legge DENTRO il documento (scadenza dichiarata,
       classe di concorso, codice meccanografico, provincia, recapiti); la HOME della stessa piattaforma
@@ -190,9 +191,10 @@
       `npm run dati:demo -- --apply` le scrive (mai in produzione senza `--consenti-produzione`),
       `npm run dati:demo -- --pulisci --apply` le elimina. La stessa tabella di casi è la guardia
       `npm run test:board:demo` (esito atteso = esito reale). Il badge della scadenza è **pieno**
-      e ha **tre luci** (`bg-rose-700` solo oggi · `bg-yellow-700` 24–72h ·
-      `bg-emerald-700` in corso, testo bianco in grassetto, ardesia per scaduto/non databile:
-      §26.89, §26.97) e il totale della pill conta le **stesse** righe che generano le schermate (§26.77).
+      e ha **tre luci** (`bg-rose-500` solo oggi · `bg-amber-400` 24–72h ·
+      `bg-emerald-500` in corso, etichetta `text-slate-950` in grassetto, ardesia per
+      scaduto/non databile: §26.89, §26.98) e il totale della pill conta le **stesse** righe
+      che generano le schermate (§26.77).
 - [ ] **Finestra dei 60 giorni: solo FETCH e pulizia, mai vetrina** (§26.71) — lo **stesso** numero
       e la stessa data **locale** vivono in `src/lib/scadenza.ts`
       (`GIORNI_FINESTRA_SENZA_SCADENZA`, `eAvvisoVivo(scadenza, pubblicazione)`) e valgono per la
