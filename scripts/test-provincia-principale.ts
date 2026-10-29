@@ -16,6 +16,15 @@ import {
   promuoviProvinciaPrincipale,
   provinceDiContorno,
 } from '../src/lib/provinceRadar.ts';
+import {
+  GIORNI_MONITORAGGIO_PROVA,
+  avviaMonitoraggioProva,
+  chiudiMonitoraggioProva,
+  giorniResiduiMonitoraggio,
+  leggiMonitoraggioProva,
+} from '../src/lib/provaRadar.ts';
+// Stub condiviso di `localStorage` (lo stesso delle guardie della prova).
+import { installaStorageInMemoria } from './lib/fixtures-prova-radar.ts';
 
 let errori = 0;
 function check(nome: string, atteso: unknown, ottenuto: unknown): void {
@@ -98,6 +107,25 @@ check(
   pannello.includes('inAttesa={indice >= maxProvince}') &&
     leggi('src/departments/radar/components/ProvinciaPill.tsx').includes('inAttesa?: boolean'),
 );
+// MONITORAGGIO TEMPORANEO (§26.107): la provincia cercata nel box «Prova il Radar»
+// resta sotto osservazione per 7 giorni, anche per chi non ha un account. Il
+// record SCADE e si cancella da solo: nessun lead eterno, nessuna data finta.
+console.log('\n— Monitoraggio temporaneo della prova (7 giorni) —');
+installaStorageInMemoria();
+chiudiMonitoraggioProva();
+const t0 = new Date('2026-10-01T09:00:00.000Z');
+check('la finestra di monitoraggio è di 7 giorni', 7, GIORNI_MONITORAGGIO_PROVA);
+const monitoraggio = avviaMonitoraggioProva('at', t0);
+check('monitoraggio: provincia normalizzata sul catalogo', 'AT', monitoraggio?.provincia ?? null);
+check('monitoraggio: scadenza = prova + 7 giorni', '2026-10-08T09:00:00.000Z', monitoraggio?.scadeIl ?? null);
+check('giorno della prova: 7 giorni residui', 7, giorniResiduiMonitoraggio(monitoraggio, t0));
+check('ultimo giorno utile: 1 giorno residuo', 1, giorniResiduiMonitoraggio(monitoraggio, new Date('2026-10-07T09:00:00.000Z')));
+check('scaduto: il record sparisce (nessun monitoraggio eterno)', null, leggiMonitoraggioProva(new Date('2026-10-08T09:00:00.001Z')));
+check('scaduto: residuo 0, mai un numero negativo', 0, giorniResiduiMonitoraggio(monitoraggio, new Date('2026-10-20T09:00:00.000Z')));
+check('provincia inesistente: nessun monitoraggio', null, avviaMonitoraggioProva('ZZ', t0));
+check('nessun monitoraggio: residuo 0', 0, giorniResiduiMonitoraggio(null, t0));
+
+
 
 // Persistenza: aggiungere, togliere o riordinare una provincia è un'azione
 // esplicita e marca il campo `provinceCodici`, così un caricamento o un refresh

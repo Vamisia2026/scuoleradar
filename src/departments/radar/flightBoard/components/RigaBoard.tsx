@@ -18,17 +18,33 @@
  * non dichiara una scadenza la riga NON entra nel tabellone (§26.71), quindi il
  * caso «Scadenza n/d» non è più raggiungibile in vetrina. La data di
  * pubblicazione NON è una scadenza e non compare in questa colonna.
- * Palette: SOLO badge pieni brillanti ad alto contrasto (rose-500 < 24h ·
- * amber-400 24–72h · emerald-500 in corso, ardesia per scaduto o fuori finestra);
- * le tre luci d'allarme portano l'etichetta quasi nera `text-slate-950` in
- * grassetto — è ciò che permette la tinta più viva restando AA (§26.98) —
- * mentre le bande ardesia restano su testo bianco. Nessuna tinta pastello.
+ * Palette ufficiale (§26.100 → direttiva 29/10/2026, §26.101) — tinte esplicite:
+ * bordi e pillola provincia blu `#2B6F9E` · righe alternate azzurrino soft
+ * `#EEF6FB`/bianco · testi principali nero `#0C2235` · badge con etichetta
+ * BIANCA: verde `#1FA055` (≥ 3 giorni) · giallo `#E2B33C` (24–72 ore) · rosso
+ * `#D9534F` (oggi / ≤ 24 ore). Etichette e SOGLIE restano di `badgeScadenza`
+ * (`lib/scadenzaSemaforo`, unica fonte): qui si allinea solo la TINTA. Le bande
+ * neutre («Scaduto», «Scadenza n/d») restano ardesia: dichiarano un'assenza, non
+ * un allarme. Nessun blu elettrico, nessuna tinta pastello.
  */
 import { ExternalLink } from 'lucide-react';
 import { nomeScuolaRiga, titoloLeggibile } from '@/lib/liveBoard';
 import { ePdf, hostDi, estraiProvincia, type InterpelloLive } from '../righeBoard';
 import { fonteApribile } from '../linkFonte';
-import { badgeScadenza, dataItBreve, inferisciTipologia } from '../rigaBoardDati';
+import { badgeScadenza, dataItBreve, inferisciTipologia, SCADENZA_TOKENS } from '../rigaBoardDati';
+
+/**
+ * TINTA UFFICIALE DEL BADGE: la chiave è il token del semaforo — etichette e
+ * soglie restano quelle di `badgeScadenza`, senza una seconda copia delle regole —
+ * il valore è la tinta coordinata del cliente. `lontana` (oltre 15 giorni) è verde
+ * come «In corso»: il termine non è urgente.
+ */
+const TINTA_BADGE_UFFICIALE: Record<string, string> = {
+  [SCADENZA_TOKENS.verde]: 'bg-[#1FA055] text-white',
+  [SCADENZA_TOKENS.lontana]: 'bg-[#1FA055] text-white',
+  [SCADENZA_TOKENS.arancio]: 'bg-[#E2B33C] text-white',
+  [SCADENZA_TOKENS.rosso]: 'bg-[#D9534F] text-white',
+};
 
 export interface RigaBoardProps {
   /** Riga presentabile del tabellone (già filtrata e alternata per provincia). */
@@ -84,7 +100,13 @@ export function RigaBoard({ riga: r, indice }: RigaBoardProps) {
   const apriFonte = (): void => {
     if (urlFonte) window.open(urlFonte, '_blank', 'noopener,noreferrer');
   };
-  const rigaClasse = indice % 2 === 0 ? 'bg-white text-primary-800' : 'bg-slate-50 text-primary-800';
+  // Righe alternate: AZZURRINO SOFT `#EEF6FB` e bianco (§26.101) — la tavola
+  // respira senza perdere il ritmo visivo. Il nero dei testi è quello ufficiale
+  // `#0C2235`, leggibile su entrambi i fondi chiari.
+  const rigaClasse =
+    indice % 2 === 0 ? 'bg-[#EEF6FB] text-[#0C2235]' : 'bg-white text-[#0C2235]';
+  // Tinta ufficiale del badge: etichetta e soglia restano di `badgeScadenza`.
+  const tintaBadge = TINTA_BADGE_UFFICIALE[urgenza.className] ?? urgenza.className;
 
   return (
     <tr
@@ -111,7 +133,7 @@ export function RigaBoard({ riga: r, indice }: RigaBoardProps) {
       <td className="px-4 py-2.5 truncate">
         <span className="block font-mono text-xs font-bold uppercase tracking-wide truncate">{classe}</span>
         {descrizioneMateria && (
-          <span className="block truncate text-[11px] font-medium normal-case tracking-normal text-primary-400">
+          <span className="block truncate text-[11px] font-medium normal-case tracking-normal text-[#1B4768]">
             {descrizioneMateria}
           </span>
         )}
@@ -129,23 +151,23 @@ export function RigaBoard({ riga: r, indice }: RigaBoardProps) {
             className="group block truncate"
           >
             <span className="flex items-center gap-1.5 truncate">
-              <span className="truncate font-semibold underline-offset-4 group-hover:text-accent-600 group-hover:underline">
+              <span className="truncate font-semibold underline-offset-4 group-hover:text-[#2B6F9E] group-hover:underline">
                 {nomeScuola}
               </span>
               {fonte?.tipo === 'avviso' && ePdf(fonte.url) && (
-                <span className="shrink-0 rounded bg-rose-700 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
+                <span className="shrink-0 rounded bg-[#D9534F] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
                   PDF
                 </span>
               )}
               {fonte?.tipo === 'sito-scuola' && (
                 <span
-                  className="shrink-0 rounded bg-slate-600 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-white"
+                  className="shrink-0 rounded bg-[#2B6F9E] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-white"
                   title="La fonte pubblicava solo una piattaforma (portale Argo, modulo Google…): il link porta al sito ufficiale della scuola"
                 >
                   Sito
                 </span>
               )}
-              <ExternalLink className="h-3.5 w-3.5 shrink-0 text-primary-400 transition group-hover:text-accent-500" />
+              <ExternalLink className="h-3.5 w-3.5 shrink-0 text-[#2B6F9E] transition group-hover:text-[#1FA055]" />
             </span>
           </a>
         ) : (
@@ -165,20 +187,20 @@ export function RigaBoard({ riga: r, indice }: RigaBoardProps) {
             className="group block truncate"
             title={sottotitolo || r.title}
           >
-            <span className="block truncate text-xs font-medium text-primary-700 group-hover:text-accent-600 group-hover:underline">
+            <span className="block truncate text-xs font-medium text-[#0C2235] group-hover:text-[#2B6F9E] group-hover:underline">
               {sottotitolo || r.title}
             </span>
           </a>
         ) : (
-          <span className="block truncate text-xs font-medium text-primary-700">
+          <span className="block truncate text-xs font-medium text-[#0C2235]">
             {sottotitolo || r.title}
           </span>
         )}
       </td>
 
-      {/* 4. Provincia */}
+      {/* 4. Provincia — pillola di FIDUCIA: blu ufficiale `#2B6F9E`, mai un riquadro nero */}
       <td className="px-4 py-2.5 text-center truncate">
-        <span className="inline-flex items-center justify-center rounded-md bg-slate-700 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-white">
+        <span className="inline-flex items-center justify-center rounded-md bg-[#2B6F9E] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-white">
           {estraiProvincia(r)}
         </span>
       </td>
@@ -186,7 +208,7 @@ export function RigaBoard({ riga: r, indice }: RigaBoardProps) {
       {/* 5. Scadenza — la scadenza vera, oppure il vuoto DICHIARATO (`—`) */}
       <td className="px-4 py-2.5 text-center align-middle truncate">
         <span
-          className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-slate-500 truncate"
+          className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-[#1B4768] truncate"
           title={
             urgenza.fonte === 'scadenza'
               ? `Scadenza dichiarata dalla fonte: ${dataScad}`
@@ -195,7 +217,7 @@ export function RigaBoard({ riga: r, indice }: RigaBoardProps) {
         >
           {dataScad || '—'}
         </span>
-        <span className={`inline-flex items-center justify-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-black ${urgenza.className}`}>
+        <span className={`inline-flex items-center justify-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-black ${tintaBadge}`}>
           {urgenza.label}
         </span>
       </td>
@@ -214,7 +236,7 @@ export function RigheRiempimento({ quante }: { quante: number }) {
         <tr
           key={`spazio-${k}`}
           aria-hidden="true"
-          className="bg-white text-primary-800"
+          className="bg-white text-[#0C2235]"
           style={{ height: '3.5rem' }}
         >
           <td colSpan={5} className="px-4 py-2.5 select-none text-transparent">

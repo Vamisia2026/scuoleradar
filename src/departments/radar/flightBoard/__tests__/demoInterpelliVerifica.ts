@@ -19,7 +19,7 @@ import { fonteApribile, type FonteApribile } from '../linkFonte.ts';
 import { badgeScadenza } from '../rigaBoardDati.ts';
 import { nomeScuolaBoard, preparaRigheBoard } from '@/lib/liveBoard';
 import { eTitoloSoloData } from '@/lib/titoloBoard';
-import { eOpportunitaConScadenza } from '@/lib/scadenza';
+import { eOpportunitaAperta } from '@/lib/scadenza';
 import type { RigaDemo } from './demoInterpelliTipi.ts';
 
 /** Esito di una riga demo nella pipeline della bacheca. */
@@ -44,8 +44,8 @@ function motivoScarto(riga: RigaDemo, fonte: FonteApribile | null, oggi: Date): 
   if (!fonte) {
     return 'nessuna fonte apribile: il click non porterebbe né a un avviso né a un sito .edu.it';
   }
-  if (!eOpportunitaConScadenza(riga.expiration_date, oggi)) {
-    return 'scadenza fuori dalla finestra di candidatura (15 giorni) o già passata';
+  if (!eOpportunitaAperta(riga.expiration_date, oggi)) {
+    return 'senza scadenza dichiarata (o già passata): non è un’opportunità aperta';
   }
   if (eTitoloSoloData(riga.title)) return 'titolo di sola pubblicazione: non descrive l’avviso';
   if (!nomeScuolaBoard(riga)) return 'nessun istituto reale (segnaposto o titolo inutilizzabile)';

@@ -8,6 +8,12 @@
  * condivisa delle Modali 2 (classi di concorso) e 3 (parole chiave), così la
  * stessa vicinanza disciplinare non viene reinterpretata due volte.
  *
+ * Riconosce anche le PAROLE DEL BANDO (`paroleBandoDi`, §26.106): i programmi e le
+ * figure che l'utente chiede con una parola propria — `PNRR`, `PON`, `POR`, `FSE`,
+ * `Tutor`, `Laboratorio didattico` — con i SINONIMI con cui le scuole li scrivono.
+ * La tabella vive in `src/data/ordiniMaterie.ts` (`PAROLE_BANDO`): qui sta solo il
+ * riconoscimento, identico per punteggio e jolly.
+ *
  * È una matrice CORTA e ispezionabile di co-occorrenze di dominio — «Digitale» ↔
  * «Intelligenza artificiale», «Letteratura» ↔ «Teatro», «Arte» ↔ «Digitale»,
  * «Scientifico» ↔ «Digitale» — non un motore semantico (`docs/RADAR_ROADMAP_V2.md`
@@ -15,6 +21,8 @@
  * sinonimi); le sigle (`IA`/`AI`) valgono solo in MAIUSCOLO, altrimenti la
  * preposizione «ai» diventerebbe intelligenza artificiale.
  */
+import { PAROLE_BANDO } from '../data/ordiniMaterie';
+
 
 /** Livello del ponte fra due aree: temi che si toccano, mai un'equivalenza. */
 export type LivelloPonte = 'affine' | 'contaminata';
@@ -187,3 +195,35 @@ export function ponteTraAree(a: ReadonlySet<string>, b: ReadonlySet<string>): Po
   );
   return { livello: ordinati[0].livello, etichetta: ordinati[0].etichetta };
 }
+
+/**
+ * True se `frase` compare come PAROLA o FRASE INTERA nel testo già normalizzato
+ * (`normalizzaTesto`): spazi come confine, mai prefissi — «pon» non è «ponte».
+ */
+function fraseIntera(normalizzato: string, frase: string): boolean {
+  const cercata = normalizzaTesto(frase);
+  if (!cercata) return false;
+  return ` ${normalizzato} `.includes(` ${cercata} `);
+}
+
+/**
+ * PAROLE DEL BANDO presenti in un testo, come CHIAVI canoniche (`PNRR`, `PON`,
+ * `POR`, `FSE`, `Tutor`, `Laboratorio didattico`): riconosce sia la sigla sia i
+ * sinonimi con cui le scuole la scrivono («Piano Operativo Nazionale» → `PON`,
+ * «tutoraggio» → `Tutor`), §26.106.
+ *
+ * Il confronto è per parola/frase INTERA sul testo normalizzato (minuscole, senza
+ * accenti, punteggiatura ridotta a spazi): restituisce un insieme VUOTO quando non
+ * c'è nulla da dire — nessuna deduzione, nessun match «per somiglianza».
+ */
+export function paroleBandoDi(testo?: string | null): Set<string> {
+  const normalizzato = normalizzaTesto(testo);
+  if (!normalizzato) return new Set<string>();
+  const trovate = PAROLE_BANDO.filter(
+    (p) =>
+      fraseIntera(normalizzato, p.chiave) ||
+      p.sinonimi.some((sinonimo) => fraseIntera(normalizzato, sinonimo)),
+  ).map((p) => p.chiave);
+  return new Set(trovate);
+}
+

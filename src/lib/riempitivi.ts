@@ -23,6 +23,13 @@
  * «riempitivo da dosare»: è un falso positivo. `riempitivoNonPertinente` lo dichiara e
  * la bacheca lo scarta a monte, senza quote. Il cap dinamico resta per i riempitivi
  * PERTINENTI.
+ *
+ * §26.106 — PARACADUTE «5 OSSO-DA-MORDERE». Il cap dice cosa NON mostrare; il paracadute
+ * (`paracaduteCinque`) dice cosa mostrare SEMPRE: almeno `MINIMO_BACHECA` (5)
+ * opportunità, completando la vetrina con le migliori righe della scorta e dichiarandole
+ * come ripiego (`ETICHETTA_RIPIEGO`). Le due regole convivono: il cap protegge dalla
+ * coda di rumore, il paracadute protegge dalla pagina vuota — e nessuna delle due
+ * scavalca le porte d'ingresso della bacheca.
  */
 import { SOGLIA_COMPATIBILITA_ARANCIO } from './compatibilita';
 
@@ -138,4 +145,61 @@ export function riempitivoNonPertinente(
   const soglia = contesto.soglia ?? SOGLIA_COMPATIBILITA_ARANCIO;
   const punteggio = punteggioNoto(voce);
   return punteggio !== null && punteggio < soglia;
+}
+
+/* ------------------- PARACADUTE «5 OSSO-DA-MORDERE» (§26.106) ------------------- */
+
+/**
+ * Minimo di opportunità che la vetrina mostra quando il database ne ha abbastanza: una
+ * bacheca con una sola card non è un Radar, è una pagina vuota con un bordo.
+ */
+export const MINIMO_BACHECA = 5;
+
+/** Esito del paracadute: `sufficiente` (non è servito) · `integrato` · `scorta-esaurita`. */
+export type MotivoParacadute = 'sufficiente' | 'integrato' | 'scorta-esaurita';
+
+/** Esito del paracadute: lista finale + quante righe sono entrate di ripiego. */
+export interface EsitoParacadute<T> {
+  lista: T[];
+  /** Righe aggiunte dalla scorta (0 = la bacheca bastava). */
+  aggiunti: number;
+  motivo: MotivoParacadute;
+}
+
+/**
+ * PARACADUTE «5 OSSO-DA-MORDERE»: la vetrina non resta mai sotto `MINIMO_BACHECA` (5)
+ * opportunità finché il database ne ha.
+ *
+ * Quando i match forti non bastano, la coda si completa con le MIGLIORI righe della
+ * `scorta` — le opportunità vere che il Radar non ha agganciato, ordinate per punteggio
+ * decrescente (a pari punteggio vale l'ordine del database, quindi il taglio è
+ * deterministico). Le righe aggiunte arrivano già marcate `ripiego` dal chiamante e la
+ * vetrina le dichiara con `ETICHETTA_RIPIEGO` (`src/lib/compatibilita.ts`): nessun
+ * riempimento silenzioso.
+ *
+ * Cosa la scorta NON contiene, per costruzione (`bachecaInterpelli`): le righe senza
+ * scadenza (§26.71), il contorno che non è un avviso (§26.65), le scuole in blacklist
+ * (§26.45) e gli avvisi OLTRE il raggio dei 60 km senza la parola del bando (§26.106).
+ * Il paracadute completa la vetrina, non scavalca una regola: se il database ha meno di
+ * cinque opportunità ammissibili, la lista resta corta e il motivo lo dice
+ * (`scorta-esaurita`).
+ */
+export function paracaduteCinque<T extends { compatibilita?: number | null }>(
+  lista: readonly T[],
+  scorta: readonly T[],
+  opts: { minimo?: number } = {},
+): EsitoParacadute<T> {
+  const minimo = opts.minimo ?? MINIMO_BACHECA;
+  if (lista.length >= minimo) return { lista: [...lista], aggiunti: 0, motivo: 'sufficiente' };
+  const mancanti = minimo - lista.length;
+  const aggiunte = scorta
+    .map((voce, indice) => ({ voce, indice, punteggio: punteggioNoto(voce) ?? 0 }))
+    .sort((a, b) => b.punteggio - a.punteggio || a.indice - b.indice)
+    .slice(0, mancanti)
+    .map((r) => r.voce);
+  return {
+    lista: [...lista, ...aggiunte],
+    aggiunti: aggiunte.length,
+    motivo: aggiunte.length < mancanti ? 'scorta-esaurita' : 'integrato',
+  };
 }

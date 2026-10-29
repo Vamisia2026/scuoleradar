@@ -39,6 +39,7 @@
  * `avviso` = pagina dell'avviso, `sito-scuola` = home ufficiale dell'istituto.
  */
 import { pulisciUrlEsterna } from '@/lib/alertInterpello';
+import { homeEduIt, hostEduIt } from '@/lib/dominiScuola';
 import { HOST_PIATTAFORMA_PRIVATA } from '@/lib/piattaformeLink';
 import { eUrlIndicePortale } from '@/lib/urlAvviso';
 import { urlValido } from './righeBoard';
@@ -62,18 +63,24 @@ export function ePiattaformaNonApribile(url?: string | null): boolean {
   }
 }
 
-/** Dominio `*.edu.it` contenuto in un recapito (PEO/PEC), altrimenti `null`. */
+/**
+ * Dominio `*.edu.it` contenuto in un recapito (PEO/PEC), altrimenti `null`.
+ *
+ * La regola di riconoscimento è UNA sola per tutta l'app
+ * (`lib/dominiScuola.ts` → `hostEduIt`): se il recapito è un indirizzo conta il
+ * dominio dopo la chiocciola, se è un host nudo o un URL conta l'host. Nessun
+ * `istruzione.it` (casella di servizio del Ministero), nessun `gmail.com`,
+ * nessun dominio storico non `.edu.it`: non sono il sito dell'istituto.
+ */
 export function dominioIstituzionale(recapito?: string | null): string | null {
-  const testo = (recapito ?? '').toLowerCase();
-  const trovato = testo.match(/(?:^|[^a-z0-9._%+-])[a-z0-9._%+-]+@((?:[a-z0-9-]+\.)+edu\.it)\b/);
-  return trovato?.[1] ?? null;
+  return hostEduIt(recapito);
 }
 
 /** Home ufficiale dell'istituto dal primo recapito `.edu.it` disponibile. */
 export function homepageIstituzionale(recapiti: ReadonlyArray<string | null | undefined>): string | null {
   for (const recapito of recapiti) {
-    const dominio = dominioIstituzionale(recapito);
-    if (dominio) return `https://${dominio}`;
+    const home = homeEduIt(recapito);
+    if (home) return home;
   }
   return null;
 }
@@ -82,27 +89,18 @@ export function homepageIstituzionale(recapiti: ReadonlyArray<string | null | un
  * Dominio `.edu.it` del SITO ISTITUZIONALE dichiarato dall'anagrafica MIM
  * (`SITOWEBSCUOLA` → `interpelli.school_site`), altrimenti `null`.
  *
- * Accetta un host nudo (`www.iccarducci.edu.it`) o un URL completo: resta solo
- * l'host, senza `www.`, così la home si compone in un punto solo. Come per i
- * recapiti, un dominio che non è `*.edu.it` non è il sito di un istituto e vale
- * `null` (`istruzione.it`, `gmail.com`, `pec.it`…).
+ * Accetta un host nudo (`www.iccarducci.edu.it`) o un URL completo — anche con lo
+ * schema malformato che scrive il file ministeriale (`https//host/`) — e ne
+ * ricava l'host senza `www.`: la home si compone in un punto solo
+ * (`hostEduIt`). Un dominio che non è `*.edu.it` non è il sito di un istituto.
  */
 export function dominioDaSito(sito?: string | null): string | null {
-  const testo = (sito ?? '').trim().toLowerCase();
-  if (!testo) return null;
-  try {
-    const conSchema = /^[a-z][a-z0-9+.-]*:\/\//.test(testo) ? testo : `https://${testo}`;
-    const host = new URL(conSchema).host.replace(/^www\./, '').replace(/\.$/, '');
-    return /^(?:[a-z0-9-]+\.)+edu\.it$/.test(host) ? host : null;
-  } catch {
-    return null;
-  }
+  return hostEduIt(sito);
 }
 
 /** Home dell'istituto dal suo sito istituzionale (`school_site`), altrimenti `null`. */
 export function homepageDaSito(sito?: string | null): string | null {
-  const dominio = dominioDaSito(sito);
-  return dominio ? `https://${dominio}` : null;
+  return homeEduIt(sito);
 }
 
 /** Fonte apribile: l'avviso vero, oppure la home ufficiale della scuola. */

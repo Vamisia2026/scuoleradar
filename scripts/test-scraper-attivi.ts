@@ -7,8 +7,10 @@
  *   · SOLO CATEGORIE DI RECLUTAMENTO — docenti, ATA, PNRR/PON/POR, esperti
  *     esterni; il resto (notizie, eventi, fondi senza procedura) è fuori;
  *   · PING NON BLOCCANTE — se il bando è strutturato (classe/materia + email di
- *     candidatura) il record si accetta anche quando il server regionale
- *     risponde 403/timeout ai client automatici (blocco anti-bot);
+ *     candidatura) non si pinga affatto: il record si accetta anche quando il
+ *     server regionale risponde 403/timeout ai client automatici (blocco anti-bot);
+ *   · NIENTE URL MORTI — la decisione sul link è quella di `lib/validitaLink.ts`
+ *     applicata in ingresso (`presidioLinkIngresso.ts`, §26.104);
  *   · ANTI-MOCK INTATTO — il link, verificato o no, deve restare una fonte
  *     ufficiale verificabile (`verificaAvviso`).
  *
@@ -21,8 +23,8 @@ import {
   eRecordStrutturato,
   eTitoloInformativo,
   motivoScartoOpportunita,
-  valutaGateLink,
 } from '../src/scraper/qualitaOpportunita.ts';
+import { daControllareInIngresso, valutaIngressoPerLink } from '../src/scraper/presidioLinkIngresso.ts';
 import { rilevaCategoriaAvviso, verificaAvviso } from '../src/scraper/parser.ts';
 
 let errori = 0;
@@ -155,7 +157,7 @@ check('record vuoto → NON strutturato', false, eRecordStrutturato({}));
 
 /* ------------------------ D · Gate del link (anti-bot) ------------------------ */
 
-console.log('\n— D. Ping fallace ≠ record scartato —');
+console.log('\n— D. Ping fallace ≠ record scartato · 404 ≠ link vivo —');
 const STRUTTURATO = {
   title: 'Interpello supplenza A-022 Matematica — Liceo Manzoni',
   link: 'https://www.liceomanzoni.edu.it/interpelli/avviso-a022',
@@ -170,34 +172,42 @@ const INCOMPLETO = {
   materia: null,
   contactEmail: null,
 };
-const esito = (a: Parameters<typeof valutaGateLink>[0], r: boolean | null) => {
-  const e = valutaGateLink(a, r);
-  return { accetta: e.accetta, verificato: e.verificato };
+const HOME = 'https://liceomanzoni.edu.it';
+/** Verdetto in una riga: `accetta|link|stato` (la matrice completa è in `test-gate-link-ingresso.ts`). */
+const v = (
+  a: Parameters<typeof valutaIngressoPerLink>[0],
+  e: Parameters<typeof valutaIngressoPerLink>[1],
+  home: string | null = null,
+) => {
+  const r = valutaIngressoPerLink(a, e, home);
+  return `${r.accetta ? 'ok' : 'fuori'}|${r.link}|${r.stato}`;
 };
 
-check('link raggiungibile → accettato e verificato', { accetta: true, verificato: true }, esito(STRUTTURATO, true));
-check(
-  'ping non eseguito (già strutturato) → accettato, non verificato',
-  { accetta: true, verificato: false },
-  esito(STRUTTURATO, null),
-);
+check('200 → avviso pubblicato', `ok|${INCOMPLETO.link}|ok`, v(INCOMPLETO, { status: 200 }));
 check(
   '403/anti-bot + record STRUTTURATO → ACCETTATO (disposizione inderogabile)',
-  { accetta: true, verificato: false },
-  esito(STRUTTURATO, false),
+  `ok|${STRUTTURATO.link}|bloccato`,
+  v(STRUTTURATO, { status: 403 }),
 );
-check('403/anti-bot + record INCOMPLETO → scartato', false, valutaGateLink(INCOMPLETO, false).accetta);
-check('ping non eseguito + record incompleto → scartato', false, valutaGateLink(INCOMPLETO, null).accetta);
-check('link raggiungibile + record incompleto → accettato', true, valutaGateLink(INCOMPLETO, true).accetta);
+check(
+  '403/anti-bot + record incompleto → accettato (non è un link morto)',
+  `ok|${INCOMPLETO.link}|bloccato`,
+  v(INCOMPLETO, { status: 403 }),
+);
+check('ping non eseguito (strutturato) → accettato', `ok|${STRUTTURATO.link}|non-verificabile`, v(STRUTTURATO, null));
+check('404 + home ufficiale → si pubblica la home', `ok|${HOME}|assente`, v(INCOMPLETO, { status: 404 }, HOME));
+check('404 senza home → riga fuori (mai URL morti)', 'fuori|null|assente', v(INCOMPLETO, { status: 404 }));
+check(
+  'timeout → link mantenuto (upsert irreversibile: nessuna prova di morte)',
+  `ok|${INCOMPLETO.link}|instabile`,
+  v(INCOMPLETO, { status: null, errore: 'timeout' }, HOME),
+);
+check('record strutturato → NON si pinga', false, daControllareInIngresso(STRUTTURATO));
+check('record incompleto con link http → si pinga', true, daControllareInIngresso(INCOMPLETO));
 check(
   'il motivo dello scarto è esplicito (mai silenzioso)',
   true,
-  /record incompleto/.test(valutaGateLink(INCOMPLETO, false).motivo),
-);
-check(
-  'il motivo di accettazione cita il blocco anti-bot',
-  true,
-  /anti-bot|strutturato/i.test(valutaGateLink(STRUTTURATO, false).motivo),
+  /nessuna home ufficiale/.test(valutaIngressoPerLink(INCOMPLETO, { status: 404 }).motivo),
 );
 
 /* ------------------ E · L'anti-mock NON è stato indebolito ------------------ */

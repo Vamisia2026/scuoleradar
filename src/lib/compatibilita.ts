@@ -171,3 +171,78 @@ export function descrizioneJollySemantico(competenza: string, punteggio: number)
     `l'avviso d'ufficio al ${PUNTEGGIO_JOLLY_OLTRE_RAGGIO}%.`
   );
 }
+
+/* ------------- Colore del MATCH della vetrina «Opportunità mappate» (§26.106) ------------- */
+
+/**
+ * Etichetta TRASPARENTE della riga di RIPIEGO: quando il paracadute «5 osso-da-mordere»
+ * completa la vetrina con le migliori opportunità del DB, la card **lo dichiara**.
+ */
+export const ETICHETTA_RIPIEGO = 'Opportunità di ripiego nel DB';
+
+/** Fascia del match nella vetrina: tre colori, tre letture. */
+export type LivelloMatch = 'alto' | 'medio' | 'basso';
+
+/**
+ * Colore di una fascia: hex della palette ufficiale e token Tailwind equivalente
+ * (`className` deve restare una stringa STATICA: Tailwind legge il sorgente).
+ */
+export interface ColoreMatch {
+  livello: LivelloMatch;
+  /** Gradino 500 di `tailwind.config.js`: un solo colore per fascia. */
+  hex: string;
+  /** Token Tailwind corrispondente (`accent-500`, `warning-500`, `error-500`). */
+  token: string;
+  /** Classi del pallino/barra (`bg-accent-500`, …). */
+  className: string;
+}
+
+/**
+ * I TRE COLORI del match (§26.106) — gradini 500 della palette, non tinte nuove:
+ *   🟢 `#1FA055` (accent-500)  → ALTO  (≥ 80) · 🟡 `#E2B33C` (warning-500) → MEDIO (60 … 79)
+ *   🔴 `#D9534F` (error-500)   → BASSO (< 60: ripiego dichiarato)
+ * Le SOGLIE non sono riscritte qui: `livelloMatch` legge `livelloCompatibilita`, l'unica fonte.
+ */
+export const COLORI_MATCH: Record<LivelloMatch, ColoreMatch> = {
+  alto: { livello: 'alto', hex: '#1FA055', token: 'accent-500', className: 'bg-accent-500' },
+  medio: { livello: 'medio', hex: '#E2B33C', token: 'warning-500', className: 'bg-warning-500' },
+  basso: { livello: 'basso', hex: '#D9534F', token: 'error-500', className: 'bg-error-500' },
+};
+
+/** Etichetta e descrizione delle tre fasce (la riga di ripiego ha la sua, sopra). */
+const FASCE_MATCH: Record<LivelloMatch, { etichetta: string; descrizione: string }> = {
+  alto: { etichetta: 'Match alto col profilo', descrizione: 'Match alto col profilo (≥ 80%): ordine, classe e provincia combaciano.' },
+  medio: { etichetta: 'Match medio col profilo', descrizione: 'Match medio col profilo (60-79%): materia o area vicina, oppure provincia entro i 60 km.' },
+  basso: { etichetta: 'Match basso col profilo', descrizione: 'Match basso col profilo (< 60%): fuori dai criteri principali del tuo Radar.' },
+};
+
+const DESCRIZIONE_RIPIEGO =
+  'Nessun match sufficiente: è una delle migliori opportunità del DB, mostrata per non lasciare ' +
+  'vuota la vetrina. Ripiego dichiarato, non un match col profilo.';
+
+/** Fascia del match di un punteggio: proiezione della banda cromatica condivisa. */
+export function livelloMatch(punteggio: number): LivelloMatch {
+  const livello = livelloCompatibilita(punteggio);
+  if (livello === 'verde') return 'alto';
+  // «arancio» (70-79) e «rosso» (60-69) sono la stessa fascia media: il secondo gradino
+  // resta nel badge della card («match parziale» / «suggerimento extra»).
+  if (livello === 'sotto-soglia') return 'basso';
+  return 'medio';
+}
+
+/** Banda del match pronta per la vetrina: punteggio, colore (hex + token), etichetta, descrizione. */
+export interface BandaMatch extends ColoreMatch {
+  punteggio: number;
+  etichetta: string;
+  descrizione: string;
+}
+
+/** Banda del MATCH nella vetrina «Opportunità mappate». `ripiego: true` (riga del paracadute)
+ * è dichiarato SOLO con match basso: un'opportunità forte non ha bisogno di scuse. */
+export function stileMatch(punteggio: number, opts: { ripiego?: boolean } = {}): BandaMatch {
+  const p = normalizzaPunteggioCompatibilita(punteggio);
+  const livello = livelloMatch(p);
+  const ripiego = opts.ripiego === true && livello === 'basso';
+  const fascia = ripiego ? { etichetta: ETICHETTA_RIPIEGO, descrizione: DESCRIZIONE_RIPIEGO } : FASCE_MATCH[livello];
+  return { ...COLORI_MATCH[livello], punteggio: p, ...fascia };
+}

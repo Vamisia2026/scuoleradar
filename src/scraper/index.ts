@@ -21,7 +21,10 @@
  *      scartati a monte (`qualitaOpportunita.ts`); le pagine indice diventano
  *      avvisi individuali (`elenchi.ts`, mai il link alla lista master) e una
  *      pagina indice che NON si riesce a espandere non viene mai pubblicata
- *      (regola condivisa col tabellone: `lib/urlAvviso.ts`);
+ *      (regola condivisa col tabellone: `lib/urlAvviso.ts`). Un elenco si legge
+ *      fino alle pagine 2…N che la pagina stessa dichiara (§26.103,
+ *      `lib/elenchiPaginati.ts`): gli hub WordPress ne tengono centinaia in
+ *      archivio e la prima pagina ne mostra dieci;
  *   5. arricchimento di scadenze ed email di candidatura (fonti ufficiali);
  *   6. GATE 2 — solo bandi ATTIVI: gli scaduti non entrano in bacheca;
  *   7. GATE 3 — link: un ping fallito (403/anti-bot/timeout dei server regionali)
@@ -37,6 +40,7 @@
  *   npm run scrape -- --dry-run          # solo estrazione + validazione, nessun inserimento
  *   npm run scrape -- --no-email         # salta il log di accodamento per il riepilogo
  *   SCRAPER_FONTI_MAX=6 npm run scrape   # limita le fonti interrogate (budget di rete)
+ *   SCRAPER_PAGINE_ELENCO=3 npm run scrape # pagine lette per elenco (1 = solo la prima, §26.103)
  *   SCRAPER_ARCHIVI=1 npm run scrape     # include gli archivi regionali (backfill)
  *   npm run fonti:verifica               # ricontrolla dal vivo tutte le URL del registro
  */
@@ -45,7 +49,11 @@ import process from 'node:process';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { arricchisciConAnagrafica, riepilogoAnagrafica } from './anagraficaInterpelli.ts';
+import {
+  arricchisciConAnagrafica,
+  homeUfficialeAvviso,
+  riepilogoAnagrafica,
+} from './anagraficaInterpelli.ts';
 import {
   applicaTailoring,
   azzeraRiepilogoTailoring,
@@ -75,10 +83,13 @@ import { espandiPostInAvvisi } from './postRaccolta.ts';
 import { datiRiga, titoloVoce } from './righeTabella.ts';
 import { eUrlArticolo, eUrlHome } from './paginaElenco.ts';
 import { eUrlIndicePortale } from '../lib/urlAvviso.ts';
+import { PAGINE_ELENCO_DEFAULT, chiaveElenco, pagineSuccessiveElenco } from '../lib/elenchiPaginati.ts';
 import { MAX_FONTI_PER_RUN, fontiPerRun, type FonteInterpelli } from './fonti.ts';
 import { sintesiCopertura } from './fontiCopertura.ts';
 import { MAX_SEZIONI_HUB, eTitoloNavigazione, scopriSezioniReclutamento } from './hub.ts';
-import { motivoScartoOpportunita, valutaGateLink, eRecordStrutturato } from './qualitaOpportunita.ts';
+import { motivoScartoOpportunita } from './qualitaOpportunita.ts';
+import { daControllareInIngresso, valutaIngressoPerLink } from './presidioLinkIngresso.ts';
+import { TIMEOUT_PING_MS, verificaLinkInLotti } from './verificaLinkHttp.ts';
 import { statoArricchimento } from '../lib/statoArricchimento.ts';
 import { arricchisciContatti, arricchisciScadenze } from './arricchimento.ts';
 import { inviaAlertTelegramTempoReale } from '../lib/notifier.ts';
@@ -409,51 +420,11 @@ export function parsePostInterpelli(
 // distinzione tra PUBBLICAZIONE e SCADENZA: gestita dal parser in
 // src/scraper/parser.ts (estraiDataPubblicazione / estraiDataScadenza).
 
-/**
- * Raggiungibilità del link di un avviso (HEAD con fallback GET, UA da browser).
- *
- * Cambio di politica (ping fallace): il risultato NON è più una condanna. Molti
- * server scolastici regionali rispondono 403/timeout ai client automatici; il
- * record viene quindi valutato dal `gate del link` (vedi
- * `qualitaOpportunita.ts`): se è strutturato (classe/materia + email di
- * candidatura) resta in bacheca, altrimenti si scarta.
- */
-async function linkRaggiungibile(url: string): Promise<boolean> {
-  const opts = {
-    timeout: 12_000,
-    maxRedirects: 5,
-    validateStatus: (s: number) => s < 400,
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
-      Accept: 'text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'it-IT,it;q=0.9,en;q=0.6',
-    },
-  };
-  try {
-    await axios.head(url, opts);
-    return true;
-  } catch {
-    try {
-      const res = await axios.get(url, { ...opts, responseType: 'arraybuffer' });
-      return res.status < 400;
-    } catch {
-      return false;
-    }
-  }
-}
+// La raggiungibilità del link NON si misura più qui: la regola sta in
+// `lib/validitaLink.ts` (decisione) + `verificaLinkHttp.ts` (controllo HEAD/GET) e
+// l'adattamento all'ingestione in `presidioLinkIngresso.ts` (§26.104). Il vecchio
+// `linkRaggiungibile` era una seconda verità sullo stesso dominio.
 
-/** Raggiungibilità in PARALLELO (concorrenza limitata): N ping non sono N attese. */
-async function mappaRaggiungibilita(urls: string[], concorrenza = 8): Promise<Map<string, boolean>> {
-  const unici = [...new Set(urls.filter(Boolean))];
-  const esiti = new Map<string, boolean>();
-  for (let i = 0; i < unici.length; i += Math.max(1, concorrenza)) {
-    const lotto = unici.slice(i, i + Math.max(1, concorrenza));
-    const risultati = await Promise.all(lotto.map((u) => linkRaggiungibile(u)));
-    lotto.forEach((u, idx) => esiti.set(u, risultati[idx] ?? false));
-  }
-  return esiti;
-}
 
 /**
  * CONNETTORE · FEED DELL'AGGREGATORE (post giornalieri NAZIONALI).
@@ -567,6 +538,7 @@ async function raccogliDaHub(
   fonte: FonteInterpelli,
   stats: StatsRaccolta,
   maxPost = 8,
+  maxPagine = PAGINE_ELENCO_DEFAULT,
 ): Promise<AvvisoRilevato[]> {
   const avvisi: AvvisoRilevato[] = [];
   const fallback = fonte.capoluogo ?? '';
@@ -580,7 +552,17 @@ async function raccogliDaHub(
 
   const pagine = [fonte.url, ...scopriSezioniReclutamento(html, fonte.url, MAX_SEZIONI_HUB)];
   const hashVisti = new Set<string>();
+  // §26.103 — Le pagine d'elenco già lette in QUESTO hub. La scoperta delle
+  // sezioni e la paginazione nativa trovano spesso le stesse pagine (2, 3, 4…):
+  // senza questo insieme si scaricherebbero due volte, e il giro paga la rete.
+  const pagineViste = new Set<string>([chiaveElenco(fonte.url)]);
   for (const [i, pagina] of pagine.entries()) {
+    const chiavePagina = chiaveElenco(pagina);
+    if (i > 0 && pagineViste.has(chiavePagina)) {
+      console.log(`  · [${fonte.id}] sezione già letta, salto: ${pagina}`);
+      continue;
+    }
+    pagineViste.add(chiavePagina);
     let paginaHtml = html;
     if (i > 0) {
       try {
@@ -590,17 +572,39 @@ async function raccogliDaHub(
         continue;
       }
     }
-    // Indice di post: le voci sono ARTICOLI (testo, data, allegati) e non righe.
-    // Se i post si leggono, sono LORO gli avvisi della pagina: le righe della
-    // stessa pagina sarebbero gli stessi avvisi senza contenuto.
-    const daPost = await espandiPaginaPost(paginaHtml, pagina, fallback, maxPost);
-    const candidati: AvvisoRilevato[] =
-      daPost.length > 0
-        ? daPost
-        : [
-            ...parseAvvisi(paginaHtml, fallback, pagina),
-            ...espandiElencoInAvvisi(paginaHtml, { baseUrl: pagina, provincia: fallback, source: pagina }),
-          ];
+    // §26.103 — LA SEZIONE PUÒ CONTINUARE NELLE PAGINE 2…N. La whitelist punta a
+    // hub WordPress che mostrano 10 voci per pagina: leggere solo la prima
+    // significa ignorare l'archivio (misurato: 70 pagine e 408 voci in più in un
+    // giro nazionale). Si seguono solo le pagine che la pagina stessa dichiara
+    // (`pagineSuccessiveElenco`), al massimo `maxPagine` per sezione.
+    const catena = await pagineSuccessiveElenco(
+      { url: pagina, html: paginaHtml },
+      {
+        max: maxPagine,
+        scarica: scaricaPagina,
+        log: (riga) => console.log(`    · [${fonte.id}] elenco su più pagine: ${riga}`),
+      },
+    );
+    const candidati: AvvisoRilevato[] = [];
+    for (const letta of catena.pagine) {
+      pagineViste.add(chiaveElenco(letta.url));
+      // Indice di post: le voci sono ARTICOLI (testo, data, allegati) e non righe.
+      // Se i post si leggono, sono LORO gli avvisi della pagina: le righe della
+      // stessa pagina sarebbero gli stessi avvisi senza contenuto.
+      const daPost = await espandiPaginaPost(letta.html, letta.url, fallback, maxPost);
+      candidati.push(
+        ...(daPost.length > 0
+          ? daPost
+          : [
+              ...parseAvvisi(letta.html, fallback, letta.url),
+              ...espandiElencoInAvvisi(letta.html, {
+                baseUrl: letta.url,
+                provincia: fallback,
+                source: letta.url,
+              }),
+            ]),
+      );
+    }
     let aggiunti = 0;
     for (const a of candidati) {
       if (hashVisti.has(a.hashId)) continue;
@@ -617,7 +621,10 @@ async function raccogliDaHub(
       avvisi.push(a);
       aggiunti += 1;
     }
-    console.log(`  ✓ [${fonte.id}] ${pagina} → ${aggiunti} voci`);
+    console.log(
+      `  ✓ [${fonte.id}] ${pagina} → ${aggiunti} voci` +
+        (catena.extra > 0 ? ` (${catena.pagine.length} pagine: ${catena.extra} oltre la prima)` : ''),
+    );
   }
   return avvisi;
 }
@@ -629,12 +636,15 @@ async function raccogliDaHub(
  * il feed dell'aggregatore. Le voci di contenuto editoriale (comunicati stampa,
  * dichiarazioni, eventi) vengono scartate QUI, a monte: mai in bacheca e mai
  * nelle notifiche Telegram/email.
+ *
+ * `maxPagine` è il tetto di pagine lette per ogni elenco degli hub (§26.103).
  */
 async function raccogliAvvisiReali(
   province: string[],
   maxFonti = MAX_FONTI_PER_RUN,
   includiArchivi = false,
   maxPost = 8,
+  maxPagine = PAGINE_ELENCO_DEFAULT,
 ): Promise<{ avvisi: AvvisoRilevato[]; fonti: string; stats: StatsRaccolta }> {
   const avvisi: AvvisoRilevato[] = [];
   const descrizioneFonti: string[] = [];
@@ -648,7 +658,7 @@ async function raccogliAvvisiReali(
     descrizioneFonti.push(fonte.id);
     const estratti =
       fonte.tipo === 'hub-istituzionale'
-        ? await raccogliDaHub(fonte, stats, maxPost)
+        ? await raccogliDaHub(fonte, stats, maxPost, maxPagine)
         : await raccogliDaAggregatore(fonte, postVisitati, stats);
 
     // GATE 1 — CONFORMITÀ: solo opportunità di lavoro, mai contenuto editoriale.
@@ -688,6 +698,12 @@ async function raccogliAvvisiReali(
  * alla lista master come se fosse un avviso). Best-effort e limitato da
  * `SCRAPER_ELENCHI_MAX` (default 25 pagine per run).
  *
+ * §26.103 — L'elenco non finisce alla prima pagina: si seguono le pagine 2…N
+ * che l'indice stesso dichiara (`lib/elenchiPaginati.ts`), fino a `maxPagine`
+ * per elenco (`SCRAPER_PAGINE_ELENCO`, default 3) e dentro lo stesso budget di
+ * rete. Senza questo, un hub WordPress con 10 voci per pagina e 200 in archivio
+ * era coperto al 5%.
+ *
  * Due famiglie di indice, stesso esito (un avviso per voce):
  *   1. TABELLARE — righe `<tr>`/`<li>`/griglie ARIA (`elenchi.ts`);
  *   2. DI POST — feed RSS o pagina con articoli linkati (WordPress, Elementor,
@@ -699,6 +715,7 @@ async function espandiElenchi(
   avvisi: AvvisoRilevato[],
   max = 25,
   maxPost = 8,
+  maxPagine = PAGINE_ELENCO_DEFAULT,
 ): Promise<{
   avvisi: AvvisoRilevato[];
   indiciEspansi: number;
@@ -708,6 +725,8 @@ async function espandiElenchi(
   elenchiPost: number;
   /** Pagine di post lette davvero (le altre: solo anteprima dell'elenco). */
   postLetti: number;
+  /** Pagine d'elenco lette OLTRE la prima (§26.103): consumo di rete extra. */
+  pagineExtra: number;
 }> {
   const out: AvvisoRilevato[] = [];
   const indiciScartati: string[] = [];
@@ -715,6 +734,7 @@ async function espandiElenchi(
   let vociCreate = 0;
   let elenchiPost = 0;
   let postLetti = 0;
+  let pagineExtra = 0;
   let fetchEffettuati = 0;
 
   for (const a of avvisi) {
@@ -769,73 +789,108 @@ async function espandiElenchi(
       out.push(a); // pagina non raggiungibile: si tiene l'avviso com'è
       continue;
     }
-    if (ePaginaElenco(html, link, link)) {
-      const figli = espandiElencoInAvvisi(html, {
-        baseUrl: link,
-        provincia: a.province,
-        source: link,
-        dataPubblicazione: a.publishedAt ?? null,
-      }).filter((f) => (f.link ?? '') !== link);
+    // §26.103 — L'ELENCO CONTINUA NELLE PAGINE 2…N. Si segue SOLO la pagina
+    // successiva dichiarata dalla pagina stessa (`pagineSuccessiveElenco`), al
+    // massimo `SCRAPER_PAGINE_ELENCO` pagine e spendendo il budget di rete del
+    // run: un archivio da 300 pagine non divora il giro.
+    const catena = await pagineSuccessiveElenco(
+      { url: link, html },
+      {
+        max: maxPagine,
+        scarica: scaricaPagina,
+        riserva: Math.max(0, max - fetchEffettuati),
+        log: (riga) => console.log(`    · elenco su più pagine: ${riga}`),
+      },
+    );
+    fetchEffettuati += catena.extra;
+    pagineExtra += catena.extra;
 
-      if (figli.length === 0) {
-        // Indice senza voci estraibili: si scarta (mai il link alla lista master).
-        indiciScartati.push(link);
-        console.warn(`  ✗ indice senza voci estraibili, scartato: ${link}`);
+    // Ogni pagina della catena si legge con la STESSA regola: la prima può essere
+    // una tabella di righe e la seconda un elenco di articoli (o viceversa). Le
+    // voci si uniscono per LINK, così una voce ripetuta dall'archivio non
+    // raddoppia; la pagina indice non entra mai in bacheca.
+    const vociPagina: AvvisoRilevato[] = [];
+    const linkVisti = new Set<string>([link]);
+    let pagineRighe = 0;
+    let paginePost = 0;
+    for (const letta of catena.pagine) {
+      const figli = ePaginaElenco(letta.html, letta.url, letta.url)
+        ? espandiElencoInAvvisi(letta.html, {
+            baseUrl: letta.url,
+            provincia: a.province,
+            source: letta.url,
+            dataPubblicazione: a.publishedAt ?? null,
+          }).filter((f) => (f.link ?? '') !== letta.url)
+        : [];
+      if (figli.length > 0) {
+        pagineRighe += 1;
+        for (const f of figli) {
+          const chiave = (f.link ?? '').trim();
+          if (!chiave || linkVisti.has(chiave)) continue;
+          linkVisti.add(chiave);
+          vociPagina.push(f);
+        }
         continue;
       }
 
-      indiciEspansi += 1;
-      vociCreate += figli.length;
-      out.push(...figli);
-      continue;
-    }
-
-    // ELENCHI DI POST (§26.88): WordPress/Elementor e e-portfolio Liferay del MIM.
-    // La pagina non è una tabella ma un elenco di ARTICOLI (o un feed RSS):
-    // ogni post diventa un avviso con il testo dell'articolo e i suoi allegati.
-    if (eFeedDocumento(html) || ePaginaPostElenco(html, link)) {
+      // ELENCHI DI POST (§26.88): WordPress/Elementor e e-portfolio Liferay del MIM.
+      // La pagina non è una tabella ma un elenco di ARTICOLI (o un feed RSS):
+      // ogni post diventa un avviso con il testo dell'articolo e i suoi allegati.
+      if (!eFeedDocumento(letta.html) && !ePaginaPostElenco(letta.html, letta.url)) continue;
       const esito = await espandiPostInAvvisi(
-        html,
+        letta.html,
         {
-          baseUrl: link,
+          baseUrl: letta.url,
           provincia: a.province,
-          source: link,
+          source: letta.url,
           dataPubblicazione: a.publishedAt ?? null,
         },
         { max: maxPost, scarica: scaricaPagina },
       );
-      if (esito.avvisi.length === 0) {
-        indiciScartati.push(link);
-        console.warn(`  ✗ indice di post senza voci estraibili, scartato: ${link}`);
-        continue;
-      }
-      indiciEspansi += 1;
-      elenchiPost += 1;
-      vociCreate += esito.avvisi.length;
+      if (esito.avvisi.length === 0) continue;
+      paginePost += 1;
       postLetti += esito.postLetti;
       if (esito.indiciScartati > 0) {
         // Voci dell'elenco che erano a loro volta una pagina indice: scartate.
         console.warn(
-          `    · ${esito.indiciScartati} voce/i dell'indice erano indici: scartate (${link})`,
+          `    · ${esito.indiciScartati} voce/i dell'indice erano indici: scartate (${letta.url})`,
         );
       }
-      out.push(...esito.avvisi);
+      for (const voce of esito.avvisi) {
+        const chiave = (voce.link ?? '').trim();
+        if (!chiave || linkVisti.has(chiave)) continue;
+        linkVisti.add(chiave);
+        vociPagina.push(voce);
+      }
+    }
+
+    if (vociPagina.length === 0) {
+      // Indice senza voci estraibili: se è una pagina indice si scarta (mai il
+      // link alla lista master), altrimenti era un avviso vero e si tiene.
+      if (indicePortale) {
+        indiciScartati.push(link);
+        console.warn(`  ✗ indice senza voci estraibili, scartato: ${link}`);
+        continue;
+      }
+      out.push(a);
       continue;
     }
 
-    // Né elenco di righe né indice di post: se resta una PAGINA INDICE (landing
-    // di un portale, sezione senza voci estraibili) non è un avviso e non entra
-    // in bacheca: meglio una riga in meno che una riga che apre una lista.
-    if (indicePortale) {
-      indiciScartati.push(link);
-      console.warn(`  ✗ pagina indice non espandibile, scartata: ${link}`);
-      continue;
+    indiciEspansi += 1;
+    if (paginePost > 0) elenchiPost += 1;
+    vociCreate += vociPagina.length;
+    if (catena.extra > 0) {
+      console.log(
+        `  ✓ ${link} → elenco su ${catena.pagine.length} pagine ` +
+          `(${pagineRighe} a righe, ${paginePost} di post): ${vociPagina.length} voci · ` +
+          `${catena.extra} oltre la prima, stop=${catena.fermato}`,
+      );
     }
-
-    out.push(a); // né elenco né indice di post: è l'avviso vero
+    out.push(...vociPagina);
+    continue;
   }
 
-  return { avvisi: out, indiciEspansi, vociCreate, indiciScartati, elenchiPost, postLetti };
+  return { avvisi: out, indiciEspansi, vociCreate, indiciScartati, elenchiPost, postLetti, pagineExtra };
 }
 
 /* ------------------- Nessun seed di test nella pipeline ------------------- */
@@ -1281,12 +1336,27 @@ async function main(provinceOverride?: string[]) {
   console.log(`• Province attive: ${province.join(', ')}`);
   console.log(`• Modalità: fonti reali (web) · inserimento: ${isDryRun ? 'DISATTIVATO (dry-run)' : 'Supabase'} · email: ${noEmail ? 'DISATTIVATE' : 'attive (Resend)'}`);
 
+  // §26.103 — pagine lette per OGNI elenco (`1` = comportamento storico, solo la
+  // prima pagina). Un hub WordPress mostra 10 voci per pagina e ne tiene centinaia
+  // in archivio: senza questo tetto la copertura dell'elenco è del 5%.
+  const pagineDaAmbiente = Number(env.SCRAPER_PAGINE_ELENCO ?? PAGINE_ELENCO_DEFAULT);
+  const pagineElenco =
+    Number.isFinite(pagineDaAmbiente) && pagineDaAmbiente >= 1
+      ? Math.floor(pagineDaAmbiente)
+      : PAGINE_ELENCO_DEFAULT;
+  if (pagineElenco > 1) {
+    console.log(
+      `• Elenchi: fino a ${pagineElenco} pagine per indice (pagine 2…N dichiarate dalla pagina stessa)`,
+    );
+  }
+
   // SOLO fonti reali (nessun fixture/seed): la pipeline non usa dati di test.
   const { avvisi, fonti, stats } = await raccogliAvvisiReali(
     province,
     Number(env.SCRAPER_FONTI_MAX ?? MAX_FONTI_PER_RUN),
     env.SCRAPER_ARCHIVI === '1',
     Number(env.SCRAPER_POST_MAX ?? 8),
+    pagineElenco,
   );
   let trovati: AvvisoRilevato[] = avvisi;
   console.log(`• Fonti interrogate: ${fonti}`);
@@ -1305,11 +1375,13 @@ async function main(provinceOverride?: string[]) {
   }
 
   // ELENCHI: ogni voce di una pagina indice (es. elenchi USR) diventa un avviso
-  // indipendente con il proprio link (mai il link alla lista master).
+  // indipendente con il proprio link (mai il link alla lista master). §26.103 —
+  // l'indice si legge fino alle pagine 2…N che dichiara (`pagineElenco`).
   const elenchi = await espandiElenchi(
     trovati,
     Number(env.SCRAPER_ELENCHI_MAX ?? 25),
     Number(env.SCRAPER_POST_MAX ?? 8),
+    pagineElenco,
   );
   if (elenchi.indiciEspansi > 0 || elenchi.indiciScartati.length > 0) {
     console.log(
@@ -1322,6 +1394,11 @@ async function main(provinceOverride?: string[]) {
   if (elenchi.elenchiPost > 0) {
     console.log(
       `• Elenchi di post: ${elenchi.elenchiPost} indice/i di articoli/feed · ${elenchi.postLetti} pagine di post lette`,
+    );
+  }
+  if (elenchi.pagineExtra > 0) {
+    console.log(
+      `• Elenchi su più pagine (§26.103): ${elenchi.pagineExtra} pagine lette oltre la prima`,
     );
   }
   trovati = elenchi.avvisi;
@@ -1372,40 +1449,56 @@ async function main(provinceOverride?: string[]) {
   if (scartatiScaduti > 0) console.log(`• Bandi già scaduti scartati: ${scartatiScaduti}`);
   trovati = attivi;
 
-  // GATE 3 — LINK (ping FALLACE ≠ record scartato).
-  // ⛔ Nessun fallback alla home dell'ente (USR/USP): il link deve restare quello
-  // specifico dell'avviso ("👉 Apri l'avviso ufficiale"). Ma un server regionale
-  // che risponde 403/timeout al client automatico NON è un bando inesistente:
-  // se il record è STRUTTURATO (classe/materia + email di candidatura) si accetta
-  // senza verifica del link; per gli altri il ping resta decisivo. I record
-  // strutturati non vengono nemmeno pingati (risparmio di richieste).
-  console.log('• Gate del link (ping non bloccante per i bandi strutturati)…');
-  const strutturatoDi = (a: AvvisoRilevato) =>
-    eRecordStrutturato({ classCodes: a.classCodes, materia: a.materia, contactEmail: a.contactEmail });
-  // Si pingano SOLO i record non strutturati (i strutturati sono già accettati).
-  const raggiungibilita = await mappaRaggiungibilita(
-    trovati.filter((a) => !strutturatoDi(a)).map((a) => a.link ?? ''),
-    Number(env.SCRAPER_PING_CONCORRENZA ?? 8),
-  );
+  // GATE 3 — LINK: nessun URL morto in bacheca (§26.104).
+  // La decisione è quella di `lib/validitaLink.ts` (`decidiPubblicazione`), la
+  // STESSA della pulizia dati: `403`/`429` (server anti-bot) non sono link morti,
+  // un `404`/`410` è una prova (home ufficiale `.edu.it` se nota, altrimenti riga
+  // fuori), un timeout non prova niente (la riga resta: l'upsert è irreversibile).
+  // I record STRUTTURATI (classe/materia + email) non si pingano: il loro esito
+  // resta «non controllato», che è lo stato di prima della §26.104 — nessuna
+  // regressione — e risparmia richieste inutili a server che risponderebbero 403.
+  console.log('• Gate del link (verifica HTTP prima dell’upsert)…');
+  const tettoControlli = Number(env.SCRAPER_PING_MAX ?? 120);
+  const daPingare = [
+    ...new Set(trovati.filter(daControllareInIngresso).map((a) => a.link ?? '')),
+  ].slice(0, Math.max(0, tettoControlli));
+  if (trovati.length - daPingare.length > 0) {
+    console.log(
+      `• Link da controllare: ${daPingare.length} (gli altri restano «non controllati»: record strutturati o tetto ${tettoControlli})`,
+    );
+  }
+  const esitiLink = await verificaLinkInLotti(daPingare, {
+    timeoutMs: Number(env.SCRAPER_PING_TIMEOUT_MS ?? TIMEOUT_PING_MS),
+    concorrenza: Number(env.SCRAPER_PING_CONCORRENZA ?? 8),
+  });
   const ammessiLink: AvvisoRilevato[] = [];
-  let linkVerificati = 0;
-  let accettatiStrutturati = 0;
-  let scartatiLink = 0;
+  const contaLink = { verificati: 0, bloccati: 0, nonControllati: 0, sostituiti: 0, scartati: 0 };
   for (const a of trovati) {
-    const strutturato = strutturatoDi(a);
-    const esito = valutaGateLink(a, strutturato ? null : (raggiungibilita.get(a.link ?? '') ?? false));
-    if (!esito.accetta) {
-      scartatiLink += 1;
-      if (scartatiLink <= 10) console.warn(`  ✗ scartato (${esito.motivo}): ${a.title.slice(0, 60)}`);
+    // La home ufficiale serve a entrambi i lati: sostituire un avviso sparito e
+    // (più sotto) la colonna `school_site` della riga.
+    const home = homeUfficialeAvviso(a);
+    const esito = esitiLink.get((a.link ?? '').trim()) ?? null;
+    const verdetto = valutaIngressoPerLink(a, esito, home);
+    if (!verdetto.accetta) {
+      contaLink.scartati += 1;
+      if (contaLink.scartati <= 10) {
+        console.warn(`  ✗ scartato (${verdetto.motivo}): ${a.title.slice(0, 60)}`);
+      }
       continue;
     }
-    if (esito.verificato) linkVerificati += 1;
-    else accettatiStrutturati += 1;
+    if (verdetto.sostituito && verdetto.link) {
+      a.link = verdetto.link;
+      contaLink.sostituiti += 1;
+    }
+    if (verdetto.stato === 'ok') contaLink.verificati += 1;
+    else if (verdetto.stato === 'bloccato') contaLink.bloccati += 1;
+    else contaLink.nonControllati += 1;
     ammessiLink.push(a);
   }
   console.log(
-    `• Link: ${linkVerificati} verificati · ${accettatiStrutturati} accettati perché strutturati ` +
-      `(classe/materia + email, ping non attendibile) · ${scartatiLink} scartati`,
+    `• Link: ${contaLink.verificati} verificati · ${contaLink.bloccati} bloccati dal server ` +
+      `(anti-bot, tenuti) · ${contaLink.nonControllati} non controllati · ` +
+      `${contaLink.sostituiti} sostituiti con la home ufficiale · ${contaLink.scartati} scartati`,
   );
   trovati = ammessiLink;
 

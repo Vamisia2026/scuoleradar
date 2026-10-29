@@ -1,21 +1,29 @@
 /**
  * ScuoleRadar.it — Dipartimento Radar · Flight Board: FILTRO di lettura della bacheca.
  *
- * La bacheca pubblica è fatta di OPPORTUNITÀ: entra solo una riga con una scadenza
- * dichiarata, non ancora passata e DENTRO LA FINESTRA DI CANDIDATURA di 15 giorni
- * (§26.71 e §26.82, direttiva 25/10/2026):
+ * La bacheca pubblica è fatta di OPPORTUNITÀ APERTE: entra solo una riga con una
+ * scadenza dichiarata e non ancora passata. Dal §26.100 (direttiva 28/10/2026)
+ * **non c'è più un tetto in avanti**:
  *
- *   and(expiration_date.gte.<oggi>,expiration_date.lte.<oggi+15>)
+ *   expiration_date.gte.<oggi>
  *
- * Il secondo ramo non è un dettaglio: senza di esso il conteggio del database
- * includeva le «scadenze» che in realtà sono la FINE dell'incarico («supplenza
- * dal 23/10/2026 al 30/06/2027»), che il gate in memoria
- * (`eOpportunitaConScadenza`) scarta già — e il pill in alto diceva più avvisi di
- * quelli che il tabellone poteva paginare (§26.75, «1.405 avvisi» con 137 pagine).
- * La finestra era di 30 giorni: un termine di candidatura non vive un mese, e la
- * finestra larga teneva in vetrina contratti annuali già assegnati.
+ * Fino al §26.99 lo stesso filtro portava anche `lte.<oggi+15>`, la finestra di
+ * candidatura di §26.82. Quella finestra risponde a «cosa posso candidare
+ * adesso» ed è la regola del FEED e del matching; sulla vetrina pubblica, invece,
+ * tagliava opportunità vere (un bando che scade fra un mese è aperto) e faceva
+ * sembrare il tabellone più povero del database. Il cliente ha chiesto il volume
+ * ATTIVO completo: qui si legge tutto ciò che non è scaduto, e le righe oltre
+ * l'orizzonte portano la banda blu «Scadenza lontana» invece di sparire.
  *
- * La finestra dei 60 giorni per gli avvisi che la fonte NON data è stata ritirata
+ * Il requisito della DATA resta identico (§26.71): un elenco di classi di
+ * concorso, una pagina di archivio o un regolamento non ha una scadenza e non
+ * entra in bacheca. In PostgREST `null >= x` non è vero, quindi `gte` esclude da
+ * sé le righe senza data e la regola ferrea resta in un solo punto
+ * (`eOpportunitaAperta` / `eOpportunitaConScadenza`, `lib/scadenza.ts`),
+ * applicata in memoria anche da `preparaRigheBoard`: doppia difesa, un solo
+ * significato.
+ *
+ * La finestra dei 60 giorni per gli avvisi che la fonte NON data resta ritirata
  * da questa superficie: nei dati reali quelle righe sono pagine di archivio,
  * regolamenti e indici di classi di concorso («ADEE | AAAA», «A041 | EEEE | A043»),
  * non opportunità di lavoro. La finestra resta dove serve al *fetch* e alla
@@ -25,10 +33,6 @@
  * numero di schermate e il totale degli avvisi parlano della stessa popolazione.
  *
  * L'espressione è in sintassi PostgREST (`client.from('interpelli').or(...)`).
- * Nessun ramo `expiration_date.is.null`: in PostgREST `null >= x` non è vero, quindi
- * `gte` esclude da sé le righe senza data e la regola ferrea resta in un solo punto
- * (`eOpportunitaConScadenza`, `lib/scadenza.ts`), applicata in memoria anche da
- * `preparaRigheBoard`: doppia difesa, un solo significato.
  *
  * Funzioni PURE (nessuna rete, nessun database, nessun orologio implicito: la data
  * si passa): la sintassi del filtro e la soglia sono verificabili senza toccare i
@@ -38,26 +42,15 @@ import { dataIsoLocale, GIORNI_ORIZZONTE_OPPORTUNITA } from '@/lib/scadenza';
 
 // La data LOCALE vive in un solo posto (`src/lib/scadenza.ts`, regola condivisa da
 // bacheca, feed e migrazioni): qui si ri-esporta perché il tabellone e la sua
-// guardia la importino dallo stesso modulo.
+// guardia la importino dallo stesso modulo. L'orizzonte resta esportato per il
+// badge (che lo legge da `lib/scadenzaSemaforo`): la bacheca non lo applica più.
 export { dataIsoLocale, GIORNI_ORIZZONTE_OPPORTUNITA };
 
-/** Data locale del giorno `oggi + giorni` (orizzonte dell'opportunità). */
-function ultimoGiornoUtile(oggi: Date, giorni: number): string {
-  const limite = new Date(oggi);
-  limite.setHours(12, 0, 0, 0);
-  limite.setDate(limite.getDate() + giorni);
-  return dataIsoLocale(limite);
-}
-
 /**
- * Filtro della bacheca: scadenza dichiarata, non ancora passata e non oltre
- * l'orizzonte dei `GIORNI_ORIZZONTE_OPPORTUNITA` (§26.71 / §26.75). Il ramo
- * «senza scadenza ma pubblicato nella finestra dei 60 giorni» non appartiene più
- * a questa superficie: quelle righe non sono opportunità attive.
+ * Filtro della bacheca: scadenza dichiarata e non ancora passata, senza tetto in
+ * avanti (§26.71 per il requisito della data, §26.100 per il volume).
  */
 export function filtroAttivi(oggi: Date = new Date()): string {
-  const dal = dataIsoLocale(oggi);
-  const al = ultimoGiornoUtile(oggi, GIORNI_ORIZZONTE_OPPORTUNITA);
-  return `and(expiration_date.gte.${dal},expiration_date.lte.${al})`;
+  return `expiration_date.gte.${dataIsoLocale(oggi)}`;
 }
 

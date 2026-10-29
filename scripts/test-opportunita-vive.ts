@@ -101,15 +101,15 @@ check(
   /from '@\/lib\/scadenza'/.test(bacheca) && /expiration_date\.gte\./.test(bacheca),
 );
 check(
-  'bacheca «Radar Live»: l’espressione ha i DUE estremi (oggi → orizzonte) e nessun ramo `is.null` di codice',
+  'bacheca «Radar Live»: un solo estremo (oggi), nessun ramo `is.null` di codice',
   true,
-  /return `and\(expiration_date\.gte\.\$\{dal\},expiration_date\.lte\.\$\{al\}\)`;/.test(bacheca) &&
-    /GIORNI_ORIZZONTE_OPPORTUNITA/.test(bacheca),
+  /return `expiration_date\.gte\.\$\{dataIsoLocale\(oggi\)\}`;/.test(bacheca) &&
+    !/expiration_date\.is\.null/.test(bacheca),
 );
 check(
-  'bacheca «Radar Live»: il filtro PostgREST non supera l’orizzonte (niente fini incarico)',
+  'bacheca «Radar Live»: nessun tetto in avanti — il volume attivo è completo (§26.100)',
   false,
-  /return `expiration_date\.gte\.\$\{dataIsoLocale\(oggi\)\}`;/.test(bacheca),
+  /expiration_date\.lte\./.test(bacheca),
 );
 check(
   'pulizia automatica: rimuove anche gli avvisi senza scadenza fuori finestra',

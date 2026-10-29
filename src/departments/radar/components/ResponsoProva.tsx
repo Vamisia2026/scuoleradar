@@ -8,8 +8,9 @@
  * Radar. Nessuna via d'uscita e nessuna frase difensiva: se il database non ha
  * avvisi vivi si promette comunque il Radar, mai una schermata vuota.
  */
-import { ArrowRight, BellRing, ExternalLink, Radar } from 'lucide-react';
+import { ArrowRight, BellRing, Clock, ExternalLink, Radar } from 'lucide-react';
 import { nomePresentabileRiga, titoloLeggibile, type RigaBoard } from '@/lib/liveBoard';
+import { giorniResiduiMonitoraggio, type MonitoraggioProva } from '@/lib/provaRadar';
 import { nomeProvincia } from '../flightBoard/righeBoard';
 import { giorniRimanenti } from '@/lib/scadenza';
 import { stileScadenza } from '@/lib/scadenzaSemaforo';
@@ -54,9 +55,33 @@ interface ResponsoProvaProps {
   provincia: string;
   /** Apre il setup del Radar (wizard o regalo PRO). */
   onAttiva: () => void;
+  /** Monitoraggio temporaneo (7 giorni) acceso dalla prova: se c'è, si dichiara. */
+  monitoraggio?: MonitoraggioProva | null;
 }
 
-export function ResponsoProva({ esito, provincia, onAttiva }: ResponsoProvaProps) {
+/**
+ * Riga del MONITORAGGIO TEMPORANEO: dice all'utente (anche anonimo) che la sua
+ * provincia resta sotto osservazione per 7 giorni e fino a quando. È l'unica
+ * traccia visibile del lead creato dalla prova: senza, «ti avvisiamo noi» sarebbe
+ * una promessa senza scadenza né stato.
+ */
+function RigaMonitoraggio({ monitoraggio }: { monitoraggio?: MonitoraggioProva | null }) {
+  if (!monitoraggio) return null;
+  const giorni = giorniResiduiMonitoraggio(monitoraggio);
+  if (giorni <= 0) return null;
+  const scadenza = new Date(monitoraggio.scadeIl).toLocaleDateString('it-IT', {
+    day: '2-digit',
+    month: '2-digit',
+  });
+  return (
+    <p className="mt-2 flex items-center justify-center gap-1 text-[11px] font-semibold text-accent-700">
+      <Clock className="h-3 w-3 shrink-0" />
+      Monitoraggio attivo per {giorni} {giorni === 1 ? 'giorno' : 'giorni'} (fino al {scadenza})
+    </p>
+  );
+}
+
+export function ResponsoProva({ esito, provincia, onAttiva, monitoraggio = null }: ResponsoProvaProps) {
   // Nessun avviso vivo nel database: si vende comunque la promessa (mai una
   // schermata vuota e mai una frase difensiva).
   if (esito.gruppo === 'vuoto' || esito.righe.length === 0) {
@@ -78,6 +103,7 @@ export function ResponsoProva({ esito, provincia, onAttiva }: ResponsoProvaProps
           Attiva il tuo Radar
           <ArrowRight className="h-4 w-4" />
         </button>
+        <RigaMonitoraggio monitoraggio={monitoraggio} />
       </div>
     );
   }
@@ -139,6 +165,7 @@ export function ResponsoProva({ esito, provincia, onAttiva }: ResponsoProvaProps
           Attiva il tuo Radar
           <ArrowRight className="h-4 w-4" />
         </button>
+        <RigaMonitoraggio monitoraggio={monitoraggio} />
       </div>
     </div>
   );

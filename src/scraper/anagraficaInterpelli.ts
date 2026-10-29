@@ -20,6 +20,12 @@ import {
   caricaAnagrafica,
   type IndiceAnagrafica,
 } from '../lib/anagraficaScuole.ts';
+import {
+  dominioUfficialeDaCodice,
+  homeUfficialeDaCodice,
+  mappaDominiDaAnagrafica,
+} from '../lib/dominiAnagrafica.ts';
+import { homeEduIt, hostEduIt, statisticheMappa } from '../lib/dominiScuola.ts';
 import type { InterpelloParsato } from './parser.ts';
 
 /** Conteggi del run corrente (diagnostica: nessun arricchimento silenzioso). */
@@ -44,9 +50,11 @@ function indiceAnagrafica(): IndiceAnagrafica {
   if (!annunciata) {
     annunciata = true;
     const dettaglio = indice.fileLetti.map((f) => `${f.file} (${f.righe} righe)`).join(', ');
+    const stat = statisticheMappa(mappaDominiDaAnagrafica(indice));
     console.log(
       indice.disponibile
-        ? `• Anagrafica scuole: ${indice.totale} codici meccanografici da ${indice.fileLetti.length} file — ${dettaglio}`
+        ? `• Anagrafica scuole: ${indice.totale} codici meccanografici da ${indice.fileLetti.length} file — ` +
+            `${stat.codici} con dominio ufficiale *.edu.it (${stat.domini} domini) — ${dettaglio}`
         : '• Anagrafica scuole NON disponibile (file SCUANAGRAFE assenti): avvisi inseriti senza arricchimento.',
     );
   }
@@ -70,7 +78,12 @@ export function arricchisciConAnagrafica(a: InterpelloParsato): InterpelloParsat
     province: a.province,
   });
   const { patch } = esito;
-  if (Object.keys(patch).length === 0) return a;
+  const schoolSite = sitoIstituzionaleUfficiale(
+    indiceCorrente,
+    patch.school_site ?? a.schoolSite,
+    patch.school_code ?? a.schoolCode,
+  );
+  if (Object.keys(patch).length === 0 && schoolSite === (a.schoolSite ?? null)) return a;
 
   arricchiti += 1;
   return {
@@ -78,9 +91,44 @@ export function arricchisciConAnagrafica(a: InterpelloParsato): InterpelloParsat
     schoolCode: patch.school_code ?? a.schoolCode,
     schoolName: patch.school_name ?? a.schoolName,
     schoolPec: patch.school_pec ?? a.schoolPec ?? null,
-    schoolSite: patch.school_site ?? a.schoolSite ?? null,
+    schoolSite,
     contactEmail: patch.contact_email ?? a.contactEmail,
   };
+}
+
+/**
+ * SITO ISTITUZIONALE da scrivere in `school_site`, nella priorità che il
+ * tabellone poi applica (`departments/radar/flightBoard/linkFonte.ts`):
+ *   1. l'host `*.edu.it` già dichiarato dalla riga o dall'anagrafica;
+ *   2. il dominio ufficiale del codice meccanografico (`lib/dominiScuola.ts`):
+ *      la mappa MIM copre anche i plessi che non dichiarano un sito;
+ *   3. il valore grezzo (es. un dominio storico non `.edu.it`): resta com'è,
+ *      perché la bacheca lo scarta da sola e non spetta allo scraper censurare.
+ */
+function sitoIstituzionaleUfficiale(
+  indice: IndiceAnagrafica,
+  sito?: string | null,
+  codice?: string | null,
+): string | null {
+  const host = hostEduIt(sito) ?? dominioUfficialeDaCodice(indice, codice);
+  if (host) return host;
+  const grezzo = (sito ?? '').trim();
+  return grezzo.length > 0 ? grezzo : null;
+}
+
+/**
+ * HOME UFFICIALE `.edu.it` dell'istituto di un avviso, PRIMA dell'arricchimento
+ * dei campi: serve al presidio del link (`presidioLinkIngresso.ts`), che deve
+ * sapere dove mandare l'utente quando la pagina dell'avviso non esiste più.
+ * Ordine: sito già dichiarato dalla riga → mappa dell'anagrafica per codice.
+ */
+export function homeUfficialeAvviso(a: {
+  schoolSite?: string | null;
+  schoolCode?: string | null;
+}): string | null {
+  const diretta = homeEduIt(a.schoolSite);
+  if (diretta) return diretta;
+  return homeUfficialeDaCodice(indiceAnagrafica(), a.schoolCode);
 }
 
 /** Conteggi del run (file letti, codici indicizzati, avvisi arricchiti). */

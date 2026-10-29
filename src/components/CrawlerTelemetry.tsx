@@ -72,8 +72,11 @@ export function CrawlerTelemetry() {
       const esito = await avviaScansioneWhitelist();
       if (esito.telemetria) setDati(esito.telemetria);
       setErrore(null);
+      // Chi ha autorizzato (admin · segreto di sviluppo · sessione) è diagnosi utile:
+      // se il trigger passa dalla DEV Bar senza login lo si vede scritto qui.
+      const chi = esito.autorizzato_da ? ` · autorizzato come ${esito.autorizzato_da}` : '';
       setAvviso(
-        `Giro avviato su ${esito.repo} (${esito.workflow}). I numeri si aggiornano da soli: ` +
+        `Giro avviato su ${esito.repo} (${esito.workflow})${chi}. I numeri si aggiornano da soli: ` +
           'la coda inizia a muoversi appena il runner parte.',
       );
       if (timer.current !== null) window.clearInterval(timer.current);

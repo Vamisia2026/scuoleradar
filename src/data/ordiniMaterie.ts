@@ -218,3 +218,32 @@ export const CORRELAZIONI_MATERIE: Readonly<Record<string, readonly string[]>> =
   orientamento: ['orientamento'],
 };
 
+/**
+ * PAROLE DEL BANDO — il vocabolario dei PROGRAMMI e delle FIGURE che l'utente chiede con
+ * una parola chiave propria («PNRR», «PON», «Tutor», …), §26.106.
+ *
+ * Perché una tabella e non i token di `tokenCompetenza`: le sigle (`PON`, `POR`, `FSE`) sono
+ * parole di TRE caratteri, che il filtro dei token scarta a priori, e `laboratorio` è fra le
+ * generiche — la parola chiave «PON» non poteva quindi matchare **mai**, nemmeno in un bando
+ * intitolato «PON». Qui si riconosce la parola/frase INTERA (mai un prefisso) con i SINONIMI
+ * delle scuole: «Piano Operativo Nazionale» → `PON`. `Laboratorio` è una parola del bando
+ * come le altre (`laboratori`, `laboratoriale`, …): se l'utente la scrive, un avviso di
+ * laboratorio la contiene per intero — boost alto. Resta il filtro dei token generici sulla
+ * PORTA d'ingresso: è anche l'unica chiave oltre i 60 km.
+ */
+export interface ParolaBando {
+  /** Forma canonica, nella lingua dei bandi («PNRR», «Tutor», «Laboratorio didattico»). */
+  chiave: string;
+  /** Come le scuole scrivono la stessa cosa («Piano Operativo Nazionale», «tutoraggio»). */
+  sinonimi: readonly string[];
+}
+
+export const PAROLE_BANDO: readonly ParolaBando[] = [
+  { chiave: 'PNRR', sinonimi: ['piano nazionale di ripresa e resilienza', 'piano nazionale ripresa e resilienza', 'next generation eu', 'pnrr scuola 4.0'] },
+  { chiave: 'PON', sinonimi: ['piano operativo nazionale', 'programma operativo nazionale', 'fondi strutturali europei', 'pon scuola'] },
+  { chiave: 'POR', sinonimi: ['piano operativo regionale', 'programma operativo regionale', 'fondi strutturali regionali'] },
+  { chiave: 'FSE', sinonimi: ['fondo sociale europeo', 'fse plus', 'fse+'] },
+  { chiave: 'Tutor', sinonimi: ['tutoraggio', 'tutor didattico', 'tutor pcto', 'tutor orientamento', 'tutoring'] },
+  { chiave: 'Laboratorio', sinonimi: ['laboratori', 'laboratoriale', 'laboratorio didattico', 'laboratorio stem', 'laboratorio informatico', 'laboratorio scientifico'] },
+];
+

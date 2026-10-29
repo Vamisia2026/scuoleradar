@@ -11,7 +11,7 @@
  * Sezioni:
  *   1. struttura del dato (prefisso, uuid, host `.edu.it`, fonti dichiarate);
  *   2. esito: dentro con la fonte e il badge dichiarati, oppure fuori;
- *   3. i badge PIENI (rose-500 / amber-400 / emerald-500 su etichetta scura) — un solo semaforo;
+ *   3. i badge PIENI (rose-600 / orange-700 / emerald-700 su etichetta bianca) — un solo semaforo;
  *   4. un solo array filtrato → totale mostrato e schermate coerenti.
  *
  * Uso: `npm run test:board:demo` (incluso in `npm test`).
@@ -114,28 +114,34 @@ check(
   daTitolo?.esito === 'mostrata' ? daTitolo.scuola : null,
 );
 
-console.log('— 3. I badge PIENI, un solo semaforo a tre luci (nessun pastello) —');
+console.log('— 3. I badge PIENI, un solo semaforo a quattro luci (nessun pastello) —');
 const className = (hash: string): string => {
   const riga = righe.find((r) => r.hash_id === `${PREFISSO_DEMO}${hash}`);
   return riga ? badgeScadenza(riga.expiration_date).className : '';
 };
-check('rosso pieno (scade oggi)', true, className('04-avviso-pdf').includes('bg-rose-500'));
-// §26.89, §26.98 — il rosso si ferma alle 24 ore: da domani il badge è ORO.
-check('oro brillante (scade domani)', true, className('02-forms-sito').includes('bg-amber-400'));
-check('non più rosso (scade domani)', false, className('02-forms-sito').includes('bg-rose-500'));
-check('verde pieno (3 giorni)', true, className('01-argo-sito').includes('bg-emerald-500'));
-check('verde pieno (oltre 7 giorni)', true, className('03-nuvola-pec').includes('bg-emerald-500'));
+check('rosso pieno (scade oggi)', true, className('04-avviso-pdf').includes('bg-rose-600'));
+// §26.89, §26.100 — il rosso si ferma alle 24 ore: da domani il badge è ARANCIO.
+check('arancio pieno (scade domani)', true, className('02-forms-sito').includes('bg-orange-700'));
+check('non più rosso (scade domani)', false, className('02-forms-sito').includes('bg-rose-600'));
+check('verde pieno (3 giorni)', true, className('01-argo-sito').includes('bg-emerald-700'));
+check('verde pieno (oltre 7 giorni)', true, className('03-nuvola-pec').includes('bg-emerald-700'));
 const tutteLeBande = righe.map((r) => badgeScadenza(r.expiration_date).className);
 vero(
-  'ogni badge ha etichetta ad alto contrasto in grassetto',
-  tutteLeBande.every(
-    (c) => (c.includes('text-slate-950') || c.includes('text-white')) && c.includes('font-bold'),
-  ),
+  'ogni badge ha etichetta BIANCA ad alto contrasto in grassetto (§26.100)',
+  tutteLeBande.every((c) => c.includes('text-white') && c.includes('font-bold')),
+);
+vero(
+  'nessuna etichetta quasi nera (`text-slate-950`)',
+  tutteLeBande.every((c) => !c.includes('text-slate-950')),
 );
 vero('nessuna tinta pastello (…-100 / …-200)', tutteLeBande.every((c) => !/-100\b|-200\b/.test(c)));
 vero(
-  'l’unica tinta gialla ammessa è `amber-400` (brillante, etichetta scura)',
-  tutteLeBande.every((c) => (c.match(/bg-(?:amber|yellow)-\d{3}/g) ?? []).every((t) => t === 'bg-amber-400')),
+  'nessun giallo/ambra: la luce media è `orange-700` (§26.100)',
+  tutteLeBande.every((c) => !/bg-(?:amber|yellow)-\d{3}/.test(c)),
+);
+vero(
+  'nessun nero né ardesia scura sui badge delle righe demo',
+  tutteLeBande.every((c) => !/bg-(?:black|slate-7|slate-8|slate-9)/.test(c)),
 );
 
 console.log('— 4. Un solo array filtrato: totale mostrato = schermate —');

@@ -211,5 +211,33 @@ check(
   !/claim_scan_target|finish_scan_target|reap_stuck_scans/.test(wrapper),
 );
 
+// 6) TRIGGER MANUALE (`crawler-admin`): in produzione restano admin e segreto di
+//    trigger; in sviluppo/test DICHIARATO anche una sessione qualunque. Senza login
+//    la DEV Bar manda il segreto di sviluppo (`VITE_CRAWLER_DEV_SECRET`): nessun
+//    bypass implicito, nessun 403 incomprensibile in locale.
+const edgeCrawler = leggi('supabase/functions/crawler-admin/index.ts');
+const clientCrawler = leggi('src/services/crawlerTelemetry.ts');
+check(
+  'edge: autorizzazione in un solo punto, con allowlist DEV',
+  true,
+  /function autorizza\(/.test(edgeCrawler) && /DEV_EMAILS\.includes\(email\)/.test(edgeCrawler),
+);
+check(
+  "edge: sviluppo dichiarato = qualunque sessione (regola che in produzione non esiste)",
+  true,
+  /const SVILUPPO =/.test(edgeCrawler) &&
+    /if \(SVILUPPO && utente\) return \{ ok: true, da: 'sviluppo-locale' \}/.test(edgeCrawler),
+);
+check(
+  'edge: telemetria senza sessione = 401 con l\'istruzione di sviluppo',
+  true,
+  /status: 401/.test(edgeCrawler) && /VITE_CRAWLER_DEV_SECRET/.test(edgeCrawler),
+);
+check(
+  'client: la DEV Bar manda il segreto solo in build locale',
+  true,
+  /env\.DEV !== true/.test(clientCrawler) && /headers\['x-crawler-secret'\] = segreto/.test(clientCrawler),
+);
+
 console.log(errori === 0 ? '\n✅ SCANSIONE DINAMICA: nessun problema' : `\n❌ SCANSIONE DINAMICA: ${errori} errore/i`);
 process.exitCode = errori === 0 ? 0 : 1;

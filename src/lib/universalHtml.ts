@@ -148,3 +148,9 @@ export function primoLink(
   }
   return undefined;
 }
+
+/* ------------------ paginazione: vedi `paginaSuccessiva.ts` ---------------- */
+// §26.102 — La lettura della PAGINA SUCCESSIVA di un elenco (`rel="next"`,
+// un'ancora «successiva» dentro la paginazione, le etichette numeriche «1 2 3…»)
+// vive in `lib/paginaSuccessiva.ts`: qui resta il solo lettore HTML, che deve
+// rimanere un tokenizzatore puro e sotto la soglia delle 250 righe (§26.84).

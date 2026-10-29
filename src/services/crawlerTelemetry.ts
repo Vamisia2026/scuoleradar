@@ -13,6 +13,14 @@
  *
  * Errori: messaggi in italiano, mai un numero inventato. Se la Edge non è
  * deployata o il segreto GitHub manca, la UI lo dice e resta senza dati.
+ *
+ * SESSIONE & SVILUPPO — la Edge chiede una sessione (JWT) perché legge tabelle
+ * di servizio; la DEV Bar però si usa anche SENZA login. In build locale
+ * (`import.meta.env.DEV`) si manda quindi l'header `x-crawler-secret` preso da
+ * `VITE_CRAWLER_DEV_SECRET` (`.env.local`, mai in produzione): la Edge lo accetta
+ * per telemetria e trigger e registra in risposta chi ha autorizzato
+ * (`autorizzato_da`). Se manca anche quello, si chiede il login con un messaggio
+ * che dice esattamente cosa configurare — mai un errore anonimo.
  */
 import { supabase } from '@/lib/supabase';
 
@@ -42,6 +50,8 @@ export interface TelemetriaCrawler {
 /** Esito dell'avvio manuale. */
 export interface EsitoAvvio {
   avviato: boolean;
+  /** Chi ha autorizzato la chiamata (`admin`, `segreto`, `sviluppo-locale`, …). */
+  autorizzato_da?: string | null;
   workflow: string;
   repo: string;
   telemetria?: TelemetriaCrawler;
@@ -50,30 +60,51 @@ export interface EsitoAvvio {
 /** Errore applicativo con il messaggio già pronto per la UI. */
 export class CrawlerTelemetriaError extends Error {}
 
+/**
+ * Segreto di SVILUPPO (`VITE_CRAWLER_DEV_SECRET` in `.env.local`), `null` in
+ * produzione: `import.meta.env.DEV` è `false` nella build, quindi il valore non
+ * finisce mai nel bundle pubblico.
+ */
+export function segretoSviluppo(): string | null {
+  const env = (import.meta as unknown as { env?: Record<string, unknown> }).env ?? {};
+  if (env.DEV !== true) return null;
+  const segreto = typeof env.VITE_CRAWLER_DEV_SECRET === 'string' ? env.VITE_CRAWLER_DEV_SECRET : '';
+  return segreto.trim() ? segreto.trim() : null;
+}
+
 async function tokenSessione(): Promise<string | null> {
   if (!supabase) return null;
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;
 }
 
-/** Chiamata alla Edge `crawler-admin` (JWT di sessione obbligatorio). */
+/**
+ * Chiamata alla Edge `crawler-admin`. Il JWT di sessione è la via normale; se non
+ * c'è (DEV Bar senza login) si manda la chiave anon per superare il gateway e ci si
+ * fa autorizzare dall'header `x-crawler-secret` della build locale.
+ */
 async function chiama<T>(azione: 'stato' | 'scansione'): Promise<T> {
   const token = await tokenSessione();
-  if (!token) {
+  const segreto = segretoSviluppo();
+  const anon = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
+  const bearer = token ?? (segreto ? anon : null);
+  if (!bearer) {
     throw new CrawlerTelemetriaError(
-      'Serve una sessione attiva: la telemetria del crawler legge tabelle di servizio.',
+      'Serve una sessione attiva: la telemetria del crawler legge tabelle di servizio. ' +
+        'In sviluppo puoi evitare il login impostando VITE_CRAWLER_DEV_SECRET in .env.local.',
     );
   }
-  const anon = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    apikey: anon,
+    Authorization: `Bearer ${bearer}`,
+  };
+  if (segreto) headers['x-crawler-secret'] = segreto;
   let res: Response;
   try {
     res = await fetch(`${SUPABASE_URL_REMOTO}/functions/v1/crawler-admin`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: anon,
-        Authorization: `Bearer ${token}`,
-      },
+      headers,
       body: JSON.stringify({ azione }),
     });
   } catch {

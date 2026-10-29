@@ -57,6 +57,25 @@ export function chiaveTarget(url: string): string {
   }
 }
 
+/**
+ * Chiave di dedup della LISTA dei target (§26.101). Diversa da `chiaveTarget`,
+ * che serve ad abbinare una riga del database e per questo ignora la query:
+ * qui la query FA PARTE dell'identità, perché due ELENCHI provinciali possono
+ * vivere sullo stesso percorso — gli hub della Liguria sono
+ * `provincia.php?p=GE|SP|IM|SV`. Con la chiave senza query il dedup ne teneva
+ * uno solo: tre province non entravano MAI in coda, pur essendo verificate.
+ */
+export function chiaveElenco(url: string): string {
+  const base = chiaveTarget(url);
+  try {
+    const u = new URL(url);
+    if (!u.search) return base;
+    return `${base}?${new URLSearchParams(u.search).toString()}`;
+  } catch {
+    return base;
+  }
+}
+
 export interface OpzioniWhitelist {
   /**
    * `true` = solo hub istituzionali (pagine UST/USP da cui si leggono gli
@@ -82,7 +101,7 @@ export function targetWhitelist(
     if (opzioni.soliHub && fonte.tipo !== 'hub-istituzionale') continue;
     const url = normalizzaUrl(fonte.url);
     if (!url) continue;
-    const chiave = chiaveTarget(url);
+    const chiave = chiaveElenco(url);
     if (visti.has(chiave)) continue;
     visti.add(chiave);
     out.push({

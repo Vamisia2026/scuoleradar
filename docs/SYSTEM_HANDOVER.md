@@ -10411,3 +10411,955 @@ nell'ingestione: la coerenza tra vetrina e dati non è più un accordo, è verif
 rinuncia è anche **contata** (`indiciScartati`), perché una riga che sparisce in silenzio
 è indistinguibile da un bug.
 
+
+## §26.100 «Niente atmosfera da funerale»: badge saturi a etichetta bianca e volume attivo senza tetto (28/10/2026)
+
+Direttiva cliente del 28/10/2026, due richieste in una riga: la bacheca pubblica «Radar Live»
+sembrava un necrologio — provincia su `bg-slate-700`, testata su `bg-slate-800`, contenitore
+della tabella su `bg-slate-900`, pill del totale e delle schermate nere — e il filtro di data
+teneva fuori opportunità ancora aperte. Le due cose hanno la stessa radice: **il tabellone
+raccontava meno di ciò che sapeva** — meno colore, meno avvisi.
+
+### 1. Il colore: dal «contrasto corretto» al registro giusto
+
+Il §26.98 aveva già sostituito le tinte spente (`rose-700`, `yellow-700`) con tinte chiare e
+brillanti (`rose-500`, `amber-400`, `emerald-500`) e aveva risolto il contrasto mettendo
+l'etichetta **quasi nera** (`text-slate-950`): i numeri erano giusti (5,49:1 · 12,08:1 ·
+7,95:1), l'effetto a schermo no — a undici pixel quelle tinte con testo scuro leggono
+«torbide», e il resto della tavola era comunque nero. La direttiva cambia il REGISTRO:
+**tinte piene e sature, etichetta BIANCA in grassetto**. Con il bianco addosso la tinta deve
+scendere di uno o due gradini, altrimenti il contrasto non regge:
+
+| luce | prima (§26.98) | ora (§26.100) | contrasto sul bianco |
+|---|---|---|---|
+| 🔴 «Scade oggi» (0 gg) | `bg-rose-500` + `text-slate-950` | **`bg-rose-600` + `text-white`** | **4,70:1** (AA) |
+| 🟠 «Scade domani» / «Ultime 72h» | `bg-amber-400` + `text-slate-950` | **`bg-orange-700` + `text-white`** | **5,18:1** (AA) |
+| 🟢 «In corso» (3–15 gg) | `bg-emerald-500` + `text-slate-950` | **`bg-emerald-700` + `text-white`** | **5,48:1** (AA) |
+| 🔵 «Scadenza lontana» (oltre 15 gg) | `bg-slate-600` ardesia «fuori finestra» | **`bg-sky-700` + `text-white`** | **5,93:1** (AA) |
+| ⚫ «Scaduto» | `bg-slate-700` | **`bg-slate-600`** (ardesia media) | 7,58:1 |
+| ⚫ «Scadenza n/d» | `bg-slate-600` | **`bg-slate-500`** (ardesia media) | 4,76:1 |
+
+**Perché non bastava mettere il bianco sulle tinte del §26.98.** Con il bianco quelle tinte
+stanno a 1,67:1 (`amber-400`), 2,54:1 (`emerald-500`) e 3,67:1 (`rose-500`): tutte sotto AA,
+quindi vietate da §26.88. La vivacità si ottiene con la **saturazione** della tinta, non con la
+sua luminosità — ed è la differenza fra un semaforo acceso e un semaforo sbiadito. L'etichetta
+`text-slate-950` esce dal design system: era la toppa che rendeva utilizzabili tinte troppo
+chiare, cioè esattamente i toni che il cliente ha chiesto di togliere.
+
+**La quarta luce non è un colore nuovo per caso.** Fino al §26.99 una scadenza oltre i 15 giorni
+era una banda ardesia «Scadenza fuori finestra»; con il tetto in avanti rimosso (sotto, §2)
+quelle righe restano in vetrina, e un'informazione ATTIVA non si veste di grigio. La banda
+`sky-700` dice «c'è tempo, ma non è un termine urgente» e non finge il verde di chi si candida
+adesso. La chiave del livello resta `fuori-finestra` (l'API del semaforo non cambia), cambiano
+solo token ed etichetta: «Scadenza lontana».
+
+**Dove è cambiato lo stile.**
+
+| file | modifica |
+|---|---|
+| `src/lib/scadenzaSemaforo.ts` | `SCADENZA_TOKENS`: `rosso` `rose-600` · `arancio` `orange-700` · `verde` `emerald-700` · **`lontana` `sky-700`** · `scaduto` `slate-600` · `neutro` `slate-500`, tutte `text-white font-bold`. `stileScadenza` oltre l'orizzonte → `lontana` / «Scadenza lontana» |
+| `src/departments/radar/flightBoard/components/RigaBoard.tsx` | pillola provincia `bg-slate-700` → **`bg-blue-600`** (blu di fiducia); tag «Sito» `bg-slate-600` → **`bg-sky-700`**; tag «PDF» resta `bg-rose-700` (6,29:1) |
+| `src/departments/radar/FlightBoardInterpelli.tsx` | contenitore tabella `bg-slate-900` → **`bg-white`** con bordo `slate-200`; testata `bg-slate-800/text-slate-300` → **`bg-blue-600/text-white`**; divisori `slate-800/60` → `slate-200`; pill delle schermate `bg-slate-900` → **`bg-blue-600`**; stato vuoto `bg-slate-900` → **`bg-blue-50`** con testo `blue-900` |
+| `src/departments/radar/flightBoard/rigaBoardDati.ts` · `RigaBoard.tsx` | documentazione allineata (nessun secondo token: la palette resta una sola) |
+
+Nessuna superficie ha una palette propria: `SCADENZA_TOKENS` è importato da tabellone, scheda
+avviso, card, modale e feed della dashboard, quindi il cambio vale ovunque nello stesso commit.
+
+### 2. Il volume: due porte, ma una sola verità sulla DATA
+
+Il filtro della bacheca era `and(expiration_date.gte.<oggi>,expiration_date.lte.<oggi+15>)`: la
+finestra di candidatura di §26.82. Quella finestra risponde a una domanda diversa — «cosa posso
+candidare adesso» — ed è la promessa del **feed** e del **matching**; sulla vetrina, invece,
+tagliava opportunità vere (un bando che scade fra un mese è aperto) e faceva sembrare il
+tabellone più povero del database. La correzione non è «alzare il numero a 30 o a 60» (sarebbe
+lo stesso errore con un altro tasso): sono **due regole con due nomi**, così nessuno le confonde
+più.
+
+| regola | dove vive | chi la usa | tetto in avanti |
+|---|---|---|---|
+| `eOpportunitaAperta(scadenza, oggi)` | `src/lib/scadenza.ts` (nuova) | bacheca «Radar Live»: filtro PostgREST, `preparaRigheBoard`, verifica live | **nessuno** |
+| `eOpportunitaConScadenza(scadenza, oggi, orizzonte?)` | `src/lib/scadenza.ts` (§26.71/§26.82) | feed della dashboard (`bachecaInterpelli`), RPC `match_interpelli`, ingestione tabellare | `GIORNI_ORIZZONTE_OPPORTUNITA` = 15 |
+
+Il **requisito della data resta identico** e non è negoziabile: senza una `expiration_date`
+dichiarata e leggibile la riga non è un'opportunità e non entra da nessuna delle due porte — è
+la regola §26.71, quella che tiene fuori gli elenchi di classi di concorso («ADEE | AAAA») e le
+pagine di archivio. Cambia solo il tetto: `eOpportunitaAperta` = «c'è una data e non è passata».
+
+Le superfici allineate:
+
+| punto | prima | ora |
+|---|---|---|
+| `radar/flightBoard/filtroAttivi.ts` | `and(expiration_date.gte.<oggi>,expiration_date.lte.<oggi+15>)` | **`expiration_date.gte.<oggi>`** — un solo estremo; stessa espressione per lettura a pagine e conteggio |
+| `src/lib/liveBoard.ts` → `preparaRigheBoard` | `eOpportunitaConScadenza` | **`eOpportunitaAperta`** (doppia difesa in memoria, stesso verdetto del filtro) |
+| `radar/flightBoard/__tests__/demoInterpelliVerifica.ts` | `eOpportunitaConScadenza` | **`eOpportunitaAperta`** (motivo di scarto riformulato) |
+| `supabase/migrations/20261025120000_...` · `tabellaUst.ts` · RPC `match_interpelli` | orizzonte 15 giorni | **invariati**: la finestra resta il metro dell'INGESTIONE e del matching, dove serve davvero |
+
+Il contatore ora riflette il pool attivo reale: `metricaBoard` continua a chiudere il numero
+sulle righe davvero in vetrina (§26.75), quindi il pill non promette più di quanto il tabellone
+pagina — ma il pool da cui nasce non è più tagliato da una data arbitraria.
+
+### 3. Le guardie
+
+| comando | cosa fissa |
+|---|---|
+| `npm run test:board:filtro` | la bacheca accetta una scadenza a 16 giorni, a 90 giorni e al 2027 (nessun tetto) e rifiuta data assente, illeggibile o passata; il filtro PostgREST è `expiration_date.gte.<oggi>` con **nessun** `lte`, `and(`, `is.null` o `created_at`; `preparaRigheBoard` tiene la riga a 30 giorni; il feed resta a 15 giorni e **ogni riga del feed è anche in vetrina** (la vetrina non è più stretta) |
+| `npm run test:board:scadenza` | sei token distinti, **tutte** le bande `text-white font-bold`, nessuna etichetta `text-slate-950`, nessun giallo/ambra, nessun pastello; 16 e 30 giorni → `bg-sky-700` «Scadenza lontana» e mai verde |
+| `npm run test:interpello-scadenza` | contrasto AA **misurato** dalle classi (`rose-600` 4,70 · `orange-700` 5,18 · `emerald-700` 5,48 · `sky-700` 5,93 · `slate-600` 7,58 · `slate-500` 4,76 sul bianco) e prova che le tinte del §26.98 col bianco stanno sotto AA; nessun badge su nero/ardesia scura |
+| `npm run test:board:demo` | i badge delle 10 righe demo sono pieni, bianchi e coerenti con la fonte (esito atteso = esito reale) |
+| `npm run test:palette` | `rose`, `orange`, `emerald`, `sky` e `slate` sono gradini Tailwind reali: nessun token orfano |
+| `npm run test:opportunita` | il filtro della bacheca ha **un solo estremo** e non supera più l'orizzonte (la guardia del feed resta) |
+
+### 4. Verifiche (da `project/`)
+
+`npm run typecheck` ✅ exit 0 · **`npm test` ✅ exit 0** (catena intera, guardie nuove incluse) ·
+`npm run test:architettura` ✅ (731 file, **145 = baseline, 0 nuove**) · `npx eslint` sui 13 file
+toccati ✅ (nessun problema) · `npm run build` ✅ (10,4 s) · `npm run test:palette` ✅ · `npm run
+test:board:filtro` ✅ · `npm run test:board:scadenza` ✅ · `npm run test:board:demo` ✅ · `npm run
+test:interpello-scadenza` ✅ · `npm run test:opportunita` ✅ · `npm run board:verifica` ✅ —
+filtro di prodotto `expiration_date.gte.2026-10-28`: **159** avvisi attivi nel database, **159**
+letti a pagine in **1** pagina, **156** in vetrina (**32** schermate), **0** senza scadenza,
+**3** fuori per istituto non risolto.
+
+**Nota di sessione.** Il cliente ha chiesto due cose che sembrano estetiche e sono invece di
+prodotto. La prima — «niente nero» — non si poteva eseguire alla lettera senza rompere
+l'accessibilità: il bianco sulle tinte del §26.98 sta a 1,67–3,67:1, cioè sotto AA. La soluzione
+è scesa di un gradino **tenendo** l'etichetta bianca richiesta e misurando ogni coppia in un
+test, non a occhio: la palette resta una sola (`SCADENZA_TOKENS`) e il test fallisce se domani
+qualcuno rimette una tinta chiara con il bianco sopra. La seconda — «più avvisi» — non era un
+numero da alzare: era una **regola di prodotto confusa con un'altra**. La finestra di 15 giorni
+è la promessa del feed («cosa posso candidare»), non della vetrina («quanti avvisi sono aperti»);
+separarle in due predicati con due nomi è costato una riga di codice e ha tolto di mezzo il
+dubbio che aveva già prodotto due regressioni (§26.75, §26.82). Oggi nei dati reali le righe
+oltre i 15 giorni sono **zero**: la correzione non gonfia il tabellone, lo rende onesto — e
+quando arriverà il bando che scade fra un mese, nessuno dovrà decidere di nuovo se nasconderlo.
+
+## §26.101 Attacco di massa alla whitelist, sgranatura dei documenti e la tabella che era invisibile (29/10/2026)
+
+Direttiva cliente del 29/10/2026: **«attacco di massa e sgranatura dei portali in whitelist per
+raggiungere 1.000+ interpelli attivi»**. La diagnosi, fatta sui numeri e non a naso, ha detto una
+cosa sola: il Paese non era vuoto, erano **i tetti** a fermare il crawler. Al mattino il database
+aveva **109** interpelli vivi, **549** righe, **440** senza scadenza; `discovered_links` 17.283 con
+**203** attive e **15.037** `pending`.
+
+### 1. Le tre strozzature misurate
+
+| strozzatura | prima | effetto misurabile |
+|---|---|---|
+| documenti aperti per pagina-elenco | **10** (`MAX_APPROFONDIMENTI_TARGET`) | un elenco regionale da 60 avvisi perdeva 50 termini |
+| documenti aperti per giro | **200** | il giro di prova su 74 target ha esaurito la riserva a metà strada («0 aperti, riserva: 0»): i portali successivi non aprivano più nulla |
+| fonti per giro / hub per regione | **12** / **6** | il run quotidiano rileggeva sempre gli stessi capoluoghi |
+
+E una strozzatura che non era un numero: **il documento non veniva né riconosciuto né letto**.
+
+### 2. La scoperta: la tabella dentro il PDF
+
+L'avviso n. 72 dell'ATP Bergamo è un POST che dichiara «Data Scadenza: -» e allega
+`Interpelli n. 72.pdf`. Dentro il PDF c'è una tabella con **quattro istituti**, ognuno con codice
+meccanografico, classe di concorso, termine e **link del proprio avviso**. Letto come un documento
+unico era «un avviso senza scadenza» → 0 record. Letto **per righe** sono quattro opportunità
+distinte, già certificate. Due difetti impedivano di arrivarci:
+
+1. `eFileDocumento` riconosceva `.pdf` solo a FINE percorso: gli allegati del repository Liferay del
+   MIM sono `…/Interpelli+n.+72.pdf/<uuid>?version=1.0` → l'allegato non esisteva per il crawler
+   (200 avvisi per ufficio, zero letture);
+2. la bacheca di una piattaforma (`nuvola.madisoft.it/bacheca-digitale/bacheca/<CODICE>/…`) era
+   trattata come una pagina di login e la riga, pur con codice, classe e scadenza, veniva scartata.
+
+### 3. Cosa è entrato (file e regole)
+
+| file | cosa fa |
+|---|---|
+| `src/scraper/sgranatura.ts` (**142 righe**, nuovo) | **politica** della sgranatura: `vociDaSgranare` (si aprono gli AVVISI: mai la pagina, la home o una sezione — §26.99) e `limitiSgranatura` (default dichiarati + override d'ambiente validati: un valore rotto ricade sul default, non azzera l'ingestione) |
+| `src/scraper/tabellaInterpelliPdf.ts` (**140 righe**, nuovo) | **lettore della tabella d'avviso**: blocco per codice meccanografico, classe/materia, TERZA data = termine (inizio · fine · scadenza), primo link = avviso di quella scuola. Con una o due date non si indovina nulla |
+| `src/scraper/allegatiPiattaforma.ts` (147) | `eFileDocumento` riconosce `.pdf` anche a metà percorso (Liferay) e `/documents/`; nuovo `eAvvisoSuPiattaforma` distingue un link PROFONDO (≥ 3 segmenti) da un login |
+| `src/scraper/whitelistTargets.ts` (158) | `chiaveElenco`: la query FA PARTE dell'identità. Gli elenchi provinciali della Liguria sono `provincia.php?p=GE\|SP\|IM\|SV`: con la chiave senza query il dedup ne teneva UNO, e tre province verificate non entravano mai in coda (whitelist 153 → **177** fonti, 156 hub) |
+| `src/scraper/fonti.ts` (250) | `MAX_FONTI_PER_RUN` 12 → **20**, `MAX_HUB_PER_REGIONE` 6 → **10** (resta la rotazione giornaliera) |
+| `scripts/table-reporter.ts` | `LIMITI = limitiSgranatura(process.env)`; `sgranaDocumentoAvviso` (avviso-pagina → PDF → **una riga = un record**); `chiaveUrl` con la query; `recordDaVoceScuola` accetta la bacheca profonda su piattaforma |
+| `scripts/test-sgranatura.ts` (**nuovo**) | guardia: voci, tetti, copertura della whitelist, cablaggio del runner, tabella reale dell'ATP Bergamo, allegato Liferay |
+
+Tetti nuovi: 40 documenti per elenco · **2.500 per giro** · 150 istituti · 3 pagine · 10 documenti
+per istituto. Override senza toccare il codice: `SGRANATURA_ELENCO`, `SGRANATURA_RUN`,
+`SGRANATURA_ISTITUTI`, `SGRANATURA_PAGINE_ALBO`, `SGRANATURA_DOCUMENTI_ISTITUTO`.
+
+### 4. Le regole NON sono cambiate
+
+La scadenza deve restare **dichiarata** (mai una data stimata), la scuola deve essere **certificata**
+su `schools_master` (mai un nome inventato) e il link deve essere quello del **singolo avviso**
+(mai la lista master, §26.99). `vociDaSgranare` esclude strutturalmente home e indici; la riga di
+tabella senza le tre date non produce nulla. Cambia la profondità, non il criterio.
+
+### 5. Comandi
+
+| comando | cosa fa |
+|---|---|
+| `npm run ingest:massa` | **nuovo**: `targets:whitelist:attiva` (tutti i portali verificati in `active_crawler`, domini morti spenti col DNS) e poi `ingest:nazionale:apply` |
+| `npm run test:sgranatura` | guardia nuova (inclusa in `npm test`) |
+| `.github/workflows/scraper.yml` | `SCRAPER_FONTI_MAX: 20`, `SCRAPER_POST_MAX: 12`, `SCRAPER_ELENCHI_MAX: 60`, `SCRAPER_SCADENZA_MAX: 40`, timeout 20 → **35 min** |
+
+### 6. Esito misurato (dry-run)
+
+Prima: 40 target (2 per regione) → **23** record, 798 voci senza scadenza, 30 termini dal corpo.
+Dopo: 74 target (4 per regione, il tetto di 800 esaurito a metà) → **47** record, **295 righe di
+tabella** lette, 129 PDF aperti, 33 con termine. Le righe prodotte sono quelle attese dal cliente:
+
+```
+[dry-run] BG | Lombardia | A026 | 2026-10-29 | BGIS033008 | "ZENALE E BUTINONE" | https://www.zenale.edu.it/pagine/interpelli
+[dry-run] BG | Lombardia | AAAA | 2026-10-29 | BGIC85100N | GROMO - SORELLE DE MARCHI | https://nuvola.madisoft.it/bacheca-digitale/…
+```
+
+Il tetto per giro è stato alzato a 2.500 proprio per questo numero: con 800 la seconda metà del
+giro non apriva più nulla.
+
+### 7. Verifiche (da `project/`)
+
+`npm run typecheck` ✅ 0 · guardie ✅ (`test:sgranatura`, `test:whitelist`, `test:scraper:fonti`,
+`test:pdf:testo`, `test:deep-crawl`, `test:piattaforme-documentali`) · `npm run test:architettura` ✅
+(733 file, **145 = baseline, 0 nuove**) · `npx eslint` sui 7 file toccati ✅ 0 · `scrape:check`
+resta rosso per **due errori preesistenti** in `articoloPost.ts`/`postElenco.ts` (`Cheerio<AnyNode>`
+vs `Cheerio<Element>`: tipi di cheerio, file non toccati in questa sessione).
+
+**Nota di sessione.** La lezione è che «pochi avvisi» non si risolve con più siti: si risolve
+leggendo **la riga giusta dentro il documento giusto**. Il crawler leggeva il post, non la tabella
+che il post allegava — e la tabella è esattamente il punto in cui l'ufficio dichiara codice, classe,
+termine e link di ogni istituto. Il secondo dettaglio, più banale e più costoso: due chiavi di dedup
+che ignoravano la **query** fondevano quattro elenchi provinciali in uno; la Liguria perdeva tre
+province da sempre, e nessun log lo diceva perché «il target c'era». Resta un limite dichiarato: il
+termine della riga è la **terza data** della tabella — se un ufficio cambia l'ordine delle colonne,
+la riga non produce nulla invece di produrre una data sbagliata. È la scelta giusta, ma va guardata.
+---
+
+## §26.102 Giro forzato della whitelist: le pagine 2…N degli elenchi e il tempo per elenco (29/10/2026)
+
+### 1. Cosa è stato eseguito davvero
+
+| passo | comando | esito |
+|---|---|---|
+| whitelist in coda | `npm run targets:whitelist:attiva` | 177 fonti verificate già presenti, **1** promossa (`active_crawler`), DNS: 86 host, 0 spenti |
+| giro forzato (senza finestra rotante) | `SGRANATURA_ELENCO=400 SGRANATURA_FINESTRA=0 APPROFONDIMENTI_RUN=30000 tsx scripts/table-reporter.ts --nazionale --no-deep` | 198/219 target prima dello stop, **0 errori** |
+| giro forzato **con paginazione** | `SGRANATURA_ELENCO=400 SGRANATURA_PAGINE_ELENCO=4 SGRANATURA_FINESTRA=0 SGRANATURA_MS_ELENCO=120000 PAGINE_ELENCO_RUN=700 APPROFONDIMENTI_RUN=40000 … --nazionale --no-deep` | **219 target, 219 successi, 0 errori**, 167 record, **3.145 PDF aperti** (3.141 con testo, 112 con scadenza), 4.680 voci senza scadenza, 607 scuole lette dal corpo, 406 righe oltre l'orizzonte |
+
+`--no-deep` è deliberato: il deep crawl degli istituti rendeva 3 record a giro al costo di ~1.500
+fetch. La profondità utile stava nei documenti degli elenchi, non nelle home delle scuole.
+
+### 2. Il collo di bottiglia vero: le pagine 2…N non esistevano
+
+Il giro leggeva **una pagina per target**. Gli hub USR/USP pubblicano su WordPress con 10 voci per
+pagina e ne tengono centinaia in archivio: la pagina 2 non è un dettaglio, è il 90% dell'elenco.
+Misura del 29/10/2026 sulla fonte vera:
+
+```
+https://www.uat-napoli.it/tag/interpelli-personale-docente/         → 12 voci, 12 apribili
+https://www.uat-napoli.it/tag/interpelli-personale-docente/page/2/  → 12 voci, 12 apribili
+https://www.uat-napoli.it/tag/interpelli-personale-docente/page/3/  → 12 voci, 12 apribili, 1 con scadenza
+```
+
+Nel giro vero: `uspistruzione.fr.it/wp2/tag/interpello-nazionale` passa da **11 a 40 voci** (pagine
+2-3-4), `uat-napoli.it` da 101 a 125. In totale **70 pagine oltre la prima** lette nel giro, per
+**408 voci d'elenco** che nessun giro precedente aveva mai visto.
+
+Regola di lettura (`urlPaginaSuccessiva`, oggi in `lib/paginaSuccessiva.ts`): si segue solo la pagina
+successiva **dichiarata dalla pagina stessa** — `<link rel="next">`, `<a rel="next">`, un'ancora
+«successiva / next / ›» dentro un contenitore di paginazione (`.pagination`, `.wp-pagenavi`,
+`.nav-links`, `.page-numbers`), oppure — per i temi che non scrivono mai «successiva» (Roma Tre
+`rt-pagination`) — l'**etichetta numerica `corrente + 1`** letta dentro il blocco di paginazione, con la
+pagina corrente presa dall'URL (`/page/3/`, `?paged=3`) o dal marcatore `active`/`current`. Mai URL
+costruite a mano, mai `rel="prev"`, mai sé stessi, mai schemi non-http. Guardia dedicata:
+`npm run test:paginazione` (in `npm test`).
+
+### 3. Tetti nuovi (tutti con default e override validati)
+
+`src/scraper/sgranatura.ts` — `LimitiSgranatura` cresce di due voci:
+
+| campo | default | variabile | note |
+|---|---|---|---|
+| `pagineElenco` | **3** | `SGRANATURA_PAGINE_ELENCO` | pagine per target (1 = comportamento vecchio) |
+| `millisecondiElenco` | **120.000** | `SGRANATURA_MS_ELENCO` | tempo per l'apertura dei documenti di UN elenco |
+
+Riserva di rete del giro: `PAGINE_ELENCO_RUN` (default **600** pagine extra). La scala del tempo non è
+quella dei conteggi: `TETTO_MASSIMO_MS_ELENCO = 1.800.000` (30 minuti), perché il tetto di 5.000 vale
+per i numeri, non per i millisecondi — con 5.000 ms la sgranatura sarebbe finita prima di iniziare.
+
+### 4. Un portale lento non deve congelare il Paese
+
+Il 29/10/2026 l'elenco `istruzioneliguria.gov.it/pagine/interpelli-` (135 voci) ha tenuto fermo il
+giro nazionale per **venti minuti** (fetch da 25 s l'uno, un documento per voce). Con
+`millisecondiElenco` il caso si chiude in due minuti:
+
+```
+[table-reporter] Sgranatura GE: tempo dell'elenco esaurito (120000 ms) dopo 13 aperture — le voci non lette restano al giro successivo.
+```
+
+Si smette di aprire **quell'elenco**, non il giro: le righe non lette restano al passaggio seguente
+(la finestra rotante le riprende) e il resto del Paese viene comunque visitato.
+
+### 5. Esito misurato sul database Supabase
+
+| momento | interpelli totali | **vivi** |
+|---|---|---|
+| inizio sessione | 653 | **213** |
+| dopo giro forzato (198/219 target) | 670 | **230** |
+| dopo giro forzato **con paginazione** (219/219) | 677 | **237** |
+
+**+24 avvisi vivi** in sessione (213 → 237), con 3.145 PDF aperti in un solo giro (i due giri
+precedenti ne avevano aperti 1.300) e 0 errori di rete. Il resto delle voci resta «senza scadenza»
+(4.680 nel giro) perché i documenti **non dichiarano** un termine: la regola di qualità non è stata
+toccata — niente date stimate, scuola sempre certificata su `schools_master`, link sempre quello del
+singolo avviso (§26.99).
+
+### 6. Verifiche (da `project/`)
+
+`npm run typecheck` ✅ 0 · `npm run test:sgranatura` ✅ · `npm run test:paginazione` ✅ (nuovo) ·
+`npm run test:architettura` ✅ (735 file, **145 = baseline, 0 nuove**) · `npx eslint` sui file toccati ✅ 0.
+
+**Nota di sessione.** La lezione è che il tetto non era più il numero di documenti aperti: era **il
+numero di pagine lette per elenco**. Un hub WordPress con 200 avvisi in archivio ne offriva 10, e
+nessun log lo diceva perché «il target c'era ed era stato letto». Il secondo dettaglio è di igiene:
+senza un tetto di **tempo** per elenco, un albo lento vale venti minuti di giro nazionale — e con 219
+target basta un pomeriggio per non finire mai. Restano due limiti dichiarati: le pagine si seguono
+solo se la pagina le dichiara (un archivio senza `rel="next"` né paginazione resta a una pagina), e
+la scadenza continua a essere la **terza data** della tabella (§26.101): un ufficio che riordina le
+colonne non produce una data sbagliata, produce zero righe.
+
+
+## §26.103 Le pagine 2…N anche nel worker: la paginazione entra nel giro nazionale (29/10/2026)
+
+Il §26.102 aveva insegnato a seguire le pagine 2…N **negli script di ingestione** (sgranatura e
+`table-reporter`). Il **worker di coda** (`src/scraper/index.ts`, quello che alimenta `scansioni` e
+`interpelli` su Supabase) leggeva ancora **una pagina per elenco**: stesso portale, stesso archivio, e
+metà delle voci invisibili al radar — con l'aggravante che nessun log lo diceva, perché «il target
+c'era ed era stato letto». Qui la stessa regola arriva nel worker, con un iteratore unico.
+
+### 1. Cosa è cambiato
+
+| punto | prima | ora |
+|---|---|---|
+| hub con sezioni | 1 pagina per sezione | catena `rel="next"` per sezione, fino a `SCRAPER_PAGINE_ELENCO` pagine |
+| indici raccolti (`espandiElenchi`) | 1 pagina per indice | catena per indice, stesso tetto, stesso budget |
+| conteggio | — | `pagineExtra` sommato al risultato e stampato nel log del giro |
+| dispensa | nessuna | `chiaveElenco` + `pagineViste` per hub: la pagina trovata due volte si scarica una volta |
+
+### 2. Un solo iteratore, nessuna rete dentro (`src/lib/elenchiPaginati.ts`)
+
+```ts
+const { pagine, extra, fermato } = await pagineSuccessiveElenco(
+  { url, html },                                  // pagina 1 già letta: non si riscarica
+  { max: 3, riserva: 40, scarica, log },           // tetto, budget di rete, downloader iniettato
+);
+```
+
+`pagine` torna in ordine (la prima in testa) e `fermato` dice **perché** la catena si è chiusa:
+`fine` (la pagina non ne dichiara un'altra), `tetto` (`max` raggiunto), `budget` (riserva di rete del
+giro esaurita), `ciclo` (la pagina riporta a una già letta), `errore` (la successiva non si scarica, è
+un PDF, non è HTML). Un errore non è un guasto: si smette **quell'elenco**, non il giro.
+
+### 3. Tetti
+
+`SCRAPER_PAGINE_ELENCO` (default `PAGINE_ELENCO_DEFAULT` = **3**, `1` = comportamento storico) scende
+sia a `raccogliDaHub` sia a `espandiElenchi`; dentro `espandiElenchi` la `riserva` è il budget di rete
+che resta al giro (`max - fetchEffettuati`), così le pagine extra non mangiano i documenti da aprire.
+Un valore non numerico o `< 1` torna al default: un tetto sbagliato non deve spegnere la paginazione
+né farla esplodere.
+
+
+### 4. La lettura della pagina successiva ha un modulo suo (`src/lib/paginaSuccessiva.ts`)
+
+`urlPaginaSuccessiva` era finita dentro il lettore HTML e lo aveva portato a **296 righe**: due guardie
+lo dicevano (`universalHtml sotto 250 righe` in `test:universal-euristica` e il `W-DIM` del gate
+strutturale). Ora la lettura vive in `lib/paginaSuccessiva.ts` (tre passi: `rel="next"` → ancora
+«successiva» dentro la paginazione → etichetta numerica `corrente + 1`) e il lettore HTML torna a
+**156 righe**, senza import (la dipendenza è a senso unico: paginazione → lettore). Il tema Roma Tre
+degli USR Piemonte/Liguria è il motivo del terzo passo: `rt-pagination` scrive solo «1 2 3 … 8», e senza
+quella regola la catena si fermava a pagina 1 pur avendo la pagina dichiarato tutto il necessario.
+
+### 5. Verifiche (da `project/`)
+
+`npm run typecheck` ✅ 0 · `npm test` ✅ (catena intera, incluse le nuove `test:paginazione` e
+`test:elenchi:paginati`) · `npm run test:architettura` ✅ (738 file, **145 = baseline, 0 nuove**) ·
+`npm run build` ✅ (13,18 s) · `npx eslint` sui file toccati ✅ 0 (i 41 problemi di `npm run lint` sono
+preesistenti, `supabase/functions/**` e non toccati).
+
+**Nota di sessione.** La lezione del §26.102 non era «leggere più pagine»: era che **il tetto vero era
+il numero di pagine per elenco, non il numero di documenti**. Applicarla al worker di coda ha richiesto
+due cose non ovvie: (1) un iteratore con il download **iniettato**, perché il worker, gli script e il
+test devono girare lo stesso codice senza che il test tocchi un portale; (2) un motivo di stop
+dichiarato (`fermato`) invece di un `while` con un contatore, altrimenti «non si è fermato» e «si è
+fermato per tetto» sembrano lo stesso evento nel log. Resta un limite dichiarato: si seguono **solo**
+le pagine che la pagina dichiara — un archivio dietro un `POST`, un `JavaScript` o un `robots.txt`
+resta a una pagina, e va bene così.
+
+
+---
+
+## §26.104 Il dominio ufficiale di ogni istituto e la validità del link PRIMA della bacheca (29/10/2026)
+
+**Il difetto.** La §26.77 aveva dato alla bacheca un dato nuovo, `interpelli.school_site`
+(`SITOWEBSCUOLA` dell'anagrafica MIM), ma nessuno ne ricavava una **mappa**: il dominio
+ufficiale si ricavava caso per caso, con una regex duplicata dentro `flightBoard/linkFonte.ts`,
+e nessuna riga veniva **controllata** prima della pubblicazione. Un avviso può morire in due
+modi, e nessuno dei due si vede in pagina: l'indirizzo della piattaforma (Argo/Nuvola/Forms)
+chiede il login dal giorno dopo, oppure la pagina dell'avviso diventa un 404 a bando chiuso.
+La direttiva cliente del 22/10/2026 («niente link morti») chiedeva due cose che mancavano
+entrambe: **un solo dominio ufficiale per istituto** e **una verifica del link prima di
+pubblicarlo**.
+
+### 1. Un solo posto per il dominio: `src/lib/dominiScuola.ts` (125 righe)
+
+Modulo **puro** (nessun `node:*`, nessuna rete: importabile anche dal browser), una sola regola
+di riconoscimento. `hostEduIt(valore)` accetta URL, host nudo e recapito e restituisce l'host
+nudo, minuscolo, senza `www.`, senza porta, senza percorso; `homeEduIt` compone `https://<host>`
+in un punto solo. Le forme che arrivano davvero dai file MIM e dagli avvisi sono tutte coperte:
+schema malformato `https//host/` (misurato su `SCUANAGRAFE`, §26.77), `:8443`, punto finale,
+caporali e punteggiatura incollata (`<segreteria@ic.edu.it>`), maiuscole. Restano fuori per
+progetto — e la guardia li fissa — `istruzione.it` (casella di servizio del Ministero),
+`gmail.com`/caselle personali, i domini storici non `.edu.it` e `edu.it` nudo.
+
+`costruisciMappaDomini(voci)` è la mappa `codice meccanografico → host`: **primo vince**, e il
+dominio dell'istituto viene registrato anche sul codice dell'istituto, così i plessi che
+dichiarano «Non Disponibile» ereditano quello vero della sede (§26.77). Accanto:
+`dominioDaCodice`, `homeDaCodice` (che normalizza il codice con la regola già esistente di
+`lib/emailScuola.ts`) e `statisticheMappa` per il log.
+
+`flightBoard/linkFonte.ts` **non duplica più niente**: `dominioIstituzionale`,
+
+### 2. La mappa dai file del Ministero: `src/lib/dominiAnagrafica.ts` (73 righe)
+
+Superficie **solo-Node**: legge l'indice dell'anagrafica (`lib/anagraficaScuole.ts`, file
+`SCUANAGRAFE`) e ne ricava la mappa. Ordine di priorità dentro l'indice: il sito dichiarato
+dalla **sede**, poi quello dell'**istituto**, poi — per i plessi che non dichiarano nulla — il
+sito dell'istituto ereditato. La mappa si costruisce **una volta per indice** (i file pesano
+~13 MB e gli avvisi sono decine di migliaia: mai un ricalcolo per riga) e vive in una
+`WeakMap`, così non trattiene in memoria un indice che il chiamante ha già scartato.
+
+### 3. Il controllo HTTP e la regola pura: `src/scraper/verificaLinkHttp.ts` (122 righe) + `src/lib/validitaLink.ts` (159 righe)
+
+Il controllo è `HEAD` (leggero, 6 s, UA da browser) con ripiego `GET` quando il metodo non è
+servito (`405`/`501`), quando il server blocca i client automatici (`403`) o quando non c'è
+stata risposta; un `404`/`410`/`5xx` del `HEAD` è già la risposta del server e non si ripete.
+`verificaLinkInLotti` controlla N link con concorrenza 8 e deduplica le URL ripetute.
+
+Il controllo produce un **dato**, non un verdetto: la decisione sta in `lib/validitaLink.ts`,
+che è puro e quindi verificabile offline (`statoLink`, `decidiPubblicazione`,
+`urlPubblicabile`). Tabella:
+
+| esito | stato | cosa si pubblica |
+|---|---|---|
+| `2xx`/`3xx` | `ok` | l'avviso |
+| `401 403 405 406 429 451` | `bloccato` | l'avviso (il server rifiuta i client automatici: **non è un link morto**) |
+| `404 410` | `assente` | la home ufficiale `.edu.it`, se nota; altrimenti la riga esce |
+| timeout, DNS, TLS, `5xx`, `4xx` non riconosciuti | `instabile` | come sopra |
+| nessun esito (controllo non eseguito, `--senza-link`) | `non-verificabile` | l'avviso: **un controllo mancato non è una prova di morte** |
+
+**Il difetto che le guardie hanno trovato prima della bacheca.** La prima stesura decideva
+«il link è già la home ufficiale» confrontando i **soli host**: un avviso pubblicato su
+`www.iccarducci.edu.it/albo/avviso-1.pdf` ha lo stesso host della home, quindi un 404 su quel
+PDF restava in bacheca con l'etichetta sbagliata («niente di meglio da pubblicare»). Il test
+`test:validita-link` l'ha colto al primo giro e la regola è diventata `eLaHomeUfficiale`, che
+pretende stesso host **e** nessun percorso/query/ancora. Lezione: la home è un indirizzo, non
+un dominio.
+
+`homepageIstituzionale`, `dominioDaSito` e `homepageDaSito` sono deleghe a `hostEduIt`/
+`homeEduIt`. Due regex sullo stesso dominio erano due verità destinate a divergere.
+
+
+
+### 4. La pulizia diventata pipeline: `scripts/lib/puliziaInterpelli.ts` (198 righe) + `scripts/pulisci-dati-non-verificati.ts` (243 righe)
+
+La regola è **pura** e vive in `scripts/lib/`, lo script legge, misura, stampa e — solo con
+`--apply` — scrive. Quattro passi, nell'ordine in cui il costo cresce:
+
+1. **titolo/fonte** (`verificaAvviso`): le righe che non sono nemmeno un avviso escono prima di
+   sprecare richieste HTTP;
+2. **dominio ufficiale**: `school_site` normalizzato all'host `*.edu.it`; se manca si prende
+   dalla mappa dell'anagrafica (mai inventato: codice sconosciuto → nessun sito);
+3. **link**: il controllo HTTP e la tabella del §3; 404/410 → home ufficiale, e se non c'è la
+   riga esce;
+4. **nome**: `school_name` fittizio (sigle di classe `EEEE`, `ADEE | EEEE`,
+   «VISUALIZZA INTERPELLI») riportato a `NULL`.
+
+**L'allarme che protegge da noi stessi.** Un controllo di rete può fallire per causa nostra
+(rete assente, DNS aziendale): oltre il **30%** di scarti, con almeno **5** scarti assoluti, il
+piano si dichiara sospetto e `--apply` **non cancella nulla** (exit 2). Un 403 o un timeout non
+sono mai prova di morte; un link non controllato resta in bacheca. Exit code ora coerenti con
+la testa dello script: **0** = fatto, **1** = errore di lettura/scrittura, **2** = allarme
+(prima anche un errore di scrittura usciva con 2, cioè sembrava un allarme di rete).
+
+### 5. Esito misurato (dry-run reale su Supabase, 29/10/2026)
+
+`npx tsx scripts/pulisci-dati-non-verificati.ts --senza-link --max 300` → exit 0, nessuna
+scrittura: **anagrafica MIM: 30.085 codici → 5.883 domini ufficiali** · 300 righe esaminate ·
+**sito dalla mappa 57** (già presente 7, assente 225) · link non verificati 289 (controllo
+saltato) · **nomi azzerati 90** · scartate per titolo/fonte 11. Con `--max 50`: 14 siti dalla
+mappa, 16 nomi azzerati, 4 scartate. È la prova che il dato mancava davvero: **una riga su
+cinque** aveva un `school_site` da riempire.
+
+### 6. Le guardie
+
+Tre file nuovi, tutti in catena `npm test` (114 comandi) con uno script dedicato:
+
+* `src/lib/__tests__/dominiScuola.test.ts` (117 righe, `test:domini`): le forme reali del
+  dominio (schema malformato, recapito, caporali, porta, punto finale), i domini da rifiutare,
+  la mappa «primo vince» con l'ereditarietà istituto → plesso, le statistiche, il cablaggio;
+* `src/lib/__tests__/validitaLink.test.ts` (149 righe, `test:validita-link`): la
+  classificazione dei 14 esiti tipo e le dieci decisioni di pubblicazione, compreso il caso
+  `home-istituzionale` che ha scoperto il difetto del §3;
+* `scripts/test-pulizia-interpelli.ts` (168 righe, `test:pulizia-interpelli`): sito dalla mappa
+  / normalizzato / mai inventato, link vivo/morto/bloccato/non controllato, nome fittizio,
+  allarme sopra soglia e report, cablaggio di `dati:pulisci`.
+
+`flightBoard/__tests__/linkFonte.test.ts` (già in catena, `test:board:link`) continua a passare
+dopo la delega a `dominiScuola`: la regola è cambiata di posto, non di comportamento.
+
+
+### 7. Verifiche (da `project/`)
+
+`npm run typecheck` ✅ exit 0 · **`npm test` ✅ exit 0** (114 comandi, in coda le tre guardie
+nuove) · `npm run test:architettura` ✅ **746 file, 145 violazioni = baseline, 0 nuove**
+(`dominiScuola` 125, `validitaLink` 159, `verificaLinkHttp` 122, `dominiAnagrafica` 73,
+`puliziaInterpelli` 198, `pulisci-dati-non-verificati` 243: tutti sotto il tetto di 250) ·
+`npm run build` ✅ (9,0 s) · `npx eslint` sui 12 file toccati ✅ 0 · dry-run reale ✅ (numeri
+del §5). Nessuna migrazione nuova, nessuna colonna nuova: `school_site` esisteva dalla §26.77.
+
+**Limite dichiarato.** La verifica HTTP non è una garanzia: molti siti scolastici rispondono
+`403` ai client automatici e i `429` sono frequenti sui domini che ospitano più istituti. Per
+questo la regola tratta quei casi come «bloccato» e **lascia la riga**, invece di scartarla —
+il costo di un link che chiede il login è un click sprecato, il costo di una riga vera
+cancellata è un'opportunità persa. La controprova è l'allarme: se in un run i morti superano il
+30%, il problema è più probabilmente nostro che delle scuole.
+
+**Prossimo passo (fatto nella §26.105).** Il controllo HTTP non girava ancora
+nell'ingestione (solo nella pulizia): una riga appena scrapata entrava in bacheca senza
+`ping`. Il posto naturale era l'immediato intorno dell'arricchimento in `index.ts`, che
+già conosce la scheda anagrafica e il dominio — ed è lì che è stato fatto, con la stessa
+`validitaLink` e non con una regola nuova.
+
+**File toccati.** *Nuovi*: `src/lib/dominiScuola.ts`, `src/lib/dominiAnagrafica.ts`,
+`src/lib/validitaLink.ts`, `src/scraper/verificaLinkHttp.ts`, `scripts/lib/puliziaInterpelli.ts`,
+`src/lib/__tests__/dominiScuola.test.ts`, `src/lib/__tests__/validitaLink.test.ts`,
+`scripts/test-pulizia-interpelli.ts`. *Modificati*: `src/scraper/anagraficaInterpelli.ts`
+(`sitoIstituzionaleUfficiale` + statistiche della mappa nel log),
+`src/departments/radar/flightBoard/linkFonte.ts` (delega a `dominiScuola`),
+`scripts/pulisci-dati-non-verificati.ts` (pipeline + exit code),
+`scripts/lib/interpelliManutenzione.ts` (`colonnaAssente` esportata), `package.json`
+(tre script di test).
+
+**Nota di sessione.** La regola che ha ripagato di più non è quella sul `.edu.it`: è
+**«scrivi il test della regola prima di guardarla in produzione»**. Il caso
+`404 + home ufficiale` sembrava ovvio e invece sbagliava, e a sbagliare era proprio il
+confronto che nessuno avrebbe mai messo in dubbio leggendo il codice (due host uguali = stessa
+pagina). Il test l'ha detto in un secondo; in bacheca l'avrebbe detto un utente. Secondo
+dettaglio, più piccolo e più insidioso: `RMIC8AA00X` sembra un codice meccanografico, non lo è
+(il formato è `XXYY` + 5 cifre + 1 carattere, `lib/emailScuola.ts`), e la mappa — giustamente —
+lo scartava. Quando una guardia «non vede» ciò che il test si aspetta, la prima ipotesi non è
+che la guardia sia rotta: è che il dato di prova non sia un dato vero.
+
+## §26.105 Il controllo del link entra nell'ingestione: nessuna riga nasce con un URL morto (29/10/2026)
+
+**Il difetto.** La §26.104 aveva portato la validità del link nella bacheca, ma solo
+nella **pulizia**: `scripts/pulisci-dati-non-verificati.ts` lavora su righe *già
+scritte*. Fra lo scrape e l'`upsert` in `interpelli` non c'era nessun controllo. E
+l'`upsert` del run è `onConflict: hash_id, ignoreDuplicates: true`: la prima scrittura
+**vince per sempre**, quindi un `404` pubblicato una volta non si corregge più —
+nemmeno quando la pulizia passa settimane dopo con la regola giusta. Il punto di non
+ritorno era lì, non in pulizia.
+
+### 1. Una regola sola, applicata dove serve: `src/scraper/presidioLinkIngresso.ts` (94 righe)
+
+Modulo **puro** (nessuna rete, nessun `node:*`): importa `decidiPubblicazione`,
+`statoLink` e `urlPubblicabile` da `lib/validitaLink.ts` e aggiunge solo ciò che
+l'ingestione sa e la pulizia no:
+
+* `daControllareInIngresso(a)` — si pinga solo un link `http(s)` pubblicabile e **non**
+  strutturato (`eRecordStrutturato`: classe/materia + email di candidatura). Su quei
+  record il server scolastico risponde `403` a *qualunque* client automatico: la
+  richiesta è rumore, e l'esito «non controllato» è esattamente lo stato di prima della
+  §26.104 — nessuna regressione;
+* `valutaIngressoPerLink(a, esito, home)` — il verdetto. Rispetto a `decidiPubblicazione`
+  cambia **una** cosa, dichiarata nel modulo: in ingresso `instabile` (timeout, DNS, TLS,
+  `5xx`) **non** è una prova di morte, perché la scelta è irreversibile; il link
+  specifico resta e la decisione — riprovando — spetta alla pulizia. Un `404`/`410`
+  invece è una prova: home ufficiale `.edu.it` se nota, altrimenti la riga **non si
+  scrive**.
+
+Tabella in ingresso (identica alla §26.104 tranne la riga dichiarata):
+
+| esito HTTP | stato | cosa entra in `interpelli.source_url` |
+|---|---|---|
+| `2xx`/`3xx` | `ok` | l'avviso (verificato) |
+| `403`/`429`/`401` | `bloccato` | l'avviso (server anti-bot, non link morto) |
+| nessun controllo | `non-verificabile` | l'avviso (record strutturato o tetto di richieste) |
+| timeout/DNS/TLS/`5xx` | `instabile` | l'avviso (**in ingresso** non prova niente: upsert irreversibile) |
+| `404`/`410` | `assente` | home ufficiale se nota, **altrimenti la riga non entra** |
+| link non `http(s)` | `non-verificabile` | mai (scartato, `nessun link http(s) da pubblicare`) |
+
+### 2. Dove è agganciato: `src/scraper/index.ts`, prima di dedupe e `upsert`
+
+Il gate è il **GATE 3** della pipeline (`• Gate del link (verifica HTTP prima
+dell’upsert)…`), subito dopo il filtro dei bandi scaduti e prima della deduplica per
+`hash_id` e della validazione anti-dummy. L'ordine non è casuale: scartare prima
+significa meno `ping` e meno lavoro, e una riga scartata qui non consuma un `hash_id`.
+
+```ts
+const daPingare = [...new Set(trovati.filter(daControllareInIngresso).map((a) => a.link ?? ''))]
+  .slice(0, tetto);                       // SCRAPER_PING_MAX, default 120
+const esitiLink = await verificaLinkInLotti(daPingare, {
+  timeoutMs: SCRAPER_PING_TIMEOUT_MS,     // default TIMEOUT_PING_MS (6 s)
+  concorrenza: SCRAPER_PING_CONCORRENZA,  // default 8
+});
+const verdetto = valutaIngressoPerLink(a, esitiLink.get(link) ?? null, homeUfficialeAvviso(a));
+```
+
+* il vecchio `linkRaggiungibile` (e la `mappaRaggiungibilita` che lo alimentava) è
+  stato **rimosso**: era una seconda verità sullo stesso dominio, ed è la ragione per
+  cui un `403` poteva scartare un bando vero;
+* la home per il ripiego viene da `homeUfficialeAvviso` (`anagraficaInterpelli.ts`,
+  nuova): legge il `school_site` già presente sulla riga e altrimenti la mappa MIM
+  (`lib/dominiAnagrafica.ts`) — nessun dominio inventato;
+* quando il verdetto sostituisce il link, la sostituzione si propaga anche alla colonna
+  `school_site` della riga (stesso URL: la bacheca non mostra due link diversi);
+* il conteggio finisce nel log del run — `Link: N verificati · N bloccati dal server
+  (anti-bot, tenuti) · N non controllati · N sostituiti con la home ufficiale · N
+  scartati` — e ogni scarto stampa il motivo (al massimo dieci righe di dettaglio).
+
+### 3. Esito misurato (dry-run reale, 29/10/2026)
+
+`SCRAPER_FONTI_MAX=2 npm run scrape -- --dry-run` (hub Piemonte + aggregatore nazionale):
+
+```
+• Gate del link (verifica HTTP prima dell’upsert)…
+• Link da controllare: 2 (gli altri restano «non controllati»: record strutturati o tetto 120)
+  ✗ scartato (nessun link http(s) da pubblicare): Ufficio scolastico di Roma – Interpelli
+• Link: 4 verificati · 0 bloccati dal server (anti-bot, tenuti) · 0 non controllati
+  · 0 sostituiti con la home ufficiale · 6 scartati
+• Interpelli estratti: 4 · unici per hash_id: 2 · verificati: 2
+✓ DRY-RUN completato: nessun dato inviato a Supabase.
+```
+
+I 4 verificati entrano con il loro link (il controllo ha ricevuto `2xx`); i 6 scartati
+sono schede d'ente con link non `http(s)` — le stesse che `verificaAvviso` avrebbe
+respinto due passi più sotto: ora vengono respinte **prima**, con un motivo scritto e
+senza consumare richieste HTTP.
+
+### 4. Le guardie
+
+* `scripts/test-gate-link-ingresso.ts` (**nuovo**, 116 righe, `npm run
+  test:gate-link-ingresso`, in catena `npm test`): matrice completa dei cinque stati,
+  `404`/`410` con e senza home, timeout/`5xx` mantenuti, `mailto:` mai pubblicabile,
+  spazi attorno al link, motivo sempre esplicito e — ultima sezione — il **cablaggio**
+  letto dal sorgente di `index.ts` (importa il presidio, usa `verificaLinkInLotti`,
+  `linkRaggiungibile` non esiste più);
+* `scripts/test-scraper-attivi.ts` (234 righe): la vecchia sezione D su `valutaGateLink`
+  è riscritta sul presidio, con la matrice completa delegata al file nuovo;
+* `qualitaOpportunita.ts` (180 righe) conserva **solo** `eRecordStrutturato` — è un dato
+  del bando, non una politica — mentre `valutaGateLink`/`EsitoGateLink` sono stati
+  rimossi insieme al loro chiamante: nessun codice morto che suggerisca due regole.
+
+### 5. Verifiche (da `project/`)
+
+`npm run typecheck` ✅ exit 0 · **`npm test` ✅ exit 0** (**115 comandi**, in coda
+`test:gate-link-ingresso`) · `npm run test:architettura` ✅ **748 file, 145 violazioni =
+baseline, 0 nuove** (`presidioLinkIngresso` 94, `test-gate-link-ingresso` 116,
+`test-scraper-attivi` 234, `qualitaOpportunita` 180: tutti sotto il tetto di 250) ·
+`npm run build` ✅ · `npx eslint` sui 7 file toccati ✅ 0 · dry-run reale ✅ (§3).
+
+**Limite dichiarato.** Il tetto è 120 controlli per run: su un giro nazionale gli
+avvisi oltre il tetto entrano «non controllati» (come prima della §26.104) e li vede la
+pulizia. Non è una svista, è la scelta di non trasformare un server scolastico lento in
+uno stallo del run — la stessa ragione per cui `verificaLinkInLotti` ha concorrenza 8 e
+timeout 6 s.
+
+**File toccati.** *Nuovi*: `src/scraper/presidioLinkIngresso.ts`,
+`scripts/test-gate-link-ingresso.ts`. *Modificati*: `src/scraper/index.ts` (GATE 3 +
+rimozione di `linkRaggiungibile`/`mappaRaggiungibilita`), `src/scraper/anagraficaInterpelli.ts`
+(`homeUfficialeAvviso`), `src/scraper/qualitaOpportunita.ts` (via `valutaGateLink`),
+`src/scraper/parser.ts` (commento di `REGIONI_USR` riallineato),
+`scripts/test-scraper-attivi.ts`, `package.json` (script `test:gate-link-ingresso`,
+catena `test` a 115 comandi).
+
+**Nota di sessione.** La tentazione era pingare tutto e scartare ciò che non risponde:
+sarebbe stato semplice e avrebbe svuotato la bacheca, perché in un giro reale la
+maggioranza dei server scolastici non risponde a un client automatico. La differenza che
+conta non è fra «risponde» e «non risponde», è fra **una prova** (`404`) e **un silenzio**
+(timeout): il primo si può correggere con una home ufficiale, il secondo non autorizza
+niente — e con un `upsert` che ignora i duplicati, sbagliare in quella direzione è
+definitivo. Il codice ha ora un solo posto dove questa distinzione è scritta, e un test
+che la fissa riga per riga.
+
+## §26.106 Motore di scoring multi-fattore, filtro dei 60 km e paracadute «5 osso-da-mordere» (29/10/2026)
+
+**Il difetto.** Tre cose mancavano al Radar Personale, e nessuna era cosmetica:
+
+1. la parola chiave «PON» (o «POR», «FSE») **non poteva matchare mai**: `tokenCompetenza`
+   scarta i token sotto i 4 caratteri e `laboratorio` è nella lista dei generici — un bando
+   intitolato «PON» non attivava nulla, nemmeno con l'utente che aveva scritto «PON»;
+2. la vetrina poteva restare con **una o due card** anche quando il database aveva decine di
+   opportunità attive: righe vere, scartate solo perché il Radar non le agganciava;
+3. la fascia bassa non aveva né un colore proprio né una parola: una riga senza match
+   spariva, e un eventuale riempimento sarebbe stato indistinguibile da un match.
+
+### 1. Motore multi-fattore: match base · boost alto · boost medio
+
+Il punteggio resta quello della §26.63 (due livelli, `valutaCompatibilita` in
+`src/lib/compatibilitaGraduata.ts`): **non** è stato riscritto. Quello che cambia è la
+misura delle PAROLE: prima non tutte erano misurabili.
+
+| fattore | dove vive | cosa fa |
+|---|---|---|
+| **match base** — ordine di scuola, classi di concorso, provincia | `punteggioOrdine.ts` · `punteggioClasse.ts` · `prossimitaGeografica.ts`, media ponderata in `mediaModali.ts` (pesi 1·2·1) | fa il voto e apre la bacheca |
+| **boost ALTO** — la parola richiesta c'è **per intero** (o è una PAROLA DEL BANDO: `PNRR`, `PON`, `POR`, `FSE`, `Tutor`, `Laboratorio`) | `punteggioCompetenze.ts` (`grado: 'esatta'`, `boost: 'alto'`) | +25 punti, **tetto** del livello secondario; e oltre i 60 km è l'unica chiave che apre (§2) |
+| **boost MEDIO** — la parola è **correlata** (alcuni token, stessa area disciplinare, ponte curato) | `punteggioCompetenze.ts` (`'vicina'` 20 · `'riconducibile'` 10, `boost: 'medio'`), aree in `areeDisciplinari.ts` | sfuma il voto dentro `CAP_COMPETENZE` (25), non apre e non scavalca nulla |
+
+Le parole del bando vivono in **una tabella sola**, `PAROLE_BANDO` in
+`src/data/ordiniMaterie.ts`: ogni voce porta la chiave canonica e i SINONIMI con cui le
+scuole la scrivono («Piano Operativo Nazionale» → `PON`, «tutoraggio» → `Tutor`,
+«laboratoriale» → `Laboratorio`). Il riconoscimento è `paroleBandoDi` in
+`src/lib/areeDisciplinari.ts`: confronto per **parola o frase intera** sul testo
+normalizzato (minuscole, senza accenti, punteggiatura → spazi), quindi `ponte` non è `PON`.
+
+### 2. Filtro dei 60 km: penalità progressiva, blocco totale, unica eccezione
+
+La regola non è stata duplicata: è quella di `src/lib/prossimitaGeografica.ts`, che resta
+l'unica fonte della distanza (Haversine fra capoluoghi, `provinceCoordinate.ts`).
+
+* **dentro i 60 km** → penalità progressiva: 25 punti entro 20 km, 40 entro 40 km, 55 entro
+  60 km (provincia a 75 · 60 · 45 di punteggio);
+* **oltre i 60 km** → **blocco totale**: `escluso`, punteggio `PUNTEGGIO_MATCH_NESSUNO` (0);
+* **unica eccezione**: l'avviso contiene la **parola chiave richiesta** (boost ALTO). Allora
+  entra d'ufficio ma con una **forte penalizzazione dichiarata**: `PUNTEGGIO_JOLLY_OLTRE_RAGGIO`
+  = **60**, mai un 100% finto (`jollySemantico.ts`, §26.64 — invariato, ora però raggiungibile
+  anche da PNRR/PON/POR, che prima non erano misurabili).
+
+### 3. Paracadute «5 osso-da-mordere»: la vetrina non scende sotto 5
+
+`paracaduteCinque` (`src/lib/riempitivi.ts`, `MINIMO_BACHECA = 5`) completa la coda con le
+**migliori** righe della scorta, ordinate per punteggio decrescente (a pari punteggio vale
+l'ordine del database: taglio deterministico). La scorta la costruisce `bachecaInterpelli.ts`
+(`candidatoRipiego`) con le opportunità **vere** che il Radar non aggancia, e **non** contiene:
+
+* righe senza una scadenza dichiarata e valida (§26.71);
+* il contorno che non è un avviso (§26.65);
+* le scuole in blacklist (§26.45);
+* gli avvisi **oltre i 60 km senza la parola del bando** — il blocco geografico non si scavalca.
+
+Ogni riga aggiunta nasce `ripiego: true` (nuovo campo di `Interpello`, `src/data/interpelli.ts`)
+e la bacheca lo conta in `ripieghiInBacheca`: se il database non ha cinque opportunità
+ammissibili la lista resta corta e il motivo lo dice (`scorta-esaurita`). Il paracadute
+completa la vetrina, non inventa righe.
+
+### 4. Colour coding della vetrina «Opportunità mappate»
+
+`src/lib/compatibilita.ts` espone `livelloMatch`, `COLORI_MATCH` e `stileMatch`: tre bande,
+**tre gradini 500 della palette esistente** (nessun colore nuovo, nessun orfano):
+
+| fascia | hex | token | soglia |
+|---|---|---|---|
+| ALTO | `#1FA055` | `accent-500` | ≥ 80 |
+| MEDIO | `#E2B33C` | `warning-500` | 60 … 79 |
+| BASSO | `#D9534F` | `error-500` | < 60 |
+
+Le soglie **non** sono riscritte: `livelloMatch` legge `livelloCompatibilita`, quindi le due
+bande interne alla card (arancio 70-79 «parziale» · rosso 60-69 «suggerimento extra»)
+restano, mentre la vetrina le legge come un solo «match medio» (60-79). Una riga di ripiego
+mostra l'etichetta trasparente `ETICHETTA_RIPIEGO` = **«Opportunità di ripiego nel DB»**, e
+`ElencoOpportunita.tsx` disegna pallino + etichetta + punteggio accanto alla riga della
+scadenza (nessuna palette locale: solo `stileMatch`).
+
+### 5. Le guardie
+
+* `scripts/test-matching-competenze.ts`: boost alto su `PNRR`, `PON` («Piano Operativo
+  Nazionale»), `POR`, `Tutor` («tutoraggio»), `Laboratorio` (anche plurale); boost medio su
+  area disciplinare e token parziali; `ponte` ≠ `PON`; la guardia storica «token generico →
+  nessun match automatico» resta valida **al gate** (`competenzaCompatibileConAvviso`);
+* `scripts/test-prossimita-60km.ts`: Roma senza parola → `escluso` a 0; con `PNRR` → entra a
+  **60**; Alessandria (32 km) → ammessa con la penalità di fascia;
+* `scripts/test-riempitivi-bacheca.ts`: minimo 5, migliori in coda, ordine deterministico,
+  `scorta-esaurita`, cablaggio `paracaduteCinque(cap.lista, scorta)` e scarto geografico
+  fuori dalla scorta;
+* `scripts/test-compatibilita-punteggio.ts`: tre bande (80 · 60 · 59), hex uguali a quelli di
+  `tailwind.config.js`, etichetta di ripiego solo con match basso, cablaggio della vetrina;
+* `scripts/test-filtri-scuole.ts`: l'assert «classe estranea → 0 righe» diventa «nessun
+  MATCH, ma il ripiego è dichiarato e contato» — è il comportamento nuovo, non una resa;
+* `scripts/test-scoring-due-livelli.ts`: l'esito silenzioso del livello secondario porta anche
+  `boost: null` (contratto del modulo, una riga).
+
+### 6. Verifiche (da `project/`)
+
+`npm run typecheck` ✅ exit 0 · **`npm test` ✅ exit 0** · `npm run test:architettura` ✅
+(nessuna violazione nuova; tutti i file toccati ≤ 250 righe: `ordiniMaterie` 250,
+`areeDisciplinari` 229, `punteggioCompetenze` 247, `compatibilita` 250, `riempitivi` 205,
+`bachecaInterpelli` 248, `ElencoOpportunita` 148) · `npm run build` ✅ · `npm run lint` ✅.
+
+**Limite dichiarato.** Il paracadute non può superare il numero di opportunità AMMISSIBILI:
+un blocco geografico, una blacklist o una riga scartata a monte (§26.65 · §26.71) restano
+fuori anche quando la vetrina è corta. Il «5» è un minimo, non una promessa: meglio due card
+vere e un conto dichiarato che cinque righe inventate.
+
+**File toccati.** *Modificati*: `src/data/ordiniMaterie.ts` (`PAROLE_BANDO`),
+`src/lib/areeDisciplinari.ts` (`paroleBandoDi`), `src/lib/punteggioCompetenze.ts` (fasce
+`boost`), `src/lib/compatibilita.ts` (`livelloMatch` · `COLORI_MATCH` · `stileMatch` ·
+`ETICHETTA_RIPIEGO`), `src/lib/riempitivi.ts` (`MINIMO_BACHECA` · `paracaduteCinque`),
+`src/lib/bachecaInterpelli.ts` (scorta + paracadute + `ripieghiInBacheca`),
+`src/data/interpelli.ts` (`ripiego`), `src/pages/dashboard/components/ElencoOpportunita.tsx`
+(colour coding) e i sei script di guardia sopra. Nessun file nuovo: le regole sono state
+aggiunte dove già vivevano, senza doppioni.
+
+**Nota di sessione.** La tentazione era riscrivere il punteggio come somma di fattori:
+sarebbe stato più semplice da raccontare e avrebbe rotto tre invarianti già fissate da
+altrettante guardie (le competenze non fanno il voto, il sostegno non si promuove, la consegna
+resta strict). Il lavoro vero era un altro: rendere **misurabile** ciò che il prodotto
+prometteva (le sigle dei programmi), **dichiarare** ciò che il motore già faceva (alto/medio)
+e **non lasciare vuota** la vetrina quando il database è pieno. Un ripiego scritto in rosso è
+un'informazione; un riempimento silenzioso è una bugia: la differenza fra i due è un'etichetta,
+un colore e un test che li fissano.
+
+
+---
+
+## §26.107 — DEV Bar, permessi di sviluppo e monitoraggio 7 giorni della prova
+
+### 1. Il problema (due sintomi, una causa)
+
+La DEV Bar funzionava solo per chi aveva la sessione dell'admin principale e un
+ambiente dichiarato a mano: in locale il pannello «Crawler Telemetry» restava
+senza numeri («Serve una sessione attiva») e il pulsante «Lancia scansione
+whitelist ora» rispondeva `403` a qualunque account che non fosse in
+`ADMIN_EMAILS`. Lo stesso percorso — ricerca di una provincia nel box «Prova il
+Radar» — produceva un effetto solo PARZIALE: la provincia veniva memorizzata per
+il wizard e la coda regionale riceveva la richiesta, ma **nessun monitoraggio
+nasceva** e l'utente non sapeva che il suo interesse era stato registrato.
+
+### 2. Autorizzazione in un solo punto (Edge `crawler-admin`)
+
+L'Edge non decide più nel `serve()`: c'è **una** funzione `autorizza(azione,
+utente, req)` che risponde con `{ ok, da, motivo, status }` e con `da` (`admin`,
+`allowlist-dev`, `segreto`, `sessione`, `sviluppo-locale`) restituito nella
+risposta HTTP. Ordine dichiarato:
+
+1. header `x-crawler-secret` = `CRAWLER_TRIGGER_SECRET` — CI, terminale e DEV Bar
+   **senza login**;
+2. `ADMIN_EMAILS` (invariata) e **`CRAWLER_DEV_EMAILS`**: una allowlist DEV/TEST
+   separata, così un account di prova non va mescolato agli admin principali;
+3. **ambiente di sviluppo dichiarato** — `ENVIRONMENT` ∈ {dev, local, test,
+   staging}, `CRAWLER_ALLOW_DEV=1` oppure URL Supabase locale: qui può avviare il
+   giro qualunque sessione valida. In produzione (`ENVIRONMENT` assente o
+   `production`) la regola **non esiste**: il bypass non è implicito, è un fatto
+   dichiarato dal deploy (rilevato server-side, non dal client);
+4. `stato` (sola telemetria): qualunque sessione valida — solo numeri aggregati.
+
+Il rifiuto è parlante e dice cosa fare (`401` con l'istruzione per la telemetria,
+`403` con le tre strade per il trigger) e la risposta include `ambiente` e
+`sviluppo`: nessun `403` anonimo.
+
+### 3. La DEV Bar senza login (`src/services/crawlerTelemetry.ts`)
+
+Il client manda l'header `x-crawler-secret` preso da `VITE_CRAWLER_DEV_SECRET`
+(`.env.local`) **solo** in build locale: `segretoSviluppo()` legge
+`import.meta.env.DEV`, che vale `false` in produzione, quindi il valore non
+finisce mai nel bundle. Senza sessione e con il segreto si usa la chiave anon per
+superare il gateway e ci si fa autorizzare dalla Edge. `EsitoAvvio` espone
+`autorizzato_da` e `CrawlerTelemetry.tsx` lo scrive nell'avviso di avvio: si vede
+subito da dove passa il permesso.
+
+
+
+### 4. «Prova il Radar»: il flag di 7 giorni e il Radar Generale
+
+La ricerca di una provincia è un **lead**, non un'anteprima. `lib/provaRadar.ts`
+tiene ora due memorie distinte, con cicli di vita diversi:
+
+* `sr_prova_radar` — la provincia **principale** (già esistente): la eredita il
+  wizard, senza chiederla due volte;
+* `sr_prova_radar_monitoraggio` — il **monitoraggio temporaneo**: `{ provincia,
+  iniziatoIl, scadeIl }` con `scadeIl = iniziatoIl + 7 giorni`
+  (`GIORNI_MONITORAGGIO_PROVA = 7`). `leggiMonitoraggioProva()` **cancella** il
+  record scaduto alla prima lettura: sette giorni non diventano «per sempre»
+  solo perché nessuno è passato a spegnerlo. `giorniResiduiMonitoraggio()` torna
+  `0` (mai un numero negativo) e arrotonda per eccesso.
+
+`registraProvaRadar(provincia)` (`radar/services/provaRadarQuery.ts`) è la porta
+unica: accende il flag (**sincrono**, nessuna latenza sul responso) e manda la
+provincia al **Radar Generale** — cioè alla coda di scansione
+(`richiediScansioneProva` → `request_scan_target`), che anticipa il giro
+regionale e ne alza la priorità. Fire-and-forget: la coda non è una dipendenza
+della prova e non può farla fallire.
+
+Il responso (`ResponsoProva`, componente `RigaMonitoraggio`) dichiara lo stato:
+«Monitoraggio attivo per N giorni (fino al gg/mm)». Vale per anonimi e
+registrati, perché il flag è locale e non richiede account — nessun dato
+personale viene conservato: solo il codice provincia, validato sul catalogo.
+
+### 5. Verifica del flusso (Telegram, digest, «Opportunità mappate»)
+
+* **Instradamento dei bandi** — `destinazioniPubblicazione` (canale regionale
+  della provincia + `@scuoleradar_ata` per ogni avviso ATA) verificato dalla
+  matrice di routing su tutte le regioni: `npm run test:telegram:canali` ✅. La
+  fixture PNRR del test aveva una scadenza **già passata** (`2026-10-05`): il
+  formatter omette correttamente la riga «📅 Scadenza:» per gli avvisi scaduti,
+  quindi il test falliva per l'orologio, non per il codice. Data portata al 2027
+  e verifica di nuovo verde.
+* **Coda regionale** — `request_scan_target` resta BUMP-ONLY, con throttle e
+  aperta ad `anon`: `npm run test:coda:sync` ✅ (nomi di RPC e parametri
+  allineati fra SQL, wrapper pubblico e worker).
+* **Digest giornaliero** — `inviaDigestGiornaliero` raccoglie le voci con
+  `searchInterpelli(client, { province: utente.province })` e le filtra con la
+  REGOLA UNICA `avvisoCompatibileConProfilo` (provincia + classe/materia,
+  sostegno incluso): il riepilogo riceve dati profilati, non un pool nazionale.
+  `npm run test:digest` ✅.
+* **Dashboard** — «Opportunità mappate» legge `bachecaInterpelli` (porta primaria
+  + voto a due livelli + paracadute dichiarato): `npm run test:prova-radar`,
+  `test:riempitivi-bacheca`, `test:filtri-scuole` ✅. La provincia provata
+  diventa la principale anche qui, passando dal wizard.
+
+### 6. Le guardie
+
+* `scripts/test-coda-sync.ts` — «trigger manuale»: `autorizza` come unico punto
+  di decisione, allowlist `CRAWLER_DEV_EMAILS`, bypass **solo** con sviluppo
+  dichiarato, `401` con l'istruzione per la telemetria, segreto di sviluppo
+  mandato dal client solo in build locale;
+* `scripts/test-provincia-principale.ts` — monitoraggio: 7 giorni esatti,
+  provincia normalizzata, scadenza = prova + 7 giorni, residuo 7 → 1 → 0, record
+  **cancellato** alla scadenza, codice ignoto rifiutato;
+* `scripts/test-prova-radar.ts` — cablaggio unico:
+  `setMonitoraggio(registraProvaRadar(provincia))`, `monitoraggio={monitoraggio}`
+  nel responso, `RigaMonitoraggio`, e la richiesta alla coda con la provincia del
+  monitoraggio.
+
+### 7. Verifiche (da `project/`)
+
+`npm run typecheck` ✅ exit 0 · `npm test` ✅ exit 0 · `npm run test:architettura`
+✅ (nessuna violazione nuova; file toccati tutti ≤ 250 righe tranne la Edge
+`crawler-admin`, portata da 257 a **300** righe: il tetto d'errore del gate) ·
+`npm run build` ✅ · `npm run lint` ✅ sui file toccati ·
+`npm run test:telegram:canali` ✅ · `npm run test:digest` ✅.
+
+**Limite dichiarato.** Il «7 giorni» è un **monitoraggio**, non un abbonamento:
+non promette notifiche a chi non ha un account. Alla scadenza resta la provincia
+principale della prova (il wizard la eredita comunque): a scadere è la finestra
+di osservazione, non il diritto a essere richiamati. E il segreto di sviluppo
+**non** indebolisce la produzione: `SVILUPPO` è calcolato dall'ambiente del
+deploy, quindi su un deploy di produzione le chiavi restano admin, allowlist DEV
+e `CRAWLER_TRIGGER_SECRET`.
+
+**File toccati.** *Modificati*: `supabase/functions/crawler-admin/index.ts`
+(`autorizza` · `DEV_EMAILS` · `SVILUPPO` · `autorizzato_da` · letture della
+telemetria in parallelo), `src/services/crawlerTelemetry.ts` (`segretoSviluppo` ·
+header `x-crawler-secret` · messaggi di rifiuto),
+`src/components/CrawlerTelemetry.tsx` (autorizzazione nell'avviso),
+`src/lib/provaRadar.ts` (monitoraggio 7 giorni),
+`src/departments/radar/services/provaRadarQuery.ts` (`registraProvaRadar`),
+`src/departments/radar/SimulatorRadar.tsx`,
+`src/departments/radar/components/ResponsoProva.tsx` (`RigaMonitoraggio`) e le
+guardie `test-coda-sync.ts`, `test-provincia-principale.ts`,
+`test-prova-radar.ts`, `test-canali-telegram.ts` (data della fixture).
+`HealthCheckModal.tsx` **non** è stato toccato: non aveva alcun check di sessione
+— quello vero stava nel servizio di telemetria ed è lì che è stato corretto
+(aggiungere codice in un file già a 291 righe sarebbe stato debito, non cura).
+Nessun file nuovo.
+
+**Nota di sessione.** Il blocco non era «l'email admin sbagliata»: era una
+decisione presa in tre posti diversi (Edge, servizio, componente) che nessuno
+poteva leggere per intero. Il fix è stato ridurre i permessi a **una** funzione
+con un ordine dichiarato e restituire `da` nella risposta, così la diagnosi è
+scritta nel dato e non nel ricordo di chi ha deployato. Stessa logica per la
+prova: un lead senza scadenza è una promessa che si autodistrugge, mentre un flag
+di 7 giorni che si cancella da solo è una promessa che si può mantenere.
+

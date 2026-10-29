@@ -134,21 +134,21 @@
       (`bachecaInterpelli` → contatore `senzaScadenza`, scarto **dichiarato**).
       Un solo grado di urgenza senza data resta possibile: la riga **fuori dal feed**
       che il chiamante ha già deciso di mostrare (banda grigia, mai una data inventata).
-- [ ] **Badge della colonna «Scadenza»: TRE luci** (§26.89, §26.98) — il colore dice quanto
-      manca e ogni luce ha UN solo significato — **rossa** `bg-rose-500` per «Scade oggi»
-      (meno di 24 ore) · **oro brillante** `bg-amber-400` per «Scade domani» e «Ultime 72h»
-      (24–72 ore) · **verde** `bg-emerald-500` per «In corso» (dal terzo giorno alla
-      finestra di candidatura) — sempre accanto alla DATA di scadenza; oltre la finestra
-      o senza data la banda è ardesia e dichiara «Scadenza fuori finestra» / «Scadenza
-      n/d» (mai una data inventata, mai una tinta pastello, nessuna banda che pulsa).
+- [ ] **Badge della colonna «Scadenza»: QUATTRO luci** (§26.89, §26.100) — il colore dice quanto
+      manca e ogni luce ha UN solo significato — **rossa** `bg-rose-600` per «Scade oggi»
+      (meno di 24 ore) · **arancio** `bg-orange-700` per «Scade domani» e «Ultime 72h»
+      (24–72 ore) · **verde** `bg-emerald-700` per «In corso» (dal terzo giorno alla
+      finestra di candidatura) · **blu** `bg-sky-700` per «Scadenza lontana» (oltre la
+      finestra) — sempre accanto alla DATA di scadenza; senza data la banda è ardesia media
+      e dichiara «Scadenza n/d» (mai una data inventata, nessuna banda che pulsa).
       Un solo modulo: `stileScadenza` in `src/lib/scadenzaSemaforo.ts`
       (`SCADENZA_TOKENS`), usato da tabellone, scheda avviso e feed della dashboard.
-      Le tre luci d'allarme sono tinte PIENE e LUMINOSE con etichetta quasi nera
-      (`text-slate-950` in grassetto): è l'unica combinazione che regge **AA** con la
-      tinta più viva — `rose-500` 5,49:1 · `amber-400` 12,08:1 · `emerald-500` 7,95:1.
-      Il testo bianco su queste tinte sta sotto AA (1,67–3,67:1) e non si usa; restano
-      fuori anche i gialli scuri (`yellow-700`, `amber-600`) perché il tabellone non deve
-      avere toni spenti (§26.97 → §26.98, misura in `npm run test:interpello-scadenza`).
+      Tutte le bande portano etichetta **BIANCA in grassetto** (`text-white font-bold`) e
+      reggono **AA** sul bianco: `rose-600` 4,70:1 · `orange-700` 5,18:1 ·
+      `emerald-700` 5,48:1 · `sky-700` 5,93:1. Restano fuori le tinte chiare del §26.98
+      (`amber-400` 1,67:1 · `emerald-500` 2,54:1 · `rose-500` 3,67:1: sotto AA) e ogni
+      nero o ardesia scura: il tabellone è la vetrina del servizio e non deve avere toni
+      «da funerale» (§26.100; misura in `npm run test:interpello-scadenza`).
       Gli avvisi scaduti non compaiono mai in bacheca.
 - [ ] **Allegati su gestori documentali: il FILE è l'avviso** (§26.96) — una tabella d'albo che linka
       solo il PDF su Gecodoc / Argo / Nuvola–Spaggiari si legge DENTRO il documento (scadenza dichiarata,
@@ -156,10 +156,14 @@
       resta un login e non diventa mai `source_url`. Una bacheca vuota o chiusa non spegne il target: si
       riparte dall'albo della scuola, risolta sul codice meccanografico scritto nell'URL. Guardia:
       `npm run test:piattaforme-documentali`.
-- [ ] **Finestra di CANDIDATURA = 15 giorni** (§26.82) — `GIORNI_ORIZZONTE_OPPORTUNITA`
-      in `src/lib/scadenza.ts`: oltre, la «scadenza» letta dalle fonti è la fine di
-      un incarico o l'avvio di un progetto, non un termine per candidarsi, e la riga
-      resta fuori da bacheca, Radar Live e feed.
+- [ ] **Finestra di CANDIDATURA = 15 giorni — per FEED e matching, non per la vetrina** (§26.82,
+      §26.100) — `GIORNI_ORIZZONTE_OPPORTUNITA` in `src/lib/scadenza.ts` vale per
+      `eOpportunitaConScadenza` (feed, punteggio, RPC di matching): oltre, la «scadenza» letta
+      dalle fonti è la fine di un incarico o l'avvio di un progetto, non un termine per
+      candidarsi. La **bacheca pubblica** invece legge `eOpportunitaAperta` (scadenza
+      dichiarata e non ancora passata, **senza tetto in avanti**) e il suo filtro PostgREST ha
+      un solo estremo (`expiration_date.gte.<oggi>`): il cliente vuole il volume ATTIVO
+      completo, e un bando che scade fra un mese è aperto. Guardia: `npm run test:board:filtro`.
 - [ ] **«Prova il Radar»: si prova con la SOLA provincia** — il box pubblico legge quella provincia e
       nient'altro (`src/departments/radar/services/provaRadarQuery.ts`, `.eq('province')`;
       `src/lib/provaRadarEngine.ts`): **nessun pool nazionale, nessun ripiego, nessun dato di
@@ -191,10 +195,10 @@
       `npm run dati:demo -- --apply` le scrive (mai in produzione senza `--consenti-produzione`),
       `npm run dati:demo -- --pulisci --apply` le elimina. La stessa tabella di casi è la guardia
       `npm run test:board:demo` (esito atteso = esito reale). Il badge della scadenza è **pieno**
-      e ha **tre luci** (`bg-rose-500` solo oggi · `bg-amber-400` 24–72h ·
-      `bg-emerald-500` in corso, etichetta `text-slate-950` in grassetto, ardesia per
-      scaduto/non databile: §26.89, §26.98) e il totale della pill conta le **stesse** righe
-      che generano le schermate (§26.77).
+      e ha **quattro luci** (`bg-rose-600` solo oggi · `bg-orange-700` 24–72h ·
+      `bg-emerald-700` in corso · `bg-sky-700` oltre la finestra; etichetta `text-white` in
+      grassetto, ardesia media per scaduto/non databile: §26.89, §26.100) e il totale della pill
+      conta le **stesse** righe che generano le schermate (§26.77).
 - [ ] **Finestra dei 60 giorni: solo FETCH e pulizia, mai vetrina** (§26.71) — lo **stesso** numero
       e la stessa data **locale** vivono in `src/lib/scadenza.ts`
       (`GIORNI_FINESTRA_SENZA_SCADENZA`, `eAvvisoVivo(scadenza, pubblicazione)`) e valgono per la

@@ -396,12 +396,11 @@ const RE_HOST_NON_ISTITUZIONALE =
  *
  * ⚠️ Solo URL UFFICIALI VERIFICATI: se una regione non è mappata non si inventa
  * nulla → si resta sul link specifico (o l'avviso viene scartato a monte). Il
- * link specifico viene testato a runtime dallo scraper (`linkRaggiungibile`) ma un
- * ping fallito NON è più una condanna: un bando STRUTTURATO (classe/materia +
- * email di candidatura) resta in bacheca anche se il server regionale risponde
- * 403/timeout ai client automatici (vedi `valutaGateLink` in
- * `qualitaOpportunita.ts`, policy §26.17). Per aggiungere una regione: verificare
- * prima la URL.
+ * link specifico viene controllato a runtime dallo scraper (`presidioLinkIngresso.ts`
+ * sopra `verificaLinkHttp.ts`) ma un ping fallace NON è una condanna: un bando
+ * STRUTTURATO (classe/materia + email di candidatura) resta in bacheca anche se il
+ * server regionale risponde 403/timeout ai client automatici (policy §26.104). Per
+ * aggiungere una regione: verificare prima la URL.
  */
 export const REGIONI_USR: Record<string, string> = {
   Piemonte: 'https://www.istruzionepiemonte.it/',

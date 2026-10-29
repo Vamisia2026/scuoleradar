@@ -87,6 +87,14 @@ export interface Interpello {
    * toglie nulla. Card e dettaglio la dichiarano con `ETICHETTA_JOLLY_SEMANTICO`.
    */
   jollySemantico?: string | null;
+  /**
+   * RIPIEGO DICHIARATO (§26.106): la riga non ha un match sufficiente col profilo ed è
+   * entrata in vetrina con il paracadute «5 osso-da-mordere» (`paracaduteCinque`,
+   * `src/lib/riempitivi.ts`), fra le migliori opportunità disponibili nel DB. La card lo
+   * dichiara con `ETICHETTA_RIPIEGO` e il colore basso (`stileMatch`): mai spacciata per
+   * un match, mai una priorità.
+   */
+  ripiego?: boolean;
 }
 
 /**

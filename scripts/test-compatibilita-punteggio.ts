@@ -23,12 +23,16 @@
  */
 import { readFileSync } from 'node:fs';
 import {
+  COLORI_MATCH,
+  ETICHETTA_RIPIEGO,
   SOGLIA_COMPATIBILITA_ARANCIO,
   SOGLIA_COMPATIBILITA_ROSSO,
   SOGLIA_COMPATIBILITA_VERDE,
   bandaCompatibilita,
   etichettaCompatibilita,
   livelloCompatibilita,
+  livelloMatch,
+  stileMatch,
 } from '../src/lib/compatibilita.ts';
 import {
   PUNTEGGIO_EXTRA_SOSTEGNO,
@@ -140,8 +144,38 @@ check(
   punteggioCompatibilita(tedesco, { province: 'TO', classi: ['A-022'], titolo: 'Interpello di tedesco' }),
 );
 
-/* --------------------------- 3) CABLAGGIO ---------------------------------- */
+console.log('\n— Colore del MATCH della vetrina «Opportunità mappate» (§26.106) —');
+check('80% → match ALTO', 'alto', livelloMatch(80));
+check('79% → match MEDIO', 'medio', livelloMatch(79));
+check('60% → match MEDIO (la fascia bassa parte sotto 60)', 'medio', livelloMatch(60));
+check('59% → match BASSO', 'basso', livelloMatch(59));
+check('punteggio corrotto → match BASSO (mai un NaN in pagina)', 'basso', livelloMatch(Number.NaN));
+check('verde #1FA055 = gradino 500 della palette (accent)', '#1FA055', COLORI_MATCH.alto.hex);
+check('giallo #E2B33C = gradino 500 della palette (warning)', '#E2B33C', COLORI_MATCH.medio.hex);
+check('rosso #D9534F = gradino 500 della palette (error)', '#D9534F', COLORI_MATCH.basso.hex);
+const tailwind = leggi('tailwind.config.js');
+check(
+  'i tre hex sono quelli DICHIARATI in `tailwind.config.js` (nessun colore orfano)',
+  true,
+  /#1fa055/i.test(tailwind) && /#e2b33c/i.test(tailwind) && /#d9534f/i.test(tailwind),
+);
+check('100% → etichetta «Match alto col profilo»', 'Match alto col profilo', stileMatch(100).etichetta);
+check('70% → etichetta «Match medio col profilo»', 'Match medio col profilo', stileMatch(70).etichetta);
+check('55% → etichetta «Match basso col profilo»', 'Match basso col profilo', stileMatch(55).etichetta);
+check(
+  'riga di RIPIEGO (< 60): etichetta trasparente «Opportunità di ripiego nel DB»',
+  ETICHETTA_RIPIEGO,
+  stileMatch(55, { ripiego: true }).etichetta,
+);
+check(
+  'un match forte non è mai dichiarato ripiego',
+  'Match alto col profilo',
+  stileMatch(95, { ripiego: true }).etichetta,
+);
+check('il pallino usa il token Tailwind, non uno stile inline', true, stileMatch(95).className.startsWith('bg-'));
+check('le soglie NON sono riscritte nella vetrina', true, livelloMatch(80) === 'alto' && livelloMatch(60) === 'medio');
 
+/* --------------------------- 3) CABLAGGIO ---------------------------------- */
 console.log('\n— Cablaggio: card/modale, feed, ordine della bacheca —');
 const card = leggi('src/components/InterpelloCard.tsx');
 const modale = leggi('src/components/InterpelloDettaglioModal.tsx');
@@ -159,6 +193,17 @@ check(
 check('feed: delega alla bacheca pura', true, /bachecaInterpelli\(/.test(feed));
 check('bacheca: applica il punteggio delle modali', true, /valutaCompatibilita\(/.test(bacheca));
 check('bacheca: prima la compatibilità, poi la scadenza', true, /const ca = a\.compatibilita \?\? 100;/.test(dashboard));
+const elencoOpportunita = leggi('src/pages/dashboard/components/ElencoOpportunita.tsx');
+check(
+  'vetrina «Opportunità mappate»: colore del match dalla banda condivisa',
+  true,
+  /stileMatch\(i\.compatibilita/.test(elencoOpportunita),
+);
+check(
+  'vetrina: una riga di ripiego si dichiara (mai un match finto)',
+  true,
+  /ripiego: i\.ripiego === true/.test(elencoOpportunita) && /match\.etichetta/.test(elencoOpportunita),
+);
 check('il punteggio vive nel motore', true, /export function punteggioCompatibilita\(/.test(motore));
 check('le soglie vivono solo nel modulo condiviso', true, /SOGLIA_COMPATIBILITA_ROSSO = 60/.test(leggi('src/lib/compatibilita.ts')));
 

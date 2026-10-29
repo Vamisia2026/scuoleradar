@@ -30,7 +30,11 @@
  *      — tipicamente il suggerimento EXTRA del sostegno (§26.45) — **non entra in
  *      bacheca**: nessun cap, nessuna quota (`riempitivoNonPertinente`);
  *   6. **cap dinamico dei riempitivi** (`limitaRiempitivi`) sui soli riempitivi
- *      PERTINENTI, che non tocca le scuole preferite.
+ *      PERTINENTI, che non tocca le scuole preferite;
+ *   7. **paracadute «5 osso-da-mordere»** (§26.106): sotto i 5 risultati la coda si
+ *      completa con le MIGLIORI righe della scorta — opportunità vere che il Radar non
+ *      aggancia — marcate `ripiego` e dichiarate in vetrina. La scorta esclude righe
+ *      senza scadenza, contorno, blacklist e avvisi oltre i 60 km senza parola del bando.
  *
  * Perché è un modulo PURO e non codice dentro l'hook: la stessa logica serve a
  * guardie e verifiche senza React, e `useInterpelliFeed` resta un contenitore di
@@ -38,13 +42,18 @@
  */
 import type { Interpello } from '../data/interpelli';
 import type { OrdineScuola } from '../data/ordiniMaterie';
-import { valutaCompatibilita, type ProfiloModali } from './compatibilitaGraduata';
+import {
+  valutaCompatibilita,
+  type ProfiloModali,
+  type ValutazioneCompatibilita,
+} from './compatibilitaGraduata';
 import { giudizioScuole } from './filtriScuole';
 import { avvisoCompatibileConProfilo, avvisoDiSostegno, profiloAderisceSostegno } from './matchingEngine';
 import { classeVicina } from './punteggioClasse';
 import { motivoRigaNonOpportunitaAvviso } from './qualitaAvviso';
-import { limitaRiempitivi, riempitivoNonPertinente } from './riempitivi';
+import { limitaRiempitivi, paracaduteCinque, riempitivoNonPertinente } from './riempitivi';
 import { eOpportunitaConScadenza } from './scadenza';
+
 
 /** Profilo completo della bacheca: criteri del Radar + liste scuole. */
 export interface ProfiloBacheca extends ProfiloModali {
@@ -78,6 +87,21 @@ export interface EsitoBacheca {
   riempitiviEsclusi: number;
   /** Riempitivi tolti dal cap dinamico. */
   riempitiviNascosti: number;
+  /**
+   * Righe entrate con il PARACADUTE «5 osso-da-mordere» (§26.106): la vetrina era sotto
+   * `MINIMO_BACHECA` e la coda è stata completata dalla scorta. Sono dichiarate `ripiego`.
+   */
+  ripieghiInBacheca: number;
+}
+
+/** Candidato di RIPIEGO (§26.106): opportunità vera non agganciata dal Radar, marcata `ripiego`. */
+function candidatoRipiego(i: Interpello, valutazione: ValutazioneCompatibilita): Interpello {
+  return {
+    ...i,
+    compatibilita: valutazione.punteggio,
+    motivoCompatibilita: valutazione.motivi.join(' · ') || undefined,
+    ripiego: true,
+  };
 }
 
 /** Avviso minimo per le modali, derivato dall'interpello della bacheca. */
@@ -101,6 +125,9 @@ export function bachecaInterpelli(
   profilo: ProfiloBacheca,
 ): EsitoBacheca {
   const inBacheca: Interpello[] = [];
+  // SCORTA del paracadute «5 osso-da-mordere» (§26.106): le opportunità VERE che il Radar
+  // non aggancia, pronte a completare la vetrina se resta sotto i 5 risultati.
+  const scorta: Interpello[] = [];
   let righeNonOpportunita = 0;
   let senzaScadenza = 0;
   let esclusiBlacklist = 0;
@@ -158,7 +185,12 @@ export function bachecaInterpelli(
     // sfuma un punteggio che le preferenze hanno già deciso, e non crea l'opportunità.
     if (!scuole.preferita) {
       const inRadar = confermato || classeVicina(profilo, avviso) || jollyPieno;
-      if (!inRadar) continue;
+      if (!inRadar) {
+        // SCORTA (§26.106): opportunità vera che il Radar non aggancia. Entra solo se la
+        // geografia è AMMESSA: oltre i 60 km senza la parola del bando resta il blocco totale.
+        if (!valutazione.escluso) scorta.push(candidatoRipiego(i, valutazione));
+        continue;
+      }
     }
     if (valutazione.escluso) continue;
     // `0` = nessuna modale applicabile: si conserva il valore dal DB.
@@ -177,6 +209,9 @@ export function bachecaInterpelli(
       )
     ) {
       riempitiviEsclusi += 1;
+      // SCORTA (§26.106): la riga ha passato le porte d'ingresso ed è solo «poco
+      // pertinente»: è esattamente la migliore candidata a completare la vetrina.
+      scorta.push(candidatoRipiego(i, valutazione));
       continue;
     }
     if (scuole.preferita) forzate += 1;
@@ -195,13 +230,19 @@ export function bachecaInterpelli(
   }
 
   const cap = limitaRiempitivi(inBacheca, { proteggi: (v) => v.scuolaPreferita === true });
+  // PARACADUTE «5 OSSO-DA-MORDERE» (§26.106): sotto i cinque risultati la vetrina si
+  // completa con le migliori righe della scorta (già marcate `ripiego`, dichiarate in UI).
+  // Se il database non ha cinque opportunità ammissibili la lista resta corta: il
+  // paracadute non inventa righe e non scavalca il blocco geografico.
+  const paracadute = paracaduteCinque(cap.lista, scorta);
   return {
-    lista: cap.lista,
+    lista: paracadute.lista,
     righeNonOpportunita,
     senzaScadenza,
     esclusiBlacklist,
     forzate,
     riempitiviEsclusi,
     riempitiviNascosti: cap.riempitiviNascosti,
+    ripieghiInBacheca: paracadute.aggiunti,
   };
 }

@@ -29,9 +29,24 @@
  * Il perimetro resta quello dichiarato: un match va provato dai TOKEN del testo o dalle
  * aree disciplinari, mai da un giudizio a caso. Nessuna provenienza speciale: competenze
  * di catalogo e parole chiave libere valgono allo stesso modo.
+ *
+ * DUE BOOST (§26.106). La stessa rilevazione serve al «motore multi-fattore» e ha due
+ * sole fasce, dichiarate nell'esito (`EsitoCompetenze.boost`):
+ *
+ *   · **ALTO** — la parola richiesta dall'utente c'è **per intero**: tutti i suoi token
+ *     oppure una PAROLA DEL BANDO riconosciuta (`PNRR`, `PON`, `POR`, `FSE`, `Tutor`,
+ *     `Laboratorio didattico`) anche nella forma che le scuole usano («Piano Operativo
+ *     Nazionale» → `PON`). È la stessa fascia che, oltre i 60 km, fa entrare l'avviso
+ *     d'ufficio al pavimento del jolly (`src/lib/jollySemantico.ts`): la parola
+ *     specifica è l'unica chiave che scavalca il blocco geografico, e la distanza
+ *     resta dichiarata nel numero (60, mai un 100% finto);
+ *   · **MEDIO** — la parola è CORRELATA: alcuni token in comune («vicina») oppure la
+ *     stessa area disciplinare / un ponte curato fra le aree («riconducibile»).
+ *     Sfuma il voto, non apre la bacheca e non scavalca nulla.
  */
-import { areeDi, areeInComune, ponteTraAree } from './areeDisciplinari';
+import { areeDi, areeInComune, paroleBandoDi, ponteTraAree } from './areeDisciplinari';
 import { etichetteCompetenzeProfilo, tokenCompetenza } from './matchingEngine';
+
 
 /**
  * TETTO del livello SECONDARIO (punti %): le competenze non pesano più di così. È lo
@@ -79,12 +94,28 @@ export interface EsitoCompetenze {
   grado: GradoCompetenza | null;
   /** Corrispondenze AGGIUNTIVE contate oltre la prevalente (0 = una sola). */
   incrementi: number;
+  /**
+   * FASCIA DEL BOOST (§26.106): `alto` = parola richiesta trovata per intero o parola
+   * del bando riconosciuta; `medio` = parola correlata (token parziali, area, ponte);
+   * `null` = nessuna corrispondenza (il livello secondario tace).
+   */
+  boost: BoostCompetenza;
   /** Motivi leggibili (competenza riconosciuta, ponte, conteggi, tetto). */
   motivi: string[];
 }
 
+
 /** Grado di un match fra una competenza del profilo e il testo dell'avviso. */
 export type GradoCompetenza = 'esatta' | 'vicina' | 'riconducibile';
+
+/**
+ * FASCIA DEL BOOST (§26.106): `alto` = la parola richiesta c'è per intero (o è una
+ * parola del bando riconosciuta), `medio` = la parola è correlata (token parziali,
+ * stessa area, ponte curato), `null` = nessuna corrispondenza. Due fasce, una sola
+ * misura: è il grado del match più forte a deciderle.
+ */
+export type BoostCompetenza = 'alto' | 'medio' | null;
+
 
 /** Match di UNA competenza del profilo col testo dell'avviso. */
 interface MatchKeyword {
@@ -93,13 +124,25 @@ interface MatchKeyword {
   dettaglio: string;
 }
 
-/** Valuta UNA parola chiave del profilo: token, aree disciplinari, ponte. */
+/** Valuta UNA parola chiave del profilo: parola del bando, token, aree disciplinari, ponte. */
 function valutaKeyword(
   keyword: string,
   tokenAvviso: ReadonlySet<string>,
   areeAvviso: ReadonlySet<string>,
+  bandoAvviso: ReadonlySet<string>,
 ): MatchKeyword | null {
+  // PAROLA DEL BANDO (§26.106): «PNRR», «PON», «POR», «FSE», «Tutor», «Laboratorio».
+  // Sta PRIMA dei token perché le sigle di tre lettere e le parole generiche non
+  // arrivano a `tokenCompetenza` (filtro di lunghezza + lista dei generici). La parola
+  // del bando copre anche i sinonimi: «Piano Operativo Nazionale» → `PON`.
+  const bandoUtente = paroleBandoDi(keyword);
+  for (const chiave of bandoUtente) {
+    if (bandoAvviso.has(chiave)) {
+      return { keyword, grado: 'esatta', dettaglio: `parola del bando: ${chiave}` };
+    }
+  }
   const tokens = tokenCompetenza(keyword);
+
   if (tokens.length === 0) {
     // Parola chiave troppo corta/generica per i token: conta solo l'area.
     const comuni = areeInComune(areeDi(keyword), areeAvviso);
@@ -164,14 +207,16 @@ export function punteggioCompetenze(
     competenza: null,
     grado: null,
     incrementi: 0,
+    boost: null,
     motivi: [],
   };
   if (competenze.length === 0) return nessuno;
   const testoAvviso = `${avviso.materia ?? ''} ${avviso.titolo ?? ''}`;
   const tokenAvviso = new Set(tokenCompetenza(testoAvviso));
   const areeAvviso = areeDi(testoAvviso);
+  const bandoAvviso = paroleBandoDi(testoAvviso);
   const matches = competenze
-    .map((k) => valutaKeyword(k, tokenAvviso, areeAvviso))
+    .map((k) => valutaKeyword(k, tokenAvviso, areeAvviso, bandoAvviso))
     .filter((m): m is MatchKeyword => m !== null);
   if (matches.length === 0) return nessuno;
 
@@ -194,6 +239,9 @@ export function punteggioCompetenze(
     competenza: prevalente.keyword,
     grado: prevalente.grado,
     incrementi,
+    // DUE FASCE (§26.106): «esatta» è il boost ALTO (parola richiesta per intero o
+    // parola del bando), ogni altra corrispondenza è il boost MEDIO (correlata).
+    boost: prevalente.grado === 'esatta' ? 'alto' : 'medio',
     motivi,
   };
 }

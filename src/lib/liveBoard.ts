@@ -20,15 +20,22 @@
  * nome, per nessuna strada. La riga che entra ha sempre la sua scuola e
  * `anagraficaParziale` dichiara lo stato dell'anagrafica (`completo`/`parziale`).
  *
- * REGOLA FERREA DELLA SCADENZA (§26.71, direttiva 16/10/2026; finestra §26.82,
- * 25/10/2026): la vetrina è fatta di OPPORTUNITÀ — senza una `expiration_date`
- * dichiarata, non ancora passata e DENTRO I 15 GIORNI la riga NON entra
- * (`eOpportunitaConScadenza`). Le pagine di archivio, i regolamenti e gli indici
- * di classi di concorso che la fonte non data restano fuori: grazie alla vecchia
- * finestra dei 60 giorni entravano in bacheca come «Scadenza n/d» e gonfiavano il
- * conto degli avvisi attivi senza essere candidabili. Lo stesso vale per le
- * «scadenze» che in realtà sono la FINE di un incarico annuale (2027): sembravano
- * opportunità lunghissime e restavano verdi per mesi.
+ * REGOLA FERREA DELLA SCADENZA (§26.71, direttiva 16/10/2026; volume §26.100,
+ * 28/10/2026): la vetrina è fatta di OPPORTUNITÀ — senza una `expiration_date`
+ * dichiarata e non ancora passata la riga NON entra (`eOpportunitaAperta`). Le
+ * pagine di archivio, i regolamenti e gli indici di classi di concorso che la
+ * fonte non data restano fuori: grazie alla vecchia finestra dei 60 giorni
+ * entravano in bacheca come «Scadenza n/d» e gonfiavano il conto degli avvisi
+ * attivi senza essere candidabili.
+ *
+ * Dal §26.100 **non c'è più un tetto in avanti**: la finestra di candidatura di
+ * 15 giorni (§26.82) resta una promessa del FEED e del matching, non della
+ * vetrina. Un avviso che scade fra un mese è ancora un'opportunità aperta e il
+ * cliente vuole vederla: nasconderla faceva sembrare il tabellone più povero del
+ * database. Le «scadenze» che in realtà sono la FINE di un incarico annuale
+ * (2027) non spariscono più in silenzio: restano visibili con la banda blu
+ * «Scadenza lontana» (`lib/scadenzaSemaforo.stileScadenza`), che dice «c'è tempo,
+ * ma non è un termine urgente».
  *
  * TITOLO UTILE (§26.76, 22/10/2026): un titolo composto dalla sola riga di
  * pubblicazione («PUBBLICATO IL 18/10/2026») non descrive nulla e non entra in
@@ -38,7 +45,7 @@
  * `nomeIstitutoPresentabile` — mai un codice amministrativo al posto del nome.
  */
 
-import { eOpportunitaConScadenza, GIORNI_FINESTRA_SENZA_SCADENZA } from './scadenza.ts';
+import { eOpportunitaAperta, GIORNI_FINESTRA_SENZA_SCADENZA } from './scadenza.ts';
 import { nomeScuolaBoard, nomeScuolaRiga } from './nomeScuolaRiga.ts';
 import { eTitoloSoloData, nomeScuolaDaTitolo } from './titoloBoard.ts';
 import { pulisciTitoloAvviso } from './alertInterpello';
@@ -136,6 +143,10 @@ export function rigaPresentabileVetrina(r: RigaBoard): boolean {
  * niente «Scadenza n/d» in vetrina — le pagine di archivio e gli indici di codici
  * che la fonte non data non sono opportunità).
  *
+ * Dal §26.100 il gate NON applica più l'orizzonte di candidatura: la bacheca
+ * mostra tutto il volume ATTIVO (`eOpportunitaAperta`), mentre feed e matching
+ * continuano a lavorare dentro i 15 giorni (`eOpportunitaConScadenza`).
+ *
  * ⛔ **GATE STRETTO del nome scuola** (§26.59, direttiva 05/10/2026): in vetrina
  * entra solo una riga di cui si sa QUALE scuola emette l'avviso (`nomeScuolaRiga`).
  * Restano fuori sia le righe con il solo nome grezzo del bando sia quelle senza
@@ -156,7 +167,9 @@ export function preparaRigheBoard<R extends RigaBoard>(
     // giorni per gli avvisi che la fonte non data è ritirata da questa superficie:
     // nei dati reali quelle righe sono pagine di archivio, regolamenti e indici di
     // classi di concorso — contorno che non si candida.
-    if (!eOpportunitaConScadenza(scadenza, adesso)) continue;
+    // Dal §26.100 NON c'è un tetto in avanti: il termine lungo è un'opportunità
+    // aperta e va mostrata (banda blu «Scadenza lontana»), non nascosta.
+    if (!eOpportunitaAperta(scadenza, adesso)) continue;
     const scadenzaValida: string | null = scadenza;
 
     // TITOLO VUOTO (§26.76, 22/10/2026): «PUBBLICATO IL 18/10/2026» non descrive

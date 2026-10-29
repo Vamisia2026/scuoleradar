@@ -10,14 +10,15 @@
  *    spacciato per scadenza).
  *  - Banda, etichetta e colori arrivano da `lib/scadenzaSemaforo.stileScadenza`:
  *    UNA regola per tabellone, scheda avviso e feed della dashboard.
- *  - I giorni sono di CALENDARIO, semaforo a TRE luci: < 24 ore rosso pieno
- *    (rose-500, «Scade oggi») · 24–72 ore oro brillante (amber-400, «Scade
- *    domani» / «Ultime 72h») · dal terzo giorno all'orizzonte di 15 verde pieno
- *    (emerald-500, «In corso») · oltre l'orizzonte ardesia «Scadenza fuori
- *    finestra» (fine incarico, avvio progetto: non è un termine per candidarsi).
- *    Le tre luci d'allarme sono tinte piene BRILLANTI con etichetta quasi nera
- *    (`text-slate-950`, §26.98) e nessuna banda pulsa: le etichette dicono lo
- *    STATO, non un conto alla rovescia — il colore non deve invitare a correre.
+ *  - I giorni sono di CALENDARIO, semaforo a QUATTRO luci (§26.100): < 24 ore
+ *    rosso pieno (rose-600, «Scade oggi») · 24–72 ore arancio pieno (orange-700,
+ *    «Scade domani» / «Ultime 72h») · dal terzo giorno all'orizzonte di 15 verde
+ *    pieno (emerald-700, «In corso») · oltre l'orizzonte blu pieno (sky-700,
+ *    «Scadenza lontana»: fine incarico, avvio progetto — non un termine urgente).
+ *    Ogni banda è una tinta SATURA con etichetta BIANCA in grassetto (`text-white`,
+ *    §26.100) e nessuna banda pulsa: le etichette dicono lo STATO, non un conto
+ *    alla rovescia — il colore non deve invitare a correre. Le due bande neutre
+ *    («Scaduto», «Scadenza n/d») restano ardesia media, mai nere.
  *  - Il campo `fonte` dichiara la provenienza: `scadenza` o `nessuna`
  *    (il vuoto si dichiara, non si riempie).
  *  - La denominazione della scuola viene SEMPRE dalla fonte; se il decode del
@@ -128,11 +129,11 @@ function badgeDaScadenza(scad: Date): BadgeUrgenza {
  * Badge di urgenza della colonna «Scadenza» del tabellone.
  *
  * Colour coding di prodotto (UNICA fonte di verità,
- * `lib/scadenzaSemaforo.stileScadenza`, §26.89 / §26.98):
- *   0 giorni (< 24h)     → rosso pieno    (rose-500)    «Scade oggi»
- *   1–2 giorni (24–72h)  → oro brillante  (amber-400)   «Scade domani» · «Ultime 72h»
- *   3 … 15 giorni        → verde pieno    (emerald-500) «In corso»
- *   oltre 15 giorni      → ardesia        «Scadenza fuori finestra»
+ * `lib/scadenzaSemaforo.stileScadenza`, §26.89 / §26.100):
+ *   0 giorni (< 24h)     → rosso pieno    (rose-600)    «Scade oggi»
+ *   1–2 giorni (24–72h)  → arancio pieno  (orange-700)  «Scade domani» · «Ultime 72h»
+ *   3 … 15 giorni        → verde pieno    (emerald-700) «In corso»
+ *   oltre 15 giorni      → blu pieno      (sky-700)     «Scadenza lontana»
  *
  * Ordine di risoluzione RIGOROSO:
  *   1. `expirationDate` assente → banda NEUTRA dichiarata («Scadenza n/d»).

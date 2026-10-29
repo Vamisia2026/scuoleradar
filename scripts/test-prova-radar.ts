@@ -232,5 +232,15 @@ check(
     /order\('expiration_date', \{ ascending: true \}\)/.test(queryProva),
 );
 
+// MONITORAGGIO TEMPORANEO (§26.107): il box accende il flag di 7 giorni e manda la
+// provincia al RADAR GENERALE (coda regionale) senza far aspettare il responso.
+const monitoraggioCablaggio =
+  /setMonitoraggio\(registraProvaRadar\(provincia\)\)/.test(simulatore) &&
+  /monitoraggio=\{monitoraggio\}/.test(simulatore) &&
+  /RigaMonitoraggio monitoraggio=\{monitoraggio\}/.test(responsoProva) &&
+  /avviaMonitoraggioProva\(provincia, adesso\)/.test(queryProva) &&
+  /void richiediScansioneProva\(monitoraggio\.provincia\)/.test(queryProva);
+check('prova → monitoraggio 7 giorni → coda regionale (Radar Generale)', true, monitoraggioCablaggio);
+
 console.log(errori === 0 ? '\n✅ PROVA DEL RADAR: nessun problema' : `\n❌ PROVA DEL RADAR: ${errori} errore/i`);
 process.exitCode = errori === 0 ? 0 : 1;

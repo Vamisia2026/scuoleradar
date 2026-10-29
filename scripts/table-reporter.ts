@@ -111,6 +111,11 @@ import {
 // ogni regione) diventano target del giro `--nazionale`, senza aspettare che la
 // coda `discovered_links` sia stata seminata a mano.
 import { targetWhitelist } from '../src/scraper/whitelistTargets.ts';
+// §26.101 — SGRANATURA: quali voci di un elenco sono AVVISI da aprire (mai la
+// home, mai una sezione: §26.99) e quanti documenti si concedono per elenco,
+// per giro e per istituto. I tetti arrivano dall'ambiente, non dal codice.
+import { finestraElenco, limitiSgranatura, vociDaSgranare } from '../src/scraper/sgranatura.ts';
+
 // Nome dell'istituto scritto dalla fonte accanto al codice: serve alla lettura
 // adattiva degli elenchi, dove la scuola è nel titolo dell'avviso.
 import { scuolaDaRiga } from '../src/scraper/scuolaDaRiga.ts';
@@ -132,6 +137,9 @@ import {
 // obbligatoria): quando la tabella o l'elenco non la riportano, la si cerca nel
 // corpo del documento prima di scartare una riga valida come «senza scadenza».
 import { testo as testoHtml } from '../src/lib/universalHtml.ts';
+// §26.102 — la pagina successiva di un elenco si legge in `lib/paginaSuccessiva`
+// (estratto dal lettore HTML per la soglia dei 250 righe): qui si segue.
+import { urlPaginaSuccessiva } from '../src/lib/paginaSuccessiva.ts';
 // §26.94 — deep crawl degli istituti: dalla scuola certificata alla sua HOME
 // ufficiale, poi ai link «Interpelli / Albo» che la scuola pubblica davvero.
 import { leggiPagineInterpelli } from '../src/scraper/deepCrawlScuole.ts';
@@ -141,8 +149,14 @@ import { linkAllegatiInterpello } from '../src/scraper/linkScuola.ts';
 // quando la piattaforma risponde con un viewer il PDF va cercato dentro.
 import {
   eAllegatoPiattaforma,
+  eAvvisoSuPiattaforma,
+  eFileDocumento,
   urlDocumentoInHtml,
 } from '../src/scraper/allegatiPiattaforma.ts';
+// §26.101 — la tabella dentro il documento dell'avviso: una riga per scuola
+// (codice, classe, scadenza, link dell'avviso). È il modo in cui gli Uffici
+// Territoriali pubblicano davvero: un post e un PDF con N istituti dentro.
+import { righeTabellaInterpelli } from '../src/scraper/tabellaInterpelliPdf.ts';
 // §26.96 — i cinque campi che il DOCUMENTO dichiara (classi, codice, provincia,
 // scadenza, recapiti): la pagina-elenco spesso non li ha.
 import { campiDaDocumento } from '../src/scraper/campiDocumento.ts';
@@ -287,29 +301,53 @@ const MAX_PER_REGIONE = (() => {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 })();
 
+// §26.101 — TETTI DELL'ATTACCO DI MASSA. I numeri non sono più scritti qui: la
+// politica (quanti documenti per elenco, per giro, per istituto) vive in
+// `src/scraper/sgranatura.ts` con default dichiarati e override d'ambiente
+// (`SGRANATURA_ELENCO`, `SGRANATURA_RUN`, `SGRANATURA_ISTITUTI`, …). Fino al
+// 28/10/2026 un elenco regionale da 60 avvisi perdeva 50 termini su 60 perché
+// il tetto era 10 per pagina: il portale veniva letto, le opportunità no.
+const LIMITI = limitiSgranatura(process.env);
+
+/**
+ * §26.101 — segmento della FINESTRA ROTANTE sugli elenchi lunghi. Default: l'ora
+ * corrente (i tre run quotidiani leggono tre segmenti diversi); override
+ * esplicito con `SGRANATURA_FINESTRA` per una campagna manuale.
+ */
+const GIRO_SGRANATURA = (() => {
+  const n = Number(process.env.SGRANATURA_FINESTRA ?? Math.floor(Date.now() / 3_600_000));
+  return Number.isFinite(n) ? Math.floor(n) : 0;
+})();
+
 // §26.94 — DEEP CRAWL degli istituti: quante scuole visitare in un giro
-// (`--max-scuole=N`, 0 = nessuna) e quante pagine per istituto. Il tetto esiste
-// perché un albo pretorio può essere enorme: due pagine per scuola sono già
-// ~180 richieste su un giro nazionale.
+// (`--max-scuole=N`, 0 = nessuna) e quante pagine per istituto. Il tetto resta
+// (un albo pretorio può essere enorme), ma non è più un campione: il default è
+// `istitutiPerGiro` e le pagine per istituto vengono dalla stessa politica.
 const MAX_SCUOLE_DEEP = (() => {
   const arg = process.argv.find((a) => a.startsWith('--max-scuole='));
-  const n = Number(arg?.split('=')[1] ?? process.env.MAX_SCUOLE ?? 60);
-  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 60;
+  const n = Number(arg?.split('=')[1] ?? process.env.MAX_SCUOLE ?? LIMITI.istitutiPerGiro);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : LIMITI.istitutiPerGiro;
 })();
 const DEEP_CRAWL = !process.argv.includes('--no-deep') && MAX_SCUOLE_DEEP > 0;
-const MAX_PAGINE_SCUOLA = 2;
+const MAX_PAGINE_SCUOLA = Math.max(1, LIMITI.paginePerAlbo);
 
 // §26.94/§26.95 — scadenze lette nel CORPO di un avviso quando l'elenco non la
 // dichiara: tetto per target e per giro (è rete, non parsing). Dal 26/10/2026 il
 // corpo comprende gli ALLEGATI PDF, quindi le riserve si possono alzare senza
 // toccare il numero di target: `APPROFONDIMENTI_RUN` / `APPROFONDIMENTI_SCUOLE_RUN`.
-const MAX_APPROFONDIMENTI_TARGET = 10;
+const MAX_APPROFONDIMENTI_TARGET = LIMITI.perElenco;
 function riservaDaAmbiente(chiave: string, predefinito: number): number {
   const n = Number(process.env[chiave] ?? predefinito);
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : predefinito;
 }
-const MAX_APPROFONDIMENTI_RUN = riservaDaAmbiente('APPROFONDIMENTI_RUN', 200);
-const MAX_APPROFONDIMENTI_SCUOLE_RUN = riservaDaAmbiente('APPROFONDIMENTI_SCUOLE_RUN', 180);
+const MAX_APPROFONDIMENTI_RUN = riservaDaAmbiente('APPROFONDIMENTI_RUN', LIMITI.perGiro);
+const MAX_APPROFONDIMENTI_SCUOLE_RUN = riservaDaAmbiente('APPROFONDIMENTI_SCUOLE_RUN', LIMITI.perGiro);
+/**
+ * §26.102 — PAGINE D'ELENCO per giro: quante pagine 2…N si scaricano in tutto
+ * il run (è rete, non parsing). Il tetto per singolo target è `pagineElenco`;
+ * questa riserva evita che un archivio da 300 pagine divori il giro.
+ */
+let pagineElencoResidue = riservaDaAmbiente('PAGINE_ELENCO_RUN', 600);
 const APPROFONDIMENTO_TIMEOUT_MS = 10_000;
 /** Riserve separate: il deep crawl non consuma quella del giro sugli hub. */
 let approfondimentiTarget = MAX_APPROFONDIMENTI_RUN;
@@ -1865,10 +1903,97 @@ async function scadenzaDaCorpoAvviso(
   return (await leggiAvvisoCompleto(url, da)).deadline;
 }
 
+/** Documenti aperti dentro un avviso-pagina (tabella delle scuole che assumono). */
+const MAX_DOCUMENTI_AVVISO = 2;
+
+/**
+ * §26.101 — SGRANATURA DEL DOCUMENTO: da un avviso-pagina alle SUE righe.
+ *
+ * Il caso che ha reso necessario questo passaggio: l'avviso n. 72 dell'ATP
+ * Bergamo è un POST che dichiara «Data Scadenza: -» e allega `Interpelli n. 72.pdf`.
+ * Dentro quel PDF c'è una tabella con QUATTRO istituti, ognuno con codice
+ * meccanografico, classe di concorso, termine e link dell'avviso. Letto come un
+ * unico documento era «un avviso senza scadenza» (0 record); letto per righe sono
+ * quattro opportunità distinte, già certificate.
+ *
+ * Regole (nessuna nuova eccezione di qualità): la riga deve dichiarare il
+ * termine (`tabellaInterpelliPdf`), la scuola deve esistere in `schools_master`
+ * (`scuolaCertificata`) e il link deve essere quello della riga (la pagina
+ * dell'istituto o la sua bacheca su piattaforma) — altrimenti resta il documento
+ * stesso. Consuma la riserva degli approfondimenti, come ogni apertura.
+ */
+async function sgranaDocumentoAvviso(
+  voce: ExtractedInterpello,
+  anagrafica: ReturnType<typeof caricaAnagrafica>,
+  visti: Set<string>,
+): Promise<{ records: InterpelloRecord[]; righe: number; conTermine: number }> {
+  const esito = { records: [] as InterpelloRecord[], righe: 0, conTermine: 0 };
+  const url = (voce.directUrl ?? '').trim();
+  if (!/^https?:\/\//i.test(url) || approfondimentiTarget <= 0) return esito;
+
+  let documenti: string[];
+  if (eFileDocumento(url)) {
+    documenti = [url];
+  } else {
+    approfondimentiTarget -= 1;
+    try {
+      const pagina = await scaricaPaginaLeggera(url);
+      if (pagina.status >= 400 || !pagina.contentType.includes('html')) return esito;
+      documenti = urlDocumentoInHtml(pagina.html, url, MAX_DOCUMENTI_AVVISO);
+    } catch {
+      return esito;
+    }
+  }
+
+  for (const documento of documenti) {
+    if (approfondimentiTarget <= 0) break;
+    approfondimentiTarget -= 1;
+    const risposta = await scaricaDocumentoPdf(documento);
+    if (!risposta) continue;
+    let byte: Uint8Array;
+    try {
+      byte = new Uint8Array(await risposta.arrayBuffer());
+    } catch {
+      continue;
+    }
+    if (byte.byteLength === 0 || byte.byteLength > MAX_BYTE_PDF) continue;
+    const pdf = estraiTestoPdf(byte);
+    if (!pdf.testo) continue;
+    statisticaPdf.aperti += 1;
+    statisticaPdf.conTesto += 1;
+
+    for (const riga of righeTabellaInterpelli(pdf.testo)) {
+      esito.righe += 1;
+      if (!riga.deadline) continue;
+      esito.conTermine += 1;
+      if (isExpired(riga.deadline) || !entroOrizzonte(riga.deadline)) continue;
+      const scuola = scuolaCertificata(anagrafica, { codice: riga.schoolCode });
+      if (!scuola) continue;
+      const materia = [riga.classCode, riga.subject].filter(Boolean).join(' ');
+      const record = recordDaVoceScuola(
+        {
+          title: `Interpello ${materia} — ${riga.schoolName}`,
+          schoolName: scuola.nome ?? riga.schoolName,
+          classCodes: riga.classCode ? [riga.classCode] : [],
+          directUrl: riga.sourceUrl ?? documento,
+        },
+        riga.deadline,
+        scuola,
+        visti,
+      );
+      if (record) esito.records.push(record);
+    }
+  }
+  if (esito.conTermine > 0) statisticaPdf.conScadenza += 1;
+  return esito;
+}
+
 /**
  * Recupera la scadenza dal corpo delle voci che non la dichiarano e le
- * converte in record. Tetti: `MAX_APPROFONDIMENTI_TARGET` per pagina,
- * `MAX_APPROFONDIMENTI_RUN` per giro (è rete, non parsing).
+ * converte in record. Tetti: `MAX_APPROFONDIMENTI_TARGET` (`perElenco`) per
+ * pagina, `MAX_APPROFONDIMENTI_RUN` (`perGiro`) per giro — è rete, non parsing.
+ * Le voci si scelgono con `vociDaSgranare` (§26.101): si aprono gli AVVISI, mai
+ * la pagina, la home o una sezione.
  */
 async function approfondisciVociSenzaScadenza(
   universale: UniversalExtractionResult | undefined,
@@ -1880,6 +2005,7 @@ async function approfondisciVociSenzaScadenza(
   trovate: number;
   daCorpoScuola: number;
   oltreOrizzonte: number;
+  righeTabella: number;
 }> {
   const esito = {
     records: [],
@@ -1887,24 +2013,67 @@ async function approfondisciVociSenzaScadenza(
     trovate: 0,
     daCorpoScuola: 0,
     oltreOrizzonte: 0,
+    righeTabella: 0,
   } as {
     records: InterpelloRecord[];
     richieste: number;
     trovate: number;
     daCorpoScuola: number;
     oltreOrizzonte: number;
+    righeTabella: number;
   };
   if (!universale?.success) return esito;
-  const senzaScadenza = universale.items.filter((voce) => !voce.expirationDate);
-  if (senzaScadenza.length === 0) return esito;
+  // §26.101 — SGRANATURA: le voci dell'elenco che non dichiarano la scadenza si
+  // aprono UNA PER UNA, ma solo se sono avvisi: la pagina stessa, la home e le
+  // sezioni/indici restano fuori (§26.99 «un avviso si apre su un avviso»). Fino
+  // al 28/10/2026 si aprivano al massimo 10 documenti per pagina: era il tetto,
+  // non il portale, a decidere quante opportunità esistevano.
+  const apribili = vociDaSgranare(
+    universale.items.filter((voce) => !voce.expirationDate),
+    { paginaUrl: target.url },
+  );
+  if (apribili.length === 0) return esito;
+  // §26.101 — finestra ROTANTE: un ufficio dichiara 200 voci e il tetto per
+  // pagina è 40, quindi senza rotazione si aprono sempre le prime 40 e
+  // l'archivio sotto non si legge mai. La finestra avanza a ogni ora del giorno.
+  const finestra = finestraElenco(apribili.length, MAX_APPROFONDIMENTI_TARGET, GIRO_SGRANATURA);
+  const candidate = apribili.slice(finestra.da, finestra.a);
+  if (candidate.length === 0) return esito;
 
   const anagrafica = caricaAnagrafica();
   const visti = new Set(giaPresenti.map((record) => record.hash_id));
-  const tetto = Math.min(MAX_APPROFONDIMENTI_TARGET, approfondimentiTarget);
+  const tetto = Math.min(candidate.length, approfondimentiTarget);
+  const scadenzaElenco = Date.now() + Math.max(1_000, LIMITI.millisecondiElenco);
+  if (apribili.length > tetto) {
+    console.log(
+      `[table-reporter] Sgranatura ${target.province ?? target.region ?? 'N/D'}: ` +
+        `${apribili.length} avvisi apribili, finestra ${finestra.da}-${finestra.a}, ` +
+        `${tetto} aperti (riserva del giro: ${approfondimentiTarget}).`,
+    );
+  }
 
-  for (const voce of senzaScadenza) {
+  for (const voce of candidate) {
     if (esito.richieste >= tetto) break;
+    // §26.101 — un portale lento non deve congelare il giro: allo scadere del
+    // tempo si smette di aprire questo elenco e si passa al target successivo.
+    if (Date.now() > scadenzaElenco) {
+      console.log(
+        `[table-reporter] Sgranatura ${target.province ?? target.region ?? 'N/D'}: ` +
+          `tempo dell'elenco esaurito (${LIMITI.millisecondiElenco} ms) dopo ${esito.richieste} aperture — ` +
+          `le voci non lette restano al giro successivo.`,
+      );
+      break;
+    }
     esito.richieste += 1;
+    // §26.101 — prima il DOCUMENTO dell'avviso: se è un PDF tabellare, ogni riga
+    // (una per istituto) è un record a sé con scuola, classe e link. Solo quando
+    // la tabella non c'è si prova la lettura «un termine per pagina».
+    const daDocumento = await sgranaDocumentoAvviso(voce, anagrafica, visti);
+    esito.righeTabella += daDocumento.righe;
+    if (daDocumento.records.length > 0) {
+      esito.records.push(...daDocumento.records);
+      continue;
+    }
     const documento = await leggiAvvisoCompleto(voce.directUrl, 'target', target.province);
     if (!documento.deadline) continue;
     esito.trovate += 1;
@@ -1942,9 +2111,10 @@ async function approfondisciVociSenzaScadenza(
 
   if (esito.richieste > 0) {
     console.log(
-      `[table-reporter] Scadenze dal corpo dell'avviso: ${esito.richieste} documenti letti → ` +
-        `${esito.trovate} termini dichiarati, ${esito.records.length} record ` +
-        `(${esito.daCorpoScuola} con scuola dal corpo; riserva: ${approfondimentiTarget}).`
+      `[table-reporter] Sgranatura (${apribili.length} avvisi apribili, finestra ${finestra.da}-${finestra.a}): ` +
+        `${esito.richieste} documenti letti → ${esito.trovate} termini dichiarati, ` +
+        `${esito.righeTabella} righe di tabella, ${esito.records.length} record ` +
+        `(${esito.daCorpoScuola} con scuola dal corpo) · riserva del giro: ${approfondimentiTarget}.`
     );
   }
   return esito;
@@ -2565,11 +2735,17 @@ function limitaPerRegione(targets: DiscoveredLink[]): DiscoveredLink[] {
   return out;
 }
 
-/** Host + percorso, senza slash finale né query: stessa pagina = stesso target. */
+/**
+ * Chiave di un target nel runner. §26.101 — la QUERY conta: gli elenchi
+ * provinciali della Liguria vivono sullo stesso percorso (`provincia.php?p=GE`,
+ * `?p=SP`, `?p=IM`, `?p=SV`) e una chiave che la ignorava fondeva quattro fonti
+ * verificate in una sola. `unisciTarget` e `CHIAVI_WHITELIST` usano questa.
+ */
 function chiaveUrl(url: string): string {
   try {
     const u = new URL(url);
-    return `${u.origin}${u.pathname.replace(/\/+$/, '')}`.toLowerCase();
+    const base = `${u.origin}${u.pathname.replace(/\/+$/, '')}`;
+    return (u.search ? `${base}?${new URLSearchParams(u.search).toString()}` : base).toLowerCase();
   } catch {
     return String(url ?? '').trim().toLowerCase().replace(/\/+$/, '');
   }
@@ -2610,12 +2786,13 @@ function stessoSito(url: string, home: string | null): boolean {
 const MAX_RECORD_SCUOLA = 40;
 /**
  * Tetto di documenti aperti per istituto (scadenza nel corpo, §26.94).
- * Dal 26/10/2026 questi documenti sono spesso PDF: sei aperture leggono un albo
- * realistico senza trasformare il deep crawl in un crawler del sito.
+ * Dal 26/10/2026 questi documenti sono spesso PDF; dal 29/10/2026 (§26.101) il
+ * numero viene dalla politica di sgranatura (`documentiPerIstituto`), così una
+ * campagna di massa alza la profondità senza toccare questo file.
  */
-const MAX_APPROFONDIMENTI_SCUOLA = 6;
+const MAX_APPROFONDIMENTI_SCUOLA = Math.max(1, LIMITI.documentiPerIstituto);
 /** Allegati PDF letti da una pagina d'albo quando l'elenco non dà voci. */
-const MAX_ALLEGATI_PAGINA = 2;
+const MAX_ALLEGATI_PAGINA = 4;
 /**
  * Albi nuovi iscritti in coda per giro: senza tetto un solo giro può aggiungere
  * centinaia di URL e il giro successivo diventa ingestibile. 120 copre gli
@@ -2682,8 +2859,12 @@ function recordDaVoceScuola(
   // §26.96 — UN'ECCEZIONE DICHIARATA: un FILE su una piattaforma documentale
   // (`…/avviso.pdf` su Argo, Gecodoc, Nuvola) è l'avviso ufficiale, non un login:
   // la regola dello «stesso sito» non si applica e il documento resta apribile.
+  // §26.101 — e vale anche per un link PROFONDO sulla bacheca della piattaforma
+  // (`nuvola.madisoft.it/bacheca-digitale/bacheca/<CODICE>/…`): è la pagina che
+  // la scuola ha pubblicato, non una credenziale.
   const sourceUrl = (voce.directUrl ?? '').trim();
-  const allegato = eAllegatoPiattaforma(sourceUrl);
+  const allegato =
+    eAllegatoPiattaforma(sourceUrl) || eAvvisoSuPiattaforma(sourceUrl);
   if (!allegato && (!urlVerificabile(sourceUrl) || !stessoSito(sourceUrl, scuola.home))) {
     return null;
   }
@@ -3071,6 +3252,67 @@ async function recuperaDaBachecaPiattaforma(target: DiscoveredLink): Promise<Int
   return records;
 }
 
+/**
+ * §26.102 — LE PAGINE 2…N DELLO STESSO ELENCO.
+ *
+ * Perché serve: un hub USR pubblica «Interpelli» su WordPress con 10 voci per
+ * pagina e 200 in archivio. Il runner leggeva UNA pagina per target, quindi le
+ * voci delle pagine 2…N non esistevano per il radar: misurato il 29/10/2026, la
+ * pagina 2 dell'AT di Napoli dà altre 12 voci apribili (e 1 con scadenza) mai
+ * viste dal giro nazionale. Qui si seguono SOLO le pagine che la pagina stessa
+ * dichiara (`urlPaginaSuccessiva`: `rel="next"` o un'ancora «successiva»), fino
+ * a `pagineElenco` pagine per target e alla riserva del giro (`PAGINE_ELENCO_RUN`).
+ *
+ * Le voci si uniscono per URL (la stessa voce può comparire in due pagine durante
+ * uno sfasamento di archivio): la sgranatura resta una decisione sola sul totale.
+ */
+async function allargaPagineElenco(
+  prima: UniversalExtractionResult,
+  htmlPrima: string,
+  target: DiscoveredLink,
+): Promise<UniversalExtractionResult> {
+  const tetto = Math.max(1, LIMITI.pagineElenco);
+  if (tetto <= 1 || !prima.success) return prima;
+  const items = [...prima.items];
+  const viste = new Set<string>([chiaveUrl(target.url)]);
+  const presenti = new Set(items.map((voce) => chiaveUrl(String(voce.directUrl ?? ''))));
+  let html = htmlPrima;
+  let url = target.url;
+  let lette = 1;
+  while (lette < tetto && pagineElencoResidue > 0) {
+    const successiva = urlPaginaSuccessiva(html, url);
+    if (!successiva) break;
+    const chiave = chiaveUrl(successiva);
+    if (viste.has(chiave)) break;
+    viste.add(chiave);
+    pagineElencoResidue -= 1;
+    let pagina: FetchResult;
+    try {
+      pagina = await fetchHtml(successiva);
+    } catch {
+      break;
+    }
+    if (pagina.status >= 400 || !pagina.contentType.includes('html')) break;
+    const estratta = parseUniversalHtml(pagina.html, successiva);
+    lette += 1;
+    let nuove = 0;
+    for (const voce of estratta.items) {
+      const k = chiaveUrl(String(voce.directUrl ?? ''));
+      if (!k || presenti.has(k)) continue;
+      presenti.add(k);
+      items.push(voce);
+      nuove += 1;
+    }
+    console.log(
+      `[table-reporter] Elenco su più pagine: ${lette}ª pagina (${successiva}) → ` +
+        `${nuove} voci nuove · totale ${items.length}.`,
+    );
+    html = pagina.html;
+    url = successiva;
+  }
+  return items.length === prima.items.length ? prima : { ...prima, items };
+}
+
 async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
   const tentativi = isPiemonteTabellare(target.url) ? PIEMONTE_TENTATIVI : 1;
   let migliore: {
@@ -3135,6 +3377,9 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
       // una sorgente che nessun layout spiega, e il modo per accorgersi subito
       // di un rifacimento grafico.
       universale = parseUniversalHtml(html, target.url);
+      // §26.102 — l'elenco può continuare nelle pagine 2…N (WordPress mostra 10
+      // voci per pagina): si seguono solo quelle dichiarate dalla pagina stessa.
+      universale = await allargaPagineElenco(universale, html, target);
       layoutRilevato = universale.layoutDetected;
       if (CONFIG.debug || !universale.success) {
         console.log(

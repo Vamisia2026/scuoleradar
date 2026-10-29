@@ -123,7 +123,10 @@ const campioni: Campione[] = [
       province: 'RM',
       comune: 'Roma',
       classCodes: ['A-050'],
-      expirationDate: '2026-10-05',
+      // Data FUTURA e lontana: la scadenza è parte della struttura del post
+      // (riga «📅 Scadenza:»), quindi una data già passata farebbe fallire la
+      // verifica senza che nulla sia rotto nel formatter.
+      expirationDate: '2027-06-30',
       link: 'https://www.istruzione.lazio.it/bando-pnrr-esperto-a050-cavour-roma',
     },
   },

@@ -8,12 +8,19 @@
  * corso · ardesia per scaduto/assente/fuori finestra, §26.89). Per gli utenti
  * Base l'accordion resta bloccato: badge «🔒 PRO» e click che apre la vetrina.
  *
+ * COLOR CODING DEL MATCH (§26.106): ogni riga dichiara la fascia del match col
+ * colore condiviso di `lib/compatibilita.stileMatch` — verde `#1FA055` (≥ 80),
+ * giallo `#E2B33C` (60-79), rosso `#D9534F` (< 60) — e una riga entrata dal
+ * paracadute «5 osso-da-mordere» mostra l'etichetta trasparente
+ * «Opportunità di ripiego nel DB».
+ *
  * Presentazione pura: dati, stato di apertura e azioni arrivano dal contenitore.
  */
 import { SlidersHorizontal } from 'lucide-react';
 import { Accordion } from '@/components/Accordion';
 import { InterpelloCard } from '@/components/InterpelloCard';
 import { etichettaScadenzaAvviso } from '@/lib/alertInterpello';
+import { stileMatch } from '@/lib/compatibilita';
 import { giorniRimanenti } from '@/lib/scadenza';
 import { stileScadenza } from '@/lib/scadenzaSemaforo';
 import { classeByCodice } from '@/data/classiConcorso';
@@ -102,6 +109,9 @@ export function ElencoOpportunita({
               // una terza scala (<48h / <5 giorni) con tinte pastello
               // warning/accent che contraddiceva il semaforo del tabellone.
               const scadenza = stileScadenza(giorniRimanenti(i.dataScadenza));
+              // COLOR CODING DEL MATCH (§26.106): verde ≥ 80 · giallo 60-79 · rosso < 60,
+              // con l'etichetta trasparente del ripiego quando la riga arriva dal paracadute.
+              const match = stileMatch(i.compatibilita, { ripiego: i.ripiego === true });
               return (
                 <div
                   key={i.id}
@@ -115,6 +125,15 @@ export function ElencoOpportunita({
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${scadenza.className}`}
                     >
                       {scadenza.label}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 border-b border-primary-100 px-3 py-1.5">
+                    <span
+                      title={match.descrizione}
+                      className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-primary-500"
+                    >
+                      <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${match.className}`} />
+                      {match.etichetta} · {match.punteggio}%
                     </span>
                   </div>
                   <InterpelloCard interpello={i} />

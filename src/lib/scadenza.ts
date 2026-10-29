@@ -8,16 +8,21 @@
  *   · `eAvvisoVivo(scadenza, pubblicazione)` → regola UNICA di lettura pubblica:
  *     con scadenza → non ancora passata; senza scadenza → pubblicato entro la
  *     finestra dei `GIORNI_FINESTRA_SENZA_SCADENZA` (60 giorni);
- *   · `eOpportunitaConScadenza(scadenza)` → REGOLA FERREA del feed (§26.71):
+ *   · `eOpportunitaConScadenza(scadenza)` → REGOLA FERREA del FEED (§26.71):
  *     senza una scadenza dichiarata e non ancora passata la riga NON è
  *     un'opportunità attiva (le pagine di archivio e gli indici di codici restano
- *     fuori da bacheca, punteggio e conteggi); dentro vale anche l'ORIZZONTE
+ *     fuori da feed, punteggio e conteggi); dentro vale anche l'ORIZZONTE
  *     (`GIORNI_ORIZZONTE_OPPORTUNITA`, §26.82): un termine di candidatura oltre
  *     15 giorni non è una finestra di candidatura, è la FINE di un incarico o la
  *     data d'avvio di un progetto;
- *   · il SEMAFORO (tre luci) vive in `lib/scadenzaSemaforo` — `stileScadenza`,
- *     `SCADENZA_TOKENS`, `SOGLIA_ROSSO`, `SOGLIA_ARANCIO` (§26.89) — perché
- *     questo file è alla soglia dei 250 righe del gate strutturale. La
+ *   · `eOpportunitaAperta(scadenza)` → REGOLA della BACHECA PUBBLICA «Radar Live»
+ *     (§26.100): scadenza dichiarata e non ancora passata, **senza tetto in
+ *     avanti**. La vetrina mostra il volume ATTIVO completo — la finestra di
+ *     candidatura resta dove serve (feed, matching, ingestione), non dove serve
+ *     contare quante opportunità sono ancora aperte;
+ *   · il SEMAFORO (quattro luci) vive in `lib/scadenzaSemaforo` — `stileScadenza`,
+ *     `SCADENZA_TOKENS`, `SOGLIA_ROSSO`, `SOGLIA_ARANCIO` (§26.89, §26.100) —
+ *     perché questo file è alla soglia dei 250 righe del gate strutturale. La
  *     dipendenza va in un senso solo: semaforo → giorni e orizzonte.
  */
 
@@ -130,8 +135,11 @@ export function eAvvisoVivo(
  *
  * Era 30 giorni (§26.75): la finestra larga teneva in vetrina contratti annuali
  * già assegnati, che il badge verde presentava come opportunità lunghe. Il tetto
- * è UNO solo: `eOpportunitaConScadenza`, `filtroAttivi`, `table-reporter` e
- * `stileScadenza` leggono questo numero, mai una copia.
+ * è UNO solo: `eOpportunitaConScadenza` (feed e matching), `table-reporter` e
+ * `stileScadenza` leggono questo numero, mai una copia. Dal §26.100 la BACHECA
+ * pubblica non lo usa più: legge il volume attivo completo con
+ * `eOpportunitaAperta` (nessun tetto) e mostra le righe oltre l'orizzonte con la
+ * banda blu «Scadenza lontana».
  */
 export const GIORNI_ORIZZONTE_OPPORTUNITA = 15;
 
@@ -160,11 +168,32 @@ export function eOpportunitaConScadenza(
   oggi: Date = new Date(),
   orizzonteGiorni: number = GIORNI_ORIZZONTE_OPPORTUNITA,
 ): boolean {
+  if (!eOpportunitaAperta(scadenza, oggi)) return false;
+  const giorni = giorniRimanenti(scadenza, oggi);
+  return giorni !== null && giorni <= orizzonteGiorni;
+}
+
+/**
+ * AVVISO ANCORA APERTO (§26.100, direttiva 28/10/2026): scadenza DICHIARATA,
+ * leggibile e non ancora passata — **senza alcun tetto in avanti**. È la regola
+ * della BACHECA PUBBLICA «Radar Live»: la vetrina mostra il volume ATTIVO
+ * completo, non solo ciò che scade entro l'orizzonte di candidatura.
+ *
+ * La differenza da `eOpportunitaConScadenza` è UNA riga (il tetto), ed è voluta:
+ *  · la BACHECA risponde a «quanti avvisi sono ancora aperti» — è una vetrina,
+ *    quindi non nasconde un'opportunità vera solo perché il termine è lungo;
+ *  · il FEED e il MATCHING rispondono a «cosa posso candidare adesso» — lì la
+ *    finestra dei `GIORNI_ORIZZONTE_OPPORTUNITA` resta la promessa di prodotto
+ *    (§26.82) e non va toccata.
+ *
+ * Il gate della riga senza data resta IDENTICO (§26.71): un elenco di classi di
+ * concorso o una pagina di archivio non ha una scadenza e non entra da nessuna
+ * delle due porte. Il tetto dei 15 giorni si toglie, il requisito della data no.
+ */
+export function eOpportunitaAperta(scadenza?: string | null, oggi: Date = new Date()): boolean {
   if (!(scadenza ?? '').trim()) return false;
   if (!eInterpelloAttivo(scadenza, oggi)) return false;
-  const giorni = giorniRimanenti(scadenza, oggi);
-  if (giorni === null) return false;
-  return giorni <= orizzonteGiorni;
+  return giorniRimanenti(scadenza, oggi) !== null;
 }
 
 /**

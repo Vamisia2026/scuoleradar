@@ -1,29 +1,26 @@
 /**
  * ScuoleRadar.it — Edge Function `crawler-admin` (telemetria + trigger manuale).
  *
- * Perché esiste: la sezione «Crawler Telemetry» del System Health Check (DEV)
- * deve leggere i numeri veri della coda di scansione e poter AVVIARE un giro
- * senza passare da GitHub → Actions. Le tabelle di servizio
- * (`discovered_links`, `scraper_runs`) sono RLS-locked al solo `service_role`,
- * quindi la lettura non può stare nel browser: qui.
+ * Perché esiste: la sezione «Crawler Telemetry» del System Health Check (DEV) deve
+ * leggere i numeri veri della coda di scansione e poter AVVIARE un giro senza
+ * passare da GitHub → Actions. `discovered_links` e `scraper_runs` sono RLS-locked
+ * al `service_role`, quindi la lettura non può stare nel browser: sta qui.
  *
- * AZIONI (POST JSON `{ "azione": "stato" | "scansione" }`)
- *  · `stato`      → conteggi aggregati + ultima scansione + ultima run. Richiede
- *                   una sessione valida (nessun dato personale: solo numeri).
- *  · `scansione`  → `workflow_dispatch` del workflow di ingestione su GitHub
- *                   (`scraper.yml` di default). Richiede un ADMIN
- *                   (`ADMIN_EMAILS`, stessa regola della Edge `admin`) oppure
- *                   l'header `x-crawler-secret` = `CRAWLER_TRIGGER_SECRET`
- *                   (lanci da terminale/CI). Se `GITHUB_DISPATCH_TOKEN` non è
- *                   configurato risponde 503 con il motivo: nessun falso OK.
+ * POST JSON `{ "azione": "stato" | "scansione" }`
+ *   · `stato`     → conteggi aggregati, ultima scansione, ultima run. Basta una
+ *                   sessione valida (solo numeri) o l'header `x-crawler-secret`.
+ *   · `scansione` → `workflow_dispatch` del workflow di ingestione. Autorizza, in
+ *                   ordine: `x-crawler-secret` = `CRAWLER_TRIGGER_SECRET` (CI,
+ *                   terminale, DEV Bar senza login) · `ADMIN_EMAILS` ·
+ *                   `CRAWLER_DEV_EMAILS` (allowlist DEV/TEST) · SVILUPPO/TEST
+ *                   DICHIARATO (`ENVIRONMENT` = dev/local/test/staging,
+ *                   `CRAWLER_ALLOW_DEV=1` o URL Supabase locale), dove può avviare
+ *                   il giro qualunque sessione valida. In produzione (`ENVIRONMENT`
+ *                   assente o `production`) quest'ultima regola NON esiste.
  *
- * SEGRETI (Supabase → Edge Functions → Secrets)
- *   GITHUB_DISPATCH_TOKEN     PAT fine-grained con `actions: write` sul repo.
- *   GITHUB_REPO               default `Vamisia2026/scuoleradar`.
- *   GITHUB_DISPATCH_WORKFLOW  default `scraper.yml` (`discovery.yml` per la BFS).
- *   GITHUB_DISPATCH_REF       default `main`.
- *   CRAWLER_TRIGGER_SECRET    opzionale (sblocca il trigger senza login admin).
- *   ADMIN_EMAILS              opzionale, stessa semantica della Edge `admin`.
+ * SEGRETI: `GITHUB_DISPATCH_TOKEN` (PAT con `actions:write`) · `GITHUB_REPO` ·
+ * `GITHUB_DISPATCH_WORKFLOW` · `GITHUB_DISPATCH_REF` · `CRAWLER_TRIGGER_SECRET` ·
+ * `CRAWLER_DEV_EMAILS` · `ENVIRONMENT` / `CRAWLER_ALLOW_DEV` · `ADMIN_EMAILS`.
  *
  * Deploy: `supabase functions deploy crawler-admin` (JWT verificato: nessuna
  * funzione `--no-verify-jwt`, così il gateway rifiuta le chiamate anonime).
@@ -33,15 +30,40 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-const ADMIN_EMAILS = (Deno.env.get('ADMIN_EMAILS') ?? 'bartoloansaldi@gmail.com,myvamisia@gmail.com')
-  .split(',')
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
+
+/** Lista di email da una variabile d'ambiente (minuscole, senza spazi, senza vuoti). */
+function listaEmail(valore: string | undefined): string[] {
+  return (valore ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+const ADMIN_EMAILS = listaEmail(
+  Deno.env.get('ADMIN_EMAILS') ?? 'bartoloansaldi@gmail.com,myvamisia@gmail.com',
+);
+/** Allowlist DEV/TEST: ammessa al trigger senza toccare gli admin principali. */
+const DEV_EMAILS = listaEmail(Deno.env.get('CRAWLER_DEV_EMAILS'));
 const GITHUB_TOKEN = Deno.env.get('GITHUB_DISPATCH_TOKEN') ?? '';
 const GITHUB_REPO = Deno.env.get('GITHUB_REPO') ?? 'Vamisia2026/scuoleradar';
 const GITHUB_WORKFLOW = Deno.env.get('GITHUB_DISPATCH_WORKFLOW') ?? 'scraper.yml';
 const GITHUB_REF = Deno.env.get('GITHUB_DISPATCH_REF') ?? 'main';
 const SEGRETO_TRIGGER = Deno.env.get('CRAWLER_TRIGGER_SECRET') ?? '';
+
+/** Ambiente dichiarato del deploy (assente = produzione). */
+const AMBIENTE = (Deno.env.get('ENVIRONMENT') ?? Deno.env.get('APP_ENV') ?? '').toLowerCase();
+
+/**
+ * SVILUPPO/TEST DICHIARATO: `ENVIRONMENT` dell'ambiente, `CRAWLER_ALLOW_DEV`
+ * attivo oppure URL Supabase locale (`supabase start`). Solo in questo stato una
+ * qualunque sessione valida può avviare il giro: in produzione (`ENVIRONMENT`
+ * assente o `production`) la regola NON esiste e restano admin, allowlist DEV e
+ * segreto di trigger.
+ */
+const SVILUPPO =
+  ['dev', 'development', 'local', 'test', 'testing', 'staging'].includes(AMBIENTE) ||
+  ['1', 'true', 'yes', 'on'].includes((Deno.env.get('CRAWLER_ALLOW_DEV') ?? '').toLowerCase()) ||
+  /localhost|127\.0\.0\.1/.test(SUPABASE_URL);
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -51,13 +73,7 @@ const CORS = {
 };
 
 /** Stati della coda che rappresentano uno SCARTO dichiarato dal motore. */
-const STATI_SCARTATI = [
-  'disqualified_noise',
-  'empty_view',
-  'parked_low_score',
-  'parked_for_pdf',
-  'disabled',
-];
+const STATI_SCARTATI = ['disqualified_noise', 'empty_view', 'parked_low_score', 'parked_for_pdf', 'disabled'];
 
 interface TelemetriaCrawler {
   /** Fonti in whitelist che il runner legge davvero (`active_crawler`). */
@@ -75,13 +91,7 @@ interface TelemetriaCrawler {
   /** Fonti whitelist ricontrollate nelle ultime 24 ore. */
   scansionate_24h: number;
   ultima_scansione: string | null;
-  ultima_run: {
-    started_at: string;
-    esito: string;
-    trovati: number;
-    nuovi: number;
-    errori: number;
-  } | null;
+  ultima_run: { started_at: string; esito: string; trovati: number; nuovi: number; errori: number } | null;
   aggiornato_il: string;
 }
 
@@ -103,9 +113,58 @@ async function utenteDaJwt(req: Request) {
   const { data, error } = await sb.auth.getUser(jwt);
   if (error || !data.user) return null;
   const { data: prof } = await sb.from('profiles').select('email').eq('id', data.user.id).single();
+  return { id: data.user.id, email: String(prof?.email ?? data.user.email ?? '').toLowerCase() };
+}
+
+/** Chi ha autorizzato la chiamata (`da` torna nella risposta: diagnosi, non fiducia). */
+type Fonte = 'admin' | 'allowlist-dev' | 'segreto' | 'sessione' | 'sviluppo-locale';
+
+/** Esito dell'autorizzazione: `motivo`/`status` sono pronti per la UI. */
+interface Autorizzazione {
+  ok: boolean;
+  da: Fonte | null;
+  motivo?: string;
+  status?: number;
+}
+
+/**
+ * Decide CHI può fare cosa, in un solo punto: 1) header `x-crawler-secret` =
+ * `CRAWLER_TRIGGER_SECRET` (CI, terminale, DEV Bar senza login via
+ * `VITE_CRAWLER_DEV_SECRET`); 2) `ADMIN_EMAILS` e `CRAWLER_DEV_EMAILS`; 3)
+ * SVILUPPO/TEST dichiarato: qualunque sessione valida (mai in produzione);
+ * 4) `stato`: qualunque sessione valida (solo numeri aggregati).
+ */
+function autorizza(
+  azione: 'stato' | 'scansione',
+  utente: { email: string } | null,
+  req: Request,
+): Autorizzazione {
+  const segretoValido =
+    SEGRETO_TRIGGER !== '' && req.headers.get('x-crawler-secret') === SEGRETO_TRIGGER;
+  if (segretoValido) return { ok: true, da: 'segreto' };
+  const email = utente?.email ?? '';
+  if (email && ADMIN_EMAILS.includes(email)) return { ok: true, da: 'admin' };
+  if (email && DEV_EMAILS.includes(email)) return { ok: true, da: 'allowlist-dev' };
+  if (SVILUPPO && utente) return { ok: true, da: 'sviluppo-locale' };
+  if (azione === 'stato' && utente) return { ok: true, da: 'sessione' };
+  if (azione === 'stato') {
+    return {
+      ok: false,
+      da: null,
+      status: 401,
+      motivo:
+        'Serve una sessione valida: la telemetria del crawler legge tabelle di servizio. ' +
+        'In sviluppo: login, oppure header x-crawler-secret (VITE_CRAWLER_DEV_SECRET).',
+    };
+  }
   return {
-    id: data.user.id,
-    email: String(prof?.email ?? data.user.email ?? '').toLowerCase(),
+    ok: false,
+    da: null,
+    status: 403,
+    motivo:
+      `Solo un admin può avviare una scansione (utente: ${email || 'anonimo'}). ` +
+      'In sviluppo: email in CRAWLER_DEV_EMAILS, header x-crawler-secret oppure ' +
+      'ENVIRONMENT=dev/test (una qualunque sessione valida).',
   };
 }
 
@@ -122,60 +181,44 @@ async function conta(
   return count ?? 0;
 }
 
+/** Numeri della coda: le letture sono indipendenti e partono tutte insieme. */
 async function telemetria(sb: ReturnType<typeof createClient>): Promise<TelemetriaCrawler> {
   const oggi = new Date().toISOString().slice(0, 10);
   const ieri = new Date(Date.now() - 86_400_000).toISOString();
-
-  const fontiWhitelist = await conta(sb, 'discovered_links', { status: 'active_crawler' });
-  const pagineInCoda = await conta(sb, 'discovered_links', { status: 'pending' });
-  const scarti = (
-    await Promise.all(STATI_SCARTATI.map((stato) => conta(sb, 'discovered_links', { status: stato })))
-  ).reduce((somma, n) => somma + n, 0);
-  const inErrore = await conta(sb, 'discovered_links', { status: 'error_internal' });
-  const interpelliTotali = await conta(sb, 'interpelli');
-
-  const { count: attivi } = await sb
-    .from('interpelli')
-    .select('*', { count: 'exact', head: true })
-    .gte('expiration_date', `${oggi}T00:00:00+00:00`);
-  const { count: scansionate } = await sb
-    .from('discovered_links')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'active_crawler')
-    .gte('last_scanned_at', ieri);
-  const { data: ultima } = await sb
-    .from('discovered_links')
-    .select('last_scanned_at')
-    .not('last_scanned_at', 'is', null)
-    .order('last_scanned_at', { ascending: false })
-    .limit(1);
-  const { data: run } = await sb
-    .from('scraper_runs')
-    .select('started_at, esito, trovati, nuovi, errori')
-    .order('started_at', { ascending: false })
-    .limit(1);
-
-  const ultimaRun = (run ?? [])[0] as TelemetriaCrawler['ultima_run'];
+  const [fonti, coda, scartiGrezzi, errori, totali, attivi, scansionate, ultima, run] =
+    await Promise.all([
+      conta(sb, 'discovered_links', { status: 'active_crawler' }),
+      conta(sb, 'discovered_links', { status: 'pending' }),
+      Promise.all(STATI_SCARTATI.map((s) => conta(sb, 'discovered_links', { status: s }))),
+      conta(sb, 'discovered_links', { status: 'error_internal' }),
+      conta(sb, 'interpelli'),
+      sb.from('interpelli').select('*', { count: 'exact', head: true })
+        .gte('expiration_date', `${oggi}T00:00:00+00:00`),
+      sb.from('discovered_links').select('*', { count: 'exact', head: true })
+        .eq('status', 'active_crawler').gte('last_scanned_at', ieri),
+      sb.from('discovered_links').select('last_scanned_at')
+        .not('last_scanned_at', 'is', null).order('last_scanned_at', { ascending: false }).limit(1),
+      sb.from('scraper_runs').select('started_at, esito, trovati, nuovi, errori')
+        .order('started_at', { ascending: false }).limit(1),
+    ]);
 
   return {
-    fonti_whitelist: fontiWhitelist,
-    pagine_in_coda: pagineInCoda,
-    scarti,
-    in_errore: inErrore,
-    interpelli_attivi: attivi ?? 0,
-    interpelli_totali: interpelliTotali,
-    scansionate_24h: scansionate ?? 0,
+    fonti_whitelist: fonti,
+    pagine_in_coda: coda,
+    scarti: (scartiGrezzi as number[]).reduce((somma: number, n: number) => somma + n, 0),
+    in_errore: errori,
+    interpelli_attivi: attivi.count ?? 0,
+    interpelli_totali: totali,
+    scansionate_24h: scansionate.count ?? 0,
     ultima_scansione:
-      ((ultima ?? [])[0] as { last_scanned_at?: string } | undefined)?.last_scanned_at ?? null,
-    ultima_run: ultimaRun ?? null,
+      ((ultima.data ?? [])[0] as { last_scanned_at?: string } | undefined)?.last_scanned_at ?? null,
+    ultima_run: ((run.data ?? [])[0] as TelemetriaCrawler['ultima_run']) ?? null,
     aggiornato_il: new Date().toISOString(),
   };
 }
 
 /** `workflow_dispatch` del workflow di ingestione. */
-async function avviaWorkflow(): Promise<
-  { ok: true } | { ok: false; status: number; motivo: string }
-> {
+async function avviaWorkflow(): Promise<{ ok: true } | { ok: false; status: number; motivo: string }> {
   if (!GITHUB_TOKEN) {
     return {
       ok: false,
@@ -206,6 +249,7 @@ async function avviaWorkflow(): Promise<
   };
 }
 
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   if (req.method !== 'POST') return risposta({ error: 'Metodo non consentito' }, 405);
@@ -217,39 +261,36 @@ serve(async (req: Request) => {
     return risposta({ error: 'Bad Request' }, 400);
   }
   const azione = String(body.azione ?? '');
+  if (azione !== 'stato' && azione !== 'scansione') {
+    return risposta({ error: `azione sconosciuta: ${azione}` }, 400);
+  }
 
   try {
     const utente = await utenteDaJwt(req);
-    if (!utente) return risposta({ error: 'Sessione non valida: esegui il login.' }, 401);
+    const auth = autorizza(azione, utente, req);
+    if (!auth.ok) {
+      return risposta(
+        { error: auth.motivo, ambiente: AMBIENTE || 'produzione', sviluppo: SVILUPPO },
+        auth.status ?? 403,
+      );
+    }
 
     const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
-
     if (azione === 'stato') {
-      return risposta({ ok: true, telemetria: await telemetria(sb) });
+      return risposta({ ok: true, autorizzato_da: auth.da, telemetria: await telemetria(sb) });
     }
 
-    if (azione === 'scansione') {
-      const segretoValido =
-        SEGRETO_TRIGGER !== '' && req.headers.get('x-crawler-secret') === SEGRETO_TRIGGER;
-      const adminValido = ADMIN_EMAILS.includes(utente.email);
-      if (!adminValido && !segretoValido) {
-        return risposta(
-          { error: `Solo un admin può avviare una scansione (utente: ${utente.email}).` },
-          403,
-        );
-      }
-      const esito = await avviaWorkflow();
-      if (!esito.ok) return risposta({ error: esito.motivo }, esito.status);
-      return risposta({
-        ok: true,
-        avviato: true,
-        workflow: GITHUB_WORKFLOW,
-        repo: GITHUB_REPO,
-        telemetria: await telemetria(sb),
-      });
-    }
-
-    return risposta({ error: `azione sconosciuta: ${azione}` }, 400);
+    // `autorizza` ha già deciso CHI può: qui si esegue soltanto.
+    const esito = await avviaWorkflow();
+    if (!esito.ok) return risposta({ error: esito.motivo, autorizzato_da: auth.da }, esito.status);
+    return risposta({
+      ok: true,
+      avviato: true,
+      autorizzato_da: auth.da,
+      workflow: GITHUB_WORKFLOW,
+      repo: GITHUB_REPO,
+      telemetria: await telemetria(sb),
+    });
   } catch (err) {
     return risposta({ error: (err as Error).message }, 500);
   }

@@ -17,7 +17,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Loader2, Radar, Search } from 'lucide-react';
 import { province } from '@/data/province';
-import { salvaProvinciaProva } from '@/lib/provaRadar';
+import { salvaProvinciaProva, type MonitoraggioProva } from '@/lib/provaRadar';
 import { rigaPresentabileVetrina } from '@/lib/liveBoard';
 import {
   selezionaRisultatiProva,
@@ -28,7 +28,7 @@ import {
   ATTESA_SCANSIONE_MS,
   LIMITE_PROVINCIA,
   leggiInterpelliProva,
-  richiediScansioneProva,
+  registraProvaRadar,
 } from './services/provaRadarQuery';
 import { ResponsoProva } from './components/ResponsoProva';
 
@@ -46,6 +46,8 @@ export function SimulatorRadar({ className = '' }: SimulatorRadarProps) {
   const [provCodice, setProvCodice] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [esito, setEsito] = useState<EsitoProvaRadar | null>(null);
+  /** Monitoraggio temporaneo acceso dalla prova (7 giorni): lo mostra il responso. */
+  const [monitoraggio, setMonitoraggio] = useState<MonitoraggioProva | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const provinceSorted = useMemo(() => [...province].sort((a, b) => a.nome.localeCompare(b.nome)), []);
@@ -57,6 +59,7 @@ export function SimulatorRadar({ className = '' }: SimulatorRadarProps) {
   /** Azzera il responso quando cambia la provincia. */
   const resettaRicerca = () => {
     setEsito(null);
+    setMonitoraggio(null);
     setIsSearching(false);
     if (timerRef.current) clearTimeout(timerRef.current);
   };
@@ -65,7 +68,9 @@ export function SimulatorRadar({ className = '' }: SimulatorRadarProps) {
    * Una sola scansione: la provincia provata (maglia larga su tutte le categorie,
    * senza selettore di classe). Nessuna seconda query nazionale: quello che non
    * c'è in provincia non viene mostrato. La provincia provata viene memorizzata
-   * per il wizard (`lib/provaRadar.ts`).
+   * per il wizard (`lib/provaRadar.ts`) e accende il MONITORAGGIO TEMPORANEO di 7
+   * giorni (`registraProvaRadar`), che manda la provincia al Radar Generale
+   * (coda di scansione regionale) senza far aspettare il responso.
    */
   const handleSimula = useCallback(() => {
     if (!provCodice || isSearching) return;
@@ -77,11 +82,9 @@ export function SimulatorRadar({ className = '' }: SimulatorRadarProps) {
       void (async () => {
         try {
           salvaProvinciaProva(provincia);
-          // CODA DI SCANSIONE: la provincia provata va ri-scansionata SUBITO, non
-          // fra sei ore. Fire-and-forget: il responso non aspetta la coda e un
-          // guasto della coda non può toccare la prova (`richiediScansioneProva`
-          // non lancia mai).
-          void richiediScansioneProva(provincia);
+          // MONITORAGGIO 7 GIORNI + RADAR GENERALE: il flag è locale (sincrono),
+          // la richiesta alla coda parte fire-and-forget e non può lanciare.
+          setMonitoraggio(registraProvaRadar(provincia));
           // VETRINA (§26.59): entrano solo righe con il nome di un istituto REALE
           // risolto (campo, registro per codice o titolo). I dump di codici classe
           // («ADEE | EEEE») e le righe senza istituto restano fuori da una vista
@@ -161,7 +164,12 @@ export function SimulatorRadar({ className = '' }: SimulatorRadarProps) {
           crescita resta fluida e tutta nel primo schermo. */}
       {!isSearching && esito && (
         <div className="mt-3 max-h-[24rem] overflow-y-auto overscroll-contain pr-0.5">
-          <ResponsoProva esito={esito} provincia={provinciaNome} onAttiva={openRadarSetup} />
+          <ResponsoProva
+            esito={esito}
+            provincia={provinciaNome}
+            onAttiva={openRadarSetup}
+            monitoraggio={monitoraggio}
+          />
         </div>
       )}
     </div>

@@ -21,8 +21,10 @@
 import { readFileSync } from 'node:fs';
 import {
   MAX_RIEMPITIVI_BACHECA,
+  MINIMO_BACHECA,
   MINIMO_MATCH_QUALITA,
   limitaRiempitivi,
+  paracaduteCinque,
   riempitivoNonPertinente,
 } from '../src/lib/riempitivi.ts';
 
@@ -124,7 +126,35 @@ const miste = limitaRiempitivi(
 check('protette sempre in bacheca, il cap taglia solo i riempitivi', 9, miste.lista.length);
 check('la preferita è sopravvissuta al taglio', true, miste.lista.some((v) => v.id === 'preferita-1'));
 
-/* ------------------- 3) CABLAGGIO E INVARIANTI DI CONSEGNA ----------------- */
+/* --------------- 3) PARACADUTE «5 OSSO-DA-MORDERE» (§26.106) ---------------- */
+
+console.log('\n— Paracadute: la vetrina non scende sotto 5 risultati —');
+check('minimo di prodotto = 5', 5, MINIMO_BACHECA);
+const bachecaCorta = [voce('forte', 90), voce('media', 72)];
+const scorta = [voce('scorta-1', 40), voce('scorta-2', 55), voce('scorta-3', 48), voce('scorta-4', 30)];
+const integrato = paracaduteCinque(bachecaCorta, scorta);
+check('2 match + scorta → 5 risultati', 5, integrato.lista.length);
+check('mancavano 3', 3, integrato.aggiunti);
+check('motivo: integrato', 'integrato', integrato.motivo);
+check(
+  'entrano i MIGLIORI (55 · 48 · 40), il 30 resta fuori',
+  ['forte', 'media', 'scorta-2', 'scorta-3', 'scorta-1'],
+  integrato.lista.map((v) => v.id),
+);
+check('i match veri restano in testa', 'forte', integrato.lista[0].id);
+check(
+  'a pari punteggio decide l’ordine del database (deterministico)',
+  'scorta-a',
+  paracaduteCinque([], [voce('scorta-a', 40), voce('scorta-b', 40)], { minimo: 1 }).lista[0].id,
+);
+const pieno = paracaduteCinque(alti(5), scorta);
+check('5 match: il paracadute non aggiunge nulla', 0, pieno.aggiunti);
+check('motivo: sufficiente', 'sufficiente', pieno.motivo);
+const esaurita = paracaduteCinque([voce('solo', 90)], [voce('unica', 40)]);
+check('scorta più corta del minimo: nessuna riga inventata', 2, esaurita.lista.length);
+check('motivo: scorta esaurita', 'scorta-esaurita', esaurita.motivo);
+
+/* ------------------- 4) CABLAGGIO E INVARIANTI DI CONSEGNA ----------------- */
 
 console.log('\n— Cablaggio: feed → bacheca pura, card/modale, consegna invariata —');
 const feed = leggi('src/contexts/app/useInterpelliFeed.ts');
@@ -138,6 +168,21 @@ check(
   /provinceDiRicerca\(/.test(feed),
 );
 check('bacheca: cap dinamico dei riempitivi', true, /limitaRiempitivi\(/.test(bacheca));
+check(
+  'bacheca: paracadute «5 osso-da-mordere» sulla scorta (§26.106)',
+  true,
+  /paracaduteCinque\(cap\.lista, scorta\)/.test(bacheca) && /ripieghiInBacheca: paracadute\.aggiunti/.test(bacheca),
+);
+check(
+  'bacheca: le righe di ripiego sono dichiarate, mai silenziose',
+  true,
+  /ripiego: true/.test(bacheca) && /ripieghiInBacheca: number/.test(bacheca),
+);
+check(
+  'bacheca: lo scarto GEOGRAFICO non entra nella scorta (blocco oltre i 60 km)',
+  true,
+  /if \(!valutazione\.escluso\) scorta\.push/.test(bacheca),
+);
 check('bacheca: le scuole preferite non sono riempitivi', true, /proteggi:/.test(bacheca));
 check(
   'bacheca: esclusione secca dei non pertinenti, A MONTE del cap (§26.60)',

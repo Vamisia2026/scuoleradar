@@ -12,6 +12,9 @@
  * Esecuzione: npm run test:prossimita (incluso in `npm test`)
  */
 import { readFileSync } from 'node:fs';
+import { valutaCompatibilita } from '../src/lib/compatibilitaGraduata.ts';
+import { PUNTEGGIO_JOLLY_OLTRE_RAGGIO } from '../src/lib/jollySemantico.ts';
+import { PUNTEGGIO_MATCH_NESSUNO } from '../src/lib/matchingEngine.ts';
 import {
   PENALITA_PROVINCIA_20KM,
   PENALITA_PROVINCIA_40KM,
@@ -81,7 +84,44 @@ check('e ammessa con `limitrofe`', true, provinciaCompatibile(['AT'], 'AL', { li
 check('oltre il raggio: mai', false, provinciaCompatibile(['AT'], 'MN', { limitrofe: true }));
 check('senza province nel profilo: nessun vincolo', true, provinciaCompatibile([], 'MN'));
 
-/* ------------------------ 4) LA GUARDIA È NELLA CATENA -------------------- */
+/* ---------- 4) OLTRE I 60 KM: BLOCCO, SALVO LA PAROLA DEL BANDO (§26.106) ---------- */
+
+console.log("\n— Oltre il raggio: blocco totale, salvo la parola chiave richiesta dall'utente —");
+const profiloLontano = {
+  ordini: ['secondaria2'] as const,
+  classi: ['A-22'],
+  province: ['AT'],
+  materieCustom: ['PNRR'],
+};
+const avvisoRoma = { province: 'RM', classi: ['A-22'], ordine: 'secondaria2' as const };
+const senzaParola = valutaCompatibilita(
+  profiloLontano,
+  { ...avvisoRoma, titolo: 'Interpello di matematica' },
+  { provinceLimitrofe: true },
+);
+check('Roma senza la parola del bando: ESCLUSO (blocco totale)', true, senzaParola.escluso);
+check('e nessun punteggio da spendere', PUNTEGGIO_MATCH_NESSUNO, senzaParola.punteggio);
+const conParola = valutaCompatibilita(
+  profiloLontano,
+  { ...avvisoRoma, titolo: 'Avviso PNRR per esperti esterni' },
+  { provinceLimitrofe: true },
+);
+check('con «PNRR» nel bando: entra d’ufficio', false, conParola.escluso);
+check('al pavimento dichiarato, mai un 100% finto', PUNTEGGIO_JOLLY_OLTRE_RAGGIO, conParola.punteggio);
+check('la distanza resta dichiarata nel motivo', true, /interesse pieno/.test(conParola.motivi.join(' ')));
+const vicinaConPenalita = valutaCompatibilita(
+  { ...profiloLontano, materieCustom: [] },
+  { province: 'AL', classi: ['A-22'], ordine: 'secondaria2', titolo: 'Interpello di matematica' },
+  { provinceLimitrofe: true },
+);
+check('Alessandria (32 km) resta ammessa con la penalità', false, vicinaConPenalita.escluso);
+check(
+  'e il punteggio è quello della fascia di distanza (mai 100)',
+  true,
+  vicinaConPenalita.punteggio > 0 && vicinaConPenalita.punteggio < 100,
+);
+
+/* ------------------------ 5) LA GUARDIA È NELLA CATENA -------------------- */
 
 console.log('\n— La guardia è nella catena di `npm test` —');
 const catena = JSON.parse(readFileSync('package.json', 'utf8')) as {

@@ -8,11 +8,12 @@
  *   2. SOLO OPPORTUNITÀ ATTIVE E IN TARGET — `motivoScartoOpportunita`: categoria
  *      di reclutamento (interpelli/supplenze, ATA, PNRR/PON, esperti esterni) e
  *      bando NON scaduto (una scadenza assente non è una prova di scadenza);
- *   3. NIENTE SCARTI PER PING FALLACE — `valutaGateLink`: se il bando è
- *      STRUTTURATO (classe/materia + email di candidatura) il record si accetta
- *      anche quando il server blocca i bot (`403`/timeout/TLS) o quando il ping
- *      non è stato eseguito; il link deve però restare una fonte ufficiale
- *      verificata (gate `verificaAvviso` di `parser.ts`, applicato a valle).
+ *   3. RECORD STRUTTURATO — `eRecordStrutturato`: se il bando dichiara
+ *      classe/materia + email di candidatura, il ping del link non è attendibile
+ *      (i server scolastici rispondono `403` ai client automatici) e il record
+ *      non si controlla dal vivo. La decisione sul link vive in
+ *      `lib/validitaLink.ts` + `presidioLinkIngresso.ts` (§26.104): qui resta solo
+ *      il riconoscimento del record, che è un dato del bando, non una politica.
  */
 
 import { eScaduto } from '../lib/scadenza.ts';
@@ -152,7 +153,7 @@ export function motivoScartoOpportunita(
   return null;
 }
 
-/* ------------- 3 · Gate del link: ping fallace ≠ record scartato ------------- */
+/* -------- 3 · Record strutturato: il ping non è attendibile (anti-bot) -------- */
 
 /** Dati per il gate del link. */
 export interface CandidatoLink {
@@ -166,46 +167,14 @@ export interface CandidatoLink {
 /**
  * True se il bando è STRUTTURATO e verificabile senza leggere la pagina:
  * ha classe di concorso o materia **e** un'email di candidatura valida.
+ *
+ * Serve al presidio del link in ingresso (`presidioLinkIngresso.ts`): questi
+ * record non si pingano, perché un server scolastico risponde `403` a un client
+ * automatico qualunque sia lo stato del bando.
  */
 export function eRecordStrutturato(a: CandidatoLink): boolean {
   const classeOMateria = Boolean((a.classCodes ?? []).length > 0 || (a.materia ?? '').trim());
   const email = emailAvviso(a.contactEmail ?? undefined);
   return Boolean(classeOMateria && email);
-}
-
-export interface EsitoGateLink {
-  accetta: boolean;
-  /** True se il link è stato verificato dal vivo (ping riuscito). */
-  verificato: boolean;
-  motivo: string;
-}
-
-/**
- * Decide se tenere un record in base alla raggiungibilità del link.
- *
- * `raggiungibile` = `true` link verificato · `false` ping fallito (403/timeout/
- * anti-bot) · `null` ping non eseguito (record già strutturato).
- * Un ping fallito NON è più una condanna: se il record è strutturato (classe o
- * materia + email di candidatura) si accetta, loggando lo scarto di verifica.
- */
-export function valutaGateLink(a: CandidatoLink, raggiungibile: boolean | null): EsitoGateLink {
-  if (raggiungibile === true) {
-    return { accetta: true, verificato: true, motivo: 'link raggiungibile' };
-  }
-  if (eRecordStrutturato(a)) {
-    return {
-      accetta: true,
-      verificato: false,
-      motivo:
-        'record strutturato (classe/materia + email di candidatura): accettato senza ' +
-        'verifica del link (blocco anti-bot del server)',
-    };
-  }
-  return {
-    accetta: false,
-    verificato: false,
-    motivo:
-      'link non verificabile e record incompleto: manca la classe/materia o l’email di candidatura',
-  };
 }
 

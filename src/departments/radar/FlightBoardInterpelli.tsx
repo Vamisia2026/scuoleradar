@@ -7,7 +7,11 @@
  * risposta di PostgREST (max 1.000 righe). Chi entra in bacheca lo decide il
  * filtro condiviso `flightBoard/filtroAttivi.ts`: scadenza dichiarata e non ancora
  * passata (§26.71: la finestra dei 60 giorni non vale più in vetrina) e
- * `lib/liveBoard.ts` applica la stessa regola in memoria. Il totale mostrato è
+ * `lib/liveBoard.ts` applica la stessa regola in memoria. Dal §26.100 il filtro
+ * **non ha più un tetto in avanti**: la finestra di candidatura di 15 giorni resta
+ * al feed e al matching, mentre la vetrina mostra tutte le opportunità ancora
+ * aperte — il contatore riflette così il volume attivo reale, e chi scade fra un
+ * mese porta la banda blu «Scadenza lontana» invece di sparire. Il totale mostrato è
  * quello delle righe DAVVERO in vetrina: lo STESSO numero che genera le schermate.
  * Le righe presentabili vengono poi alternate per provincia
  * (`diversificaProvince`), così il tabellone è una vetrina NAZIONALE e non la
@@ -19,6 +23,14 @@
  *
  * Colonne: "Classe / Tipologia", "Scuola", "Descrizione", "Provincia", "Scadenza".
  * Nessun mock, nessuna barra di scorrimento orizzontale, altezza fissa e pulita.
+ *
+ * PALETTE UFFICIALE (direttiva 29/10/2026, §26.101). Il contenitore della tavola
+ * e la testata portano il BLU UFFICIALE `#2B6F9E` (bordo del riquadro, fondo
+ * dell'intestazione, pillola delle schermate), le righe respirano fra bianco e
+ * AZZURRINO SOFT `#EEF6FB`, i testi poggiano sul NERO `#0C2235`. Le bande di
+ * scadenza (verde `#1FA055` · giallo `#E2B33C` · rosso `#D9534F`, etichetta
+ * bianca) vivono nella riga (`flightBoard/components/RigaBoard.tsx`). Non resta
+ * nessun blu elettrico (`bg-blue-600`) né una tinta fuori coordinamento.
  */
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -178,20 +190,20 @@ export function FlightBoardInterpelli() {
         <IntestazioneBoard etichettaTotale={metrica.etichettaTotale} />
 
         {vuoto && (
-          <div className="rounded-xl border border-primary-100 bg-slate-900 px-6 py-10 text-center shadow-card">
-            <p className="text-lg font-bold text-white sm:text-xl">Nessun bando attivo al momento</p>
-            <p className="mx-auto mt-2 max-w-2xl text-sm leading-relaxed text-slate-300">
+          <div className="rounded-xl border border-[#2B6F9E] bg-[#EEF6FB] px-6 py-10 text-center shadow-card">
+            <p className="text-lg font-bold text-[#0C2235] sm:text-xl">Nessun bando attivo al momento</p>
+            <p className="mx-auto mt-2 max-w-2xl text-sm leading-relaxed text-[#1B4768]">
               La scansione resta accesa: appena lo scraper intercetta un interpello reale lo trovi qui, senza dover ricaricare la pagina.
             </p>
           </div>
         )}
 
         {!vuoto && (
-          <div className="overflow-hidden rounded-xl border border-primary-100 bg-slate-900 shadow-card">
+          <div className="overflow-hidden rounded-xl border border-[#2B6F9E] bg-white shadow-card">
             <div className="overflow-x-hidden">
               <div key={`pagina-${paginaSicura}`} className="flight-slide-in w-full">
                 <table className="w-full text-left text-sm table-fixed">
-                  <thead className="bg-slate-800 text-[11px] uppercase tracking-[0.14em] text-slate-300">
+                  <thead className="border-b border-[#2B6F9E] bg-[#2B6F9E] text-[11px] uppercase tracking-[0.14em] text-white">
                     <tr>
                       <th className="px-4 py-3 w-[15%]">Classe / Tipologia</th>
                       <th className="px-4 py-3 w-[24%]">Scuola</th>
@@ -200,7 +212,7 @@ export function FlightBoardInterpelli() {
                       <th className="px-4 py-3 w-[13%] text-center">Scadenza</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/60">
+                  <tbody className="divide-y divide-[#C9E0EF]">
                     {visibili.map((r, i) => (
                       <RigaBoard key={r.id} riga={r} indice={i} />
                     ))}
@@ -216,10 +228,10 @@ export function FlightBoardInterpelli() {
         {!vuoto && pagine > 1 && (
           <div className="mt-5 flex items-center justify-center gap-2.5">
             <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#1FA055] opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#1FA055]" />
             </span>
-            <span className="inline-flex items-center rounded-full bg-slate-900 px-5 py-2.5 text-sm font-black uppercase tracking-[0.12em] text-white shadow-card">
+            <span className="inline-flex items-center rounded-full bg-[#2B6F9E] px-5 py-2.5 text-sm font-black uppercase tracking-[0.12em] text-white shadow-card">
               {metrica.etichettaPagine}
             </span>
           </div>

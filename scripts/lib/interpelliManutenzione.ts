@@ -57,7 +57,7 @@ export interface LetturaInterpelli {
  *   · PostgREST → «Could not find the 'school_site' column of … in the schema cache»
  * Il riconoscimento di entrambe è ciò che rende davvero tollerante il run.
  */
-function colonnaAssente(messaggio: string): string | null {
+export function colonnaAssente(messaggio: string): string | null {
   const postgrest = messaggio.match(/Could not find the '([^']+)' column/i)?.[1];
   if (postgrest) return postgrest;
   const postgres = messaggio.match(/column\s+(?:[A-Za-z_][\w]*\.)?([A-Za-z_][\w]*)\s+does not exist/i)?.[1];

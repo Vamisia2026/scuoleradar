@@ -49,20 +49,26 @@ export const AGGREGATORE_NAZIONALE = 'https://www.scuolainterpelli.it/interpelli
 /** Massimo numero di fonti interrogate per una singola provincia. */
 export const MAX_FONTI_PER_PROVINCIA = 5;
 
-/** Massimo numero di fonti interrogate in un run (feed nazionale + hub locali). */
-export const MAX_FONTI_PER_RUN = 12;
+/**
+ * Massimo numero di fonti interrogate in un run (feed nazionale + hub locali).
+ * §26.101 (29/10/2026) — ATTACCO DI MASSA: era **12**. Con dodici fonti su ~180
+ * verificate il giro quotidiano rileggeva sempre gli stessi capoluoghi: era il
+ * budget (`SCRAPER_FONTI_MAX`) a fermarsi, non il registro a essere corto.
+ */
+export const MAX_FONTI_PER_RUN = 20;
 
 /**
- * Tetti degli hub interrogati per regione in un run (§26.89).
- *
+ * Tetti degli hub interrogati per regione in un run (§26.89, §26.101).
  * Gli hub territoriali verificati sono molti (un elenco per provincia), il
  * budget di rete di un run no. Restano tutti ATTIVI e verificati: questo tetto
  * sceglie solo quali interrogare ORA, con due garanzie:
  *   1. gli hub della provincia richiesta passano sempre per primi;
  *   2. la finestra sui restanti RUOTA ogni giorno (giorno UTC), così nell'arco
  *      della settimana tutti gli hub della regione vengono interrogati.
+ * Dal 29/10/2026 la finestra è **10** (era 6): sei hub coprivano un terzo delle
+ * province di Lombardia, Emilia-Romagna e Puglia e la rotazione non bastava.
  */
-export const MAX_HUB_PER_REGIONE = 6;
+export const MAX_HUB_PER_REGIONE = 10;
 
 /** Registro completo: feed dell'aggregatore + hub istituzionali dei capoluoghi. */
 export const FONTI_INTERPELLI: FonteInterpelli[] = [

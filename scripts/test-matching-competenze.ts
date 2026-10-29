@@ -26,6 +26,7 @@ import {
   normalizzaCompetenza,
   tokenCompetenza,
 } from '../src/lib/matchingEngine.ts';
+import { punteggioCompetenze } from '../src/lib/punteggioCompetenze.ts';
 import { inviaDigestGiornaliero } from '../src/lib/notifier.ts';
 
 declare const process: { exitCode?: number; env: Record<string, string | undefined>; pid: number };
@@ -179,6 +180,26 @@ async function digests(): Promise<void> {
   );
   process.exitCode = errori === 0 ? 0 : 1;
 }
+
+/* ===== 2-bis) BOOST DEL MOTORE MULTI-FATTORE (§26.106) ===== */
+
+console.log('\n— Boost ALTO: la parola richiesta c’è per intero (anche nei sinonimi) —');
+/** Grado, fascia di boost e punti di una parola chiave del profilo su un testo. */
+const esitoBoost = (parola: string, testo: string): [string | null, string | null, number] => {
+  const e = punteggioCompetenze({ materieCustom: [parola] }, { titolo: testo });
+  return [e.grado, e.boost, e.punteggio];
+};
+check('PNRR × «Avviso PNRR per esperti»', ['esatta', 'alto', 25], esitoBoost('PNRR', 'Avviso PNRR per esperti esterni'));
+check('PON × «Piano Operativo Nazionale» (sinonimo)', ['esatta', 'alto', 25], esitoBoost('PON', 'Avvisi Piano Operativo Nazionale 2026'));
+check('POR × sigla nel titolo', ['esatta', 'alto', 25], esitoBoost('POR', 'Fondi POR per laboratori'));
+check('Tutor × «tutoraggio» (sinonimo)', ['esatta', 'alto', 25], esitoBoost('Tutor', 'Attività di tutoraggio PCTO'));
+check('Laboratorio × «Laboratorio didattico di scienze»', ['esatta', 'alto', 25], esitoBoost('Laboratorio', 'Laboratorio didattico di scienze'));
+check('Laboratorio × plurale «laboratori»', ['esatta', 'alto', 25], esitoBoost('Laboratorio', 'Percorso nei laboratori della scuola'));
+check('«ponte» NON è «PON» (confine di parola)', [null, null, 0], esitoBoost('PON', 'Interpello per il ponte scolastico'));
+
+console.log('\n— Boost MEDIO: la parola è correlata (area, ponte, token parziali) —');
+check('stessa area disciplinare (Digitale ↔ robotica)', ['riconducibile', 'medio', 10], esitoBoost('Digitale', 'Progetto di robotica educativa'));
+check('token parziali (match vicino)', ['vicina', 'medio', 20], esitoBoost('Didattica Multimediale', 'Corso multimediale'));
 
 await digests();
 if (existsSync(percorsoLedger)) rmSync(percorsoLedger, { force: true });

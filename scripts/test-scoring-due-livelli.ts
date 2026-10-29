@@ -93,7 +93,7 @@ check('incremento dichiarato dal modulo', 3, INCREMENTO_JOLLY);
 
 check(
   'nessuna competenza nel testo → il livello secondario tace',
-  { punteggio: 0, competenza: null, grado: null, incrementi: 0, motivi: [] },
+  { punteggio: 0, competenza: null, grado: null, incrementi: 0, boost: null, motivi: [] },
   punteggioCompetenze({ materieCustom: ['Pedagogia Steineriana'] }, { titolo: 'Interpello di matematica' }),
 );
 check(

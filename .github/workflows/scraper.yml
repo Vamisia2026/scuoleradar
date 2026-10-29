@@ -29,7 +29,11 @@ jobs:
   scrape:
     name: Scraping interpelli → Supabase (interpelli, fallback notices)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # §26.101 — ATTACCO DI MASSA: il budget di fonti per giro è passato da 12 a 20
+    # (e gli hub per regione da 6 a 10). Il timeout cresce con il budget: prima
+    # 20 minuti con 12 fonti, ora 35 con 20 — meglio tagliare il giro dall'alto
+    # che perderlo a metà.
+    timeout-minutes: 35
     # Necessari per committare il LEDGER anti-duplicato (.scuoleradar/).
     permissions:
       contents: write
@@ -113,8 +117,12 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHANNELS: ${{ secrets.TELEGRAM_CHANNELS }}
           ADMIN_ALERT_SECRET: ${{ secrets.ADMIN_ALERT_SECRET }}
-          SCRAPER_SCADENZA_MAX: '20'
-          SCRAPER_ELENCHI_MAX: '25'
+          SCRAPER_SCADENZA_MAX: '40'
+          SCRAPER_ELENCHI_MAX: '60'
+          # §26.101 — sgranatura: più post letti per indice e più elenchi espansi
+          # in un giro. Sono aperture di documenti, quindi restano tetti espliciti.
+          SCRAPER_POST_MAX: '12'
+          SCRAPER_FONTI_MAX: '20'
         run: npm run scrape
 
       - name: Commit del LEDGER anti-duplicato (se aggiornato)

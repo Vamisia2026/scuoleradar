@@ -8,6 +8,7 @@
  * CPIA, ATA, esperti esterni.
  */
 import type { RigaProvaRadar } from '@/lib/provaRadarEngine';
+import { avviaMonitoraggioProva, type MonitoraggioProva } from '@/lib/provaRadar';
 import { supabase } from '@/lib/supabase';
 import { FONTE_RICHIESTA_PROVA, richiediScansioniProvince } from '@/lib/queueRichieste';
 
@@ -76,4 +77,26 @@ export async function leggiInterpelliProva(
  */
 export async function richiediScansioneProva(provincia: string): Promise<string[]> {
   return richiediScansioniProvince(supabase, [provincia], FONTE_RICHIESTA_PROVA);
+}
+
+/**
+ * REGISTRA LA PROVA (§26.107) — l'unica porta d'ingresso del box: alla ricerca di
+ * una provincia si accende il monitoraggio temporaneo (7 giorni,
+ * `@/lib/provaRadar`) e la provincia viene MANDATA AL RADAR GENERALE, cioè alla
+ * coda di scansione (`richiediScansioneProva` → `request_scan_target`), che
+ * anticipa il giro regionale e ne alza la priorità.
+ *
+ * Sincrona di proposito: il flag è locale (nessuna latenza) e la richiesta alla
+ * coda parte senza essere attesa — il responso della prova non deve aspettare la
+ * rete, e `richiediScansioneProva` non lancia mai. `adesso` è iniettabile per le
+ * guardie: il monitoraggio non dipende dall'orologio della macchina.
+ */
+export function registraProvaRadar(
+  provincia: string,
+  adesso: Date = new Date(),
+): MonitoraggioProva | null {
+  const monitoraggio = avviaMonitoraggioProva(provincia, adesso);
+  if (!monitoraggio) return null;
+  void richiediScansioneProva(monitoraggio.provincia);
+  return monitoraggio;
 }

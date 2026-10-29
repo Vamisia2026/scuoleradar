@@ -25,15 +25,23 @@
 
 import { piattaformaScolastica, type PiattaformaScolastica } from '../lib/piattaformeLink.ts';
 
-/** Estensione di un documento scaricabile (il `.p7m` è il PDF firmato). */
-const RE_ESTENSIONE_DOCUMENTO = /\.(?:pdf|p7m)$/i;
+/**
+ * Estensione di un documento scaricabile (il `.p7m` è il PDF firmato).
+ * §26.101 — l'estensione può stare anche PRIMA della fine del percorso: il
+ * repository Liferay del MIM serve i propri allegati come
+ * `/documents/9081047/10244555/Interpelli+n.+72.pdf/<uuid>?version=1.0`.
+ * Con la sola estensione finale quei documenti non erano riconosciuti e 200
+ * avvisi per ufficio restavano senza scadenza («Data Scadenza: -», il termine
+ * era dentro il PDF).
+ */
+const RE_ESTENSIONE_DOCUMENTO = /\.(?:pdf|p7m)(?:$|[/?#])/i;
 
 /**
  * Endpoint tipici dei gestori documentali: la pagina non ha estensione ma serve
- * un file (`/documento/12`, `?docId=…`, `/download/…`, `/anteprima/…`).
+ * un file (`/documento/12`, `/documents/9081047/…`, `?docId=…`, `/download/…`).
  */
 const RE_ENDPOINT_DOCUMENTO =
-  /\/(?:document[oi]|allegat[oi]|download|openfile|getfile|visualizza|anteprima|viewer|file)\b|[?&](?:doc(?:umento)?_?id|id_documento|allegato|file|doc)=/i;
+  /\/(?:document[oi]|documents|allegat[oi]|download|openfile|getfile|visualizza|anteprima|viewer|file)\b|[?&](?:doc(?:umento)?_?id|id_documento|allegato|file|doc)=/i;
 
 /** Un `.pdf` può comparire anche in query (viewer Google: `?url=…pdf`). */
 const RE_PDF_IN_URL = /\.pdf(?:$|[&#?])/i;
@@ -83,6 +91,36 @@ export function piattaformaAllegato(url?: string | null): PiattaformaScolastica 
 /** True se l'URL è un allegato servito da una piattaforma documentale. */
 export function eAllegatoPiattaforma(url?: string | null): boolean {
   return piattaformaAllegato(url) !== null;
+}
+
+/** Segmenti finali che sono una pagina di ACCESSO, non un avviso. */
+const RE_SEGMENTO_LOGIN =
+  /^(?:login|log-in|signin|sign-in|accedi|accesso|home|index\.php\d?|index\.html?)$/i;
+
+/**
+ * §26.101 — AVVISO su una piattaforma: un link PROFONDO (almeno tre segmenti di
+ * percorso) su Argo / Nuvola–Spaggiari / Gecodoc / ClasseViva.
+ *
+ * Perché serve: la tabella di un documento dichiara l'avviso della SINGOLA
+ * scuola proprio così —
+ * `nuvola.madisoft.it/bacheca-digitale/bacheca/BGIC85100N/4/IN_PUBBLICAZIONE/…`
+ * — e quel link non è una pagina di credenziali: è il documento che la scuola ha
+ * pubblicato. Senza questa distinzione la regola «mai una piattaforma» buttava
+ * via la riga, pur avendo codice, classe e scadenza certificati.
+ *
+ * Restano fuori, come sempre: la home (`/`), `/login`, `/argoweb/login`, un
+ * sottosito di un segmento solo. Nessun URL costruito: si guarda quello letto.
+ */
+export function eAvvisoSuPiattaforma(url?: string | null): boolean {
+  if (eFileDocumento(url)) return piattaformaScolastica(url) !== null;
+  if (piattaformaScolastica(url) === null) return false;
+  try {
+    const segmenti = new URL(String(url)).pathname.split('/').filter(Boolean);
+    if (segmenti.length < 3) return false;
+    return !RE_SEGMENTO_LOGIN.test(segmenti[segmenti.length - 1]);
+  } catch {
+    return false;
+  }
 }
 
 const RE_CONTENITORE = /<(?:iframe|embed|object)\b[^>]*\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
