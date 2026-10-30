@@ -163,9 +163,12 @@ async function main(): Promise<void> {
     leggi('src/lib/sourceTelemetry.ts').includes('quarantenaScaduta(precedente, adesso)'),
     leggi('src/lib/sourceTelemetry.ts').includes('return fontiIsolate(tutte, opzioni.adesso)'),
   ]);
+  // §26.112: la coda si legge in due query (prima le istituzionali, poi il
+  // resto), quindi il filtro delle fonti isolate deve stare su entrambe.
+  const discovery = leggi('scripts/discovery-engine.ts');
   check('i runner saltano le fonti isolate', [true, true], [
     leggi('scripts/table-reporter.ts').includes('filtraFontiSane(targets, quarantena'),
-    leggi('scripts/discovery-engine.ts').includes('return filtraFontiSane(righe, escluse)'),
+    (discovery.match(/filtraFontiSane\(\s*await chiediCoda\([^)]*\)\s*,\s*escluse/g) ?? []).length >= 2,
   ]);
   check('la migrazione conserva la data dell’isolamento', true, /quarantined_at/.test(leggi('supabase/migrations/20261023120000_create_source_health.sql')));
 

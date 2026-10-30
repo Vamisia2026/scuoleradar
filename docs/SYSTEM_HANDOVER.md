@@ -509,7 +509,11 @@ data/ · types.ts`. Dettaglio e regole: [`DEPARTMENT_MAP.md`](./DEPARTMENT_MAP.m
 | `fontiWhitelist2610.ts` | 222 | **Node-only, puro, SOLO DATI** (§26.97) — whitelist UST/USR verificata il 26/10/2026: 84 tuple attive (83 hub + 1 aggregatore InterpelloWeb), `ALIAS_SCARTATI` (le 6 URL non registrate: alias o indici di scelta) e `RIEPILOGO_WHITELIST_2610` (attive/spente/totale). Importato da `fonti.ts` con una spread; `id` con prefisso `w26-` |
 | `fontiEsclusiWhitelist2610.ts` | 98 | **Node-only, puro, SOLO DATI** (§26.97) — le 27 URL della stessa whitelist che restano `attiva: false` con il motivo dichiarato (home senza voci, pagina-guscio JS, alias, TLS, DNS, 403 anti-bot, SharePoint, albo, ricerca). `npm run fonti:verifica` le ricontrolla |
 | `hub.ts` | 111 | **Node-only, puro** — connettore dei capoluoghi: `eUrlSezioneReclutamento`/`scopriSezioniReclutamento` (dalle pagine USR si scoprono le sezioni interpelli/avvisi, max `MAX_SEZIONI_HUB`), `eTitoloNavigazione` (menu/archivi/ricerca non sono avvisi) |
-| `qualitaOpportunita.ts` | 202 | **Node-only, puro** — conformità della bacheca: `eContenutoEditoriale`/`motivoScartoEditoriale` (separazione dal dominio Notizie), `eTitoloInformativo` (esiti/graduatorie), `motivoScartoOpportunita` (editoriale → informativo → non-opportunità → categoria → scaduto), `eRecordStrutturato` e **`valutaGateLink`** (ping fallace ≠ record scartato) |
+| `qualitaOpportunita.ts` | 196 | **Node-only, puro** — conformità della bacheca: `eContenutoEditoriale`/`motivoScartoEditoriale` (separazione dal dominio Notizie), `eTitoloInformativo` (delega ad `attiConclusi`), `motivoScartoOpportunita` (editoriale → atto concluso → pagina di servizio → rumore → non-opportunità → categoria → scaduto), `eRecordStrutturato` e **`valutaGateLink`** (ping fallace ≠ record scartato) |
+| `attiConclusi.ts` | 140 | **Puro** (§26.115) — la procedura è chiusa: `valutaAttoConcluso`/`eAttoConcluso`. Atto in TESTA (graduatoria, esiti, nomina, contratto, decreto, aggiudicazione, individuazione di una persona) oppure atto NEL titolo **solo senza apertura** (`interpello`, `bando`, `selezione`, `candidature`, `incarico`, `conferimento`): un interpello che *cita* le graduatorie resta ammesso. «Individuazione di esperti» (PNRR) è un bando; «individuazione del docente» è un atto |
+| `paginaServizio.ts` | 98 | **Puro** (§26.115) — le pagine che *spiegano* non reclutano: `motivoPaginaServizio`/`ePaginaServizio` («come inviare», «modalità di presentazione», FAQ, guida, «cos'è», MAD). Vale SOLO senza scadenza e senza classe: con una delle due la pagina resta (è un bando che spiega anche come si invia la domanda) |
+| `allegatiBando.ts` | 169 | **Puro** (§26.115) — il bando vive nel PDF: `ePaginaSenzaContenuto`/`testoPagina` (guscio = solo etichette), `allegatiBando` (pertinenza bando > avviso/interpello > domanda, stesso istituto, **mai un aggregatore terzo**), `allegatiDaGuscio` (l'unica domanda del deep crawl), `titoloDaAllegato` (link o nome del file ripulito) |
+| `datiBando.ts` | 156 | **Puro** (§26.115) — dal documento alla riga: `datiBandoDaTesto` (cinque campi di `campiDocumento` + ore e requisiti), `oreSettimanaliDaTesto` (solo forme dichiarate: «18 ore settimanali», «n. 6 ore»), `requisitiDaTesto` (max 3 frasi), `intestazioneDaDocumento`/`titoloBandoDaDocumento` (etichetta «Interpello» + classe + ore, mai un doppione) |
 | `elenchi.ts` | 234 | **Node-only, puro** — espansione delle PAGINE INDICE ("elenchi" USR/USP): `estraiVociElenco` estrae **una voce per avviso** (riga più specifica vince, mai la lista master), `ePaginaElenco` riconosce la pagina indice, `espandiElencoInAvvisi` le trasforma in avvisi strutturati con link proprio. Riconoscimento di pagina e di riga: `paginaElenco.ts` / `righeTabella.ts` |
 | `paginaElenco.ts` | 69 | **Node-only, puro** — riconoscimento della PAGINA INDICE: `eUrlElenco` (percorso: `/avvisi/`, `?sezione=bandi`), `sembraTitoloElenco` ("Elenco interpelli"), **`eUrlHome`** (radice del dominio o file di indice senza query: un link di TESTATA non è mai un avviso — `index.php` del portale provinciale) |
 | `righeTabella.ts` | 180 | **Node-only, puro** — riconoscimento delle RIGHE di dati: `celleRiga`/`intestazioniTabella`/`eRigaIntestazione` (la riga di intestazione non è una voce), `suggerimentiDaRiga` (etichetta di colonna: «Scadenza» qualifica la data), `datiRiga`/`titoloVoce` (contesto della riga per titolo e scadenza). Copre **`<table>`** e **griglie ARIA** (`div[role="row"]`/`[role="cell"]`, USR Liguria `provincia.php`); gli `<span>` adiacenti sono separati da spazio (mai parole incollate) |
@@ -11809,4 +11813,455 @@ non dove si guarda il motore. Spostare lo strumento dove il lavoro avviene
 (§26.109) non arrivavano a nessun pannello. Il costo di questa sessione è stato un
 campo opzionale nel contratto e un decimo `from()` nella Edge — nessuna nuova
 tabella, nessuna migrazione, nessun permesso nuovo.
+
+
+## §26.111 — La vetrina non resta corta: provincia → regione → Italia (30/10/2026)
+
+### 1. Il deserto di Asti non era «nessun avviso»: era una vetrina corta
+
+Asti, 30/10/2026: dashboard aperta, **zero opportunità**. Il paracadute «5
+osso-da-mordere» (§26.106) completava la bacheca con le migliori righe della
+*scorta*, ma la scorta è fatta delle **stesse righe che il database aveva già
+restituito** per la provincia del profilo: se quella provincia non ha nemmeno
+cinque avvisi attivi, il paracadute non ha niente da cui attingere. Un utente che
+apre la pagina e trova il vuoto non distingue «non ci sono avvisi per te» da «il
+Radar non ha guardato»: la pagina deve dire sempre **cosa** c'è.
+
+### 2. La regola (una sola, in ordine di precedenza)
+
+Nuovo modulo **puro** `src/lib/ambitoBacheca.ts` (**170 righe**, zero rete, zero
+`node:*`, importabile dal browser):
+
+1. le opportunità di **provincia** (bacheca + scorta §26.106) sono la vetrina;
+2. se non arrivano a `MINIMO_BACHECA` (**5**, letto da `riempitivi.ts`: una sola
+   verità, non un secondo «5» scritto qui) si integrano le più **recenti** della
+   stessa **regione** (tutte le province della regione del profilo, da
+   `provinceDellaRegione` → `src/data/province.ts`);
+3. se ancora non bastano, si integra il resto d'**Italia**.
+
+`integraAmbiti(principali, { regionali, nazionali })` restituisce `lista` (ogni
+riga porta `ambito`), `aggiunti`, `daRegione`, `daNazionale` e un `motivo`
+dichiarato: `'sufficiente'` · `'integrato'` · `'ambito-esaurito'`. Le aggiunte
+sono ordinate per **pubblicazione decrescente, poi `id` crescente** (ordine
+deterministico, verificabile) e deduplicate per `id` contro le righe già in
+vetrina.
+
+Il tetto è **uno solo per regione + nazione insieme**. La prima stesura sommava
+`lista.length + scelte.length` *dentro* il gruppo corrente, quindi dopo aver
+riempito la regione la nazione aggiungeva altre tre righe (7 invece di 5): la
+guardia l'ha misurato (`atteso=5 ottenuto=7`), e il difetto era reale — la
+dashboard avrebbe mostrato più righe del minimo dichiarato. Ora un contatore
+`presenze` cresce ad ogni riga scelta.
+
+### 3. Il feed: una query larga solo quando serve
+
+In `src/contexts/app/useInterpelliFeed.ts`:
+
+* `mancantiVetrina = max(0, MINIMO_BACHECA - bacheca.length)` — dipende **solo**
+  dalla bacheca, mai dalla lista integrata: nessun ciclo di query;
+* se serve, **una** query larga (`getFeedInterpelli(client, { classi, limit:
+  RIGHE_FEED })`, senza filtro geografico) e `fontiAmbito` in stato; il flag
+  `attivo` chiude la corsa allo smontaggio; un errore **non rompe la pagina**:
+  `console.warn` e insieme vuoto (la vetrina resta quella della provincia);
+* le righe fuori ambito passano lo **stesso gate del feed**
+  (`eOpportunitaConScadenza`, §26.82): in vetrina entra solo ciò che si può
+  candidare adesso — un avviso «lontano» non entra solo perché è di un'altra
+  regione;
+* le righe fuori provincia viaggiano con `compatibilita: 0` e `ripiego: false`:
+  non sono state valutate sul profilo, quindi non possono portare il «100
+  neutro» in cima alla dashboard.
+
+Il campo `ambito` è dichiarato nel tipo (`src/data/interpelli.ts`): è un dato di
+**vetrina**, lo scrive il feed, non il database, e non entra in nessuna consegna
+(notifiche e digest restano strict, §26.45).
+
+### 4. La pagina lo dichiara
+
+`src/pages/dashboard/components/ElencoOpportunita.tsx`: una riga d'intestazione
+conta le righe fuori provincia («Le N opportunità segnalate come «Stessa
+regione» o «Resto d'Italia» arrivano da fuori dalla tua provincia…»), ogni card
+fuori ambito sostituisce il voto con il badge d'ambito (`ETICHETTA_AMBITO`) e il
+`title` spiega il perché (`descrizioneAmbito`). L'integrazione non è mai
+silenziosa: l'utente sa che la sua zona è corta.
+
+### 5. La guardia
+
+`npm run test:ambito-bacheca` (`scripts/test-ambito-bacheca.ts`, **196 righe, 63
+check**, in catena a `npm test`) — nove blocchi: geografia dall'anagrafica
+(Asti → Piemonte, 8 province, codici in minuscolo tollerati, codici ignoti →
+`null`), minimo già raggiunto (nessuna aggiunta), integrazione regionale e poi
+nazionale con i conti dichiarati, ordine delle aggiunte, dedup, immutabilità
+degli input, etichette e spiegazioni, purezza del modulo (nessun import di rete/
+`node:*`, sotto le 300 righe, `MINIMO_BACHECA` importato e non ricopiato) e
+cablaggio (feed e pagina usano il modulo, la voce `package.json` esiste, la
+guardia è nella catena).
+
+
+
+## §26.112 — La coda del discovery mette le scuole davanti, e le fonti isolate restano isolate (30/10/2026)
+
+### 1. Il difetto era nell'ordine della coda, non nel tetto
+
+La coda `discovered_links` era ordinata per `depth` e `path_score` soltanto. Le
+**828 home** seminate il 09/10/2026 (scuole private e dell'infanzia, host non
+istituzionali) stanno tutte a `depth 0` e `path_score 0`; le home `*.edu.it` di
+Asti — anch'esse a `depth 0` — finivano nello stesso gruppo, e a pari punteggio
+l'ordine è quello **fisico** del database. Con un tetto di 120 target al giorno le
+21 home istituzionali della provincia **non venivano mai raggiunte**: zero
+opportunità per Asti, e nessuna riga di log che lo dicesse.
+
+### 2. La regola
+
+Nuovo modulo **puro** `src/lib/prioritaCoda.ts` (**94 righe**):
+
+* **prima i target istituzionali** (`eDominioIstituzionale`, §26.109: `*.edu.it`,
+  `*.gov.it`, portali del Ministero, portali USR/UST dichiarati nel registro
+  fonti), **poi** tutto il resto;
+* dentro ciascun gruppo resta l'ordine storico: `depth` crescente, poi
+  `path_score` decrescente, poi URL — deterministico e verificabile;
+* **niente si perde**: le righe non istituzionali restano in coda e vengono lette
+  quando gli istituzionali sono finiti (`scartate` dice quante restano oltre il
+  tetto del giro);
+* dedup per `id` (o per URL se l'id manca): una riga ripetuta dal database non
+  consuma due volte il tetto.
+
+`ordinaCoda(righe, limite, { portaliUfficiali })` restituisce `{ scelte,
+istituzionali, altre, scartate }`, cioè i numeri che il log dichiara.
+
+### 3. Il cablaggio in `scripts/discovery-engine.ts`
+
+`fetchPendingTargets` legge la coda in **due query**: `chiediCoda(finestra,
+provinceFilter, true)` con il filtro `FILTRO_HOST_ISTITUZIONALI` (una sola verità
+con la whitelist, niente regex locali) e, **solo** se la finestra istituzionale
+non basta, `chiediCoda(finestra + limit, provinceFilter, false)` per il resto.
+Entrambe passano da `filtraFontiSane(…, escluse)`: le fonti in quarantena
+(§26.109) occupano spazio nella finestra ma non vengono lette, e restano
+`pending` così tornano candidabili da sole quando un run riuscito le riabilita.
+Il giro chiude con una riga di log che si può pesare:
+
+```
+[coda] 34 target istituzionali · 86 altre fonti · 828 righe in attesa oltre il tetto del giro
+```
+
+La guardia di §26.109 (`src/lib/__tests__/quarantenaFonti.test.ts`) verificava
+la forma `return filtraFontiSane(righe, escluse)`: con due query quella forma non
+esiste più, quindi il check ora chiede **il filtro su entrambe** («§26.112: la
+coda si legge in due query, quindi il filtro delle fonti isolate deve stare su
+entrambe»). Il vincolo è più stretto di prima, non più largo.
+
+### 4. La guardia
+
+`npm run test:priorita-coda` (`scripts/test-priorita-coda.ts`, **172 righe, 38
+check**, in catena a `npm test`) — otto blocchi: scuole davanti e resto dietro,
+nessuna riga persa, ordine storico conservato dentro il gruppo, portali
+ufficiali riconosciuti dal registro (senza copiarli), tetto rispettato (zero e
+negativo = nessuna scelta, frazionario arrotondato per difetto), dedup, ordine
+del chiamante mai modificato, purezza del modulo e cablaggio (il discovery chiama
+`ordinaCoda`, legge il registro dei portali, chiede la coda istituzionale per
+prima, logga il verdetto).
+
+## §26.113 — Pagine guscio: se la home è un frame, si entra nel contenuto vero (30/10/2026)
+
+### 1. Una scuola «senza albo» che l'albo ce l'aveva
+
+Molti siti di istituto non pubblicano l'albo nella pagina che l'anagrafica
+dichiara. La home è un `frameset` (o un `<iframe>` a tutta pagina) che carica il
+portale vero, oppure una pagina con il solo `<meta http-equiv="refresh"
+content="0;url=…">`. In quei casi il deep crawl (§26.94) leggeva la home, non
+trovava **un solo** link «Interpelli/Albo» e chiudeva la scuola con
+`linkTrovati: 0`: zero avvisi, e nessuno poteva sapere che la pagina non era
+vuota — era un **guscio**.
+
+### 2. La regola
+
+Nuovo modulo **puro** `src/scraper/guscioPagina.ts` (**113 righe**):
+`urlGuscio(html, baseUrl)` restituisce l'URL del contenuto vero, in quest'ordine:
+
+1. `<iframe src>` / `<frame src>` (apici doppi, singoli o assenti, attributi in
+   qualsiasi ordine);
+2. `<meta http-equiv="refresh" content="…url=…">`.
+
+Nessun URL costruito a mano: solo ciò che è scritto nella pagina (`new URL(src,
+base)` e `null` se non è `http(s)`).
+
+**Fuori per scelta**: `about:blank`, `javascript:`, i contenitori pubblicitari e i
+social (`google.com`, `googletagmanager.com`, `doubleclick.net`, `youtube.com`,
+`facebook.com`, `instagram.com`, `linkedin.com`, `twitter.com`, `x.com`) non sono
+contenuti, sono contorni che porterebbero il crawler fuori dal sito della scuola.
+Un frame che punta alla **pagina stessa** (anche con ancora o barra finale
+diversa) è un anello, non un contenuto: `null`. Un link interno **non** è un
+guscio: niente falsi positivi.
+
+### 3. Il cablaggio in `src/scraper/deepCrawlScuole.ts`
+
+Il guscio si apre **solo quando serve**, cioè quando la home non ha prodotto
+nemmeno un candidato (`candidati.length === 0`): una volta sola, senza ricorsione.
+La pagina interna entra in `pagine` (spesso **è** il portale vero) e consuma uno
+slot del tetto (`maxPagine - 1` per i link successivi). Gli errori si dichiarano
+invece di sparire: `guscio ${dentro}: HTTP ${status}`, `guscio ${dentro}: non
+HTML (…)`, `guscio ${dentro}: ${messaggio(err)}`.
+
+### 4. La guardia
+
+`npm run test:guscio-pagina` (`scripts/test-guscio-pagina.ts`, **175 righe, 35
+check**, in catena a `npm test`) — sei blocchi: iframe/frameset e meta refresh
+(con priorità al frame), pubblicità/social/self-frame scartati, input sporchi
+(`html` vuoto o non stringa, base URL illeggibile) che non lanciano, purezza del
+modulo (nessun `node:*`, gira anche nel browser, nessun database) e cablaggio del
+deep crawl (`urlGuscio`, `candidati.length === 0`, messaggio `guscio ${dentro}:
+HTTP`).
+
+## §26.114 — L'orizzonte dell'ingestione è separato dall'orizzonte della vetrina (30/10/2026)
+
+### 1. Il numero giusto usato nel posto sbagliato
+
+`GIORNI_ORIZZONTE_OPPORTUNITA` (**15**, §26.82) risponde alla domanda «cosa posso
+candidare adesso» ed è giusto che tagli feed e matching. Usato anche
+all'**ingresso**, però, cancellava il dato alla fonte. Misurato il 30/10/2026 sul
+portale USR Piemonte: le righe di Asti ancora aperte
+(`servizi.istruzionepiemonte.it/interpello2025/…_at.php`) dichiarano `Data
+Scadenza Interpello = 2027-04-30` — è il segnaposto che il portale usa per
+«disponibile fino a 10 giorni», cioè un avviso **senza termine fisso** che la
+scuola lascia aperto. Con il tetto di 15 giorni nessuna riga AT entrava mai
+(Alessandria, con scadenze ravvicinate, ne produceva 4): la provincia risultava
+deserta **non perché non ci fossero avvisi, ma perché li scartavamo noi**. Una
+riga persa all'ingresso non torna; una riga conservata la filtrano comunque le
+superfici che devono farlo.
+
+### 2. La regola
+
+In `src/lib/scadenza.ts`, accanto alla finestra dei 15 giorni (che **non
+cambia**), nasce `GIORNI_ORIZZONTE_INGESTIONE = 365`: quanto lontano nel futuro
+una scadenza **dichiarata dalla fonte** può stare e venire comunque conservata.
+Non è l'orizzonte della vetrina, è l'archivio. Il tetto resta per non registrare
+refusi d'anno (`2099`) come opportunità; entro l'anno la data è quella che la
+fonte dichiara.
+
+`scripts/table-reporter.ts` importa il nuovo costante e lo usa per
+`LIMITE_ORIZZONTE_ISO`, per il conteggio `scartateOltreOrizzonte` e per i messaggi
+di log — compreso quello dedicato alla Liguria — che ora dichiarano l'orizzonte
+**giusto** («oltre l'orizzonte di 365 giorni»). Feed, matching e `filtroAttivi`
+restano dentro i 15 giorni; la bacheca pubblica resta senza tetto (§26.100, banda
+blu «Scadenza lontana»).
+
+### 3. Verifiche (30/10/2026)
+
+`npm run typecheck` ✅ exit 0, **0** `error TS` · **`npm test` ✅ exit 0** (5.017
+righe di output, tutte le guardie in catena chiuse con ✅), con le tre guardie
+nuove (`test:ambito-bacheca` ✅, `test:priorita-coda` ✅, `test:guscio-pagina` ✅)
+e `test:quarantena` ✅ allineato alla coda a due query · `test:architettura` ✅
+**757 file, 145 violazioni = baseline esatta, 0 nuove** · `build` ✅ vite
+`built in 13,86s` · `npx eslint` ✅ exit 0 sui 14 file toccati (nessun avviso,
+a parte il noto avviso di versione TypeScript di `@typescript-eslint`).
+
+**File toccati.** *Nuovi*: `src/lib/ambitoBacheca.ts` (170),
+`src/lib/prioritaCoda.ts` (94), `src/scraper/guscioPagina.ts` (113),
+`scripts/test-ambito-bacheca.ts` (196), `scripts/test-priorita-coda.ts` (172),
+`scripts/test-guscio-pagina.ts` (175). *Modificati*: `src/lib/scadenza.ts`
+(`GIORNI_ORIZZONTE_INGESTIONE`), `scripts/table-reporter.ts` (orizzonte
+d'ingresso), `src/contexts/app/useInterpelliFeed.ts` (`integraAmbiti`, query
+larga condizionata, gate dei 15 giorni anche sulle righe fuori ambito),
+`src/data/interpelli.ts` (campo `ambito`),
+`src/pages/dashboard/components/ElencoOpportunita.tsx` (intestazione e badge
+d'ambito), `scripts/discovery-engine.ts` (coda a due query),
+`src/scraper/deepCrawlScuole.ts` (apertura del guscio),
+`src/lib/__tests__/quarantenaFonti.test.ts` (cablaggio a due query),
+`package.json` (tre voci e catena), `docs/SYSTEM_HANDOVER.md` e
+`docs/DEPARTMENT_MAP.md`.
+
+**Nessun dipartimento toccato**: tutti i file stanno nei condivisi essenziali,
+nell'ingestione o nella documentazione.
+
+**Nota di sessione.** Le quattro modifiche hanno la stessa radice: il dato c'era
+e non arrivava. Asti non era vuota — la coda non leggeva le scuole (§26.112), le
+scadenze lunghe venivano buttate all'ingresso (§26.114), le home che sono gusci
+chiudevano la scuola a zero link (§26.113) e, quel che restava, non bastava a
+riempire una vetrina di cinque righe (§26.111). La lezione: **ogni filtro deve
+dichiarare di quale domanda è la risposta**. I 15 giorni rispondono a «posso
+candidarmi adesso», non a «questo avviso esiste»; e una pagina vuota e un guscio
+non sono la stessa cosa.
+
+## §26.115 — L'albo non è la bacheca: atti conclusi, pagine di servizio e il bando che vive nel PDF (30/10/2026)
+
+### 1. I tre falsi positivi che il cliente ha visto in pagina
+
+Un albo scolastico non pubblica solo bandi. Pubblica, con lo stesso formato e lo
+stesso rilievo visivo:
+
+1. **l'ATTO che chiude il bando** — «Graduatoria provvisoria…» (Chieti-Pescara),
+   «Nomina supplente A022» (Cuneo), «Contratto individuale…», «Decreto di
+   aggiudicazione…». Il candidato apriva la riga e trovava il nome di un altro:
+   la procedura era finita prima che entrasse in bacheca;
+2. **la pagina che SPIEGA come candidarsi** — «Messa a disposizione: come inviare
+   la propria candidatura» (Perugia 14), «Modalità di presentazione delle
+   domande», le FAQ. Sono pagine utili e non opportunità: nessuno si candida *a*
+   una spiegazione;
+3. **il bando che vive DENTRO un PDF** — la pagina HTML è un guscio con solo il
+   link al documento (Piacenza) o un elenco di file senza contesto (il
+   «cimitero»): l'HTML non dice niente e il dato (data, classe, ore, requisiti)
+   sta nel documento.
+
+Tre difetti, una radice: **il motore giudicava il contenitore, non la riga**. Il
+titolo era già la prova — come per il rumore amministrativo (§26.82) e per il
+contorno del feed (§26.65) — ma la regola guardava solo l'INIZIO del titolo e
+solo i bandi; e dove l'HTML taceva, il documento non veniva aperto.
+
+### 2. Atti conclusi: due gradini, e una parola che non si tocca (`attiConclusi.ts`)
+
+Nuovo modulo **puro** (140 righe, zero import, gira anche nel browser).
+`valutaAttoConcluso(titolo)` risponde `{concluso, tipo, motivo}`:
+
+* **gradino 1 — l'atto è la prima parola**: `graduatorie`, `esiti`/`risultanze`,
+  `verbale`, `nomina`/`nomine`, `contratto`/`contratti`, `aggiudicazione`/
+  `aggiudicatari`, `decreto`/`determina`, `approvazione`, `annullamento`/
+  `revoca`/`rettifica`, `elenco degli ammessi`, `pubblicazione della
+  graduatoria`. Nessuna apertura la salva: la pubblicazione **è** l'atto;
+* **gradino 2 — l'atto è più avanti nel titolo** (Chieti-Pescara, Cuneo) e vale
+  solo se il titolo **non dichiara un'apertura**: `interpello`, `bando`,
+  `selezione`, `candidature`, `domande`, `manifestazione`, `messa a
+  disposizione`, `disponibilità`, `reclutamento`, `incarico`, `conferimento`,
+  `assunzione`. Così «Interpello supplenza A-022 **da graduatorie di istituto**»
+  resta un'opportunità (§26.47: una riga genuina non si scarta).
+
+**«Individuazione» è una parola onesta.** «Avviso di individuazione di esperti»
+è il bando PNRR di un istituto; «individuazione **del** docente»,
+«**dell'**aggiudicatario» è l'atto con cui si sceglie la persona. La differenza
+è l'oggetto, non la parola: la regex chiede `del|dello|della|dei|degli|delle|dell'`
+dopo «individuazione», e solo allora scarta.
+
+Il CORPO non entra nel giudizio: un bando vero cita «graduatorie di istituto» e
+«contratti» nel testo. L'atto concluso si annuncia nel titolo.
+
+`qualitaOpportunita.eTitoloInformativo` **delega** al nuovo modulo (una sola
+verità: la vecchia regex locale è stata rimossa) e `motivoScartoOpportunita`
+applica il giudizio subito dopo il filtro editoriale, mantenendo alla lettera il
+messaggio storico — `atto informativo/esito (non un'opportunità aperta)` — che le
+guardie citano.
+
+### 3. Le pagine di servizio: la spiegazione non è un'offerta (`paginaServizio.ts`)
+
+Nuovo modulo **puro** (98 righe): `motivoPaginaServizio`/`ePaginaServizio`.
+Riconosce l'intento didascalico — «come inviare/presentare/compilare», «modalità
+di invio/presentazione della domanda», «pagina informativa»/«informazioni
+generali», FAQ, «guida/istruzioni», «cos'è…», la MAD spiegata — e scarta la riga
+**solo se non porta né una scadenza né una classe di concorso**. La condizione di
+sicurezza è il punto: un bando vero dichiara il termine, e spesso spiega anche
+come si invia la domanda; senza scadenza e senza classe, invece, non c'è nulla a
+cui candidarsi, e la riga resta solo rumore in bacheca. La guardia ha il caso
+opposto fra i suoi check: lo stesso titolo MAD **con** una scadenza o **con** una
+classe non viene toccato.
+
+### 4. Il guscio con l'allegato, e il cimitero di file (`allegatiBando.ts`, `datiBando.ts`)
+
+Due moduli **puri**, entrambi sotto le 170 righe.
+
+`allegatiBando.ts` risponde a una domanda sola: *questa pagina è un guscio con un
+bando dentro?*
+
+* `ePaginaSenzaContenuto` misura il testo leggibile (via `script`/`style`) e la
+  frase più lunga: un guscio ha «Home | Albo | Contatti» e nient'altro;
+* `allegatiBando` riusa la regola di §26.95 (`linkScuola.linkAllegatiInterpello`:
+  stesso istituto, mai piattaforma privata, mai file non pertinente) e ordina i
+  candidati per pertinenza — `bando` (4) > `avviso`/`interpello`/`supplenza` (3) >
+  `domanda`/`requisiti` (2) > `allegato` (1). **Gli aggregatori terzi non
+  entrano mai** (§26.109): il PDF di `scuolainterpelli.it` non è la fonte
+  ufficiale nemmeno se è pertinente;
+* `allegatiDaGuscio` = le due cose insieme; `titoloDaAllegato` dà il titolo
+  leggibile (testo del link, altrimenti `bando_A022_supplenza.pdf` → «Bando A022
+  supplenza», mai vuoto).
+
+`datiBando.ts` porta il documento NELLA RIGA: `datiBandoDaTesto` riusa i cinque
+campi di `campiDocumento` (§26.96 — una sola verità con l'HTML) e aggiunge
+**ore settimanali** e **requisiti**, letti solo dalle forme dichiarate («18 ore
+settimanali», «orario settimanale di 12 ore», «n. 6 ore»; un corso di 30 ore non
+è un orario). `titoloBandoDaDocumento` compone il titolo: intestazione del
+documento («AVVISO…») o testo del link, etichetta **«Interpello»** quando il
+titolo non dichiara un reclutamento — è la categoria della riga, ed è ciò che le
+permette di superare il gate di `recordDaVoceScuola` — poi classe e ore, mai
+duplicate.
+
+### 5. Il cablaggio: due punti, nessuna nuova eccezione
+
+* **`deepCrawlScuole.leggiPagineInterpelli`** — quando la home non produce un solo
+  link pertinente (`candidati.length === 0`) e `allegatiDaGuscio` trova un bando,
+  la home entra in `pagine` con `soloAllegati: true` e il conteggio sale in
+  `allegatiTrovati` (letto dal log del runner). Nessuna richiesta in più — la
+  pagina è già in memoria — e nessuna URL costruita a mano;
+* **`scripts/table-reporter.ts`** — la pagina-guscio **non** viene interpretata
+  (`if (!pagina.soloAllegati)`): le sue «voci» sarebbero le voci di menu. Il ramo
+  degli allegati (§26.95) legge ora il documento **intero** con
+  `leggiAvvisoCompleto` (non solo la data), ne prende classi, intestazione e ore
+  (`EsitoAvviso.titolo/ore/requisiti`) e costruisce la riga con
+  `titoloBandoDaDocumento`: **il link di atterraggio è il PDF ufficiale**.
+
+### 6. Il recapito dal codice meccanografico — modello Liguria
+
+Le righe che nascono dal deep crawl (`recordDaVoceScuola`) entravano senza
+recapito: il candidato doveva aprire il PDF per sapere a chi scrivere. Ora la
+riga porta `contact_email` (PEO) e `school_pec`, derivati dal **codice
+meccanografico** con la convenzione MIM (`lib/emailScuola.emailDaCodiceMeccanografico`
+— `codice@istruzione.it` / `codice@pec.istruzione.it`) e `stato_arricchimento`
+calcolato da `lib/statoArricchimento` (`completo` quando istituto identificato **e**
+recapito presente). Nessun indirizzo inventato: codice non valido → campi `null`,
+come per il resto della pipeline (`index.ts` → `mappaRigaInterpelli`).
+
+### 7. Le guardie
+
+* `npm run test:purghe-ingestione` (`scripts/test-purghe-ingestione.ts`, **214
+  righe**): atto in testa per ogni tipo, atto nel titolo con e senza apertura, i
+  sei casi di protezione (interpello con graduatorie, bando con esiti, PNRR,
+  pubblicazione di un avviso), pagine di servizio con e senza scadenza/classe, il
+  cablaggio in `motivoScartoOpportunita` (messaggio storico invariato), purezza e
+  presenza in catena;
+* `npm run test:allegati-bando` (`scripts/test-allegati-bando.ts`, **232 righe**):
+  guscio vs pagina piena, scelta e ordine degli allegati (privacy e altra scuola
+  fuori), divieto aggregatori, titoli leggibili, ore/requisiti/titolo composto,
+  cablaggio di deep crawl e runner, PEO/PEC dal codice meccanografico.
+
+Aggiornata anche la guardia di §26.96 (`scripts/test-piattaforme-documentali.ts`):
+il runner legge i campi del documento attraverso `datiBandoDaTesto`, che delega a
+`campiDocumento` — stessa verità, una facciata in più.
+
+### 8. Verifiche (30/10/2026)
+
+`npm run typecheck` ✅ exit 0, **0** `error TS` · **`npm test` ✅ exit 0** (5.163
+righe di output, catena completa dalla prima guardia CFU fino a `LINEA ROSSA`,
+nessun `✗`, inclusi i due nuovi anelli `test:allegati-bando` ✅ e
+`test:purghe-ingestione` ✅) · `npm run test:architettura` ✅ **763 file, 145
+violazioni = baseline esatta, 0 nuove** · `npm run build` ✅ vite `built in 8,73s`
+· `npx eslint` ✅ exit 0 su 11 file toccati. Guardie storiche riverificate una a
+una dopo il cablaggio: `test:scraper-attivi` ✅, `test:scraper-domini` ✅,
+`test:deep-crawl` ✅ (2 pagine, nessuna URL inventata), `test:piattaforme-documentali`
+✅ (85 check), `test:pdf-testo` ✅, `test:arricchimento` ✅.
+
+**File toccati.** *Nuovi*: `src/scraper/attiConclusi.ts` (140),
+`src/scraper/paginaServizio.ts` (98), `src/scraper/allegatiBando.ts` (169),
+`src/scraper/datiBando.ts` (156), `scripts/test-purghe-ingestione.ts` (214),
+`scripts/test-allegati-bando.ts` (232). *Modificati*:
+`src/scraper/qualitaOpportunita.ts` (202 → 196: la regex locale è delegata,
+`classCodes` nel candidato, i due nuovi passi in `motivoScartoOpportunita`),
+`src/scraper/deepCrawlScuole.ts` (149 → 173: `soloAllegati`, `allegatiTrovati`,
+ramo guscio-con-allegato), `src/scraper/index.ts` (gate 1 passa `classCodes`),
+`scripts/table-reporter.ts` (`EsitoAvviso` con titolo/ore/requisiti,
+`datiBandoDaTesto` in PDF e HTML, allegati letti interi, `soloAllegati`,
+`contact_email`/`school_pec`/`stato_arricchimento` nella riga),
+`scripts/test-piattaforme-documentali.ts` (la facciata del documento),
+`package.json` (due voci e catena), `docs/SYSTEM_HANDOVER.md` (moduli, §26.115),
+`docs/DEPARTMENT_MAP.md` (riga di sessione).
+
+**Nessun dipartimento toccato**: tutti i file stanno nell'ingestione
+(`src/scraper/**`, `scripts/**`), nei condivisi essenziali (`src/lib/**`) o nella
+documentazione.
+
+**Nota di sessione.** I tre difetti avevano la stessa forma: una riga che il
+candidato non può usare, tenuta in vita da un contenitore che *sembrava* un
+bando. La risposta non è stata una lista di parole vietate più lunga, ma la
+domanda giusta al posto giusto: **il titolo dice se la procedura è aperta**
+(`attiConclusi`), **la scadenza e la classe dicono se c'è qualcosa a cui
+candidarsi** (`paginaServizio`), **il documento dice il resto e diventa la
+destinazione** (`allegatiBando` + `datiBando`). Le tre regole stanno in moduli
+puri, senza rete, con una guardia ciascuna: la prossima eccezione si aggiunge in
+un punto solo, e si vede subito se rompe un caso vero.
+
+
 

@@ -16,14 +16,23 @@
  * `valutaCompatibilita` (`src/lib/compatibilitaGraduata.ts`). La CONSEGNA non passa
  * di qui: notifiche e digest restano strict (§26.45).
  *
+ * VETRINA MAI CORTA (§26.111). Il paracadute «5» della bacheca pesca dalla scorta
+ * della STESSA area: se la provincia non ha cinque avvisi attivi (Asti: zero), la
+ * pagina resterebbe vuota senza dirlo. Qui, sotto il minimo, il feed si allarga
+ * prima alla REGIONE e poi all'ITALIA (`integraAmbiti`): ogni riga aggiunta porta
+ * l'`ambito` dichiarato e arriva senza voto, così non sale mai in cima.
+ *
  * `loading` resta nel provider: lo usano gli effetti di bootstrap del profilo.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { interpelli, type Interpello } from '@/data/interpelli';
+import { integraAmbiti, provinceDellaRegione } from '@/lib/ambitoBacheca';
 import { bachecaInterpelli } from '@/lib/bachecaInterpelli';
 import { limitaSelezione } from '@/lib/planLimits';
 import { getFeedInterpelli } from '@/lib/matchingEngine';
-import { provinceDiRicerca } from '@/lib/prossimitaGeografica';
+import { normalizzaProvincia, provinceDiRicerca } from '@/lib/prossimitaGeografica';
+import { MINIMO_BACHECA } from '@/lib/riempitivi';
+import { eOpportunitaConScadenza } from '@/lib/scadenza';
 import { supabase } from '@/lib/supabase';
 import { mapNoticiaToInterpello } from './helpers';
 import type { Preferenze } from './types';
@@ -67,6 +76,12 @@ export function useInterpelliFeed(
   //    `interpelli` in `src/data/interpelli.ts` è intenzionalmente `[]`).
   const [fontiInterpelli, setFontiInterpelli] = useState<Interpello[]>(interpelli);
   const [origineDati, setOrigineDati] = useState<'vuoto' | 'supabase'>('vuoto');
+  /**
+   * Feed LARGO (§26.111): gli avvisi fuori dalla provincia, chiesti al database
+   * solo quando la vetrina della propria zona resta sotto `MINIMO_BACHECA`.
+   * Effimero: non sostituisce `fontiInterpelli` e non entra mai nella bacheca.
+   */
+  const [fontiAmbito, setFontiAmbito] = useState<Interpello[]>([]);
 
   /**
    * SELEZIONE ATTIVA per il piano corrente (tetti confermati dal DB): il feed usa
@@ -151,10 +166,13 @@ export function useInterpelliFeed(
     };
   }, [provinceRicerca, classiAttive]);
 
-  const interpelliFiltrati = useMemo<Interpello[]>(() => {
+  /**
+   * BACHECA DEL PROFILO (pura): porta d'ingresso PRIMARIA, voto a due livelli
+   * (§26.63), whitelist/blacklist scuole, cap dinamico dei riempitivi e
+   * paracadute «5» che pesca dalla scorta dell'area (§26.106).
+   */
+  const bacheca = useMemo<Interpello[]>(() => {
     if (!preferenze.onboarded) return [];
-    // BACHECA (pura): porta d'ingresso PRIMARIA, voto a due livelli (§26.63), whitelist/blacklist
-    // scuole e cap dinamico dei riempitivi vivono in un solo modulo testabile.
     return bachecaInterpelli(fontiInterpelli, {
       ordini: preferenze.ordini,
       classi: classiAttive,
@@ -165,6 +183,68 @@ export function useInterpelliFeed(
       ignoredSchools: preferenze.ignoredSchools,
     }).lista;
   }, [preferenze, fontiInterpelli, provinceAttive, classiAttive]);
+
+  /** Quante opportunità mancano al minimo di vetrina (§26.111). */
+  const mancantiVetrina = preferenze.onboarded
+    ? Math.max(0, MINIMO_BACHECA - bacheca.length)
+    : 0;
+
+  /**
+   * Integrazione fuori provincia: UNA query larga (senza filtro geografico, con
+   * le classi del profilo) SOLO quando serve davvero, cioè quando la propria zona
+   * non arriva a `MINIMO_BACHECA`. Nessun ciclo: la condizione dipende dalla
+   * bacheca, mai dalla lista integrata.
+   */
+  useEffect(() => {
+    const client = supabase;
+    if (!client) return;
+    if (mancantiVetrina === 0) {
+      setFontiAmbito([]);
+      return;
+    }
+    let attivo = true;
+    (async () => {
+      try {
+        const ampio = await getFeedInterpelli(client, { classi: classiAttive, limit: RIGHE_FEED });
+        if (!attivo) return;
+        setFontiAmbito(ampio ?? []);
+        console.log(
+          `✓ Dashboard: ${(ampio ?? []).length} avvisi fuori provincia caricati (la tua zona ne ha meno di ${MINIMO_BACHECA}).`,
+        );
+      } catch (err) {
+        if (!attivo) return;
+        setFontiAmbito([]);
+        console.warn('Feed regionale/nazionale non disponibile.', (err as Error).message);
+      }
+    })();
+    return () => {
+      attivo = false;
+    };
+  }, [mancantiVetrina, classiAttive]);
+
+  const interpelliFiltrati = useMemo<Interpello[]>(() => {
+    if (!preferenze.onboarded) return [];
+    // VETRINA: provincia → regione → Italia, fino al minimo (§26.111). Le righe
+    // fuori ambito passano lo STESSO gate del feed (`eOpportunitaConScadenza`,
+    // §26.82): nella vetrina entra solo ciò che si può candidare adesso, mai un
+    // avviso «lontano» solo perché arriva da un'altra regione.
+    const inBacheca = new Set(bacheca.map((i) => i.id));
+    const provinceRegione = provinceDellaRegione(provinceAttive);
+    const fuori = fontiAmbito.filter(
+      (i) => !inBacheca.has(i.id) && eOpportunitaConScadenza(i.dataScadenza),
+    );
+    const regionali = fuori.filter((i) =>
+      provinceRegione.has(normalizzaProvincia(i.provinciaCodice)),
+    );
+    const nazionali = fuori.filter(
+      (i) => !provinceRegione.has(normalizzaProvincia(i.provinciaCodice)),
+    );
+    return integraAmbiti(bacheca, { regionali, nazionali }).lista.map((i) =>
+      // Il voto resta del profilo: una riga fuori ambito non è stata valutata e
+      // non può portare il 100 neutro del mapper in cima alla dashboard.
+      i.ambito === 'provincia' ? i : { ...i, compatibilita: 0, ripiego: false },
+    );
+  }, [preferenze.onboarded, bacheca, fontiAmbito, provinceAttive]);
 
   return { fontiInterpelli, origineDati, interpelliFiltrati };
 }

@@ -20,6 +20,7 @@ import { SlidersHorizontal } from 'lucide-react';
 import { Accordion } from '@/components/Accordion';
 import { InterpelloCard } from '@/components/InterpelloCard';
 import { etichettaScadenzaAvviso } from '@/lib/alertInterpello';
+import { ETICHETTA_AMBITO, descrizioneAmbito } from '@/lib/ambitoBacheca';
 import { stileMatch } from '@/lib/compatibilita';
 import { giorniRimanenti } from '@/lib/scadenza';
 import { stileScadenza } from '@/lib/scadenzaSemaforo';
@@ -66,6 +67,12 @@ export function ElencoOpportunita({
     .filter(Boolean)
     .join(', ');
 
+  // Righe fuori dalla propria provincia (§26.111): la vetrina le dichiara in testa
+  // all'elenco, così l'integrazione regionale/nazionale non è mai silenziosa.
+  const fuoriAmbito = lista.filter(
+    (i) => i.ambito === 'regione' || i.ambito === 'nazionale',
+  ).length;
+
   return (
       <Accordion
         icona="📡"
@@ -103,6 +110,15 @@ export function ElencoOpportunita({
           </div>
         ) : (
           <div className="animate-fade-in space-y-3">
+            {fuoriAmbito > 0 && (
+              <p className="rounded-xl border border-primary-100 bg-primary-50 px-3 py-2 text-[11px] leading-relaxed text-primary-600">
+                Le {fuoriAmbito}{' '}
+                {fuoriAmbito === 1 ? 'opportunità segnalata' : 'opportunità segnalate'} come «
+                {ETICHETTA_AMBITO.regione}» o «{ETICHETTA_AMBITO.nazionale}» arrivano da fuori
+                dalla tua provincia: la tua zona ha meno di 5 opportunità attive, quindi il Radar
+                allarga la ricerca — e lo dichiara, invece di lasciare la pagina vuota.
+              </p>
+            )}
             {lista.map((i) => {
               // UNA sola regola/palette per la scadenza (§26.82, §26.89): la
               // stessa del «Radar Live» e della scheda avviso. Prima qui viveva
@@ -112,6 +128,10 @@ export function ElencoOpportunita({
               // COLOR CODING DEL MATCH (§26.106): verde ≥ 80 · giallo 60-79 · rosso < 60,
               // con l'etichetta trasparente del ripiego quando la riga arriva dal paracadute.
               const match = stileMatch(i.compatibilita, { ripiego: i.ripiego === true });
+              // AMBITO (§26.111): una riga fuori provincia dichiara il suo ambito al posto
+              // del voto — non è stata valutata sul profilo, quindi non ha un punteggio.
+              const ambito =
+                i.ambito === 'regione' || i.ambito === 'nazionale' ? i.ambito : null;
               return (
                 <div
                   key={i.id}
@@ -128,13 +148,23 @@ export function ElencoOpportunita({
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2 border-b border-primary-100 px-3 py-1.5">
-                    <span
-                      title={match.descrizione}
-                      className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-primary-500"
-                    >
-                      <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${match.className}`} />
-                      {match.etichetta} · {match.punteggio}%
-                    </span>
+                    {ambito ? (
+                      <span
+                        title={descrizioneAmbito(ambito)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-primary-100 bg-primary-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-600"
+                      >
+                        <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-primary-400" />
+                        {ETICHETTA_AMBITO[ambito]}
+                      </span>
+                    ) : (
+                      <span
+                        title={match.descrizione}
+                        className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-primary-500"
+                      >
+                        <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${match.className}`} />
+                        {match.etichetta} · {match.punteggio}%
+                      </span>
+                    )}
                   </div>
                   <InterpelloCard interpello={i} />
                 </div>

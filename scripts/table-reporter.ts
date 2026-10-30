@@ -76,6 +76,20 @@
 //     Effetto: ingestione deterministica (VB 7, TO 43, AL 39 su qualunque
 //     snapshot) invece di 0 record quando capitava il backend con lo stato fermo.
 //
+// VERSIONE v17 (30/10/2026) — la SCADENZA DICHIARATA non si butta via (§26.114):
+//   • FIX v17 — l'orizzonte dei 15 giorni della VETRINA era applicato anche
+//     all'INGESTIONE: una riga con scadenza oltre i 15 giorni non entrava nel
+//     database, quindi non esisteva più per nessuno (né per la bacheca pubblica,
+//     che dal §26.100 mostra senza tetto, né per un secondo giro). Misurato il
+//     30/10/2026 sul portale USR Piemonte: tutte le righe di Asti ancora «aperte»
+//     dichiarano `Data Scadenza Interpello = 2027-04-30` (segnaposto «disponibile
+//     fino a 10 giorni») e venivano scartate — zero opportunità AT, mentre
+//     Alessandria con scadenze ravvicinate ne produceva 4. Ora l'ingestione usa
+//     `GIORNI_ORIZZONTE_INGESTIONE` (365 giorni, `src/lib/scadenza.ts`): il
+//     database conserva la data dichiarata, feed e matching continuano a
+//     lavorare dentro i 15 giorni (§26.82) e la bacheca pubblica mostra le
+//     scadenze lontane con la banda blu (§26.100).
+//
 // Legge i target da discovered_links (status = 'active_crawler'),
 // estrae le righe delle tabelle interpelli e fa upsert su interpelli.
 //
@@ -94,8 +108,11 @@ import * as crypto from 'crypto';
 // («Taranto», «Reggio Calabria»): il codice e la regione si leggono dal
 // catalogo condiviso, senza tabelle duplicate nello script.
 import { provinciaDaCitta, provinciaDaCodice } from '../src/lib/scanTargets.ts';
-// FIX v13 — l'orizzonte della scadenza è lo stesso della vetrina: un solo numero.
-import { GIORNI_ORIZZONTE_OPPORTUNITA } from '../src/lib/scadenza.ts';
+// FIX v13 — l'orizzonte della scadenza è UNO solo, ma non è quello della vetrina:
+// l'ingestione conserva la data DICHIARATA dalla fonte entro un anno
+// (`GIORNI_ORIZZONTE_INGESTIONE`, §26.114) — feed e matching continuano a
+// lavorare dentro i 15 giorni (`GIORNI_ORIZZONTE_OPPORTUNITA`, §26.82).
+import { GIORNI_ORIZZONTE_INGESTIONE } from '../src/lib/scadenza.ts';
 // Pre-filtro semantico condiviso col discovery engine: atti di gara, circolari
 // per le famiglie e burocrazia del personale si scartano PRIMA del parsing.
 import { isAdministrativeNoise } from '../src/lib/noiseFilter.ts';
@@ -158,8 +175,23 @@ import {
 // Territoriali pubblicano davvero: un post e un PDF con N istituti dentro.
 import { righeTabellaInterpelli } from '../src/scraper/tabellaInterpelliPdf.ts';
 // §26.96 — i cinque campi che il DOCUMENTO dichiara (classi, codice, provincia,
-// scadenza, recapiti): la pagina-elenco spesso non li ha.
-import { campiDaDocumento } from '../src/scraper/campiDocumento.ts';
+// scadenza, recapiti): la pagina-elenco spesso non li ha. Da §26.115 la facciata
+// è `datiBandoDaTesto`, che aggiunge intestazione, ore e requisiti e delega qui.
+// §26.115 — dal documento alla RIGA: intestazione (titolo), ore settimanali e
+// requisiti. Il nome del file non è un titolo: `bando_A022.pdf` non dice per
+// quale classe né quante ore.
+import {
+  datiBandoDaTesto,
+  intestazioneDaDocumento,
+  titoloBandoDaDocumento,
+} from '../src/scraper/datiBando.ts';
+// §26.115 — allegato → titolo leggibile (testo del link o nome del file ripulito).
+import { titoloDaAllegato } from '../src/scraper/allegatiBando.ts';
+// §26.115 — RECAPITI dal codice meccanografico (modello Liguria): PEO e PEC
+// ufficiali dell'istituto entrano nella riga, così la candidatura ha un
+// destinatario senza aprire il PDF. Convenzione MIM, mai un indirizzo inventato.
+import { emailDaCodiceMeccanografico } from '../src/lib/emailScuola.ts';
+import { statoArricchimento } from '../src/lib/statoArricchimento.ts';
 // §26.96 — vicolo cieco su una bacheca di piattaforma: dal codice meccanografico
 // dell'URL alla home istituzionale, senza inventare né URL né province.
 import { meritaFallback } from '../src/scraper/fallbackPiattaforma.ts';
@@ -468,6 +500,17 @@ interface InterpelloRecord {
    */
   expiration_date: string | null;
   source_url: string;
+  /**
+   * §26.115 — RECAPITO di candidatura (modello Liguria): la PEO ufficiale
+   * dell'istituto, derivata dal codice meccanografico con la convenzione MIM
+   * (`lib/emailScuola.emailDaCodiceMeccanografico`). Nessun indirizzo inventato:
+   * se il codice non è valido il campo resta `null`.
+   */
+  contact_email?: string | null;
+  /** §26.115 — PEC ufficiale (`codice@pec.istruzione.it`), per gli atti formali. */
+  school_pec?: string | null;
+  /** §26.115 — `completo`/`parziale` secondo `lib/statoArricchimento`. */
+  stato_arricchimento?: string;
 }
 
 interface ProcessResult {
@@ -626,11 +669,14 @@ function todayIso(): string {
 
 const TODAY_ISO = todayIso();
 
-// FIX v13 (§26.75) — ORIZZONTE di una scadenza tabellare. Il portale Piemonte a
-// volte scrive nella colonna «Data Scadenza Interpello» la FINE del contratto
-// (`30/06/2027`, `31/05/2027`) invece del termine per candidarsi: la riga
-// risulterebbe aperta per mesi. Oltre l'orizzonte condiviso con la vetrina
-// (`GIORNI_ORIZZONTE_OPPORTUNITA`) la riga non entra nel database.
+// FIX v13 (§26.75) + §26.114 — ORIZZONTE di una scadenza tabellare. Il portale
+// Piemonte a volte scrive nella colonna «Data Scadenza Interpello» la FINE del
+// contratto (`30/06/2027`, `31/05/2027`) invece del termine per candidarsi; e per
+// gli avvisi «disponibile fino a 10 giorni» scrive il segnaposto `2027-04-30`.
+// Il tetto qui è quello dell'INGESTIONE (`GIORNI_ORIZZONTE_INGESTIONE`, 365
+// giorni): il database conserva ciò che la fonte dichiara, ed è la VETRINA a
+// decidere cosa mostrare — feed e matching dentro i 15 giorni (§26.82), bacheca
+// pubblica senza tetto con la banda blu «Scadenza lontana» (§26.100).
 function isoPiuGiorni(iso: string, giorni: number): string {
   const [y, m, d] = iso.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
@@ -641,9 +687,9 @@ function isoPiuGiorni(iso: string, giorni: number): string {
   return `${yy}-${mm}-${dd}`;
 }
 
-const LIMITE_ORIZZONTE_ISO = isoPiuGiorni(TODAY_ISO, GIORNI_ORIZZONTE_OPPORTUNITA);
+const LIMITE_ORIZZONTE_ISO = isoPiuGiorni(TODAY_ISO, GIORNI_ORIZZONTE_INGESTIONE);
 
-/** True se la scadenza è entro l'orizzonte dell'opportunità (mai una fine incarico). */
+/** True se la scadenza è entro l'orizzonte di INGESTIONE (mai un refuso d'anno). */
 function entroOrizzonte(deadlineIso: string): boolean {
   return deadlineIso <= LIMITE_ORIZZONTE_ISO;
 }
@@ -1472,7 +1518,7 @@ function extractRecordsFromLiguriaGrid(
 
   if (scartateOltreOrizzonte > 0) {
     console.log(
-      `[table-reporter] Liguria: ${scartateOltreOrizzonte} righe scartate oltre l'orizzonte di ${GIORNI_ORIZZONTE_OPPORTUNITA} giorni.`
+      `[table-reporter] Liguria: ${scartateOltreOrizzonte} righe scartate oltre l'orizzonte di ${GIORNI_ORIZZONTE_INGESTIONE} giorni.`
     );
   }
 
@@ -1762,6 +1808,12 @@ interface EsitoAvviso {
   classi: string[];
   /** True se il documento è stato scaricato (anche senza termine). */
   letto: boolean;
+  /** §26.115 — intestazione dichiarata dal documento (`null` se non si intitola). */
+  titolo: string | null;
+  /** §26.115 — ore settimanali dichiarate (`null` se il documento non le scrive). */
+  ore: number | null;
+  /** §26.115 — requisiti dichiarati, al massimo tre frasi. */
+  requisiti: string[];
 }
 
 /**
@@ -1803,7 +1855,15 @@ async function leggiAvvisoCompleto(
   da: 'target' | 'scuola' = 'target',
   provincia?: string | null,
 ): Promise<EsitoAvviso> {
-  const vuoto: EsitoAvviso = { deadline: null, scuole: [], classi: [], letto: false };
+  const vuoto: EsitoAvviso = {
+    deadline: null,
+    scuole: [],
+    classi: [],
+    letto: false,
+    titolo: null,
+    ore: null,
+    requisiti: [],
+  };
   const residuo = da === 'scuola' ? approfondimentiScuole : approfondimentiTarget;
   if (residuo <= 0) return vuoto;
   if (da === 'scuola') approfondimentiScuole -= 1;
@@ -1847,14 +1907,18 @@ async function leggiAvvisoCompleto(
     const contenuto = $('article, main, .entry-content, .avviso, #content, .contenuto').first();
     const frammento = contenuto.length > 0 ? contenuto.html() ?? html : html;
     const testoAvviso = testoHtml(frammento.slice(0, 400_000));
-    // §26.96 — i campi si leggono con la STESSA regola del PDF: classi e
-    // scadenza dal documento, scuola CITATA nel corpo con il codice meccanografico.
-    const campi = campiDaDocumento(testoAvviso);
+    // §26.96 + §26.115 — i campi si leggono con la STESSA regola del PDF: classi,
+    // scadenza, intestazione, ore e requisiti dal documento; scuola CITATA nel
+    // corpo con il codice meccanografico.
+    const campi = datiBandoDaTesto(testoAvviso);
     return {
       deadline: campi.scadenza,
       scuole: scuoleDaTesto(caricaAnagrafica(), testoAvviso, provincia ?? null),
       classi: campi.classi,
       letto: true,
+      titolo: intestazioneDaDocumento(testoAvviso),
+      ore: campi.ore,
+      requisiti: campi.requisiti,
     };
   } catch {
     return vuoto;
@@ -1873,7 +1937,15 @@ async function leggiAvvisoPdf(
   response: Response,
   provincia?: string | null,
 ): Promise<EsitoAvviso> {
-  const vuoto: EsitoAvviso = { deadline: null, scuole: [], classi: [], letto: false };
+  const vuoto: EsitoAvviso = {
+    deadline: null,
+    scuole: [],
+    classi: [],
+    letto: false,
+    titolo: null,
+    ore: null,
+    requisiti: [],
+  };
   const dichiarata = Number(response.headers.get('content-length') ?? 0);
   if (Number.isFinite(dichiarata) && dichiarata > MAX_BYTE_PDF) return vuoto;
   const buffer = new Uint8Array(await response.arrayBuffer());
@@ -1882,9 +1954,10 @@ async function leggiAvvisoPdf(
   const esito = estraiTestoPdf(buffer);
   if (!esito.testo) return vuoto;
   statisticaPdf.conTesto += 1;
-  // §26.96 — i cinque campi del documento (classi, codice, provincia, scadenza,
-  // recapiti) si leggono con UNA regola sola, la stessa dell'HTML.
-  const campi = campiDaDocumento(esito.testo);
+  // §26.96 + §26.115 — i campi del documento (classi, codice, provincia,
+  // scadenza, recapiti) più intestazione, ore e requisiti: UNA regola sola, la
+  // stessa dell'HTML (`datiBandoDaTesto` → `campiDocumento`).
+  const campi = datiBandoDaTesto(esito.testo);
   const deadline = campi.scadenza;
   if (deadline) statisticaPdf.conScadenza += 1;
   return {
@@ -1892,6 +1965,9 @@ async function leggiAvvisoPdf(
     scuole: scuoleDaTesto(caricaAnagrafica(), esito.testo, provincia ?? null),
     classi: campi.classi,
     letto: true,
+    titolo: intestazioneDaDocumento(esito.testo),
+    ore: campi.ore,
+    requisiti: campi.requisiti,
   };
 }
 
@@ -2287,8 +2363,10 @@ async function leggiRecordsDaHtml(
       const deadline = deadlineDichiarata(colTexts, columns) ?? scadenzaDaRiga(fullRowText);
       if (!deadline) return;
       if (isExpired(deadline)) return;
-      // Una «scadenza» oltre l'orizzonte è la FINE dell'incarico travestita da
-      // termine: fuori dal database (e quindi dalla vetrina).
+      // §26.114 — oltre l'orizzonte di INGESTIONE (365 giorni) la data è un
+      // refuso d'anno, non un termine: la riga non entra. Dentro l'anno la riga
+      // entra con la data DICHIARATA: è la vetrina a decidere (feed 15 giorni,
+      // bacheca pubblica senza tetto).
       if (!entroOrizzonte(deadline)) {
         scartateOltreOrizzonte += 1;
         return;
@@ -2512,7 +2590,7 @@ async function leggiRecordsDaHtml(
 
   if (scartateOltreOrizzonte > 0) {
     console.log(
-      `[table-reporter] ${scartateOltreOrizzonte} righe scartate: «scadenza» oltre l'orizzonte di ${GIORNI_ORIZZONTE_OPPORTUNITA} giorni (fine incarico, non termine per candidarsi).`
+      `[table-reporter] ${scartateOltreOrizzonte} righe scartate: «scadenza» oltre l'orizzonte di ${GIORNI_ORIZZONTE_INGESTIONE} giorni (data illeggibile o refuso d'anno).`
     );
   }
 
@@ -2879,10 +2957,17 @@ function recordDaVoceScuola(
   const classCodes = voce.classCodes ?? [];
   const { classCode, subject } = extractSubjectAndClass(`${title} ${classCodes.join(' ')}`);
   const classCodeVoce = (classCodes[0] ?? '').replace(/[-_\s]/g, '');
+  const schoolName = scuola.nome ?? voce.schoolName ?? `Istituto ${schoolCode}`;
+  // §26.115 — MODELLO LIGURIA: il recapito si deriva dal codice meccanografico
+  // (PEO/PEC della convenzione MIM), così la riga nasce con un destinatario e
+  // non «Email non disponibile». Solo per codici validi: `null` altrimenti.
+  const caselle = emailDaCodiceMeccanografico(schoolCode);
+  const contactEmail = caselle?.peo ?? null;
+  const schoolPec = caselle?.pec ?? null;
   return {
     hash_id: hashId,
     title,
-    school_name: scuola.nome ?? voce.schoolName ?? `Istituto ${schoolCode}`,
+    school_name: schoolName,
     school_code: schoolCode,
     province,
     // La regione viene dal catalogo province: mai dal target che ha citato la
@@ -2893,6 +2978,14 @@ function recordDaVoceScuola(
     deadline,
     expiration_date: aExpirationDate(deadline),
     source_url: sourceUrl,
+    contact_email: contactEmail,
+    school_pec: schoolPec,
+    stato_arricchimento: statoArricchimento({
+      school_name: schoolName,
+      school_code: schoolCode,
+      contact_email: contactEmail,
+      school_pec: schoolPec,
+    }),
   };
 }
 
@@ -3018,28 +3111,34 @@ async function deepCrawlScuole(scuole: Map<string, string>): Promise<void> {
     let vociInterpello = 0;
     for (const pagina of esito.pagine) {
       pagine += 1;
-      const universale = parseUniversalHtml(pagina.html, pagina.url);
       let interpelliPagina = 0;
-      if (universale.success) {
-        for (const voce of universale.items) {
-          if (records.length >= MAX_RECORD_SCUOLA) break;
-          voci += 1;
-          if (RE_TITOLO_INTERPELLO.test(voce.title)) {
-            vociInterpello += 1;
-            interpelliPagina += 1;
+      // §26.115 — PAGINA-GUSCIO: vale solo per gli allegati. In un guscio le
+      // «voci» sarebbero le voci di menu, e un menu non è un interpello.
+      if (!pagina.soloAllegati) {
+        const universale = parseUniversalHtml(pagina.html, pagina.url);
+        if (universale.success) {
+          for (const voce of universale.items) {
+            if (records.length >= MAX_RECORD_SCUOLA) break;
+            voci += 1;
+            if (RE_TITOLO_INTERPELLO.test(voce.title)) {
+              vociInterpello += 1;
+              interpelliPagina += 1;
+            }
+            let deadline = voce.expirationDate ?? null;
+            if (!deadline && approfondimentiScuola < MAX_APPROFONDIMENTI_SCUOLA) {
+              approfondimentiScuola += 1;
+              deadline = await scadenzaDaCorpoAvviso(voce.directUrl, 'scuola');
+            }
+            if (!deadline || isExpired(deadline) || !entroOrizzonte(deadline)) continue;
+            const record = recordDaVoceScuola(voce, deadline, scuola, visti);
+            if (record) records.push(record);
           }
-          let deadline = voce.expirationDate ?? null;
-          if (!deadline && approfondimentiScuola < MAX_APPROFONDIMENTI_SCUOLA) {
-            approfondimentiScuola += 1;
-            deadline = await scadenzaDaCorpoAvviso(voce.directUrl, 'scuola');
-          }
-          if (!deadline || isExpired(deadline) || !entroOrizzonte(deadline)) continue;
-          const record = recordDaVoceScuola(voce, deadline, scuola, visti);
-          if (record) records.push(record);
         }
       }
       // §26.95 — albo che elenca SOLO file: l'elenco non dà voci, ma i PDF sono
       // documenti veri. Se ne leggono al massimo due, col termine dentro.
+      // §26.115 — il documento si legge INTERO (non solo la data): classe, ore e
+      // intestazione diventano i campi della riga e l'atterraggio è il PDF.
       if (interpelliPagina === 0) {
         for (const allegato of linkAllegatiInterpello(
           pagina.html,
@@ -3048,16 +3147,22 @@ async function deepCrawlScuole(scuole: Map<string, string>): Promise<void> {
         )) {
           if (approfondimentiScuola >= MAX_APPROFONDIMENTI_SCUOLA) break;
           approfondimentiScuola += 1;
-          const deadline = await scadenzaDaCorpoAvviso(allegato.url, 'scuola');
-          if (!deadline || isExpired(deadline) || !entroOrizzonte(deadline)) continue;
+          const documento = await leggiAvvisoCompleto(allegato.url, 'scuola');
+          if (!documento.deadline) continue;
+          if (isExpired(documento.deadline) || !entroOrizzonte(documento.deadline)) continue;
           const record = recordDaVoceScuola(
             {
-              title: allegato.testo || decodeURIComponent(allegato.url.split('/').pop() ?? ''),
+              title: titoloBandoDaDocumento({
+                testo: documento.titolo,
+                fallback: titoloDaAllegato(allegato.testo, allegato.url),
+                classi: documento.classi,
+                ore: documento.ore,
+              }),
               schoolName: scuola.nome,
-              classCodes: [],
+              classCodes: documento.classi,
               directUrl: allegato.url,
             },
-            deadline,
+            documento.deadline,
             scuola,
             visti,
           );
@@ -3081,6 +3186,7 @@ async function deepCrawlScuole(scuole: Map<string, string>): Promise<void> {
         `[table-reporter] Deep crawl ${codice}: ${esito.linkTrovati} link · ` +
           `${esito.pagine.length} pagine · ${voci} voci (${vociInterpello} interpelli) · ` +
           `${records.length} record` +
+          (esito.allegatiTrovati > 0 ? ` · guscio con ${esito.allegatiTrovati} allegati` : '') +
           (esito.errori.length > 0 ? ` — ${esito.errori.join('; ')}` : ''),
       );
     }

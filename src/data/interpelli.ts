@@ -95,6 +95,15 @@ export interface Interpello {
    * un match, mai una priorità.
    */
   ripiego?: boolean;
+  /**
+   * AMBITO D'INTEGRAZIONE (§26.111): la riga NON è nella propria provincia ma è in
+   * vetrina perché la zona non arriva a cinque opportunità attive
+   * (`integraAmbiti`, `src/lib/ambitoBacheca.ts`). `regione` = stessa regione del
+   * profilo, `nazionale` = resto d'Italia, `provincia`/assente = riga della bacheca
+   * del profilo. Dato di VETRINA: lo scrive `useInterpelliFeed`, mai il database, e
+   * non entra in nessuna consegna (notifiche e digest restano strict, §26.45).
+   */
+  ambito?: 'provincia' | 'regione' | 'nazionale' | null;
 }
 
 /**

@@ -200,7 +200,12 @@ check('allegati di piattaforma ammessi nell’albo', true, /eAllegatoPiattaforma
 check('linkScuola sotto 250 righe', true, linkScuola.split('\n').length <= 250);
 
 const reporter = leggi('scripts/table-reporter.ts');
-check('il runner legge i campi del documento', true, /campiDaDocumento\(/.test(reporter));
+check(
+  'il runner legge i campi del documento',
+  true,
+  // §26.115 — la facciata è `datiBandoDaTesto` (che delega a `campiDocumento`).
+  /campiDaDocumento\(|datiBandoDaTesto\(/.test(reporter),
+);
 check('il runner legge il PDF dentro il viewer', true, /urlDocumentoInHtml\(/.test(reporter));
 check('il runner usa la decisione di fallback', true, /meritaFallback\(/.test(reporter));
 check('fallback chiamato su un target senza avvisi', true, /recuperaDaBachecaPiattaforma\(target\)/.test(reporter));

@@ -144,6 +144,32 @@ export function eAvvisoVivo(
 export const GIORNI_ORIZZONTE_OPPORTUNITA = 15;
 
 /**
+ * ORIZZONTE DI INGESTIONE (§26.114, direttiva 30/10/2026): quanto lontano nel
+ * futuro una scadenza DICHIARATA dalla fonte può stare e venire comunque
+ * CONSERVATA nel database. Non è l'orizzonte della vetrina: è l'archivio.
+ *
+ * Perché è un numero diverso da `GIORNI_ORIZZONTE_OPPORTUNITA` (15): l'orizzonte
+ * dei 15 giorni risponde a «cosa posso candidare adesso» ed è giusto che tagli
+ * feed e matching (§26.82). Usato anche all'INGRESSIONE, però, cancellava il dato
+ * alla fonte: misurato il 30/10/2026 sul portale USR Piemonte, le righe di Asti
+ * ancora «aperte» (`servizi.istruzionepiemonte.it/interpello2025/…_at.php`)
+ * dichiarano `Data Scadenza Interpello = 2027-04-30` — il segnaposto che il
+ * portale usa per «disponibile fino a 10 giorni», cioè un avviso SENZA termine
+ * fisso che la scuola lascia aperto. Con il tetto di 15 giorni nessuna riga AT
+ * entrava mai (Alessandria, con scadenze ravvicinate, ne produceva 4): la
+ * provincia risultava deserta non perché non ci fossero avvisi, ma perché li
+ * scartavamo noi. Una riga persa all'ingresso non torna; una riga conservata la
+ * filtrano comunque le superfici che devono farlo.
+ *
+ * Il tetto resta (365 giorni) per non registrare refusi d'anno («2099») come
+ * opportunità; entro l'anno la data è quella che la fonte dichiara, e la
+ * distinzione fra «termine per candidarsi» e «fine incarico» la fanno i lettori
+ * che hanno il contesto: il feed/matching (15 giorni) e la bacheca pubblica
+ * (§26.100, nessun tetto, banda blu «Scadenza lontana»).
+ */
+export const GIORNI_ORIZZONTE_INGESTIONE = 365;
+
+/**
  * REGOLA FERREA DELL'OPPORTUNITÀ (§26.71, direttiva 16/10/2026; finestra §26.82):
  * senza una `expiration_date` dichiarata — o con una data già passata, o oltre
  * l'orizzonte dei `GIORNI_ORIZZONTE_OPPORTUNITA` — la riga NON è un'opportunità

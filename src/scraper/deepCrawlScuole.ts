@@ -28,6 +28,8 @@
  * `npm run test:deep-crawl` (incluso in `npm test`).
  */
 
+import { allegatiDaGuscio } from './allegatiBando.ts';
+import { urlGuscio } from './guscioPagina.ts';
 import { linkInterpelliScuola } from './linkScuola.ts';
 
 /** Esito del download di una pagina (forma minima di `fetch`). */
@@ -44,6 +46,12 @@ export type ScaricaPagina = (url: string) => Promise<PaginaScaricata>;
 export interface PaginaScuola {
   url: string;
   html: string;
+  /**
+   * §26.115 — PAGINA-GUSCIO: non ha contenuto suo e vale solo per gli allegati.
+   * Il runner ne legge i PDF (`linkAllegatiInterpello`) e NON le voci: in un
+   * guscio le «voci» sarebbero le voci di menu, e un menu non è un interpello.
+   */
+  soloAllegati?: boolean;
 }
 
 /** Esito della visita a un istituto (nessuna eccezione: solo dati e motivi). */
@@ -52,6 +60,8 @@ export interface EsitoLetturaScuola {
   pagine: PaginaScuola[];
   /** Link candidati riconosciuti nella home (anche se il download fallisce). */
   linkTrovati: number;
+  /** §26.115 — allegati di bando trovati nel guscio della home (0 se nessuno). */
+  allegatiTrovati: number;
   errori: string[];
 }
 
@@ -72,6 +82,7 @@ export async function leggiPagineInterpelli(
     home: scuola.home ?? null,
     pagine: [],
     linkTrovati: 0,
+    allegatiTrovati: 0,
     errori: [],
   };
   if (!scuola.home) {
@@ -97,7 +108,51 @@ export async function leggiPagineInterpelli(
     return esito;
   }
 
-  const candidati = linkInterpelliScuola(home.html, scuola.home, maxPagine);
+  let candidati = linkInterpelliScuola(home.html, scuola.home, maxPagine);
+
+  // §26.113 — PAGINA GUSCIO: la home è un frameset/iframe o un meta refresh e non
+  // contiene un solo link pertinente. Si entra UNA volta nel contenuto vero
+  // (`urlGuscio`) e si cercano i link lì: una scuola il cui albo vive dentro il
+  // frame non è una scuola senza albo. La pagina interna entra in `pagine` (spesso
+  // È il portale vero) e consuma uno slot del tetto.
+  if (candidati.length === 0) {
+    const dentro = urlGuscio(home.html, scuola.home);
+    if (dentro) {
+      try {
+        const interna = await scarica(dentro);
+        if (interna.status >= 400) {
+          esito.errori.push(`guscio ${dentro}: HTTP ${interna.status}`);
+        } else if (!interna.contentType.includes('html')) {
+          esito.errori.push(
+            `guscio ${dentro}: non HTML (${interna.contentType || 'content-type assente'})`
+          );
+        } else {
+          esito.pagine.push({ url: dentro, html: interna.html });
+          candidati = linkInterpelliScuola(
+            interna.html,
+            dentro,
+            Math.max(0, maxPagine - 1)
+          );
+        }
+      } catch (err) {
+        esito.errori.push(`guscio ${dentro}: ${messaggio(err)}`);
+      }
+    }
+  }
+
+  // §26.115 — GUSCIO CON ALLEGATO (Piacenza): la home non ha contenuto suo e non
+  // produce un solo link pertinente, ma il bando c'è — dentro un PDF. Si
+  // restituisce la HOME come pagina-guscio (`soloAllegati`): il runner ne legge
+  // gli allegati e il link di atterraggio sarà il documento ufficiale. Nessuna
+  // richiesta in più (la pagina è già in memoria) e nessuna URL costruita a mano.
+  if (candidati.length === 0 && esito.pagine.length === 0) {
+    const allegati = allegatiDaGuscio(home.html, scuola.home, 2);
+    if (allegati.length > 0) {
+      esito.pagine.push({ url: scuola.home, html: home.html, soloAllegati: true });
+      esito.allegatiTrovati = allegati.length;
+    }
+  }
+
   esito.linkTrovati = candidati.length;
   for (const candidato of candidati) {
     try {

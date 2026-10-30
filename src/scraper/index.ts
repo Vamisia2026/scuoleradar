@@ -679,7 +679,12 @@ async function raccogliAvvisiReali(
     const daFonteInterpelli = fonte.tipo === 'aggregatore';
     let tenuti = 0;
     for (const a of estratti) {
-      const motivo = motivoScartoOpportunita({ title: a.title }, new Date(), { daFonteInterpelli });
+      const motivo = motivoScartoOpportunita(
+        { title: a.title, classCodes: a.classCodes },
+        new Date(),
+        { daFonteInterpelli },
+      );
+
       if (motivo) {
         if (motivo.includes('editoriale')) stats.editoriali += 1;
         else stats.fuoriTarget += 1;

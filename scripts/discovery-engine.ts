@@ -35,6 +35,11 @@ import {
   fontiInQuarantena,
   recordSourceRun,
 } from '../src/lib/sourceTelemetry.ts';
+// §26.112 — ORDINE DELLA CODA: i portali ISTITUZIONALI (scuole `*.edu.it`, PA
+// `*.gov.it`, portali del Ministero e degli Uffici) passano davanti al resto e
+// vengono chiesti al database con una query dedicata, così le home delle scuole
+// non restano invisibili dietro migliaia di pagine non istituzionali in coda.
+import { ordinaCoda } from '../src/lib/prioritaCoda.ts';
 
 dotenv.config();
 
@@ -1099,6 +1104,38 @@ async function processTarget(target: Target): Promise<void> {
 // Loop BFS
 // ---------------------------------------------------------------------------
 
+/**
+ * Domini che rendono un target ISTITUZIONALE (§26.112). È il filtro che il
+ * database sa applicare da solo: la decisione fine resta in `ordinaCoda`
+ * (`src/lib/prioritaCoda.ts`, regola di `dominiIstituzionali`), questa è la
+ * finestra che porta in memoria le righe giuste.
+ */
+const FILTRO_HOST_ISTITUZIONALI = ['edu.it', 'gov.it', 'istruzione.it']
+  .map((dominio) => `url.ilike.%${dominio}%`)
+  .join(',');
+
+/** Una lettura della coda `pending`, opzionalmente solo sui domini istituzionali. */
+async function chiediCoda(
+  finestra: number,
+  provinceFilter: string | undefined,
+  soloIstituzionali: boolean
+): Promise<Target[]> {
+  let q = supabase
+    .from('discovered_links')
+    .select('id, url, region, province, depth, path_score, parent_url')
+    .eq('status', 'pending')
+    .order('depth', { ascending: true })
+    .order('path_score', { ascending: false })
+    .limit(finestra);
+
+  if (provinceFilter) q = q.eq('province', provinceFilter);
+  if (soloIstituzionali) q = q.or(FILTRO_HOST_ISTITUZIONALI);
+
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Target[];
+}
+
 async function fetchPendingTargets(
   limit: number,
   provinceFilter?: string,
@@ -1109,20 +1146,33 @@ async function fetchPendingTargets(
   // una fonte in quarantena resta `pending` e torna candidabile da sola quando
   // un run riuscito o un reset la riabilita.
   const extra = Math.min(escluse.size, 500);
-  let q = supabase
-    .from('discovered_links')
-    .select('id, url, region, province, depth, path_score, parent_url')
-    .eq('status', 'pending')
-    .order('depth', { ascending: true })
-    .order('path_score', { ascending: false })
-    .limit(limit + extra);
+  const finestra = limit + extra;
 
-  if (provinceFilter) q = q.eq('province', provinceFilter);
+  // §26.112 — PRIMA LE SCUOLE. La coda di Asti era IRRAGGIUNGIBILE: 828 home di
+  // scuole private/infanzia (domini non istituzionali, `depth 0`, `path_score 0`)
+  // occupavano ogni giro da 120 target, e le 21 home `*.edu.it` della provincia
+  // non venivano mai lette. La query dedicata ai domini istituzionali non può
+  // essere scavalcata da nessuna riga di contorno; il resto si aggiunge solo se
+  // la finestra istituzionale non basta a riempire il giro.
+  const istituzionali = filtraFontiSane(
+    await chiediCoda(finestra, provinceFilter, true),
+    escluse
+  );
+  let righe = istituzionali;
+  if (istituzionali.length < limit) {
+    const generali = filtraFontiSane(
+      await chiediCoda(finestra + limit, provinceFilter, false),
+      escluse
+    );
+    righe = [...istituzionali, ...generali];
+  }
 
-  const { data, error } = await q;
-  if (error) throw new Error(error.message);
-  const righe = (data ?? []) as Target[];
-  return filtraFontiSane(righe, escluse).slice(0, limit);
+  const coda = ordinaCoda(righe, limit);
+  console.log(
+    `[coda] ${coda.istituzionali} target istituzionali · ${coda.altre} altre fonti · ` +
+      `${coda.scartate} righe in attesa oltre il tetto del giro`
+  );
+  return coda.scelte;
 }
 
 async function runDiscoveryEngine(): Promise<void> {

@@ -19,6 +19,8 @@
 import { eScaduto } from '../lib/scadenza.ts';
 import { emailAvviso } from '../lib/alertInterpello.ts';
 import { isAdministrativeNoise } from '../lib/noiseFilter.ts';
+import { valutaAttoConcluso } from './attiConclusi.ts';
+import { motivoPaginaServizio } from './paginaServizio.ts';
 import { rilevaCategoriaAvviso, sembraOpportunita } from './parser.ts';
 
 /* ----------------------- 1 · Filtro editoriale (domini) ----------------------- */
@@ -59,19 +61,16 @@ export function eContenutoEditoriale(testo?: string | null): boolean {
 export const SEGNALI_EDITORIALI = RE_EDITORIALE.map((re) => String(re));
 
 /**
- * Titoli INFORMATIVI/AMMINISTRATIVI: esiti, graduatorie, approvazioni, revoche.
- * Non sono opportunità a cui candidarsi (sono l'esito di una procedura): restano
- * fuori dalla bacheca degli interpelli aperti. Il confronto è sull'inizio del
- * titolo, quindi un interpello che *parla* di graduatorie resta ammesso.
+ * Titoli INFORMATIVI/AMMINISTRATIVI: esiti, graduatorie, nomine, contratti.
+ *
+ * §26.115 — la regola NON vive più qui: `attiConclusi.ts` conosce anche la
+ * forma «nel titolo ma senza apertura» (Chieti-Pescara, Cuneo) e protegge gli
+ * interpelli che *citano* una graduatoria. Questa funzione resta la scorciatoia
+ * pubblica usata da guardie e chiamanti storici: stessa risposta, una sola
+ * verità.
  */
-const RE_TITOLO_INFORMATIVO =
-  /^(?:esit[oi]|risultanz[ae]|verbale|graduatori[ae](?:\s+(?:definitive?|provvisorie?|di istituto|per supplenze))?|elenco (?:degli )?ammess[ie]|ammess[ie]|approvazion[ei]|annullamento|revoca|rettifica|decreto|nomina|pubblicazione degli esiti)/i;
-
-/** True se il titolo annuncia un esito/un atto amministrativo, non un bando aperto. */
 export function eTitoloInformativo(titolo?: string | null): boolean {
-  const t = (titolo ?? '').replace(/\s+/g, ' ').trim();
-  if (!t) return false;
-  return RE_TITOLO_INFORMATIVO.test(t);
+  return valutaAttoConcluso(titolo).concluso;
 }
 
 /* ------------- 2 · Categorie ammesse (docenti, ATA, PNRR, esperti) ------------- */
@@ -97,6 +96,8 @@ export interface CandidatoOpportunita {
   /** Contesto della riga (città, classi, scadenze, email): secondo bacino di segnali. */
   corpo?: string | null;
   expirationDate?: string | null;
+  /** Classi di concorso riconosciute: una pagina che le dichiara non è «di servizio». */
+  classCodes?: readonly string[] | null;
 }
 
 /** Opzioni della valutazione di conformità. */
@@ -119,9 +120,10 @@ export function motivoScartoEditoriale(testo?: string | null): string | null {
 
 /**
  * Motivo per cui un avviso NON entra nella bacheca (`null` = ammesso).
- * Ordine: contenuto editoriale → atto informativo → rumore amministrativo/
- * informativo → non-opportunità → categoria fuori target → scaduto.
- * Con `daFonteInterpelli` si salta il solo controllo "parola chiave nel titolo".
+ * Ordine: contenuto editoriale → atto concluso → pagina di servizio → rumore
+ * amministrativo/informativo → non-opportunità → categoria fuori target →
+ * scaduto. Con `daFonteInterpelli` si salta il solo controllo "parola chiave
+ * nel titolo".
  */
 export function motivoScartoOpportunita(
   a: CandidatoOpportunita,
@@ -134,9 +136,22 @@ export function motivoScartoOpportunita(
   if (eContenutoEditoriale(testo) && !sembraOpportunita(a.title ?? '')) {
     return 'contenuto editoriale/istituzionale (notizia, non opportunità)';
   }
-  if (eTitoloInformativo(a.title)) {
+  // §26.115 — ATTO CONCLUSO: graduatoria, esito, nomina, contratto,
+  // aggiudicazione, individuazione di una persona. Il messaggio resta quello
+  // storico (le guardie lo citano alla lettera); il dettaglio del tipo vive in
+  // `attiConclusi.valutaAttoConcluso` ed è quello che si legge nei log.
+  if (valutaAttoConcluso(a.title).concluso) {
     return 'atto informativo/esito (non un\'opportunità aperta)';
   }
+  // §26.115 — PAGINA DI SERVIZIO: spiega come ci si candida (MAD, «modalità di
+  // invio», FAQ) e non porta né una scadenza né una classe: non è un'opportunità.
+  const servizio = motivoPaginaServizio({
+    titolo: a.title,
+    testo: a.corpo,
+    scadenza: a.expirationDate,
+    classi: a.classCodes,
+  });
+  if (servizio) return servizio;
   // PREFILTRO SEMANTICO (§26.82): la STESSA regola del discovery engine e del
   // table-reporter — gare, circolari, burocrazia e PAGINE INFORMATIVE (PCTO,
   // progetti, corsi, elenchi di scuole) con una sola verità. Una pagina
