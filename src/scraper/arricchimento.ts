@@ -6,8 +6,10 @@
  * e nei suoi allegati — mai inventato. Verificato da `scripts/test-arricchimento.ts`:
  *   · **scadenza** solo se il testo la dichiara (`scadenza`, `entro il`, `termine`):
  *     una data nuda non basta e un avviso senza data resta senza data (GATE 2);
- *   · **recapito** scelto per pertinenza all'istituto (`punteggioEmailScuola`),
- *     con la convenzione MIM sul codice meccanografico come ultima ratio.
+ *   · **recapito** scelto per GERARCHIA di natura (`lib/gerarchiaContatti.ts`, §26.116:
+ *     PEO → segreteria → dirigenza → generica → PEC) e, a parità di natura, per
+ *     pertinenza all'istituto (`punteggioEmailScuola`); la convenzione MIM sul
+ *     codice meccanografico resta l'ultima ratio (mai sopra una casella osservata).
  *
  * Il downloader è INIETTATO (`ScaricaPagina`): nessuna connessione parte da qui,
  * così le regole si provano offline. `index.ts` passa `scaricaPagina` (axios).
@@ -28,8 +30,12 @@ import {
   emailDaCodiceMeccanografico,
   estraiCodiceMeccanograficoDaTesto,
   normalizzaCodiceMeccanografico,
-  risolviEmailUfficialeScuola,
 } from '../lib/emailScuola.ts';
+import {
+  eAggiornamentoContatto,
+  eContattoPrimario,
+  scegliContatto,
+} from '../lib/gerarchiaContatti.ts';
 
 /** Lettore di una pagina: l'unica porta verso la rete (iniettata). */
 export type ScaricaPagina = (url: string) => Promise<string>;
@@ -136,25 +142,24 @@ export async function cercaEmailNelleFonti(
   }
 
   let migliore: string | null = null;
-  let migliorPunteggio = -Infinity;
   // Il codice (anche quello appena ricavato da URL/pagina) aiuta a preferire la
   // casella effettivamente legata all'istituto.
   const ctxFinale = { schoolCode: codice ?? a.schoolCode, schoolName: a.schoolName };
-  for (const e of emailTrovate) {
-    const p = punteggioEmailScuola(e, ctxFinale);
-    if (p > migliorPunteggio) {
-      migliorPunteggio = p;
-      migliore = e;
-    }
-  }
-  return {
-    email:
-      risolviEmailUfficialeScuola({
-        emailsTrovate: migliore ? [migliore] : [],
-        schoolCode: usaCodice ? (codice ?? a.schoolCode) : null,
-      })?.email ?? null,
-    codice,
-  };
+  // §26.116 — GERARCHIA tra le email osservate nella fonte: PEO, segreteria,
+  // dirigenza, generica; PEC solo se non c'è altro. A parità di natura resta il
+  // criterio di prima (pertinenza all'istituto, `punteggioEmailScuola`).
+  const osservate = [...emailTrovate]
+    .map((email) => ({ email, provenienza: 'fonte', punteggio: punteggioEmailScuola(email, ctxFinale) }))
+    .sort((x, y) => y.punteggio - x.punteggio);
+  const scelta = scegliContatto(osservate);
+  // La PEO ricostruita dal codice vale solo per una casella NON reale: una PEC
+  // trovata nella pagina non deve sopravvivere alla PEO ufficiale dell'istituto.
+  // Un dominio personale (gmail…) non è MAI un recapito: al massimo lo si legge
+  // per il codice meccanografico.
+  const derivata = usaCodice ? emailIstituzionaleDaCodice(codice ?? a.schoolCode) : null;
+  if (!scelta || scelta.natura === 'esterno') migliore = derivata;
+  else migliore = eContattoPrimario(scelta.email) ? scelta.email : (derivata ?? scelta.email);
+  return { email: migliore, codice };
 }
 
 /**
@@ -185,52 +190,44 @@ export async function arricchisciContatti(
   const usaCodice = opts.usaCodice ?? true;
   if (avvisi.length === 0) return 0;
 
-  // Priorità agli avvisi SENZA email (poi a quelli con email).
-  const ordinati = [...avvisi].sort(
-    (x, y) => (x.contactEmail ? 1 : 0) - (y.contactEmail ? 1 : 0),
-  );
+  // §26.116 — PRIORITÀ: prima chi NON ha un recapito reale (buco, PEC o dominio
+  // personale), poi chi ne ha già uno buono. L'arricchimento opportunistico
+  // completa le righe candidate senza consumare il budget su quelle a posto.
+  const daMigliorare = (a: InterpelloParsato): number => (eContattoPrimario(a.contactEmail) ? 1 : 0);
+  const ordinati = [...avvisi].sort((x, y) => daMigliorare(x) - daMigliorare(y));
   const campione = ordinati.slice(0, max);
 
   let migliorati = 0;
   let daPagine = 0;
   let daCodice = 0;
   for (const a of campione) {
-    const ctx = { schoolCode: a.schoolCode, schoolName: a.schoolName };
     const attuale = a.contactEmail ?? null;
     let migliore = attuale;
-    let migliorPunteggio = attuale ? punteggioEmailScuola(attuale, ctx) : -Infinity;
 
-    // Approfondisce su più fonti solo se manca l'email o è debole.
-    if (migliorPunteggio < SOGLIA_EMAIL_AFFIDABILE) {
+    // Approfondisce su più fonti quando il recapito manca o quando quello che
+    // c'è NON è una casella reale (PEC/dominio personale): è lo scavo
+    // opportunistico che trasforma una PEC nella PEO dell'istituto.
+    if (!eContattoPrimario(attuale)) {
       const esito = await cercaEmailNelleFonti(a, opts.scarica, usaCodice);
       // Il codice meccanografico può emergere anche dalla pagina ufficiale:
       // salvarlo permette la risoluzione PEO/PEC e il nome reale della scuola.
       if (esito.codice && !a.schoolCode) a.schoolCode = esito.codice;
       const trovata = esito.email;
-      if (trovata) {
-        const p = punteggioEmailScuola(trovata, ctx);
-        if (p > migliorPunteggio) {
-          migliore = trovata;
-          migliorPunteggio = p;
-          daPagine += 1;
-        }
+      if (trovata && eAggiornamentoContatto(migliore, trovata)) {
+        migliore = trovata;
+        daPagine += 1;
       }
     }
 
-    // Ultima ratio / RINFORZO: convenzione MIM sul codice meccanografico.
-    // Si usa l'email derivata sia quando manca un contatto, sia quando quello
-    // trovato è DEBOLE (es. dominio personale) e la derivata è più pertinente:
-    // così si evita "Email non disponibile" (o un contatto sbagliato) quando
-    // l'istituto ha una casella istituzionale desumibile dal codice.
-    if (usaCodice && a.schoolCode && (!migliore || migliorPunteggio < SOGLIA_EMAIL_AFFIDABILE)) {
+    // Ultima ratio / RINFORZO: convenzione MIM sul codice meccanografico. Si usa
+    // quando il recapito manca o quando quello presente NON è una casella reale
+    // (PEC, dominio personale). Una ricostruzione non sale mai sopra una casella
+    // osservata: quella è la casella che il bando indica.
+    if (usaCodice && a.schoolCode && !eContattoPrimario(migliore)) {
       const derivata = emailIstituzionaleDaCodice(a.schoolCode);
-      if (derivata) {
-        const p = punteggioEmailScuola(derivata, ctx);
-        if (!migliore || p > migliorPunteggio) {
-          migliore = derivata;
-          migliorPunteggio = p;
-          daCodice += 1;
-        }
+      if (derivata && eAggiornamentoContatto(migliore, derivata, { derivato: true })) {
+        migliore = derivata;
+        daCodice += 1;
       }
     }
 

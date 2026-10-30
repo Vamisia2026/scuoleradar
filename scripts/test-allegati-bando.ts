@@ -202,6 +202,14 @@ check('codice non valido → nessun indirizzo', null, emailDaCodiceMeccanografic
 check('il runner scrive il recapito nella riga', true, /contact_email: contactEmail/.test(reporter));
 check('il runner scrive la PEC', true, /school_pec: schoolPec/.test(reporter));
 check('lo stato dell’anagrafica è dichiarato', true, /stato_arricchimento: statoArricchimento\(/.test(reporter));
+// §26.116 — il recapito non è più solo la PEO del codice: i recapiti SCRITTI nel
+// documento e quelli dell'anagrafica entrano in una gerarchia dichiarata.
+check('il runner sceglie il recapito con la GERARCHIA', true, /scegliContatto\(\[/.test(reporter));
+check(
+  'i recapiti del documento entrano nel record',
+  true,
+  /email: string\[\]/.test(reporter) && /recapiti\?\.email/.test(reporter),
+);
 
 /* ---------------------- 9) PUREZZA, DIMENSIONE, CATENA ----------------- */
 

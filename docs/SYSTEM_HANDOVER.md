@@ -343,7 +343,8 @@ Dettaglio file-per-file, confini e backlog: [`DEPARTMENT_MAP.md`](./DEPARTMENT_M
 | `bachecaInterpelli.ts` | 191 | **Puro** (§26.56 → §26.65) — PIPELINE della bacheca, un solo punto: avviso vivo → **la riga è un avviso?** (`motivoRigaNonOpportunitaAvviso`, §26.65: il contorno del feed non entra e lo scarto è contato) → filtri scuole (blacklist fuori, whitelist dentro d'ufficio) → **PORTA D'INGRESSO PRIMARIA** (conferma del motore, oppure classe almeno «stessa area» 85: una competenza trovata NON apre la bacheca) → punteggio (media ponderata delle modali primarie **+ la sfumatura del livello secondario**) → esclusione secca dei riempitivi non pertinenti (§26.60) → cap dei riempitivi con protezione delle scuole preferite. `bachecaInterpelli(fonti, profilo)` restituisce lista + conti (`righeNonOpportunita`, `esclusiBlacklist`, `forzate`, `riempitiviEsclusi`, `riempitiviNascosti`) e scrive sull'interpello `compatibilita`, `motivoCompatibilita`, `scuolaPreferita` e **`competenzaSecondaria`** (§26.63), così `useInterpelliFeed` resta un contenitore di stato |
 | `scadenza.ts` | 174 | Helper scadenza (puro): `giorniRimanenti`, `eScaduto`, `eInterpelloAttivo`, `eAvvisoVivo`, `eOpportunitaConScadenza`, `GIORNI_ORIZZONTE_OPPORTUNITA`, `GIORNI_FINESTRA_SENZA_SCADENZA` — il **calcolo del tempo**; il **badge** (semaforo a TRE luci) vive in `scadenzaSemaforo.ts` (§26.89) |
 | `alertInterpello.ts` | ~480 | Costruttore dell'**avviso strutturato** (gerarchia obbligatorie/opzionali + campo `email` dell'avviso), `pulisciTitoloAvviso` (via i dump di codici classe), **`emailAvviso`** + costanti condivise `EMAIL_ICONA`/`EMAIL_ETICHETTA`/`EMAIL_ETICHETTA_WEB`, **`ISTRUZIONE_AVVISO_UFFICIALE`** (direttiva standard "clicca STAMPA") e **`suggerimentoRicercaAvviso({ compatto })`** (guida operativa per elenchi/"Stampa" o fonte mancante), **`emailAvviso`** ed **`etichettaFonteLink`/`classificaFonteLink`/`ePaginaRiepilogo`** (etichetta ONESTA del link: PDF / Albo Pretorio / **pagina di riepilogo "Stampa"** / avviso — mai "Candidati"), **GATE DI QUALITÀ**: `eUrlAvvisoDiretto` (link = avviso specifico, mai home/elenco/ricerca/archivio regionale), `motivoAvvisoNonInviabile` e `avvisoInviabile` (**LINK DIRETTO obbligatorio**; da §26.68 il **recapito mancante NON blocca più** l'invio: `avvisoSenzaRecapito` + `MOTIVO_RECAPITO_MANCANTE` sono l'avvertenza che il dispatch logga e che il monitor conta), **PULIZIA DELL'URL**: `pulisciUrlEsterna` (entità `&amp;`, virgolette/angolari/caporalia di markdown, spazi e punteggiatura di contorno) e **`urlFonteAvviso`** = stringa pulita + UNICO gate `eUrlAvvisoDiretto` (il punto unico dell'`href` per Telegram, email e canali — §26.45). Verificato da `npm run test:qualita` |
-| `tailoringContatti.ts` | 103 | **Puro** (§26.68) — il **TAILORING DEL RECAPITO**, punto unico di decisione: `risolviContattoAvviso({ emailFonte, anagrafica, storico, convenzione })` risponde `{ email, pec, provenienza, daRevisionare }` nella gerarchia di autorevolezza **fonte → anagrafica (SCUANAGRAFE) → storico interno → convenzione MIM**; `Email malformata` scende alla fonte successiva, `daRevisionare` è l'esito onesto quando nessuna fonte produce un recapito (l'avviso si invia lo stesso, senza blocco contatto). `ETICHETTA_PROVENIENZA` per log e report. Verificato da `npm run test:tailoring` |
+| `gerarchiaContatti.ts` | 221 | **Puro e isomorfo** (§26.116) — la SCALA del recapito di candidatura: `naturaContatto` (`peo` → `segreteria` → `dirigenza` → `istituto` → `pec` → `esterno`, domini personali gmail/libero… sempre ultimi), `RANGO_CONTATTO`, `ETICHETTA_NATURA` (le etichette mostrate all'utente), `eContattoPrimario` (PEC e dominio personale **non** lo sono mai), `scegliContatto` (osservati reali → ricostruiti → PEC → esterno; a parità vince il primo, cioè la fonte) e `eAggiornamentoContatto` (riempie i buchi, sostituisce PEC/generica, `derivato` mai sopra un'osservazione, `soloNonPrimari` = contratto «fill-only» dell'anagrafica). Verificato da `npm run test:contatti` |
+| `tailoringContatti.ts` | 125 | **Puro** (§26.68, §26.116) — il **TAILORING DEL RECAPITO**, punto unico di decisione: `risolviContattoAvviso({ emailFonte, anagrafica, storico, convenzione })` risponde `{ email, pec, provenienza, daRevisionare, natura }`. Dalla §26.116 non vince più la PRIMA fonte che dichiara un'email: vince il **rango** (`lib/gerarchiaContatti`), con due precedenze dichiarate — un indirizzo **osservato** (fonte/SCUANAGRAFE/storico) batte uno **ricostruito** (convenzione MIM) e a parità vince la fonte più autorevole. `Email malformata` scende alla fonte successiva, `daRevisionare` è l'esito onesto quando nessuna fonte produce un recapito (l'avviso si invia lo stesso, senza blocco contatto). `ETICHETTA_PROVENIENZA` per log e report. Verificato da `npm run test:tailoring` |
 | `interpelloRouting.ts` | ~40 | Deep link LEGACY `/interpello/:id` (puro): `eUuid`, `chiaveInterpelloDaParam` (uuid → `id`, hash → `hash_id`). **Policy**: le notifiche non generano più link interni; la rotta resta solo per i deep link storici (che reindirizzano subito alla fonte esterna) |
 | `digest.ts` | ~130 | **Puro, senza import** — finestra del BATCH giornaliero: `oraLocaleItalia`/`dataLocaleItalia`/`etichettaDataItalia` (fuso `Europe/Rome`), `ORA_DIGEST` (**17:00**), `eOraDelDigest(istante, forzato)`, `descrizioneFinestraDigest`, `ordinaVociDigest` (scadenza più vicina in cima), `raggruppaPerProvincia` |
 | `resend.ts` | 1.153 | **Node-only** — email Resend: 8 `TipoMessaggio` (`welcome, prova1, prova2, prova3, extra, recap, welcome_pro, notifica_pro`), **OGGETTO STANDARD delle opportunità** `OGGETTO_OPPORTUNITA = 'Nuove opportunità per te!'` (`subjectDigest`/`subjectOpportunita`/`subjectPerNotifica`; gli oggetti di ciclo di vita restano specifici), **`vociAttive`** (il digest contiene SOLO opportunità non scadute), **`footerEmailHtml`** (footer unico crisp: firma → CTA Notizie email → link Radar **in piccolo** (12.5 px) → riga brand → avviso "non rispondere" in coda; niente "P.S.", niente grigio `#94a3b8`), `ctaNotizieHtml`/`URL_NOTIZIE_VISIBILE`/`CTA_NOTIZIE_TESTO_EMAIL`/`TESTO_NON_RISPOSTA`, `linkOpportunita` (solo link diretto, **URL già pulito** via `urlFonteAvviso`) e **`fonteInEvidenza`** (PULSANTE dell'avviso ufficiale: **UNICA azione di fonte per voce**, etichetta standard; **nessun box giallo né guida operativa nelle email**), **`intestazioneBrandHtml`/`URL_BRAND`** (header email **SOLO testuale**, cliccabile verso `scuoleradar.it`: **nessun logo-immagine**), CORPO_MESSAGGI, `TIPI_CON_OPPORTUNITA`, `renderEmailHtml`, `inviaNotificaEmail`, `inviaNotificheInterpello`, `renderDigestEmailHtml`/`inviaDigestEmail`, **`renderPromemoriaEmailHtml`/`inviaPromemoriaEmail`**. Verificato da `npm run test:email`, `npm run test:digest`, `npm run test:promemoria`, `npm run test:link` |
@@ -12262,6 +12263,186 @@ candidarsi** (`paginaServizio`), **il documento dice il resto e diventa la
 destinazione** (`allegatiBando` + `datiBando`). Le tre regole stanno in moduli
 puri, senza rete, con una guardia ciascuna: la prossima eccezione si aggiunge in
 un punto solo, e si vede subito se rompe un caso vero.
+
+## §26.116 — Il recapito giusto: PEO prima della PEC, e l'anagrafica che si completa da sola (30/10/2026)
+
+### 1. Il difetto non era la casella MANCANTE, era la casella SBAGLIATA
+
+Con il modello Liguria (§26.115) le righe nascevano con un recapito, ma quale:
+`arricchisciDaAnagrafica` scriveva `scuola.email ?? scuola.pec` — quando il MIM
+non dichiarava la PEO, `contact_email` diventava la **PEC**; e da lì nessuno la
+toglieva più, perché ogni anello successivo rispettava il contratto «mai
+sovrascrivere». Stessa radice per la casella generica: se la pagina elencava
+`info@…` e `segreteria@…`, vinceva il punteggio di pertinenza, non il RUOLO della
+casella. Tre conseguenze reali:
+
+1. la candidatura finiva su una casella che serve agli **atti formali** (PEC) e
+   che non è pensata per ricevere domande;
+2. una casella generica non presidiata bruciava l'occasione;
+3. l'indicazione del bando («inviare a segreteria@…») poteva essere sostituita
+   da un indirizzo ricostruito, senza che nessuna regola lo dicesse.
+
+### 2. Una scala sola, in un modulo puro (`lib/gerarchiaContatti.ts`)
+
+Nuovo modulo **puro e isomorfo** (221 righe, nessuna rete, nessun `node:*`):
+la scala è quella richiesta dal cliente, dal migliore al peggiore —
+
+| rango | natura | riconoscimento |
+|---|---|---|
+| 1 | `peo` | `codice@istruzione.it` (codice meccanografico valido sul dominio del Ministero) |
+| 2 | `segreteria` | `segreteria`, `segr`, `didattica`, `protocollo`, `dsga`, `amministrazione`, `personale`, `alunni`, `urp`, `ufficio` |
+| 3 | `dirigenza` | `dirigente`, `dirigenza`, `presidenza`, `preside`, `dirscol`, `direttore`, `ds` |
+| 4 | `istituto` | qualunque altra casella su dominio dell'istituto (`info@`, `contatti@`…) |
+| 5 | `pec` | dominio `pec.*`, `postacert*`, `legalmail` |
+| 6 | `esterno` | dominio personale/gratuito (gmail, libero, virgilio…), **mai** recapito scolastico |
+
+L'ordine dei controlli è significativo: `codice@pec.istruzione.it` è una **PEC**
+(non la PEO dello stesso codice) e una casella che si chiama «segreteria» su
+`@gmail.com` resta `esterno`. Il divieto dei domini personali non è duplicato:
+`emailScuola.ts` espone `eDominioNonIstituzionale`, unica verità riusata qui.
+
+Due funzioni decidono tutto il resto:
+
+* **`scegliContatto(candidati)`** — primo gruppo: indirizzi **osservati** e reali
+  (fonte, SCUANAGRAFE, storico interno), vince il rango migliore; secondo gruppo:
+  indirizzi **ricostruiti** (`derivato: true`, convenzione MIM); poi la PEC, poi
+  il dominio esterno. A parità di rango vince il primo arrivato, così l'ordine di
+  autorevolezza di §26.68 (`fonte → anagrafica → storico → convenzione`) resta
+  intatto.
+* **`eAggiornamentoContatto(attuale, candidato, opzioni)`** — quando il nuovo
+  recapito deve sostituire quello salvato: (a) buco da riempire; (b) il salvato è
+  un ripiego (PEC/dominio personale) e il candidato è una casella reale;
+  (c) fra due indirizzi osservati vince il rango strettamente migliore
+  (mail generica → segreteria → PEO). Mai un peggioramento, mai una ricostruzione
+  sopra un dato osservato.
+
+### 3. Il confine dichiarato: la PEO ricostruita non batte il bando
+
+La tentazione è far vincere la PEO sempre, perché «esiste per costruzione». Non
+si fa, e la ragione è di prodotto: quando la fonte scrive «inviare la domanda a
+`segreteria@…`» non sta offrendo una casella fra tante, sta dando
+un'**istruzione**; sostituirla con la PEO ufficiale può far perdere la
+candidatura. Quindi la PEO ricostruita resta l'**ultima ratio** (§26.68) e batte
+solo i ripieghi — PEC e domini personali. La gerarchia piena (PEO prima di
+segreteria) vale invece **fra le caselle osservate**, che è esattamente il caso
+del cliente («trovata Segreteria dove c'era una mail generica»). La PEC, invece,
+non è MAI primaria: se esiste una qualunque casella reale, si usa quella.
+
+### 4. Il cablaggio: cinque anelli, nessuna eccezione locale
+
+La scala è una sola e i punti che la usano sono quelli che già decidevano il
+recapito — nessuna logica parallela:
+
+1. **Tailoring** (`lib/tailoringContatti.risolviContattoAvviso`) — la scelta fra
+   le fonti non è più «la prima che risponde» ma il **rango**; l'esito espone
+   `natura` (`peo`/`segreteria`/…) oltre a `email`, `pec`, `provenienza`,
+   `daRevisionare`.
+2. **Anagrafica** (`lib/anagraficaScuole.arricchisciDaAnagrafica`) — la PEO del
+   registro batte la PEC (`scegliContatto` sui due campi MIM) e un recapito
+   **non primario** viene sostituito (`soloNonPrimari: true`): il contratto «mai
+   sovrascrivere» resta intatto per i recapiti buoni, come dimostrano le
+   asserzioni storiche di `test:anagrafica`.
+3. **Arricchimento dallo scraper** (`scraper/arricchimento`) — `cercaEmailNelleFonti`
+   ordina le email della pagina/PDF per natura (PEO → segreteria → dirigenza →
+   generica, poi pertinenza all'istituto come spareggio) e `arricchisciContatti`
+   scava anche sulle righe che hanno una **PEC o una casella generica** (non solo
+   su quelle vuote): è l'arricchimento **opportunistico**. La PEO ricostruita dal
+   codice entra solo dove non c'è una casella reale.
+4. **Manutenzione dati** (`scripts/arricchisci-interpelli.ts`) — la PEO da
+   convenzione MIM sostituisce PEC e domini personali già salvati (contatore
+   `PEO da convenzione MIM`), così lo storico esistente si allinea senza
+   migrazioni.
+5. **Runner del deep crawl** (`scripts/table-reporter.ts`) — `EsitoAvviso` porta
+   ora anche i **recapiti scritti nel documento** (`email`, `pec` da
+   `campiDocumento`): `recordDaVoceScuola` sceglie con `scegliContatto` fra
+   documento, anagrafica MIM e convenzione, e `school_pec` resta il campo della
+   PEC (anagrafica → codice → documento). Una riga nata da un PDF che indica
+   `segreteria@…` arriva in bacheca con quella casella; se il codice è valido e
+   il documento tace, resta la PEO.
+
+**Perché non c'è una tabella nuova.** Nel progetto l'«anagrafica della scuola»
+osservata è la riga stessa (`interpelli.contact_email` + `school_pec`): lo storico
+(`scraper/storicoContatti`) la rilegge e la riusa per tutte le righe successive
+della stessa scuola. Migliorare il recapito della riga **è** l'aggiornamento
+dell'anagrafica: un `pending` in più da mantenere non avrebbe aggiunto nulla.
+
+### 5. L'interfaccia: il bottone e la natura dichiarata
+
+* `src/components/ContattoCandidatura.tsx` (59 righe) — il canale standard:
+  bottone `mailto:` con l'etichetta unica di prodotto **«📧 Email candidature»**,
+  il badge della **natura** (`ETICHETTA_NATURA`: «PEO ministeriale», «Segreteria»,
+  «Dirigenza», «Istituto», «PEC (atti formali)», «Dominio esterno») e l'indirizzo
+  leggibile. Se il recapito manca il blocco **non si mostra**: mai «Email non
+  disponibile» (§26.68).
+* `src/components/InterpelloAzioni.tsx` (57 righe) — le azioni della card
+  (fonte ufficiale · canale email · dettaglio), estratte da `InterpelloCard` per
+  rispettare le 250 righe del gate strutturale.
+* Superfici cablate: **card della vetrina** (variante `secondario`, accanto alla
+  CTA della fonte), **modale di dettaglio** e **scheda `/interpello/:id`**
+  (variante `primario`).
+* **La parola «Candidati» non viene usata**: le checklist in `comunicazione/**`
+  la vietano come etichetta/CTA. Il canale è `contact_email`, l'etichetta è quella
+  standard già condivisa da email, Telegram e viste web.
+
+### 6. La guardia
+
+`npm run test:contatti` (`scripts/test-gerarchia-contatti.ts`, **215 righe**,
+incluso in `npm test`): la scala e i ranghi, il riconoscimento di ogni famiglia
+(codice PEO, segreteria/didattica/protocollo/DSGA, dirigenza, generica, PEC dal
+dominio, dominio personale anche quando si chiama «segreteria»), i valori non-email,
+`eContattoPrimario` (PEC e dominio personale mai primari), `scegliContatto`
+(PEO > segreteria > generica > PEC, osservata > ricostruita, nessun indirizzo
+inventato), `eAggiornamentoContatto` (buco, ripiego sostituito, mai un
+peggioramento, ricostruzione mai sopra un'osservazione, contratto «fill-only») e le
+etichette mostrate all'utente. Include il caso **anagrafica** con un indice MIM in
+memoria: PEC e dominio personale salgono alla PEO, un recapito primario resta.
+
+Estese le guardie esistenti: `test:tailoring` (5 casi di gerarchia: PEC battuta
+dalla PEO, PEC come estrema ratio, segreteria della fonte che resiste alla
+ricostruzione, generica promossa dalla segreteria, dominio personale sostituito) e
+`test:allegati-bando` (il runner sceglie con `scegliContatto` e i recapiti del
+documento entrano nel record). `test:arricchimento`, `test:anagrafica`,
+`test:email-scuola`, `test:qualita` restano verdi senza modifiche di merito.
+
+### 7. Verifiche (30/10/2026)
+
+`npm run typecheck` ✅ 0 `error TS` · **`npm test` ✅ exit 0** (5.216 righe di
+output, catena completa, **nessun** `✗`, ultimo anello `test:contatti` ✅) ·
+`npm run test:architettura` ✅ 767 file, **145 violazioni = baseline esatta,
+0 nuove** · `npm run build` ✅ vite `built in 7,42s` · `npx eslint` ✅ 0 problemi
+sui 15 file toccati. Guardie riverificate dopo il cablaggio: `test:tailoring` ✅,
+`test:contatti` ✅, `test:anagrafica` ✅ (248 righe, contratto «mai sovrascritture»
+intatto), `test:arricchimento` ✅, `test:allegati-bando` ✅, `test:email-scuola` ✅.
+
+**File toccati.** *Nuovi*: `src/lib/gerarchiaContatti.ts` (221),
+`src/components/ContattoCandidatura.tsx` (59),
+`src/components/InterpelloAzioni.tsx` (57),
+`scripts/test-gerarchia-contatti.ts` (215). *Modificati*:
+`src/lib/emailScuola.ts` (92 → 101: `eDominioNonIstituzionale`),
+`src/lib/tailoringContatti.ts` (104 → 125),
+`src/lib/anagraficaScuole.ts` (208 → 222),
+`src/scraper/arricchimento.ts` (249 → 245),
+`src/components/InterpelloCard.tsx` (249 → 230, azioni estratte),
+`src/components/InterpelloDettaglioModal.tsx`,
+`src/pages/interpello/components/SchedaAvviso.tsx`,
+`scripts/arricchisci-interpelli.ts`, `scripts/table-reporter.ts`,
+`scripts/test-tailoring.ts`, `scripts/test-allegati-bando.ts`, `package.json`
+(script `test:contatti` + catena), `docs/**`, `comunicazione/**`.
+
+**Nota di sessione.** La regola del cliente («PEO, poi segreteria, poi dirigenza,
+poi generica, poi — e solo poi — la PEC») è stata implementata come **scala di
+rango** in un modulo puro, non come catena di `if` sparsa nei cinque punti che
+toccano il recapito: così l'ordine si legge in un file solo e i test lo bloccano.
+Due scelte vanno dette, perché sono confini e non dettagli: (a) la PEO
+**ricostruita** dal codice non sostituisce un indirizzo **osservato**, perché il
+bando che scrive «inviate a segreteria@…» sta dando un'istruzione, non offrendo una
+casella — resta l'ultima ratio di §26.68 e batte PEC e domini personali; (b)
+l'upgrade è **monotòno**: si sale di rango o si sostituisce un ripiego, mai si
+scende, e questo rende il ricalcolo idempotente su tutta la base dati
+(`npm run dati:arricchisci`), senza toccare le righe già a posto.
+
+
+
 
 
 

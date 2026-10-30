@@ -86,7 +86,7 @@ check(
 );
 check(
   'nessuna fonte → daRevisionare (nessun recapito inventato)',
-  { email: null, pec: null, provenienza: 'nessuna', daRevisionare: true },
+  { email: null, pec: null, provenienza: 'nessuna', daRevisionare: true, natura: null },
   risolviContattoAvviso({ emailFonte: '', anagrafica: null, storico: null, convenzione: { email: 'niente' } }),
 );
 check(
@@ -97,6 +97,19 @@ check(
     anagrafica: { pec: 'BSIS02900X@PEC.Istruzione.IT' },
   }).pec,
 );
+
+console.log('\n— §26.116 · Gerarchia: la PEC non è MAI primaria —');
+const casiGerarchia: Array<[string, Parameters<typeof risolviContattoAvviso>[0], string]> = [
+  ['PEC della fonte + PEO della convenzione → vince la PEO', { emailFonte: 'BSIS02900X@PEC.Istruzione.IT', convenzione: { email: 'bsis02900x@istruzione.it' } }, 'peo|convenzione|bsis02900x@istruzione.it'],
+  ['PEC come UNICA fonte → resta, dichiarata (estrema ratio)', { emailFonte: ' BSIS02900X@PEC.Istruzione.IT ' }, 'pec|fonte|bsis02900x@pec.istruzione.it'],
+  ['segreteria della fonte + PEO ricostruita → resta la fonte', { emailFonte: 'segreteria@gigli.edu.it', convenzione: { email: 'bsis02900x@istruzione.it' } }, 'segreteria|fonte|segreteria@gigli.edu.it'],
+  ['casella GENERICA della fonte + segreteria dallo storico → sale la segreteria', { emailFonte: 'info@gigli.edu.it', storico: { email: 'segreteria@gigli.edu.it' } }, 'segreteria|storico|segreteria@gigli.edu.it'],
+  ['dominio personale della fonte + PEO ricostruita → vince la PEO', { emailFonte: 'prof.rossi@gmail.com', convenzione: { email: 'ltis00100a@istruzione.it' } }, 'peo|convenzione|ltis00100a@istruzione.it'],
+];
+for (const [nome, fonti, atteso] of casiGerarchia) {
+  const e = risolviContattoAvviso(fonti);
+  check(nome, atteso, `${e.natura}|${e.provenienza}|${e.email}`);
+}
 
 console.log('\n— Storico interno: indice e matching —');
 const storico: RigaStorico[] = [

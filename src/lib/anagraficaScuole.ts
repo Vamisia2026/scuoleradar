@@ -24,6 +24,7 @@
 import { chiaveCodiceScuola, normalizzaNomeScuola, type ScuolaAnagrafica } from './anagraficaCsv';
 import type { IndiceAnagrafica } from './anagraficaIndice';
 import { estraiCodiceMeccanograficoDaTesto } from './emailScuola';
+import { eAggiornamentoContatto, scegliContatto } from './gerarchiaContatti';
 import { nomeIstitutoPresentabile } from './nomeIstituto';
 
 export {
@@ -158,7 +159,10 @@ export function sitoIstituzionale(
  *   1. il codice meccanografico della riga (o estratto dal titolo/nome);
  *   2. `school_code`, `school_name` (denominazione presentabile), `contact_email`
  *      (PEO, altrimenti PEC) e `school_pec` — **solo se mancanti**: un dato già
- *      presente non viene mai sovrascritto.
+ *      presente non viene mai sovrascritto, con UNA eccezione dichiarata (§26.116):
+ *      un recapito NON primario (PEC o dominio personale) viene sostituito dalla
+ *      PEO/PEC dell'istituto, perché una PEC al posto di una casella reale fa
+ *      perdere la candidatura.
  * Con il codice assente si tenta il NOME (solo se univoco): è il caso delle righe
  * che hanno un nome leggibile ma nessun meccanografico — lì si recupera anche il
  * codice e quindi il recapito ufficiale.
@@ -191,9 +195,20 @@ export function arricchisciDaAnagrafica(
     const nome = nomeDaAnagrafica(scuola);
     if (nome) patch.school_name = nome;
   }
-  if (!(riga.contact_email ?? '').trim()) {
-    const recapito = scuola.email ?? scuola.pec;
-    if (recapito) patch.contact_email = recapito;
+  // RECAPITO DI CANDIDATURA (§26.116) — gerarchia del contatto (`lib/gerarchiaContatti.ts`):
+  // la PEO ministeriale batte la PEC, e un recapito salvato che NON è primario
+  // (PEC o dominio personale) viene sostituito da una casella reale. Un recapito
+  // già primario non si tocca: contiene l'indicazione della fonte (il bando dice
+  // dove inviare la domanda) e l'anagrafica non è più autorevole di lei.
+  const recapitiRegistro = [scuola.email, scuola.pec].filter((e): e is string => Boolean(e));
+  const miglioreRegistro = scegliContatto(
+    recapitiRegistro.map((email) => ({ email, provenienza: 'anagrafica' })),
+  );
+  if (
+    miglioreRegistro &&
+    eAggiornamentoContatto(riga.contact_email, miglioreRegistro.email, { soloNonPrimari: true })
+  ) {
+    patch.contact_email = miglioreRegistro.email;
   }
   if (!(riga.school_pec ?? '').trim() && scuola.pec) patch.school_pec = scuola.pec;
   // SITO ISTITUZIONALE (§26.77): è il materiale con cui la bacheca sostituisce i

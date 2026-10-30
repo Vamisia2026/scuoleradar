@@ -21,6 +21,15 @@ const RE_CODICE_MECCANOGRAFICO = /\b([A-Z]{2}[A-Z]{2}\d{5}[A-Z0-9])\b/;
 const DOMINI_NON_ISTITUZIONALI =
   /@(?:gmail|googlemail|libero|virgilio|alice|tin|hotmail|outlook|live|yahoo|icloud|protonmail|tiscali|fastwebnet|scuoleradar)\./i;
 
+/**
+ * True se l'email usa un dominio PERSONALE/gratuito (gmail, libero, …): non è mai
+ * il recapito di un istituto (§26.47, checklist di prodotto). Unica verità del
+ * divieto, riusata dalla gerarchia del contatto (`lib/gerarchiaContatti.ts`).
+ */
+export function eDominioNonIstituzionale(email?: string | null): boolean {
+  return DOMINI_NON_ISTITUZIONALI.test((email ?? '').trim().toLowerCase());
+}
+
 export interface EmailUfficialeScuola {
   email: string;
   /** PEO = posta ordinaria (candidature) · PEC = posta certificata. */
@@ -69,7 +78,7 @@ export function risolviEmailUfficialeScuola(opts: {
 }): EmailUfficialeScuola | null {
   const trovate = (opts.emailsTrovate ?? [])
     .map((e) => (e ?? '').trim().toLowerCase())
-    .filter((e) => e.includes('@') && !DOMINI_NON_ISTITUZIONALI.test(e));
+    .filter((e) => e.includes('@') && !eDominioNonIstituzionale(e));
   if (trovate.length > 0) {
     const pec = trovate.find((e) => e.includes('@pec.'));
     const scelta = opts.preferisciPec && pec ? pec : (trovate.find((e) => !e.includes('@pec.')) ?? trovate[0]);

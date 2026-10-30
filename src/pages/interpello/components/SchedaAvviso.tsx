@@ -11,6 +11,7 @@
  */
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, BadgeCheck, Clock, MapPin } from 'lucide-react';
+import { ContattoCandidatura } from '@/components/ContattoCandidatura';
 import { IstitutoEmittente } from '@/components/IstitutoEmittente';
 import { etichettaClasseMateria } from '@/data/classiConcorso';
 import type { Interpello } from '@/data/interpelli';
@@ -123,10 +124,10 @@ export function SchedaAvviso({ interpello }: SchedaAvvisoProps) {
             <dt className="text-sm font-semibold text-primary-700">
               {EMAIL_ICONA} {EMAIL_ETICHETTA_WEB}
             </dt>
-            <dd className="text-sm text-primary-800">
-              <a href={`mailto:${avviso.email}`} className="break-all text-primary-600 underline">
-                {avviso.email}
-              </a>
+            <dd className="mt-2 text-sm text-primary-800">
+              {/* §26.116 — bottone standard + natura dichiarata (PEO, segreteria,
+                  dirigenza, generica, PEC di ripiego): mai una casella anonima. */}
+              <ContattoCandidatura email={avviso.email} />
             </dd>
           </div>
         )}

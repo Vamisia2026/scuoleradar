@@ -29,6 +29,7 @@ import {
   ETICHETTA_SCUOLA_PREFERITA,
 } from '@/lib/compatibilita';
 import { scuolaPreferita } from '@/lib/filtriScuole';
+import { ContattoCandidatura } from './ContattoCandidatura';
 import { IstitutoEmittente } from './IstitutoEmittente';
 import { Modal } from './Modal';
 
@@ -163,20 +164,15 @@ export function InterpelloDettaglioModal({
               <dd className="text-sm text-primary-800">{r.valore}</dd>
             </div>
           ))}
-          {/* Email candidature: blocco presente SOLO se l'indirizzo è stato estratto
-              (mai uno stato negativo tipo "Non indicata"); stessa etichetta di email. */}
+          {/* Recapito di candidatura: bottone `mailto` + NATURA dichiarata (§26.116).
+              Presente SOLO se l'indirizzo è stato risolto (mai uno stato negativo). */}
           {avviso.email && (
-            <div className="rounded-xl bg-slate-50 p-4">
+            <div className="rounded-xl bg-slate-50 p-4 sm:col-span-2">
               <dt className="text-sm font-semibold text-primary-700">
                 {EMAIL_ICONA} {EMAIL_ETICHETTA_WEB}
               </dt>
-              <dd className="text-sm text-primary-800">
-                <a
-                  href={`mailto:${avviso.email}`}
-                  className="break-all text-primary-600 underline transition hover:text-primary-800"
-                >
-                  {avviso.email}
-                </a>
+              <dd className="mt-2 text-sm text-primary-800">
+                <ContattoCandidatura email={avviso.email} />
               </dd>
             </div>
           )}

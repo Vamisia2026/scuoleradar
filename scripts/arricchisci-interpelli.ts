@@ -31,6 +31,7 @@ import {
   risolviEmailUfficialeScuola,
 } from '../src/lib/emailScuola.ts';
 import { nomeScuolaDaCodice } from '../src/lib/school-lookup.ts';
+import { eAggiornamentoContatto, eContattoPrimario } from '../src/lib/gerarchiaContatti.ts';
 import { indiceStoricoContatti, patchDaStorico } from '../src/scraper/storicoContatti.ts';
 import { statoArricchimento } from '../src/lib/statoArricchimento.ts';
 import {
@@ -127,10 +128,13 @@ if (!url || !key) {
         patch.school_code = codice;
         daCodice += 1;
       }
-      // 2) Email ufficiale (PEO) dalla convenzione MIM sul codice.
-      if (!patch.contact_email && !r.contact_email?.trim()) {
-        const email = risolviEmailUfficialeScuola({ schoolCode: codice, testo })?.email;
-        if (email) {
+      // 2) Email ufficiale (PEO) dalla convenzione MIM sul codice. §26.116 — vale
+      // anche per SOSTITUIRE un recapito non primario (PEC o dominio personale):
+      // è l'arricchimento opportunistico che riporta la riga sulla casella reale.
+      const emailAttuale = patch.contact_email ?? r.contact_email ?? null;
+      if (!eContattoPrimario(emailAttuale)) {
+        const email = risolviEmailUfficialeScuola({ schoolCode: codice, testo })?.email ?? null;
+        if (email && eAggiornamentoContatto(emailAttuale, email, { derivato: true })) {
           patch.contact_email = email;
           daEmail += 1;
         }

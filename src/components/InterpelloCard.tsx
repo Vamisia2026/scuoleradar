@@ -11,13 +11,12 @@
  * link, una sola derivazione dei dati.
  */
 import { useState } from 'react';
-import { ArrowRight, BadgeCheck, Clock, GraduationCap, MapPin, Sparkles, Star } from 'lucide-react';
+import { BadgeCheck, Clock, GraduationCap, MapPin, Sparkles, Star } from 'lucide-react';
 import type { Interpello } from '@/data/interpelli';
 import { useApp } from '@/contexts/AppContext';
 import { etichettaClasseMateria } from '@/data/classiConcorso';
 import {
   costruisciAvviso,
-  etichettaFonteLink,
   formatDataAvviso,
   pulisciTitoloAvviso,
   scegliClasseRilevante,
@@ -36,6 +35,7 @@ import {
 import { scuolaPreferita } from '@/lib/filtriScuole';
 import { giorniRimanenti } from '@/lib/scadenza';
 import { eTermineProssimo, stileScadenza } from '@/lib/scadenzaSemaforo';
+import { InterpelloAzioni } from './InterpelloAzioni';
 import { InterpelloDettaglioModal } from './InterpelloDettaglioModal';
 import { IstitutoEmittente } from './IstitutoEmittente';
 
@@ -206,31 +206,13 @@ export function InterpelloCard({ interpello }: { interpello: Interpello }) {
           )}
         </div>
 
-        {/* AZIONI: link DIRETTO alla fonte ufficiale + dettaglio. */}
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-          {linkEsterno ? (
-            <a
-              href={linkEsterno}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-700"
-            >
-              {etichettaFonteLink(linkEsterno)}
-              <ArrowRight className="h-4 w-4" />
-            </a>
-          ) : (
-            <span className="text-sm text-primary-500">
-              Fonte ufficiale non indicata: usa i recapiti dell&apos;avviso.
-            </span>
-          )}
-          <button
-            onClick={handleVediDettaglio}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-600 transition hover:text-primary-800"
-          >
-            Vedi dettaglio
-            <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-          </button>
-        </div>
+        {/* AZIONI: link DIRETTO alla fonte ufficiale, canale email di candidatura
+            (§26.116, con la natura dichiarata) e dettaglio. */}
+        <InterpelloAzioni
+          linkEsterno={linkEsterno}
+          contactEmail={interpello.contactEmail}
+          onDettaglio={handleVediDettaglio}
+        />
       </article>
 
       <InterpelloDettaglioModal

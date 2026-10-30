@@ -32,6 +32,10 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
 }
 
 const card = leggi('src/components/InterpelloCard.tsx');
+// §26.116 — le azioni della card (fonte ufficiale · email di candidatura ·
+// dettaglio) vivono in `InterpelloAzioni`, estratte per il limite di 250 righe:
+// il link diretto si verifica sul COMPONENTE che lo rende, più la card che lo monta.
+const azioniCard = leggi('src/components/InterpelloAzioni.tsx');
 const modale = leggi('src/components/InterpelloDettaglioModal.tsx');
 const istituto = leggi('src/components/IstitutoEmittente.tsx');
 const scheda = leggi('src/pages/interpello/components/SchedaAvviso.tsx');
@@ -55,7 +59,12 @@ console.log('— 1. Scuola emittente + fonte ufficiale: card E modale —');
 check('la card mostra l’istituto emittente', true, /<IstitutoEmittente\b/.test(card));
 check('la modale mostra l’istituto emittente', true, /<IstitutoEmittente\b/.test(modale));
 check('la scheda pubblica mostra l’istituto emittente', true, /<IstitutoEmittente\b/.test(scheda));
-check('la card espone il LINK diretto alla fonte, in nuova scheda', true, linkFonte(card));
+check('la card espone il LINK diretto alla fonte, in nuova scheda', true, linkFonte(card) || linkFonte(azioniCard));
+check(
+  'la card monta le azioni estratte (fonte · email · dettaglio)',
+  true,
+  /<InterpelloAzioni\b/.test(card),
+);
 check('la modale espone il LINK diretto alla fonte, in nuova scheda', true, linkFonte(modale));
 check(
   'l’etichetta della fonte è quella ONESTA (mai “Candidati”)',

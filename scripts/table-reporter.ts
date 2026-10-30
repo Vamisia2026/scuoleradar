@@ -191,6 +191,7 @@ import { titoloDaAllegato } from '../src/scraper/allegatiBando.ts';
 // ufficiali dell'istituto entrano nella riga, così la candidatura ha un
 // destinatario senza aprire il PDF. Convenzione MIM, mai un indirizzo inventato.
 import { emailDaCodiceMeccanografico } from '../src/lib/emailScuola.ts';
+import { scegliContatto } from '../src/lib/gerarchiaContatti.ts';
 import { statoArricchimento } from '../src/lib/statoArricchimento.ts';
 // §26.96 — vicolo cieco su una bacheca di piattaforma: dal codice meccanografico
 // dell'URL alla home istituzionale, senza inventare né URL né province.
@@ -1814,6 +1815,13 @@ interface EsitoAvviso {
   ore: number | null;
   /** §26.115 — requisiti dichiarati, al massimo tre frasi. */
   requisiti: string[];
+  /**
+   * §26.116 — RECAPITI scritti nel documento (email ordinarie e PEC): alimentano
+   * la gerarchia del contatto (`lib/gerarchiaContatti`) quando il codice
+   * meccanografico non basta o non c'è.
+   */
+  email: string[];
+  pec: string[];
 }
 
 /**
@@ -1863,6 +1871,8 @@ async function leggiAvvisoCompleto(
     titolo: null,
     ore: null,
     requisiti: [],
+    email: [],
+    pec: [],
   };
   const residuo = da === 'scuola' ? approfondimentiScuole : approfondimentiTarget;
   if (residuo <= 0) return vuoto;
@@ -1919,6 +1929,8 @@ async function leggiAvvisoCompleto(
       titolo: intestazioneDaDocumento(testoAvviso),
       ore: campi.ore,
       requisiti: campi.requisiti,
+      email: campi.recapiti.email,
+      pec: campi.recapiti.pec,
     };
   } catch {
     return vuoto;
@@ -1945,6 +1957,8 @@ async function leggiAvvisoPdf(
     titolo: null,
     ore: null,
     requisiti: [],
+    email: [],
+    pec: [],
   };
   const dichiarata = Number(response.headers.get('content-length') ?? 0);
   if (Number.isFinite(dichiarata) && dichiarata > MAX_BYTE_PDF) return vuoto;
@@ -1968,6 +1982,8 @@ async function leggiAvvisoPdf(
     titolo: intestazioneDaDocumento(esito.testo),
     ore: campi.ore,
     requisiti: campi.requisiti,
+    email: campi.recapiti.email,
+    pec: campi.recapiti.pec,
   };
 }
 
@@ -2926,6 +2942,8 @@ function recordDaVoceScuola(
   deadline: string,
   scuola: ScuolaCertificata,
   visti: Set<string>,
+  /** §26.116 — recapiti scritti nel documento letto (email ordinarie e PEC). */
+  recapiti?: { email?: readonly string[]; pec?: readonly string[] } | null,
 ): InterpelloRecord | null {
   const title = normalize(voce.title);
   if (title.length < 8 || !RE_TITOLO_INTERPELLO.test(title)) return null;
@@ -2961,9 +2979,20 @@ function recordDaVoceScuola(
   // §26.115 — MODELLO LIGURIA: il recapito si deriva dal codice meccanografico
   // (PEO/PEC della convenzione MIM), così la riga nasce con un destinatario e
   // non «Email non disponibile». Solo per codici validi: `null` altrimenti.
+  // §26.116 — GERARCHIA del contatto (`lib/gerarchiaContatti`): le caselle scritte
+  // nel DOCUMENTO e quelle dell'anagrafica MIM sono OSSERVATE e valgono più della
+  // PEO ricostruita dal codice; nell'ordine contano PEO → segreteria → dirigenza →
+  // generica, con la PEC come estrema ratio e i domini personali sempre esclusi.
   const caselle = emailDaCodiceMeccanografico(schoolCode);
-  const contactEmail = caselle?.peo ?? null;
-  const schoolPec = caselle?.pec ?? null;
+  const contatto = scegliContatto([
+    ...(recapiti?.email ?? []).map((email) => ({ email, provenienza: 'documento' })),
+    ...(recapiti?.pec ?? []).map((email) => ({ email, provenienza: 'documento' })),
+    { email: scuola.email, provenienza: 'anagrafica' },
+    { email: caselle?.peo, provenienza: 'convenzione', derivato: true },
+    { email: caselle?.pec, provenienza: 'convenzione', derivato: true },
+  ]);
+  const contactEmail = contatto && contatto.natura !== 'esterno' ? contatto.email : null;
+  const schoolPec = scuola.pec ?? caselle?.pec ?? recapiti?.pec?.[0] ?? null;
   return {
     hash_id: hashId,
     title,
@@ -3165,6 +3194,9 @@ async function deepCrawlScuole(scuole: Map<string, string>): Promise<void> {
             documento.deadline,
             scuola,
             visti,
+            // §26.116 — i recapiti scritti nel bando entrano nella riga: se il
+            // documento indica la segreteria, è quella la casella da usare.
+            documento,
           );
           if (record) records.push(record);
         }

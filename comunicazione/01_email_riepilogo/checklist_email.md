@@ -107,25 +107,38 @@
 ## 6. Gerarchia STRETTA dell'email della scuola
 
 Ordine di risoluzione del recapito di candidatura — si scende di livello **solo**
-se il precedente non esiste:
+se il precedente non esiste (scala unica: `src/lib/gerarchiaContatti.ts`, §26.116):
 
-- [ ] **1. Istituzionale / ATIC** — recapito istituzionale pubblicato
-      dall'istituto, dominio ufficiale (PEO `codice@istruzione.it`,
-      `@*.edu.it`, `@*.gov.it`), o email di candidatura indicata dalla fonte.
-- [ ] **2. Generica** — casella generica della scuola (es. `info@scuola…`),
-      sempre su dominio istituzionale.
-- [ ] **3. Segreteria / direzione** — `segreteria@…`, `direzione@…`,
-      `protocollo@…`, `dsga@…`, `dirigente@…`.
-- [ ] **4. PEC** — `codice@pec.istruzione.it` (atti formali), solo se non esiste
-      alcun recapito PEO utilizzabile.
-- [ ] **5. Nessun recapito risolto** — il **blocco contatto si omette** dal
+- [ ] **1. PEO ministeriale** — `codice@istruzione.it` (convenzione MIM,
+      `emailScuola.ts`): la casella ufficiale delle candidature.
+- [ ] **2. Segreteria / didattica** — `segreteria@…`, `didattica@…`,
+      `protocollo@…`, `dsga@…`, `personale@…`.
+- [ ] **3. Dirigenza / presidenza** — `dirigente@…`, `presidenza@…`.
+- [ ] **4. Generica dell'istituto** — `info@…`, `contatti@…` su dominio della
+      scuola (o l'indirizzo di candidatura indicato dalla fonte).
+- [ ] **5. PEC** — `codice@pec.istruzione.it` (atti formali): **estrema ratio**,
+      solo se non esiste alcun recapito PEO utilizzabile. Mai primaria.
+- [ ] **6. Nessun recapito risolto** — il **blocco contatto si omette** dal
       messaggio: mai `Email non disponibile`, mai una riga `📧` vuota (§26.68).
       L'avviso parte comunque e la riga resta segnalata per la revisione.
 - [ ] **VIETATO**: inventare indirizzi fuori dalla convenzione MIM
-      (`emailScuola.ts`), usare domini non istituzionali (gmail, libero, …), o
-      ricostruire la PEC quando esiste la PEO.
+      (`emailScuola.ts`), usare domini non istituzionali (gmail, libero, …) —
+      riconosciuti da `eDominioNonIstituzionale` — o ricostruire la PEC quando
+      esiste la PEO.
+- [ ] **Indirizzo OSSERVATO prima di quello RICOSTRUITO**: la PEO derivata dal
+      codice non sostituisce una casella scritta dalla fonte o dal registro MIM
+      (il bando dice *dove* inviare); batte solo PEC e domini personali.
+- [ ] **Upgrade opportunistico** (§26.116): quando una pagina/PDF/anagrafica offre
+      un recapito di rango migliore, la riga viene aggiornata (mail generica →
+      segreteria → PEO, PEC → PEO). Mai un peggioramento; il ricalcolo
+      (`npm run dati:arricchisci`) è idempotente.
 - [ ] Il recapito va reso come link `mailto:` con etichetta standard
-      (`📧 Candidature`), coerente con Telegram.
+      (`📧 Candidature` nei messaggi, `📧 Email candidature` nelle viste web) e,
+      nell'interfaccia, con la **natura dichiarata** accanto
+      (`components/ContattoCandidatura.tsx`: PEO ministeriale · Segreteria ·
+      Dirigenza · Istituto · PEC (atti formali) · Dominio esterno).
+- [ ] Verifica: `npm run test:contatti` (scala e upgrade), `npm run test:tailoring`
+      (gerarchia delle fonti), `npm run test:anagrafica` (mai sovrascritture).
 
 ## 7. Verifica prima del merge
 

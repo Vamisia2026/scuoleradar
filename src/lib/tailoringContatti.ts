@@ -27,6 +27,7 @@
  * Verificato da `npm run test:tailoring`.
  */
 import { emailAvviso } from './alertInterpello';
+import { scegliContatto, type NaturaContatto } from './gerarchiaContatti';
 
 /** Da dove arriva il recapito risolto. */
 export type ProvenienzaContatto = 'fonte' | 'anagrafica' | 'storico' | 'convenzione' | 'nessuna';
@@ -59,6 +60,12 @@ export interface EsitoTailoring {
   provenienza: ProvenienzaContatto;
   /** true = nessuna fonte ha prodotto un recapito: la riga va segnalata. */
   daRevisionare: boolean;
+  /**
+   * §26.116 — NATURA del recapito scelto (PEO, segreteria, dirigenza, generica,
+   * PEC, dominio esterno): l'interfaccia la dichiara, così l'utente sa sempre che
+   * cosa sta usando. `null` quando non c'è alcun recapito.
+   */
+  natura: NaturaContatto | null;
 }
 
 /** Etichetta leggibile della provenienza (log del run, report, diagnosi). */
@@ -71,33 +78,48 @@ export const ETICHETTA_PROVENIENZA: Record<ProvenienzaContatto, string> = {
 };
 
 /**
- * Cuce il recapito di candidatura di UNA riga: vince la PRIMA fonte che dichiara
- * un'email valida, mentre la PEC si prende da qualunque fonte la offra (serve agli
- * atti formali e alla diagnostica, §26.41: non si ricostruisce se c'è la PEO).
+ * Cuce il recapito di candidatura di UNA riga. §26.116 — non vince più la PRIMA
+ * fonte che dichiara un'email: vince il recapito con il RANGO migliore
+ * (`lib/gerarchiaContatti.ts`), così la PEO ministeriale batte una casella
+ * generica e la PEC resta l'estrema ratio anche quando è la fonte a offrirla.
  *
- * Un'email malformata (`non-una-email`) NON interrompe la ricerca: si scende alla
- * fonte successiva. Mai un indirizzo inventato: solo valori reali, normalizzati
- * (`emailAvviso`).
+ * Due precedenze dichiarate, perché l'ordine di autorità resta quello di §26.68:
+ *  · un indirizzo OSSERVATO (fonte, anagrafica MIM, storico interno) batte uno
+ *    RICOSTRUITO dalla convenzione MIM a parità di rango;
+ *  · a parità di rango e di natura vince la fonte più autorevole (ordine
+ *    `fonte` → `anagrafica` → `storico` → `convenzione`).
+ *
+ * La PEC si prende da qualunque fonte la offra (serve agli atti formali e alla
+ * diagnostica, §26.41: non si ricostruisce se c'è la PEO). Un'email malformata
+ * NON interrompe la ricerca. Mai un indirizzo inventato: solo valori reali,
+ * normalizzati (`emailAvviso`).
  */
 export function risolviContattoAvviso(fonti: FontiTailoring = {}): EsitoTailoring {
-  const candidate: Array<[ProvenienzaContatto, RecapitoCandidatura | null | undefined]> = [
-    ['fonte', { email: fonti.emailFonte }],
-    ['anagrafica', fonti.anagrafica],
-    ['storico', fonti.storico],
-    ['convenzione', fonti.convenzione],
+  const candidate: Array<[ProvenienzaContatto, RecapitoCandidatura | null | undefined, boolean]> = [
+    ['fonte', { email: fonti.emailFonte }, false],
+    ['anagrafica', fonti.anagrafica, false],
+    ['storico', fonti.storico, false],
+    ['convenzione', fonti.convenzione, true],
   ];
-  let email: string | null = null;
-  let provenienza: ProvenienzaContatto = 'nessuna';
   let pec: string | null = null;
-  for (const [nome, recapito] of candidate) {
-    if (!email) {
-      const candidata = emailAvviso(recapito?.email ?? null);
-      if (candidata) {
-        email = candidata;
-        provenienza = nome;
-      }
-    }
+  for (const [, recapito] of candidate) {
     if (!pec) pec = emailAvviso(recapito?.pec ?? null);
   }
-  return { email, pec, provenienza, daRevisionare: email === null };
+  const scelta = scegliContatto(
+    candidate.map(([provenienza, recapito, derivato]) => ({
+      email: recapito?.email ?? null,
+      provenienza,
+      derivato,
+    })),
+  );
+  if (scelta) {
+    return {
+      email: scelta.email,
+      pec,
+      provenienza: scelta.provenienza as ProvenienzaContatto,
+      daRevisionare: false,
+      natura: scelta.natura,
+    };
+  }
+  return { email: null, pec, provenienza: 'nessuna', daRevisionare: true, natura: null };
 }
