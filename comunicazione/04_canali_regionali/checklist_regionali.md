@@ -156,6 +156,27 @@
       resta un login e non diventa mai `source_url`. Una bacheca vuota o chiusa non spegne il target: si
       riparte dall'albo della scuola, risolta sul codice meccanografico scritto nell'URL. Guardia:
       `npm run test:piattaforme-documentali`.
+      **Su una piattaforma di LOGIN solo i contenitori PUBBLICI sono avvisi** (§26.108): bacheca, albo,
+      pubblicazioni, documenti. Un'area applicativa — `nuvola.madisoft.it/interpelli/<CODICE>/docenti/<uuid>/
+      candidatura` — risponde 200 ma è il modulo del docente (guscio JavaScript `noindex` che chiede le
+      credenziali): non entra mai in bacheca né in `source_url`. Guardia:
+      `npm run test:piattaforme-contenitori`.
+- [ ] **In bacheca solo DOMINI ISTITUZIONALI — un aggregatore concorrente non è una fonte** (§26.109) —
+      ammessi per costruzione `.edu.it` e `.gov.it`, `istruzione.it` e sottodomini, e i portali
+      USR/USP/UAT/UST del registro (`src/scraper/portaliUfficiali.ts`: 62 host oggi). Fuori
+      `scuolainterpelli.it`, `interpelloweb.it`, social, hosting gratuiti, moduli Google e qualunque
+      dominio non pubblico — anche `istruzione.it.evil.com` (il confronto è sul suffisso, non su
+      «contiene»). Se l'avviso linka un aggregatore si pubblica la **home `.edu.it`** dell'istituto
+      (GATE 0 di `presidioLinkIngresso.ts`), altrimenti la riga **resta fuori**: meglio una riga in
+      meno che un click su un terzo. Una regola sola in `src/lib/dominiIstituzionali.ts`. Guardia:
+      `npm run test:domini-istituzionali`.
+- [ ] **La QUARANTENA di una fonte dura 60 giorni, poi si riprova** (§26.109) — `source_health`
+      isola dopo 2 run con **`404`/`410`** (`not_found`), 2 con layout ignoto, 3 con timeout o zero
+      righe (`sogliaQuarantena`). Passata la finestra (`GIORNI_QUARANTENA` in
+      `src/lib/sourceQuarantine.ts`) la fonte torna candidabile, i contatori ripartono da zero e —
+      se è ancora morta — viene isolata di nuovo con una data nuova: costo della riprova, **un run
+      ogni 60 giorni**. Nessuna lista da ripulire a mano, nessuna quarantena eterna. Guardia:
+      `npm run test:quarantena`.
 - [ ] **Finestra di CANDIDATURA = 15 giorni — per FEED e matching, non per la vetrina** (§26.82,
       §26.100) — `GIORNI_ORIZZONTE_OPPORTUNITA` in `src/lib/scadenza.ts` vale per
       `eOpportunitaConScadenza` (feed, punteggio, RPC di matching): oltre, la «scadenza» letta

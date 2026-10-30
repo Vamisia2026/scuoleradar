@@ -1,22 +1,32 @@
 /**
- * ScuoleRadar.it — «Crawler Telemetry» del System Health Check (solo DEV).
+ * ScuoleRadar.it — «LINEA ROSSA»: la barra di comando del pannello Admin (§26.110).
  *
- * Quattro numeri che dicono se il motore sta lavorando davvero:
- *   · fonti in whitelist lette dal runner (`active_crawler`);
- *   · pagine scoperte e ancora in coda (`pending`);
- *   · voci scartate dal motore (rumore, viste vuote, parcheggi, domini spenti);
- *   · interpelli vivi nel database (`expiration_date` ≥ oggi).
- * Sotto: ultima scansione e ultima run di ingestione. Il pulsante
- * «Lancia scansione whitelist ora» fa il dispatch del workflow GitHub tramite la
- * Edge `crawler-admin` e poi RILEGGE i numeri ogni 5 secondi per due minuti:
- * il pannello si aggiorna da solo mentre il giro gira, senza ricaricare la pagina.
+ * Sostituisce il pannello «Crawler Telemetry» del System Health Check della DEV
+ * Bar (§26.97): stesso dato, altra posizione e altro peso. Il motore si guarda
+ * dove si prendono le decisioni — il pannello Admin di produzione — non in un
+ * modale che si apre solo in sviluppo. Il nome del file resta quello storico:
+ * il nome di prodotto è «Linea Rossa».
  *
- * Nessun numero è calcolato qui: arrivano tutti dalla Edge (`crawler-admin`), che
- * è l'unica a poter leggere le tabelle di servizio. Se la Edge non risponde o la
- * sessione non è attiva, il pannello lo dichiara invece di mostrare zeri finti.
+ * Forma: fascia alta poche decine di pixel, fondo `primary-900` (#0C2235), una
+ * linea rossa (`error-500`, #D9534F) come segno di riconoscimento, un punto di
+ * stato e quattro numeri; il dettaglio (ultima run, fonti isolate con i giorni
+ * che mancano) sta dietro il chevron e non ruba spazio ad abbonamenti e
+ * comunicazioni.
+ *
+ * DATI VERI, MAI ZERI — i numeri arrivano dalla Edge `crawler-admin`, l'unica a
+ * poter leggere `discovered_links`, `scraper_runs` e `source_health`. Quando il
+ * dato manca (Edge non deployata, sessione assente, campo non ancora esposto)
+ * la cella mostra «—»: uno zero è un'affermazione, un «—» è un fatto. La
+ * finestra dei 60 giorni vive in `src/lib/sourceQuarantine.ts`, non qui.
+ *
+ * PERMESSI — nessun permesso nuovo: la barra vive solo dentro `AdminPage`, dopo
+ * il gate `ADMIN_EMAILS` (`@/lib/utentiAdmin`), e la Edge ricontrolla comunque
+ * lato server (admin · allowlist DEV · segreto di sviluppo). Il dispatch
+ * dichiara chi lo ha autorizzato (`autorizzato_da`).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CalendarClock, Filter, Inbox, Loader2, Play, RefreshCw, Radar } from 'lucide-react';
+import { ChevronDown, Loader2, Play, RefreshCw } from 'lucide-react';
+import { GIORNI_QUARANTENA, quaranteneAttive } from '@/lib/sourceQuarantine';
 import {
   avviaScansioneWhitelist,
   leggiTelemetriaCrawler,
@@ -27,21 +37,55 @@ import {
 /** Intervallo e durata del polling dopo un avvio (5 s × 24 = 2 minuti). */
 const INTERVALLO_MS = 5_000;
 const MAX_GIRI = 24;
+/** Quante fonti isolate si elencano: oltre, la riga diventa un registro. */
+const MAX_ISOLATE = 4;
 
-interface Voce {
+/** Stato dichiarato dalla barra: punto + parola, mai solo un colore. */
+const TONO = {
+  ok: { punto: 'bg-accent-500', testo: 'text-accent-500', parola: 'in linea' },
+  attenzione: { punto: 'bg-secondary-450', testo: 'text-secondary-450', parola: 'da guardare' },
+  errore: { punto: 'bg-error-500', testo: 'text-error-500', parola: 'senza dati' },
+  attesa: { punto: 'bg-primary-300', testo: 'text-primary-300', parola: 'in attesa' },
+} as const;
+type Tono = keyof typeof TONO;
+
+const BTN_BARRA =
+  'inline-flex items-center gap-1 rounded-md border border-primary-700 px-1.5 py-1 text-[10px] font-bold uppercase tracking-wide text-primary-50 transition hover:bg-primary-800 disabled:opacity-60';
+const BTN_SCANSIONE =
+  'inline-flex items-center gap-1 rounded-md border border-secondary-450 bg-secondary-450 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white transition hover:bg-secondary-500 disabled:opacity-60';
+
+interface Cella {
   etichetta: string;
-  valore: number;
+  /** `null` = dato assente: si scrive «—», non `0`. */
+  valore: number | null;
   nota: string;
-  icona: React.ReactNode;
-  tono: string;
 }
 
-export function CrawlerTelemetry() {
+/** Un numero della telemetria, oppure `null` se il campo non c'è (deploy vecchio). */
+const numero = (v: unknown): number | null =>
+  typeof v === 'number' && Number.isFinite(v) ? v : null;
+
+/** Host leggibile di una fonte (la riga del dettaglio resta su una linea). */
+const hostDi = (url: string): string => {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+};
+
+interface Props {
+  /** false = nessuna sessione admin reale: la barra dichiara il vuoto. */
+  attiva?: boolean;
+}
+
+export function LineaRossa({ attiva = true }: Props) {
   const [dati, setDati] = useState<TelemetriaCrawler | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
-  const [inCorso, setInCorso] = useState(false);
   const [avviso, setAvviso] = useState<string | null>(null);
-  const [aggiornamentoLive, setAggiornamentoLive] = useState(false);
+  const [inCorso, setInCorso] = useState(false);
+  const [live, setLive] = useState(false);
+  const [aperta, setAperta] = useState(false);
   const timer = useRef<number | null>(null);
 
   const carica = useCallback(async () => {
@@ -54,16 +98,19 @@ export function CrawlerTelemetry() {
   }, []);
 
   useEffect(() => {
-    void carica();
-  }, [carica]);
+    if (attiva) void carica();
+  }, [attiva, carica]);
 
-  // Nessun intervallo sopravvive alla chiusura del pannello.
-  useEffect(
-    () => () => {
-      if (timer.current !== null) window.clearInterval(timer.current);
-    },
-    [],
-  );
+  // Nessun intervallo sopravvive all'uscita dal pannello.
+  useEffect(() => () => {
+    if (timer.current !== null) window.clearInterval(timer.current);
+  }, []);
+
+  const fermaTimer = () => {
+    if (timer.current !== null) window.clearInterval(timer.current);
+    timer.current = null;
+    setLive(false);
+  };
 
   const lancia = async () => {
     setInCorso(true);
@@ -72,139 +119,130 @@ export function CrawlerTelemetry() {
       const esito = await avviaScansioneWhitelist();
       if (esito.telemetria) setDati(esito.telemetria);
       setErrore(null);
-      // Chi ha autorizzato (admin · segreto di sviluppo · sessione) è diagnosi utile:
-      // se il trigger passa dalla DEV Bar senza login lo si vede scritto qui.
+      // Chi ha autorizzato il dispatch è diagnosi: in produzione «admin», in locale
+      // «segreto» o «sviluppo-locale». La barra lo scrive, non lo presume.
       const chi = esito.autorizzato_da ? ` · autorizzato come ${esito.autorizzato_da}` : '';
-      setAvviso(
-        `Giro avviato su ${esito.repo} (${esito.workflow})${chi}. I numeri si aggiornano da soli: ` +
-          'la coda inizia a muoversi appena il runner parte.',
-      );
-      if (timer.current !== null) window.clearInterval(timer.current);
+      setAvviso(`Giro avviato su ${esito.repo} (${esito.workflow})${chi}. Rileggo i numeri ogni ${INTERVALLO_MS / 1000} s.`);
+      fermaTimer();
       let giri = 0;
-      setAggiornamentoLive(true);
+      setLive(true);
       timer.current = window.setInterval(() => {
         giri += 1;
         void carica();
-        if (giri >= MAX_GIRI) {
-          if (timer.current !== null) window.clearInterval(timer.current);
-          timer.current = null;
-          setAggiornamentoLive(false);
-        }
+        if (giri >= MAX_GIRI) fermaTimer();
       }, INTERVALLO_MS);
     } catch (err) {
-      setErrore(err instanceof Error ? err.message : 'Avvio della scansione non riuscito.');
+      setAvviso(err instanceof Error ? err.message : 'Avvio della scansione non riuscito.');
     } finally {
       setInCorso(false);
     }
   };
 
-
-  const voci: Voce[] = [
-    {
-      etichetta: 'Fonti in whitelist',
-      valore: dati?.fonti_whitelist ?? 0,
-      nota: dati ? `${dati.scansionate_24h} ricontrollate nelle ultime 24h` : 'in attesa',
-      icona: <Radar className="h-4 w-4" />,
-      tono: 'border-accent-200 bg-accent-50 text-accent-700',
-    },
-    {
-      etichetta: 'Pagine scoperte in coda',
-      valore: dati?.pagine_in_coda ?? 0,
-      nota: 'scoperte dai giri di discovery, da leggere',
-      icona: <Inbox className="h-4 w-4" />,
-      tono: 'border-primary-200 bg-primary-50 text-primary-700',
-    },
-    {
-      etichetta: 'Voci scartate',
-      valore: dati?.scarti ?? 0,
-      nota: dati ? `${dati.in_errore} ferme per errore interno` : 'in attesa',
-      icona: <Filter className="h-4 w-4" />,
-      tono: 'border-warning-200 bg-warning-50 text-warning-700',
-    },
-    {
-      etichetta: 'Interpelli attivi',
-      valore: dati?.interpelli_attivi ?? 0,
-      nota: dati ? `${dati.interpelli_totali} in archivio (anche scaduti)` : 'in attesa',
-      icona: <CalendarClock className="h-4 w-4" />,
-      tono: 'border-primary-200 bg-white text-primary-800',
-    },
+  const isolate = quaranteneAttive(dati?.fonti_isolate ?? null);
+  const tono: Tono = errore ? 'errore' : !dati ? 'attesa' : isolate && isolate.length > 0 ? 'attenzione' : 'ok';
+  const celle: Cella[] = [
+    { etichetta: 'Coda', valore: numero(dati?.pagine_in_coda), nota: 'pagine da leggere' },
+    { etichetta: 'Fonti', valore: numero(dati?.fonti_whitelist), nota: dati ? `${dati.scansionate_24h} / 24h` : 'in attesa' },
+    { etichetta: 'Interpelli', valore: numero(dati?.interpelli_attivi), nota: dati ? `${dati.interpelli_totali} in archivio` : 'in attesa' },
+    { etichetta: 'Isolate', valore: isolate ? isolate.length : null,
+      nota: isolate === null ? 'dato assente' : isolate.length === 0 ? 'nessuna' : `riprova entro ${GIORNI_QUARANTENA} g` },
   ];
 
-  return (
-    <section className="rounded-lg border border-primary-100 bg-white p-2" aria-live="polite">
-      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-primary-500">
-          <Radar className="h-3.5 w-3.5" />
-          Crawler Telemetry
+  if (!attiva) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2">
+        <span className="h-1.5 w-1.5 rounded-full bg-primary-300" aria-hidden="true" />
+        <p className="text-[10px] font-black uppercase tracking-[0.20em] text-primary-500">Linea Rossa</p>
+        <p className="text-[11px] leading-snug text-primary-500">
+          Telemetria non disponibile senza sessione admin reale. In sviluppo: <code className="rounded bg-white px-1 text-primary-700">VITE_CRAWLER_DEV_SECRET</code> in <code className="rounded bg-white px-1 text-primary-700">.env.local</code>.
         </p>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-semibold text-primary-400">
-            {dati ? `aggiornato ${quando(dati.aggiornato_il)}` : 'nessun dato'}
+      </div>
+    );
+  }
+  return (
+    <section
+      aria-live="polite"
+      aria-label="Linea Rossa: telemetria del crawler"
+      className="rounded-xl border border-primary-800 bg-primary-900 px-3 py-2 text-primary-50"
+    >
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        {/* La linea rossa: il segno della barra, non un bordo decorativo. */}
+        <div className="flex items-center gap-2 border-l-2 border-error-500 pl-2">
+          <span className={`h-1.5 w-1.5 rounded-full ${TONO[tono].punto}`} aria-hidden="true" />
+          <span className="text-[10px] font-black uppercase tracking-[0.20em]">Linea Rossa</span>
+          <span className={`text-[9px] font-bold uppercase tracking-wide ${TONO[tono].testo}`}>{TONO[tono].parola}</span>
+        </div>
+
+        {celle.map((c) => (
+          <div key={c.etichetta} className="border-l border-primary-700 pl-3">
+            <p className="text-[9px] font-bold uppercase tracking-wider text-primary-300">{c.etichetta}</p>
+            <p className="text-sm font-bold leading-tight tabular-nums">
+              {c.valore === null ? '—' : c.valore.toLocaleString('it-IT')}
+            </p>
+            <p className="text-[9px] leading-tight text-primary-300">{c.nota}</p>
+          </div>
+        ))}
+
+        <div className="ml-auto flex items-center gap-1">
+          <span className="mr-1 hidden text-[10px] text-primary-300 sm:inline">
+            {dati ? `agg. ${quando(dati.aggiornato_il)}` : 'nessun dato'}
           </span>
-          <button
-            type="button"
-            onClick={() => void carica()}
-            aria-label="Rileggi la telemetria"
-            title="Rileggi i numeri dal database"
-            className="rounded-md border border-primary-200 bg-white p-1 text-primary-600 transition hover:bg-primary-50"
-          >
+          <button type="button" onClick={() => void carica()} aria-label="Rileggi la telemetria"
+            title="Rileggi i numeri dal database" className={BTN_BARRA}>
             <RefreshCw className="h-3 w-3" />
+          </button>
+          <button type="button" onClick={() => void lancia()} disabled={inCorso}
+            title="Lancia una scansione della whitelist ora" className={BTN_SCANSIONE}>
+            {inCorso ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />} Scansione
+          </button>
+          <button type="button" onClick={() => setAperta((v) => !v)} aria-expanded={aperta}
+            aria-label={aperta ? 'Chiudi il dettaglio' : 'Apri il dettaglio'} className={BTN_BARRA}>
+            <ChevronDown className={`h-3 w-3 transition ${aperta ? 'rotate-180' : ''}`} />
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-1.5 lg:grid-cols-4">
-        {voci.map((voce) => (
-          <div key={voce.etichetta} className={`rounded-md border px-2 py-1.5 ${voce.tono}`}>
-            <p className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide">
-              {voce.icona}
-              {voce.etichetta}
-            </p>
-            <p className="mt-0.5 text-lg font-bold tabular-nums leading-none">
-              {voce.valore.toLocaleString('it-IT')}
-            </p>
-            <p className="mt-0.5 text-[9px] leading-tight opacity-80">{voce.nota}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1.5 text-[10px] text-primary-500">
-        <span>
-          Ultima scansione: <strong>{quando(dati?.ultima_scansione)}</strong>
-          {dati?.ultima_run && (
-            <>
-              {' · '}ultima run: <strong>{dati.ultima_run.esito}</strong> ({dati.ultima_run.nuovi}{' '}
-              nuovi su {dati.ultima_run.trovati}, {dati.ultima_run.errori} errori)
-            </>
-          )}
-        </span>
-        {aggiornamentoLive && (
-          <span className="inline-flex items-center gap-1 font-semibold text-accent-700">
-            <Loader2 className="h-3 w-3 animate-spin" /> aggiornamento live
-          </span>
-        )}
-      </div>
-
-      <button
-        type="button"
-        onClick={() => void lancia()}
-        disabled={inCorso}
-        className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-primary-800 bg-primary-800 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-primary-700 disabled:opacity-60"
-      >
-        {inCorso ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-        Lancia scansione whitelist ora
-      </button>
-
-      {avviso && (
-        <p className="mt-1 rounded-md border border-accent-200 bg-accent-50 px-2 py-1 text-[10px] leading-snug text-accent-700">
-          {avviso}
+      {(avviso || errore || live) && (
+        <p title={avviso ?? errore ?? undefined}
+          className={`mt-1.5 truncate text-[10px] leading-snug ${errore ? 'text-error-500' : live ? 'text-accent-500' : 'text-primary-200'}`}>
+          {errore ?? avviso ?? `Aggiornamento live: rileggo i numeri ogni ${INTERVALLO_MS / 1000} s.`}
         </p>
       )}
-      {errore && (
-        <p className="mt-1 rounded-md border border-error-200 bg-error-50 px-2 py-1 text-[10px] leading-snug text-error-700">
-          {errore}
-        </p>
+
+      {aperta && (
+        <div className="mt-2 grid gap-2 rounded-lg bg-primary-50 p-2 text-[11px] leading-snug text-primary-800 md:grid-cols-2">
+          <div className="space-y-0.5">
+            <p><span className="font-bold">Ultima scansione:</span> {dati ? quando(dati.ultima_scansione) : '—'}</p>
+            <p><span className="font-bold">Ultima run:</span>{' '}
+              {dati?.ultima_run
+                ? `${quando(dati.ultima_run.started_at)} · ${dati.ultima_run.esito} · ${dati.ultima_run.nuovi}/${dati.ultima_run.trovati} nuovi · ${dati.ultima_run.errori} errori`
+                : dati ? 'nessuna run registrata' : '—'}
+            </p>
+            <p><span className="font-bold">In guasto (non isolate):</span> {numero(dati?.fonti_in_guasto) ?? '—'}</p>
+            <p><span className="font-bold">Aggiornato:</span> {dati ? quando(dati.aggiornato_il) : '—'}</p>
+          </div>
+          <div>
+            <p className="font-bold">Fonti in quarantena</p>
+            {isolate === null ? (
+              <p className="text-primary-500">Dato assente: la Edge non espone ancora <code>fonti_isolate</code>{' '}
+                (ridistribuisci <code>crawler-admin</code>).</p>
+            ) : isolate.length === 0 ? (
+              <p className="text-primary-500">Nessuna fonte isolata: il giro legge tutta la whitelist.</p>
+            ) : (
+              <ul className="mt-0.5 space-y-0.5">
+                {isolate.slice(0, MAX_ISOLATE).map((fonte) => (
+                  <li key={fonte.url} className="flex items-baseline justify-between gap-2">
+                    <span className="truncate font-semibold" title={fonte.url}>{hostDi(fonte.url)}</span>
+                    <span className="shrink-0 text-primary-500">{fonte.motivo ?? 'motivo non dichiarato'} · {fonte.giorni} g</span>
+                  </li>
+                ))}
+                {isolate.length > MAX_ISOLATE && <li className="text-primary-500">+{isolate.length - MAX_ISOLATE} altre</li>}
+              </ul>
+            )}
+          </div>
+        </div>
       )}
     </section>
   );
 }
+

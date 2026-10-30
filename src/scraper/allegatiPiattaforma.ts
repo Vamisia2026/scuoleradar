@@ -20,7 +20,9 @@
  *    PDF vero: UN salto, nessuna URL costruita a mano.
  *
  * Zero dipendenze, nessun accesso a `node:*`, nessuna rete: solo URL e stringhe.
- * Guardia: `npm run test:piattaforme-documentali` (incluso in `npm test`).
+ * Guardie: `npm run test:piattaforme-documentali` (il file è l'avviso, il login
+ * no) e `npm run test:piattaforme-contenitori` (§26.108: su una piattaforma di
+ * login solo i contenitori PUBBLICI sono avvisi). Entrambe in `npm test`.
  */
 
 import { piattaformaScolastica, type PiattaformaScolastica } from '../lib/piattaformeLink.ts';
@@ -93,9 +95,17 @@ export function eAllegatoPiattaforma(url?: string | null): boolean {
   return piattaformaAllegato(url) !== null;
 }
 
-/** Segmenti finali che sono una pagina di ACCESSO, non un avviso. */
+/** Segmenti finali che sono una pagina di ACCESSO o un MODULO, non un avviso. */
 const RE_SEGMENTO_LOGIN =
-  /^(?:login|log-in|signin|sign-in|accedi|accesso|home|index\.php\d?|index\.html?)$/i;
+  /^(?:login|log-in|signin|sign-in|accedi|accesso|home|index\.php\d?|index\.html?|candidatur[ae]?|domand[ae]|application|apply)$/i;
+
+/**
+ * §26.108 — CONTENITORI PUBBLICI di una piattaforma di LOGIN: i soli luoghi in
+ * cui la scuola PUBBLICA (bacheca, albo, pubblicazioni, documenti). Tutto il
+ * resto, su una piattaforma di login, è un'area applicativa dell'utente.
+ */
+const RE_CONTENITORE_PUBBLICO =
+  /^(?:bacheca(?:-digitale)?|albo|albi|albo-pretorio|pubblicazion[ei]|in[_-]?pubblicazione|pubblicat[oi]|document[oi]|documents|allegat[oi]|files?)$/i;
 
 /**
  * §26.101 — AVVISO su una piattaforma: un link PROFONDO (almeno tre segmenti di
@@ -108,16 +118,31 @@ const RE_SEGMENTO_LOGIN =
  * pubblicato. Senza questa distinzione la regola «mai una piattaforma» buttava
  * via la riga, pur avendo codice, classe e scadenza certificati.
  *
+ * §26.108 — «PROFONDO» NON BASTA su una piattaforma di LOGIN. La regola diceva
+ * «almeno tre segmenti e l'ultimo non è una pagina di accesso», e accettava
+ * `nuvola.madisoft.it/interpelli/<CODICE>/docenti/<uuid>/candidatura`: la pagina
+ * risponde 200 ma è un guscio JavaScript (`robots: noindex,nofollow`, 1,2 kB,
+ * zero testo leggibile) che dopo il login mostra il modulo di candidatura del
+ * docente. Per l'utente è un link che apre una credenziale spacciata per
+ * «avviso ufficiale» — esattamente ciò che la regola doveva impedire. Ora su una
+ * piattaforma di login il percorso deve stare in un CONTENITORE PUBBLICO
+ * dichiarato (`RE_CONTENITORE_PUBBLICO`); un documento (`.pdf`, endpoint di
+ * download) resta valido comunque, e le piattaforme documentali pure (Gecodoc,
+ * `login: false`) non cambiano regola.
+ *
  * Restano fuori, come sempre: la home (`/`), `/login`, `/argoweb/login`, un
  * sottosito di un segmento solo. Nessun URL costruito: si guarda quello letto.
  */
 export function eAvvisoSuPiattaforma(url?: string | null): boolean {
   if (eFileDocumento(url)) return piattaformaScolastica(url) !== null;
-  if (piattaformaScolastica(url) === null) return false;
+  const piattaforma = piattaformaScolastica(url);
+  if (piattaforma === null) return false;
   try {
     const segmenti = new URL(String(url)).pathname.split('/').filter(Boolean);
     if (segmenti.length < 3) return false;
-    return !RE_SEGMENTO_LOGIN.test(segmenti[segmenti.length - 1]);
+    if (RE_SEGMENTO_LOGIN.test(segmenti[segmenti.length - 1])) return false;
+    if (piattaforma.login && !segmenti.some((s) => RE_CONTENITORE_PUBBLICO.test(s))) return false;
+    return true;
   } catch {
     return false;
   }

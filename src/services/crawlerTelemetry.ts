@@ -1,11 +1,12 @@
 /**
  * ScuoleRadar.it — TELEMETRIA DEL CRAWLER (client della Edge `crawler-admin`).
  *
- * Perché un servizio a parte: la sezione «Crawler Telemetry» del System Health
- * Check deve mostrare numeri VERI (coda di scansione, scarti, interpelli vivi) e
- * poter avviare un giro di ingestione. Le tabelle che li contengono
- * (`discovered_links`, `scraper_runs`) sono leggibili solo col `service_role`,
- * quindi il client non le interroga mai direttamente: parla con la Edge.
+ * Perché un servizio a parte: la «Linea Rossa» del pannello Admin (§26.110) deve
+ * mostrare numeri VERI (coda di scansione, scarti, interpelli vivi, fonti isolate)
+ * e poter avviare un giro di ingestione. Le tabelle che li contengono
+ * (`discovered_links`, `scraper_runs`, `source_health`) sono leggibili solo col
+ * `service_role`, quindi il client non le interroga mai direttamente: parla con
+ * la Edge.
  *
  * Contratto della Edge (vedi `supabase/functions/crawler-admin/index.ts`):
  *   POST { azione: 'stato' }     → { ok, telemetria }
@@ -15,14 +16,15 @@
  * deployata o il segreto GitHub manca, la UI lo dice e resta senza dati.
  *
  * SESSIONE & SVILUPPO — la Edge chiede una sessione (JWT) perché legge tabelle
- * di servizio; la DEV Bar però si usa anche SENZA login. In build locale
- * (`import.meta.env.DEV`) si manda quindi l'header `x-crawler-secret` preso da
- * `VITE_CRAWLER_DEV_SECRET` (`.env.local`, mai in produzione): la Edge lo accetta
- * per telemetria e trigger e registra in risposta chi ha autorizzato
- * (`autorizzato_da`). Se manca anche quello, si chiede il login con un messaggio
- * che dice esattamente cosa configurare — mai un errore anonimo.
+ * di servizio; in build locale (`import.meta.env.DEV`) si può anche mandare
+ * l'header `x-crawler-secret` preso da `VITE_CRAWLER_DEV_SECRET`
+ * (`.env.local`, mai in produzione): la Edge lo accetta per telemetria e trigger
+ * e registra in risposta chi ha autorizzato (`autorizzato_da`). Se manca anche
+ * quello, si chiede il login con un messaggio che dice esattamente cosa
+ * configurare — mai un errore anonimo.
  */
 import { supabase } from '@/lib/supabase';
+import type { FonteIsolata } from '@/lib/sourceQuarantine';
 
 /** Progetto Supabase remoto dove sono deployate le Edge Functions. */
 const SUPABASE_URL_REMOTO = 'https://gwdmsgsshvdnfrplbjiv.supabase.co';
@@ -37,6 +39,14 @@ export interface TelemetriaCrawler {
   interpelli_totali: number;
   scansionate_24h: number;
   ultima_scansione: string | null;
+  /**
+   * Fonti in quarantena lette da `source_health` (§26.109), con la data
+   * dell'isolamento. `null` o assente = la Edge non le ha lette (versione
+   * precedente o tabella non raggiungibile): la UI mostra «—», mai uno zero.
+   */
+  fonti_isolate?: FonteIsolata[] | null;
+  /** Fonti che stanno fallendo senza essere ancora isolate (`null` = non letto). */
+  fonti_in_guasto?: number | null;
   ultima_run: {
     started_at: string;
     esito: string;

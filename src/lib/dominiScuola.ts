@@ -27,15 +27,15 @@ import { normalizzaCodiceMeccanografico } from './emailScuola';
 const RE_HOST_EDU_IT = /^(?:[a-z0-9-]+\.)+edu\.it$/;
 
 /**
- * HOST `*.edu.it` contenuto in un URL, in un host nudo o in un recapito.
+ * HOST normalizzato (qualsiasi dominio) contenuto in un URL, in un host nudo o in
+ * un recapito: minuscolo, senza `www.`, senza porta, senza percorso e senza punto
+ * finale. Restituisce `null` solo se non resta niente di leggibile.
  *
- * Resta solo il dominio nudo (minuscolo, senza `www.`, senza porta e senza punto
- * finale): la home si compone in un punto solo e un percorso pubblicato
- * dall'anagrafica può essere vecchio. Tutto il resto vale `null` — `istruzione.it`
- * è una casella di servizio del Ministero, `gmail.com` un indirizzo personale,
- * `icmanzoniadr.it` un dominio storico che il tabellone non può usare.
+ * È la normalizzazione CONDIVISA: `hostEduIt` ci applica sopra la regola `.edu.it`
+ * e `lib/dominiIstituzionali.ts` la whitelist dei domini ammessi in ingresso
+ * (§26.109), così non esistono due estrattori di host che possono divergere.
  */
-export function hostEduIt(valore?: string | null): string | null {
+export function hostDa(valore?: string | null): string | null {
   const testo = (valore ?? '').trim().toLowerCase();
   if (!testo) return null;
   // Un recapito (`segreteria@iccarducci.edu.it`) → conta il dominio dopo la chiocciola.
@@ -50,7 +50,21 @@ export function hostEduIt(valore?: string | null): string | null {
     .replace(/[^a-z0-9.-]+$/, '')
     .replace(/\.+$/, '')
     .replace(/^www\./, '');
-  return RE_HOST_EDU_IT.test(host) ? host : null;
+  return host || null;
+}
+
+/**
+ * HOST `*.edu.it` contenuto in un URL, in un host nudo o in un recapito.
+ *
+ * Resta solo il dominio nudo (minuscolo, senza `www.`, senza porta e senza punto
+ * finale): la home si compone in un punto solo e un percorso pubblicato
+ * dall'anagrafica può essere vecchio. Tutto il resto vale `null` — `istruzione.it`
+ * è una casella di servizio del Ministero, `gmail.com` un indirizzo personale,
+ * `icmanzoniadr.it` un dominio storico che il tabellone non può usare.
+ */
+export function hostEduIt(valore?: string | null): string | null {
+  const host = hostDa(valore);
+  return host && RE_HOST_EDU_IT.test(host) ? host : null;
 }
 
 /** Home ufficiale (`https://<dominio>`) da un dominio o da un valore che lo contiene. */

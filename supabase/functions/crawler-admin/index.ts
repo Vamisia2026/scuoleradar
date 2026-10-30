@@ -1,14 +1,17 @@
 /**
  * ScuoleRadar.it — Edge Function `crawler-admin` (telemetria + trigger manuale).
  *
- * Perché esiste: la sezione «Crawler Telemetry» del System Health Check (DEV) deve
- * leggere i numeri veri della coda di scansione e poter AVVIARE un giro senza
- * passare da GitHub → Actions. `discovered_links` e `scraper_runs` sono RLS-locked
- * al `service_role`, quindi la lettura non può stare nel browser: sta qui.
+ * Perché esiste: la «Linea Rossa» del pannello Admin (§26.110, nata come «Crawler
+ * Telemetry» della DEV Bar, §26.97) deve leggere i numeri veri della coda di
+ * scansione, le fonti isolate da `source_health` e poter AVVIARE un giro senza
+ * passare da GitHub → Actions. `discovered_links`, `scraper_runs` e
+ * `source_health` sono RLS-locked al `service_role`, quindi la lettura non può
+ * stare nel browser: sta qui.
  *
  * POST JSON `{ "azione": "stato" | "scansione" }`
- *   · `stato`     → conteggi aggregati, ultima scansione, ultima run. Basta una
- *                   sessione valida (solo numeri) o l'header `x-crawler-secret`.
+ *   · `stato`     → conteggi aggregati, ultima scansione, ultima run, fonti
+ *                   isolate/in guasto. Basta una sessione valida (solo numeri) o
+ *                   l'header `x-crawler-secret`.
  *   · `scansione` → `workflow_dispatch` del workflow di ingestione. Autorizza, in
  *                   ordine: `x-crawler-secret` = `CRAWLER_TRIGGER_SECRET` (CI,
  *                   terminale, DEV Bar senza login) · `ADMIN_EMAILS` ·
@@ -90,6 +93,16 @@ interface TelemetriaCrawler {
   interpelli_totali: number;
   /** Fonti whitelist ricontrollate nelle ultime 24 ore. */
   scansionate_24h: number;
+  /**
+   * Fonti in QUARANTENA lette da `public.source_health` (§26.109): URL, data
+   * dell'isolamento e motivo. `null` = tabella non leggibile (deploy senza la
+   * migrazione): il pannello mostra «—» invece di uno zero rassicurante.
+   * La finestra dei 60 giorni NON si applica qui: si applica in lettura
+   * (`src/lib/sourceQuarantine.ts`), così la Edge non tiene una seconda copia.
+   */
+  fonti_isolate: Array<{ url: string; dal: string | null; motivo: string | null }> | null;
+  /** Fonti che stanno fallendo senza essere ancora isolate (`null` = non letto). */
+  fonti_in_guasto: number | null;
   ultima_scansione: string | null;
   ultima_run: { started_at: string; esito: string; trovati: number; nuovi: number; errori: number } | null;
   aggiornato_il: string;
@@ -181,11 +194,20 @@ async function conta(
   return count ?? 0;
 }
 
+/** Riga di `public.source_health` che serve alla diagnostica delle fonti (§26.110). */
+interface SaluteFonte {
+  source_url: string;
+  is_quarantined: boolean | null;
+  quarantined_at: string | null;
+  quarantine_reason: string | null;
+  consecutive_failures: number | null;
+}
+
 /** Numeri della coda: le letture sono indipendenti e partono tutte insieme. */
 async function telemetria(sb: ReturnType<typeof createClient>): Promise<TelemetriaCrawler> {
   const oggi = new Date().toISOString().slice(0, 10);
   const ieri = new Date(Date.now() - 86_400_000).toISOString();
-  const [fonti, coda, scartiGrezzi, errori, totali, attivi, scansionate, ultima, run] =
+  const [fonti, coda, scartiGrezzi, errori, totali, attivi, scansionate, ultima, run, salute] =
     await Promise.all([
       conta(sb, 'discovered_links', { status: 'active_crawler' }),
       conta(sb, 'discovered_links', { status: 'pending' }),
@@ -200,7 +222,13 @@ async function telemetria(sb: ReturnType<typeof createClient>): Promise<Telemetr
         .not('last_scanned_at', 'is', null).order('last_scanned_at', { ascending: false }).limit(1),
       sb.from('scraper_runs').select('started_at, esito, trovati, nuovi, errori')
         .order('started_at', { ascending: false }).limit(1),
+      // `source_health` è di servizio come le altre: la finestra dei 60 giorni resta
+      // nel client puro (`src/lib/sourceQuarantine.ts`), qui si consegnano le righe.
+      sb.from('source_health')
+        .select('source_url, is_quarantined, quarantined_at, quarantine_reason, consecutive_failures'),
     ]);
+
+  const saluteFonti = salute.error ? null : ((salute.data ?? []) as SaluteFonte[]);
 
   return {
     fonti_whitelist: fonti,
@@ -210,6 +238,17 @@ async function telemetria(sb: ReturnType<typeof createClient>): Promise<Telemetr
     interpelli_attivi: attivi.count ?? 0,
     interpelli_totali: totali,
     scansionate_24h: scansionate.count ?? 0,
+    fonti_isolate:
+      saluteFonti === null
+        ? null
+        : saluteFonti
+            .filter((f) => f.is_quarantined === true)
+            .map((f) => ({ url: f.source_url, dal: f.quarantined_at, motivo: f.quarantine_reason })),
+    fonti_in_guasto:
+      saluteFonti === null
+        ? null
+        : saluteFonti.filter((f) => f.is_quarantined !== true && (f.consecutive_failures ?? 0) > 0)
+            .length,
     ultima_scansione:
       ((ultima.data ?? [])[0] as { last_scanned_at?: string } | undefined)?.last_scanned_at ?? null,
     ultima_run: ((run.data ?? [])[0] as TelemetriaCrawler['ultima_run']) ?? null,

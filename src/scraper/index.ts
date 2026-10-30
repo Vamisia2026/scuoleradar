@@ -89,6 +89,8 @@ import { sintesiCopertura } from './fontiCopertura.ts';
 import { MAX_SEZIONI_HUB, eTitoloNavigazione, scopriSezioniReclutamento } from './hub.ts';
 import { motivoScartoOpportunita } from './qualitaOpportunita.ts';
 import { daControllareInIngresso, valutaIngressoPerLink } from './presidioLinkIngresso.ts';
+import { opzioniDominio } from './portaliUfficiali.ts';
+import { eDominioIstituzionale } from '../lib/dominiIstituzionali.ts';
 import { TIMEOUT_PING_MS, verificaLinkInLotti } from './verificaLinkHttp.ts';
 import { statoArricchimento } from '../lib/statoArricchimento.ts';
 import { arricchisciContatti, arricchisciScadenze } from './arricchimento.ts';
@@ -105,6 +107,13 @@ import { ledgerLocaleSalva } from '../lib/ledgerLocale.ts';
 import { GIORNI_IMPRONTA, improntaAvviso } from '../lib/dedupAvvisi.ts';
 
 /* ------------------------------- Tipi ------------------------------- */
+
+/**
+ * §26.109 — Portali ufficiali MIM/USR/ATP del registro fonti, letti UNA volta:
+ * la whitelist dei domini (`lib/dominiIstituzionali.ts`) non tiene una copia
+ * dell'elenco, lo riceve da qui (estrazione dei link e presidio d'ingresso).
+ */
+const DOMINI = opzioniDominio();
 
 /** Alias per retro-compatibilità: gli avvisi parsati dal nuovo parser.ts. */
 export type AvvisoRilevato = InterpelloParsato;
@@ -352,9 +361,11 @@ export function parsePostInterpelli(
     $blocco.find('a[href^="http"]').each((_, a) => {
       const h = ($(a).attr('href') ?? '').trim();
       if (!h) return;
-      if (/scuolainterpelli\.it|t\.me|facebook|twitter|pinterest|whatsapp|linkedin|instagram|altervista|iubenda/.test(h)) {
-        return;
-      }
+      // §26.109 — SOLO DOMINI ISTITUZIONALI: un aggregatore concorrente, un social,
+      // un hosting gratuito o un modulo esterno non diventa mai il link di un
+      // avviso. La regola è una sola (`lib/dominiIstituzionali.ts`) e ammette
+      // `.edu.it`, `.gov.it`, MIM/USR/ATP del registro.
+      if (!eDominioIstituzionale(h, DOMINI)) return;
       const t = $(a)
         .text()
         .replace(/\s+/g, ' ')
@@ -1478,7 +1489,7 @@ async function main(provinceOverride?: string[]) {
     // (più sotto) la colonna `school_site` della riga.
     const home = homeUfficialeAvviso(a);
     const esito = esitiLink.get((a.link ?? '').trim()) ?? null;
-    const verdetto = valutaIngressoPerLink(a, esito, home);
+    const verdetto = valutaIngressoPerLink(a, esito, home, DOMINI);
     if (!verdetto.accetta) {
       contaLink.scartati += 1;
       if (contaLink.scartati <= 10) {

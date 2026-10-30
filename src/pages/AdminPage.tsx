@@ -12,6 +12,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, BadgeInfo, Loader2, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/contexts/AppContext';
+import { LineaRossa } from '@/components/CrawlerTelemetry';
 import {
   ADMIN_EMAILS,
   DEV,
@@ -151,6 +152,13 @@ export function AdminPage() {
             </button>
           ))}
         </nav>
+
+        {/* «Linea Rossa» (§26.110): la barra di comando del motore, sempre in vista
+            dentro il pannello — non un modale della DEV Bar. Senza sessione reale
+            la barra lo dichiara invece di mostrare numeri inventati. */}
+        <div className="mt-3">
+          <LineaRossa attiva={sessioneReale || DEV} />
+        </div>
 
         <main className="mt-6">
           {tab === 'utenti' ? (

@@ -25,6 +25,10 @@ export default {
           200: '#f6cb9f',
           300: '#f2a65a',
           400: '#ee8c33',
+          // 450 = ARANCIO ESATTO del brand (#E37820), chiesto dalla «Linea Rossa» (§26.110).
+          // Sta fra 400 e 500 perché non sostituisce `secondary-500` (#e2721c), già in uso
+          // in tutto il sito: qui serve il colore ufficiale, non l'ennesimo tono vicino.
+          450: '#e37820',
           500: '#e2721c',
           600: '#bd5a14',
           700: '#974610',

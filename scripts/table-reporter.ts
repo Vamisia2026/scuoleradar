@@ -2862,6 +2862,10 @@ function recordDaVoceScuola(
   // §26.101 — e vale anche per un link PROFONDO sulla bacheca della piattaforma
   // (`nuvola.madisoft.it/bacheca-digitale/bacheca/<CODICE>/…`): è la pagina che
   // la scuola ha pubblicato, non una credenziale.
+  // §26.108 — su una piattaforma di LOGIN il link profondo deve stare in un
+  // CONTENITORE PUBBLICO (bacheca/albo/pubblicazioni/documenti): un'area
+  // applicativa come `…/interpelli/<CODICE>/docenti/<uuid>/candidatura` è il
+  // modulo del docente (guscio JS `noindex` che chiede il login) e resta fuori.
   const sourceUrl = (voce.directUrl ?? '').trim();
   const allegato =
     eAllegatoPiattaforma(sourceUrl) || eAvvisoSuPiattaforma(sourceUrl);

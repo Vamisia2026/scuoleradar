@@ -6,20 +6,24 @@
  * («questa fonte va isolata? perché?»), in `sourceTelemetry.ts` le operazioni
  * con la memoria di processo e in `sourceTelemetryDb.ts` il ponte Supabase.
  *
- * Le due soglie:
+ * Le soglie:
  *   · `SOGLIA_QUARANTENA` (3) fallimenti consecutivi (`empty` o `quarantine`);
  *   · `SOGLIA_LAYOUT_IGNOTO` (2) run con layout non riconosciuto: un rifacimento
  *     grafico è un guasto conclamato prima di tre run — i parser non trovano
- *     più le colonne, non è «una pagina vuota».
+ *     più le colonne, non è «una pagina vuota»;
+ *   · `SOGLIA_NON_TROVATO` (2) run con `404`/`410`: il dominio è sparito, non è
+ *     anti-bot né lentezza — è la prova più forte che abbiamo (§26.109).
  *
  * Un `success` azzera tutto: la ri-validazione è automatica, nessuno deve
- * ricordarsi di togliere la fonte dalla naftalina.
+ * ricordarsi di togliere la fonte dalla naftalina. In più la quarantena NON è
+ * eterna: la finestra dei 60 giorni vive in `sourceQuarantine.ts` (scadenza e
+ * insieme degli URL da saltare), così queste regole restano senza stato.
  */
 
 /** Esito di un run di lettura di una fonte (lo decide chi chiama). */
 export type EsitoRun = 'success' | 'empty' | 'quarantine';
 /** Perché una fonte è stata isolata. */
-export type MotivoQuarantena = 'layout_changed' | 'timeout' | 'zero_items';
+export type MotivoQuarantena = 'layout_changed' | 'timeout' | 'zero_items' | 'not_found';
 /** Stato registrato: l'esito dell'ultimo run o `unknown` (mai vista). */
 export type StatoFonte = EsitoRun | 'unknown';
 
@@ -62,6 +66,8 @@ export interface PonteTelemetria {
 export const SOGLIA_QUARANTENA = 3;
 /** Layout ignoto ripetuto per questi run = rifacimento grafico. */
 export const SOGLIA_LAYOUT_IGNOTO = 2;
+/** Run con `404`/`410` oltre i quali il dominio è dato per morto. */
+export const SOGLIA_NON_TROVATO = 2;
 
 /** Layout che l'euristica universale (§26.84) sa leggere. */
 const LAYOUT_NOTI: readonly string[] = ['table', 'aria_grid', 'wp_posts'];
@@ -106,14 +112,33 @@ export function layoutRiconosciuto(layout?: string | null): boolean {
 }
 
 /**
+ * L'errore del trasporto dichiara la pagina SPARITA (`404`/`410`)? Allora non è
+ * anti-bot né lentezza: è una prova che l'elenco non esiste più (§26.109).
+ */
+export function eNonTrovato(dettagli: DettagliRun): boolean {
+  return /(^|\D)(404|410)(\D|$)/.test(dettagli.error ?? '');
+}
+
+/**
  * Perché il run è fallito. Con un errore la pagina non è mai stata servita
  * (timeout, HTTP ≥ 400, content-type sbagliato): il motivo è `timeout`, il
- * cappello del trasporto. Senza errore la pagina è stata letta: se il layout è
- * ignoto è un `layout_changed`, altrimenti l'elenco era vuoto (`zero_items`).
+ * cappello del trasporto — tranne il `404`/`410`, che è un `not_found` conclamato.
+ * Senza errore la pagina è stata letta: se il layout è ignoto è un
+ * `layout_changed`, altrimenti l'elenco era vuoto (`zero_items`).
  */
 export function motivoGuasto(dettagli: DettagliRun): MotivoQuarantena {
-  if ((dettagli.error ?? '').trim()) return 'timeout';
+  if ((dettagli.error ?? '').trim()) return eNonTrovato(dettagli) ? 'not_found' : 'timeout';
   return layoutRiconosciuto(dettagli.layoutDetected) ? 'zero_items' : 'layout_changed';
+}
+
+/**
+ * Soglia di isolamento per motivo: un `404`/`410` ripetuto è più probante di un
+ * timeout (che può essere la rete) e isola al secondo run.
+ */
+export function sogliaQuarantena(motivo: MotivoQuarantena): number {
+  if (motivo === 'layout_changed') return SOGLIA_LAYOUT_IGNOTO;
+  if (motivo === 'not_found') return SOGLIA_NON_TROVATO;
+  return SOGLIA_QUARANTENA;
 }
 
 /**
@@ -132,11 +157,9 @@ export function valutaRun(
   const fallito = esito !== 'success';
   const fallimenti = fallito ? base.consecutiveFailures + 1 : 0;
   const motivo = fallito ? motivoGuasto(dettagli) : null;
-  // «Layout ignoto che persiste» è un guasto conclamato già al secondo run.
-  const scatta =
-    motivo !== null &&
-    (fallimenti >= SOGLIA_QUARANTENA ||
-      (motivo === 'layout_changed' && fallimenti >= SOGLIA_LAYOUT_IGNOTO));
+  // «Layout ignoto che persiste» è un guasto conclamato già al secondo run, un
+  // dominio sparito pure: la soglia dipende dal motivo (vedi `sogliaQuarantena`).
+  const scatta = motivo !== null && fallimenti >= sogliaQuarantena(motivo);
   // Una fonte isolata resta isolata finché un run riuscito non la riabilita.
   const isolata = fallito && (scatta || base.isQuarantined);
   return {

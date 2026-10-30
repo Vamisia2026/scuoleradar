@@ -23,6 +23,8 @@ import { province } from '../data/province.ts';
 import { eUrlAvvisoDiretto } from '../lib/alertInterpello.ts';
 import { risolviEmailUfficialeScuola } from '../lib/emailScuola.ts';
 import { nomeIstitutoPresentabile } from '../lib/nomeIstituto.ts';
+import { eDominioIstituzionale, type OpzioniDominio } from '../lib/dominiIstituzionali.ts';
+import { portaliUfficiali } from './portaliUfficiali.ts';
 import { scuolaDaRiga } from './scuolaDaRiga.ts';
 
 /* ------------------------------- Tipi ------------------------------- */
@@ -410,9 +412,6 @@ export const REGIONI_USR: Record<string, string> = {
   Sicilia: 'https://www.usr-sicilia.it/',
 };
 
-/** Suffissi di host riconosciuti come istituzionali (Pubblica Amministrazione/scuola). */
-const RE_HOST_ISTITUZIONALE = /(\.edu\.it|\.istruzione\.it|\.gov\.it)$/i;
-
 /** Host degli enti mappati non coperti dai suffissi (es. istruzionepiemonte.it). */
 const HOST_ENTI_MAPPATI = new Set<string>(
   Object.values(REGIONI_USR)
@@ -426,15 +425,19 @@ const HOST_ENTI_MAPPATI = new Set<string>(
     .filter(Boolean),
 );
 
+/**
+ * §26.109 — Domini istituzionali ammessi: la regola sta in UN solo posto
+ * (`lib/dominiIstituzionali.ts`), qui si aggiungono gli enti mappati in
+ * `REGIONI_USR` e i portali USR/USP/UAT/UST verificati del registro fonti.
+ * Calcolato UNA volta all'import: `eHostIstituzionale` gira per ogni candidato.
+ */
+const DOMINI_ISTITUZIONALI: OpzioniDominio = {
+  portaliUfficiali: [...HOST_ENTI_MAPPATI, ...portaliUfficiali()],
+};
+
 /** True se l'host dell'URL è quello di un ente istituzionale (USP/USR/Scuola). */
 export function eHostIstituzionale(url?: string | null): boolean {
-  let host = '';
-  try {
-    host = new URL((url ?? '').trim()).host.toLowerCase();
-  } catch {
-    return false;
-  }
-  return RE_HOST_ISTITUZIONALE.test(host) || HOST_ENTI_MAPPATI.has(host);
+  return eDominioIstituzionale(url, DOMINI_ISTITUZIONALI);
 }
 
 /**

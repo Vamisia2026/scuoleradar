@@ -32,9 +32,11 @@ import {
   type SourceHealthStatus,
 } from './sourceHealthRules';
 import { ponteSupabase } from './sourceTelemetryDb';
+import { fontiIsolate, quarantenaScaduta } from './sourceQuarantine';
 
 // Un solo punto d'import per chi registra o legge la salute di una fonte.
 export * from './sourceHealthRules';
+export * from './sourceQuarantine';
 
 /** Opzioni comuni: client Supabase, ponte esplicito (test) e orologio. */
 export interface OpzioniTelemetria {
@@ -61,9 +63,7 @@ const messaggio = (err: unknown): string =>
 function avvisa(chiave: string, motivo: string): void {
   if (avvisati.has(chiave)) return;
   avvisati.add(chiave);
-  console.warn(
-    `⚠ telemetria fonti: ${motivo} (${chiave}) — lo stato resta in memoria.`,
-  );
+  console.warn(`⚠ telemetria fonti: ${motivo} (${chiave}) — lo stato resta in memoria.`);
 }
 
 /** Ponte del chiamante: esplicito nei test, dal client nei runner. */
@@ -99,9 +99,9 @@ async function precedenteDi(
 }
 
 /**
- * Registra l'esito di un run su una fonte e, se le regole lo dicono, la mette
- * in quarantena. `Promise<void>` e nessuna eccezione: è il punto in cui il
- * runner dichiara «ho letto questa pagina», non dove la scansione si ferma.
+ * Registra l'esito di un run e, se le regole lo dicono, isola la fonte.
+ * `Promise<void>`, nessuna eccezione: qui il runner dichiara «ho letto questa
+ * pagina», non è il punto in cui la scansione si ferma.
  */
 export async function recordSourceRun(
   sourceUrl: string,
@@ -114,12 +114,16 @@ export async function recordSourceRun(
     if (!url) return;
     const ponte = ponteDi(opzioni);
     const precedente = await precedenteDi(url, ponte);
+    const adesso = opzioni.adesso ?? new Date();
+    // Quarantena a termine: dopo la finestra la fonte riparte dai contatori a zero
+    // (se è ancora morta, le regole la isolano di nuovo al primo run fallito).
+    const base = precedente && quarantenaScaduta(precedente, adesso) ? null : precedente;
     const stato = valutaRun(
       url,
-      precedente,
+      base,
       status,
       details ?? { itemsCount: 0 },
-      opzioni.adesso,
+      adesso,
     );
     memoria.set(url, stato);
 
@@ -162,9 +166,7 @@ export async function fontiInQuarantena(
   opzioni: OpzioniTelemetria = {},
 ): Promise<Set<string>> {
   const tutte = await caricaTutte(ponteDi(opzioni));
-  return new Set(
-    tutte.filter((stato) => stato.isQuarantined).map((stato) => stato.sourceUrl),
-  );
+  return fontiIsolate(tutte, opzioni.adesso);
 }
 
 /**
@@ -193,8 +195,6 @@ export async function riabilitaFonte(
     const errore = ponte ? await ponte.salva(stato) : null;
     if (errore) avvisa(url, `source_health non scrivibile (${errore})`);
   } catch (err) {
-    console.warn(
-      `⚠ telemetria fonti: riabilitazione non riuscita (${messaggio(err)}).`,
-    );
+    console.warn(`⚠ telemetria fonti: riabilitazione non riuscita (${messaggio(err)}).`);
   }
 }

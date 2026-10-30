@@ -11363,3 +11363,450 @@ scritta nel dato e non nel ricordo di chi ha deployato. Stessa logica per la
 prova: un lead senza scadenza è una promessa che si autodistrugge, mentre un flag
 di 7 giorni che si cancella da solo è una promessa che si può mantenere.
 
+---
+
+## §26.108 — Su una piattaforma di login «profondo» non basta: il modulo di candidatura non è un interpello
+
+### 1. Il fatto, misurato
+
+Segnalazione: un avviso della bacheca portava a
+`https://nuvola.madisoft.it/interpelli/COIC82200C/docenti/54c4e881-…/candidatura`.
+La pagina risponde **200** e pesa **1.281 byte**: è un guscio JavaScript con
+`<meta name="description" content="Nuvola - Interpelli">` e
+`<meta name="robots" content="noindex,nofollow">`, **zero testo leggibile senza
+JavaScript**. Dopo il login mostra il modulo di candidatura del docente: è
+un'**area applicativa**, non una pubblicazione dell'istituto.
+
+Verifica dei tre gate con la sonda `tsx` sui moduli reali (nessuna ipotesi):
+
+| gate | dove decide | prima | effetto |
+| --- | --- | --- | --- |
+| `ePiattaformaPrivata` | tabellone (`linkFonte.fonteApribile`) | `true` | il click va sulla home `.edu.it` ✅ |
+| `eAvvisoSuPiattaforma` | ingestione (`table-reporter.recordDaVoceScuola`) | **`true`** ❌ | il link di login diventava `source_url` |
+| `eUrlAvvisoDiretto` / `urlFonteAvviso` | email e Telegram | **`true`** ❌ | «🔗 Fonte Ufficiale» puntata al login |
+
+### 2. La regola corretta (una sola, nel punto che già la possiede)
+
+La §26.101 diceva «link profondo = almeno tre segmenti e l'ultimo non è una
+pagina di accesso». Su una piattaforma di **login** quella condizione accetta
+qualunque area applicativa: la profondità non è una prova di pubblicità. Il
+modulo è `src/scraper/allegatiPiattaforma.ts` (la funzione esisteva già, cambia
+la condizione):
+
+* documento (`.pdf`, `.p7m`, endpoint di download/anteprima) → **avviso**,
+  invariato: il PDF su Argo/Nuvola/Gecodoc *è* l'avviso (§26.96);
+* piattaforma con `login: true` (Argo, Nuvola–Spaggiari, ClasseViva) → il
+  percorso deve contenere almeno un **contenitore pubblico** dichiarato
+  (`RE_CONTENITORE_PUBBLICO`: `bacheca`, `bacheca-digitale`, `albo`, `albi`,
+  `albo-pretorio`, `pubblicazioni`, `IN_PUBBLICAZIONE`, `pubblicato`,
+  `documenti`, `documents`, `allegati`, `file`). `…/interpelli/<CODICE>/docenti/…`
+  non ne ha nessuno → fuori;
+* l'ultimo segmento che è un **modulo** o un accesso (`login`, `accedi`,
+  `candidatura`, `domande`, `application`, `apply`…) è escluso **sempre**, anche
+  dentro un contenitore;
+* piattaforme documentali pure (`login: false`, Gecodoc) → regola invariata: lì
+  tutto l'host è albo, quindi il percorso profondo resta valido.
+
+Nessun URL costruito, nessuna lista di siti: si guarda **quello letto**, con la
+stessa asimmetria delle altre regole (si dichiara «non avviso» solo ciò che è
+riconoscibile come area privata).
+
+### 3. Effetti dichiarati
+
+* **bacheca** — invariata: la piattaforma era già sostituita dalla home
+  istituzionale; nessuna riga in meno, nessuna riga in più;
+* **ingestione** — la voce d'albo che porta *solo* il modulo non produce più un
+  record. È un **limite accettato e scritto**: se una tabella dichiara come unico
+  link il modulo di candidatura, quell'avviso si perde; la regola di prodotto
+  resta «meglio una riga in meno che un click che apre un login»;
+* **email/Telegram** — nessun nuovo `source_url` di questa forma, perché la riga
+  non entra più. Le righe **già scritte** prima della correzione restano
+  competenza della pulizia dati, che riconosce gli host di piattaforma con
+  `ePiattaformaPrivata` — il gate dei messaggi non è stato toccato (avrebbe
+  richiesto di duplicare in `src/lib` la logica dei documenti, che vive nello
+  scraper: due verità invece di una).
+
+### 4. Le guardie
+
+Nuovo `scripts/test-piattaforme-contenitori.ts` (`npm run test:piattaforme-contenitori`,
+in catena a `npm test`): `scripts/test-sgranatura.ts` era già a **249 righe**, cioè
+al tetto morbido delle 250 del gate strutturale, e le prove della regola nuova
+sarebbero state debito. Il file separato copre:
+
+* `…/interpelli/COIC82200C/docenti/<uuid>/candidatura` → **false** (il caso
+  segnalato, con l'URL vero);
+* `…/interpelli/COIC82200C/docenti/<uuid>` (stessa area, senza il segmento
+  finale) → **false**: la regola guarda il percorso, non una parola;
+* `…/area-riservata/docenti/domanda` → **false** e
+  `…/bacheca-digitale/bacheca/COIC82200C/candidatura` → **false** (il segmento
+  finale «modulo» esclude anche dentro un contenitore);
+* `…/bacheca-digitale/documenti/avviso-a022.pdf` → **true**: il documento su
+  piattaforma di login resta l'avviso;
+* `rmic81200p.gecodoc.it/albo/12/2027` → **true**: la piattaforma documentale
+  pura non cambia regola; `portaleargo.it/argoweb/login` e la home → **false**;
+* `…/bacheca-digitale/bacheca/BGIC85100N/4/IN_PUBBLICAZIONE/abc` → **true**,
+  invariata (la §26.101 continua a valere per le bacheche vere);
+* cablaggio: la regola sta in un solo file (`RE_CONTENITORE_PUBBLICO`,
+  `piattaforma.login &&`) e il runner usa `eAvvisoSuPiattaforma(sourceUrl)`, non
+  una copia.
+
+### 5. Verifiche (da `project/`)
+
+`npm run test:piattaforme-contenitori` ✅ · `npm run test:sgranatura` ✅ ·
+`npm run test:piattaforme-documentali` ✅ · `npm run test:piattaforme-link` ✅ ·
+`npm run typecheck` ✅ · `npm test` ✅ ·
+`npm run test:architettura` ✅ (nessuna violazione nuova) · `npm run build` ✅ ·
+`npm run lint` ✅ sui file toccati.
+
+**File toccati.** *Nuovo*: `scripts/test-piattaforme-contenitori.ts` (la guardia
+della regola; `test-sgranatura.ts` era già a 249 righe). *Modificati*:
+`src/scraper/allegatiPiattaforma.ts`
+(`RE_CONTENITORE_PUBBLICO` · condizione su `piattaforma.login` · segmenti-modulo),
+`scripts/table-reporter.ts` (commento della regola), `package.json` (script e
+catena di `npm test`), `comunicazione/04_canali_regionali/checklist_regionali.md`,
+questa sezione. Nessun dipartimento toccato.
+
+**Nota di sessione.** Il difetto non era nel tabellone — che aveva già ragione —
+ma nella **misura**: «link profondo» era stato usato come sinonimo di «pagina
+pubblica», e su una piattaforma di login la profondità non dimostra niente. La
+lezione è la stessa della §26.107: quando due strati devono rispondere alla
+stessa domanda, la risposta va scritta una volta e deve poter essere **provata**
+con l'URL reale, non con un esempio somigliante.
+
+---
+
+## §26.109 — In ingresso solo domini istituzionali, e la quarantena ha una scadenza
+
+### 1. I due difetti
+
+**(a) Il link era ammesso per esclusione.** All'estrazione dei link
+(`src/scraper/index.ts`, `parsePostInterpelli`) c'era una **blocklist locale** di
+sette parole — `/scuolainterpelli\.it|t\.me|facebook|twitter|pinterest|whatsapp|
+linkedin|instagram|altervista|iubenda/` — cioè passava *tutto* ciò che non era
+scritto lì dentro: un aggregatore nuovo, un hosting gratuito, un modulo Google,
+un dominio comprato ieri. E la stessa domanda aveva **una seconda risposta** in
+`src/scraper/parser.ts` (`RE_HOST_ISTITUZIONALE` + `HOST_ENTI_MAPPATI`): due
+verità che potevano divergere senza che nessuno se ne accorgesse.
+
+**(b) La quarantena non finiva mai.** `source_health.is_quarantined` era un
+booleano senza data di scadenza: una fonte che cambia URL o riapre dopo un
+restyling restava invisibile per sempre, e toglierla dalla naftalina era un gesto
+manuale che nessuno ricorda di fare. In più un `404`/`410` — la prova più forte
+che abbiamo che l'elenco non esiste più — pesava come un `timeout`, cioè tre run.
+
+### 2. La regola dei domini: una sola, in `src/lib/dominiIstituzionali.ts`
+
+Ordine di precedenza di `valutaDominio(valore, opzioni)`:
+
+| # | condizione | esito | motivo nel log |
+| --- | --- | --- | --- |
+| 1 | dominio in `AGGREGATORI_PRIVATI` (10 voci, sottodomini compresi) | **fuori** | `aggregatore privato concorrente (<host>)` |
+| 2 | `.edu.it` (scuole) o `.gov.it` (PA) | **dentro** | `dominio pubblico <suffisso>` |
+| 3 | `istruzione.it` o `*.istruzione.it` (MIM, PNRR, USR su sottodominio) | **dentro** | `portale del Ministero (istruzione.it)` |
+| 4 | portale USR/USP/UAT/UST del registro fonti | **dentro** | `portale ufficiale USR/ATP (<host>)` |
+| 5 | tutto il resto | **fuori** | `dominio non istituzionale (<host>)` |
+
+L'elenco diagnostico (`AGGREGATORI_PRIVATI`) **non è la difesa**: il divieto vero
+è la riga 5, che non ha bisogno di conoscere il nome del concorrente di domani.
+La riga 4 **non è copiata nel codice**: `src/scraper/portaliUfficiali.ts` legge i
+target `hub-istituzionale` attivi del registro (`fontiAttive()`) e ne ricava gli
+host — oggi **62** — così un ufficio aggiunto al registro entra da solo e uno
+spento esce da solo.
+
+Un solo estrattore di host: `hostDa()` in `src/lib/dominiScuola.ts` (era la testa
+di `hostEduIt`, che ora ci si appoggia sopra). Minuscolo, senza `www.`, senza
+porta, senza percorso, senza punto finale. Nessun trucco di suffisso: il
+confronto è `host === d || host.endsWith('.' + d)`, quindi
+`istruzione.it.evil.com` e `scuolainterpelli.it.evil.com` restano **fuori**, e
+`edu.it`/`gov.it` nudi pure (davanti manca l'etichetta dell'ente).
+
+Tre punti di applicazione, una sola funzione:
+
+* **estrazione dei link** — `src/scraper/index.ts` tiene una costante sola,
+  `const DOMINI = opzioniDominio()`, usata sia nel filtro (`if
+  (!eDominioIstituzionale(h, DOMINI)) return;`) sia nella chiamata del presidio;
+* **GATE 0 dell'ingestione** — `presidioLinkIngresso.valutaIngressoPerLink(a,
+  esito, home, dominio)`: link su dominio non istituzionale ⇒ si pubblica la
+  **home `.edu.it`** dell'istituto se la conosciamo (`homeEduIt`), altrimenti la
+  riga **resta fuori**;
+* **parser** — `eHostIstituzionale` non ha più una regex propria: delega alla
+  regola con `REGIONI_USR` + i portali del registro, calcolati una volta
+  all'import (la funzione gira per ogni candidato).
+
+### 3. La quarantena a termine
+
+`src/lib/sourceHealthRules.ts` decide **quando** isolare e ora distingue i motivi:
+
+| motivo | come si riconosce | soglia | perché |
+| --- | --- | --- | --- |
+| `not_found` | `404`/`410` nell'errore del trasporto (`eNonTrovato`) | `SOGLIA_NON_TROVATO` = **2** | è una prova, non un sospetto |
+| `layout_changed` | pagina letta, layout non riconosciuto | `SOGLIA_LAYOUT_IGNOTO` = **2** | rifacimento grafico conclamato |
+| `timeout` | errore senza `404`/`410` (5xx, DNS, TLS) | `SOGLIA_QUARANTENA` = **3** | può essere la rete |
+| `zero_items` | pagina letta, layout noto, zero righe | `SOGLIA_QUARANTENA` = **3** | può essere un periodo vuoto |
+
+`src/lib/sourceQuarantine.ts` (nuovo, **puro**: nessuna rete, nessun database)
+dice **quanto dura** e **chi salta il giro**: `GIORNI_QUARANTENA` = 60,
+`quarantenaScaduta(stato, adesso)`, `fontiIsolate(tutte, adesso)`. Un isolamento
+**senza data leggibile** (`quarantined_at` nullo, riga scritta a mano) vale come
+**scaduto**: una riga senza data non può tenere una fonte fuori per sempre.
+
+`src/lib/sourceTelemetry.ts` applica la finestra in due punti soli:
+`recordSourceRun` usa `base = quarantenaScaduta(precedente, adesso) ? null :
+precedente`, cioè dopo la scadenza **i contatori ripartono da zero**; e
+`fontiInQuarantena` restituisce `fontiIsolate(tutte, opzioni.adesso)`, quindi una
+quarantena scaduta **non fa saltare** il run. Se la fonte è ancora morta, le
+soglie la isolano di nuovo e la data dell'isolamento riparte: il costo della
+riprova è **un run ogni 60 giorni**, non una lista da ripulire a mano.
+
+### 4. Effetti dichiarati
+
+* **bacheca** — può avere **una riga in meno**: un avviso il cui unico link sta
+  su un aggregatore e il cui istituto non ha una home `.edu.it` nota non entra.
+  È il limite accettato e scritto della §26.108: meglio una riga in meno che un
+  click che porta a un terzo;
+* **paritarie e istituti su dominio proprio** (`icmanzoniadr.it`) — restano
+  **fuori** finché non sono nel registro: la regola ammette per costruzione, non
+  per somiglianza;
+* **registro** — aggiungere un ufficio lo ammette senza toccare il codice,
+  spegnerlo lo esclude: nessuna copia da tenere allineata;
+* **database** — nessuna migrazione nuova: `quarantined_at` esiste già
+  (`20261023120000_create_source_health.sql`) e la finestra è calcolata in
+  lettura, così non servono job notturni per «far scadere» le quarantene.
+
+### 5. Le guardie
+
+**`scripts/test-domini-istituzionali.ts`** (`npm run test:domini-istituzionali`,
+in catena a `npm test`) — cinque blocchi: (1) ammessi (istituto, host nudo, PA,
+MIM, sottodominio, schema malformato, maiuscole e punto finale), (2) rifiutati
+(aggregatore, sottodominio di aggregatore, social, modulo Google, hosting,
+`edu.it`/`gov.it` nudi, `istruzione.it.evil.com`, `scuolainterpelli.it.evil.com`),
+(3) i portali del registro (ognuno ammesso, elenco stabile fra due letture),
+(4) il GATE 0 sui tre casi veri (aggregatore con home → home ufficiale;
+aggregatore senza home → riga fuori; link istituzionale vivo → si pubblica
+quello), (5) il **cablaggio**, letto nel testo dei sorgenti: `index.ts` contiene
+`eDominioIstituzionale(h, DOMINI)` e **non** contiene più la vecchia blocklist,
+`parser.ts` non contiene più `RE_HOST_ISTITUZIONALE`, lo script dedicato esiste e
+sta nella catena di `npm test`.
+
+**`src/lib/__tests__/quarantenaFonti.test.ts`** (`npm run test:quarantena`) —
+soglie per motivo, la finestra dei 60 giorni **ai bordi** (59 giorni dentro, 60
+fuori, senza data = scaduto), `fontiIsolate` con chiavi normalizzate, il flusso
+vero di `recordSourceRun` su un `PonteTelemetria` finto con la forma di
+`public.source_health` e un orologio fisso (due `404` isolano; alla scadenza i
+contatori ripartono; se il dominio è ancora morto la quarantena riparte **con
+data nuova**), più i controlli di cablaggio e il tetto delle 200 righe sui tre
+moduli.
+
+### 6. Verifiche (da `project/`)
+
+`npm run test:domini-istituzionali` ✅ · `npm run test:quarantena` ✅ ·
+`npm run test:source-telemetry` ✅ · `npm run test:domini` ✅ ·
+`npm run test:gate-link-ingresso` ✅ · `npm run test:scraper:domini` ✅ ·
+`npm run test:scraper:fonti`/`test:scraper:attivi` ✅ ·
+`npm run typecheck` ✅ · `npm run test:architettura` ✅ (nessuna violazione nuova;
+145 in baseline) · `npm run build` ✅ · `npm run lint` ✅ sui file toccati.
+
+**File toccati.** *Nuovi*: `src/lib/dominiIstituzionali.ts`,
+`src/lib/sourceQuarantine.ts`, `src/scraper/portaliUfficiali.ts`,
+`scripts/test-domini-istituzionali.ts`,
+`src/lib/__tests__/quarantenaFonti.test.ts`. *Modificati*:
+`src/lib/dominiScuola.ts` (`hostDa` condiviso, `hostEduIt` vi delega),
+`src/lib/sourceHealthRules.ts` (`SOGLIA_NON_TROVATO`, `eNonTrovato`,
+`motivoGuasto`, `sogliaQuarantena`), `src/lib/sourceTelemetry.ts` (finestra e
+re-export), `src/scraper/index.ts` (una costante `DOMINI`, filtro e presidio),
+`src/scraper/parser.ts` (`eHostIstituzionale` in delega),
+`src/scraper/presidioLinkIngresso.ts` (GATE 0), `package.json` (due script e
+catena di `npm test`), `comunicazione/04_canali_regionali/checklist_regionali.md`,
+questa sezione. Nessun dipartimento toccato.
+
+**Nota di sessione.** Le due correzioni sono la stessa lezione applicata due
+volte: **un permesso non si scrive come lista di divieti**. La blocklist
+ammetteva per esclusione — quindi ammetteva il futuro; la quarantena senza
+scadenza escludeva per sempre — quindi puniva anche il pentimento. Adesso la
+whitelist dice *chi* entra (e si ricava dal registro, non dalla memoria) e la
+quarantena dice *per quanto*: entrambe sono definite in positivo, entrambe
+stanno in un modulo puro, ed entrambe si provano con un caso vero invece che con
+un esempio somigliante.
+
+## §26.110 — «Linea Rossa»: la telemetria del motore sale nel pannello Admin (30/10/2026)
+
+### 1. Il difetto era di posizione, non di dati
+
+Il pannello «Crawler Telemetry» (§26.97) stava **dentro il System Health Check
+della DEV Bar**: un modale che esiste solo dove `import.meta.env.DEV` è vero,
+dietro due click, in una finestra che nessuno tiene aperta mentre decide. Il
+motore invece si guarda **in produzione** — quando la coda non scende, quando una
+fonte smette di rispondere, quando serve rilanciare un giro. Uno strumento che si
+apre solo in sviluppo si usa solo per caso.
+
+«Linea Rossa» è la stessa telemetria con **altra posizione e altro peso**: una
+fascia alta poche decine di pixel, montata in `AdminPage` **sopra i tab**, quindi
+visibile da ogni sezione del pannello. Non un pannello dentro un modale: quattro
+numeri, un punto di stato, tre bottoni, un chevron per il dettaglio. Il file
+conserva il nome storico (`src/components/CrawlerTelemetry.tsx`) perché è la
+telemetria del crawler; il nome di prodotto è «Linea Rossa» (export
+`LineaRossa`).
+
+### 2. La forma, e il perché di ogni colore
+
+| elemento | token | perché |
+| --- | --- | --- |
+| fondo barra | `primary-900` #0C2235 | è il blu del marchio: la barra è infrastruttura, non un avviso |
+| linea di riconoscimento | `border-l-2 border-error-500` #D9534F | la linea rossa è il **segno** della barra, non uno stato: non cambia mai |
+| CTA «Scansione» | `secondary-450` #E37820 | l'arancio esatto del brand, chiesto esplicitamente |
+| stato «in linea» | `accent-500` #1FA055 | verde di sistema, già usato dal sito |
+| stato «da guardare» | `secondary-450` | fonti isolate: si vede, non allarma |
+| stato «senza dati» | `error-500` | la telemetria non risponde |
+| stato «in attesa» | `primary-300` | primo caricamento: nessuna affermazione |
+| dato mancante | «—» | vedi §4 |
+
+`secondary.450` è un **gradino nuovo** della scala (`tailwind.config.js`): si
+infila fra `400` (#EE8C33) e `500` (#E2721C) perché serve il colore ufficiale
+senza sostituire quello già in uso in tutto il sito — due toni vicini per due
+cose diverse. `npm run test:palette` resta verde (0 token orfani su 586 file).
+
+Lo stato non è mai affidato al solo colore: ogni tono porta **punto + parola**
+(«in linea» · «da guardare» · «senza dati» · «in attesa»), così la barra si legge
+anche in scala di grigi.
+
+### 3. Le quattro celle e da dove vengono
+
+| cella | campo della Edge | nota sotto il numero |
+| --- | --- | --- |
+| **Coda** | `pagine_in_coda` (`discovered_links`, stato `pending`) | «pagine da leggere» |
+| **Fonti** | `fonti_whitelist` (`active_crawler`) | «N / 24h» (`scansionate_24h`) |
+| **Interpelli** | `interpelli_attivi` (scadenza ≥ oggi) | «N in archivio» (`interpelli_totali`) |
+| **Isolate** | `fonti_isolate` (`source_health`) | «nessuna» · «riprova entro 60 g» · «dato assente» |
+
+La quarta cella è quella nuova: prima le quarantene erano invisibili, e una
+fonte isolata «spariva» senza che il pannello lo dicesse. Ora il numero si vede e
+il perché sta nel dettaglio. Il «60» della nota **non è scritto a mano**:
+`riprova entro ${GIORNI_QUARANTENA} g`, letto da `sourceQuarantine.ts`.
+
+### 4. Dati veri, mai zeri
+
+La regola della barra è la stessa del resto del progetto, portata all'estremo:
+**uno zero è un'affermazione, un «—» è un fatto**. Quando il campo non c'è — Edge
+non deployata, sessione assente, oppure Edge vecchia che non conosce ancora
+`fonti_isolate` — la cella scrive «—» (helper `numero()`), il dettaglio dice
+«Dato assente: la Edge non espone ancora `fonti_isolate` (ridistribuisci
+`crawler-admin`)» e nessuno legge un numero inventato.
+
+Da qui i due campi **opzionali** del contratto (`src/services/crawlerTelemetry.ts`):
+`fonti_isolate?: FonteIsolata[] | null` e `fonti_in_guasto?: number | null`,
+`null` = «non letto». La Edge restituisce `null` anche quando la query su
+`source_health` fallisce (`salute.error`), invece di far fallire tutta la
+telemetria: la coda resta leggibile anche se la diagnostica delle fonti no.
+
+Distinzione che sembra un dettaglio e non lo è: `quaranteneAttive(null)`
+restituisce **`null`**, `quaranteneAttive([])` restituisce **`[]`**. «Nessuna
+fonte isolata» e «dato assente» non sono lo stesso fatto e la UI non deve
+trasformare il secondo nel primo.
+
+### 5. Il dettaglio dietro il chevron
+
+Nessuna informazione è andata persa rispetto al vecchio pannello, ma non ruba
+spazio ad abbonamenti e comunicazioni:
+
+* **ultima scansione** e **ultima run** (istante, esito, «N/M nuovi», errori);
+* **fonti in guasto (non isolate)**: `fonti_in_guasto`, cioè le fonti che stanno
+  fallendo ma non hanno ancora superato le soglie di §26.109 — sono il preavviso
+  di una quarantena;
+* **fonti in quarantena**: host, motivo dichiarato (`not_found`, `layout_changed`,
+  `timeout`, `zero_items`) e giorni che mancano alla riprova; al massimo **4**
+  righe (`MAX_ISOLATE`) e poi «+N altre»: oltre, la riga diventa un registro;
+* **aggiornato**, perché un numero senza ora è un numero che non si può pesare.
+
+### 6. Cosa fa il bottone «Scansione»
+
+`avviaScansioneWhitelist()` → Edge `crawler-admin` → `workflow_dispatch` di
+`.github/workflows/discovery.yml`. L'avviso scrive **repo, workflow e
+`autorizzato_da`** (`admin`, `segreto`, `sviluppo-locale`): chi ha autorizzato il
+dispatch è diagnosi, e la barra lo dichiara invece di presumerlo. Dopo l'avvio la
+telemetria si rilegge **ogni 5 secondi per 24 giri (2 minuti)**
+(`INTERVALLO_MS` × `MAX_GIRI`): l'intervallo si azzera allo smontaggio del
+componente e ad ogni nuovo avvio, quindi non esistono timer orfani. Il refresh
+manuale (`RefreshCw`) resta disponibile sempre.
+
+### 7. I permessi non cambiano
+
+Nessun permesso nuovo: la barra vive solo dentro `AdminPage`, **dopo** il gate
+`ADMIN_EMAILS` (`@/lib/utentiAdmin`), e la Edge ricontrolla comunque lato server
+(admin · allowlist DEV · `x-crawler-secret` di sviluppo, §26.107). La prop
+`attiva={sessioneReale || DEV}` non allarga nulla: senza sessione reale e fuori da
+una build DEV la barra **non chiama niente** e dichiara il vuoto, scrivendo il
+nome della variabile da configurare (`VITE_CRAWLER_DEV_SECRET` in `.env.local`).
+
+### 8. La finestra dei 60 giorni resta una sola
+
+`src/lib/sourceQuarantine.ts` (puro, e già unico proprietario della regola da
+§26.109) è cresciuto di tre pezzi e **non** di una seconda verità:
+
+* `FonteIsolata` — `{ url, dal, motivo }`, la forma che consegna la Edge;
+* `giorniResiduiQuarantena(dal, adesso)` — estratta da `quarantenaScaduta`, che ora
+  ci si appoggia sopra: una funzione sola decide i giorni, quindi non possono
+  divergere;
+* `quaranteneAttive(tutte, adesso)` — le isolate **non scadute**, con i giorni
+  residui, e `null` in ingresso (`null`) in uscita.
+
+La Edge consegna le **righe grezze** di `source_health` (`source_url`,
+`is_quarantined`, `quarantined_at`, `quarantine_reason`,
+`consecutive_failures`): niente aritmetica sulle date lato server, la finestra si
+calcola dove la regola vive già. Lo stesso file pesa **99 righe**.
+
+### 9. Le guardie
+
+`npm run test:linea-rossa` (`src/lib/__tests__/lineaRossa.test.ts`, in catena a
+`npm test`) — **21 check** in quattro blocchi:
+
+1. **finestra** — `GIORNI_QUARANTENA` = 60, isolata ieri → 59 giorni residui,
+   59 giorni fa → 1, 60 giorni fa → 0, 70 giorni fa → 0 (mai negativo), orologio
+   indietro → 60, `quarantined_at` nullo o illeggibile → scaduta (0);
+2. **assente ≠ vuoto** — `null` → `null`, `[]` → `[]`, filtro sulle sole attive,
+   `url`/`data`/`motivo` conservati;
+3. **cablaggio** — il componente esporta `LineaRossa`, importa la finestra dal
+   modulo puro (**e non la ricopia**: nessun `60` in chiaro nel componente), il
+   «—» c'è, la barra è montata in `AdminPage`, il System Health Check **non** la
+   monta più, la Edge legge `source_health` e produce i due campi, il client li
+   dichiara opzionali, `secondary.450` sta nel tema;
+4. **peso** — `CrawlerTelemetry.tsx` sotto le 251 righe (oggi **248**, il tetto
+   morbido è 250) e lo script presente sia da solo sia nella catena.
+
+Le guardie sono testuali, non renderizzate: la banda è fatta di testo e token, e
+il rischio vero non è il markup ma la **regola duplicata** — che è esattamente
+ciò che il blocco 3 sorveglia.
+
+### 10. Verifiche (da `project/`, 30/10/2026)
+
+`typecheck` ✅ 0 errori · **`npm test` ✅ exit 0** (la catena chiude con il banner
+della guardia nuova: la finestra è una sola, e i numeri mancanti restano “—”) ·
+`test:architettura` ✅ 755 file · 145 = baseline, **nessuna voce nuova** ·
+`test:palette` ✅ 0 orfani su 586 file · `build` ✅ 8,30 s (CSS 73,26 kB · gzip
+12,55 kB, era 71,34 kB: +1,9 kB di classi nuove) · `eslint` ✅ **0 errori** sui
+file toccati (i due warning residui di `HealthCheckModal.tsx` — direttiva
+`eslint-disable` ormai inutile a riga 59 e dipendenza `supabase` a riga 101 —
+sono **preesistenti**: il diff di quel file tocca solo l'import rimosso e il
+mount sostituito dal commento).
+
+**File toccati.** *Nuovo*: `src/lib/__tests__/lineaRossa.test.ts` (124 righe).
+*Modificati*: `tailwind.config.js` (`secondary.450`), `src/lib/sourceQuarantine.ts`
+(`FonteIsolata`, `giorniResiduiQuarantena`, `quaranteneAttive`),
+`src/services/crawlerTelemetry.ts` (`fonti_isolate`, `fonti_in_guasto`),
+`supabase/functions/crawler-admin/index.ts` (`SaluteFonte` + decima lettura
+`source_health`), `src/components/CrawlerTelemetry.tsx` (da pannello a fascia,
+248 righe), `src/components/HealthCheckModal.tsx` (−1 import, −2 righe di mount,
+un commento di rinvio a questa sezione), `src/pages/AdminPage.tsx` (un import,
+una riga di mount, 179 righe), `package.json` (`test:linea-rossa` + catena),
+`docs/SYSTEM_HANDOVER.md` (questa sezione) e `docs/DEPARTMENT_MAP.md`.
+
+**Nessun dipartimento toccato**: tutti i file stanno nei condivisi essenziali, nei
+componenti trasversali, nella Edge o nella documentazione.
+
+**Nota di sessione.** Il difetto non era nei numeri — la telemetria di §26.97
+era corretta — ma nel **luogo**: la DEV Bar è il posto dove si guarda un errore,
+non dove si guarda il motore. Spostare lo strumento dove il lavoro avviene
+(`AdminPage`) ha reso visibile una cosa che prima non lo era: le fonti isolate
+(§26.109) non arrivavano a nessun pannello. Il costo di questa sessione è stato un
+campo opzionale nel contratto e un decimo `from()` nella Edge — nessuna nuova
+tabella, nessuna migrazione, nessun permesso nuovo.
+

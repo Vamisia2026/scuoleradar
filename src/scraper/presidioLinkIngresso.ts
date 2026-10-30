@@ -9,13 +9,17 @@
  * e chi ripulisce.
  *
  * Questo modulo è il punto in cui la regola incontra il flusso di INGESTIONE e
- * aggiunge due cose che la pulizia non ha:
+ * aggiunge tre cose che la pulizia non ha:
+ *   0. `valutaDominio` (§26.109): il link di un avviso deve stare su un dominio
+ *      ISTITUZIONALE (`.edu.it`, `.gov.it`, MIM/USR/ATP). Un aggregatore
+ *      concorrente non viene mai pubblicato: se l'istituto ha una home ufficiale
+ *      si pubblica quella, altrimenti la riga resta fuori;
  *   1. `daControllareInIngresso`: i record STRUTTURATI (classe/materia + email di
  *      candidatura) non si pingano — un server scolastico risponde `403` a un bot
  *      qualunque sia lo stato del bando, quindi la richiesta è solo rumore;
  *   2. `instabile` ≠ `assente`: in ingresso un timeout/5xx NON prova che l'avviso
  *      sia morto e l'upsert è `ignoreDuplicates`, cioè irreversibile — il link
- *      specifico resta e la decisione (con nuovo tentativo) spetta alla pulizia.
+ *      specifico resta e la decisione (con nuovo tentativo) la prende la pulizia.
  *      Un `404`/`410` invece è una prova: home ufficiale se nota, altrimenti fuori.
  */
 
@@ -26,6 +30,8 @@ import {
   type EsitoPingLink,
   type StatoLink,
 } from '../lib/validitaLink.ts';
+import { homeEduIt } from '../lib/dominiScuola.ts';
+import { eDominioIstituzionale, type OpzioniDominio } from '../lib/dominiIstituzionali.ts';
 import { eRecordStrutturato, type CandidatoLink } from './qualitaOpportunita.ts';
 
 /**
@@ -58,14 +64,36 @@ export interface EsitoIngressoLink {
  * `null`/assente = link non controllato in questo giro (record strutturato,
  * tetto di richieste raggiunto): un controllo non eseguito non è una prova di
  * morte, quindi la riga resta.
+ * `dominio` = portali ufficiali MIM/USR/ATP del registro fonti
+ * (`scraper/portaliUfficiali.ts`): senza, valgono solo i suffissi pubblici.
  */
 export function valutaIngressoPerLink(
   a: CandidatoLink,
   esito?: EsitoPingLink | null,
   home?: string | null,
+  dominio: OpzioniDominio = {},
 ): EsitoIngressoLink {
   const link = (a.link ?? '').trim() || null;
   const stato = statoLink(esito);
+
+  // GATE 0 — SOLO DOMINI ISTITUZIONALI (§26.109). Un link che punta a un
+  // aggregatore concorrente (o a un social, a un hosting, a un modulo) non entra
+  // in bacheca: si pubblica la home `.edu.it` dell'istituto se la conosciamo,
+  // altrimenti la riga resta fuori. Il controllo vale sui link `http(s)`
+  // pubblicabili: un `mailto:` o un link assente seguono la via di sempre.
+  if (link && urlPubblicabile(link) && !eDominioIstituzionale(link, dominio)) {
+    const ufficiale = homeEduIt(home);
+    return {
+      accetta: Boolean(ufficiale),
+      link: ufficiale,
+      stato: 'non-verificabile',
+      motivo: ufficiale
+        ? 'link su dominio non istituzionale: si pubblica la home ufficiale'
+        : 'link su dominio non istituzionale e nessuna home ufficiale',
+      sostituito: Boolean(ufficiale),
+      verificato: false,
+    };
+  }
 
   // Timeout/DNS/TLS/5xx: nessuna prova di morte, e in ingresso la scelta è
   // irreversibile (upsert con `ignoreDuplicates`). Il link specifico resta; se è
