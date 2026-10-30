@@ -65,19 +65,37 @@ function aRiga(stato: SourceHealthStatus): Record<string, unknown> {
   };
 }
 
+/** SQLSTATE dei permessi negati: manca il GRANT, non è una questione di RLS. */
+const PERMESSI_NEGATI = '42501';
+
+/**
+ * Messaggio d'errore leggibile (§26.117). Un `42501` non dice «permesso negato»
+ * e basta: dice QUALE SQL eseguire. Misurato il 30/10/2026 — la chiave era
+ * `service_role` e la tabella esisteva, mancava solo il privilegio.
+ */
+function messaggioErrore(error: { code?: string; message: string }): string {
+  if (error.code === PERMESSI_NEGATI) {
+    return (
+      'permessi SQL mancanti (42501): esegui `grant select, insert, update, delete on public.source_health to service_role;` ' +
+      '(supabase/migrations/20261030120000_grant_source_health_service_role.sql)'
+    );
+  }
+  return error.message;
+}
+
 /** Ponte Supabase su `public.source_health` (upsert sulla chiave naturale). */
 export function ponteSupabase(client: SupabaseClient): PonteTelemetria {
   return {
     async leggi() {
       const { data, error } = await client.from('source_health').select('*');
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(messaggioErrore(error));
       return ((data ?? []) as Record<string, unknown>[]).map(daRiga);
     },
     async salva(stato) {
       const { error } = await client
         .from('source_health')
         .upsert(aRiga(stato), { onConflict: 'source_url' });
-      return error ? error.message : null;
+      return error ? messaggioErrore(error) : null;
     },
   };
 }

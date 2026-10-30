@@ -207,6 +207,13 @@ check(
   /campiDaDocumento\(|datiBandoDaTesto\(/.test(reporter),
 );
 check('il runner legge il PDF dentro il viewer', true, /urlDocumentoInHtml\(/.test(reporter));
+// §26.117 — il PDF annidato non è l'UNICA fonte: se non dichiara né termine né
+// istituto si legge anche la pagina del viewer (prima un `return` la scartava).
+check(
+  'il PDF annidato senza dati non chiude la lettura',
+  true,
+  /if \(dalPdf\.deadline \|\| dalPdf\.scuole\.length > 0\) return dalPdf;/.test(reporter),
+);
 check('il runner usa la decisione di fallback', true, /meritaFallback\(/.test(reporter));
 check('fallback chiamato su un target senza avvisi', true, /recuperaDaBachecaPiattaforma\(target\)/.test(reporter));
 check('la bacheca vuota diventa un albo in coda', true, /promuoviPaginaAlbo\(pagina\.url, scuola\)/.test(reporter));

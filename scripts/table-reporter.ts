@@ -225,6 +225,15 @@ import {
 // e accoda la voce; la consegna la fa `npm run notifiche:processa`. Un timeout di
 // Telegram non puo' piu' far fallire (o allungare) la scansione.
 import { accodaInterpelli } from '../src/lib/notificationQueue.ts';
+// Censimento delle voci senza scadenza (§26.118): la classificazione è pura e
+// condivisa con la sua guardia, così i numeri della decisione sono ripetibili.
+import {
+  ETICHETTA_CAUSA as ETICHETTA_CENSIMENTO,
+  causaSenzaScadenza,
+  titoloCandidabile,
+  type CausaSenzaScadenza,
+} from '../src/lib/motivoSenzaScadenza.ts';
+import { writeFileSync } from 'node:fs';
 
 dotenv.config();
 
@@ -341,6 +350,24 @@ const MAX_PER_REGIONE = (() => {
 // 28/10/2026 un elenco regionale da 60 avvisi perdeva 50 termini su 60 perché
 // il tetto era 10 per pagina: il portale veniva letto, le opportunità no.
 const LIMITI = limitiSgranatura(process.env);
+
+/**
+ * §26.118 — CENSIMENTO DELLE VOCI SENZA SCADENZA (solo su richiesta).
+ *
+ * `--censimento-senza-scadenza` (o `CENSIMENTO_SENZA_SCADENZA=1`) non cambia
+ * NIENTE dell'ingestione: classifica le voci che il gate scarta per assenza di
+ * termine, per decidere — con i numeri e non con le impressioni — se e come
+ * esporre le «disponibilità aperte fino a revoca». Regole in
+ * `lib/motivoSenzaScadenza.ts`. Il CSV si scrive dove dice `--censimento-out`
+ * (default `censimento-senza-scadenza.csv`).
+ */
+const CENSIMENTO =
+  process.argv.includes('--censimento-senza-scadenza') ||
+  process.env.CENSIMENTO_SENZA_SCADENZA === '1';
+const CENSIMENTO_OUT = (() => {
+  const arg = process.argv.find((a) => a.startsWith('--censimento-out='));
+  return arg ? arg.slice('--censimento-out='.length) : 'censimento-senza-scadenza.csv';
+})();
 
 /**
  * §26.101 — segmento della FINESTRA ROTANTE sugli elenchi lunghi. Default: l'ora
@@ -1908,7 +1935,15 @@ async function leggiAvvisoCompleto(
         if (da === 'scuola') approfondimentiScuole -= 1;
         else approfondimentiTarget -= 1;
         const documento = await scaricaDocumentoPdf(annidato);
-        if (documento) return await leggiAvvisoPdf(documento, provincia);
+        if (documento) {
+          const dalPdf = await leggiAvvisoPdf(documento, provincia);
+          // §26.117 — il PDF annidato è la fonte più ricca, non l'unica. Se non
+          // dichiara NÉ il termine NÉ un istituto (scansione, viewer vuoto,
+          // avviso senza data) si legge ANCHE la pagina: prima il `return`
+          // chiudeva la lettura e una riga con la data nel viewer diventava
+          // «senza scadenza» senza che nessuno avesse letto la data.
+          if (dalPdf.deadline || dalPdf.scuole.length > 0) return dalPdf;
+        }
       }
     }
     // Il contenuto dell'avviso, non il menu del sito: se c'è un contenitore
@@ -3522,6 +3557,8 @@ async function processTarget(target: DiscoveredLink): Promise<ProcessResult> {
       // §26.102 — l'elenco può continuare nelle pagine 2…N (WordPress mostra 10
       // voci per pagina): si seguono solo quelle dichiarate dalla pagina stessa.
       universale = await allargaPagineElenco(universale, html, target);
+      // §26.118 — censimento su richiesta: si guarda ciò che il gate scarta.
+      if (CENSIMENTO) raccogliCensimento(universale, target);
       layoutRilevato = universale.layoutDetected;
       if (CONFIG.debug || !universale.success) {
         console.log(
@@ -3939,6 +3976,8 @@ async function runTableReporter(): Promise<void> {
         `con scadenza dichiarata: ${statisticaPdf.conScadenza}`,
     );
   }
+  // §26.118 — censimento delle voci senza scadenza (solo con il flag).
+  if (CENSIMENTO) stampaCensimento();
 
   // Un giro nazionale in dry-run è un REPORT: le fonti morte restano nel
   // riepilogo (con la causa) ma non fanno fallire la verifica. In un giro
@@ -3951,6 +3990,122 @@ async function runTableReporter(): Promise<void> {
     } else {
       process.exitCode = 2;
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CENSIMENTO DELLE VOCI SENZA SCADENZA (§26.118)
+// ---------------------------------------------------------------------------
+// Non scrive su Supabase e non cambia il gate: prende le voci che l'elenco
+// dichiara SENZA termine, le classifica con `lib/motivoSenzaScadenza` e stampa il
+// conto per causa, regione e fonte (più un CSV per l'analisi a mano). Serve a
+// decidere se esporre le «disponibilità aperte fino a revoca» con i numeri.
+interface VoceCensimento {
+  regione: string;
+  provincia: string;
+  host: string;
+  causa: CausaSenzaScadenza;
+  candidabile: boolean;
+  titolo: string;
+  url: string;
+}
+
+const censimentoVoci: VoceCensimento[] = [];
+
+/** Host della fonte, senza `www.` (`''` se l'URL non è leggibile). */
+function hostDi(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+function raccogliCensimento(
+  universale: UniversalExtractionResult,
+  target: DiscoveredLink
+): void {
+  for (const voce of universale.items) {
+    if (voce.expirationDate) continue;
+    // §26.118 — il classificatore lavora su `titolo`/`url`: la voce dell'elenco
+    // si mappa QUI, una volta, invece di lasciargli indovinare i nomi.
+    const daClassificare = { titolo: voce.title, url: voce.directUrl, testo: voce.schoolName };
+    censimentoVoci.push({
+      regione: target.region ?? 'N/D',
+      provincia: (target.province || 'N/D').toUpperCase(),
+      host: hostDi(target.url),
+      causa: causaSenzaScadenza(daClassificare),
+      candidabile: titoloCandidabile(daClassificare),
+      titolo: (voce.title ?? '').replace(/\s+/g, ' ').slice(0, 120),
+      url: voce.directUrl ?? '',
+    });
+  }
+}
+
+/** Conteggio per chiave, dal più frequente al meno. */
+function contaPer<T extends string>(
+  voci: readonly VoceCensimento[],
+  chiave: (voce: VoceCensimento) => T
+): Array<[T, number]> {
+  const mappa = new Map<T, number>();
+  for (const voce of voci) mappa.set(chiave(voce), (mappa.get(chiave(voce)) ?? 0) + 1);
+  return [...mappa.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+/** Riga del CSV: `;` come separatore (Excel italiano), campi fra virgolette. */
+function rigaCsv(voce: VoceCensimento): string {
+  const campo = (valore: string): string => `"${valore.replace(/"/g, '""')}"`;
+  return [
+    campo(voce.regione),
+    campo(voce.provincia),
+    campo(voce.host),
+    campo(voce.causa),
+    campo(ETICHETTA_CENSIMENTO[voce.causa]),
+    campo(voce.candidabile ? 'sì' : 'no'),
+    campo(voce.titolo),
+    campo(voce.url),
+  ].join(';');
+}
+
+function stampaCensimento(): void {
+  const totale = censimentoVoci.length;
+  const fonti = new Set(censimentoVoci.map((voce) => voce.host)).size;
+  console.log(
+    `\n[table-reporter] CENSIMENTO voci senza scadenza (§26.118): ${totale} voci da ${fonti} fonti.`
+  );
+  if (totale === 0) return;
+
+  console.log('  Causa                       Voci   Quota   «candidabili»');
+  for (const [causa, n] of contaPer(censimentoVoci, (voce) => voce.causa)) {
+    const cand = censimentoVoci.filter((v) => v.causa === causa && v.candidabile).length;
+    console.log(
+      `  ${ETICHETTA_CENSIMENTO[causa].padEnd(24)} ${String(n).padStart(5)} ${((n / totale) * 100).toFixed(1).padStart(6)}%   ${String(cand).padStart(6)}`
+    );
+  }
+
+  const opache = censimentoVoci.filter((voce) => voce.causa === 'non_dichiarata');
+  console.log(
+    `\n  Fascia che merita una lettura («senza alcun segnale»): ${opache.length} voci, ` +
+      `di cui ${opache.filter((v) => v.candidabile).length} con un titolo di reclutamento.`
+  );
+  for (const [regione, n] of contaPer(opache, (voce) => voce.regione).slice(0, 8)) {
+    console.log(`    · ${regione.padEnd(20)} ${String(n).padStart(4)}`);
+  }
+  const perFonte = contaPer(opache, (voce) => voce.host).slice(0, 10);
+  if (perFonte.length > 0) {
+    console.log('  Fonti con più voci opache:');
+    for (const [host, n] of perFonte) console.log(`    · ${host.padEnd(34)} ${String(n).padStart(4)}`);
+  }
+
+  const intestazione =
+    'regione;provincia;fonte;causa;etichetta;titolo_candidabile;titolo;url';
+  try {
+    writeFileSync(CENSIMENTO_OUT, [intestazione, ...censimentoVoci.map(rigaCsv)].join('\n'), 'utf8');
+    console.log(`\n  Dettaglio per voce: ${CENSIMENTO_OUT}`);
+  } catch (err) {
+    console.warn(
+      `  CSV non scritto (${err instanceof Error ? err.message : String(err)}): i numeri restano qui sopra.`
+    );
   }
 }
 

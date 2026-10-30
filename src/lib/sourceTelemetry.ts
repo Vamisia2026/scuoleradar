@@ -17,7 +17,7 @@
  * ROBUSTEZZA: nessuna funzione lancia. Se il database non risponde lo stato
  * resta in memoria di processo e si logga un avviso per URL: un guasto della
  * telemetria non deve MAI fermare l'ingestione. `caricaTutte` è anche la cache
- * di lettura del run: una query, non una per fonte.
+ * di lettura del run: una query, non una per fonte. §26.117 — un permesso negato (`42501`) è un fatto della TABELLA, non della singola fonte: chi scrive passa la chiave `permessi`, così il log resta di una riga e dice quale SQL eseguire.
  *
  * Guardia: `npm run test:source-telemetry` (incluso in `npm test`).
  */
@@ -137,7 +137,7 @@ export async function recordSourceRun(
     }
 
     const errore = ponte ? await ponte.salva(stato) : null;
-    if (errore) avvisa(url, `source_health non scrivibile (${errore})`);
+    if (errore) avvisa(/42501/.test(errore) ? 'permessi' : url, `source_health non scrivibile (${errore})`);
   } catch (err) {
     // Error boundary: la telemetria non ferma mai la scansione.
     console.warn(
@@ -193,7 +193,7 @@ export async function riabilitaFonte(
     };
     memoria.set(url, stato);
     const errore = ponte ? await ponte.salva(stato) : null;
-    if (errore) avvisa(url, `source_health non scrivibile (${errore})`);
+    if (errore) avvisa(/42501/.test(errore) ? 'permessi' : url, `source_health non scrivibile (${errore})`);
   } catch (err) {
     console.warn(`⚠ telemetria fonti: riabilitazione non riuscita (${messaggio(err)}).`);
   }

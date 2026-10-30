@@ -159,6 +159,14 @@ async function main(): Promise<void> {
   check('colonne della quarantena', true, ['consecutive_failures', 'is_quarantined', 'quarantine_reason'].every((c) => new RegExp(`\\b${c}\\b`).test(sql)));
   check('RLS di servizio', true, /enable row level security/i.test(sql) && /to service_role/i.test(sql));
 
+  // §26.117 — RLS e GRANT sono due cancelli diversi: la policy decide le RIGHE,
+  // il privilegio decide se il ruolo tocca la tabella. Misurato il 30/10/2026:
+  // con la chiave `service_role` giusta la tabella rispondeva 42501.
+  const permessi = leggi('supabase/migrations/20261030120000_grant_source_health_service_role.sql');
+  check('privilegi SQL al service_role (42501)', true, /grant\s+select[\s\S]*?on public\.source_health\s+to service_role/i.test(permessi));
+  check('nessun privilegio al browser', false, /\bto\s+(?:anon|authenticated)\b/i.test(permessi));
+  check('l\'errore 42501 dice quale SQL eseguire', true, /42501/.test(leggi('src/lib/sourceTelemetryDb.ts')));
+
   const regole = leggi('src/lib/sourceHealthRules.ts');
   check('regole pure: nessun import, nessuna rete', [false, false], [/^\s*import\s/m.test(regole), /fetch\s*\(|XMLHttpRequest|cheerio/i.test(regole)]);
 

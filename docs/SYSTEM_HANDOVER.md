@@ -12446,3 +12446,257 @@ scende, e questo rende il ricalcolo idempotente su tutta la base dati
 
 
 
+## §26.117 — `source_health`: il GRANT che mancava, e i «senza scadenza» che non sono un parser rotto (30/10/2026)
+
+### 1. Il sintomo riportato e la misura fatta
+
+La segnalazione era: *«il crawler trova centinaia di avvisi ma li scarta TUTTI (0
+record validi) come "senza scadenza", e in più `permission denied for table
+source_health`»*. Prima di toccare una riga di codice il comportamento è stato
+**misurato** su fonti vere, con tre giri:
+
+| giro | target | record | «senza scad.» | PDF aperti / con testo / con scadenza | errori |
+|---|---|---|---|---|---|
+| `--regioni=Liguria --max-per-regione=2 --dry-run` | 2 | **9** | 0 | 4 / 4 / 0 | 0 |
+| `--nazionale --max-per-regione=2 --max-scuole=1 --dry-run` | 39 | **38** | 954 | 428 / 427 / **25** | 0 |
+| `--regioni=Liguria --max-per-regione=1` (**scrittura reale**) | 1 | **8** | 0 | — | 0 |
+
+Tre conclusioni, verificate e non dedotte:
+
+1. **il parser non scarta tutto**: il giro nazionale su 39 target produce 23 record
+   (`Estratti N record validi da …` è la riga che compare per target);
+2. **la scrittura funziona**: il giro reale ha lasciato in `scrape_reports` una
+   riga `scanned_at 19:15:53`, `status success`, `extracted_count 8`, riletta via
+   REST. Il conteggio di `interpelli` resta 835 perché l'upsert è
+   `ignoreDuplicates: true` su `hash_id`: le otto righe esistevano già da un giro
+   precedente — è l'idempotenza dichiarata in §26.116, non una scrittura persa;
+3. **la telemetria era cieca davvero**, e la causa non era la chiave.
+
+### 2. `source_health`: RLS e GRANT sono due cancelli diversi (il difetto vero)
+
+Con la chiave **giusta** in `.env` (`SUPABASE_SERVICE_ROLE_KEY`, JWT decodificato:
+`role=service_role`), il confronto fra tabelle è netto:
+
+| richiesta | esito |
+|---|---|
+| `GET /rest/v1/scan_targets` | **200** |
+| `GET /rest/v1/discovered_links` | **200** |
+| `GET /rest/v1/interpelli` | **200** |
+| `GET /rest/v1/source_health` | **403** · `{"code":"42501","message":"permission denied for table source_health","hint":"Grant the required privileges to the current role with: GRANT SELECT ON public.source_health TO service_role;"}` |
+
+La tabella esiste, la policy `service_role_full_access` esiste: **mancava il
+privilegio SQL**. La migrazione `20261023120000_create_source_health.sql` crea
+tabella, indici, trigger e policy RLS ma non concede nulla al ruolo, e qui la
+tabella non eredita i *default privileges* di Supabase. La conseguenza non era un
+crash — `recordSourceRun` non lancia per scelta (§26.85) — ma una **quarantena che
+non esiste**: nessuna fonte veniva isolata e nessun contatore veniva scritto.
+
+Rimedio: nuova migrazione **`20261030120000_grant_source_health_service_role.sql`**
+(idempotente) — `grant usage on schema public`, `grant select, insert, update,
+delete on public.source_health to service_role`, default privileges sulle tabelle
+future, più la query di diagnosi `has_table_privilege`. Il perimetro di sicurezza
+non cambia: nessun permesso ad `anon` né ad `authenticated` (§26.109).
+
+Metterla in esercizio richiede **un passo manuale**, perché il repository non ha
+accesso DDL al progetto remoto: eseguire il file su Supabase (SQL editor o
+`supabase db push`). Fino a quel momento il log dice che cosa fare, una volta sola:
+
+```
+⚠ telemetria fonti: source_health non scrivibile (permessi SQL mancanti (42501): esegui
+`grant select, insert, update, delete on public.source_health to service_role;` …) (permessi)
+— lo stato resta in memoria.
+```
+
+Due ritocchi rendono il guasto trasparente invece che rumoroso: il ponte
+(`sourceTelemetryDb.ts`) traduce `42501` in **quale SQL eseguire** (prima
+restituiva solo `permission denied for table source_health`) e l'avviso usa la
+chiave `permessi` invece dell'URL, così cento fonti non producono cento righe
+identiche (`sourceTelemetry.ts`; guardia `test:source-telemetry` estesa).
+
+
+### 3. Che cosa NON si è fatto: la scadenza di comodo (oggi + 15 giorni)
+
+La richiesta conteneva anche: *«se la data non c'è, imposta oggi + 15 giorni e
+marca la riga come opportunità valida»*. Non è stato implementato, e non per
+prudenza: sarebbe una **data inventata mostrata all'utente su un atto
+istituzionale**, e contraddice tre punti fermi in vigore.
+
+* **§26.71 — «REGOLA FERREA»** (`lib/scadenza.ts`, `eOpportunitaConScadenza`):
+  senza `expiration_date` dichiarata la riga non è un'opportunità. La finestra dei
+  60 giorni resta per il *fetch* e per la pulizia, non per la vetrina.
+* **La checklist del cliente** (`comunicazione/04_canali_regionali/checklist_regionali.md`,
+  riga 229): *«bacheca e feed scartano a monte la riga senza scadenza
+  (`eOpportunitaConScadenza`) e lo dichiarano nel contatore»*.
+* **Le guardie**: `test:live-board` (*«nessuna riga entra in vetrina senza
+  scadenza»*), `test:opportunita-vive`, `test:board:filtro`. Con la data di comodo
+  diventerebbero rosse, non «aggiornate».
+
+E c'è la ragione di sostanza, misurata. Le voci senza termine **non sono
+opportunità con una data mancante**: aprendo le pagine vere del campione Liguria —
+la fonte da cui partiva la segnalazione — il campo recita
+
+```
+Periodo Non previsto   Scadenza   Disponibilità aperta fino a revoca
+```
+
+cioè la fonte **dichiara di non avere un termine** (`?id=870`, `?id=869`,
+`?id=868`, `?id=867`, `?id=1344`). Con la regola «oggi + 15» quelle righe
+entrerebbero in bacheca con «scade fra 15 giorni»: un termine che nessun atto
+contiene, identico per tutte, e la prima candidatura su una disponibilità chiusa
+sarebbe una promessa falsa del prodotto. Le altre voci senza data del campione
+sono pagine d'archivio, indici di classi di concorso e atti già scaduti —
+esattamente il contorno che §26.71 era nato per togliere dalla vetrina.
+
+La strada corretta per le disponibilità a revoca **esiste**, ma è una decisione di
+prodotto e non un default tecnico: vanno rappresentate con `expiration_date`
+`NULL` e una superficie dichiarata («senza scadenza / fino a revoca»), lasciando
+il `filtroAttivi` della bacheca a richiedere la data. Va aperta dal cliente,
+perché cambia il significato del contatore «opportunità attive».
+
+### 4. Il difetto vero trovato leggendo il codice: il PDF annidato chiudeva la lettura
+
+Cercando la perdita di date è emerso un bug indipendente dalla segnalazione, in
+`leggiAvvisoCompleto` (`scripts/table-reporter.ts`). Su una piattaforma
+documentale (Gecodoc/Argo/Nuvola) che risponde con un *viewer*, il codice scarica
+il PDF annidato e faceva `return await leggiAvvisoPdf(...)`: se quel PDF non
+dichiarava **né** il termine **né** un istituto (scansione, viewer vuoto, avviso
+senza data) la funzione usciva con `deadline: null` **senza aver mai letto la
+pagina del viewer**, che il termine magari ce l'aveva. Ora il PDF è la prima
+fonte, non l'unica: si esce solo se ha prodotto un dato
+(`if (dalPdf.deadline || dalPdf.scuole.length > 0) return dalPdf;`), altrimenti si
+prosegue con l'HTML. L'ordine resta quello di §26.94/§26.96 — *documento prima,
+pagina dopo* — e non inventa nulla: aggiunge una lettura, non una data. Guardia:
+`test:piattaforme-documentali` (*«il PDF annidato senza dati non chiude la
+lettura»*).
+
+### 5. Verifiche (30/10/2026)
+
+`npm run typecheck` ✅ · `npm test` ✅ exit 0 · `npm run test:architettura` ✅
+violazioni = baseline, 0 nuove · `npm run build` ✅ · `npx eslint` ✅ 0 problemi sui
+file toccati. Guardie mirate: `test:source-telemetry` ✅ (nuovi controlli su GRANT,
+assenza di permessi al browser, messaggio `42501`), `test:piattaforme-documentali`
+✅. Giro reale di controllo ✅ (8 record, 0 errori, `scrape_reports` scritto).
+
+**File toccati.** *Nuovo*:
+`supabase/migrations/20261030120000_grant_source_health_service_role.sql`.
+*Modificati*: `src/lib/sourceTelemetryDb.ts` (101 righe: `messaggioErrore`),
+`src/lib/sourceTelemetry.ts` (200: chiave `permessi`),
+`src/lib/__tests__/sourceTelemetry.test.ts`,
+`scripts/table-reporter.ts` (fallback HTML dopo il PDF annidato),
+`scripts/test-piattaforme-documentali.ts`, `docs/**`.
+
+**Nota di sessione.** La richiesta d'emergenza univa due cose di natura diversa: un
+guasto vero (i permessi) e una scorciatoia che avrebbe risolto il sintomo
+nascondendo il dato (la data di comodo). La prima è stata corretta alla radice; la
+seconda è stata rifiutata con le misure alla mano, perché il «senza scadenza» del
+log descrive **una proprietà della fonte** («aperta fino a revoca»), non un
+fallimento del parser — e una data inventata è l'unica cosa che un radar di
+scadenze non può permettersi. Il valore aggiunto della sessione è stato un terzo
+elemento, non richiesto: il PDF annidato che interrompeva la lettura della pagina,
+anch'esso capace di far sparire un termine **vero**.
+
+## §26.118 — Censimento delle voci senza scadenza: 1.070 voci, e che cosa sono davvero (30/10/2026)
+
+### 1. Perché un censimento e non un numero
+
+Il runner conta le voci scartate per assenza di termine (`senza scad.` nel
+riepilogo), ma un contatore non dice **che cosa** si sta scartando. La decisione
+«esporre o no le disponibilità aperte fino a revoca» non si prende su quel
+numero: serve sapere se dietro ci sono opportunità perse o contorno. Il
+censimento è fatto di due pezzi:
+
+* **`lib/motivoSenzaScadenza.ts`** (puro, 6 cause, nessuna rete): `a_revoca`
+  (la fonte dichiara di non avere un termine), `indice` (titolo di soli codici o
+  «classi di concorso»), `amministrativo` (l'atto che `noiseFilter` già
+  riconosce — regex **riusate**, non duplicate), `archivio` (archivio, esami,
+  nomine, circolari, a.s. passato), `data_passata` (la voce cita una data
+  scaduta), `non_dichiarata` (nessun segnale). Più `titoloCandidabile`, che
+  misura quante voci *sembrano* un reclutamento. Guardia
+  `npm run test:motivo-senza-scadenza` (in catena a `npm test`).
+* **`--censimento-senza-scadenza`** in `table-reporter.ts` (o
+  `npm run diag:senza-scadenza`): non tocca l'ingestione, classifica le voci che
+  il gate scarta e scrive un CSV per voce (`--censimento-out`, default
+  `censimento-senza-scadenza.csv`).
+
+### 2. I numeri (giro nazionale, 39 target, 20 fonti, 30/10/2026)
+
+| causa | voci | quota | con titolo di reclutamento |
+|---|---|---|---|
+| senza alcun segnale | 703 | 65,7% | 479 |
+| archivio / atto concluso | 125 | 11,7% | 86 |
+| indice di classi | 122 | 11,4% | 86 |
+| data già passata | 119 | 11,1% | 113 |
+| atto amministrativo (`noiseFilter`) | 1 | 0,1% | 0 |
+| **totale** | **1070** | | |
+
+Regioni con più voci opache: Lombardia 202, Sardegna 116, Campania 99, Veneto
+77, Liguria 69, Sicilia 32, Marche 32, Basilicata 22. Fonti: `mim.gov.it` 375,
+`uat-napoli.it` 95, `padova.istruzioneveneto.gov.it` 73,
+`servizi.istruzioneliguria.gov.it` 69, `usr.sicilia.it` 32.
+
+Il numero che conta è **1.070**, non 954: il riepilogo per regione conta le voci
+della pagina d'elenco, il censimento conta anche quelle delle pagine 2…N
+(`--max-per-regione=2` legge più elenchi dello stesso host).
+
+### 3. Il campione che risponde alla domanda: 15 pagine di dettaglio
+
+Le voci «senza alcun segnale» con un titolo di reclutamento sono 479. Aprirne 15
+(campionate per fonte, max 3 per host) e chiedere al CORPO della pagina se
+dichiara un termine (`scadenzaDaTesto`) dà questo:
+
+| esito della pagina di dettaglio | voci |
+|---|---|
+| atto concluso / archivio / pagina di servizio | 13 |
+| **termine vero dichiarato** (2026-11-07, «Conferimento incarico dirigenziale») | **1** |
+| nessuna data di alcun tipo | 1 |
+
+Cioè: **su 15 voci opache, 14 non contengono alcun termine da estrarre**. La
+frase «senza scadenza dichiarata» del log descrive la FONTE, non un difetto del
+parser. E il caso isolato con un termine vero non è un interpello docenti (è un
+incarico dirigenziale, fuori dal perimetro delle classi di concorso).
+
+Nel campione Liguria di §26.117 le pagine senza data dicevano, alla lettera,
+*«Scadenza — Disponibilità aperta fino a revoca»*: anche lì non c'era nulla da
+estrarre. La causa `a_revoca` vale **0** nel censimento solo perché la frase vive
+nella pagina di dettaglio, non nel titolo dell'elenco: è un limite dichiarato
+dello strumento, non un'assenza del fenomeno.
+
+### 4. Che cosa dice la misura, e la raccomandazione
+
+1. **Non c'è una massa di opportunità nascoste dietro «senza scadenza»**: il 34%
+   delle voci è già contorno per costruzione (archivio, indici, date passate) e,
+   delle 479 che sembrano reclutamenti, la pagina di dettaglio non dichiara un
+   termine in 14 casi su 15.
+2. **La data di comodo (oggi + 15) resta fuori**: metterebbe in bacheca 1.070
+   righe con un termine inventato, di cui 13 su 15 campionate sono atti chiusi o
+   pagine di servizio. La regola §26.71 non è un formalismo, è la descrizione di
+   questi numeri.
+3. **Se il cliente vuole comunque esporre le disponibilità a revoca**, la strada
+   misurata è una sola e va aperta con una decisione di prodotto: classificare
+   la frase *nel corpo* (dove sta), tenere `expiration_date` `NULL`, mostrare
+   l'etichetta «fino a revoca» e **tenerle fuori dal contatore delle opportunità
+   attive**. Il `filtroAttivi` della bacheca resta com'è: chiede la data.
+4. **Il rendimento già esiste dove serve**: la sgranatura apre le pagine senza
+   termine e nel giro completo ha dichiarato 25 termini veri (su 428 PDF aperti),
+   che diventano record quando l'istituto è certificabile. È la strada giusta —
+   leggere, non inventare.
+
+### 5. Verifiche e file
+
+`npm run typecheck` ✅ · `npm run test:motivo-senza-scadenza` ✅ (16 controlli:
+cause, ordine, riuso di `noiseFilter`, purezza, dimensione) · `npm test` ✅ exit 0
+· `npm run test:architettura` ✅ baseline, 0 nuove · `npm run build` ✅ ·
+`npx eslint` ✅ 0. Il censimento è stato ripetuto due volte e ha dato gli stessi
+1.070 voci (le classificazioni cambiano solo con i titoli, che sono stabili).
+
+*Nuovi*: `src/lib/motivoSenzaScadenza.ts` (110 righe),
+`scripts/test-motivo-senza-scadenza.ts` (114). *Modificati*:
+`scripts/table-reporter.ts` (flag + report + CSV), `package.json`
+(`test:motivo-senza-scadenza`, `diag:senza-scadenza`), `docs/**`.
+
+**Nota di sessione.** Il censimento è servito a trasformare una richiesta
+(«metti una data di default») in una decisione: 1.070 voci senza termine, di cui
+solo una, nel campione, nascondeva un termine vero — e non era un interpello
+docenti. Il valore del lavoro non è il numero: è che ora la prossima volta che il
+contatore «senza scad.» sale, c'è uno strumento che dice *perché*.
+
