@@ -15,14 +15,21 @@
  * Da qui in poi il conto dei posti liberi si fa SOLO su `vetrinaVisibile`, cioè su
  * ciò che l'utente vedrà davvero. Il modulo è PURO (nessuna rete, nessun `node:*`).
  *
- * Guardia: `npm run test:ambito-bacheca` (inclusa in `npm test`).
+ * §26.122 — LA VETRINA NON ESCE DALLE PROPRIE PROVINCE. Fino al 31/10/2026, sotto
+ * i cinque posti, il feed allargava la ricerca prima alla REGIONE e poi all'ITALIA
+ * (`integraAmbiti`): la pagina di un utente di Asti si riempiva con avvisi di
+ * Vercelli o di un'altra regione, presentati senza voto perché non valutati sul
+ * profilo. La direttiva del cliente è opposta e ora è la regola: si mostrano SOLO
+ * le opportunità delle province scelte (o entro il raggio dei 60 km). Se non ce ne
+ * sono, la dashboard dice «zero» con il motivo — mai un riempimento fuori zona.
+ * Per questo `vetrinaConAmbiti` non esiste più: la vetrina è `vetrinaVisibile`.
+ *
+ * Guardia: `npm run test:ambito-bacheca` (lo scope provinciale) e
+ * `npm run test:vetrina-bacheca` (gate identitario e scadenze), in `npm test`.
  */
 import type { Interpello } from '../data/interpelli';
 import { costruisciAvviso } from './alertInterpello';
-import { integraAmbiti, provinceDellaRegione } from './ambitoBacheca';
-import { normalizzaProvincia } from './prossimitaGeografica';
-import { MINIMO_BACHECA } from './riempitivi';
-import { eOpportunitaAperta, eOpportunitaConScadenza } from './scadenza';
+import { eOpportunitaAperta } from './scadenza';
 
 /** Campi identitari che mancano alla riga (`[]` = la vetrina può mostrarla). */
 export function campiMancantiVetrina(riga: Interpello): string[] {
@@ -59,55 +66,5 @@ export function vetrinaVisibile(
 ): Interpello[] {
   return lista.filter(
     (riga) => eOpportunitaAperta(riga.dataScadenza, oggi) && rigaVetrinaCompleta(riga),
-  );
-}
-
-/** Fonti fuori zona già lette dal feed (query larga sotto il minimo, §26.111). */
-export interface FontiAmbiti {
-  /** Righe fuori dalla zona del profilo: possono essere regionali o nazionali. */
-  fuori: readonly Interpello[];
-  /** Province del profilo: definiscono il PERIMETRO regionale dell'integrazione. */
-  province: readonly string[];
-}
-
-/**
- * VETRINA COMPLETA: provincia → regione → Italia, fino al minimo (§26.111), contando
- * solo le righe che la pagina mostrerà davvero (§26.119).
- *
- * Perché vive qui e non nell'hook: la regola ha due metà che devono restare una sola —
- * quali righe sono VISIBILI (gate identitario + scadenza aperta) e quante ne servono
- * alla vetrina. Tenerle nello stesso modulo puro permette di verificarle senza React
- * e impedisce che il conto torni a farsi sulle righe sbagliate (era il difetto per
- * cui l'utente vedeva zero con la bacheca «piena»).
- *
- * Le righe fuori zona arrivano SENZA voto (`compatibilita: 0`, `ripiego: false`):
- * non sono state valutate sul profilo e non possono salire in cima alla pagina.
- */
-export function vetrinaConAmbiti(
-  principali: readonly Interpello[],
-  fonti: FontiAmbiti,
-  opzioni: { minimo?: number; oggi?: Date } = {},
-): Interpello[] {
-  const minimo = opzioni.minimo ?? MINIMO_BACHECA;
-  const oggi = opzioni.oggi ?? new Date();
-  const visibili = vetrinaVisibile(principali, oggi);
-  if (visibili.length >= minimo) return visibili;
-
-  const gia = new Set(principali.map((riga) => riga.id));
-  const perimetro = provinceDellaRegione(fonti.province);
-  const candidati = fonti.fuori.filter(
-    (riga) =>
-      !gia.has(riga.id) &&
-      eOpportunitaConScadenza(riga.dataScadenza, oggi) &&
-      rigaVetrinaCompleta(riga),
-  );
-  const regionali = candidati.filter((riga) =>
-    perimetro.has(normalizzaProvincia(riga.provinciaCodice)),
-  );
-  const nazionali = candidati.filter(
-    (riga) => !perimetro.has(normalizzaProvincia(riga.provinciaCodice)),
-  );
-  return integraAmbiti(visibili, { regionali, nazionali }, { minimo }).lista.map((riga) =>
-    riga.ambito === 'provincia' ? riga : { ...riga, compatibilita: 0, ripiego: false },
   );
 }

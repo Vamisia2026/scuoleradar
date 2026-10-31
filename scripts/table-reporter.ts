@@ -1684,7 +1684,12 @@ async function leggiTabelleUst(
 
     // `urlUfficiale`: il link della riga se è apribile, altrimenti la home
     // dell'istituto (mai una pagina di login Argo/Nuvola spacciata per avviso).
-    const sourceUrl = urlUfficiale(esito.link, scuola);
+    // §26.123 — SE NON C'È NESSUNO DEI DUE (Piemonte: tabelle «per ambito» con
+    // 0 `<a href>`, scuola non certificata) l'identità dell'avviso è la TABELLA
+    // USR stessa: è la fonte ufficiale in cui la riga vive, e la card deve poter
+    // mostrare «Vai alla fonte» invece di sparire. Il dominio del target è
+    // verificato in ingresso: nessun aggregatore, nessun social, nessun modulo.
+    const sourceUrl = urlUfficiale(esito.link, scuola) ?? target.url;
     if (!deadline || !sourceUrl) {
       contaIneleggibile(motivi, 'riga senza scadenza o senza URL apribile');
       continue;
@@ -1695,6 +1700,22 @@ async function leggiTabelleUst(
     const province = isLikelyMechCode(schoolCode)
       ? schoolCode.slice(0, 2).toUpperCase()
       : scuola.provincia ?? urlProvince ?? defaultProvince;
+
+    // §26.123 — L'EMAIL DELLA SCUOLA SULLA RIGA DI TABELLA (la «Sartoria» del
+    // recapito). Una tabella USR (Liguria `provincia.php`, Piemonte modulo «per
+    // ambito») dichiara il codice meccanografico ma quasi mai la casella: senza
+    // questo passaggio la card della bacheca arriva con «Email non disponibile»
+    // e la riga è inutilizzabile. Stessa GERARCHIA del percorso scuola
+    // (`lib/gerarchiaContatti`): anagrafica MIM → PEO/PEC della convenzione
+    // ministeriale, con la PEC come estrema ratio e i domini personali esclusi.
+    const caselleUst = emailDaCodiceMeccanografico(schoolCode);
+    const contattoUst = scegliContatto([
+      { email: scuola.email, provenienza: 'anagrafica' },
+      { email: caselleUst?.peo, provenienza: 'convenzione', derivato: true },
+      { email: caselleUst?.pec, provenienza: 'convenzione', derivato: true },
+    ]);
+    const contactEmail = contattoUst && contattoUst.natura !== 'esterno' ? contattoUst.email : null;
+    const schoolPec = scuola.pec ?? caselleUst?.pec ?? null;
 
     // Il titolo porta l'OGGETTO della riga: sulla stessa scuola convivono più
     // interpelli (classi diverse) e `hash_id` è costruito anche sul titolo.
@@ -1717,6 +1738,14 @@ async function leggiTabelleUst(
       deadline,
       expiration_date: aExpirationDate(deadline),
       source_url: sourceUrl,
+      contact_email: contactEmail,
+      school_pec: schoolPec,
+      stato_arricchimento: statoArricchimento({
+        school_name: schoolName,
+        school_code: schoolCode,
+        contact_email: contactEmail,
+        school_pec: schoolPec,
+      }),
     });
   }
 
@@ -3270,11 +3299,14 @@ async function deepCrawlScuole(scuole: Map<string, string>): Promise<void> {
       // §26.115 — il documento si legge INTERO (non solo la data): classe, ore e
       // intestazione diventano i campi della riga e l'atterraggio è il PDF.
       if (interpelliPagina === 0) {
-        for (const allegato of linkAllegatiInterpello(
-          pagina.html,
-          pagina.url,
-          MAX_ALLEGATI_PAGINA,
-        )) {
+        // §26.123 — SPOONFEEDING: se il deep crawl ha già risolto il PDF unico
+        // del contenitore/guscio (`allegatoUnico`), si usa QUELL'indirizzo:
+        // niente secondo scan dei link e nessun rischio di atterrare
+        // sull'elenco invece che sul documento ufficiale.
+        const allegati = pagina.allegatoUnico
+          ? [{ url: pagina.allegatoUnico, testo: '', punteggio: 0 }]
+          : linkAllegatiInterpello(pagina.html, pagina.url, MAX_ALLEGATI_PAGINA);
+        for (const allegato of allegati) {
           if (approfondimentiScuola >= MAX_APPROFONDIMENTI_SCUOLA) break;
           approfondimentiScuola += 1;
           const documento = await leggiAvvisoCompleto(allegato.url, 'scuola');

@@ -134,21 +134,24 @@
       (`bachecaInterpelli` → contatore `senzaScadenza`, scarto **dichiarato**).
       Un solo grado di urgenza senza data resta possibile: la riga **fuori dal feed**
       che il chiamante ha già deciso di mostrare (banda grigia, mai una data inventata).
-- [ ] **Badge della colonna «Scadenza»: QUATTRO luci** (§26.89, §26.100) — il colore dice quanto
-      manca e ogni luce ha UN solo significato — **rossa** `bg-rose-600` per «Scade oggi»
-      (meno di 24 ore) · **arancio** `bg-orange-700` per «Scade domani» e «Ultime 72h»
-      (24–72 ore) · **verde** `bg-emerald-700` per «In corso» (dal terzo giorno alla
-      finestra di candidatura) · **blu** `bg-sky-700` per «Scadenza lontana» (oltre la
-      finestra) — sempre accanto alla DATA di scadenza; senza data la banda è ardesia media
-      e dichiara «Scadenza n/d» (mai una data inventata, nessuna banda che pulsa).
+- [ ] **Badge della colonna «Scadenza»: QUATTRO luci** (§26.89, §26.100, §26.122) — il colore dice
+      quanto manca e ogni luce ha UN solo significato, nella **scala del blu del brand**
+      (niente rosso, niente arancio: l'ansia non è informazione) — **blu notte**
+      `bg-primary-700` per «Scade oggi» (meno di 24 ore) · **blu** `bg-primary-600` per
+      «Scade domani» e «Ultime 72h» (24–72 ore) · **verde** `bg-accent-600` per «In corso»
+      (dal terzo giorno alla finestra di candidatura) · **blu chiaro** `bg-primary-500` per
+      «Scadenza lontana» (oltre la finestra) — sempre accanto alla DATA di scadenza; senza
+      data la banda è ardesia media e dichiara «Scadenza n/d» (mai una data inventata,
+      nessuna banda che pulsa).
       Un solo modulo: `stileScadenza` in `src/lib/scadenzaSemaforo.ts`
       (`SCADENZA_TOKENS`), usato da tabellone, scheda avviso e feed della dashboard.
       Tutte le bande portano etichetta **BIANCA in grassetto** (`text-white font-bold`) e
-      reggono **AA** sul bianco: `rose-600` 4,70:1 · `orange-700` 5,18:1 ·
-      `emerald-700` 5,48:1 · `sky-700` 5,93:1. Restano fuori le tinte chiare del §26.98
-      (`amber-400` 1,67:1 · `emerald-500` 2,54:1 · `rose-500` 3,67:1: sotto AA) e ogni
-      nero o ardesia scura: il tabellone è la vetrina del servizio e non deve avere toni
-      «da funerale» (§26.100; misura in `npm run test:interpello-scadenza`).
+      reggono **AA** sul bianco: `primary-700` 9,1:1 · `primary-600` 7,1:1 ·
+      `accent-600` 4,99:1 · `primary-500` 5,43:1 · ardesia 7,58:1 / 4,76:1. Restano fuori
+      le tinte chiare del §26.98 (`amber-400` 1,67:1 · `emerald-500` 2,54:1 · `rose-500`
+      3,67:1: sotto AA), i rossi/aranci d'allarme e ogni nero o ardesia scura: il tabellone
+      è la vetrina del servizio e non deve avere toni «da funerale» (§26.100; misura in
+      `npm run test:interpello-scadenza` e `npm run test:scadenza`).
       Gli avvisi scaduti non compaiono mai in bacheca.
 - [ ] **Allegati su gestori documentali: il FILE è l'avviso** (§26.96) — una tabella d'albo che linka
       solo il PDF su Gecodoc / Argo / Nuvola–Spaggiari si legge DENTRO il documento (scadenza dichiarata,
@@ -161,15 +164,19 @@
       candidatura` — risponde 200 ma è il modulo del docente (guscio JavaScript `noindex` che chiede le
       credenziali): non entra mai in bacheca né in `source_url`. Guardia:
       `npm run test:piattaforme-contenitori`.
-- [ ] **In bacheca solo DOMINI ISTITUZIONALI — un aggregatore concorrente non è una fonte** (§26.109) —
-      ammessi per costruzione `.edu.it` e `.gov.it`, `istruzione.it` e sottodomini, e i portali
-      USR/USP/UAT/UST del registro (`src/scraper/portaliUfficiali.ts`: 62 host oggi). Fuori
+- [ ] **In bacheca solo DOMINI ISTITUZIONALI — un aggregatore concorrente non è una fonte** (§26.109,
+      §26.123) — ammessi per costruzione `.edu.it` e `.gov.it`, `istruzione.it` e sottodomini, e i
+      portali USR/USP/UAT/UST del registro (`src/scraper/portaliUfficiali.ts`: 62 host oggi). Fuori
       `scuolainterpelli.it`, `interpelloweb.it`, social, hosting gratuiti, moduli Google e qualunque
       dominio non pubblico — anche `istruzione.it.evil.com` (il confronto è sul suffisso, non su
       «contiene»). Se l'avviso linka un aggregatore si pubblica la **home `.edu.it`** dell'istituto
       (GATE 0 di `presidioLinkIngresso.ts`), altrimenti la riga **resta fuori**: meglio una riga in
-      meno che un click su un terzo. Una regola sola in `src/lib/dominiIstituzionali.ts`. Guardia:
-      `npm run test:domini-istituzionali`.
+      meno che un click su un terzo. §26.123 — il divieto vale anche per il **registro delle fonti**:
+      indice nazionale e 19 archivi regionali di `scuolainterpelli.it` sono registrati e **spenti**
+      (`attiva: false` + motivo), `fontiAttive()` esclude per dominio anche se il flag venisse
+      riacceso, e il connettore salta la fonte invece di scaricarla. Una regola sola in
+      `src/lib/dominiIstituzionali.ts`. Guardie: `npm run test:domini-istituzionali`,
+      `npm run test:scraper:fonti`, `npm run test:pagina-archivio`.
 - [ ] **La QUARANTENA di una fonte dura 60 giorni, poi si riprova** (§26.109) — `source_health`
       isola dopo 2 run con **`404`/`410`** (`not_found`), 2 con layout ignoto, 3 con timeout o zero
       righe (`sogliaQuarantena`). Passata la finestra (`GIORNI_QUARANTENA` in
@@ -209,6 +216,12 @@
       dichiara (`tipo: 'sito-scuola'`); se non esiste né un avviso apribile né un dominio
       istituzionale, la riga **non entra** in bacheca. In vetrina **nessun badge di stato interno**
       (niente più «anagrafica parziale»): la colonna «Scuola» mostra solo il nome reale.
+      §26.123 — **la stessa scheda vale per le righe nate dalle tabelle USR** (Liguria `provincia.php`,
+      Piemonte `ric_interpello_ambito_*`): classe, scadenza (solo se aperta), **email della scuola**
+      risolta dall'anagrafica MIM o dalla convenzione `codice@istruzione.it` («Sartoria», mai
+      «Email non disponibile») e link alla fonte ufficiale — che, quando la tabella non linka il
+      singolo avviso, è **la tabella USR stessa**. I record già scaduti non arrivano alla card. Guardia:
+      `npm run test:scheda-ust`.
 - [ ] **Prova a occhio, senza aspettare lo scraper** (§26.77) — `npm run dati:demo` (dry-run)
       elenca le **10** righe `demo-*` con l'esito dichiarato: **7 in bacheca** (Argo/Forms/Nuvola
       → home `.edu.it`, avvisi veri, badge **pieni** nei tre stati di scadenza, nome dal
@@ -216,10 +229,10 @@
       `npm run dati:demo -- --apply` le scrive (mai in produzione senza `--consenti-produzione`),
       `npm run dati:demo -- --pulisci --apply` le elimina. La stessa tabella di casi è la guardia
       `npm run test:board:demo` (esito atteso = esito reale). Il badge della scadenza è **pieno**
-      e ha **quattro luci** (`bg-rose-600` solo oggi · `bg-orange-700` 24–72h ·
-      `bg-emerald-700` in corso · `bg-sky-700` oltre la finestra; etichetta `text-white` in
-      grassetto, ardesia media per scaduto/non databile: §26.89, §26.100) e il totale della pill
-      conta le **stesse** righe che generano le schermate (§26.77).
+      e ha **quattro luci** (`bg-primary-700` solo oggi · `bg-primary-600` 24–72h ·
+      `bg-accent-600` in corso · `bg-primary-500` oltre la finestra; etichetta `text-white` in
+      grassetto, ardesia media per scaduto/non databile: §26.89, §26.100, §26.122) e il totale
+      della pill conta le **stesse** righe che generano le schermate (§26.77).
 - [ ] **Finestra dei 60 giorni: solo FETCH e pulizia, mai vetrina** (§26.71) — lo **stesso** numero
       e la stessa data **locale** vivono in `src/lib/scadenza.ts`
       (`GIORNI_FINESTRA_SENZA_SCADENZA`, `eAvvisoVivo(scadenza, pubblicazione)`) e valgono per la

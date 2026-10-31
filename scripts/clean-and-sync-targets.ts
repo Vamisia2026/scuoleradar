@@ -104,6 +104,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import { provinciaDaCodice } from '../src/lib/scanTargets.ts';
+import { AGGREGATORI_PRIVATI } from '../src/lib/dominiIstituzionali.ts';
 
 dotenv.config();
 
@@ -221,7 +222,8 @@ const TARGETS: TargetSeed[] = [
   // ── Emilia-Romagna ────────────────────────────────────────────────────────
   { url: 'https://www.istruzioneer.gov.it/', region: 'Emilia-Romagna', province: null },
   { url: 'https://bo.istruzioneer.gov.it/', region: 'Emilia-Romagna', province: 'BO' },
-  { url: 'https://interpelloweb.it/interpelli-supplenze/istituto/boss000vd8/', region: 'Emilia-Romagna', province: null },
+  // §26.122 — l'aggregatore `interpelloweb.it` NON è più un target: un aggregatore
+  // privato non è una fonte (vedi `scraper/fontiWhitelist2610.ts`, voce spenta).
   { url: 'https://fe.istruzioneer.gov.it/', region: 'Emilia-Romagna', province: 'FE' },
   { url: 'https://fe.istruzioneer.gov.it/category/interpelli_docenti/', region: 'Emilia-Romagna', province: 'FE' },
   { url: 'https://fe.istruzioneer.gov.it/category/interpelli-personale-ata/', region: 'Emilia-Romagna', province: 'FE' },
@@ -595,6 +597,72 @@ async function deleteInterpelliPiattaformeBloccate(): Promise<number> {
   );
   return count;
 }
+
+// ---------------------------------------------------------------------------
+// STEP 3-quinquies — Eliminazione dei record e dei target da AGGREGATORI PRIVATI
+// ---------------------------------------------------------------------------
+//
+// §26.123 — un aggregatore concorrente (`scuolainterpelli.it`, `interpelloweb.it`,
+// …) non è una fonte: le righe nate da lì portano in bacheca il link di un terzo
+// e vengono comunque respinte in ingresso (`lib/dominiIstituzionali.ts`). I record
+// già salvati prima del blocco restano però nel pool: qui si tolgono, e i target
+// sulla loro bacheca vengono disattivati (non si scarica più quella pagina).
+// La lista dei domini è UNA sola: `AGGREGATORI_PRIVATI`.
+
+async function deleteInterpelliDaAggregatori(): Promise<number> {
+  if (AGGREGATORI_PRIVATI.length === 0) return 0;
+  const orFilter = AGGREGATORI_PRIVATI.map((d) => `source_url.ilike.%${d}%`).join(',');
+
+  // 1. I target che puntano a un aggregatore non si visitano più.
+  const { data: target } = await supabase
+    .from('discovered_links')
+    .select('id, url')
+    .in('status', ['active_crawler', 'pending'])
+    .limit(5000);
+  const daDisattivare = (target ?? []).filter((row) =>
+    AGGREGATORI_PRIVATI.some((d) => String(row.url ?? '').toLowerCase().includes(d))
+  );
+  for (let i = 0; i < daDisattivare.length; i += 50) {
+    const lotto = daDisattivare.slice(i, i + 50);
+    const { error: updErr } = await supabase
+      .from('discovered_links')
+      .update({ status: 'disabled' })
+      .in('id', lotto.map((row) => row.id));
+    if (updErr) {
+      console.error(`[clean-and-sync] Errore disattivazione target aggregatore: ${updErr.message}`);
+    }
+  }
+  if (daDisattivare.length > 0) {
+    console.log(
+      `[clean-and-sync] Disattivati ${daDisattivare.length} target di aggregatori privati.`
+    );
+  }
+
+  // 2. I record con il link dell'aggregatore escono dal pool.
+  const { count, error: countErr } = await supabase
+    .from('interpelli')
+    .select('hash_id', { count: 'exact', head: true })
+    .or(orFilter);
+
+  if (countErr) {
+    console.error(`[clean-and-sync] Errore conteggio record aggregatori: ${countErr.message}`);
+    return 0;
+  }
+  if (!count || count === 0) {
+    console.log('[clean-and-sync] Nessun record da aggregatori privati.');
+    return 0;
+  }
+
+  const { error: delErr } = await supabase.from('interpelli').delete().or(orFilter);
+  if (delErr) {
+    console.error(`[clean-and-sync] Errore delete record aggregatori: ${delErr.message}`);
+    return 0;
+  }
+
+  console.log(`[clean-and-sync] Eliminati ${count} record da aggregatori privati.`);
+  return count;
+}
+
 
 // ---------------------------------------------------------------------------
 // STEP 3-ter — Eliminazione record che arrivano da FONTI TABELLARI MORTE
@@ -1135,6 +1203,9 @@ async function main(): Promise<void> {
   console.log('\n── STEP 3-ter: eliminazione record da fonti tabellari morte ──');
   const fontiMorteRemoved = await deleteInterpelliDaFontiMorte();
 
+  console.log('\n── STEP 3-quinquies: record e target da AGGREGATORI PRIVATI (§26.123) ──');
+  const aggregatoriRemoved = await deleteInterpelliDaAggregatori();
+
   console.log(
     '\n── STEP 3-quater: eliminazione righe orfane senza regione ──'
   );
@@ -1164,6 +1235,7 @@ async function main(): Promise<void> {
   console.log(`  Record bacheche chiuse eliminati: ${bachecheChiuseRemoved}`);
   console.log(`  Record fonti morte eliminati:   ${fontiMorteRemoved}`);
   console.log(`  Righe senza regione eliminate:  ${righeSenzaRegioneRemoved}`);
+  console.log(`  Record da aggregatori (SPENTI): ${aggregatoriRemoved}`);
   console.log(`  Link Umbria disattivati:        ${umbriaDisabled}`);
   console.log(`  Link bacheca chiusa disattivati: ${linkBachecaChiusa}`);
   console.log(`  Target inseriti:                ${stats.inserted}`);

@@ -68,7 +68,33 @@ export interface EsitoAvvio {
 }
 
 /** Errore applicativo con il messaggio già pronto per la UI. */
-export class CrawlerTelemetriaError extends Error {}
+export class CrawlerTelemetriaError extends Error {
+  /**
+   * Diagnosi stabile restituita dalla Edge (`github_token_rifiutato`,
+   * `github_permessi`, `github_repo_o_workflow`, …). `null` quando la risposta
+   * non ne porta una: nessun codice inventato lato client.
+   */
+  readonly codice: string | null;
+
+  /**
+   * §26.122 — TELEMETRIA CHE ARRIVA INSIEME ALL'ERRORE. Dal 31/10/2026 la Edge,
+   * quando il dispatch a GitHub fallisce, restituisce comunque i numeri della
+   * coda: il trigger è un'azione in più, non la fonte del dato. `null` = la
+   * risposta non li portava (deploy precedente o telemetria illeggibile).
+   */
+  readonly telemetria: TelemetriaCrawler | null;
+
+  constructor(
+    messaggio: string,
+    codice: string | null = null,
+    telemetria: TelemetriaCrawler | null = null,
+  ) {
+    super(messaggio);
+    this.name = 'CrawlerTelemetriaError';
+    this.codice = codice;
+    this.telemetria = telemetria;
+  }
+}
 
 /**
  * Segreto di SVILUPPO (`VITE_CRAWLER_DEV_SECRET` in `.env.local`), `null` in
@@ -130,13 +156,20 @@ async function chiama<T>(azione: 'stato' | 'scansione'): Promise<T> {
     );
   }
   if (!res.ok || data?.ok !== true) {
+    const codice = typeof data?.codice === 'string' ? data.codice : null;
+    // §26.122 — se la Edge ha mandato la telemetria insieme all'errore, la barra
+    // continua a mostrare i numeri veri: il dispatch fallito non è un guasto dei dati.
+    const telemetria =
+      data?.telemetria && typeof data.telemetria === 'object'
+        ? (data.telemetria as TelemetriaCrawler)
+        : null;
     const motivo =
       typeof data?.error === 'string'
         ? data.error
         : res.status === 401
           ? 'Sessione non valida: esegui il login come admin.'
           : `HTTP ${res.status}: telemetria non disponibile.`;
-    throw new CrawlerTelemetriaError(motivo);
+    throw new CrawlerTelemetriaError(motivo, codice, telemetria);
   }
   return data as T;
 }

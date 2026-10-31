@@ -27,12 +27,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown, Loader2, Play, RefreshCw } from 'lucide-react';
 import { GIORNI_QUARANTENA, quaranteneAttive } from '@/lib/sourceQuarantine';
-import {
-  avviaScansioneWhitelist,
-  leggiTelemetriaCrawler,
-  quando,
-  type TelemetriaCrawler,
-} from '@/services/crawlerTelemetry';
+import { avviaScansioneWhitelist, CrawlerTelemetriaError, leggiTelemetriaCrawler, quando, type TelemetriaCrawler } from '@/services/crawlerTelemetry';
 
 /** Intervallo e durata del polling dopo un avvio (5 s × 24 = 2 minuti). */
 const INTERVALLO_MS = 5_000;
@@ -132,7 +127,11 @@ export function LineaRossa({ attiva = true }: Props) {
         if (giri >= MAX_GIRI) fermaTimer();
       }, INTERVALLO_MS);
     } catch (err) {
-      setAvviso(err instanceof Error ? err.message : 'Avvio della scansione non riuscito.');
+      // §26.122 — la barra NON si spegne: se la Edge manda la telemetria insieme
+      // all'errore si mostra quella, e il messaggio dice che il dato resta valido.
+      if (err instanceof CrawlerTelemetriaError && err.telemetria) setDati(err.telemetria);
+      const m = err instanceof Error ? err.message : 'Avvio della scansione non riuscito.';
+      setErrore(/resta valida|giro periodico/i.test(m) ? m : `${m} La telemetria qui sopra resta valida: il giro periodico non dipende da questo pulsante.`);
     } finally {
       setInCorso(false);
     }
@@ -204,7 +203,7 @@ export function LineaRossa({ attiva = true }: Props) {
 
       {(avviso || errore || live) && (
         <p title={avviso ?? errore ?? undefined}
-          className={`mt-1.5 truncate text-[10px] leading-snug ${errore ? 'text-error-500' : live ? 'text-accent-500' : 'text-primary-200'}`}>
+          className={`mt-1.5 text-[10px] leading-snug ${errore ? 'line-clamp-2 text-error-500' : live ? 'truncate text-accent-500' : 'truncate text-primary-200'}`}>
           {errore ?? avviso ?? `Aggiornamento live: rileggo i numeri ogni ${INTERVALLO_MS / 1000} s.`}
         </p>
       )}

@@ -256,36 +256,135 @@ async function telemetria(sb: ReturnType<typeof createClient>): Promise<Telemetr
   };
 }
 
+/**
+ * Forma plausibile di un token GitHub: nessuno spazio (un incolla con «Bearer» o
+ * con un a capo non funziona) e lunghezza credibile (`ghp_…` = 40 caratteri,
+ * `github_pat_…` più lungo).
+ */
+function tokenMalformato(token: string): boolean {
+  return /\s/.test(token) || token.length < 20;
+}
+
+/**
+ * Traduce l'esito di GitHub in un motivo AZIONABILE.
+ *
+ * Perché non basta il corpo di GitHub: «GitHub ha risposto 401: {"message":"Bad
+ * credentials"}» dice cosa è successo ma non cosa fare, e sembra un guasto del
+ * codice. Non lo è: il 401 significa che il PAT è scaduto, revocato o copiato
+ * male. Nessun token GitHub vive nel browser (`VITE_GITHUB_TOKEN` non esiste in
+ * questo progetto): l'unico posto da correggere è il secret della Edge.
+ */
+function motivoGithub(
+  stato: number,
+  dettaglio: string,
+): { http: number; codice: string; motivo: string } {
+  const coda = dettaglio ? ` Dettaglio GitHub: ${dettaglio}` : '';
+  if (stato === 401) {
+    return {
+      http: 502,
+      codice: 'github_token_rifiutato',
+      motivo:
+        'GITHUB_DISPATCH_TOKEN rifiutato da GitHub (401 Bad credentials): il token è ' +
+        'scaduto, revocato o copiato male. Rigenera un PAT con permesso «Actions: write» ' +
+        'sul repository, aggiorna il secret della Edge ' +
+        '(`supabase secrets set GITHUB_DISPATCH_TOKEN=...`) e ridistribuisci ' +
+        '`crawler-admin`. Il pulsante non può rimediare da solo: nessun token GitHub ' +
+        'esiste nel browser.' +
+        coda,
+    };
+  }
+  if (stato === 403) {
+    return {
+      http: 502,
+      codice: 'github_permessi',
+      motivo:
+        'GitHub ha negato il dispatch (403): al token manca il permesso «Actions: write» ' +
+        'sul repository oppure è stato raggiunto il tetto di richieste.' +
+        coda,
+    };
+  }
+  if (stato === 404) {
+    return {
+      http: 502,
+      codice: 'github_repo_o_workflow',
+      motivo:
+        'GitHub non trova il repository o il workflow (404): controlla GITHUB_REPO ' +
+        `(ora «${GITHUB_REPO}») e GITHUB_DISPATCH_WORKFLOW (ora «${GITHUB_WORKFLOW}»).` +
+        coda,
+    };
+  }
+  if (stato === 422) {
+    return {
+      http: 502,
+      codice: 'github_ref',
+      motivo:
+        `GitHub ha rifiutato il ramo (422): GITHUB_DISPATCH_REF «${GITHUB_REF}» non esiste.` +
+        coda,
+    };
+  }
+  return {
+    http: 502,
+    codice: `github_${stato}`,
+    motivo: `GitHub ha risposto ${stato}: ${dettaglio || 'nessun dettaglio'}`,
+  };
+}
+
+/** Esito del dispatch: `codice` è la diagnosi stabile per la UI e per i log. */
+type EsitoDispatch =
+  | { ok: true }
+  | { ok: false; status: number; codice: string; motivo: string };
+
 /** `workflow_dispatch` del workflow di ingestione. */
-async function avviaWorkflow(): Promise<{ ok: true } | { ok: false; status: number; motivo: string }> {
+async function avviaWorkflow(): Promise<EsitoDispatch> {
   if (!GITHUB_TOKEN) {
     return {
       ok: false,
       status: 503,
+      codice: 'github_token_assente',
       motivo:
         'GITHUB_DISPATCH_TOKEN non configurato: aggiungi il secret (PAT con actions:write) ' +
         'nelle impostazioni delle Edge Functions per abilitare il trigger manuale.',
     };
   }
+  if (tokenMalformato(GITHUB_TOKEN)) {
+    return {
+      ok: false,
+      status: 503,
+      codice: 'github_token_malformato',
+      motivo:
+        'GITHUB_DISPATCH_TOKEN sembra incollato male (spazi o lunghezza anomala): ' +
+        'il secret deve contenere solo il token, senza virgolette né prefisso «Bearer».',
+    };
+  }
   const url = `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/${GITHUB_WORKFLOW}/dispatches`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${GITHUB_TOKEN}`,
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-      'Content-Type': 'application/json',
-      'User-Agent': 'ScuoleRadar-crawler-admin',
-    },
-    body: JSON.stringify({ ref: GITHUB_REF }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${GITHUB_TOKEN}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+        'User-Agent': 'ScuoleRadar-crawler-admin',
+      },
+      body: JSON.stringify({ ref: GITHUB_REF }),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      status: 504,
+      codice: 'github_irraggiungibile',
+      motivo:
+        'GitHub non raggiungibile in 10 s: riprova. Nessun dispatch è stato inviato. ' +
+        `(${(err as Error).name || 'errore di rete'})`,
+    };
+  }
   if (res.status === 204) return { ok: true };
   const dettaglio = (await res.text().catch(() => '')).slice(0, 300);
-  return {
-    ok: false,
-    status: 502,
-    motivo: `GitHub ha risposto ${res.status}: ${dettaglio || 'nessun dettaglio'}`,
-  };
+  const esito = motivoGithub(res.status, dettaglio);
+  return { ok: false, status: esito.http, codice: esito.codice, motivo: esito.motivo };
 }
 
 
@@ -321,7 +420,32 @@ serve(async (req: Request) => {
 
     // `autorizza` ha già deciso CHI può: qui si esegue soltanto.
     const esito = await avviaWorkflow();
-    if (!esito.ok) return risposta({ error: esito.motivo, autorizzato_da: auth.da }, esito.status);
+    if (!esito.ok) {
+      // §26.122 — L'ERRORE NON SPEGNE IL PANNELLO. La risposta porta anche la
+      // TELEMETRIA: il dispatch è un'azione in più, non la fonte dei numeri. Se
+      // GitHub rifiuta il token, il pannello continua a mostrare la coda reale e
+      // l'operatore vede due cose distinte — «i numeri ci sono» e «il trigger non
+      // parte» — invece di una barra vuota che sembra un guasto generale.
+      // `codice` + repo/workflow: chi legge il pannello sa cosa è stato tentato e
+      // dove correggere (secret della Edge, non il codice del client).
+      let telemetriaDopoErrore: TelemetriaCrawler | null = null;
+      try {
+        telemetriaDopoErrore = await telemetria(sb);
+      } catch (err) {
+        console.warn('crawler-admin: telemetria non leggibile dopo il dispatch fallito:', (err as Error).message);
+      }
+      return risposta(
+        {
+          error: esito.motivo,
+          codice: esito.codice,
+          autorizzato_da: auth.da,
+          workflow: GITHUB_WORKFLOW,
+          repo: GITHUB_REPO,
+          telemetria: telemetriaDopoErrore,
+        },
+        esito.status,
+      );
+    }
     return risposta({
       ok: true,
       avviato: true,

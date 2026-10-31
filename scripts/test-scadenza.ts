@@ -100,8 +100,8 @@ check('oggi (< 24h) label', 'Scade oggi', stileScadenza(0).label);
 check('scaduto → ardesia', 'scaduto', stileScadenza(-3).livello);
 check('sconosciuto → n/d', 'sconosciuto', stileScadenza(null).livello);
 check('verde: tinta piena accent-600 (§26.120)', true, stileScadenza(10).className.includes('bg-accent-600'));
-check('luce media: arancio della palette secondary-600 (§26.120)', true, stileScadenza(2).className.includes('bg-secondary-600'));
-check('rosso: tinta piena error-600 (solo a 0 giorni)', true, stileScadenza(0).className.includes('bg-error-600'));
+check('luce media: blu del brand `primary-600` (§26.122)', true, stileScadenza(2).className.includes('bg-primary-600'));
+check('scade oggi: blu notte `primary-700` (solo a 0 giorni)', true, stileScadenza(0).className.includes('bg-primary-700'));
 check('oltre l’orizzonte: blu primary-500, mai ardesia', true, stileScadenza(30).className.includes('bg-primary-500'));
 check('il rosso NON si estende a domani', false, stileScadenza(1).className === stileScadenza(0).className);
 check('la luce media NON si estende al terzo giorno', false, stileScadenza(3).className === stileScadenza(2).className);
@@ -142,8 +142,9 @@ console.log('\n— Contrasto MISURATO (WCAG 2.1) delle bande: nessuna tinta sott
 // Dal §26.100 l'etichetta è SEMPRE bianca: le tinte sono scese di un gradino per
 // reggere AA con il bianco, non per diventare più scure a caso.
 const HEX: Record<string, string> = {
-  'bg-error-600': '#b9403c',
-  'bg-secondary-600': '#bd5a14',
+  // §26.122 — il semaforo è una scala del blu del brand: due gradini nuovi.
+  'bg-primary-700': '#1b4768',
+  'bg-primary-600': '#225a82',
   'bg-accent-600': '#168044',
   'bg-primary-500': '#2b6f9e',
   'bg-slate-500': '#64748b',
@@ -171,8 +172,8 @@ for (const g of [10, 5, 3, 2, 1, 0, 30, 16, -3, null]) {
   const rapporto = tinta ? contrasto(HEX[tinta.sfondo], HEX[tinta.testo]) : 0;
   check(`contrasto AA (≥ 4,5:1) — ${g ?? 'n/d'} giorni · bianco su ${tinta?.sfondo ?? 'tinta?'}`, true, rapporto >= 4.5);
 }
-check('«Scade oggi»: bianco su error-600 ≥ 4,5:1 (AA)', true, contrasto('#b9403c', '#ffffff') >= 4.5);
-check('«Scade domani»: bianco su secondary-600 ≥ 4,5:1 (AA)', true, contrasto('#bd5a14', '#ffffff') >= 4.5);
+check('«Scade oggi»: bianco su primary-700 ≥ 4,5:1 (AA)', true, contrasto('#1b4768', '#ffffff') >= 4.5);
+check('«Scade domani»: bianco su primary-600 ≥ 4,5:1 (AA)', true, contrasto('#225a82', '#ffffff') >= 4.5);
 check('«In corso»: bianco su accent-600 ≥ 4,5:1 (AA)', true, contrasto('#168044', '#ffffff') >= 4.5);
 check('«Scadenza lontana»: bianco su primary-500 ≥ 4,5:1 (AA)', true, contrasto('#2b6f9e', '#ffffff') >= 4.5);
 // Le tinte CHIARE del §26.98 restano fuori palette: con il bianco andavano sotto

@@ -11,20 +11,28 @@
  * registro e la SELEZIONE delle fonti per provincia/run. La copertura
  * dichiarata (regioni e capoluoghi) sta in fontiCopertura.ts.
  * 
- * Tipi di fonte:
- * · aggregatore       → landing dell'aggregatore di interpelli: i post
- *                       giornalieri sono NAZIONALI, quindi la provincia si
- *                       RILEVA dalla singola riga (città o codice scuola);
+ * Tipi di fonte (aggiornato §26.123):
+ * · aggregatore       → SPAVENTO: nessun aggregatore privato è interrogabile.
+ *                       Le voci restano registrate e SPENTE con il motivo, e il
+ *                       filtro duro è in `fontiAttive()` (`eAggregatorePrivato`):
+ *                       riaccendere una voce non la rende interrogabile;
  * · hub-istituzionale → pagine di reclutamento USR/USP dei capoluoghi di
  *                       regione e hub metropolitani (docenti, ATA, PNRR,
  *                       esperti esterni pubblicati dall'ente).
+ * AGGREGATORI (§26.123): `scuolainterpelli.it` vive nel registro SOLO come voce
+ * spenta. Qualunque host di `AGGREGATORI_PRIVATI` è escluso da `fontiAttive()`
+ * anche se la voce è `attiva: true`: un aggregatore non è una fonte, è un
+ * concorrente, e la sua riga in bacheca sarebbe un falso positivo col link di
+ * un terzo.
  * 
  * Nessuna URL inventata: una fonte non verificabile resta registrata con
  * attiva: false e il motivo in note (npm run fonti:verifica le ricontrolla).
  */
 
 import { province } from '../data/province.ts';
-import { AGGREGATORI_REGIONALI, HUB_ATTIVI, HUB_ESCLUSI } from './fontiRegistro.ts';
+import { eAggregatorePrivato } from '../lib/dominiIstituzionali.ts';
+import { AGGREGATORI_SPENTI } from './fontiAggregatori.ts';
+import { HUB_ATTIVI, HUB_ESCLUSI } from './fontiRegistro.ts';
 import { DATA_VERIFICA_TERRITORI, HUB_TERRITORIALI } from './fontiTerritoriali.ts';
 import { HUB_ESCLUSI_VERIFICA } from './fontiEsclusiVerifica.ts';
 import { FONTI_WHITELIST_2610 } from './fontiWhitelist2610.ts';
@@ -39,12 +47,8 @@ export const DATA_VERIFICA_FONTI = '2026-09-28';
 
 const V = DATA_VERIFICA_FONTI;
 
-/**
- * Aggregatore: indice dei post giornalieri. Il post è NAZIONALE (le voci sono
- * raggruppate per città), quindi la deduplica per URL evita di riscaricare lo
- * stesso post una volta per regione.
- */
-export const AGGREGATORE_NAZIONALE = 'https://www.scuolainterpelli.it/interpelli-scuola-aggiornati/';
+/** Aggregatore nazionale: costante pubblica, voce SPENTA (§26.123). */
+export { AGGREGATORE_NAZIONALE, AGGREGATORI_SPENTI } from './fontiAggregatori.ts';
 
 /** Massimo numero di fonti interrogate per una singola provincia. */
 export const MAX_FONTI_PER_PROVINCIA = 5;
@@ -70,30 +74,12 @@ export const MAX_FONTI_PER_RUN = 20;
  */
 export const MAX_HUB_PER_REGIONE = 10;
 
-/** Registro completo: feed dell'aggregatore + hub istituzionali dei capoluoghi. */
+/**
+ * Registro completo: SOLO hub istituzionali attivi + aggregatori dichiarati
+ * spenti (`fontiAggregatori.ts`, §26.123).
+ */
 export const FONTI_INTERPELLI: FonteInterpelli[] = [
-  {
-    id: 'aggregatore-nazionale',
-    etichetta: 'Aggregatore interpelli — indice nazionale',
-    url: AGGREGATORE_NAZIONALE,
-    tipo: 'aggregatore',
-    regioni: [],
-    capoluogo: null,
-    nazionale: true,
-    attiva: true,
-    verificata: V,
-  },
-  ...AGGREGATORI_REGIONALI.map(([regione, slug]) => ({
-    id: `aggregatore-${regione.toLowerCase().replace(/[^a-z]+/g, '-')}`,
-    etichetta: `Aggregatore interpelli — archivio ${regione}`,
-    url: `https://www.scuolainterpelli.it/${slug}/`,
-    tipo: 'aggregatore' as TipoFonte,
-    regioni: [regione],
-    capoluogo: null,
-    nazionale: true,
-    attiva: true,
-    verificata: V,
-  })),
+  ...AGGREGATORI_SPENTI,
   ...HUB_ATTIVI.map(([id, etichetta, url, regioni, capoluogo]) => ({
     id: `hub-${id}`,
     etichetta,
@@ -157,9 +143,17 @@ export function regioneDiProvincia(codice: string): string | null {
   return province.find((p) => p.codice === c)?.regione ?? null;
 }
 
-/** Fonti interrogabili in questo run (registro filtrato). */
+/**
+ * Fonti interrogabili in questo run (registro filtrato).
+ *
+ * §26.123 — BLOCCO A MONTE: oltre al flag `attiva`, qualunque host elencato in
+ * `AGGREGATORI_PRIVATI` (`lib/dominiIstituzionali.ts`) è escluso **sempre**.
+ * È la difesa in profondità: il flag può essere riacceso per errore (o da un
+ * import futuro), la whitelist dei domini no. Un aggregatore concorrente non
+ * entra nel motore per nessun motivo.
+ */
 export function fontiAttive(): FonteInterpelli[] {
-  return FONTI_INTERPELLI.filter((f) => f.attiva);
+  return FONTI_INTERPELLI.filter((f) => f.attiva && !eAggregatorePrivato(f.url));
 }
 
 /** Deduplica per URL mantenendo l'ordine di priorità. */
@@ -205,9 +199,10 @@ export function hubDellaRegione(
 /**
  * Fonti da interrogare per una provincia, in ordine di priorità:
  * 1. hub istituzionali della regione (USP/ATP della provincia in testa);
- * 2. aggregatore nazionale (post del giorno — feed NAZIONALE);
- * 3. archivio regionale dell'aggregatore (recupero dei post precedenti).
- * Le province non mappate su una regione restano coperte dal feed nazionale.
+ * 2. (solo se un aggregatore fosse attivo — oggi nessuno, §26.123) il feed
+ *    nazionale, che resta l'unica fonte che vede TUTTE le province.
+ * Con gli aggregatori spenti il budget va interamente agli hub: `riserva` vale 0
+ * e il tetto per provincia è tutto per il territorio.
  */
 export function fontiPerProvincia(provincia: string, max = MAX_FONTI_PER_PROVINCIA): FonteInterpelli[] {
   const regione = regioneDiProvincia(provincia);
@@ -223,14 +218,12 @@ export function fontiPerProvincia(provincia: string, max = MAX_FONTI_PER_PROVINC
 
 /**
  * Fonti da interrogare in un RUN multi-provincia: prima gli hub locali (sono
- * quelli che portano i bandi del capoluogo), poi il feed nazionale. Gli ARCHIVI
- * regionali dell'aggregatore sono opt-in (includiArchivi): contengono gli
- * stessi post NAZIONALI dei giorni precedenti, quindi servono solo al backfill
- * manuale (SCRAPER_ARCHIVI=1) e non al run quotidiano.
+ * quelli che portano i bandi del capoluogo), poi — se esistono — gli aggregatori.
  *
- * Anche qui il feed nazionale ha un posto RISERVATO (`max - 1`): sarebbe
- * inutile riempire il budget con 12 hub di due regioni e perdere l'indice
- * nazionale, che è la fonte più produttiva.
+ * §26.123: con gli aggregatori spenti `nazionali`/`archivi` sono vuoti e il
+ * budget è tutto degli hub; il codice resta generico (se un giorno una fonte
+ * istituzionale nazionale entrasse nel registro, il posto riservato funziona).
+ * `includiArchivi` resta per il backfill manuale: oggi non seleziona nulla.
  */
 export function fontiPerRun(
   provincie: string[],

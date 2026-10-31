@@ -20,6 +20,7 @@ import { eScaduto } from '../lib/scadenza.ts';
 import { emailAvviso } from '../lib/alertInterpello.ts';
 import { isAdministrativeNoise } from '../lib/noiseFilter.ts';
 import { valutaAttoConcluso } from './attiConclusi.ts';
+import { motivoPaginaContenitore } from './paginaArchivio.ts';
 import { motivoPaginaServizio } from './paginaServizio.ts';
 import { rilevaCategoriaAvviso, sembraOpportunita } from './parser.ts';
 
@@ -98,6 +99,12 @@ export interface CandidatoOpportunita {
   expirationDate?: string | null;
   /** Classi di concorso riconosciute: una pagina che le dichiara non è «di servizio». */
   classCodes?: readonly string[] | null;
+  /**
+   * URL della pagina (§26.122): serve SOLO a riconoscere una pagina-contenitore
+   * dal percorso (`/la-segreteria-comunica/`, `/archivio`, `/comunicazioni`).
+   * Assente = nessun giudizio dal percorso.
+   */
+  url?: string | null;
 }
 
 /** Opzioni della valutazione di conformità. */
@@ -152,6 +159,18 @@ export function motivoScartoOpportunita(
     classi: a.classCodes,
   });
   if (servizio) return servizio;
+  // §26.122 — PAGINA-CONTENITORE / VOCE DI MENU: «La segreteria comunica»,
+  // «Comunicazioni», «Interpelli» senza scadenza e senza classe sono il contenitore
+  // (o la voce di menu) in cui i bandi vivono, non un bando. La parola nel menu non
+  // è un atto: senza un termine e senza una classe non c'è nulla a cui candidarsi.
+  const contenitore = motivoPaginaContenitore({
+    titolo: a.title,
+    testo: a.corpo,
+    url: a.url,
+    scadenza: a.expirationDate,
+    classi: a.classCodes,
+  });
+  if (contenitore) return contenitore;
   // PREFILTRO SEMANTICO (§26.82): la STESSA regola del discovery engine e del
   // table-reporter — gare, circolari, burocrazia e PAGINE INFORMATIVE (PCTO,
   // progetti, corsi, elenchi di scuole) con una sola verità. Una pagina

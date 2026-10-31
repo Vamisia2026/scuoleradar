@@ -75,7 +75,7 @@ check(
   bandaCompatibilita(100).visibile && etichettaCompatibilita(100) === '100% Compatibile',
 );
 check('100: palette verde (accent)', true, /accent/.test(bandaCompatibilita(100).className));
-check('70: palette arancio (warning)', true, /warning/.test(bandaCompatibilita(70).className));
+check('70: palette BLU del brand, non arancio (§26.122)', true, /primary/.test(bandaCompatibilita(70).className));
 check('60: «60% · extra»', '60% · extra', bandaCompatibilita(60).etichetta);
 check('60: badge NEUTRO, non rosso (§26.120)', true, /slate/.test(bandaCompatibilita(60).className));
 check('60: descrizione «suggerimento extra»', true, /[Ee]xtra/.test(bandaCompatibilita(60).descrizione));

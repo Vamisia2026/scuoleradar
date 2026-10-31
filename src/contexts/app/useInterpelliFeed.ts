@@ -16,11 +16,11 @@
  * `valutaCompatibilita` (`src/lib/compatibilitaGraduata.ts`). La CONSEGNA non passa
  * di qui: notifiche e digest restano strict (§26.45).
  *
- * VETRINA MAI CORTA (§26.111). Il paracadute «5» della bacheca pesca dalla scorta
- * della STESSA area: se la provincia non ha cinque avvisi attivi (Asti: zero), la
- * pagina resterebbe vuota senza dirlo. Qui, sotto il minimo, il feed si allarga
- * prima alla REGIONE e poi all'ITALIA (`integraAmbiti`): ogni riga aggiunta porta
- * l'`ambito` dichiarato e arriva senza voto, così non sale mai in cima.
+ * VETRINA DELLE PROPRIE PROVINCE (§26.122). Se la zona del profilo non ha
+ * opportunità pertinenti la pagina lo dice (zero, con il motivo): il feed NON
+ * allarga più la ricerca alla regione e all'Italia. L'allargamento (§26.111)
+ * riempiva la bacheca con avvisi di province mai scelte — Vercelli per chi ha
+ * scelto Asti — senza voto e senza affinità: un riempimento, non un match.
  *
  * `loading` resta nel provider: lo usano gli effetti di bootstrap del profilo.
  */
@@ -30,8 +30,7 @@ import { bachecaInterpelli } from '@/lib/bachecaInterpelli';
 import { limitaSelezione } from '@/lib/planLimits';
 import { getFeedInterpelli } from '@/lib/matchingEngine';
 import { provinceDiRicerca } from '@/lib/prossimitaGeografica';
-import { MINIMO_BACHECA } from '@/lib/riempitivi';
-import { vetrinaConAmbiti, vetrinaVisibile } from '@/lib/vetrinaBacheca';
+import { vetrinaVisibile } from '@/lib/vetrinaBacheca';
 import { supabase } from '@/lib/supabase';
 import { mapNoticiaToInterpello } from './helpers';
 import type { Preferenze } from './types';
@@ -75,12 +74,6 @@ export function useInterpelliFeed(
   //    `interpelli` in `src/data/interpelli.ts` è intenzionalmente `[]`).
   const [fontiInterpelli, setFontiInterpelli] = useState<Interpello[]>(interpelli);
   const [origineDati, setOrigineDati] = useState<'vuoto' | 'supabase'>('vuoto');
-  /**
-   * Feed LARGO (§26.111): gli avvisi fuori dalla provincia, chiesti al database
-   * solo quando la vetrina della propria zona resta sotto `MINIMO_BACHECA`.
-   * Effimero: non sostituisce `fontiInterpelli` e non entra mai nella bacheca.
-   */
-  const [fontiAmbito, setFontiAmbito] = useState<Interpello[]>([]);
 
   /**
    * SELEZIONE ATTIVA per il piano corrente (tetti confermati dal DB): il feed usa
@@ -184,61 +177,14 @@ export function useInterpelliFeed(
   }, [preferenze, fontiInterpelli, provinceAttive, classiAttive]);
 
   /**
-   * VETRINA della provincia: le righe della bacheca che la pagina mostrerà davvero
-   * (gate identitario, §26.119). Il minimo si conta QUI: contarlo sulla bacheca
-   * faceva credere al feed di avere già cinque posti pieni mentre la pagina ne
-   * scartava cinque su cinque — l'utente vedeva zero con il Radar pieno.
-   */
-  const vetrina = useMemo<Interpello[]>(() => vetrinaVisibile(bacheca), [bacheca]);
-
-  /** Quante opportunità mancano al minimo di vetrina (§26.111). */
-  const mancantiVetrina = preferenze.onboarded
-    ? Math.max(0, MINIMO_BACHECA - vetrina.length)
-    : 0;
-
-  /**
-   * Integrazione fuori provincia: UNA query larga (senza filtro geografico, con
-   * le classi del profilo) SOLO quando serve davvero, cioè quando la propria zona
-   * non arriva a `MINIMO_BACHECA`. Nessun ciclo: la condizione dipende dalla
-   * bacheca, mai dalla lista integrata.
-   */
-  useEffect(() => {
-    const client = supabase;
-    if (!client) return;
-    if (mancantiVetrina === 0) {
-      setFontiAmbito([]);
-      return;
-    }
-    let attivo = true;
-    (async () => {
-      try {
-        const ampio = await getFeedInterpelli(client, { classi: classiAttive, limit: RIGHE_FEED });
-        if (!attivo) return;
-        setFontiAmbito(ampio ?? []);
-        console.log(
-          `✓ Dashboard: ${(ampio ?? []).length} avvisi fuori provincia caricati (la tua zona ne ha meno di ${MINIMO_BACHECA}).`,
-        );
-      } catch (err) {
-        if (!attivo) return;
-        setFontiAmbito([]);
-        console.warn('Feed regionale/nazionale non disponibile.', (err as Error).message);
-      }
-    })();
-    return () => {
-      attivo = false;
-    };
-  }, [mancantiVetrina, classiAttive]);
-
-  /**
-   * VETRINA: provincia → regione → Italia, fino al minimo (§26.111), contando solo le
-   * righe che la pagina mostrerà davvero (§26.119). La regola vive in un modulo PURO
-   * (`lib/vetrinaBacheca`): contare la BACHECA invece della vetrina faceva credere al
-   * feed di avere già cinque posti pieni mentre la pagina ne scartava cinque su cinque.
+   * VETRINA: le righe della bacheca che la pagina mostrerà davvero (gate
+   * identitario + scadenza aperta, §26.119). Nessun allargamento fuori provincia:
+   * le opportunità sono quelle delle province scelte (o entro i 60 km), §26.122.
    */
   const interpelliFiltrati = useMemo<Interpello[]>(() => {
     if (!preferenze.onboarded) return [];
-    return vetrinaConAmbiti(bacheca, { fuori: fontiAmbito, province: provinceAttive });
-  }, [preferenze.onboarded, bacheca, fontiAmbito, provinceAttive]);
+    return vetrinaVisibile(bacheca);
+  }, [preferenze.onboarded, bacheca]);
 
   return { fontiInterpelli, origineDati, interpelliFiltrati };
 }

@@ -15,6 +15,8 @@
  *     reclutamento leggibili). 84 entrano attive (83 hub + 1 aggregatore), 27
  *     restano registrate e spente con il motivo dichiarato, 6 non entrano: sono
  *     alias della stessa pagina o indici di scelta senza righe proprie;
+ *     DAL 31/10/2026 (§26.122) l'aggregatore è SPENTO: le attive sono 83, le
+ *     spente 28. Un aggregatore privato non è una fonte.
  *  3. gli alias scartati sono elencati in fondo (`ALIAS_SCARTATI`) per memoria:
  *     `usr.sicilia.it` ≡ `www.usr.sicilia.it`, `servizi…/index.php` ≡ `/`,
  *     `miur.gov.it/web/molise` ≡ `mim.gov.it/web/molise`, le varianti `http://`
@@ -33,8 +35,6 @@ export const DATA_VERIFICA_WHITELIST = '2026-10-26';
 
 /** [id, etichetta, url, regioni, capoluogo] — fonti ATTIVE. */
 type TuplaAttiva = [string, string, string, string[], string];
-/** [id, etichetta, url] — aggregatori (provincia rilevata riga per riga). */
-type TuplaAggregatore = [string, string, string];
 
 const ATTIVI: TuplaAttiva[] = [
   // ── Emilia-Romagna: home dei nove USP + le due sezioni nuove ──
@@ -150,13 +150,27 @@ const ATTIVI: TuplaAttiva[] = [
 ];
 
 /**
- * Aggregatori: la provincia si rileva RIGA PER RIGA (come `scuolainterpelli.it`).
- * L’unica voce di questo blocco è la pagina-istituto di InterpelloWeb indicata
- * dal cliente: 35 segnali di interpello, elenco leggibile, nessuna provincia
- * dichiarata nell’URL → nazionale.
+ * AGGREGATORI TERZI — §26.122: NESSUNO ENTRA PIÙ.
+ *
+ * Fino al 31/10/2026 questo blocco conteneva una voce ATTIVA
+ * (`interpelloweb.it/interpelli-supplenze/istituto/boss000vd8/`): un aggregatore
+ * concorrente usato come FONTE del motore, con 35 segnali di interpello e nessuna
+ * provincia dichiarata. Conseguenza misurata: le righe nate da lì portavano in
+ * bacheca l'indirizzo dell'aggregatore (o, dopo il gate §26.109, la home della
+ * scuola) senza che l'avviso fosse un atto dell'istituto.
+ *
+ * La regola ora è quella della whitelist dei domini (`lib/dominiIstituzionali.ts`,
+ * `AGGREGATORI_PRIVATI`): un aggregatore non è una fonte, è un concorrente. La
+ * voce resta REGISTRATA e SPENTA, con il motivo — la copertura si dichiara, non
+ * si simula — così chi legge il registro sa perché non c'è.
  */
-const AGGREGATORI: TuplaAggregatore[] = [
-  ['interpelloweb-boss000vd8', 'InterpelloWeb — Istituto BOS000VD8 (aggregatore)', 'https://interpelloweb.it/interpelli-supplenze/istituto/boss000vd8/'],
+const AGGREGATORI_ESCLUSI: Array<[string, string, string, string]> = [
+  [
+    'interpelloweb-boss000vd8',
+    'InterpelloWeb — Istituto BOS000VD8 (aggregatore)',
+    'https://interpelloweb.it/interpelli-supplenze/istituto/boss000vd8/',
+    'aggregatore privato concorrente: non è una fonte istituzionale (§26.109 · §26.122)',
+  ],
 ];
 
 /**
@@ -189,7 +203,7 @@ export const FONTI_WHITELIST_2610: FonteInterpelli[] = [
     attiva: true,
     verificata: DATA_VERIFICA_WHITELIST,
   })),
-  ...AGGREGATORI.map(([id, etichetta, url]) => ({
+  ...AGGREGATORI_ESCLUSI.map(([id, etichetta, url, note]) => ({
     id: `w26-${id}`,
     etichetta,
     url,
@@ -197,8 +211,9 @@ export const FONTI_WHITELIST_2610: FonteInterpelli[] = [
     regioni: [] as string[],
     capoluogo: null,
     nazionale: true,
-    attiva: true,
-    verificata: DATA_VERIFICA_WHITELIST,
+    attiva: false,
+    verificata: null,
+    note,
   })),
   ...ESCLUSI_WHITELIST_2610.map(([id, etichetta, url, regioni, capoluogo, note]) => ({
     id: `w26-${id}`,
@@ -216,7 +231,7 @@ export const FONTI_WHITELIST_2610: FonteInterpelli[] = [
 
 /** Numeri dichiarati (guardia `npm run test:whitelist`): attive, spente, totale. */
 export const RIEPILOGO_WHITELIST_2610 = {
-  attive: ATTIVI.length + AGGREGATORI.length,
-  spente: ESCLUSI_WHITELIST_2610.length,
-  totale: ATTIVI.length + AGGREGATORI.length + ESCLUSI_WHITELIST_2610.length,
+  attive: ATTIVI.length,
+  spente: AGGREGATORI_ESCLUSI.length + ESCLUSI_WHITELIST_2610.length,
+  totale: ATTIVI.length + AGGREGATORI_ESCLUSI.length + ESCLUSI_WHITELIST_2610.length,
 } as const;

@@ -6,14 +6,22 @@
  * (`radar/flightBoard/rigaBoardDati.badgeScadenza`), card e scheda dell'avviso,
  * feed della dashboard (`ElencoOpportunita`), responso della prova Radar.
  *
- *   🔴 rosso   `bg-error-600`    0 giorni   → le prossime 24 ore  «Scade oggi»
- *   🟠 arancio `bg-secondary-600` 1–2 giorni → 24–72 ore         «Scade domani»
- *   🟢 verde   `bg-accent-600`  3 … 15 giorni, entro l'orizzonte «In corso»
- *   🔵 blu     `bg-primary-500` oltre l'orizzonte  «Scadenza lontana»
- *   ⚫ ardesia  `bg-slate-600`   già passata       «Scaduto»
+ *   🔵 blu notte `bg-primary-700` 0 giorni    → le prossime 24 ore  «Scade oggi»
+ *   🔵 blu      `bg-primary-600`  1–2 giorni → 24–72 ore           «Scade domani»
+ *   🟢 verde    `bg-accent-600`   3 … 15 giorni, entro l'orizzonte «In corso»
+ *   🔵 chiaro   `bg-primary-500`  oltre l'orizzonte                «Scadenza lontana»
+ *   ⚫ ardesia   `bg-slate-600`   già passata       «Scaduto»
  *              `bg-slate-500`   data assente      «Scadenza n/d»
  * Tutte con etichetta BIANCA in grassetto (§26.100): nessun nero, nessun tono
  * spento, nessuna banda pastello.
+ *
+ * **PERCHÉ NON C'È PIÙ IL ROSSO «SCADE OGGI» (§26.122).** Fino al 31/10/2026 il
+ * semaforo usava `error-600` (rosso) per le 24 ore e `secondary-600` (arancio per
+ * le 24–72: su una pagina di opportunità con più card, l'effetto era un muro di
+ * allarmi — «rosso Normandia» — che diceva «sta per finire tutto» anche quando
+ * c'era tempo. La direttiva del cliente è di uniformare i badge alla palette del
+ * Design System e di togliere l'ansia: l'urgenza resta, la gerarchia resta (blu
+ * sempre più scuro man mano che il termine si avvicina), il colore d'allarme no.
  *
  * **Perché il rosso si ferma a 24 ore e l'arancio arriva a 72.** Con il rosso
  * fisso a «Ultime 48h» due terzi della finestra utile erano già allarme: un
@@ -39,16 +47,14 @@
  * dalla palette ufficiale del prodotto. A schermo una card poteva sommare tre
  * tinte diverse — badge del match, badge della scadenza e badge del semaforo —
  * e il rosso acceso del ripiego sembrava un allarme anche quando non c'era
- * nulla da fare. Le quattro luci ora sono i gradini 500/600 della palette
- * (`error` · `secondary` · `accent` · `primary`), con il bianco in grassetto:
- * la regola del §26.100 (tinte piene, etichetta bianca) resta, il colore è
- * quello approvato. Il ROSSO resta un'eccezione dichiarata — «Scade oggi» — e
- * non viene più usato per dire «match basso».
+ * nulla da fare. Dal 31/10/2026 (§26.122) il semaforo è una SCALA DEL BLU del
+ * brand più due bande ardesia: l'urgenza resta (il blu si scurisce man mano che
+ * il termine si avvicina), il colore d'allarme no — né rosso né arancio.
  *
- *   🔴 `error-600`     #b9403c → 5,44:1 sul bianco (AA)
- *   🟠 `secondary-600` #bd5a14 → 4,53:1 sul bianco (AA)
- *   🟢 `accent-600`    #168044 → 4,99:1 sul bianco (AA)
- *   🔵 `primary-500`   #2b6f9e → 5,43:1 sul bianco (AA)
+ *   `primary-700` #1b4768 → 9,1:1 sul bianco (AAA)  «Scade oggi»
+ *   `primary-600` #225a82 → 7,1:1 sul bianco (AAA)  «Scade domani» / «Ultime 72h»
+ *   `primary-500` #2b6f9e → 5,43:1 sul bianco (AA)  «Scadenza lontana»
+ *   `accent-600`  #168044 → 4,99:1 sul bianco (AA)  «In corso»
  *
  * Le tinte del §26.98 con il bianco stanno a 1,67–3,67:1 (sotto AA, quindi
  * vietate da §26.88) e con l'etichetta scura diventavano «muddy», cioè torbide a
@@ -108,15 +114,16 @@ export interface StileScadenza {
  * tinta pastello: il tabellone è la vetrina del servizio, non un bollettino.
  */
 export const SCADENZA_TOKENS = {
-  // «Scade oggi»: l'UNICO rosso delle superfici. È il gradino 600 di `error`
-  // (#b9403c): pieno e saturo, ma della palette — non il `rose-600` di Tailwind.
-  rosso: 'bg-error-600 text-white font-bold',
-  // La chiave resta `arancio` perché il livello del semaforo è sempre `urgente`:
-  // rinominarla obbligherebbe ogni superficie a cambiare per un colore.
-  arancio: 'bg-secondary-600 text-white font-bold',
+  // «Scade oggi»: il gradino più SCURO del blu del brand (#1b4768). La chiave resta
+  // `rosso` perché il livello del semaforo è sempre `critico`: rinominarla
+  // obbligherebbe ogni superficie a cambiare per un colore (§26.122).
+  rosso: 'bg-primary-700 text-white font-bold',
+  // 24–72 ore: blu pieno un gradino più chiaro (#225a82). La chiave resta `arancio`
+  // perché il livello del semaforo è `urgente`.
+  arancio: 'bg-primary-600 text-white font-bold',
   verde: 'bg-accent-600 text-white font-bold',
   // Oltre l'orizzonte di candidatura la data non è un termine urgente, ma resta
-  // un'informazione ATTIVA: blu pieno, non una banda ardesia (§26.100).
+  // un'informazione ATTIVA: blu chiaro, non una banda ardesia (§26.100).
   lontana: 'bg-primary-500 text-white font-bold',
   scaduto: 'bg-slate-600 text-white font-bold',
   neutro: 'bg-slate-500 text-white font-bold',

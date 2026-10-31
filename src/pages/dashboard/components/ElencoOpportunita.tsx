@@ -18,12 +18,16 @@
  * proprio: due codifiche di colore per la stessa card, e l'impressione che tutto
  * stesse per scadere.
  *
+ * ZERO È UNA RISPOSTA (§26.122). Non esistono più righe «Stessa regione» o «Resto
+ * d'Italia»: se nelle province scelte non c'è nulla di pertinente, la pagina lo
+ * dice con il motivo e con la strada per allargare la ricerca (le preferenze). Un
+ * elenco riempito con avvisi di altre province non è un servizio: è rumore.
+ *
  * Presentazione pura: dati, stato di apertura e azioni arrivano dal contenitore.
  */
 import { SlidersHorizontal } from 'lucide-react';
 import { Accordion } from '@/components/Accordion';
 import { InterpelloCard } from '@/components/InterpelloCard';
-import { ETICHETTA_AMBITO, descrizioneAmbito } from '@/lib/ambitoBacheca';
 import { stileMatch } from '@/lib/compatibilita';
 import { classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
@@ -68,8 +72,9 @@ export function ElencoOpportunita({
     .filter(Boolean)
     .join(', ');
 
-  // Righe fuori dalla propria provincia (§26.111): la vetrina le dichiara in testa
-  // all'elenco, così l'integrazione regionale/nazionale non è mai silenziosa.
+  // Righe fuori dalla propria provincia: NON esistono più (§26.122). Il conto resta
+  // per difesa: se un giorno una superficie tornasse a iniettare l'ambito, la pagina
+  // lo dichiara invece di mostrarlo come match.
   const fuoriAmbito = lista.filter(
     (i) => i.ambito === 'regione' || i.ambito === 'nazionale',
   ).length;
@@ -105,19 +110,26 @@ export function ElencoOpportunita({
           </div>
         ) : totale === 0 ? (
           <div className="rounded-xl border border-primary-100 bg-primary-50 px-4 py-3 text-center text-sm text-primary-600">
-            Nessuna nuova opportunità attiva al momento
-            {classeEtichetta ? ` per ${classeEtichetta}` : ''}
-            {provinciaEtichetta ? ` in ${provinciaEtichetta}` : ''}.
+            <p className="font-semibold">
+              Nessuna opportunità attiva
+              {classeEtichetta ? ` per ${classeEtichetta}` : ''}
+              {provinciaEtichetta ? ` in ${provinciaEtichetta}` : ''}.
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-primary-500">
+              Il Radar non allarga la ricerca fuori dalle province che hai scelto: zero è
+              una risposta, non una pagina da riempire. Se vuoi più opportunità aggiungi
+              una provincia o una classe di concorso nel profilo, oppure attendi il
+              prossimo giro di scansione (le fonti vengono ricontrollate ogni giorno).
+            </p>
           </div>
         ) : (
           <div className="animate-fade-in space-y-3">
             {fuoriAmbito > 0 && (
               <p className="rounded-xl border border-primary-100 bg-primary-50 px-3 py-2 text-[11px] leading-relaxed text-primary-600">
-                Le {fuoriAmbito}{' '}
-                {fuoriAmbito === 1 ? 'opportunità segnalata' : 'opportunità segnalate'} come «
-                {ETICHETTA_AMBITO.regione}» o «{ETICHETTA_AMBITO.nazionale}» arrivano da fuori
-                dalla tua provincia: la tua zona ha meno di 5 opportunità attive, quindi il Radar
-                allarga la ricerca — e lo dichiara, invece di lasciare la pagina vuota.
+                {fuoriAmbito === 1 ? 'Una riga arriva' : `${fuoriAmbito} righe arrivano`} da
+                fuori dalle tue province: non è un match e non viene presentata come tale
+                (§26.122). Controlla le preferenze del Radar se il perimetro non è quello
+                che vuoi.
               </p>
             )}
             {lista.map((i) => {
@@ -125,33 +137,19 @@ export function ElencoOpportunita({
               // verde ≥ 80 · giallo 70-79 · neutra < 70 (< 70 = riga di ripiego, si
               // dichiara con l'etichetta trasparente, non con un allarme).
               const match = stileMatch(i.compatibilita, { ripiego: i.ripiego === true });
-              // AMBITO (§26.111): una riga fuori provincia dichiara il suo ambito al posto
-              // del voto — non è stata valutata sul profilo, quindi non ha un punteggio.
-              const ambito =
-                i.ambito === 'regione' || i.ambito === 'nazionale' ? i.ambito : null;
               return (
                 <div
                   key={i.id}
                   className="overflow-hidden rounded-2xl border border-primary-100 bg-white shadow-card"
                 >
                   <div className="flex items-center justify-between gap-2 border-b border-primary-100 px-3 py-1.5">
-                    {ambito ? (
-                      <span
-                        title={descrizioneAmbito(ambito)}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-primary-100 bg-primary-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-600"
-                      >
-                        <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-primary-400" />
-                        {ETICHETTA_AMBITO[ambito]}
-                      </span>
-                    ) : (
-                      <span
-                        title={match.descrizione}
-                        className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-primary-500"
-                      >
-                        <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${match.className}`} />
-                        {match.etichetta} · {match.punteggio}%
-                      </span>
-                    )}
+                    <span
+                      title={match.descrizione}
+                      className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-primary-500"
+                    >
+                      <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${match.className}`} />
+                      {match.etichetta} · {match.punteggio}%
+                    </span>
                   </div>
                   <InterpelloCard interpello={i} />
                 </div>

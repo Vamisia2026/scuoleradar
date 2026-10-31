@@ -31,6 +31,7 @@
 import { allegatiDaGuscio } from './allegatiBando.ts';
 import { urlGuscio } from './guscioPagina.ts';
 import { linkInterpelliScuola } from './linkScuola.ts';
+import { motivoPaginaContenitore, documentoUnicoDaContenitore } from './paginaArchivio.ts';
 
 /** Esito del download di una pagina (forma minima di `fetch`). */
 export interface PaginaScaricata {
@@ -52,6 +53,14 @@ export interface PaginaScuola {
    * guscio le «voci» sarebbero le voci di menu, e un menu non è un interpello.
    */
   soloAllegati?: boolean;
+  /**
+   * §26.123 — SPOONFEEDING: l'URL del PDF unico del bando, già risolto qui.
+   * Quando la pagina è un guscio e il bando è un solo documento (USP Piacenza,
+   * IC Pianello), il runner non deve ri-scandire i link: usa QUESTO indirizzo e
+   * la riga nasce direttamente sul PDF ufficiale. Con più documenti resta vuoto
+   * e la scelta torna al parser.
+   */
+  allegatoUnico?: string;
 }
 
 /** Esito della visita a un istituto (nessuna eccezione: solo dati e motivi). */
@@ -148,7 +157,13 @@ export async function leggiPagineInterpelli(
   if (candidati.length === 0 && esito.pagine.length === 0) {
     const allegati = allegatiDaGuscio(home.html, scuola.home, 2);
     if (allegati.length > 0) {
-      esito.pagine.push({ url: scuola.home, html: home.html, soloAllegati: true });
+      esito.pagine.push({
+        url: scuola.home,
+        html: home.html,
+        soloAllegati: true,
+        // §26.123 — un solo bando: si passa già l'indirizzo del PDF.
+        allegatoUnico: allegati.length === 1 ? allegati[0].url : undefined,
+      });
       esito.allegatiTrovati = allegati.length;
     }
   }
@@ -162,6 +177,25 @@ export async function leggiPagineInterpelli(
         continue;
       }
       if (!pagina.contentType.includes('html')) continue;
+      // §26.122 — CONTENITORE CON UN SOLO BANDO DENTRO: «La segreteria comunica»,
+      // «Comunicazioni», «Archivio» sono involucri. Se il contenitore porta UN SOLO
+      // allegato di bando pertinente, la pagina si legge per gli allegati e il link
+      // di atterraggio è il PDF ufficiale (assoluto), non l'elenco caotico. Con più
+      // PDF non si indovina: la pagina resta normale e decide il parser.
+      const contenitore = motivoPaginaContenitore({ url: candidato.url });
+      const documento = contenitore ? documentoUnicoDaContenitore(pagina.html, candidato.url) : null;
+      if (documento) {
+        // §26.123 — il percorso è già risolto: si passa al runner, che non deve
+        // ri-scandire i link del contenitore (e non può sbagliare documento).
+        esito.pagine.push({
+          url: candidato.url,
+          html: pagina.html,
+          soloAllegati: true,
+          allegatoUnico: documento.url,
+        });
+        esito.allegatiTrovati += 1;
+        continue;
+      }
       esito.pagine.push({ url: candidato.url, html: pagina.html });
     } catch (err) {
       esito.errori.push(`${candidato.url}: ${messaggio(err)}`);

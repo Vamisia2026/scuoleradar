@@ -140,7 +140,7 @@ export function InterpelloDettaglioModal({
                   ? formatDataAvvisoLunga(interpello.dataScadenza)
                   : r.valore}
                 {r.etichetta === 'Scadenza' && inScadenza && (
-                  <span className="ml-2 inline-flex items-center gap-1 font-semibold text-error-600">
+                  <span className="ml-2 inline-flex items-center gap-1 font-semibold text-primary-700">
                     <AlertTriangle className="h-4 w-4" /> In scadenza
                   </span>
                 )}

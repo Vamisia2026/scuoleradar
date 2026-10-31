@@ -67,9 +67,19 @@ check('lontana: colore pieno su etichetta bianca', true, ePieno(SCADENZA_TOKENS.
 check('scaduto: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.scaduto));
 check('neutro: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.neutro));
 check('verde: tinta piena `bg-accent-600`', true, SCADENZA_TOKENS.verde.includes('bg-accent-600'));
-check('arancio: `bg-secondary-600` (§26.120)', true, SCADENZA_TOKENS.arancio.includes('bg-secondary-600'));
-check('rosso: tinta piena `bg-error-600`', true, SCADENZA_TOKENS.rosso.includes('bg-error-600'));
+check('arancio: `bg-primary-600` (§26.122)', true, SCADENZA_TOKENS.arancio.includes('bg-primary-600'));
+check('rosso: tinta piena `bg-primary-700` (§26.122)', true, SCADENZA_TOKENS.rosso.includes('bg-primary-700'));
 check('lontana: blu di stato `bg-primary-500`', true, SCADENZA_TOKENS.lontana.includes('bg-primary-500'));
+// §26.122 — NIENTE TINTE D'ALLARME: la scala del semaforo è blu + verde + ardesia.
+// Il rosso e l'arancio sono fuori non perché «brutti», ma perché su una pagina di
+// card diventavano un muro d'allarme anche quando c'era tempo.
+check(
+  'nessun rosso/arancio d’allarme (`error`/`secondary`/`rose`/`orange`)',
+  [],
+  Object.entries(SCADENZA_TOKENS).flatMap(([banda, token]) =>
+    (token.match(/bg-(?:error|secondary|rose|orange|red)-\d{3}/g) ?? []).map((t) => `${banda}: ${t}`),
+  ),
+);
 check(
   'TUTTE le bande usano l’etichetta BIANCA in grassetto (§26.100)',
   true,

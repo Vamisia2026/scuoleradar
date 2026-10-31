@@ -90,7 +90,7 @@ import { MAX_SEZIONI_HUB, eTitoloNavigazione, scopriSezioniReclutamento } from '
 import { motivoScartoOpportunita } from './qualitaOpportunita.ts';
 import { daControllareInIngresso, valutaIngressoPerLink } from './presidioLinkIngresso.ts';
 import { opzioniDominio } from './portaliUfficiali.ts';
-import { eDominioIstituzionale } from '../lib/dominiIstituzionali.ts';
+import { eAggregatorePrivato, eDominioIstituzionale } from '../lib/dominiIstituzionali.ts';
 import { TIMEOUT_PING_MS, verificaLinkInLotti } from './verificaLinkHttp.ts';
 import { statoArricchimento } from '../lib/statoArricchimento.ts';
 import { arricchisciContatti, arricchisciScadenze } from './arricchimento.ts';
@@ -666,6 +666,14 @@ async function raccogliAvvisiReali(
   console.log(`• Fonti selezionate: ${fonti.length} (${fonti.map((f) => f.id).join(', ')})`);
 
   for (const fonte of fonti) {
+    // §26.123 — BLOCCO A MONTE, ultimo miglio: se una voce di aggregatore
+    // arrivasse comunque qui (flag riacceso, registro importato di nuovo), non
+    // si scarica nulla. Il registro è già filtrato in `fontiAttive()`: questo è
+    // il secondo chiavistello, quello che protegge il connettore.
+    if (eAggregatorePrivato(fonte.url)) {
+      console.warn(`  ✗ fonte aggregatore ignorata (§26.123): ${fonte.url}`);
+      continue;
+    }
     descrizioneFonti.push(fonte.id);
     const estratti =
       fonte.tipo === 'hub-istituzionale'

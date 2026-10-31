@@ -5,6 +5,9 @@
  * `fontiRegistro.ts`):
  *   · igiene del registro (id unici, URL http(s) reali, niente URL di test);
  *   · fonti non attive SEMPRE con un motivo dichiarato (mai copertura finta);
+ *   · AGGREGATORI PRIVATI SEMPRE SPENTI (§26.123: `scuolainterpelli.it` non è
+ *     una fonte; le sue 20 voci restano registrate e `fontiAttive()` le esclude
+ *     comunque, anche se il flag venisse riacceso);
  *   · copertura delle 20 regioni e dei 12 capoluoghi principali;
  *   · selezione per provincia/run (priorità hub, dedup per URL, tetti di budget);
  *   · scoperta delle SEZIONI di reclutamento dentro un hub (connettore capoluoghi).
@@ -23,6 +26,7 @@ import {
   hubDellaRegione,
   regioneDiProvincia,
 } from '../src/scraper/fonti.ts';
+import { eAggregatorePrivato } from '../src/lib/dominiIstituzionali.ts';
 import { DATA_VERIFICA_AGGIORNATI, DATA_VERIFICA_TERRITORI } from '../src/scraper/fontiTerritoriali.ts';
 import { DATA_VERIFICA_WHITELIST } from '../src/scraper/fontiWhitelist2610.ts';
 import {
@@ -85,9 +89,17 @@ check('hub istituzionali attivi (>= 15)', true, fontiAttive().filter((f) => f.ti
 /* --------------------------- B · Copertura del territorio --------------------------- */
 
 console.log('\n— B. Copertura regioni e capoluoghi —');
-check('regioni con fonte attiva (19/20)', 19, regioniCoperte(true).length);
-check('regione senza hub dedicato (dichiarata)', ["Valle d'Aosta"], regioniScoperte());
-check('esiste il feed nazionale', true, fontiAttive().some((f) => f.nazionale && f.regioni.length === 0));
+// §26.123 — con gli aggregatori spenti la copertura scende a 18/20: il Trentino-Alto
+// Adige era «coperto» SOLO dall'archivio regionale dell'aggregatore, cioè da una
+// copertura finta (Vivoscuola è una home senza elenco, gli e-portfolio MIM di TN/BZ
+// sono 404). Si dichiara, non si simula.
+check('regioni con fonte attiva (18/20, senza aggregatore)', 18, regioniCoperte(true).length);
+check('regioni senza hub dedicato (dichiarate)', ["Trentino-Alto Adige", "Valle d'Aosta"], regioniScoperte());
+const SPENTI_AGGREGATORE = FONTI_INTERPELLI.filter((f) => eAggregatorePrivato(f.url));
+check('nessun aggregatore attivo (§26.123)', 0, fontiAttive().filter((f) => f.tipo === 'aggregatore').length);
+check('il feed nazionale è registrato e SPENTO, con il motivo', true, FONTI_INTERPELLI.some((f) => f.id === 'aggregatore-nazionale' && !f.attiva && (f.note ?? '').length > 40));
+check('21 voci di aggregatore registrate (20 `scuolainterpelli` + `interpelloweb`) e TUTTE spente', true, SPENTI_AGGREGATORE.length === 21 && SPENTI_AGGREGATORE.every((f) => !f.attiva));
+check('nessuna entra in `fontiAttive()`: il filtro è sul dominio, non sul flag', 0, fontiAttive().filter((f) => SPENTI_AGGREGATORE.some((s) => s.url === f.url)).length);
 check('capoluoghi principali scoperti', [], capoluoghiScoperti());
 check('ogni capoluogo principale ha almeno una fonte attiva', [], CAPOLUOGHI_PRINCIPALI.filter((c) => fontiPerCapoluogo(c.provincia).length === 0).map((c) => c.nome));
 check('Torino/Milano/Genova/Bologna/Firenze/Roma/Napoli coperti', true, ['TO', 'MI', 'GE', 'BO', 'FI', 'RM', 'NA'].every((p) => fontiPerCapoluogo(p).length > 0));
@@ -125,7 +137,7 @@ console.log('\n— C. Selezione delle fonti (priorità, dedup, budget) —');
 const perMilano = fontiPerProvincia('MI');
 check('Milano: hub della Lombardia in testa', 'hub-istituzionale', perMilano[0]?.tipo);
 check('Milano: entro il tetto per provincia', true, perMilano.length <= MAX_FONTI_PER_PROVINCIA);
-check('Milano: include il feed nazionale', true, perMilano.some((f) => f.nazionale && f.regioni.length === 0));
+check('Milano: nessun aggregatore nel budget', 0, perMilano.filter((f) => f.tipo === 'aggregatore').length);
 check('Milano: nessun duplicato di URL', perMilano.length, new Set(perMilano.map((f) => f.url)).size);
 check('Milano: solo fonti attive', true, perMilano.every((f) => f.attiva && f.verificata !== null));
 check(
@@ -148,11 +160,7 @@ check(
   'MI',
   fontiPerProvincia('MI').filter((f) => f.tipo === 'hub-istituzionale')[0]?.capoluogo,
 );
-check(
-  'provincia: il feed nazionale resta nel budget',
-  true,
-  fontiPerProvincia('MI').some((f) => f.nazionale && f.regioni.length === 0),
-);
+check('provincia: budget INTERAMENTE agli hub istituzionali (§26.123)', true, fontiPerProvincia('MI').every((f) => f.tipo === 'hub-istituzionale'));
 const hubLombardiaTutti = fontiAttive()
   .filter((f) => f.tipo === 'hub-istituzionale' && f.regioni.includes('Lombardia'))
   .map((f) => f.id)
@@ -169,19 +177,11 @@ check('run: nessun duplicato di URL', run.length, new Set(run.map((f) => f.url))
 check('run: prima gli hub locali', 'hub-istituzionale', run[0]?.tipo);
 check('run: contiene hub di Milano e Torino', true, ['MI', 'TO'].every((p) => run.some((f) => f.capoluogo === p)));
 check('run: la fonte del Piemonte resta coperta', true, run.some((f) => f.regioni.includes('Piemonte')));
-check('provincia senza fonte dedicata → resta il feed nazionale', true, fontiPerProvincia('ZZ').some((f) => f.nazionale));
-check(
-  'run: archivi regionali esclusi per default (evita post nazionali duplicati)',
-  0,
-  run.filter((f) => f.tipo === 'aggregatore' && f.regioni.length > 0).length,
-);
-check(
-  'run: archivi disponibili su richiesta (backfill)',
-  true,
-  fontiPerRun(['MI'], MAX_FONTI_PER_RUN, { includiArchivi: true }).some(
-    (f) => f.tipo === 'aggregatore' && f.regioni.includes('Lombardia'),
-  ),
-);
+// §26.123 — provincia fuori mappa: senza aggregatore la lista può essere VUOTA.
+// È il comportamento onesto (nessun riempimento con un concorrente): il run
+// dichiara zero fonti per quella provincia invece di pescare altrove.
+check('provincia senza fonte dedicata → nessun aggregatore di riempimento', 0, fontiPerProvincia('ZZ').length);
+check('run: archivi regionali MAI selezionati, nemmeno chiedendoli', 0, fontiPerRun(['MI'], MAX_FONTI_PER_RUN, { includiArchivi: true }).filter((f) => f.tipo === 'aggregatore').length);
 
 /* ------------------------ D · Connettore hub: scoperta sezioni ------------------------ */
 

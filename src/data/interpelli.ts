@@ -96,12 +96,15 @@ export interface Interpello {
    */
   ripiego?: boolean;
   /**
-   * AMBITO D'INTEGRAZIONE (§26.111): la riga NON è nella propria provincia ma è in
-   * vetrina perché la zona non arriva a cinque opportunità attive
-   * (`integraAmbiti`, `src/lib/ambitoBacheca.ts`). `regione` = stessa regione del
-   * profilo, `nazionale` = resto d'Italia, `provincia`/assente = riga della bacheca
-   * del profilo. Dato di VETRINA: lo scrive `useInterpelliFeed`, mai il database, e
-   * non entra in nessuna consegna (notifiche e digest restano strict, §26.45).
+   * AMBITO D'INTEGRAZIONE — CAMPO STORICO, NON PIÙ SCRITTO (§26.122).
+   *
+   * Fino al 31/10/2026 la vetrina si allargava fuori provincia (regione → Italia,
+   * `integraAmbiti`) e questo campo diceva da dove veniva la riga. Quella regola è
+   * REVOCATA: la bacheca mostra solo le province scelte (o entro i 60 km) e, se non
+   * ha nulla, dichiara zero. Il campo resta nel contratto solo perché la pagina lo
+   * legge per DIFESA (se una superficie tornasse a iniettarlo, lo dichiara invece di
+   * presentarlo come match) e perché il database non lo conosce: nessun mapper lo
+   * popola, nessuna consegna lo legge (notifiche e digest restano strict, §26.45).
    */
   ambito?: 'provincia' | 'regione' | 'nazionale' | null;
 }

@@ -12,8 +12,9 @@
  *   · la riga è presentabile solo con Provincia + Ordine + Classe/Materia;
  *   · la vetrina tiene solo righe PRESENTABILI e ANCORA APERTE (una scadenza di oggi
  *     vale tutto il giorno, §26.100);
- *   · il minimo si conta sulla vetrina, e sotto il minimo si integra regione → Italia
- *     (`vetrinaConAmbiti`), con le righe fuori zona dichiarate e senza voto;
+ *   · il minimo si conta sulla vetrina; sotto il minimo NON si integra nulla:
+ *     fuori dalle province scelte la lista resta vuota e la pagina lo dichiara
+ *     (§26.122, che revoca l'integrazione regione → Italia di §26.111);
  *   · la classe arriva anche dalla colonna singolare, mai dai segnaposto «GENERALE»;
  *   · ingestione e pagina usano QUESTE funzioni (nessun gate duplicato);
  *   · il modulo resta puro (niente rete, niente `node:*`).
@@ -26,7 +27,6 @@ import { codiciClasseRiga } from '../src/lib/matchingEngine.ts';
 import {
   campiMancantiVetrina,
   rigaVetrinaCompleta,
-  vetrinaConAmbiti,
   vetrinaVisibile,
 } from '../src/lib/vetrinaBacheca.ts';
 import type { Interpello } from '../src/data/interpelli.ts';
@@ -101,75 +101,42 @@ check(
 );
 check('input vuoto → vetrina vuota', 0, vetrinaVisibile([]).length);
 
-/* --------- 3) IL MINIMO SI CONTA SULLA VETRINA, NON SULLA BACHECA ------- */
+/* --------- 3) LA VETRINA È QUELLA DELLA PROVINCIA: ZERO È UNA RISPOSTA ------ */
 
-console.log('\n— 3. Provincia → regione → Italia, contando ciò che si vede —');
-const provinciaPiena = Array.from({ length: MINIMO_BACHECA }, (_, i) =>
-  avviso({ id: `p${i + 1}`, compatibilita: 90 }),
+console.log('\n— 3. Nessuna integrazione: la vetrina non si riempie fuori provincia —');
+const OGGI = new Date('2026-10-30T09:00:00Z');
+const piena = vetrinaVisibile(
+  Array.from({ length: MINIMO_BACHECA }, (_, i) =>
+    avviso({ id: `p${i + 1}`, compatibilita: 90, dataScadenza: '2026-11-05' }),
+  ),
+  OGGI,
 );
-const piena = vetrinaConAmbiti(provinciaPiena, {
-  fuori: [avviso({ id: 'r1', provinciaCodice: 'TO', provinciaNome: 'Torino' })],
-  province: ['AT'],
-});
-check('con cinque righe visibili non si integra nulla', MINIMO_BACHECA, piena.length);
+check('cinque righe buone → cinque in vetrina', MINIMO_BACHECA, piena.length);
 check(
-  'nessuna riga fuori zona entra',
+  'nessuna riga di altre province (il campo `ambito` non è più scritto)',
   false,
   piena.some((r) => r.ambito === 'regione' || r.ambito === 'nazionale'),
 );
 
-
-// Le cinque righe della bacheca NON sono presentabili: la vetrina è vuota e deve
-// integrarsi (è il caso reale del 30/10/2026: 5 ripieghi senza classe, 0 a schermo).
-// Le date restano entro l'orizzonte dei 15 giorni e il «oggi» è FISSO: la guardia non
-// deve cambiare esito col passare del tempo.
-const OGGI = new Date('2026-10-30T09:00:00Z');
+// Il caso reale del 30/10/2026: cinque righe in memoria senza classe, zero a schermo.
+// §26.122 — la vetrina resta VUOTA (e la pagina lo dichiara), non si allarga.
 const bachecaInvisibile = Array.from({ length: MINIMO_BACHECA }, (_, i) =>
   avviso({ id: `x${i + 1}`, classeCodice: '', classiCodes: [], dataScadenza: '2026-11-05' }),
 );
-const integrata = vetrinaConAmbiti(
-  bachecaInvisibile,
-  {
-    fuori: [
-      avviso({ id: 'reg1', provinciaCodice: 'TO', provinciaNome: 'Torino', dataScadenza: '2026-11-02', dataPubblicazione: '2026-10-28T09:00:00Z' }),
-      avviso({ id: 'reg2', provinciaCodice: 'AL', provinciaNome: 'Alessandria', dataScadenza: '2026-11-03', dataPubblicazione: '2026-10-29T09:00:00Z' }),
-      avviso({ id: 'reg3', provinciaCodice: 'CN', provinciaNome: 'Cuneo', dataScadenza: '2026-11-04', dataPubblicazione: '2026-10-27T09:00:00Z' }),
-      avviso({ id: 'naz1', provinciaCodice: 'MI', provinciaNome: 'Milano', dataScadenza: '2026-11-03', dataPubblicazione: '2026-10-29T09:00:00Z' }),
-      avviso({ id: 'naz2', provinciaCodice: 'RM', provinciaNome: 'Roma', dataScadenza: '2026-11-02', dataPubblicazione: '2026-10-28T09:00:00Z' }),
-    ],
-    province: ['AT'],
-  },
-  { oggi: OGGI },
-);
-check('la vetrina si riempie fino al minimo (e si ferma lì)', MINIMO_BACHECA, integrata.length);
-check('prima la REGIONE, poi l’Italia', ['reg2', 'reg1', 'reg3'], integrata.slice(0, 3).map((r) => r.id));
-check('le righe fuori zona sono dichiarate', true, integrata.every((r) => r.ambito !== 'provincia'));
-check('le righe fuori zona non portano voto', [0, 0, 0, 0, 0], integrata.map((r) => r.compatibilita));
-check('e non sono spacciate per ripieghi', false, integrata.some((r) => r.ripiego === true));
+check('righe non presentabili → vetrina vuota', 0, vetrinaVisibile(bachecaInvisibile, OGGI).length);
 check(
-  'a parità di ambito vince la più recente',
-  ['reg2', 'reg1', 'reg3'],
-  integrata.filter((r) => r.ambito === 'regione').map((r) => r.id),
+  'una riga scaduta non entra (nessuna scadenza inventata)',
+  0,
+  vetrinaVisibile([avviso({ id: 'vecchia', dataScadenza: '2026-10-01' })], OGGI).length,
 );
-
-const vuotoOvunque = vetrinaConAmbiti(
-  bachecaInvisibile,
-  { fuori: [], province: ['AT'] },
-  { oggi: OGGI },
+const mista = vetrinaVisibile(
+  [
+    avviso({ id: 'p1', dataScadenza: '2026-11-05' }),
+    avviso({ id: 'p2', classeCodice: '', classiCodes: [], dataScadenza: '2026-11-05' }),
+  ],
+  OGGI,
 );
-check('scorta esaurita: lista corta, mai righe inventate', 0, vuotoOvunque.length);
-
-const mista = vetrinaConAmbiti(
-  [avviso({ id: 'p1', dataScadenza: '2026-11-05' }), avviso({ id: 'p2', classeCodice: '', classiCodes: [], dataScadenza: '2026-11-05' })],
-  {
-    fuori: [avviso({ id: 'reg1', provinciaCodice: 'TO', provinciaNome: 'Torino', dataScadenza: '2026-11-02' })],
-    province: ['AT'],
-  },
-  { minimo: 2, oggi: OGGI },
-);
-check('la riga buona resta davanti', ['p1', 'reg1'], mista.map((r) => r.id));
-check('la riga illeggibile non entra nemmeno dalla scorta', false, mista.some((r) => r.id === 'p2'));
-
+check('la riga buona resta, quella illeggibile no', ['p1'], mista.map((r) => r.id));
 
 /* --------- 4) LA CLASSE ARRIVA ANCHE DALLA COLONNA SINGOLARE ---------- */
 
@@ -184,8 +151,9 @@ check('riga senza classi', [], codiciClasseRiga({ class_codes: null, class_code:
 
 console.log('\n— 5. Feed, pagina e ingestione usano la stessa regola —');
 const feed = leggi('src/contexts/app/useInterpelliFeed.ts');
-check('feed: la vetrina passa dal modulo puro', true, /vetrinaConAmbiti\(bacheca/.test(feed));
-check('feed: il minimo si conta sulle righe visibili', true, /MINIMO_BACHECA - vetrina\.length/.test(feed));
+check('feed: la vetrina passa dal modulo puro', true, /vetrinaVisibile\(bacheca\)/.test(feed));
+check('feed: nessun allargamento fuori provincia (§26.122)', false, /vetrinaConAmbiti|integraAmbiti/.test(feed));
+check('feed: nessuna query larga senza filtro geografico', false, /mancantiVetrina/.test(feed));
 
 const pagina = leggi('src/pages/DashboardPage.tsx');
 check('pagina: usa la regola condivisa', true, /vetrinaVisibile\(interpelliFiltrati\)/.test(pagina));

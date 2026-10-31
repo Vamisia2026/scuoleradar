@@ -12973,3 +12973,365 @@ era una finestra mobile letta come un magazzino. La lezione: **misurare prima di
 correggere** — e, quando una regola di prodotto dice «mostra sempre cinque», farle
 dire anche «cinque di che cosa».
 
+## §26.121 — Il 401 di GitHub non era il pulsante, e Asti non aveva il parser rotto: aveva la fonte 2026 spenta (31/10/2026)
+
+### 1. «GitHub ha risposto 401: {"message":"Bad credentials"}»
+
+Il pulsante **SCANSIONE** della Linea Rossa non parla con GitHub: chiama la Edge
+`crawler-admin`, che fa il `workflow_dispatch` con `GITHUB_DISPATCH_TOKEN`. Il 401
+arriva da lì, e nessun token GitHub vive nel client: `VITE_GITHUB_TOKEN` **non
+esiste** in questo repository (ricerca su 956 file: zero occorrenze). Se qualcuno
+l'ha impostata su Vercel, non fa nulla. Le variabili davvero lette sono:
+
+| Dove | Variabili |
+|---|---|
+| Edge `crawler-admin` | `GITHUB_DISPATCH_TOKEN`, `GITHUB_REPO`, `GITHUB_DISPATCH_WORKFLOW`, `GITHUB_DISPATCH_REF`, `CRAWLER_TRIGGER_SECRET`, `ADMIN_EMAILS`, `CRAWLER_DEV_EMAILS`, `ENVIRONMENT`/`CRAWLER_ALLOW_DEV` |
+| Client | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` e `VITE_CRAWLER_DEV_SECRET` (quest'ultima solo in build DEV: in produzione non finisce nel bundle) |
+
+Correzioni fatte, perché un 401 non deve somigliare a un guasto del codice:
+
+* `avviaWorkflow()` traduce l'esito in **codice + messaggio azionabile**:
+  `github_token_rifiutato` (401: PAT scaduto, revocato o copiato male),
+  `github_permessi` (403: manca `Actions: write` o tetto di richieste),
+  `github_repo_o_workflow` (404), `github_ref` (422), `github_token_assente` /
+  `github_token_malformato` (503, con il nome del secret da sistemare),
+  `github_irraggiungibile` (504 dopo **10 s**, `AbortSignal.timeout`). La risposta
+  ora porta anche `codice`, `repo` e `workflow`: chi legge sa cosa è stato tentato.
+* `CrawlerTelemetriaError` porta il campo `codice` (nessun codice inventato lato
+  client: `null` se la Edge non lo manda).
+* **La UI classificava male l'errore**: in `lancia()` il fallimento finiva in
+  `setAvviso` — riga grigia, `truncate`, sembrava una nota informativa. Ora va in
+  `setErrore`: riga rossa su due righe (`line-clamp-2`) con il testo completo nel
+  `title`.
+
+**Resta a carico dell'operatore, e nessun codice può sostituirlo:** rigenerare il
+PAT con permesso `Actions: write`, aggiornare il secret
+(`supabase secrets set GITHUB_DISPATCH_TOKEN=…`) e **ridistribuire**
+`supabase functions deploy crawler-admin`. Finché la Edge non è ridistribuita, il
+pannello continua a mostrare il vecchio messaggio generico.
+
+### 2. Asti: la coda era piena, la fonte era spenta
+
+Misura del 31/10/2026 su `discovered_links`, `province='AT'`: **63 target** — 58
+`pending`, 2 `expanded`, 2 `disabled`, **1** `active_crawler`. L'unico attivo era
+`…/interpello2025/ric_interpello_ambito_at.php`, con ultima scansione il **15/10**.
+
+Il dato che cambia la diagnosi: **tutti e otto** i target Piemonte
+`…/interpello2026/ric_interpello_ambito_*.php` (AT, AL, BI, CN, NO, TO, VB, VC)
+sono in stato `disabled`, creati e spenti lo stesso giorno (**22/10/2026**). Non
+era il parser: era il target spento. La pagina 2026 di AT risponde **200** con
+**206 righe `<tr>`** e 2.472 celle. Confronto fra i due percorsi: entrambi hanno
+206 righe, ma il 2025 raccoglie **43 date distinte** e si ferma al **30/10/2026**,
+il 2026 ne ha **59** e arriva a novembre: il percorso corrente è il 2026.
+
+### 3. Attivazione dichiarata, mirata e ripetibile
+
+Nuovo `scripts/attiva-target-provincia.ts` (+ `npm run targets:attiva-provincia`):
+dry-run per default, `--apply` per scrivere, **solo** i target `pending` della
+provincia richiesta (non tocca `disabled`, `error_internal`, `empty_view`: una
+disattivazione deliberata resta tale). Non bastava `targets:whitelist:attiva`:
+promuove solo i target della **whitelist** (hub USR/USP + aggregatori) e lo fa su
+tutto il Paese, mentre i 58 di AT vengono dall'anagrafica delle scuole.
+
+Eseguito: dry-run **58**, `--apply` **58 → `active_crawler`**. In coda AT: 59
+attivi. Contestualmente riattivato l'hub 2026 (`756b48d1…`) e spento il percorso
+2025 (`cbb3db55…`), per non leggere due volte lo stesso avviso.
+
+### 4. La scansione mirata (eseguita)
+
+`npx tsx scripts/table-reporter.ts --province=AT` — 59 target: **39 successi**,
+20 errori di rete, **17 target disattivati dal motore** (nessuna tabella interpelli
+riconosciuta: la pulizia è del motore, non manuale), **5 record** validi dall'hub
+2026, deep crawl 4 istituti / 7 pagine / 0 record.
+
+In `interpelli`, provincia `AT`: **5 righe**, tutte con `class_codes` — `A034`
+I.I.S. A. Castigliano (scad. 01/11/2026), `ADEE` I.C. Costigliole (02/11/2026),
+`AAAA` I.C. 4 e `AAAA`/`EEEE` I.C. San Damiano (segnaposto `2027-04-30`, §26.114).
+
+### 5. Il difetto che la prova ha fatto emergere: `hash_id` distingue il percorso
+
+Attivando il 2026 gli **stessi cinque avvisi** sono rientrati come righe nuove:
+l'hash include la `source_url`, che passa da `/interpello2025/` a `/interpello2026/`.
+Risultato: 10 righe AT e 10 voci `notification_queue`, tutte `READY` con
+`notificata_il` vuoto. Lasciarle significava **notificare due volte lo stesso
+avviso** a chi ha il Radar su Asti.
+
+Ripulito: eliminate le 5 righe del percorso 2025 (la cascata `on delete cascade`
+porta via le loro voci di coda, che non erano ancora state consegnate). Restano 5
+righe e 5 voci `READY`, una per avviso, tutte dal percorso vivo.
+
+**Regola per i prossimi cambi di percorso di una fonte tabellare:** spegnere la
+riga vecchia **prima** del giro e ripulire le righe con la vecchia `source_url`
+dopo, altrimenti il database raddoppia. La correzione strutturale (hash
+indipendente dal percorso, con la `source_url` come attributo) è dichiarata qui e
+non ancora fatta: tocca l'ingestione condivisa, non questa sessione.
+
+### Verifiche (31/10/2026)
+
+`npm run build` ✅ (vite, 2.058 moduli, 1m02s) · `npm run typecheck` ✅ 0 ·
+`npm run test:architettura` ✅ nessuna violazione nuova (145 = baseline; il file
+`CrawlerTelemetry.tsx` era arrivato a 251 righe ed è stato ricompattato a 249) ·
+`eslint` sui file toccati ✅ 0 · `npm test` ✅ catena completa (ultimo test
+`test-motivo-senza-scadenza`, `exitCode 0`) ·
+scansione `--province=AT` eseguita sul database di produzione · dry-run e `--apply`
+dell'attivazione rilanciabili senza effetti collaterali. **Da fare:** ridistribuire
+`crawler-admin` perché il fix del 401 sia attivo in produzione.
+
+*File toccati*: `supabase/functions/crawler-admin/index.ts`,
+`src/services/crawlerTelemetry.ts`, `src/components/CrawlerTelemetry.tsx`,
+`scripts/attiva-target-provincia.ts` (nuovo), `package.json`,
+`docs/SYSTEM_HANDOVER.md`. Dati: `discovered_links` (58 target AT promossi, hub
+2026 riattivato, percorso 2025 spento), `interpelli` (5 righe duplicate del
+percorso 2025 eliminate).
+
+**Nota di sessione.** Il sintomo riferito era uno (il pulsante che sbaglia), i
+guasti erano tre, e nessuno dei tre era dove sembrava: il 401 non stava nel
+pulsante ma in un secret della Edge; il «nessun interpello ad Asti» non stava nel
+parser ma in uno stato `disabled` scritto il 22/10 su tutto il Piemonte. La prova
+mirata ha poi aperto un quarto difetto — i doppioni da `hash_id` — che nessuna
+lettura del codice avrebbe mostrato: è servito **eseguire** il giro e guardare le
+righe. La lezione è la stessa del §26.120, un gradino più in là: prima di
+correggere, misurare; e dopo aver misurato, guardare il database, non solo il log.
+
+
+## §26.122 — Bonifica dei falsi positivi, fine del riempimento fuori provincia, palette senza allarmi (31/10/2026)
+
+Quattro direttive del cliente, quattro interventi indipendenti. Nessun dipartimento
+toccato: condivisi essenziali (`src/lib/**`, `src/data/**`), ingestione
+(`src/scraper/**`, `scripts/**`), Edge `crawler-admin`, dashboard, guardie, docs.
+
+### 1. Il 401 del pulsante «Scansione» non spegne più il pannello
+
+Il difetto del §26.121 resta quello che era: nessun token GitHub vive nel browser,
+l'unico posto da correggere è il secret della Edge. Quello che cambia è il
+comportamento **quando** il token è rifiutato:
+
+* la Edge risponde all'errore **con la telemetria** (`telemetria` nel corpo della
+  risposta 502): il dispatch è un'azione in più, non la fonte dei numeri. Se la
+  lettura fallisce si risponde comunque con `telemetria: null` e un `console.warn`,
+  mai con un 500 che sembra un guasto generale;
+* il client (`CrawlerTelemetriaError`) porta con sé `codice` **e** `telemetria`; la
+  barra mostra i numeri appena ricevuti e, sotto, il messaggio azionabile con
+  l'aggiunta «La telemetria qui sopra resta valida: il giro periodico non dipende
+  da questo pulsante»;
+* niente più riga grigia (`setAvviso`) per un rifiuto: il dispatch fallito è un
+  errore, dichiarato in rosso di stato, con il testo completo nel `title`.
+
+**Resta a carico dell'operatore** (unica azione manuale): rigenerare il PAT con
+`Actions: write`, `supabase secrets set GITHUB_DISPATCH_TOKEN=...` e **ridistribuire**
+`crawler-admin`. Finché non lo fa, il pulsante dice esattamente cosa manca e perché.
+
+### 2. Aggregatori: fuori dalla whitelist, una sola lista
+
+`interpelloweb.it` era ancora una **fonte ATTIVA** del registro
+(`fontiWhitelist2610.ts`, blocco `AGGREGATORI`): un aggregatore concorrente usato
+come target del motore, con 35 segnali e nessuna provincia dichiarata. Ora:
+
+* la voce resta **registrata e spenta** con il motivo (`AGGREGATORI_ESCLUSI`,
+  `attiva: false`): attive **83**, spente **28**, totale 111 invariato;
+* il seme dei target (`clean-and-sync-targets.ts`) non reinserisce più l'URL;
+* il discovery non ha più una copia parziale della blacklist: importa
+  `AGGREGATORI_PRIVATI` da `lib/dominiIstituzionali.ts` (l'unica lista, la stessa
+  del gate dei link in ingresso, §26.109);
+* il gate dei link resta la difesa vera: un URL di aggregatore non diventa mai la
+  `source_url` di un avviso (home `.edu.it` dell'istituto o riga fuori).
+
+### 3. Pagine-contenitore, voci di menu e PDF diretto
+
+Nuovo modulo puro `src/scraper/paginaArchivio.ts` (145 righe, Node-only, nessuna rete):
+
+* `motivoPaginaContenitore` scarta le pagine che **non dichiarano né una scadenza né
+  una classe** e che sono (a) pure etichette di menu — «Interpelli», «Comunicazioni»,
+  «La segreteria comunica», «Archivio», «Circolari», «Albo pretorio» — o (b) un
+  percorso di contenitore (`/la-segreteria-comunica/`, `/comunicazioni`, `/archivio`)
+  con un titolo senza segnale di reclutamento. È il caso Orvieto-Montecchio: la
+  parola «interpello» nel **menu** non è un bando;
+* `documentoUnicoDaContenitore` risolve **un solo** allegato di bando pertinente
+  nell'URL assoluto del PDF: con zero o più PDF non si indovina (un archivio non dice
+  quale sia l'interpello) e decide il parser normale;
+* cablaggio: `qualitaOpportunita.motivoScartoOpportunita` chiama la prima (dopo la
+  pagina di servizio, §26.115) e `deepCrawlScuole.leggiPagineInterpelli` chiama la
+  seconda — quando trova il documento unico la pagina viaggia come `soloAllegati`,
+  quindi il runner legge il PDF e l'atterraggio è il documento ufficiale.
+
+### 4. Fine dell'allargamento fuori provincia: zero è una risposta
+
+Revocata la regola del §26.111 (provincia → regione → Italia). La direttiva: se non
+c'è nulla di pertinente **nella provincia scelta**, la bacheca mostra **0** con un
+messaggio chiaro, non cinque card da scartare.
+
+* `src/lib/ambitoBacheca.ts` **eliminato** (`integraAmbiti`, `provinceDellaRegione`,
+  `ETICHETTA_AMBITO`); `vetrinaConAmbiti` **rimossa** da `vetrinaBacheca.ts`;
+* `useInterpelliFeed` non fa più la query larga «senza filtro geografico»: via lo
+  stato `fontiAmbito`, il conto `mancantiVetrina` e l'effetto che li governava. La
+  vetrina è `vetrinaVisibile(bacheca)`, cioè le sole province del profilo (o entro i
+  60 km, che è una modale dichiarata, non un automatismo);
+* `ElencoOpportunita` non mostra più badge d'ambito e, a elenco vuoto, dichiara:
+  «Nessuna opportunità attiva per … in …» + «Il Radar non allarga la ricerca fuori
+  dalle province che hai scelto: zero è una risposta, non una pagina da riempire»,
+  con la strada per allargare (preferenze) e il giro di scansione quotidiano;
+* il campo `Interpello.ambito` resta nel contratto come **storico non più scritto**
+  (la pagina lo legge per difesa: se una superficie lo iniettasse, lo dichiara).
+
+### 5. Palette: lo stop al «rosso Normandia»
+
+* `SCADENZA_TOKENS` (`lib/scadenzaSemaforo.ts`) diventa una **scala del blu del
+  brand** più due bande ardesia: `primary-700` «Scade oggi» (9,1:1) · `primary-600`
+  24–72h (7,1:1) · `primary-500` «Scadenza lontana» (5,43:1) · `accent-600`
+  «In corso» (4,99:1) · `slate-600` «Scaduto» · `slate-500` «Scadenza n/d». **Nessun
+  `error`, nessun `secondary`**: l'urgenza resta (il blu si scurisce), l'allarme no;
+* `compatibilita.ts`: il match «medio» (70-79) passa da `warning` (oro) a
+  `primary-50/700`; la fascia bassa è `slate-100/500`. Le soglie 60/70/80 non
+  cambiano, le etichette nemmeno («60% · extra» resta identico);
+* le guardie sono state **allineate al contratto nuovo**, non aggirate:
+  `test-scadenza` (HEX map + contrasti AA misurati), `badgeScadenza.test` (token e
+  nuovo controllo «nessun rosso/arancio d'allarme»), `demoInterpelli.test`,
+  `test-compatibilita-punteggio` («70 → blu del brand»).
+
+### Verifiche (31/10/2026)
+
+`npm run typecheck` ✅ 0 · `npx tsc -p tsconfig.node.json` ✅ 0 · `npm test` ✅ catena
+completa (`TEST=0`, ultimo test `test-motivo-senza-scadenza`) · `npm run
+test:architettura` ✅ nessuna violazione nuova (145 = baseline; `compatibilita.ts` e
+`CrawlerTelemetry.tsx` erano saliti a 257 righe e sono stati ricompattati a 249/247) ·
+`eslint` sui 18 file toccati ✅ 0 · `npm run build` ✅ (7,59 s) · guardia nuova
+`test:pagina-archivio` ✅ (31 controlli) e `test:ambito-bacheca` riscritta ✅ (solo
+province scelte, zero dichiarato).
+
+*File toccati*: `src/lib/{vetrinaBacheca,compatibilita,scadenzaSemaforo}.ts`,
+`src/lib/ambitoBacheca.ts` (eliminato), `src/contexts/app/useInterpelliFeed.ts`,
+`src/pages/dashboard/components/ElencoOpportunita.tsx`, `src/data/interpelli.ts`,
+`src/components/CrawlerTelemetry.tsx`, `src/services/crawlerTelemetry.ts`,
+`src/scraper/{paginaArchivio (nuovo),qualitaOpportunita,deepCrawlScuole,fontiWhitelist2610}.ts`,
+`scripts/{discovery-engine,clean-and-sync-targets}.ts`,
+`scripts/test-{ambito-bacheca,vetrina-bacheca,scadenza,compatibilita-punteggio}.ts`,
+`scripts/test-pagina-archivio.ts` (nuovo),
+`src/departments/radar/flightBoard/__tests__/{badgeScadenza,demoInterpelli}.test.ts`,
+`supabase/functions/crawler-admin/index.ts`, `package.json`, `docs/SYSTEM_HANDOVER.md`.
+
+**Nota di sessione.** Due delle quattro direttive erano già state affrontate nei
+giorni precedenti (§26.120 per il sostegno, §26.109 per i domini) e la misura ha
+confermato che il motore era a posto: restavano due canali che il motore non
+controlla — l'**allargamento geografico** del feed e i **contenitori di archivio**
+dell'ingestione. È il motivo per cui la bonifica è fatta di cancellazioni (un modulo,
+una funzione, trecento righe di test) e non di nuove euristiche: dove una regola
+esiste già, la correzione è togliere quella che la scavalca.
+
+**Da fare (operatore):** ridistribuire `crawler-admin` dopo aver ruotato
+`GITHUB_DISPATCH_TOKEN`; decidere `scraper.yml` vs `discovery.yml` come workflow di
+default della Edge; opzionale, ripulire dal database le righe nate dall'aggregatore
+prima del §26.122 (`scripts/pulisci-non-opportunita.ts` in dry-run).
+
+
+## §26.123 — Aggregatori fuori dal motore, tabelle USR in card, PDF diretti (31/10/2026)
+
+**Direttiva del cliente (4 punti).** 1) bloccare a monte gli aggregatori
+concorrenti (`scuolainterpelli.it`); 2) trasformare le tabelle massive degli USR
+(Piemonte `/ric_interpello_ambito_no.php` e `_vc.php`, Liguria `provincia.php`)
+in card pulite, scartando i record scaduti e mostrando fonte ufficiale, classe,
+scadenza ed email della scuola; 3) quando la pagina dell'istituto ospita un solo
+PDF di bando, puntare direttamente al PDF; 4) togliere i badge rossi/arancio
+aggressivi dalle card.
+
+### 1. Aggregatori: non più «fonti», e nemmeno per errore
+
+La scoperta è che la blacklist c'era già (`lib/dominiIstituzionali.ts` →
+`AGGREGATORI_PRIVATI`, con `scuolainterpelli.it` in testa) ma **non copriva il
+registro**: `src/scraper/fonti.ts` interrogava ancora l'indice nazionale
+(`AGGREGATORE_NAZIONALE`) e **19 archivi regionali** dello stesso dominio, tutti
+con `attiva: true`. Erano la fonte più produttiva del run e la ragione per cui in
+bacheca comparivano righe il cui unico link era un portale terzo.
+
+* `fonti.ts`: le 20 voci restano **registrate e spente** (`attiva: false`,
+  `verificata: null`, `note: MOTIVO_AGGREGATORE`) — la copertura si dichiara, non
+  si simula — e `fontiAttive()` ora filtra **anche** per dominio
+  (`eAggregatorePrivato(f.url)`): riaccendere il flag non rende la voce
+  interrogabile;
+* `scraper/index.ts`: secondo chiavistello nel connettore — se una voce di
+  aggregatore arrivasse comunque al ciclo, viene saltata con un `console.warn`
+  invece di essere scaricata;
+* conseguenza **dichiarata**: la copertura scende da 19/20 a **18/20** regioni.
+  Il Trentino-Alto Adige era «coperto» solo dall'archivio dell'aggregatore
+  (Vivoscuola è una home senza elenco, gli e-portfolio MIM di TN/BZ sono 404):
+  ora è fra le regioni scoperte, come la Valle d'Aosta. Zero province coperte
+  «per finta», e nessun riempimento con un concorrente;
+* con gli aggregatori spenti `riserva` in `fontiPerProvincia` vale 0 e il budget
+  è **tutto** degli hub istituzionali; `includiArchivi` non seleziona più nulla
+  (resta per compatibilità del chiamante).
+
+### 2. Tabelle USR → Title Card (recapito compreso)
+
+Il percorso `leggiTabelleUst` (`scripts/table-reporter.ts`: riga → gate
+`tabellaUst.valutaRigaUst` → certificazione anagrafica) produceva record **senza
+recapito**: la card arrivava con «Email non disponibile» su tutte le righe nate
+da una tabella. Ora la riga risolve il contatto con la stessa gerarchia del
+percorso scuola (`lib/gerarchiaContatti.scegliContatto` + convenzione MIM):
+
+* `contact_email`: anagrafica MIM → **PEO** `codice@istruzione.it` → PEC come
+  estrema ratio (domini personali sempre esclusi);
+* `school_pec` e `stato_arricchimento` (`completo`/`parziale`), così il record
+  nasce dichiarando ciò che ha davvero;
+* **link della fonte ufficiale**: se la riga non ha un `<a href>` apribile e la
+  scuola non ha una home certificata (Piemonte, tabelle «per ambito» con 0 link)
+  l'identità dell'avviso è **la tabella USR stessa** (`target.url`), che è la
+  fonte in cui la riga vive: la card mostra «Vai alla fonte» invece di sparire;
+* **scaduti fuori due volte**: il gate della riga scarta bando scaduto, avviso
+  chiuso e scadenza non dichiarata (`valutaRigaUst`), e la vetrina
+  (`vetrinaVisibile(bacheca)` nel feed) scarta di nuovo le scadenze passate
+  prima che la card venga montata.
+
+La card non è stata riscritta: mostrava già classe (`etichettaClasse`), scadenza
+(`formatDataAvviso` + `stileScadenza`), link (`InterpelloAzioni` →
+`linkEsterno`) ed email (`contactEmail`), e ripulisce il titolo dai dump di
+codici con `pulisciTitoloAvviso`. Il difetto era **a monte**, nel record.
+
+### 3. PDF diretto: il percorso già risolto non si ri-scandisce
+
+`deepCrawlScuole` riconosceva il contenitore con un solo bando
+(`paginaArchivio.documentoUnicoDaContenitore`) ma al runner passava solo un
+booleano (`soloAllegati: true`), che ri-scandiva i link della pagina. Ora la
+pagina porta anche `allegatoUnico` (l'URL assoluto del PDF, o dell'unico allegato
+del guscio) e `table-reporter` lo usa **al posto** di
+`linkAllegatiInterpello`: un solo documento, nessun secondo scan, nessun rischio
+di atterrare sull'elenco. Con più PDF il campo resta vuoto e decide il parser.
+
+### 4. Palette: nessun badge d'allarme (verifica, non riscrittura)
+
+Il «rosso Normandia» era già stato eliminato nel §26.122
+(`SCADENZA_TOKENS`: `primary-700/600/500` + `accent-600` + `slate`). Questa
+sessione lo ha **verificato** sulle superfici delle opportunità: zero occorrenze
+di `bg-/text-/border-(rose|orange|amber|red|yellow)-*` in `src/components`,
+`src/pages/dashboard/**` e `src/departments/radar/flightBoard/**`. Le uniche due
+occorrenze rosse del repo sono i **messaggi di errore dei form**
+(`DatiProfiloModal`, `ForcePasswordModal`: `bg-red-50/text-red-600`), dove il
+rosso è informazione e non decorazione: restano.
+
+
+
+
+### Verifiche (31/10/2026)
+
+`npm run typecheck` ✅ 0 · `test:scraper:fonti` ✅ riscritta sulla nuova regola
+(18/20 regioni dichiarate, `attiva:false` sulle 20 voci, filtro di dominio
+provato anche «forzando» il flag) · `test:pagina-archivio` ✅ (35 controlli, con
+le nuove prove su registro/connettore e su `allegatoUnico`) · **`test:scheda-ust`
+✅ nuovo** (19 controlli: gate della riga, recapito dal codice, card con
+link/classe/scadenza/email) · `test-allegati-bando`, `test-deep-crawl-scuole`,
+`test:tabella-ust`, `test-vetrina-bacheca` ✅.
+
+*File toccati*: `src/scraper/{fonti,index,deepCrawlScuole}.ts`,
+`scripts/table-reporter.ts`, `scripts/test-{scraper-fonti,pagina-archivio}.ts`,
+`scripts/test-scheda-ust.ts` (nuovo), `package.json`, `docs/SYSTEM_HANDOVER.md`.
+
+**Nota di sessione.** Tre dei quattro punti si sono risolti **prima** della card:
+il cliente vedeva il sintomo in pagina (badge, righe illeggibili, link a un
+portale terzo), la causa era nel registro delle fonti e nel record. La lezione
+del §26.122 si ripete: quando la regola esiste già altrove (la blacklist dei
+domini), il difetto è che il flusso non la chiama — qui, che il registro si
+fidasse del proprio flag `attiva`.
+
+**Da fare (operatore):** ridistribuire `crawler-admin` e verificare al primo run
+che `Fonti selezionate` elenchi **solo hub istituzionali**; opzionale, dry-run di
+`scripts/pulisci-non-opportunita.ts` per le righe nate dagli archivi
+dell'aggregatore prima di oggi; valutare una fonte istituzionale verificata per
+il Trentino-Alto Adige (oggi dichiarato scoperto).

@@ -8,10 +8,11 @@
  * soglie e il modo in cui card e modale traducono il numero in colore, etichetta e motivo.
  *
  *   🟢 verde    → ≥ 80  match forte col profilo
- *   🟠 arancio  → ≥ 70  match parziale (materia coperta, stessa area disciplinare)
+ *   🔵 blu      → ≥ 70  match parziale (materia coperta, stessa area disciplinare)
  *   ⚪ neutro   → ≥ 60  suggerimento EXTRA (area sostegno nell'ordine del profilo):
- *                       informazione, non allarme (§26.120: il rosso è la scadenza ≤24h)
+ *                       informazione, non allarme (§26.120 · §26.122)
  *   ⚪ niente badge → < 60  l'opportunità non si presenta come compatibile
+ *
  *
  * Il colore è un'informazione di SERVIZIO (`comunicazione/00_regole_generali`): dice
  * quanto l'avviso somiglia al profilo, mai una graduatoria di merito.
@@ -51,7 +52,6 @@ export const ETICHETTA_COMPETENZA_SECONDARIA = 'Competenza trovata';
  */
 export const ETICHETTA_JOLLY_SEMANTICO = 'Interesse pieno';
 
-
 export type LivelloCompatibilita = 'verde' | 'arancio' | 'rosso' | 'sotto-soglia';
 
 /** Banda cromatica di un punteggio di compatibilità. */
@@ -71,9 +71,9 @@ export interface BandaCompatibilita {
 
 const CLASSI: Record<LivelloCompatibilita, string> = {
   verde: 'bg-accent-50 text-accent-700 ring-1 ring-inset ring-accent-200',
-  arancio: 'bg-warning-50 text-warning-700 ring-1 ring-inset ring-warning-300',
-  // §26.120 — il suggerimento EXTRA è un'informazione, non un allarme: tinta neutra.
-  rosso: 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200',
+  // §26.122 — «medio» è BLU del brand (l'urgenza è del semaforo); sotto è neutro (§26.120).
+  arancio: 'bg-primary-50 text-primary-700 ring-1 ring-inset ring-primary-200',
+  rosso: 'bg-slate-100 text-slate-500 ring-1 ring-inset ring-slate-200',
   'sotto-soglia': '',
 };
 

@@ -25,6 +25,11 @@ import * as cheerio from 'cheerio';
 import * as dotenv from 'dotenv';
 import * as crypto from 'crypto';
 import { isAdministrativeNoise } from '../src/lib/noiseFilter.ts';
+// Aggregatori privati (§26.122): la lista è UNA SOLA, quella della whitelist dei
+// domini in ingresso (`AGGREGATORI_PRIVATI`). Prima questo file ne aveva una copia
+// parziale: un aggregatore nuovo poteva entrare dal discovery senza essere noto
+// al gate dei link.
+import { AGGREGATORI_PRIVATI } from '../src/lib/dominiIstituzionali.ts';
 // Telemetria delle fonti (§26.85): i fallimenti di fetch alimentano la
 // quarantena e le fonti isolate si saltano nei giri ordinari. Il discovery NON
 // scrive stati in `discovered_links` per saltarle: le esclude dalla finestra di
@@ -88,10 +93,9 @@ const CONFIG = {
   ] as readonly string[],
 
   blacklist: [
-    'scuolainterpelli.it',
-    'docenti.it',
-    'studenti.it',
-    'skuola.net',
+    // Aggregatori e concorrenti: dalla lista unica di `lib/dominiIstituzionali`
+    // (§26.109 · §26.122). Il discovery non li espande e non li conta come fonti.
+    ...AGGREGATORI_PRIVATI,
     'facebook.com',
     'twitter.com',
     'instagram.com',
