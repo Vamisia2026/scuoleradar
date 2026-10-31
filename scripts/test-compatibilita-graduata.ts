@@ -35,10 +35,13 @@ const profilo = { ordini: ['secondaria2'], classi: ['A-22'], province: ['AT'], m
 
 /* --------------------------- 1) INVARIANTI -------------------------------- */
 
-console.log('— Invarianti: sostegno a 60, esclusione geografica, consegna strict —');
+console.log('— Invarianti: sostegno a 60 nella provincia e nell’ordine GIUSTI, esclusione geografica, consegna strict —');
+// §26.120 — il suggerimento EXTRA del sostegno sopravvive SOLO dove è plausibile
+// (stessa provincia scelta, stesso ordine di scuola): i casi di esclusione vivono
+// nella guardia dedicata `test:sostegno`.
 const sostegno = valutaCompatibilita(
   { ...profilo, ordini: ['secondaria2'] },
-  { province: 'AL', classi: ['ADEE'], ordine: 'primaria', titolo: 'Interpello sostegno scuola primaria' },
+  { province: 'AT', classi: ['ADSS'], ordine: 'secondaria2', titolo: 'Interpello sostegno' },
   { provinceLimitrofe: true },
 );
 check('SUGGERIMENTO EXTRA (sostegno) resta a 60: il pavimento non si sconta', PUNTEGGIO_EXTRA_SOSTEGNO, sostegno.punteggio);
@@ -156,21 +159,8 @@ check('whitelist + competenza: entra d’ufficio e sfuma i 97 primari → 100', 
 check('ed è marcata come inclusione d’ufficio', true, chiaveForzata.forzata);
 check('le competenze non toccano la condizione geografica', null, chiaveForzata.modali.provincia);
 check('whitelist: il jolly è SOSPESO, il badge resta la sfumatura §26.63', 25, chiaveForzata.competenzaSecondaria?.punteggio);
-
-// INVARIANTE §26.45: il pavimento del sostegno non si sconta e la competenza non lo promuove.
-const sostegnoChiave = valutaCompatibilita(
-  { ...profilo, ordini: ['secondaria2'], materieCustom: ['Intelligenza Artificiale'] },
-  {
-    province: 'AL',
-    classi: ['ADEE'],
-    ordine: 'primaria',
-    titolo: 'Interpello sostegno scuola primaria: intelligenza artificiale',
-  },
-  { provinceLimitrofe: true },
-);
-check('suggerimento EXTRA (sostegno) anche con la competenza: resta 60', PUNTEGGIO_EXTRA_SOSTEGNO, sostegnoChiave.punteggio);
-check('e la competenza non lo promuove', null, sostegnoChiave.competenzaSecondaria);
-check('e il jolly tace: nessun pavimento d’ufficio sul suggerimento extra (§26.64)', null, sostegnoChiave.jollySemantico);
+// §26.120 — gli invarianti del pavimento del sostegno (60 non scontabile, competenza
+// che non promuove, jolly che tace) vivono nella guardia dedicata `test:sostegno`.
 
 /* ---------------------------- 3) CABLAGGIO -------------------------------- */
 

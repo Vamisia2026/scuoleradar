@@ -6,10 +6,10 @@
  * (`radar/flightBoard/rigaBoardDati.badgeScadenza`), card e scheda dell'avviso,
  * feed della dashboard (`ElencoOpportunita`), responso della prova Radar.
  *
- *   🔴 rosso   `bg-rose-600`    0 giorni   → le prossime 24 ore  «Scade oggi»
- *   🟠 arancio `bg-orange-700`  1–2 giorni → 24–72 ore           «Scade domani»
- *   🟢 verde   `bg-emerald-700` 3 … 15 giorni, entro l'orizzonte «In corso»
- *   🔵 blu     `bg-sky-700`     oltre l'orizzonte  «Scadenza lontana»
+ *   🔴 rosso   `bg-error-600`    0 giorni   → le prossime 24 ore  «Scade oggi»
+ *   🟠 arancio `bg-secondary-600` 1–2 giorni → 24–72 ore         «Scade domani»
+ *   🟢 verde   `bg-accent-600`  3 … 15 giorni, entro l'orizzonte «In corso»
+ *   🔵 blu     `bg-primary-500` oltre l'orizzonte  «Scadenza lontana»
  *   ⚫ ardesia  `bg-slate-600`   già passata       «Scaduto»
  *              `bg-slate-500`   data assente      «Scadenza n/d»
  * Tutte con etichetta BIANCA in grassetto (§26.100): nessun nero, nessun tono
@@ -33,19 +33,22 @@
  * questo file importa i giorni e l'orizzonte da `lib/scadenza.ts`, che NON lo
  * importa — quindi non si crea nessun ciclo fra moduli (`E-CICLO`).
  *
- * **Perché le tinte scendono di un gradino e l'etichetta torna BIANCA (§26.100,
- * direttiva del 28/10/2026).** Il §26.98 aveva risolto il contrasto con
- * l'etichetta quasi nera (`text-slate-950`) sopra tinte chiarissime (`amber-400`,
- * `emerald-500`): corretto sul numero, ma letto a schermo il tabellone somigliava
- * a un semaforo da ufficio. La direttiva del 28/10/2026 chiede il registro
- * opposto: tinte PIENE e SATURE con etichetta BIANCA in grassetto, «niente
- * atmosfera da funerale». Con il bianco addosso, però, la tinta deve scendere di
- * uno o due gradini — non basta alzare la saturazione:
+ * **Perché le tinte sono quelle del BRAND e non di Tailwind (§26.120).** Fino al
+ * 30/10/2026 il semaforo usava `rose-600`/`orange-700`/`emerald-700`/`sky-700`:
+ * gradini della palette Tailwind (non di `theme.extend.colors`), quindi fuori
+ * dalla palette ufficiale del prodotto. A schermo una card poteva sommare tre
+ * tinte diverse — badge del match, badge della scadenza e badge del semaforo —
+ * e il rosso acceso del ripiego sembrava un allarme anche quando non c'era
+ * nulla da fare. Le quattro luci ora sono i gradini 500/600 della palette
+ * (`error` · `secondary` · `accent` · `primary`), con il bianco in grassetto:
+ * la regola del §26.100 (tinte piene, etichetta bianca) resta, il colore è
+ * quello approvato. Il ROSSO resta un'eccezione dichiarata — «Scade oggi» — e
+ * non viene più usato per dire «match basso».
  *
- *   🔴 `rose-600`    #e11d48 → 4,70:1 sul bianco (AA)
- *   🟠 `orange-700`  #c2410c → 5,18:1 sul bianco (AA)
- *   🟢 `emerald-700` #047857 → 5,48:1 sul bianco (AA)
- *   🔵 `sky-700`     #0369a1 → 5,93:1 sul bianco (AA)
+ *   🔴 `error-600`     #b9403c → 5,44:1 sul bianco (AA)
+ *   🟠 `secondary-600` #bd5a14 → 4,53:1 sul bianco (AA)
+ *   🟢 `accent-600`    #168044 → 4,99:1 sul bianco (AA)
+ *   🔵 `primary-500`   #2b6f9e → 5,43:1 sul bianco (AA)
  *
  * Le tinte del §26.98 con il bianco stanno a 1,67–3,67:1 (sotto AA, quindi
  * vietate da §26.88) e con l'etichetta scura diventavano «muddy», cioè torbide a
@@ -54,11 +57,12 @@
  * (7,58:1) e `slate-500` «Scadenza n/d» (4,76:1) — mai un nero: il nero è
  * esattamente ciò che il cliente ha chiesto di togliere dalla tavola.
  *
- * Nota sui token: `rose`, `orange`, `emerald`, `sky` e `slate` sono gradini della
- * palette Tailwind (non di `theme.extend.colors`), quindi la guardia
- * `npm run test:palette` li valida contro la palette completa; i rapporti di
- * contrasto sono misurati da `npm run test:interpello-scadenza` (funzione WCAG
- * nel test, nessun numero copiato a mano).
+ * Nota sui token: `error`, `secondary`, `accent` e `primary` sono i gradini di
+ * `theme.extend.colors` (`tailwind.config.js`), quindi la guardia
+ * `npm run test:palette` li valida contro la palette ufficiale; le due bande
+ * neutre usano `slate` (Tailwind base, già impiegato in tutto il sito). I
+ * rapporti di contrasto sono misurati da `npm run test:interpello-scadenza`
+ * (funzione WCAG nel test, nessun numero copiato a mano).
  */
 import { GIORNI_ORIZZONTE_OPPORTUNITA } from './scadenza';
 
@@ -104,14 +108,16 @@ export interface StileScadenza {
  * tinta pastello: il tabellone è la vetrina del servizio, non un bollettino.
  */
 export const SCADENZA_TOKENS = {
-  rosso: 'bg-rose-600 text-white font-bold',
+  // «Scade oggi»: l'UNICO rosso delle superfici. È il gradino 600 di `error`
+  // (#b9403c): pieno e saturo, ma della palette — non il `rose-600` di Tailwind.
+  rosso: 'bg-error-600 text-white font-bold',
   // La chiave resta `arancio` perché il livello del semaforo è sempre `urgente`:
   // rinominarla obbligherebbe ogni superficie a cambiare per un colore.
-  arancio: 'bg-orange-700 text-white font-bold',
-  verde: 'bg-emerald-700 text-white font-bold',
+  arancio: 'bg-secondary-600 text-white font-bold',
+  verde: 'bg-accent-600 text-white font-bold',
   // Oltre l'orizzonte di candidatura la data non è un termine urgente, ma resta
   // un'informazione ATTIVA: blu pieno, non una banda ardesia (§26.100).
-  lontana: 'bg-sky-700 text-white font-bold',
+  lontana: 'bg-primary-500 text-white font-bold',
   scaduto: 'bg-slate-600 text-white font-bold',
   neutro: 'bg-slate-500 text-white font-bold',
 } as const;

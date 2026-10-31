@@ -2,21 +2,19 @@
  * ScuoleRadar.it — COMPATIBILITÀ profilo ↔ opportunità: SOGLIE, BANDA CROMATICA e
  * etichette di servizio (modulo PURO, una sola fonte di verità).
  *
- * Il PUNTEGGIO (0-100) nasce dalle PREFERENZE PRIMARIE del Radar — dove vuoi lavorare
- * (ordine), classi di concorso, provincia, filtri scuole — in media PONDERATA
- * (`valutaCompatibilita`, `src/lib/compatibilitaGraduata.ts`) SFUMATA dalle competenze del
- * profilo (§26.63: al massimo `CAP_COMPETENZE` punti); qui vivono SOLO le soglie e il modo
- * in cui card, modale e qualunque altra superficie traducono quel numero in colore,
- * etichetta e motivo: nessuna copia delle soglie nei componenti.
+ * Il PUNTEGGIO (0-100) nasce dalle PREFERENZE PRIMARIE del Radar — ordine, classi di concorso,
+ * provincia — in media PONDERATA (`valutaCompatibilita`, `src/lib/compatibilitaGraduata.ts`)
+ * SFUMATA dalle competenze (§26.63: al massimo `CAP_COMPETENZE` punti); qui vivono SOLO le
+ * soglie e il modo in cui card e modale traducono il numero in colore, etichetta e motivo.
  *
  *   🟢 verde    → ≥ 80  match forte col profilo
  *   🟠 arancio  → ≥ 70  match parziale (materia coperta, stessa area disciplinare)
- *   🔴 rosso    → ≥ 60  suggerimento EXTRA (es. area sostegno fuori dalle proprie classi)
+ *   ⚪ neutro   → ≥ 60  suggerimento EXTRA (area sostegno nell'ordine del profilo):
+ *                       informazione, non allarme (§26.120: il rosso è la scadenza ≤24h)
  *   ⚪ niente badge → < 60  l'opportunità non si presenta come compatibile
  *
- * Il colore è un'informazione di SERVIZIO (`comunicazione/00_regole_generali`):
- * dice quanto l'avviso somiglia al profilo, mai una graduatoria di merito né una
- * fretta artificiale.
+ * Il colore è un'informazione di SERVIZIO (`comunicazione/00_regole_generali`): dice
+ * quanto l'avviso somiglia al profilo, mai una graduatoria di merito.
  */
 import { CAP_COMPETENZE } from './punteggioCompetenze';
 import { PUNTEGGIO_JOLLY_OLTRE_RAGGIO, PUNTEGGIO_JOLLY_PIENO } from './jollySemantico';
@@ -74,7 +72,8 @@ export interface BandaCompatibilita {
 const CLASSI: Record<LivelloCompatibilita, string> = {
   verde: 'bg-accent-50 text-accent-700 ring-1 ring-inset ring-accent-200',
   arancio: 'bg-warning-50 text-warning-700 ring-1 ring-inset ring-warning-300',
-  rosso: 'bg-error-50 text-error-700 ring-1 ring-inset ring-error-200',
+  // §26.120 — il suggerimento EXTRA è un'informazione, non un allarme: tinta neutra.
+  rosso: 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200',
   'sotto-soglia': '',
 };
 
@@ -198,22 +197,24 @@ export interface ColoreMatch {
 }
 
 /**
- * I TRE COLORI del match (§26.106) — gradini 500 della palette, non tinte nuove:
- *   🟢 `#1FA055` (accent-500)  → ALTO  (≥ 80) · 🟡 `#E2B33C` (warning-500) → MEDIO (60 … 79)
- *   🔴 `#D9534F` (error-500)   → BASSO (< 60: ripiego dichiarato)
- * Le SOGLIE non sono riscritte qui: `livelloMatch` legge `livelloCompatibilita`, l'unica fonte.
+ * I TRE COLORI del match (§26.106 · §26.120) — gradini della palette, non tinte nuove:
+ *   🟢 `#1FA055` (accent-500) → ALTO (≥ 80) · 🟡 `#E2B33C` (warning-500) → MEDIO (70-79)
+ *   ⚪ `#94A3B8` (slate-400) → BASSO (< 70: riga di ripiego, dichiarata).
+ * Il ROSSO non è un colore del match: nella pagina resta UNO solo, la scadenza entro
+ * le 24 ore (`lib/scadenzaSemaforo.ts`). Le SOGLIE non si riscrivono qui:
+ * `livelloMatch` legge `livelloCompatibilita`, l'unica fonte.
  */
 export const COLORI_MATCH: Record<LivelloMatch, ColoreMatch> = {
   alto: { livello: 'alto', hex: '#1FA055', token: 'accent-500', className: 'bg-accent-500' },
   medio: { livello: 'medio', hex: '#E2B33C', token: 'warning-500', className: 'bg-warning-500' },
-  basso: { livello: 'basso', hex: '#D9534F', token: 'error-500', className: 'bg-error-500' },
+  basso: { livello: 'basso', hex: '#94A3B8', token: 'slate-400', className: 'bg-slate-400' },
 };
 
 /** Etichetta e descrizione delle tre fasce (la riga di ripiego ha la sua, sopra). */
 const FASCE_MATCH: Record<LivelloMatch, { etichetta: string; descrizione: string }> = {
   alto: { etichetta: 'Match alto col profilo', descrizione: 'Match alto col profilo (≥ 80%): ordine, classe e provincia combaciano.' },
-  medio: { etichetta: 'Match medio col profilo', descrizione: 'Match medio col profilo (60-79%): materia o area vicina, oppure provincia entro i 60 km.' },
-  basso: { etichetta: 'Match basso col profilo', descrizione: 'Match basso col profilo (< 60%): fuori dai criteri principali del tuo Radar.' },
+  medio: { etichetta: 'Match medio col profilo', descrizione: 'Match medio col profilo (70-79%): materia o area vicina, oppure provincia entro i 60 km.' },
+  basso: { etichetta: 'Match basso col profilo', descrizione: 'Match basso col profilo (< 70%): suggerimento extra o riga di ripiego, fuori dalle priorità del tuo Radar.' },
 };
 
 const DESCRIZIONE_RIPIEGO =
@@ -224,10 +225,10 @@ const DESCRIZIONE_RIPIEGO =
 export function livelloMatch(punteggio: number): LivelloMatch {
   const livello = livelloCompatibilita(punteggio);
   if (livello === 'verde') return 'alto';
-  // «arancio» (70-79) e «rosso» (60-69) sono la stessa fascia media: il secondo gradino
-  // resta nel badge della card («match parziale» / «suggerimento extra»).
-  if (livello === 'sotto-soglia') return 'basso';
-  return 'medio';
+  if (livello === 'arancio') return 'medio';
+  // «rosso» (60-69) e «sotto-soglia» sono la STESSA fascia bassa: suggerimento o
+  // ripiego dichiarato, mai una tinta d'allarme (§26.120).
+  return 'basso';
 }
 
 /** Banda del match pronta per la vetrina: punteggio, colore (hex + token), etichetta, descrizione. */

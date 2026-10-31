@@ -39,9 +39,10 @@ export function DashboardPage() {
   // `lib/vetrinaBacheca`, §26.119: la stessa che il feed usa per contare i posti
   // liberi), poi ordinate per compatibilità e scadenza.
   const opportunitaAttive = vetrinaVisibile(interpelliFiltrati)
-    // PRIORITÀ: prima i match più forti col profilo (verde → arancio → rosso), poi
-    // la scadenza più vicina. I suggerimenti EXTRA (60%, es. area sostegno fuori
-    // dalle proprie classi) restano in bacheca ma finiscono in coda, mai in testa.
+    // PRIORITÀ: prima i match più forti col profilo (verde → arancio → neutro), poi
+    // la scadenza più vicina. I suggerimenti EXTRA (§26.120: area sostegno nello
+    // stesso ordine di scuola e nella provincia scelta) restano in bacheca ma
+    // finiscono in coda, mai in testa.
     .sort((a, b) => {
       const ca = a.compatibilita ?? 100;
       const cb = b.compatibilita ?? 100;

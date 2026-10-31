@@ -119,12 +119,12 @@ const className = (hash: string): string => {
   const riga = righe.find((r) => r.hash_id === `${PREFISSO_DEMO}${hash}`);
   return riga ? badgeScadenza(riga.expiration_date).className : '';
 };
-check('rosso pieno (scade oggi)', true, className('04-avviso-pdf').includes('bg-rose-600'));
-// §26.89, §26.100 — il rosso si ferma alle 24 ore: da domani il badge è ARANCIO.
-check('arancio pieno (scade domani)', true, className('02-forms-sito').includes('bg-orange-700'));
-check('non più rosso (scade domani)', false, className('02-forms-sito').includes('bg-rose-600'));
-check('verde pieno (3 giorni)', true, className('01-argo-sito').includes('bg-emerald-700'));
-check('verde pieno (oltre 7 giorni)', true, className('03-nuvola-pec').includes('bg-emerald-700'));
+check('rosso pieno (scade oggi)', true, className('04-avviso-pdf').includes('bg-error-600'));
+// §26.89, §26.100, §26.120 — il rosso si ferma alle 24 ore: da domani il badge è ARANCIO.
+check('arancio pieno (scade domani)', true, className('02-forms-sito').includes('bg-secondary-600'));
+check('non più rosso (scade domani)', false, className('02-forms-sito').includes('bg-error-600'));
+check('verde pieno (3 giorni)', true, className('01-argo-sito').includes('bg-accent-600'));
+check('verde pieno (oltre 7 giorni)', true, className('03-nuvola-pec').includes('bg-accent-600'));
 const tutteLeBande = righe.map((r) => badgeScadenza(r.expiration_date).className);
 vero(
   'ogni badge ha etichetta BIANCA ad alto contrasto in grassetto (§26.100)',
@@ -136,7 +136,7 @@ vero(
 );
 vero('nessuna tinta pastello (…-100 / …-200)', tutteLeBande.every((c) => !/-100\b|-200\b/.test(c)));
 vero(
-  'nessun giallo/ambra: la luce media è `orange-700` (§26.100)',
+  'nessun giallo/ambra: la luce media è `secondary-600` (§26.120)',
   tutteLeBande.every((c) => !/bg-(?:amber|yellow)-\d{3}/.test(c)),
 );
 vero(

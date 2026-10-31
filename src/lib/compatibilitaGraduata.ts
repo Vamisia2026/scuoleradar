@@ -2,24 +2,18 @@
  * ScuoleRadar.it — COMPATIBILITÀ GRADUATA (modulo PURO): il punteggio MOSTRATO in bacheca.
  *
  * UN PUNTO SOLO, DUE LIVELLI (§26.63 · §26.64):
- *
  *   1. **LIVELLO PRIMARIO** — le preferenze dichiarate (ordine, classi, provincia) fanno il
- *      match e il voto: `mediaPonderata` delle modali APPLICABILI (`mediaModali.ts`), e una
- *      modale senza dati dell'utente ESCE dalla media (non azzera l'offerta per un dato assente).
+ *      match e il voto: `mediaPonderata` delle modali APPLICABILI (`mediaModali.ts`); una
+ *      modale senza dati dell'utente ESCE dalla media (non azzera l'offerta).
  *   2. **LIVELLO SECONDARIO** — le competenze del profilo (`materie_id`, `materie_custom`)
  *      NON assegnano il voto e NON entrano nella media: le interpreta il **JOLLY SEMANTICO**
- *      (`jollySemantico.ts`, §26.64), ASIMMETRICO. Match PIENO → `PUNTEGGIO_JOLLY_PIENO` (90)
- *      come PAVIMENTO del voto; fuori dalle proprie province, inclusione D'UFFICIO a 60 invece
- *      dell'esclusione. Match PARZIALE → bonus dentro `BONUS_JOLLY_PARZIALE` (15). Nessun
- *      match → zero punti e ZERO PENALIZZAZIONI. Il jolly è SOSPESO con la whitelist (§26.45),
- *      col tetto del motore (profilo senza classi) e col pavimento del sostegno: lì vale la
- *      §26.63, la sfumatura di al più `CAP_COMPETENZE`.
- *
- * Due invarianti: il pavimento del sostegno non si sconta (suggerimento EXTRA a inclusione
- * permanente: né le competenze né il jolly lo promuovono); la CONSEGNA (email/Telegram,
- * digest) non passa di qui — usa il motore STRICT, perché `provinceLimitrofe` è della bacheca.
+ *      (`jollySemantico.ts`, §26.64). Match PIENO → pavimento 90 dentro le proprie province,
+ *      inclusione D'UFFICIO a 60 oltre il raggio; PARZIALE → bonus ≤ 15; nessun match → zero.
+ *      Il jolly è SOSPESO con la whitelist (§26.45), col tetto del motore (profilo senza
+ *      classi) e col pavimento del sostegno: lì vale la sfumatura di al più `CAP_COMPETENZE`.
+ * Due invarianti: il pavimento del sostegno non si sconta (le competenze e il jolly non lo
+ * promuovono) e la CONSEGNA non passa di qui — usa il motore STRICT (§26.120).
  */
-import type { OrdineScuola } from '../data/ordiniMaterie';
 import {
   esitoJollySemantico,
   motivoJolly,
@@ -30,6 +24,7 @@ import {
   PUNTEGGIO_EXTRA_SOSTEGNO,
   PUNTEGGIO_MATCH_NESSUNO,
   PUNTEGGIO_MATCH_SECONDARIO,
+  avvisoDiSostegno,
   punteggioCompatibilita,
   type AvvisoCompatibilita,
   type OpzioniCompatibilita,
@@ -41,15 +36,14 @@ import { punteggioClasse } from './punteggioClasse';
 import { punteggioOrdine } from './punteggioOrdine';
 import { punteggioProvincia } from './prossimitaGeografica';
 
-/** Profilo per le modali: il profilo del motore + gli ordini di scuola scelti. */
-export interface ProfiloModali extends ProfiloCompatibilita {
-  ordini?: readonly OrdineScuola[] | null;
-}
+/**
+ * Profilo per le modali: dal §26.120 il profilo del motore dichiara anche gli `ordini`
+ * di scuola scelti — nessun campo duplicato, un solo contratto.
+ */
+export type ProfiloModali = ProfiloCompatibilita;
 
-/** Avviso per le modali: l'avviso del motore + l'ordine di scuola pubblicato. */
-export interface AvvisoModali extends AvvisoCompatibilita {
-  ordine?: OrdineScuola | null;
-}
+/** Avviso per le modali: dal §26.120 il contratto del motore dichiara anche l'`ordine`. */
+export type AvvisoModali = AvvisoCompatibilita;
 
 /** Opzioni della valutazione di bacheca (include quelle del motore). */
 export interface OpzioniModali extends OpzioniCompatibilita {
@@ -124,6 +118,15 @@ function contributo(punteggio: number | null | undefined, peso: number): Contrib
   return typeof punteggio === 'number' ? { punteggio, peso } : null;
 }
 
+/** Esito di ESCLUSIONE (geografia o pertinenza): zero, motivo leggibile, nessuna modale. */
+function esitoEscluso(punteggioMotore: number, motivo: string): ValutazioneCompatibilita {
+  return {
+    punteggio: PUNTEGGIO_MATCH_NESSUNO, punteggioMotore, penalita: 0, motivi: [motivo],
+    escluso: true, forzata: false, competenzaSecondaria: null, jollySemantico: null,
+    modali: { ...MODALI_VUOTE },
+  };
+}
+
 /** Riga del tooltip che dichiara la media ponderata delle preferenze PRIMARIE. */
 function composizioneMotivo(modali: number): string {
   return `media ponderata di ${modali} modali`;
@@ -162,19 +165,17 @@ export function valutaCompatibilita(
     sostegno: punteggioMotore === PUNTEGGIO_EXTRA_SOSTEGNO,
   });
 
-  // FUORI DAL RAGGIO (Modalità 4): esclusione d'ufficio, salvo whitelist o match PIENO.
+  // FUORI DAL RAGGIO (Modalità 4) e SOSTEGNO RESPINTO DAL MOTORE (§26.120): la riga
+  // esce. La whitelist delle scuole preferite resta sovrana (`forzata`). Senza il
+  // secondo ramo la media delle modali riportava a 90 un sostegno fuori tema.
   if (geo.stato === 'fuori' && !forzata && !jolly.bypassRaggio) {
-    return {
-      punteggio: PUNTEGGIO_MATCH_NESSUNO,
+    return esitoEscluso(punteggioMotore, geo.motivo);
+  }
+  if (punteggioMotore === PUNTEGGIO_MATCH_NESSUNO && !forzata && avvisoDiSostegno(avviso)) {
+    return esitoEscluso(
       punteggioMotore,
-      penalita: 0,
-      motivi: [geo.motivo],
-      escluso: true,
-      forzata: false,
-      competenzaSecondaria: null,
-      jollySemantico: null,
-      modali: { ...MODALI_VUOTE },
-    };
+      'sostegno non pertinente: ordine di scuola o provincia fuori dal tuo profilo',
+    );
   }
 
   // SUGGERIMENTO EXTRA (sostegno fuori dalle proprie classi): resta al pavimento.

@@ -193,10 +193,10 @@ check('e nessun jolly dichiarato su un avviso escluso', null, fuoriParziale.joll
 
 const sostegno = valutaCompatibilita(
   chiave,
-  { province: 'AT', classi: ['ADEE'], ordine: 'primaria', titolo: 'Interpello sostegno primaria: intelligenza artificiale' },
+  { province: 'AT', classi: ['ADSS'], ordine: 'secondaria2', titolo: 'Interpello sostegno: intelligenza artificiale' },
   { provinceLimitrofe: true },
 );
-check('pavimento del sostegno (§26.45): resta 60', PUNTEGGIO_EXTRA_SOSTEGNO, sostegno.punteggio);
+check('pavimento del sostegno (§26.45 · §26.120): resta 60 nello stesso ordine', PUNTEGGIO_EXTRA_SOSTEGNO, sostegno.punteggio);
 check('e il jolly tace: nessuna competenza dichiarata', null, sostegno.jollySemantico);
 
 const senzaClassi = valutaCompatibilita(

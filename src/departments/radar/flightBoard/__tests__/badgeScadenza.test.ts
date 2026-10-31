@@ -48,14 +48,14 @@ function fra(giorni: number): string {
   return dataIsoLocale(d);
 }
 
-console.log('— 0. Palette UNICA e PIENA: quattro luci distinte (§26.89, §26.100) —');
+console.log('— 0. Palette UNICA e PIENA: quattro luci distinte (§26.89, §26.100, §26.120) —');
 // Direttiva di prodotto (28/10/2026): il colore di urgenza deve vedersi di
 // sfuggita, anche su schermo piccolo → tinta PIENA e SATURA con etichetta BIANCA
-// in grassetto. Le luci sono QUATTRO (rosso · arancio · verde · blu): dal §26.100
-// sono `rose-600`, `orange-700`, `emerald-700` e `sky-700`, tutte sopra AA sul
-// bianco (4,70:1 · 5,18:1 · 5,48:1 · 5,93:1). Le tinte chiare del §26.98
-// (`amber-400`, `emerald-500`, `rose-500`) con il bianco stanno a 1,67–3,67:1:
-// sotto AA, quindi fuori palette (§26.88).
+// in grassetto. Le luci sono QUATTRO (rosso · arancio · verde · blu): dal §26.120
+// sono i gradini del BRAND — `error-600`, `secondary-600`, `accent-600` e
+// `primary-500` — tutte sopra AA sul bianco (5,44:1 · 4,53:1 · 4,99:1 · 5,43:1).
+// Le tinte chiare del §26.98 (`amber-400`, `emerald-500`, `rose-500`) con il
+// bianco stanno a 1,67–3,97:1: sotto AA, quindi fuori palette (§26.88).
 const ePieno = (token: string): boolean =>
   /\bbg-\w+-(?:400|500|600|700|800|900)\b/.test(token) &&
   token.includes('text-white') &&
@@ -66,10 +66,10 @@ check('rosso: colore pieno su etichetta bianca', true, ePieno(SCADENZA_TOKENS.ro
 check('lontana: colore pieno su etichetta bianca', true, ePieno(SCADENZA_TOKENS.lontana));
 check('scaduto: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.scaduto));
 check('neutro: colore pieno su testo bianco', true, ePieno(SCADENZA_TOKENS.neutro));
-check('verde: tinta satura `bg-emerald-700`', true, SCADENZA_TOKENS.verde.includes('bg-emerald-700'));
-check('arancio: `bg-orange-700` (§26.100)', true, SCADENZA_TOKENS.arancio.includes('bg-orange-700'));
-check('rosso: tinta satura `bg-rose-600`', true, SCADENZA_TOKENS.rosso.includes('bg-rose-600'));
-check('lontana: blu di stato `bg-sky-700`', true, SCADENZA_TOKENS.lontana.includes('bg-sky-700'));
+check('verde: tinta piena `bg-accent-600`', true, SCADENZA_TOKENS.verde.includes('bg-accent-600'));
+check('arancio: `bg-secondary-600` (§26.120)', true, SCADENZA_TOKENS.arancio.includes('bg-secondary-600'));
+check('rosso: tinta piena `bg-error-600`', true, SCADENZA_TOKENS.rosso.includes('bg-error-600'));
+check('lontana: blu di stato `bg-primary-500`', true, SCADENZA_TOKENS.lontana.includes('bg-primary-500'));
 check(
   'TUTTE le bande usano l’etichetta BIANCA in grassetto (§26.100)',
   true,
@@ -88,7 +88,7 @@ check('ogni banda ha una tinta DIVERSA (6 token distinti)', 6, new Set(Object.va
 // §26.88 — la luce media è ARANCIO pieno, non un giallo scuro: `amber`/`yellow`
 // a dieci pixel sembravano torbidi anche quando il contrasto era corretto.
 check(
-  'nessun giallo/ambra fra i token (la luce media è `orange-700`)',
+  'nessun giallo/ambra fra i token (la luce media è `secondary-600`)',
   [],
   Object.entries(SCADENZA_TOKENS).flatMap(([banda, token]) =>
     (token.match(/bg-(?:amber|yellow)-\d{3}/g) ?? []).map((t) => `${banda}: ${t}`),

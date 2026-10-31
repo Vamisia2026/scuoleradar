@@ -77,7 +77,7 @@ check(
 check('100: palette verde (accent)', true, /accent/.test(bandaCompatibilita(100).className));
 check('70: palette arancio (warning)', true, /warning/.test(bandaCompatibilita(70).className));
 check('60: «60% · extra»', '60% · extra', bandaCompatibilita(60).etichetta);
-check('60: palette rossa (error)', true, /error/.test(bandaCompatibilita(60).className));
+check('60: badge NEUTRO, non rosso (§26.120)', true, /slate/.test(bandaCompatibilita(60).className));
 check('60: descrizione «suggerimento extra»', true, /[Ee]xtra/.test(bandaCompatibilita(60).descrizione));
 check('59: badge NON visibile', false, bandaCompatibilita(59).visibile);
 check('0: badge NON visibile', false, bandaCompatibilita(0).visibile);
@@ -147,17 +147,20 @@ check(
 console.log('\n— Colore del MATCH della vetrina «Opportunità mappate» (§26.106) —');
 check('80% → match ALTO', 'alto', livelloMatch(80));
 check('79% → match MEDIO', 'medio', livelloMatch(79));
-check('60% → match MEDIO (la fascia bassa parte sotto 60)', 'medio', livelloMatch(60));
+check('70% → match MEDIO (la fascia media parte dalla soglia arancio)', 'medio', livelloMatch(70));
+check('60% → match BASSO (§26.120: il suggerimento extra non è «medio»)', 'basso', livelloMatch(60));
 check('59% → match BASSO', 'basso', livelloMatch(59));
 check('punteggio corrotto → match BASSO (mai un NaN in pagina)', 'basso', livelloMatch(Number.NaN));
 check('verde #1FA055 = gradino 500 della palette (accent)', '#1FA055', COLORI_MATCH.alto.hex);
 check('giallo #E2B33C = gradino 500 della palette (warning)', '#E2B33C', COLORI_MATCH.medio.hex);
-check('rosso #D9534F = gradino 500 della palette (error)', '#D9534F', COLORI_MATCH.basso.hex);
+check('la fascia bassa è NEUTRA (#94A3B8, slate-400): niente rosso del match', '#94A3B8', COLORI_MATCH.basso.hex);
+check('la fascia bassa usa il token Tailwind `slate-400`', 'slate-400', COLORI_MATCH.basso.token);
+check('nessun `error-*` fra i colori del match (§26.120)', [], Object.values(COLORI_MATCH).map((c) => c.className).filter((c) => /error/.test(c)));
 const tailwind = leggi('tailwind.config.js');
 check(
-  'i tre hex sono quelli DICHIARATI in `tailwind.config.js` (nessun colore orfano)',
+  'gli hex dichiarati in `tailwind.config.js` sono quelli usati (nessun colore orfano)',
   true,
-  /#1fa055/i.test(tailwind) && /#e2b33c/i.test(tailwind) && /#d9534f/i.test(tailwind),
+  /#1fa055/i.test(tailwind) && /#e2b33c/i.test(tailwind),
 );
 check('100% → etichetta «Match alto col profilo»', 'Match alto col profilo', stileMatch(100).etichetta);
 check('70% → etichetta «Match medio col profilo»', 'Match medio col profilo', stileMatch(70).etichetta);
@@ -173,7 +176,7 @@ check(
   stileMatch(95, { ripiego: true }).etichetta,
 );
 check('il pallino usa il token Tailwind, non uno stile inline', true, stileMatch(95).className.startsWith('bg-'));
-check('le soglie NON sono riscritte nella vetrina', true, livelloMatch(80) === 'alto' && livelloMatch(60) === 'medio');
+check('le soglie NON sono riscritte nella vetrina', true, livelloMatch(80) === 'alto' && livelloMatch(70) === 'medio');
 
 /* --------------------------- 3) CABLAGGIO ---------------------------------- */
 console.log('\n— Cablaggio: card/modale, feed, ordine della bacheca —');

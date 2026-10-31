@@ -12801,3 +12801,175 @@ ricerca per classe poteva raggiungere. Il `--province` del reporter chiude l'alt
 del problema: un giro mirato ora legge e scrive solo il territorio richiesto, e lo
 dichiara nei log.
 
+
+---
+
+## §26.120 — Pertinenza prima della quantità: il 60% fuori tema, la palette del brand, il contatore che è un flusso (30/10/2026)
+
+Ricerca esplicita dell'utente del 30/10/2026, dopo il rilascio della §26.119. Tre
+richieste, una sola radice: **la bacheca deve dire la verità** — sulle classi
+(`pertinenza`), sui colori (`una sola scala`) e sui numeri (`un flusso, non uno
+stock`). Il testo della direttiva è stato: «elimina la logica che assegna il 60% a
+classi di concorso totalmente estranee e a province non selezionate; meglio 0
+opportunità pertinenti che 5 cazzate al 60%».
+
+### 1) MATCHING — il 60% non è un premio di consolazione
+
+**Che cosa succedeva davvero.** Il difetto non era nel punteggio: era nel *canale*
+da cui quelle righe tornavano in vetrina. `bachecaInterpelli` escludeva già i
+riempitivi non pertinenti (§26.60) — un avviso di sostegno fuori dalle proprie
+classi, o un avviso di una classe senza alcun rapporto disciplinare — ma **li
+metteva nella scorta** del paracadute «5 osso-da-mordere» (§26.106). Sotto i cinque
+risultati, `paracaduteCinque` ripescava proprio quelle righe e le mostrava come
+`ripiego`: cinque card al 60%, con il badge rosso, che non c'entravano nulla con il
+profilo. La geografia (provincia entro i 60 km) era l'unico criterio rimasto, e
+bastava: per un profilo AT/AL/CN/TO anche Vercelli va bene.
+
+**Le tre correzioni.**
+
+1. **Pertinenza del sostegno (`sostegnoPertinente`, `matchingEngine`)**. L'inclusione
+   permanente dell'area sostegno (§26.45) resta, ma smette di essere una scorciatoia
+   quando il profilo **non** ha una classe `AD…` propria (cioè quando la riga è solo
+   un suggerimento EXTRA). Due confini:
+   * **ordine di scuola**: l'ordine dell'avviso — `avviso.ordine`, altrimenti il
+     codice di classe dal catalogo (`ADAA` → infanzia, `ADEE` → primaria…),
+     altrimenti il titolo (`inferisciOrdineDaTesto`) — deve stare fra quelli scelti
+     dall'utente. «Sostegno infanzia» per un docente di Lingue della secondaria non
+     è un'opportunità in più: è un'altra cattedra. Nuova funzione `ordineAvviso`,
+     unico punto in cui un avviso si traduce in ordine di scuola.
+   * **provincia SELEZIONATA**, non «entro il raggio»: un suggerimento non si fa a
+     sessanta chilometri da casa.
+   Lato dati: quando uno di questi lati è **sconosciuto** la regola non scarta nulla
+   (mai un falso negativo per un'informazione che la fonte non pubblica). La
+   **CONSEGNA non cambia**: `findUtentiCompatibili` non passa `ordini` e non passa
+   `provinceLimitrofe`, quindi per email/Telegram/digest le due condizioni sono
+   sempre vere e l'inclusione del §26.45 resta identica — verificato dalle guardie.
+2. **`valutaCompatibilita` non «gradua» un sostegno respinto.** Con il motore che
+   rispondeva `0`, la funzione proseguiva comunque nella media ponderata delle
+   modali e riportava la riga a **90** (il jolly le metteva pure il pavimento): il
+   «60% fuori tema» diventava un match quasi pieno. Ora, se il motore respinge un
+   avviso di sostegno, la riga esce (`escluso: true`, `punteggio: 0`) — la whitelist
+   delle scuole preferite resta sovrana.
+3. **La scorta del paracadute non pesca più fuori dalla pertinenza.** Nel ramo
+   «non è in Radar» (classe estranea, nessuna affinità) la riga non entra più nella
+   scorta: non torna in vetrina né come ripiego. Il conto nuovo
+   `senzaAffinitaClasse` lo dichiara in diagnosi. **Regola**: la geografia non
+   sostituisce l'affinità di classe. Meglio una vetrina corta e onesta che cinque
+   card da scartare.
+
+**Misura su Asti (database vero, `npm run diag:bacheca` — nuovo `--ordini=`).**
+Profilo Lingue della secondaria (`--classi=A-24,A-25 --ordini=secondaria2`): zona
+(AT, AL, TO, VC) 31 righe attive → 10 lette con le classi del profilo → **0 in
+bacheca** (10 «senza affinità di classe») → integrazione regionale: 5 righe
+**filtrate per classe** dalla query larga (VC/TO/AL), dichiarate `ambito: regione`
+e **senza voto** → vetrina 5/5. Nessuna riga al 60%: le righe fuori provincia sono
+pertinenti per classe, non «le migliori del DB». Profilo derivato dal pool
+(EEEE/ADEE/AAAA): 24 righe in bacheca, 0 senza affinità, vetrina 24 con in testa
+**I.C. Costigliole (AT, 93%)** e poi AL/TO/VC fra 76% e 83%.
+
+
+### 2) PALETTE — un solo rosso, quello della scadenza
+
+**Che cosa si vedeva.** Una sola card poteva sommare quattro tinte: il badge del
+match (verde/giallo/**rosso**), il badge della scadenza nell'accordion (rosa pieno
+sotto le 24 ore), il badge della scadenza **dentro** la card (rosa/arancio/verde/
+blu) e la pillola della scadenza nel dettaglio. Due codifiche di colore per la
+stessa informazione e un rosso che segnalava «match basso» come se fosse un
+allarme.
+
+**Le tre correzioni.**
+
+1. **Il semaforo torna sulla palette ufficiale** (`scadenzaSemaforo.ts`). Le quattro
+   luci passano dai gradini Tailwind `rose-600`/`orange-700`/`emerald-700`/`sky-700`
+   ai gradini del brand: `error-600` #b9403c (5,44:1), `secondary-600` #bd5a14
+   (4,53:1), `accent-600` #168044 (4,99:1), `primary-500` #2b6f9e (5,43:1). Resta la
+   regola del §26.100 — tinte piene, etichetta **bianca in grassetto** — ma i colori
+   sono quelli approvati (`theme.extend.colors`) e non quelli di Tailwind. Le due
+   bande neutre restano `slate-600`/`slate-500`.
+2. **Il rosso del match non esiste più.** `COLORI_MATCH.basso` passa da `error-500`
+   #D9534F a `slate-400` #94A3B8 e `livelloMatch(60)` scende da «medio» a «basso»:
+   sotto la soglia arancio la riga è un suggerimento o un ripiego **dichiarato**, non
+   un allarme. Anche il badge `bandaCompatibilita` per 60-69% diventa neutro
+   (`bg-slate-100 text-slate-600 ring-slate-200`). Nella pagina il rosso resta **uno
+   solo**: la scadenza entro le 24 ore.
+3. **Via il badge duplicato dell'accordion** (`ElencoOpportunita`). La riga mostra
+   UNA sola tinta (il match, o l'ambito quando la riga viene da fuori provincia); la
+   scadenza la dichiara la card, con il semaforo unico. Da quattro tinte a una.
+
+### 3) INGESTIONE — il contatore è un flusso, e Asti scrive
+
+**Perché il numero oscilla (355 → 277).** Misura del 30/10/2026 sul database di
+produzione (`interpelli`, 836 righe):
+
+| Misura | Valore |
+|---|---|
+| Righe totali | 836 |
+| Con scadenza futura | 307 |
+| Senza scadenza dichiarata | 441 |
+| Scadute (già passate) | 88 |
+| Marcate `fuori_finestra` (oltre i 15 giorni) | 584 |
+| Con `class_codes` / `class_code` | 496 / 465 |
+
+Righe **dentro la finestra dei 15 giorni**: **252 ieri, 165 oggi**; sono **88** le
+righe uscite dalla finestra fra i due giorni, e **88** quelle con scadenza
+esattamente il 30/10 (31 il 31/10, 79 il 06/11). Le righe entrano a lotti —
+205 il 30/10, 85 il 29/10, 133 il 22/10 — e **escono da sole** quando la scadenza
+passa: il contatore «avvisi attivi» non è uno stock, è **la fotografia della
+finestra**. Una diminuzione di 78 unità in un giorno è quindi un evento normale
+(88 scadenze + inserimenti del giorno), non una perdita di dati: le righe scadute
+restano nel database finché `dati:pulisci-scaduti` non le rimuove (il job notturno
+`pulisci-scaduti.yml`, con la finestra dei 60 giorni per le righe senza data). Il
+numero mostrato dall'applicazione non cambia significato: `match_interpelli` e
+`filtroAttivi` applicano la stessa finestra.
+
+**Asti produce, e lo dichiara.** `npx tsx scripts/table-reporter.ts --province=AT`
+(30/10/2026): **1/247** target — `ric_interpello_ambito_at.php` —, **3 record
+validi**, deep crawl **2 istituti su 2 citati** (2 siti, 3 pagine, 0 record) e
+**0 nuovi in DB**, perché i tre avvisi sono già presenti (deduplicazione per
+`hash_id`): «0 nuovi» è la prova che il giro è passato, non che sia rotto. In
+database: **5 righe AT**, tutte con `class_codes` (I.I.S. A. Castigliano `A034`,
+I.C. Costigliole `ADEE`, I.C. 4 `AAAA`, I.C. San Damiano `AAAA`/`EEEE`); tre hanno
+la scadenza segnaposto `2027-04-30` che il portale usa per gli avvisi «lasciati
+aperti» (§26.113) e restano fuori dalla finestra per costruzione.
+
+**Il tetto è la FONTE, non il codice.** La coda di Asti ha **56 link**: 1
+`active_crawler` (la pagina per ambito, l'unica che pubblica avvisi), 52 `pending`
+(le scuole scoperte e non ancora validate), 2 `disabled`, 1 `expanded`. Finché i
+52 restano `pending` la copertura di AT è quella di una pagina — tre avvisi per
+giro. Per allargarla: `npm run targets:whitelist:attiva` (promuove i target della
+whitelist) oppure un aggiornamento mirato `status='active_crawler'` sui soli link
+`province='AT'`, poi `--province=AT` di nuovo. La strada è dichiarata, non
+implicita: senza nuove fonti AT nessun cambio di codice può inventare avvisi.
+
+
+### Verifiche
+
+`npm run typecheck` ✅ 0 · `npm test` (catena completa) ✅ exit 0 ·
+`npm run test:architettura` ✅ nessuna violazione nuova ·
+`npm run build` ✅ · `eslint` sui file toccati ✅ ·
+guardie dedicate: `test:compatibilita` (nuovi casi `ordineAvviso`/`sostegnoPertinente`,
+palette del match), `test:compatibilita:graduata` (sostegno a 60 **pertinente** +
+esclusione fuori ordine/fuori provincia), `test:scoring` e `test:jolly` riallineate,
+`test:interpello-scadenza` (nuove tinte + contrasti AA misurati),
+`test:ambito-bacheca`, `test:vetrina-bacheca`, `test:opportunita`, `test:palette`.
+
+*File toccati*: `src/lib/matchingEngine.ts` (`ordineAvviso`, `sostegnoPertinente`,
+`AvvisoCompatibilita.ordine`, `ProfiloCompatibilita.ordini`, due motivi di scarto),
+`src/lib/compatibilitaGraduata.ts` (esclusione del sostegno respinto),
+`src/lib/bachecaInterpelli.ts` (scorta senza righe estranee, `senzaAffinitaClasse`),
+`src/lib/compatibilita.ts` (fascia bassa neutra, `livelloMatch`),
+`src/lib/scadenzaSemaforo.ts` (tinte del brand),
+`src/pages/dashboard/components/ElencoOpportunita.tsx` (via il badge duplicato),
+`src/pages/DashboardPage.tsx` (commento), `src/components/InterpelloCard.tsx`
+(nessuna modifica: eredita il badge neutro), `scripts/diag-bacheca.ts`
+(`--ordini=`, conto delle righe senza affinità), guardie in `scripts/**`, `docs/**`.
+
+**Nota di sessione.** Tre sintomi riferiti dall'utente — «60% a classi estranee»,
+«badge rossi aggressivi», «il numero che balla» — sembravano tre bug. Erano una
+sola domanda mal posta: *la bacheca sta dicendo la verità?* Il 60% non era un
+punteggio sbagliato ma una riga ripescata dal paracadute; il rosso non era una
+scelta di design ma la terza tinta di una stessa card; il numero non era instabile,
+era una finestra mobile letta come un magazzino. La lezione: **misurare prima di
+correggere** — e, quando una regola di prodotto dice «mostra sempre cinque», farle
+dire anche «cinque di che cosa».
+

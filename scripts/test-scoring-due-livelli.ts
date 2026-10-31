@@ -148,7 +148,7 @@ check('nessun peso primario da mediare oltre la provincia', 1, soloCompetenze.mo
 
 const sostegno = valutaCompatibilita(
   chiave,
-  { province: 'AT', classi: ['ADEE'], ordine: 'primaria', titolo: 'Interpello sostegno primaria: intelligenza artificiale' },
+  { province: 'AT', classi: ['ADSS'], ordine: 'secondaria2', titolo: 'Interpello sostegno: intelligenza artificiale' },
   { provinceLimitrofe: true },
 );
 check('SUGGERIMENTO EXTRA (sostegno) resta a 60 anche con la competenza trovata', PUNTEGGIO_EXTRA_SOSTEGNO, sostegno.punteggio);

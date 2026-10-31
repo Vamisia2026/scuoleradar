@@ -119,8 +119,8 @@ check('il punteggio resta quello delle modali (può essere insufficiente)', true
 check('inclusione contata per log e guardie', 1, esito.forzate);
 
 const senzaWhitelist = bachecaInterpelli([interpello({})], { ...profilo, favoriteSchools: [] });
-check('senza whitelist: classe estranea → nessun MATCH, un RIPIEGO dichiarato (§26.106)', [1, true, 1], [senzaWhitelist.lista.length, senzaWhitelist.lista[0]?.ripiego === true, senzaWhitelist.ripieghiInBacheca]);
-
+check('senza whitelist: classe estranea → NESSUNA card, nessun ripiego (§26.120)', [0, 0, 1],
+  [senzaWhitelist.lista.length, senzaWhitelist.ripieghiInBacheca, senzaWhitelist.senzaAffinitaClasse]);
 const blacklistEsito = bachecaInterpelli([interpello({})], { ...profilo, ignoredSchools: ['Volta'] });
 check('blacklist: l’avviso è oscurato anche se la scuola è preferita', 0, blacklistEsito.lista.length);
 check('scarto contato per log e guardie', 1, blacklistEsito.esclusiBlacklist);

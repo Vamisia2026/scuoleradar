@@ -1,44 +1,33 @@
 /**
- * ScuoleRadar.it — BACHECA INTERPELLI (modulo PURO): dal feed del DB alla lista
- * che la dashboard mostra.
+ * ScuoleRadar.it — BACHECA INTERPELLI (modulo PURO): dal feed del DB alla lista mostrata.
  *
  * Una sola pipeline, in quest'ordine:
  *   1. **opportunità con scadenza** (`eOpportunitaConScadenza`, §26.71): senza una
- *      `expiration_date` dichiarata e non ancora passata la riga NON entra nel feed
- *      — le pagine di archivio, i regolamenti e gli indici di classi di concorso
- *      non sono opportunità di lavoro e non si candidano. Lo scarto è contato
- *      (`senzaScadenza`), mai silenzioso;
- *   1-bis. **la riga è un avviso?** (`motivoRigaNonOpportunita`, §26.65): le voci di
- *      contorno che la fonte pubblica accanto agli avvisi — titoli di sezione, voci
- *      di menu, indici di classi («A041 | B017»), numeri di protocollo — **non
- *      entrano**: non sono opportunità e falsavano punteggi e suggerimenti scuola.
- *      Lo scarto è dichiarato nel conto (`righeNonOpportunita`), mai silenzioso;
- *   2. **Modalità 5 — Filtri Avanzati Scuole**: blacklist → scartato a
- *      prescindere dal punteggio; whitelist → incluso d'ufficio (saltando gli
- *      altri criteri) e marcato `scuolaPreferita`;
+ *      `expiration_date` dichiarata e non passata la riga NON entra (archivi, regolamenti,
+ *      indici di classi). Lo scarto è contato (`senzaScadenza`), mai silenzioso;
+ *   1-bis. **la riga è un avviso?** (`motivoRigaNonOpportunita`, §26.65): titoli di sezione,
+ *      voci di menu, indici di classi («A041 | B017»), numeri di protocollo **non entrano**.
+ *      Lo scarto è dichiarato (`righeNonOpportunita`);
+ *   2. **Modalità 5 — Filtri Avanzati Scuole**: blacklist → scartato; whitelist → incluso
+ *      d'ufficio (saltando gli altri criteri) e marcato `scuolaPreferita`;
  *   3. **porta d'ingresso (§26.63 · §26.64)**: decidono le PREFERENZE PRIMARIE — il motore
  *      conferma l'avviso (`avvisoCompatibileConProfilo`, province entro il raggio) oppure
  *      la classe è almeno «stessa area» (85) — oppure un match PIENO del jolly semantico:
- *      l'interesse dichiarato per intero apre l'opportunità anche fuori dalle proprie province.
- *      Un match PARZIALE no: sfuma un voto che le preferenze hanno già agganciato. Nessun
- *      invio (e nessuna card) a caso;
+ *      l'interesse dichiarato per intero apre l'opportunità anche fuori dalle proprie
+ *      province. Un match PARZIALE no. Chi non passa questa porta NON entra nemmeno nella
+ *      scorta del paracadute (§26.120): la geografia non sostituisce l'affinità di classe;
  *   4. **punteggio**: media ponderata delle preferenze primarie + jolly semantico
- *      (`valutaCompatibilita`, §26.64), col motivo leggibile e la competenza riconosciuta
- *      che card e modale dichiarano accanto al voto;
- *   5. **esclusione secca dei riempitivi NON pertinenti** (§26.60): una voce sotto
- *      la soglia arancio (70%) che il Radar non conferma per classe o per match PIENO
- *      — tipicamente il suggerimento EXTRA del sostegno (§26.45) — **non entra in
- *      bacheca**: nessun cap, nessuna quota (`riempitivoNonPertinente`);
- *   6. **cap dinamico dei riempitivi** (`limitaRiempitivi`) sui soli riempitivi
- *      PERTINENTI, che non tocca le scuole preferite;
- *   7. **paracadute «5 osso-da-mordere»** (§26.106): sotto i 5 risultati la coda si
- *      completa con le MIGLIORI righe della scorta — opportunità vere che il Radar non
- *      aggancia — marcate `ripiego` e dichiarate in vetrina. La scorta esclude righe
- *      senza scadenza, contorno, blacklist e avvisi oltre i 60 km senza parola del bando.
+ *      (`valutaCompatibilita`, §26.64), col motivo leggibile e la competenza riconosciuta;
+ *   5. **esclusione secca dei riempitivi NON pertinenti** (§26.60): sotto la soglia arancio
+ *      (70%) e senza conferma per classe o match PIENO — tipicamente il suggerimento EXTRA
+ *      del sostegno (§26.45) — **non entra**: nessun cap, nessuna quota;
+ *   6. **cap dinamico dei riempitivi** (`limitaRiempitivi`) sui soli riempitivi PERTINENTI;
+ *   7. **paracadute «5 osso-da-mordere»** (§26.106): sotto i 5 risultati la coda si completa
+ *      con le MIGLIORI righe della scorta — avvisi veri con affinità di CLASSE (§26.120) —
+ *      marcate `ripiego` e dichiarate in vetrina.
  *
- * Perché è un modulo PURO e non codice dentro l'hook: la stessa logica serve a
- * guardie e verifiche senza React, e `useInterpelliFeed` resta un contenitore di
- * stato e fetch (ben sotto il limite di 250 righe del gate strutturale).
+ * Perché è un modulo PURO e non codice dentro l'hook: la stessa logica serve a guardie e
+ * verifiche senza React, e `useInterpelliFeed` resta un contenitore di stato e fetch.
  */
 import type { Interpello } from '../data/interpelli';
 import type { OrdineScuola } from '../data/ordiniMaterie';
@@ -87,6 +76,9 @@ export interface EsitoBacheca {
   riempitiviEsclusi: number;
   /** Riempitivi tolti dal cap dinamico. */
   riempitiviNascosti: number;
+  /** Righe scartate perché la classe non ha rapporto con le proprie (§26.120):
+   *  fuori dalla bacheca e fuori dalla scorta del paracadute. */
+  senzaAffinitaClasse: number;
   /**
    * Righe entrate con il PARACADUTE «5 osso-da-mordere» (§26.106): la vetrina era sotto
    * `MINIMO_BACHECA` e la coda è stata completata dalla scorta. Sono dichiarate `ripiego`.
@@ -133,6 +125,7 @@ export function bachecaInterpelli(
   let esclusiBlacklist = 0;
   let forzate = 0;
   let riempitiviEsclusi = 0;
+  let senzaAffinitaClasse = 0;
 
   for (const i of fonti) {
     // §26.71 — REGOLA FERREA: senza una scadenza dichiarata e non ancora passata la
@@ -186,9 +179,15 @@ export function bachecaInterpelli(
     if (!scuole.preferita) {
       const inRadar = confermato || classeVicina(profilo, avviso) || jollyPieno;
       if (!inRadar) {
-        // SCORTA (§26.106): opportunità vera che il Radar non aggancia. Entra solo se la
-        // geografia è AMMESSA: oltre i 60 km senza la parola del bando resta il blocco totale.
-        if (!valutazione.escluso) scorta.push(candidatoRipiego(i, valutazione));
+        // §26.120 — NIENTE SCORTA PER CHI NON HA AFFINITÀ DI CLASSE. Fino al
+        // 30/10/2026 questa riga finiva nella scorta del paracadute «5» e tornava
+        // in vetrina come ripiego: era il canale da cui entravano le «cinque
+        // opportunità al 60%» che non c'entravano nulla con il profilo (§26.60
+        // le escludeva dalla bacheca, il paracadute le ripescava). La geografia
+        // non basta: se la classe non ha alcun rapporto con le proprie, la riga
+        // non entra — né in bacheca né di ripiego. Meglio una vetrina corta e
+        // onesta che cinque card da scartare.
+        senzaAffinitaClasse += 1;
         continue;
       }
     }
@@ -244,5 +243,6 @@ export function bachecaInterpelli(
     riempitiviEsclusi,
     riempitiviNascosti: cap.riempitiviNascosti,
     ripieghiInBacheca: paracadute.aggiunti,
+    senzaAffinitaClasse,
   };
 }

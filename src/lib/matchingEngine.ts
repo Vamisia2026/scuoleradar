@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Interpello } from '../data/interpelli';
 import { classeByCodice, eAvvisoSostegno, isCodiceSostegno } from '../data/classiConcorso';
-import { materie as catalogoMaterie } from '../data/ordiniMaterie';
+import { materie as catalogoMaterie, type OrdineScuola } from '../data/ordiniMaterie';
 import { province } from '../data/province';
 import { normalizzaProvincia, provinciaCompatibile } from './prossimitaGeografica';
 import { inferisciOrdineDaTesto } from './alertInterpello';
@@ -402,7 +402,15 @@ export type MotivoScarto =
   | 'profilo-senza-province'
   | 'profilo-senza-classi'
   | 'provincia'
-  | 'classe';
+  | 'classe'
+  /**
+   * Sostegno fuori dall'ordine di scuola del profilo (§26.120): un avviso di
+   * sostegno per l'infanzia o la primaria non è un «suggerimento extra» per chi
+   * insegna nella secondaria — è un'altra cattedra.
+   */
+  | 'sostegno-fuori-ordine'
+  /** Sostegno in una provincia NON selezionata (solo entro il raggio): niente extra. */
+  | 'sostegno-fuori-provincia';
 
 /** Esito del confronto profilo ↔ opportunità (con motivo, per log e test). */
 export interface EsitoCompatibilita {
@@ -415,6 +423,15 @@ export interface ProfiloCompatibilita {
   province?: readonly string[] | null;
   classi?: readonly string[] | null;
   sostegno?: boolean | null;
+  /**
+   * ORDINI DI SCUOLA scelti (Modalità 1). Servono alla pertinenza del sostegno
+   * (§26.120): senza di loro un avviso di sostegno per l'infanzia veniva proposto
+   * come «suggerimento extra» anche a chi insegna nella secondaria.
+   * `undefined`/vuoto = dato non disponibile: la regola NON scarta nulla (mai un
+   * falso negativo per un dato che il chiamante non conosce — la consegna, che
+   * non li legge, resta identica).
+   */
+  ordini?: readonly OrdineScuola[] | null;
   /** Competenze/laboratori extra del catalogo (`profiles.materie_id`). */
   materieId?: readonly string[] | null;
   /** Parole chiave libere scritte dall'utente (`profiles.materie_custom`). */
@@ -427,6 +444,8 @@ export interface AvvisoCompatibilita {
   classi?: readonly string[] | null;
   materia?: string | null;
   titolo?: string | null;
+  /** Ordine di scuola pubblicato (o inferito): decide la pertinenza del sostegno. */
+  ordine?: OrdineScuola | null;
 }
 
 /**
@@ -598,8 +617,13 @@ export function competenzaCompatibileConAvviso(
  *      non allargano la consegna, quindi nessun ritorno dei falsi positivi.
  *   3. ECCEZIONE SOSTEGNO: gli avvisi dell'area sostegno (codici `AD…` oppure
  *      titolo/materia che la dichiarano — `avvisoDiSostegno`) NON passano dal
- *      controllo di classe: sono SEMPRE consegnati nella provincia del profilo
+ *      controllo di CLASSE: sono SEMPRE consegnati nella provincia del profilo
  *      (policy di inclusione permanente, nessuna preferenza e nessun opt-out).
+ *      Dal §26.120 hanno però due confini che valgono SOLO per il suggerimento
+ *      EXTRA della bacheca — chi non ha una classe `AD…` propria: provincia
+ *      SELEZIONATA (non «entro il raggio») e stesso ORDINE di scuola
+ *      (`sostegnoPertinente`). La consegna, che non passa né gli ordini né il
+ *      raggio, resta identica.
  *
  * `ignoraFiltri` serve SOLO a enumerare i profili notificabili (digest): salta i
  * controlli geografici/di classe (compreso quello del sostegno).
@@ -638,16 +662,30 @@ export function avvisoCompatibileConProfilo(
     limitrofe: opts.provinceLimitrofe === true,
   });
   if (!provinciaAmmessa) return { ok: false, motivo: 'provincia' };
+  // Provincia SELEZIONATA (senza raggio): serve al sostegno EXTRA, che non è un match
+  // ma una proposta — e una proposta non si fa a sessanta chilometri da casa (§26.120).
+  const provinciaPropria = provinciaCompatibile(provinceProfilo, provinciaAvviso);
 
   const classiProfilo = (profilo.classi ?? []).map(normalizzaClasse).filter(Boolean);
   const competenzeProfilo = etichetteCompetenzeProfilo(profilo);
   if (classiProfilo.length === 0 && competenzeProfilo.length === 0) {
     return { ok: false, motivo: 'profilo-senza-classi' };
   }
-  // AREA SOSTEGNO (e alternativa all'IRC): inclusione PERMANENTE. Nella provincia
-  // dell'utente l'avviso di sostegno non viene mai scartato per assenza di classe
-  // in comune: nessuna preferenza, nessun opt-out, più opportunità utili.
-  if (avvisoDiSostegno(avviso)) return { ok: true };
+  // AREA SOSTEGNO (§26.45) — inclusione PERMANENTE, ma con due confini (§26.120):
+  //   · chi ha una classe AD… propria è in un match vero: nessun confine da porre;
+  //   · chi non l'ha riceve il sostegno come suggerimento EXTRA, e un suggerimento
+  //     deve essere plausibile: stessa provincia SELEZIONATA e stesso ordine di
+  //     scuola. «Sostegno infanzia» per un docente di Lingue della secondaria non è
+  //     un'opportunità in più: è rumore che occupa un posto in vetrina.
+  // La CONSEGNA non cambia: `findUtentiCompatibili` non passa `ordini` (dato che non
+  // legge) e non passa `provinceLimitrofe`, quindi per lei le due condizioni sono
+  // sempre vere e l'inclusione resta quella di sempre.
+  if (avvisoDiSostegno(avviso)) {
+    if (profiloAderisceSostegno(profilo)) return { ok: true };
+    if (!provinciaPropria) return { ok: false, motivo: 'sostegno-fuori-provincia' };
+    if (!sostegnoPertinente(profilo, avviso)) return { ok: false, motivo: 'sostegno-fuori-ordine' };
+    return { ok: true };
+  }
   const classiAvviso = (avviso.classi ?? []).filter(Boolean);
   if (classiProfilo.length > 0) {
     // Profilo con CLASSI: regola STORICA, invariata. Le competenze/parole chiave
@@ -714,10 +752,58 @@ export function profiloAderisceSostegno(profilo: ProfiloCompatibilita): boolean 
 }
 
 /**
+ * ORDINE DI SCUOLA di un avviso (§26.120), nell'ordine di affidabilità:
+ *   1. quello pubblicato dalla fonte (`avviso.ordine`, letto dallo scraper);
+ *   2. quello che dichiara il CODICE di classe (`A-22` → secondaria II, `ADEE` →
+ *      primaria): è il catalogo a dirlo, non un'euristica sul testo;
+ *   3. quello inferito dal titolo (`inferisciOrdineDaTesto`).
+ * `null` = l'avviso non lo dichiara: chi consuma la regola deve trattarlo come
+ * «dato assente» e NON scartare (mai un falso negativo per un'informazione che
+ * la fonte non ha pubblicato).
+ */
+export function ordineAvviso(avviso: AvvisoCompatibilita): OrdineScuola | null {
+  if (avviso.ordine) return avviso.ordine;
+  for (const codice of avviso.classi ?? []) {
+    const ordine = classeByCodice(normalizzaClasse(codice))?.ordine;
+    if (ordine) return ordine;
+  }
+  return inferisciOrdineDaTesto(avviso.titolo ?? '') ?? null;
+}
+
+/**
+ * PERTINENZA DEL SOSTEGNO (§26.120): l'inclusione permanente dell'area sostegno
+ * (§26.45) non è una scorciatoia per proporre la cattedra di un altro ordine di
+ * scuola. Un docente di Lingue della secondaria che riceve «Sostegno infanzia»
+ * al 60% non ha un suggerimento extra: ha un falso positivo.
+ *
+ * Regola (tutti i lati noti devono combaciare):
+ *   · profilo SENZA ordini dichiarati → `true` (dato assente, nessuna esclusione:
+ *     è il caso della CONSEGNA, che gli ordini non li legge — comportamento
+ *     invariato per costruzione);
+ *   · avviso SENZA ordine riconoscibile → `true` (la fonte non lo dice);
+ *   · altrimenti l'ordine dell'avviso deve stare fra quelli del profilo.
+ *
+ * Il caso «docente con ADEE che riceve un avviso ADSS» NON passa da qui: quella è
+ * una classe di sostegno propria del profilo e resta un match, non un extra.
+ */
+export function sostegnoPertinente(
+  profilo: ProfiloCompatibilita,
+  avviso: AvvisoCompatibilita,
+): boolean {
+  const ordiniProfilo = (profilo.ordini ?? []).filter(Boolean);
+  if (ordiniProfilo.length === 0) return true;
+  const ordine = ordineAvviso(avviso);
+  if (!ordine) return true;
+  return ordiniProfilo.includes(ordine);
+}
+
+/**
  * PUNTEGGIO di compatibilità (0-100) di un'opportunità rispetto a un profilo.
  *
  *   · 0   → non compatibile (`avvisoCompatibileConProfilo` dice no);
- *   · 60  → area SOSTEGNO senza una classe AD… propria: suggerimento EXTRA (rosso);
+ *   · 60  → area SOSTEGNO senza una classe AD… propria: suggerimento EXTRA (mai
+ *           un allarme: §26.120 lo ammette solo nell'ordine di scuola del profilo
+ *           e nella provincia SELEZIONATA);
  *   · 25  → profilo senza classi: TETTO del livello secondario (§26.63), la competenza
  *           trovata nel testo non è un match primario;
  *   · 80  → avviso senza codice classe ma materia coperta dalle classi del profilo;

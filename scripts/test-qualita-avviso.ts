@@ -152,7 +152,11 @@ check('senza date: dichiarato, mai inventato', 'Senza scadenza dichiarata', etic
 check('`null` non è una data', 'Senza scadenza dichiarata', etichettaScadenzaAvviso(null, null));
 const elenco = leggi('src/pages/dashboard/components/ElencoOpportunita.tsx');
 check('la lista non costruisce più la data a mano', false, /new Date\(i\.dataScadenza\)/.test(elenco));
-check('la lista usa l’helper condiviso', true, /etichettaScadenzaAvviso\(i\.dataScadenza, i\.dataPubblicazione\)/.test(elenco));
+check(
+  'la lista non duplica la scadenza: la dichiara la card (§26.120)',
+  false,
+  /import[^\n]*stileScadenza|etichettaScadenzaAvviso\(|stileScadenza\(/.test(elenco),
+);
 
 /* ------------------------ 4) LA GUARDIA È NELLA CATENA -------------------- */
 

@@ -8,22 +8,23 @@
  * corso · ardesia per scaduto/assente/fuori finestra, §26.89). Per gli utenti
  * Base l'accordion resta bloccato: badge «🔒 PRO» e click che apre la vetrina.
  *
- * COLOR CODING DEL MATCH (§26.106): ogni riga dichiara la fascia del match col
- * colore condiviso di `lib/compatibilita.stileMatch` — verde `#1FA055` (≥ 80),
- * giallo `#E2B33C` (60-79), rosso `#D9534F` (< 60) — e una riga entrata dal
- * paracadute «5 osso-da-mordere» mostra l'etichetta trasparente
- * «Opportunità di ripiego nel DB».
+ * UNA SOLA TINTA PER RIGA (§26.120). La riga dell'accordion dichiara il MATCH col
+ * colore condiviso di `lib/compatibilita.stileMatch` — verde #1FA055 (≥ 80),
+ * giallo #E2B33C (70-79), neutro < 70 — e una riga entrata dal paracadute «5
+ * osso-da-mordere» mostra l'etichetta trasparente «Opportunità di ripiego nel DB».
+ * La SCADENZA non viene più ripetuta qui: la dichiara la card, con il semaforo
+ * unico dell'applicazione. Prima questa riga sommava un secondo badge a tinta
+ * piena — rosso quando mancavano 24 ore — sopra una card che mostrava già il
+ * proprio: due codifiche di colore per la stessa card, e l'impressione che tutto
+ * stesse per scadere.
  *
  * Presentazione pura: dati, stato di apertura e azioni arrivano dal contenitore.
  */
 import { SlidersHorizontal } from 'lucide-react';
 import { Accordion } from '@/components/Accordion';
 import { InterpelloCard } from '@/components/InterpelloCard';
-import { etichettaScadenzaAvviso } from '@/lib/alertInterpello';
 import { ETICHETTA_AMBITO, descrizioneAmbito } from '@/lib/ambitoBacheca';
 import { stileMatch } from '@/lib/compatibilita';
-import { giorniRimanenti } from '@/lib/scadenza';
-import { stileScadenza } from '@/lib/scadenzaSemaforo';
 import { classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import type { Interpello } from '@/data/interpelli';
@@ -120,13 +121,9 @@ export function ElencoOpportunita({
               </p>
             )}
             {lista.map((i) => {
-              // UNA sola regola/palette per la scadenza (§26.82, §26.89): la
-              // stessa del «Radar Live» e della scheda avviso. Prima qui viveva
-              // una terza scala (<48h / <5 giorni) con tinte pastello
-              // warning/accent che contraddiceva il semaforo del tabellone.
-              const scadenza = stileScadenza(giorniRimanenti(i.dataScadenza));
-              // COLOR CODING DEL MATCH (§26.106): verde ≥ 80 · giallo 60-79 · rosso < 60,
-              // con l'etichetta trasparente del ripiego quando la riga arriva dal paracadute.
+              // COLOR CODING DEL MATCH (§26.106 · §26.120): UNA sola tinta per riga,
+              // verde ≥ 80 · giallo 70-79 · neutra < 70 (< 70 = riga di ripiego, si
+              // dichiara con l'etichetta trasparente, non con un allarme).
               const match = stileMatch(i.compatibilita, { ripiego: i.ripiego === true });
               // AMBITO (§26.111): una riga fuori provincia dichiara il suo ambito al posto
               // del voto — non è stata valutata sul profilo, quindi non ha un punteggio.
@@ -137,16 +134,6 @@ export function ElencoOpportunita({
                   key={i.id}
                   className="overflow-hidden rounded-2xl border border-primary-100 bg-white shadow-card"
                 >
-                  <div className="flex items-center justify-between gap-2 border-b border-primary-100 bg-slate-50 px-3 py-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary-400">
-                      {etichettaScadenzaAvviso(i.dataScadenza, i.dataPubblicazione)}
-                    </span>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${scadenza.className}`}
-                    >
-                      {scadenza.label}
-                    </span>
-                  </div>
                   <div className="flex items-center justify-between gap-2 border-b border-primary-100 px-3 py-1.5">
                     {ambito ? (
                       <span

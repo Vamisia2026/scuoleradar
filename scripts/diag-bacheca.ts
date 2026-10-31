@@ -20,6 +20,7 @@
  * Uso:
  *   npx tsx scripts/diag-bacheca.ts --provincia=AT
  *   npx tsx scripts/diag-bacheca.ts --provincia=AT --classi=A-22,A-12 --minimo=5
+ *   npx tsx scripts/diag-bacheca.ts --provincia=AT --classi=A-24,A-25 --ordini=secondaria2
  *   npx tsx scripts/diag-bacheca.ts --provincia=AT --senza-classi   # ultima spiaggia
  */
 import { createClient } from '@supabase/supabase-js';
@@ -65,6 +66,17 @@ const argomento = (nome: string): string | undefined =>
 const CODICE = normalizzaProvincia(argomento('provincia') ?? 'AT');
 const MINIMO = Number(argomento('minimo') ?? MINIMO_BACHECA);
 const SENZA_CLASSI = process.argv.includes('--senza-classi');
+/**
+ * ORDINI DI SCUOLA del profilo di prova (`--ordini=secondaria2`, separati da virgola).
+ * Servono dal §26.120: la pertinenza del sostegno dipende dall'ordine, quindi una
+ * diagnosi che finge «tutti gli ordini» non può vedere il caso reale del cliente
+ * (docente della secondaria che riceveva «Sostegno infanzia» al 60%).
+ * Vuoto = tutti gli ordini (comportamento storico, utile per misurare il massimo).
+ */
+const ORDINI_PROFILO = (argomento('ordini') ?? '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean) as OrdineScuola[];
 
 const client = createClient(
   process.env.SUPABASE_URL || '',
@@ -143,7 +155,7 @@ async function main(): Promise<void> {
   const feedZona =
     (await getFeedInterpelli(client, { province: zona, classi: classiProfilo, limit: RIGHE_FEED })) ?? [];
   const bacheca = bachecaInterpelli(feedZona, {
-    ordini: ORDINI,
+    ordini: ORDINI_PROFILO.length > 0 ? ORDINI_PROFILO : ORDINI,
     classi: classiProfilo,
     province: [CODICE],
     favoriteSchools: [],
@@ -154,7 +166,7 @@ async function main(): Promise<void> {
     `• In bacheca: ${bacheca.lista.length} · senza scadenza: ${bacheca.senzaScadenza} · ` +
       `contorno: ${bacheca.righeNonOpportunita} · blacklist: ${bacheca.esclusiBlacklist} · ` +
       `riempitivi esclusi: ${bacheca.riempitiviEsclusi} · nascosti: ${bacheca.riempitiviNascosti} · ` +
-      `ripieghi: ${bacheca.ripieghiInBacheca}`,
+      `ripieghi: ${bacheca.ripieghiInBacheca} · senza affinità di classe: ${bacheca.senzaAffinitaClasse}`,
   );
 
   // 3. Integrazione fuori zona: query larga SOLO sotto il minimo (§26.111), contato

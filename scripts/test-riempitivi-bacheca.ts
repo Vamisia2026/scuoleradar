@@ -179,9 +179,14 @@ check(
   /ripiego: true/.test(bacheca) && /ripieghiInBacheca: number/.test(bacheca),
 );
 check(
-  'bacheca: lo scarto GEOGRAFICO non entra nella scorta (blocco oltre i 60 km)',
-  true,
+  'bacheca: la scorta non accoglie righe senza affinità di classe (§26.120)',
+  false,
   /if \(!valutazione\.escluso\) scorta\.push/.test(bacheca),
+);
+check(
+  'bacheca: lo scarto per affinità è dichiarato, non silenzioso',
+  true,
+  /senzaAffinitaClasse \+= 1/.test(bacheca),
 );
 check('bacheca: le scuole preferite non sono riempitivi', true, /proteggi:/.test(bacheca));
 check(
