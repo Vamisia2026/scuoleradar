@@ -39,6 +39,13 @@ export interface InterpelloDB {
   title: string;
   province: string;
   class_codes: string[] | null;
+  /**
+   * Codice classe SINGOLARE (colonna storica, scritta quasi sempre dall'ingestione:
+   * misurato il 30/10/2026, 465 righe con `class_code` contro 197 con `class_codes`).
+   * Se il mapper leggesse solo l'array, due terzi delle righe arriverebbero in vetrina
+   * senza classe — ed è esattamente ciò che svuotava la bacheca (§26.119).
+   */
+  class_code?: string | null;
   school_name: string | null;
   school_code: string | null;
   source_url: string;
@@ -93,9 +100,37 @@ export function enteEmittenteDaTitolo(
   return null;
 }
 
+/** Codici che NON sono una classe di concorso: segnaposto della pipeline di ingestione. */
+const CLASSI_SEGNAPOSTO = new Set(['GENERALE', 'ND', 'N.A.', 'NON SPECIFICATA']);
+
+/**
+ * Codici classe di una riga: l'array `class_codes` **e** il singolare `class_code`.
+ *
+ * Perché entrambi: l'ingestione scrive quasi sempre la colonna singolare (misurato
+ * il 30/10/2026 sulla banca dati: 465 righe con `class_code`, 197 con `class_codes`).
+ * Leggendo solo l'array, 268 righe arrivavano alla vetrina senza classe e il gate
+ * identitario della dashboard le scartava TUTTE — la bacheca di ogni provincia
+ * risultava vuota pur avendo avvisi attivi (§26.119).
+ * I segnaposto («GENERALE» = «nessuna classe riconosciuta») non sono classi: se
+ * entrassero, la vetrina mostrerebbe «GENERALE» al posto della materia e il gate
+ * considererebbe completa una riga che non lo è.
+ */
+export function codiciClasseRiga(
+  riga: Pick<InterpelloDB, 'class_codes' | 'class_code'>,
+): string[] {
+  const grezzi = [...(riga.class_codes ?? []), riga.class_code];
+  return [
+    ...new Set(
+      grezzi
+        .map((codice) => (codice ?? '').trim().toUpperCase())
+        .filter((codice) => codice.length > 0 && !CLASSI_SEGNAPOSTO.has(codice)),
+    ),
+  ];
+}
+
 /** Converte una riga della tabella `interpelli` nel tipo `Interpello` usato dalla dashboard. */
 export function mapInterpelloDBToInterpello(r: InterpelloDB): Interpello {
-  const codici = (r.class_codes ?? []).filter(Boolean);
+  const codici = codiciClasseRiga(r);
   const primaClasse = codici[0] ?? '';
   const classe = classeByCodice(primaClasse);
   const provinciaCodice = (r.province ?? '').toUpperCase();

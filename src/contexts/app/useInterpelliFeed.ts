@@ -26,13 +26,12 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { interpelli, type Interpello } from '@/data/interpelli';
-import { integraAmbiti, provinceDellaRegione } from '@/lib/ambitoBacheca';
 import { bachecaInterpelli } from '@/lib/bachecaInterpelli';
 import { limitaSelezione } from '@/lib/planLimits';
 import { getFeedInterpelli } from '@/lib/matchingEngine';
-import { normalizzaProvincia, provinceDiRicerca } from '@/lib/prossimitaGeografica';
+import { provinceDiRicerca } from '@/lib/prossimitaGeografica';
 import { MINIMO_BACHECA } from '@/lib/riempitivi';
-import { eOpportunitaConScadenza } from '@/lib/scadenza';
+import { vetrinaConAmbiti, vetrinaVisibile } from '@/lib/vetrinaBacheca';
 import { supabase } from '@/lib/supabase';
 import { mapNoticiaToInterpello } from './helpers';
 import type { Preferenze } from './types';
@@ -184,9 +183,17 @@ export function useInterpelliFeed(
     }).lista;
   }, [preferenze, fontiInterpelli, provinceAttive, classiAttive]);
 
+  /**
+   * VETRINA della provincia: le righe della bacheca che la pagina mostrerà davvero
+   * (gate identitario, §26.119). Il minimo si conta QUI: contarlo sulla bacheca
+   * faceva credere al feed di avere già cinque posti pieni mentre la pagina ne
+   * scartava cinque su cinque — l'utente vedeva zero con il Radar pieno.
+   */
+  const vetrina = useMemo<Interpello[]>(() => vetrinaVisibile(bacheca), [bacheca]);
+
   /** Quante opportunità mancano al minimo di vetrina (§26.111). */
   const mancantiVetrina = preferenze.onboarded
-    ? Math.max(0, MINIMO_BACHECA - bacheca.length)
+    ? Math.max(0, MINIMO_BACHECA - vetrina.length)
     : 0;
 
   /**
@@ -222,28 +229,15 @@ export function useInterpelliFeed(
     };
   }, [mancantiVetrina, classiAttive]);
 
+  /**
+   * VETRINA: provincia → regione → Italia, fino al minimo (§26.111), contando solo le
+   * righe che la pagina mostrerà davvero (§26.119). La regola vive in un modulo PURO
+   * (`lib/vetrinaBacheca`): contare la BACHECA invece della vetrina faceva credere al
+   * feed di avere già cinque posti pieni mentre la pagina ne scartava cinque su cinque.
+   */
   const interpelliFiltrati = useMemo<Interpello[]>(() => {
     if (!preferenze.onboarded) return [];
-    // VETRINA: provincia → regione → Italia, fino al minimo (§26.111). Le righe
-    // fuori ambito passano lo STESSO gate del feed (`eOpportunitaConScadenza`,
-    // §26.82): nella vetrina entra solo ciò che si può candidare adesso, mai un
-    // avviso «lontano» solo perché arriva da un'altra regione.
-    const inBacheca = new Set(bacheca.map((i) => i.id));
-    const provinceRegione = provinceDellaRegione(provinceAttive);
-    const fuori = fontiAmbito.filter(
-      (i) => !inBacheca.has(i.id) && eOpportunitaConScadenza(i.dataScadenza),
-    );
-    const regionali = fuori.filter((i) =>
-      provinceRegione.has(normalizzaProvincia(i.provinciaCodice)),
-    );
-    const nazionali = fuori.filter(
-      (i) => !provinceRegione.has(normalizzaProvincia(i.provinciaCodice)),
-    );
-    return integraAmbiti(bacheca, { regionali, nazionali }).lista.map((i) =>
-      // Il voto resta del profilo: una riga fuori ambito non è stata valutata e
-      // non può portare il 100 neutro del mapper in cima alla dashboard.
-      i.ambito === 'provincia' ? i : { ...i, compatibilita: 0, ripiego: false },
-    );
+    return vetrinaConAmbiti(bacheca, { fuori: fontiAmbito, province: provinceAttive });
   }, [preferenze.onboarded, bacheca, fontiAmbito, provinceAttive]);
 
   return { fontiInterpelli, origineDati, interpelliFiltrati };

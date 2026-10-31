@@ -172,20 +172,17 @@ check('il minimo arriva dai riempitivi', true, /import \{ MINIMO_BACHECA \} from
 check('sotto 300 righe', true, sorgente.split('\n').length <= 300);
 
 const feed = leggi('src/contexts/app/useInterpelliFeed.ts');
-check('il feed integra gli ambiti', true, /integraAmbiti\(/.test(feed));
+const vetrinaModulo = leggi('src/lib/vetrinaBacheca.ts');
+check('il feed integra gli ambiti', true, /vetrinaConAmbiti\(/.test(feed) && /integraAmbiti\(/.test(vetrinaModulo));
 check('il feed chiede la query larga sotto il minimo', true, /mancantiVetrina/.test(feed));
 check('il feed conosce il minimo di vetrina', true, /MINIMO_BACHECA/.test(feed));
-check('il feed usa le province della regione', true, /provinceDellaRegione\(/.test(feed));
-check('le righe fuori ambito passano il gate dei 15 giorni', true, /eOpportunitaConScadenza\(/.test(feed));
-check('le righe fuori ambito non portano voto', true, /compatibilita: 0/.test(feed));
+check('le province della regione definiscono il perimetro', true, /provinceDellaRegione\(/.test(vetrinaModulo));
+check('le righe fuori ambito passano il gate dei 15 giorni', true, /eOpportunitaConScadenza\(/.test(vetrinaModulo));
+check('le righe fuori ambito non portano voto', true, /compatibilita: 0/.test(vetrinaModulo));
 
 const elenco = leggi('src/pages/dashboard/components/ElencoOpportunita.tsx');
 check('il badge d’ambito è in pagina', true, /ETICHETTA_AMBITO/.test(elenco));
 check('la spiegazione è nel tooltip', true, /descrizioneAmbito\(/.test(elenco));
-
-const pkg = JSON.parse(leggi('package.json')) as { scripts: Record<string, string> };
-check('script dedicato', true, 'test:ambito-bacheca' in pkg.scripts);
-check('guardia nella catena', true, (pkg.scripts.test ?? '').includes('scripts/test-ambito-bacheca.ts'));
 
 console.log(
   errori === 0

@@ -11,10 +11,10 @@ import { useState } from 'react';
 import { BenvenutoProRadar, PreferenzeRadar, RadarStatusToggle } from '@/departments/radar';
 import { ProFeatureModal } from '@/components/ProFeatureModal';
 import { useApp } from '@/contexts/AppContext';
-import { costruisciAvviso } from '@/lib/alertInterpello';
 import { BannerBozzaOnboarding } from './dashboard/components/BannerBozzaOnboarding';
 import { ElencoOpportunita } from './dashboard/components/ElencoOpportunita';
 import { VetrinaRadarOspiti } from './dashboard/components/VetrinaRadarOspiti';
+import { vetrinaVisibile } from '@/lib/vetrinaBacheca';
 
 export function DashboardPage() {
   const {
@@ -35,29 +35,10 @@ export function DashboardPage() {
   const feedBloccatoBase =
     Boolean(user) && Boolean(preferenze.onboarded) && pianoStato === 'pronto' && !hasProAccess;
 
-  // Opportunità attive: pulite dalle scadute, poi ordinate per compatibilità e scadenza.
-  const oraAttuale = Date.now();
-  const opportunitaAttive = interpelliFiltrati
-    .filter((i) => !i.dataScadenza || new Date(i.dataScadenza).getTime() > oraAttuale)
-    // Gate di gerarchia: mostra SOLO gli avvisi con i campi IDENTITARI obbligatori
-    // (Provincia, Ordine di scuola, Classe/Materia). La Scadenza, se assente, è
-    // gestita garbatamente nella card (non è motivo di scarto).
-    .filter((i) => {
-      const mancanti = costruisciAvviso({
-        provincia: i.provinciaNome || i.provinciaCodice,
-        ordine: i.ordine,
-        classCode: i.classeCodice,
-        classCodes: i.classiCodes,
-        materia: i.materia,
-        scadenza: i.dataScadenza,
-        schoolName: i.istituto,
-      }).mancanti;
-      return (
-        !mancanti.includes('Provincia') &&
-        !mancanti.includes('Ordine di scuola') &&
-        !mancanti.includes('Classe / Materia')
-      );
-    })
+  // Opportunità attive: pulite dalle scadute e dal gate identitario (regola UNICA in
+  // `lib/vetrinaBacheca`, §26.119: la stessa che il feed usa per contare i posti
+  // liberi), poi ordinate per compatibilità e scadenza.
+  const opportunitaAttive = vetrinaVisibile(interpelliFiltrati)
     // PRIORITÀ: prima i match più forti col profilo (verde → arancio → rosso), poi
     // la scadenza più vicina. I suggerimenti EXTRA (60%, es. area sostegno fuori
     // dalle proprie classi) restano in bacheca ma finiscono in coda, mai in testa.

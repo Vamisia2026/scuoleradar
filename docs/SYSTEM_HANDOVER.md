@@ -12700,3 +12700,104 @@ solo una, nel campione, nascondeva un termine vero — e non era un interpello
 docenti. Il valore del lavoro non è il numero: è che ora la prossima volta che il
 contatore «senza scad.» sale, c'è uno strumento che dice *perché*.
 
+
+---
+
+## §26.119 — Bacheca mai vuota: la classe che l'ingestione scriveva e il mapper non leggeva (30/10/2026)
+
+**Direttiva.** «La bacheca dell'utente di Asti mostra 0 opportunità: garantire sempre
+cinque voci, attingendo prima alla regione e poi all'Italia. Scansione mirata solo su
+Asti.» Il fallback a tre livelli esisteva già (§26.111, `lib/ambitoBacheca`), quindi la
+prima domanda non era «come aggiungerlo» ma **perché non entrava in funzione**. La
+risposta misurata sul database: la bacheca contava cinque righe che la pagina non avrebbe
+mai mostrato, e le righe della zona arrivavano senza classe.
+
+### 1. Le tre cause, in ordine di gravità
+
+| # | Difetto | Misura (30/10/2026, `--province=AT`) |
+|---|---|---|
+| 1 | **Il mapper ignorava `class_code`** (colonna singolare) | 465 righe con `class_code`, **197** con `class_codes`: 268 righe senza classe |
+| 2 | **Il gate identitario della pagina le scartava** (`Classe / Materia` mancante) | bacheca 5 su 5 scartate → **vetrina 0**, con 395 avvisi attivi in Italia |
+| 3 | **Il minimo dei cinque posti si contava sulla BACHECA, non sulla vetrina** | `mancantiVetrina` = 0 → nessuna integrazione regionale/nazionale |
+
+Le cause 1 e 2 sono lo stesso errore visto da due lati: l'ingestione scrive **due**
+colonne (l'array indicizzato e il singolare storico) e il resto del sistema ne leggeva
+una sola. La RPC `match_interpelli` e il fallback PostgREST filtrano su `class_codes`:
+una riga con la sola colonna singolare era invisibile a **ogni** ricerca per classe.
+
+### 2. Le correzioni
+
+* **`lib/matchingEngine`** — `codiciClasseRiga` legge `class_codes` **e** `class_code`,
+  normalizza (maiuscolo, dedup) e scarta i segnaposto (`GENERALE` = «nessuna classe
+  riconosciuta», `ND`, `N.A.`): un segnaposto nell'array avrebbe fatto dichiarare
+  completa una riga che non lo è.
+* **`lib/vetrinaBacheca`** (nuovo, PURO) — la regola del gate identitario esce dalla
+  pagina e diventa una sola: `campiMancantiVetrina`, `rigaVetrinaCompleta`,
+  `vetrinaVisibile` (presentabile **e** ancora aperta: una scadenza di oggi vale tutto il
+  giorno, §26.100) e `vetrinaConAmbiti` (provincia → regione → Italia, contando solo le
+  righe visibili). `DashboardPage` e `useInterpelliFeed` usano queste funzioni: il conto
+  dei posti liberi non può più divergere da ciò che si vede.
+* **`scripts/table-reporter`** — scrive `class_codes` accanto a `class_code` in **tutti e
+  cinque** i punti in cui costruisce un record (era la radice del difetto) e accetta
+  `--province=AT` (alias `--provincia`): il filtro vale sui target **e** sui record
+  scritti, così un giro mirato non riempie il database di righe di altre province. Il
+  deep crawl visita solo le scuole della provincia richiesta.
+* **`scripts/backfill-classi-array.ts`** — riparazione idempotente delle righe storiche
+  (dry-run di default, `--apply` per scrivere): **298 righe** riparate in produzione
+  (EEEE 79 · ADEE 59 · AAAA 47 · ADAA 34 · …), 835 totali, 495 con classi dopo l'operazione.
+* **`scripts/diag-bacheca.ts`** (`npm run diag:bacheca`) — rifà in Node l'intero percorso
+  del feed su una provincia e stampa i conti di ogni stadio e le righe che l'utente
+  vedrebbe. È lo strumento che ha reso questa diagnosi una misura, non un'ipotesi.
+
+
+### 3. Scansione mirata su Asti (eseguita)
+
+| Passo | Comando | Esito |
+|---|---|---|
+| Percorso nativo per provincia | `npx tsx src/scraper/index.ts --provincia=AT --no-email` (Telegram realtime off) | 5 fonti (USR Piemonte avvisi/docenti/ATA, aggregatore nazionale, InterpelloWeb) · 5 avvisi estratti · 3 unici · **1 nuovo** · upsert 3 righe — tutte fuori AT: gli hub piemontesi non pubblicano gli interpelli di Asti |
+| **Giro mirato (nuovo filtro)** | `npx tsx scripts/table-reporter.ts --province=AT` | **1 target su 247** (la pagina USP Asti `ric_interpello_ambito_at.php`) · **5 record validi estratti** · deep crawl **4 istituti su 4 citati, 6 pagine, 0 record nuovi** · 0 record di altre province scritti |
+| Stato su Supabase | sonde di sola lettura, poi cancellate | **5 righe AT**, **4 scuole distinte** (I.I.S. A. Castigliano, I.C. Costigliole, I.C. San Damiano ×2, I.C. 4), tutte con `class_codes` popolate dopo il backfill |
+
+Due delle cinque righe AT hanno una scadenza utile (`2026-11-01` A034, `2026-11-02` ADEE);
+tre portano il segnaposto `2027-04-30` che il portale usa per «avviso lasciato aperto»
+(§26.113): restano nel database, fuori dal feed per l'orizzonte dei 15 giorni (§26.82),
+come da regola.
+
+### 4. Che cosa vede l'utente di Asti (misurato dopo le correzioni)
+
+`npx tsx scripts/diag-bacheca.ts --provincia=AT --classi=A034,ADEE,AAAA` (profilo con
+classi reali di Asti): zona cercata AT, AL, TO, VC (raggio 60 km) → **15 righe visibili**,
+nessuna integrazione necessaria perché la zona supera il minimo. Prime cinque:
+
+1. **I.I.S. A. CASTIGLIANO** (AT) — voto **100%**, scadenza 01/11
+2. **I.C. COSTIGLIOLE** (AT) — voto **100%**, scadenza 02/11
+3. I.C. TORTONA B (AL, entro il raggio) — 90%, scadenza 01/11
+4. I.C. TORTONA B (AL) — 88%, scadenza 02/11
+5. I.C. CONDOVE E SANT AMBROGIO (TO) — 86%, scadenza 31/10
+
+Con il profilo derivato dal pool (`EEEE, ADEE, AAAA`) la vetrina è di **24 righe**, con
+I.C. COSTIGLIOLE davanti al 100%. Prima delle correzioni, qualunque profilo produceva
+**0 righe**: è la differenza che ha chiuso la segnalazione.
+
+### 5. Verifiche e file
+
+`npm run typecheck` ✅ · `npm test` ✅ exit 0 (nuova guardia `npm run test:vetrina-bacheca`
+in catena) · `npm run test:architettura` ✅ 145 di baseline, **0 nuove** (l'hook del feed
+è sceso a 245 righe spostando la regola nel modulo puro) · `npm run build` ✅ ·
+`npx eslint` sui file toccati ✅ 0.
+
+*Nuovi*: `src/lib/vetrinaBacheca.ts`, `scripts/test-vetrina-bacheca.ts`,
+`scripts/diag-bacheca.ts`, `scripts/backfill-classi-array.ts`. *Modificati*:
+`src/lib/matchingEngine.ts`, `src/contexts/app/useInterpelliFeed.ts`,
+`src/pages/DashboardPage.tsx`, `scripts/table-reporter.ts`,
+`scripts/test-ambito-bacheca.ts`, `package.json` (`test:vetrina-bacheca`,
+`diag:bacheca`, `db:backfill-classi`), `docs/**`.
+
+**Nota di sessione.** Il fallback a tre livelli non era rotto: era **invisibile ai propri
+dati**. La lezione da tenere è la stessa di §26.118 — prima di aggiungere una regola,
+misurare ciò che la regola esistente vede davvero. Qui la misura ha trovato una colonna
+scritta dall'ingestione e ignorata dal mapper: 298 righe, in produzione, che nessuna
+ricerca per classe poteva raggiungere. Il `--province` del reporter chiude l'altra metà
+del problema: un giro mirato ora legge e scrive solo il territorio richiesto, e lo
+dichiara nei log.
+

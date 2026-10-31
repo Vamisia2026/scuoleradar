@@ -328,6 +328,29 @@ function regioneCorrisponde(regione: string | null): boolean {
   return REGIONI_FILTRO.some((filtro) => r.includes(filtro) || filtro.includes(r));
 }
 
+// Filtro PROVINCE opzionale: `--province=AT` (alias `--provincia=AT`) oppure
+// variabile d'ambiente `PROVINCE=AT`. Vuoto = tutte le province.
+//
+// Perché serve (§26.119): una verifica mirata («solo Asti») non poteva esistere —
+// `--regioni=Piemonte` legge anche TO, AL, CN… e i record delle altre province
+// finivano comunque nel database. Con questo filtro il giro scarta i target che non
+// sono della provincia richiesta E, prima dell'upsert, i record che la fonte ha
+// citato per altre province (un hub regionale ne elenca di mezza regione): un giro
+// dichiaratamente «solo Asti» scrive solo righe di Asti.
+const PROVINCE_FILTRO: string[] = (() => {
+  const arg = process.argv.find(
+    (a) => a.startsWith('--province=') || a.startsWith('--provincia='),
+  );
+  const raw = arg ? arg.split('=')[1] : process.env.PROVINCE ?? '';
+  return raw.split(',').map((codice) => codice.trim().toUpperCase()).filter(Boolean);
+})();
+
+/** True se il codice provincia rientra nel filtro (vuoto = tutte). */
+function provinciaCorrisponde(codice: string | null | undefined): boolean {
+  if (PROVINCE_FILTRO.length === 0) return true;
+  return PROVINCE_FILTRO.includes((codice ?? '').trim().toUpperCase());
+}
+
 // `--nazionale` (o `NATIONALE=1`): GIRO NAZIONALE — tutti i target attivi di
 // `discovered_links` di ogni regione PIÙ gli hub USR/USP verificati della
 // whitelist (`src/scraper/fonti.ts`), deduplicati per URL. Ignora `--regioni`.
@@ -517,6 +540,14 @@ interface InterpelloRecord {
   province: string;
   region: string | null;
   class_code: string;
+  /**
+   * §26.119 — le STESSE classi in ARRAY, accanto al singolare. La RPC
+   * `match_interpelli` e il fallback PostgREST filtrano su `class_codes`
+   * (`&&`/`.overlaps`): scrivendo solo `class_code` la riga entrava nel database
+   * ma era INVISIBILE a ogni ricerca per classe — misurato il 30/10/2026: 465
+   * righe con il singolare, 197 con l'array, e la bacheca dell'utente vuota.
+   */
+  class_codes: string[];
   subject: string;
   /** Colonna LEGACY (text ISO): resta per compatibilità e per la migrazione. */
   deadline: string;
@@ -1531,6 +1562,7 @@ function extractRecordsFromLiguriaGrid(
       province,
       region,
       class_code: classCode,
+      class_codes: classiArray(classCode),
       subject,
       deadline,
       expiration_date: aExpirationDate(deadline),
@@ -1680,6 +1712,7 @@ async function leggiTabelleUst(
       province,
       region: target.region,
       class_code: classi[0] ?? classCode,
+      class_codes: classiArray(classi[0], classCode, ...classi),
       subject,
       deadline,
       expiration_date: aExpirationDate(deadline),
@@ -1774,6 +1807,10 @@ function recordDaVoceAdattiva(
     province,
     region: target.region,
     class_code: CLASS_CODE_SHAPE.test(classCodeVoce) ? classCodeVoce : classCode,
+    class_codes: classiArray(
+      CLASS_CODE_SHAPE.test(classCodeVoce) ? classCodeVoce : classCode,
+      ...classi,
+    ),
     subject,
     deadline,
     expiration_date: aExpirationDate(deadline),
@@ -2631,6 +2668,7 @@ async function leggiRecordsDaHtml(
         province,
         region,
         class_code: finalClassCode,
+        class_codes: classiArray(finalClassCode, classCode),
         subject,
         deadline,
         expiration_date: aExpirationDate(deadline),
@@ -2700,6 +2738,30 @@ const CLASS_CODE_HEAD = /^([A-Za-z]{1,2}[0-9]{2,3}|[A-Za-z]{4,6})\s*[-–—]\s*
 function classCodeNudo(raw: string): string | null {
   const code = normalize(raw).toUpperCase();
   return CLASS_CODE_SHAPE.test(code) ? code : null;
+}
+
+/** Segnaposto che NON sono classi di concorso (stessa lista del mapper, §26.119). */
+const CLASS_CODE_SEGNAPOSTO = new Set(['GENERALE', 'ND', 'N.A.', 'NON SPECIFICATA']);
+
+/**
+ * Classi in ARRAY (`class_codes`) accanto al singolare (`class_code`).
+ *
+ * Perché serve (§26.119): la RPC `match_interpelli` filtra con `class_codes &&
+ * varianti` e il fallback PostgREST con `.overlaps('class_codes', …)`. Scrivendo
+ * solo la colonna singolare, la riga entrava nel database ma nessuna ricerca per
+ * classe poteva vederla: la bacheca dell'utente restava vuota pur avendo avvisi
+ * attivi. Si deduplica, si alza il caso e si scartano i segnaposto: «GENERALE»
+ * significa «nessuna classe riconosciuta» e non deve diventare una classe.
+ */
+function classiArray(...codici: (string | null | undefined)[]): string[] {
+  return [
+    ...new Set(
+      codici
+        .flatMap((codice) => (codice ?? '').split(/[,;|]/))
+        .map((codice) => codice.trim().toUpperCase())
+        .filter((codice) => codice.length > 0 && !CLASS_CODE_SEGNAPOSTO.has(codice)),
+    ),
+  ];
 }
 
 /** Codice all'INIZIO di una cella con descrizione (`A041 - Scienze…` → `A041`,
@@ -3038,6 +3100,10 @@ function recordDaVoceScuola(
     // scuola (un hub nazionale cita istituti di mezza Italia).
     region: provinciaDaCodice(province)?.regione ?? null,
     class_code: CLASS_CODE_SHAPE.test(classCodeVoce) ? classCodeVoce : classCode,
+    class_codes: classiArray(
+      CLASS_CODE_SHAPE.test(classCodeVoce) ? classCodeVoce : classCode,
+      ...classCodes,
+    ),
     subject,
     deadline,
     expiration_date: aExpirationDate(deadline),
@@ -3335,9 +3401,24 @@ function attesa(ms: number): Promise<void> {
  */
 async function salvaRecords(records: readonly InterpelloRecord[]): Promise<number> {
   if (records.length === 0) return 0;
+  // GIRO MIRATO (§26.119): un filtro provincia si applica anche a CIÒ CHE SI SCRIVE,
+  // non solo ai target letti. Un hub regionale elenca avvisi di mezza regione: senza
+  // questo taglio un «giro solo Asti» riempiva il database di righe di Torino e
+  // Alessandria. Lo scarto è dichiarato, mai silenzioso.
+  const daScrivere = PROVINCE_FILTRO.length === 0
+    ? records
+    : records.filter((record) => provinciaCorrisponde(record.province));
+  if (daScrivere.length !== records.length) {
+    console.log(
+      `[table-reporter] Giro mirato (${PROVINCE_FILTRO.join(', ')}): ` +
+        `${records.length - daScrivere.length} record di altre province non scritti ` +
+        `(${daScrivere.length}/${records.length} ammessi).`
+    );
+  }
+  if (daScrivere.length === 0) return 0;
   const { data: inseriti, error } = await supabase
     .from('interpelli')
-    .upsert(records, {
+    .upsert(daScrivere, {
       onConflict: 'hash_id',
       ignoreDuplicates: true,
     })
@@ -3788,6 +3869,12 @@ async function runTableReporter(): Promise<void> {
       `[table-reporter] Filtro regioni attivo: ${REGIONI_FILTRO.join(', ')}`
     );
   }
+  if (PROVINCE_FILTRO.length > 0) {
+    console.log(
+      `[table-reporter] Filtro PROVINCE attivo: ${PROVINCE_FILTRO.join(', ')} — ` +
+        'si leggono e si scrivono solo righe di queste province (§26.119).'
+    );
+  }
 
   try {
     if (DRY_RUN) {
@@ -3823,6 +3910,18 @@ async function runTableReporter(): Promise<void> {
   }
 
   targets = limitaPerRegione(targets);
+
+  // GIRO MIRATO PER PROVINCIA (§26.119): `--province=AT` legge solo i target della
+  // provincia richiesta. I target senza provincia (hub regionali) restano fuori: in un
+  // giro «solo Asti» sarebbero letture pagate per righe che poi si scartano.
+  if (PROVINCE_FILTRO.length > 0) {
+    const prima = targets.length;
+    targets = targets.filter((target) => provinciaCorrisponde(target.province));
+    console.log(
+      `[table-reporter] Filtro province attivo: ${PROVINCE_FILTRO.join(', ')} — ` +
+        `${targets.length}/${prima} target`
+    );
+  }
 
   if (targets.length === 0) {
     console.warn(
@@ -3918,6 +4017,9 @@ async function runTableReporter(): Promise<void> {
       stat.vociAdattive += result.vociAdattive ?? 0;
       stat.scadenzeDaCorpo += result.scadenzeDaCorpo ?? 0;
       for (const codice of result.scuole ?? []) {
+        // Giro mirato (§26.119): il deep crawl visita solo le scuole della provincia
+        // richiesta (le prime due lettere del codice meccanografico sono la provincia).
+        if (!provinciaCorrisponde(codice.slice(0, 2))) continue;
         if (!scuoleDaVisitare.has(codice)) scuoleDaVisitare.set(codice, codice);
       }
       console.log(
