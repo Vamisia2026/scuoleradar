@@ -1,0 +1,70 @@
+# ============================================================
+# Crawl di UNA provincia — anagrafica MIM → coda → crawler (§26.125)
+#
+# Perché esiste: il box «Prova il Radar» legge `interpelli` e non può avviare una
+# scansione dal browser. Questo workflow è il comando che rende vera la promessa
+# «quando provo il Radar su Asti, il sistema interroga i target di Asti»:
+#   1. elenca le scuole della provincia dall'anagrafica MIM;
+#   2. promuove i target `pending` della provincia ad `active_crawler`;
+#   3. legge gli hub istituzionali della REGIONE (l'USR che pubblica per Asti non
+#      è censito su Asti) e visita le scuole, stampando «SCUOLE CONTATTATE».
+#
+# Secrets richiesti: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+# ============================================================
+name: Crawl Provincia (scuole + hub regionali)
+
+on:
+  workflow_dispatch:
+    inputs:
+      provincia:
+        description: 'Codice provincia da scandire (due lettere, es. AT)'
+        required: true
+        default: 'AT'
+      apply:
+        description: 'Promuovi i target pending ad active_crawler'
+        type: boolean
+        default: true
+      dry_run:
+        description: 'Nessuna scrittura su interpelli (solo lettura e report)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: crawl-provincia
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    name: Crawl mirato della provincia
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Installazione dipendenze
+        run: npm ci
+
+      - name: Validazione TypeScript dello scraper (informativa)
+        continue-on-error: true
+        run: npm run scrape:check
+
+      - name: Crawl della provincia
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PROVINCIA: ${{ inputs.provincia }}
+        run: |
+          ARGS="--province=$PROVINCIA"
+          if [ "${{ inputs.apply }}" = "true" ]; then ARGS="$ARGS --apply"; fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+          echo "Comando: npm run crawl:provincia -- $ARGS"
+          npm run crawl:provincia -- $ARGS

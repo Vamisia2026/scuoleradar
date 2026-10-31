@@ -10,7 +10,11 @@
  *      senza scadenza e senza classe un contenitore non è un'opportunità;
  *   3. gli aggregatori privati (interpelloweb.it) non sono fonti: la lista è una
  *      sola (`AGGREGATORI_PRIVATI`), la usa anche il discovery, e nel registro
- *      fonti la voce è SPENTA con il motivo.
+ *      fonti la voce è SPENTA con il motivo;
+ *   4. le pagine che DICHIARANO di essere vuote («Nessun risultato», «La ricerca
+ *      non ha prodotto risultati») e le voci che puntano a un contenitore invece
+ *      che al bando sono falsi positivi totali: fuori dall'ingestione e fuori
+ *      dalla card (`ePaginaSenzaRisultati` + `motivoPaginaContenitore` sul link).
  *
  * Uso: npm run test:pagina-archivio  (incluso in `npm test`)
  */
@@ -18,6 +22,7 @@ import { readFileSync } from 'node:fs';
 import {
   documentoUnicoDaContenitore,
   eEtichettaMenu,
+  ePaginaSenzaRisultati,
   motivoPaginaContenitore,
 } from '../src/scraper/paginaArchivio.ts';
 import { AGGREGATORI_PRIVATI } from '../src/lib/dominiIstituzionali.ts';
@@ -154,7 +159,9 @@ check('il deep crawl usa il PDF unico del contenitore', true, /documentoUnicoDaC
 check('e lo dichiara come pagina-guscio', true, /soloAllegati: true/.test(crawl));
 // §26.123 — SPOONFEEDING: il PDF unico già risolto (`allegatoUnico`) arriva al
 // runner, che NON ri-scandisce i link della pagina. Nessun passaggio intermedio.
-check('il deep crawl passa il PDF unico (`allegatoUnico`)', true, /allegatoUnico: documento\.url/.test(crawl));
+// §26.125 — `documentoUnicoDaContenitore` restituisce una STRINGA (l'URL), non un oggetto.
+const passaLUnicoPdf = /allegatoUnico: documento,/.test(crawl) && !/allegatoUnico: documento\.url/.test(crawl);
+check('il deep crawl passa il PDF unico (`allegatoUnico`)', true, passaLUnicoPdf);
 const reporter = leggi('scripts/table-reporter.ts');
 check(
   'il runner usa l’URL già risolto invece di ri-scandire i link',
@@ -162,9 +169,74 @@ check(
   /pagina\.allegatoUnico[\s\S]{0,200}linkAllegatiInterpello/.test(reporter),
 );
 
+// §26.124 — IL RUNNER APPLICA LE STESSE REGOLE ALLE VOCI D'ALBO: una voce che
+// punta a un contenitore non è un bando e una pagina vuota non è una fonte.
+check(
+  'il runner scarta la voce che punta a un contenitore',
+  true,
+  /motivoPaginaContenitore\(\{ url: sourceUrl/.test(reporter),
+);
+check(
+  'il runner scarta la pagina vuota («Nessun risultato»)',
+  true,
+  /ePaginaSenzaRisultati\(pagina\.html\)/.test(reporter),
+);
+check(
+  'il deep crawl conta le pagine vuote e non le consegna',
+  true,
+  /ePaginaSenzaRisultati\([\s\S]{0,200}continue/.test(crawl) && /pagineVuote/.test(crawl),
+);
+check(
+  'la conformità riceve URL e scadenza (contenitore riconoscibile dal percorso)',
+  true,
+  /motivoScartoOpportunita\(\s*\{[\s\S]{0,240}url: a\.link/.test(leggi('src/scraper/index.ts')),
+);
+// §26.123 — LA CINTURA IN USCITA: nessun aggregatore nella dashboard né nel Radar
+// Live, nemmeno per le righe storiche già salvate prima del blocco.
+check(
+  'la bacheca filtra i domini aggregatore',
+  true,
+  /eAggregatorePrivato\(riga\.linkFonte\)/.test(leggi('src/lib/vetrinaBacheca.ts')),
+);
+check(
+  'il Radar Live filtra i domini aggregatore',
+  true,
+  /eAggregatorePrivato\(riga\.source_url\)/.test(leggi('src/lib/liveBoard.ts')),
+);
+
 const pkg = JSON.parse(leggi('package.json')) as { scripts: Record<string, string> };
 check('script dedicato', true, 'test:pagina-archivio' in pkg.scripts);
 check('guardia nella catena', true, (pkg.scripts.test ?? '').includes('scripts/test-pagina-archivio.ts'));
+
+/* ---------------- 6) PAGINE CHE DICHIARANO «NESSUN RISULTATO» ---------------- */
+
+console.log('\n— 6. La pagina vuota non è una fonte —');
+const paginaVuota = `<!doctype html><html><body>
+  <div class="ricerca"><p>Nessun risultato</p></div>
+  <script>var messaggio = 'Nessun risultato';</script>
+</body></html>`;
+check('«Nessun risultato» su pagina scarna → scartata', true, ePaginaSenzaRisultati(paginaVuota));
+check(
+  '«La ricerca non ha prodotto risultati» → scartata',
+  true,
+  ePaginaSenzaRisultati('<p>La ricerca non ha prodotto risultati</p>'),
+);
+check(
+  'pagina con un bando → tenuta',
+  false,
+  ePaginaSenzaRisultati('<p>Interpello A022 — supplenza, scadenza 10/11/2026</p>'),
+);
+check('HTML vuoto → nessun giudizio (decide il resto del filtro)', false, ePaginaSenzaRisultati(''));
+const paginaRicca =
+  '<div>Nessun risultato per «matematica»</div>' +
+  '<a href="https://www.x.edu.it/bando-a022.pdf">Interpello A022 supplenza scuola primaria, scadenza 10 novembre 2026, conferimento incarico</a>'.repeat(
+    8,
+  );
+check(
+  'pagina RICCA che cita «nessun risultato» nella ricerca interna → tenuta',
+  false,
+  ePaginaSenzaRisultati(paginaRicca),
+);
 
 console.log('\n' + '─'.repeat(70));
 if (errori === 0) {

@@ -28,6 +28,7 @@
  * ingestion e guardia (`npm run test:noise-filter`, in `npm test`).
  */
 import { PATTERN_VITA_SINDACALE } from './noiseFilterSindacale.ts';
+import { INDICATORI_ATA } from './noiseFilterAta.ts';
 import type { NoisePattern, NoiseVerdict } from './noiseFilterTipi.ts';
 
 /** I tipi restano importabili da qui: la superficie pubblica non cambia. */
@@ -127,6 +128,8 @@ export const RECRUITMENT_INDICATORS: readonly RegExp[] = [
   /attribuzione\s+(?:di\s+)?cattedr/i,
   /post[oi]\s+vacant/i,
   /avvis[oi]\s+(?:di\s+|per\s+la\s+)?selezion/i,
+  // §26.126 — i profili del personale ATA (`noiseFilterAta.ts`).
+  ...INDICATORI_ATA,
 ];
 
 /**

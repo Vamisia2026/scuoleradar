@@ -159,6 +159,10 @@ check('motivo: scorta esaurita', 'scorta-esaurita', esaurita.motivo);
 console.log('\n— Cablaggio: feed → bacheca pura, card/modale, consegna invariata —');
 const feed = leggi('src/contexts/app/useInterpelliFeed.ts');
 const bacheca = leggi('src/lib/bachecaInterpelli.ts');
+// §26.125 — l'esito (`ripieghiInBacheca`, …) e la riga di ripiego vivono in
+// `bachecaRipiego` (estratto per il tetto di 250 righe del gate strutturale): il
+// cablaggio resta UNO, la guardia legge i due file come un solo contratto.
+const bachecaConRipiego = `${bacheca}\n${leggi('src/lib/bachecaRipiego.ts')}`;
 const card = leggi('src/components/InterpelloCard.tsx');
 const modale = leggi('src/components/InterpelloDettaglioModal.tsx');
 check('feed: delega alla bacheca pura (filtri e punteggio)', true, /bachecaInterpelli\(/.test(feed));
@@ -171,12 +175,13 @@ check('bacheca: cap dinamico dei riempitivi', true, /limitaRiempitivi\(/.test(ba
 check(
   'bacheca: paracadute «5 osso-da-mordere» sulla scorta (§26.106)',
   true,
-  /paracaduteCinque\(cap\.lista, scorta\)/.test(bacheca) && /ripieghiInBacheca: paracadute\.aggiunti/.test(bacheca),
+  /paracaduteCinque\(cap\.lista, scorta, \{/.test(bacheca) &&
+    /ripieghiInBacheca: paracadute\.aggiunti/.test(bacheca),
 );
 check(
   'bacheca: le righe di ripiego sono dichiarate, mai silenziose',
   true,
-  /ripiego: true/.test(bacheca) && /ripieghiInBacheca: number/.test(bacheca),
+  /ripiego: true/.test(bachecaConRipiego) && /ripieghiInBacheca: number/.test(bachecaConRipiego),
 );
 check(
   'bacheca: la scorta non accoglie righe senza affinità di classe (§26.120)',
@@ -198,7 +203,7 @@ check(
 check(
   'bacheca: il conto degli esclusi è dichiarato, mai silenzioso',
   true,
-  /riempitiviEsclusi: number/.test(bacheca) && /riempitiviEsclusi \+= 1/.test(bacheca),
+  /riempitiviEsclusi: number/.test(bachecaConRipiego) && /riempitiviEsclusi \+= 1/.test(bacheca),
 );
 check('bacheca: province entro il raggio con penalità', true, /provinceLimitrofe: true/.test(bacheca));
 const bandaConMotivo = /bandaCompatibilita\(interpello\.compatibilita, interpello\.motivoCompatibilita\)/;

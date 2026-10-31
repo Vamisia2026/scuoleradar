@@ -157,7 +157,7 @@ export function estraiContenutoArticolo(
   for (const selettore of SELETTORI_CORPO) {
     const $candidato = $(selettore).first();
     if ($candidato.length > 0 && compatto($candidato.text(), 4000).length >= MIN_CORPO) {
-      $corpo = $candidato;
+      $corpo = $candidato as unknown as cheerio.Cheerio<Element>;
       break;
     }
   }

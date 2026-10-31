@@ -179,6 +179,27 @@ check('guardia nella catena', true, (pkg.scripts.test ?? '').includes('scripts/t
 check('riparazione dei dati storici disponibile', true, /backfill-classi-array/.test(leggi('package.json')));
 check('diagnosi per provincia disponibile', true, /diag-bacheca/.test(leggi('package.json')));
 
+/* ------- 5-bis) NESSUN AGGREGATORE PRIVATO IN BACHECA (§26.123) --------- */
+
+console.log('\n— 5-bis. Una fonte aggregatore privata non entra in vetrina —');
+for (const dominio of ['scuolainterpelli.it', 'interpelloweb.it', 'www.orizzontescuola.it']) {
+  check(
+    `fonte ${dominio} → riga fuori dalla bacheca`,
+    0,
+    vetrinaVisibile([avviso({ linkFonte: `https://${dominio}/interpello-a022/` })], OGGI).length,
+  );
+}
+check(
+  'fonte istituzionale → la stessa riga resta',
+  ['v1'],
+  vetrinaVisibile([avviso()], OGGI).map((riga) => riga.id),
+);
+check(
+  'fonte assente → nessun falso blocco',
+  ['v1'],
+  vetrinaVisibile([avviso({ linkFonte: '' })], OGGI).map((riga) => riga.id),
+);
+
 /* ------------------------- 6) PUREZZA DEL MODULO ----------------------- */
 
 console.log('\n— 6. Modulo puro, verificabile senza browser —');

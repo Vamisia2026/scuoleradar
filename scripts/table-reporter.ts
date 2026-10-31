@@ -142,6 +142,7 @@ import { scuolaDaRiga } from '../src/scraper/scuolaDaRiga.ts';
 // abbreviato; senza certificazione la riga non entra (meglio nessun avviso che
 // un avviso di una scuola che non esiste).
 import { caricaAnagrafica } from '../src/lib/anagraficaIndice.ts';
+import { targetInAmbitoProvincia } from '../src/lib/ambitoProvincia.ts';
 import {
   scuolaCertificata,
   scuoleDaTesto,
@@ -149,6 +150,13 @@ import {
   urlVerificabile,
   type ScuolaCertificata,
 } from '../src/lib/scuoleMaster.ts';
+// §26.125 — la visura delle scuole di una provincia (anagrafica MIM → HOME da leggere).
+import { scuoleDellaProvincia } from '../src/lib/scuoleProvincia.ts';
+// §26.126 — PROFILI DEL PERSONALE ATA: `personale ATA`, «collaboratori
+// scolastici», «assistenti amministrativi/tecnici» non hanno la forma «lettere +
+// cifre», quindi senza questa lettura la riga nasceva con `class_codes` vuoto e
+// nessun profilo poteva agganciarla (il Radar copriva solo i docenti).
+import { codiciAtaDaTesto } from '../src/lib/profiliAta.ts';
 // §26.94, §26.96 — la scadenza DICHIARATA nel testo dell'avviso si legge con
 // `campiDocumento`, che a sua volta usa `lib/scadenzaTesto` (etichetta
 // obbligatoria): quando la tabella o l'elenco non la riportano, la si cerca nel
@@ -161,6 +169,12 @@ import { urlPaginaSuccessiva } from '../src/lib/paginaSuccessiva.ts';
 // ufficiale, poi ai link «Interpelli / Albo» che la scuola pubblica davvero.
 import { leggiPagineInterpelli } from '../src/scraper/deepCrawlScuole.ts';
 import { linkAllegatiInterpello } from '../src/scraper/linkScuola.ts';
+// §26.124 — PAGINE-CONTENITORE, VOCI DI MENU E PAGINE VUOTE: la stessa regola
+// dell'ingestione `src/scraper/index.ts`. Una voce d'albo che punta a
+// `/la-segreteria-comunica/`, `/albo-online`, `/comunicazioni` (o che si chiama
+// semplicemente «Interpelli») non è un bando, e una pagina che dichiara «Nessun
+// risultato» non è una fonte: nessuna delle due deve arrivare alla card.
+import { ePaginaSenzaRisultati, motivoPaginaContenitore } from '../src/scraper/paginaArchivio.ts';
 // §26.96 — ALLEGATI su piattaforma documentale (Gecodoc, Argo, Nuvola/Spaggiari):
 // un `.pdf` servito da quelle piattaforme È l'avviso (la pagina di login no), e
 // quando la piattaforma risponde con un viewer il PDF va cercato dentro.
@@ -406,13 +420,37 @@ const GIRO_SGRANATURA = (() => {
 // (`--max-scuole=N`, 0 = nessuna) e quante pagine per istituto. Il tetto resta
 // (un albo pretorio può essere enorme), ma non è più un campione: il default è
 // `istitutiPerGiro` e le pagine per istituto vengono dalla stessa politica.
+//
+// §26.127 — `--max-scuole=tutte`: NESSUN tetto. Serve alla provincia in domanda,
+// che si legge al 100% dell'anagrafica MIM (una provincia ha un numero di
+// istituti che nessuno conosce in anticipo: un tetto «alto abbastanza» sarebbe un
+// campione travestito). `0` resta il modo di spegnere il deep crawl: due
+// significati diversi, due valori diversi.
+const TETTO_NESSUNO = Number.MAX_SAFE_INTEGER;
 const MAX_SCUOLE_DEEP = (() => {
   const arg = process.argv.find((a) => a.startsWith('--max-scuole='));
-  const n = Number(arg?.split('=')[1] ?? process.env.MAX_SCUOLE ?? LIMITI.istitutiPerGiro);
+  const grezzo = (arg?.split('=')[1] ?? process.env.MAX_SCUOLE ?? '').trim();
+  if (/^(?:tutte|tutti|all)$/i.test(grezzo)) return TETTO_NESSUNO;
+  const n = Number(grezzo || LIMITI.istitutiPerGiro);
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : LIMITI.istitutiPerGiro;
 })();
+/** Etichetta del tetto nei log: `tutte` quando non c'è tetto, mai un numero illeggibile. */
+const ETICHETTA_MAX_SCUOLE =
+  MAX_SCUOLE_DEEP >= TETTO_NESSUNO ? 'tutte' : String(MAX_SCUOLE_DEEP);
 const DEEP_CRAWL = !process.argv.includes('--no-deep') && MAX_SCUOLE_DEEP > 0;
 const MAX_PAGINE_SCUOLA = Math.max(1, LIMITI.paginePerAlbo);
+
+// §26.125 — SCUOLE DELLA PROVINCIA. Fino al 31/10/2026 il deep crawl visitava
+// SOLO gli istituti citati dalle tabelle di questo giro (`scuoleDaVisitare` si
+// riempiva con `result.scuole`): una provincia con 52 istituti ne vedeva leggere
+// due o tre, e tutto ciò che le altre scuole pubblicano nel proprio albo restava
+// invisibile. Con questo flag il giro parte dall'ANAGRAFICA MIM (siti dichiarati
+// della provincia richiesta), non dalle citazioni. Si accende da solo quando c'è
+// un filtro di provincia (`--province=AT`), si spegne con `--no-scuole-provincia`
+// e non ha effetto senza provincia: «tutte le scuole d'Italia» non è un giro.
+const SCUOLE_PROVINCIA =
+  !process.argv.includes('--no-scuole-provincia') &&
+  (process.argv.includes('--scuole-provincia') || PROVINCE_FILTRO.length > 0);
 
 // §26.94/§26.95 — scadenze lette nel CORPO di un avviso quando l'elenco non la
 // dichiara: tetto per target e per giro (è rete, non parsing). Dal 26/10/2026 il
@@ -1562,7 +1600,9 @@ function extractRecordsFromLiguriaGrid(
       province,
       region,
       class_code: classCode,
-      class_codes: classiArray(classCode),
+      // §26.126 — un bando ATA dichiara il profilo a parole («collaboratori
+      // scolastici»), non con un codice: le classi si leggono dalla riga.
+      class_codes: classiArray(classCode, ...classiAtaDaTesto(fullRowText)),
       subject,
       deadline,
       expiration_date: aExpirationDate(deadline),
@@ -1733,7 +1773,14 @@ async function leggiTabelleUst(
       province,
       region: target.region,
       class_code: classi[0] ?? classCode,
-      class_codes: classiArray(classi[0], classCode, ...classi),
+      // §26.126 — le classi ATA lette dal testo della riga (l'elenco USR scrive
+      // «Collaboratore scolastico», non `ATA-CS`).
+      class_codes: classiArray(
+        classi[0],
+        classCode,
+        ...classi,
+        ...classiAtaDaTesto(esito.testo),
+      ),
       subject,
       deadline,
       expiration_date: aExpirationDate(deadline),
@@ -1839,6 +1886,8 @@ function recordDaVoceAdattiva(
     class_codes: classiArray(
       CLASS_CODE_SHAPE.test(classCodeVoce) ? classCodeVoce : classCode,
       ...classi,
+      // §26.126 — profili ATA dichiarati nel titolo/nei campi della voce.
+      ...classiAtaDaTesto(`${title} ${voce.schoolName ?? ''} ${classi.join(' ')}`),
     ),
     subject,
     deadline,
@@ -2697,7 +2746,12 @@ async function leggiRecordsDaHtml(
         province,
         region,
         class_code: finalClassCode,
-        class_codes: classiArray(finalClassCode, classCode),
+        class_codes: classiArray(
+          finalClassCode,
+          classCode,
+          // §26.126 — profili ATA letti dalla riga della tabella.
+          ...classiAtaDaTesto(fullRowText),
+        ),
         subject,
         deadline,
         expiration_date: aExpirationDate(deadline),
@@ -2746,22 +2800,38 @@ function extractSubjectAndClass(text: string): {
   else if (t.includes('latino')) subject = 'Latino';
   else if (t.includes('scienze')) subject = 'Scienze';
 
-  return { classCode, subject };
+  // §26.126 — PERSONALE ATA. Il codice del profilo NON ha la forma «lettere +
+  // cifre» (è `ATA-AA`/`ATA-AT`/`ATA-CS`): senza questo ramo un bando per
+  // collaboratori o assistenti finiva a `GENERALE` e nessun profilo ATA poteva
+  // vederlo. Un profilo ESPLICITO diventa il codice della riga; la sola famiglia
+  // («personale ATA») resta `GENERALE` nel singolare e porta le tre classi in
+  // `class_codes`, così il bando è aperto a tutti i profili come lo è davvero.
+  const ata = codiciAtaDaTesto(text);
+  const ataUnica = ata.length === 1 ? ata[0] : null;
+
+  return {
+    classCode: classMatch ? classCode : (ataUnica ?? 'GENERALE'),
+    subject: subject === 'Non specificata' && ata.length > 0 ? 'Personale ATA' : subject,
+  };
 }
 
 // FIX v12 — codice classe di concorso: le fonti ufficiali usano TRE forme.
 //   · 4-6 lettere            → `AAAA`, `EEEE`, `ADEE`, `AAIRC`
 //   · 2 lettere + 2 cifre    → `AA24`, `AB25`, `BD02`, `AG55`
 //   · 1 lettera + 2/3 cifre  → `A026`, `A029`, `A041`, `A048`
+// §26.126 — più i TRE PROFILI DEL PERSONALE ATA del catalogo (`ATA-AA`, `ATA-AT`,
+// `ATA-CS`): sono codici con il trattino e una coda alfabetica, quindi nessuno
+// dei tre schemi precedenti li riconosceva e una cella «ATA-CS» veniva scartata.
 // Il pattern v11 (`[A-Za-z]{2,6}[0-9]{0,2}`) pretendeva DUE lettere e rifiutava
 // la terza forma: «A041 - Scienze e tecnologie informatiche» ricadeva su
 // `extractSubjectAndClass` → `GENERALE` (17 righe Piemonte, 33 Liguria il
 // 22/10/2026: nessuna poteva fare match con il profilo dell'utente).
-const CLASS_CODE_SHAPE = /^(?:[A-Z]{1,2}[0-9]{2,3}|[A-Z]{4,6})$/;
+const CLASS_CODE_SHAPE = /^(?:ATA-(?:AA|AT|CS)|[A-Z]{1,2}[0-9]{2,3}|[A-Z]{4,6})$/;
 
 // Il codice deve essere seguito da un separatore: senza questo vincolo celle
 // come «DIURNO» o «POSTO INTERO» verrebbero lette come codici di 4-5 lettere.
-const CLASS_CODE_HEAD = /^([A-Za-z]{1,2}[0-9]{2,3}|[A-Za-z]{4,6})\s*[-–—]\s*\S/;
+const CLASS_CODE_HEAD =
+  /^(ATA-(?:AA|AT|CS)|[A-Za-z]{1,2}[0-9]{2,3}|[A-Za-z]{4,6})\s*[-–—]\s*\S/;
 
 /** Codice «nudo» in una cella dedicata (`A044`, `ADEE`, `AAIRC`) oppure null. */
 function classCodeNudo(raw: string): string | null {
@@ -3089,6 +3159,20 @@ function recordDaVoceScuola(
   // applicativa come `…/interpelli/<CODICE>/docenti/<uuid>/candidatura` è il
   // modulo del docente (guscio JS `noindex` che chiede il login) e resta fuori.
   const sourceUrl = (voce.directUrl ?? '').trim();
+  // §26.124 — IL LINK DEVE ESSERE IL BANDO, NON IL CONTENITORE. «La segreteria
+  // comunica», «Comunicazioni», «Albo online» sono pagine che OSPITANO gli avvisi:
+  // pubblicarle come se fossero l'opportunità manda l'utente in un elenco caotico
+  // ed è la firma dei falsi positivi (Orvieto-Montecchio, Polovolta: la parola
+  // «interpelli» vive solo nel MENU). Con un titolo che dichiara il reclutamento
+  // la voce resta, e resta anche quando il link è un documento (`*.pdf`): lì il
+  // link È il bando, non l'involucro.
+  const linkDocumento = /\.pdf(?:$|[?#])/i.test(sourceUrl);
+  if (
+    !linkDocumento &&
+    motivoPaginaContenitore({ url: sourceUrl, titolo: title, classi: voce.classCodes })
+  ) {
+    return null;
+  }
   const allegato =
     eAllegatoPiattaforma(sourceUrl) || eAvvisoSuPiattaforma(sourceUrl);
   if (!allegato && (!urlVerificabile(sourceUrl) || !stessoSito(sourceUrl, scuola.home))) {
@@ -3132,6 +3216,10 @@ function recordDaVoceScuola(
     class_codes: classiArray(
       CLASS_CODE_SHAPE.test(classCodeVoce) ? classCodeVoce : classCode,
       ...classCodes,
+      // §26.126 — l'albo di un istituto intitola «Avviso per collaboratore
+      // scolastico / assistente amministrativo» senza codice: la classe si legge
+      // dal titolo, altrimenti la riga resta senza profilo.
+      ...classiAtaDaTesto(`${title} ${voce.schoolName ?? ''}`),
     ),
     subject,
     deadline,
@@ -3228,13 +3316,19 @@ async function deepCrawlScuole(scuole: Map<string, string>): Promise<void> {
   const anagrafica = caricaAnagrafica();
   const elenco = [...scuole.entries()].slice(0, MAX_SCUOLE_DEEP);
   console.log(
-    `[table-reporter] Deep crawl: ${elenco.length} istituti su ${scuole.size} citati ` +
-      `(tetto ${MAX_SCUOLE_DEEP}, ${MAX_PAGINE_SCUOLA} pagine per istituto).`,
+    `[table-reporter] Deep crawl: ${elenco.length} istituti su ${scuole.size} in elenco ` +
+      `(tetto ${ETICHETTA_MAX_SCUOLE}, ${MAX_PAGINE_SCUOLA} pagine per istituto).`,
   );
+  // §26.125 — le scuole DAVVERO contattate (home letta, almeno una pagina): la lista
+  // che il giro per provincia deve poter mostrare, senza doverla dedurre dai contatori.
+  const contattate: Array<{ codice: string; nome: string; home: string; pagine: number; record: number }> = [];
+  const nonRaggiunte: string[] = [];
 
   let visitati = 0;
   let senzaSito = 0;
   let pagine = 0;
+  /** §26.124 — pagine scartate perché dichiarano di essere vuote («Nessun risultato»). */
+  let pagineVuote = 0;
   let trovati = 0;
   let nuovi = 0;
   let errori = 0;
@@ -3254,6 +3348,10 @@ async function deepCrawlScuole(scuole: Map<string, string>): Promise<void> {
       { maxPagine: MAX_PAGINE_SCUOLA },
     );
     if (esito.pagine.length === 0) {
+      // §26.125 — nessuna pagina letta: la home non risponde oppure non pubblica un
+      // link di albo. Non è un errore del giro, ma va dichiarata: la lista delle
+      // «contattate» deve dire anche chi NON è stato contattato.
+      nonRaggiunte.push(codice);
       if (esito.errori.length > 0) {
         errori += 1;
         if (CONFIG.debug) {
@@ -3270,6 +3368,13 @@ async function deepCrawlScuole(scuole: Map<string, string>): Promise<void> {
     let vociInterpello = 0;
     for (const pagina of esito.pagine) {
       pagine += 1;
+      // §26.124 — PAGINA VUOTA («Nessun risultato», «La ricerca non ha prodotto
+      // risultati»): l'albo adesso non pubblica nulla. Nessuna voce da leggere e
+      // nessun albo da promuovere in coda: si salta, contando a parte dagli errori.
+      if (ePaginaSenzaRisultati(pagina.html)) {
+        pagineVuote += 1;
+        continue;
+      }
       let interpelliPagina = 0;
       // §26.115 — PAGINA-GUSCIO: vale solo per gli allegati. In un guscio le
       // «voci» sarebbero le voci di menu, e un menu non è un interpello.
@@ -3356,6 +3461,19 @@ async function deepCrawlScuole(scuole: Map<string, string>): Promise<void> {
       );
     }
     trovati += records.length;
+    contattate.push({
+      codice,
+      nome: scuola.nome ?? nome,
+      home: scuola.home,
+      pagine: esito.pagine.length,
+      record: records.length,
+    });
+    if (SCUOLE_PROVINCIA) {
+      console.log(
+        `[table-reporter] Scuola contattata: ${codice} — ${scuola.nome ?? nome} → ` +
+          `${scuola.home} (${esito.pagine.length} pagine, ${records.length} record)`,
+      );
+    }
     if (records.length === 0) continue;
     if (DRY_RUN) {
       logRecords(records);
@@ -3370,9 +3488,27 @@ async function deepCrawlScuole(scuole: Map<string, string>): Promise<void> {
     }
   }
 
+  if (SCUOLE_PROVINCIA) {
+    const province = PROVINCE_FILTRO.join(', ');
+    console.log(
+      `\n[table-reporter] SCUOLE CONTATTATE (province: ${province}): ${contattate.length} ` +
+        `su ${elenco.length} in elenco · ${senzaSito} senza sito dichiarato dall'anagrafica.`,
+    );
+    for (const c of contattate) {
+      console.log(`  · ${c.codice} — ${c.nome} → ${c.home} (${c.pagine} pagine, ${c.record} record)`);
+    }
+    if (nonRaggiunte.length > 0) {
+      console.log(
+        `  Non raggiunte (${nonRaggiunte.length}): ${nonRaggiunte.join(', ')} ` +
+          '— la home non ha risposto o non ha link di albo: si ritentano al prossimo giro.',
+      );
+    }
+  }
+
   console.log(
     `[table-reporter] Deep crawl: ${visitati} siti letti · ${pagine} pagine · ` +
-      `${trovati} record · ${nuovi} nuovi in DB · ${senzaSito} senza sito · ${errori} errori.`,
+      `${trovati} record · ${nuovi} nuovi in DB · ${senzaSito} senza sito · ` +
+      `${errori} errori · ${pagineVuote} pagine vuote.`,
   );
   console.log(
     `[table-reporter] Albi verificati in coda: ${albiNuovi} nuovi · ` +
@@ -3943,23 +4079,43 @@ async function runTableReporter(): Promise<void> {
 
   targets = limitaPerRegione(targets);
 
-  // GIRO MIRATO PER PROVINCIA (§26.119): `--province=AT` legge solo i target della
-  // provincia richiesta. I target senza provincia (hub regionali) restano fuori: in un
-  // giro «solo Asti» sarebbero letture pagate per righe che poi si scartano.
+  // GIRO MIRATO PER PROVINCIA (§26.119 · §26.125): `--province=AT` legge i target
+  // della provincia richiesta **più gli hub istituzionali della sua regione**. Fino al
+  // 31/10/2026 questi ultimi restavano fuori (`target.province` = capoluogo), ma il
+  // Piemonte non ha un hub dedicato ad Asti: si spegneva l'unica fonte che ne parla.
+  // Le righe restano comunque filtrate per provincia al momento dell'upsert.
   if (PROVINCE_FILTRO.length > 0) {
     const prima = targets.length;
-    targets = targets.filter((target) => provinciaCorrisponde(target.province));
+    const hubRegione = targetDaWhitelist().filter((target) =>
+      targetInAmbitoProvincia(target, PROVINCE_FILTRO),
+    );
+    const uniti = unisciTarget(targets, hubRegione);
+    if (uniti.length > targets.length) {
+      console.log(
+        `[table-reporter] Hub istituzionali della regione aggiunti al giro: ` +
+          `+${uniti.length - targets.length} (non erano in coda).`,
+      );
+    }
+    targets = uniti.filter((target) => targetInAmbitoProvincia(target, PROVINCE_FILTRO));
     console.log(
       `[table-reporter] Filtro province attivo: ${PROVINCE_FILTRO.join(', ')} — ` +
-        `${targets.length}/${prima} target`
+        `${targets.length}/${prima} target (hub regionali verificati inclusi)`,
     );
   }
 
   if (targets.length === 0) {
+    if (!SCUOLE_PROVINCIA) {
+      console.warn(
+        '[table-reporter] Nessun target con status=active_crawler in discovered_links.'
+      );
+      return;
+    }
+    // §26.125 — una provincia può avere la coda vuota e 52 scuole da leggere: il giro
+    // non si ferma, prosegue con il deep crawl dell'anagrafica.
     console.warn(
-      '[table-reporter] Nessun target con status=active_crawler in discovered_links.'
+      '[table-reporter] Nessun target in coda per questa provincia: il giro prosegue ' +
+        "con il deep crawl delle scuole dell'anagrafica."
     );
-    return;
   }
 
   // Telemetria (§26.85): le fonti isolate si saltano. UNA query per giro; se
@@ -3996,6 +4152,42 @@ async function runTableReporter(): Promise<void> {
   // §26.94 — istituti citati negli avvisi di questo giro: alimentano il deep
   // crawl (codice meccanografico → nome visto in fonte, dedup per codice).
   const scuoleDaVisitare = new Map<string, string>();
+
+  // §26.125 — SCUOLE DELLA PROVINCIA: il giro mirato parte dall'ANAGRAFICA MIM, non
+  // dalle citazioni dell'USR. Si seminano per PRIME, così il tetto `MAX_SCUOLE_DEEP`
+  // non può tagliare fuori la provincia proprio per colpa delle scuole citate.
+  if (SCUOLE_PROVINCIA) {
+    if (PROVINCE_FILTRO.length === 0) {
+      console.log(
+        '[table-reporter] --scuole-provincia senza --province: nessuna provincia da ' +
+          'scandire (un giro «tutte le scuole d\'Italia» non esiste). Flag ignorato.',
+      );
+    } else {
+      const anagrafica = caricaAnagrafica();
+      if (!anagrafica.disponibile) {
+        console.log(
+          '[table-reporter] Scuole della provincia: anagrafica MIM non disponibile ' +
+            '(file SCUANAGRAFE assenti) — il deep crawl resta sulle scuole citate.',
+        );
+      }
+      for (const provincia of PROVINCE_FILTRO) {
+        const esito = scuoleDellaProvincia(anagrafica, provincia, { max: MAX_SCUOLE_DEEP });
+        let aggiunte = 0;
+        for (const scuola of esito.scuole) {
+          const codice = (scuola.codice ?? '').trim().toUpperCase();
+          if (!codice || scuoleDaVisitare.has(codice)) continue;
+          scuoleDaVisitare.set(codice, scuola.nome ?? codice);
+          aggiunte += 1;
+        }
+        console.log(
+          `[table-reporter] Scuole della provincia ${provincia}: ${aggiunte} istituti con ` +
+            `sito ufficiale su ${esito.righe} righe d'anagrafica ` +
+            `(${esito.senzaSito} senza sito dichiarato, ${esito.paritarie} paritarie escluse, ` +
+            `tetto ${ETICHETTA_MAX_SCUOLE}).`,
+        );
+      }
+    }
+  }
 
   for (const target of targets) {
     const stat = statRegione(stats, target.region);

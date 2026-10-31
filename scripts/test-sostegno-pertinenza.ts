@@ -122,7 +122,13 @@ check(
   /if \(!valutazione\.escluso\) scorta\.push\(candidatoRipiego\(i, valutazione\)\)/.test(bacheca),
 );
 check('la geografia non sostituisce l’affinità di classe', true, /senzaAffinitaClasse/.test(bacheca));
-check('il conto è dichiarato nell’esito', true, /senzaAffinitaClasse: number/.test(bacheca));
+// §26.125 — il CONTRATTO dell'esito vive in `bachecaRipiego` (split per il tetto di
+// 250 righe): la guardia legge i due file, il cablaggio resta uno solo.
+check(
+  'il conto è dichiarato nell’esito',
+  true,
+  /senzaAffinitaClasse: number/.test(`${bacheca}\n${leggi('src/lib/bachecaRipiego.ts')}`),
+);
 
 console.log('\n— Cablaggio —');
 const pkg = leggi('package.json');

@@ -146,7 +146,7 @@ function voceDaAncora(
   url: string,
 ): PostElenco {
   const $a = $(el);
-  const $cont = $a.closest(SELETTORI_CONTENITORE).first();
+  const $cont = $a.closest(SELETTORI_CONTENITORE).first() as unknown as cheerio.Cheerio<Element>;
   const contesto = testo(($cont.length > 0 ? $cont : $a.parent()).text(), 600);
   return { titolo, url, contesto, dataPubblicazione: dataDelContenitore($, $cont) };
 }

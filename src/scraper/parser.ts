@@ -20,6 +20,7 @@
 
 import { createHash } from 'node:crypto';
 import { province } from '../data/province.ts';
+import { codiciAtaDaTesto } from '../lib/profiliAta.ts';
 import { eUrlAvvisoDiretto } from '../lib/alertInterpello.ts';
 import { risolviEmailUfficialeScuola } from '../lib/emailScuola.ts';
 import { nomeIstitutoPresentabile } from '../lib/nomeIstituto.ts';
@@ -96,6 +97,10 @@ export interface InterpelloParsato {
  *  - formato classico: A-12, A-026, B-02, B-001
  *  - speciali sostegno: ADEE, ADSS, ADMM, AD24, ...
  *  - formato COMPATTO di alcune fonti: A042 → A-042; AB25, AH56, BA02, AR01 (validi)
+ *  - profili del personale ATA (legge 31/10/2026, §26.126): «personale ATA»,
+ *    «collaboratori scolastici», «assistenti amministrativi/tecnici» →
+ *    `ATA-AA`/`ATA-AT`/`ATA-CS` (`lib/profiliAta`). Senza queste voci un bando
+ *    ATA entrava con `class_codes` vuoto e nessun profilo poteva agganciarlo.
  */
 const RE_CLASSI = /\b(?:[A-Z]{1,2}-\d{2,3}|AD(?:[A-Z]{2,3}|\d{2}))\b/g;
 /** 1 lettera + 3 cifre (A042, A040, A028) → normalizzato in A-042, A-040, A-028. */
@@ -112,6 +117,11 @@ export function rilevaClassi(testo: string): string[] {
   while ((m = RE_CLASSE_COMPATTA_NUM.exec(t)) !== null) trovate.add(`${m[1]}-${m[2]}`);
   RE_CLASSE_COMPATTA_ALFA.lastIndex = 0;
   while ((m = RE_CLASSE_COMPATTA_ALFA.exec(t)) !== null) trovate.add(m[1]);
+
+  // PROFILI ATA (§26.126): non hanno la forma «lettere + cifre» e senza questa
+  // lettura restavano fuori da `class_codes` — la riga entrava in database come
+  // «GENERALE» e nessun profilo ATA la vedeva.
+  for (const codice of codiciAtaDaTesto(testo)) trovate.add(codice);
 
   // Esclude placeholder generici non informativi (AAAA, EEEE, …).
   trovate.delete('AAAA');

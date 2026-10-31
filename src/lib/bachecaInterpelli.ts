@@ -24,7 +24,11 @@
  *   6. **cap dinamico dei riempitivi** (`limitaRiempitivi`) sui soli riempitivi PERTINENTI;
  *   7. **paracadute «5 osso-da-mordere»** (§26.106): sotto i 5 risultati la coda si completa
  *      con le MIGLIORI righe della scorta — avvisi veri con affinità di CLASSE (§26.120) —
- *      marcate `ripiego` e dichiarate in vetrina.
+ *      marcate `ripiego` e dichiarate in vetrina;
+ *   7-bis. **scala del paracadute** (§26.125): le righe di ripiego entrano secondo il
+ *      gradino (`ottime` → `affini` → `ultima-spiaggia` → `non-classificata`, vedi
+ *      `lib/scalaParacadute`) e il **sostegno/alternativa Religione in una provincia non
+ *      scelta è escluso sempre**: non è una priorità, è un divieto.
  *
  * Perché è un modulo PURO e non codice dentro l'hook: la stessa logica serve a guardie e
  * verifiche senza React, e `useInterpelliFeed` resta un contenitore di stato e fetch.
@@ -32,15 +36,17 @@
 import type { Interpello } from '../data/interpelli';
 import type { OrdineScuola } from '../data/ordiniMaterie';
 import {
-  valutaCompatibilita,
-  type ProfiloModali,
-  type ValutazioneCompatibilita,
-} from './compatibilitaGraduata';
+  avvisoDaInterpello,
+  candidatoRipiego,
+  type EsitoBacheca,
+} from './bachecaRipiego';
+import { valutaCompatibilita, type ProfiloModali } from './compatibilitaGraduata';
 import { giudizioScuole } from './filtriScuole';
 import { avvisoCompatibileConProfilo, avvisoDiSostegno, profiloAderisceSostegno } from './matchingEngine';
 import { classeVicina } from './punteggioClasse';
 import { motivoRigaNonOpportunitaAvviso } from './qualitaAvviso';
 import { limitaRiempitivi, paracaduteCinque, riempitivoNonPertinente } from './riempitivi';
+import { ORDINE_LIVELLO, scalaParacadute } from './scalaParacadute';
 import { eOpportunitaConScadenza } from './scadenza';
 
 
@@ -58,54 +64,12 @@ export interface ProfiloBacheca extends ProfiloModali {
   ignoredSchools?: readonly string[] | null;
 }
 
-/** Esito della pipeline: lista pronta per la dashboard + conti per log/guardie. */
-export interface EsitoBacheca {
-  lista: Interpello[];
-  /** Righe di contorno scartate a monte: non sono avvisi (§26.65). */
-  righeNonOpportunita: number;
-  /**
-   * Righe senza una scadenza dichiarata e valida: NON sono opportunità (§26.71) e
-   * non entrano nel feed (pagine di archivio, regolamenti, indici di classi).
-   */
-  senzaScadenza: number;
-  /** Avvisi scartati dalla blacklist scuole. */
-  esclusiBlacklist: number;
-  /** Avvisi inclusi d'ufficio dalla whitelist scuole. */
-  forzate: number;
-  /** Riempitivi NON pertinenti esclusi a monte (§26.60: nessun cap, nessuna quota). */
-  riempitiviEsclusi: number;
-  /** Riempitivi tolti dal cap dinamico. */
-  riempitiviNascosti: number;
-  /** Righe scartate perché la classe non ha rapporto con le proprie (§26.120):
-   *  fuori dalla bacheca e fuori dalla scorta del paracadute. */
-  senzaAffinitaClasse: number;
-  /**
-   * Righe entrate con il PARACADUTE «5 osso-da-mordere» (§26.106): la vetrina era sotto
-   * `MINIMO_BACHECA` e la coda è stata completata dalla scorta. Sono dichiarate `ripiego`.
-   */
-  ripieghiInBacheca: number;
-}
-
-/** Candidato di RIPIEGO (§26.106): opportunità vera non agganciata dal Radar, marcata `ripiego`. */
-function candidatoRipiego(i: Interpello, valutazione: ValutazioneCompatibilita): Interpello {
-  return {
-    ...i,
-    compatibilita: valutazione.punteggio,
-    motivoCompatibilita: valutazione.motivi.join(' · ') || undefined,
-    ripiego: true,
-  };
-}
-
-/** Avviso minimo per le modali, derivato dall'interpello della bacheca. */
-function avvisoDaInterpello(i: Interpello) {
-  return {
-    province: i.provinciaCodice,
-    classi: i.classiCodes,
-    materia: i.materia,
-    titolo: i.titolo,
-    ordine: i.ordine,
-  };
-}
+/**
+ * L'ESITO della pipeline (`EsitoBacheca`, conti per log e guardie) e la RIGA DI
+ * RIPIEGO vivono in `lib/bachecaRipiego.ts` dal §26.125: qui si riesportano, così
+ * chi legge la bacheca trova il contratto dove l'ha sempre trovato.
+ */
+export type { EsitoBacheca } from './bachecaRipiego';
 
 /**
  * Pipeline della bacheca: filtra, valuta e limita gli interpelli del feed.
@@ -126,6 +90,8 @@ export function bachecaInterpelli(
   let forzate = 0;
   let riempitiviEsclusi = 0;
   let senzaAffinitaClasse = 0;
+  /** §26.125 — righe fermate dal DIVIETO della scala (sostegno fuori provincia). */
+  let sostegnoFuoriProvincia = 0;
 
   for (const i of fonti) {
     // §26.71 — REGOLA FERREA: senza una scadenza dichiarata e non ancora passata la
@@ -155,6 +121,15 @@ export function bachecaInterpelli(
     }
 
     const avviso = avvisoDaInterpello(i);
+    // §26.125 — SCALA DEL PARACADUTE: il DIVIETO viene prima di ogni punteggio.
+    // Sostegno o alternativa alla Religione in una provincia che l'utente non ha
+    // scelto: la riga non entra e non finisce nemmeno nella scorta. La whitelist
+    // delle scuole preferite resta sovrana (scelta esplicita, Modalità 5).
+    const scala = scalaParacadute(profilo, avviso);
+    if (!scuole.preferita && !scala.ammessa) {
+      sostegnoFuoriProvincia += 1;
+      continue;
+    }
     // PRIMA la valutazione: porta il verdetto del jolly semantico (§26.64), che può far
     // entrare d'ufficio un match PIENO fuori dalle proprie province (i vincoli geografici
     // secondari non escludono più) e quindi aprire anche la porta d'ingresso.
@@ -210,7 +185,8 @@ export function bachecaInterpelli(
       riempitiviEsclusi += 1;
       // SCORTA (§26.106): la riga ha passato le porte d'ingresso ed è solo «poco
       // pertinente»: è esattamente la migliore candidata a completare la vetrina.
-      scorta.push(candidatoRipiego(i, valutazione));
+      // §26.125 — con il suo gradino: la coda si ordina per scala, non per voto.
+      scorta.push(candidatoRipiego(i, valutazione, scala.livello));
       continue;
     }
     if (scuole.preferita) forzate += 1;
@@ -233,7 +209,11 @@ export function bachecaInterpelli(
   // completa con le migliori righe della scorta (già marcate `ripiego`, dichiarate in UI).
   // Se il database non ha cinque opportunità ammissibili la lista resta corta: il
   // paracadute non inventa righe e non scavalca il blocco geografico.
-  const paracadute = paracaduteCinque(cap.lista, scorta);
+  const paracadute = paracaduteCinque(cap.lista, scorta, {
+    // §26.125 — la vetrina si completa per GRADINO: prima le ottime, poi le affini,
+    // poi il sostegno/Religione della propria provincia, infine il fuori scala.
+    priorita: (voce) => ORDINE_LIVELLO[voce.livelloRipiego ?? 'non-classificata'],
+  });
   return {
     lista: paracadute.lista,
     righeNonOpportunita,
@@ -244,5 +224,6 @@ export function bachecaInterpelli(
     riempitiviNascosti: cap.riempitiviNascosti,
     ripieghiInBacheca: paracadute.aggiunti,
     senzaAffinitaClasse,
+    sostegnoFuoriProvincia,
   };
 }

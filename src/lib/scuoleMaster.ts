@@ -43,6 +43,7 @@ import {
   type ScuolaAnagrafica,
 } from './anagraficaScuole';
 import { normalizzaCodiceMeccanografico } from './emailScuola';
+import { dominioIstituzionale, homeDaSito } from './hostIstituzionale';
 import { ePiattaformaPrivata, hostDaUrl } from './piattaformeLink';
 
 /** Scuola risolta sull'anagrafica: la riga d'interpello può nascere completa. */
@@ -78,50 +79,12 @@ export function dominioEduIt(recapito?: string | null): string | null {
 }
 
 /**
- * Dominio ISTITUZIONALE contenuto in un recapito (PEO/PEC), altrimenti `null`.
- * Generalizza `dominioEduIt`: l'anagrafica dichiara anche `.gov.it`, e un
- * recapito su quel dominio è comunque la casa dell'istituto. L'ordine di
- * preferenza resta `.edu.it` → `.gov.it` → altro dominio istituzionale.
+ * REGOLA DELL'HOST (§26.77 · §26.125) — vive in `lib/hostIstituzionale.ts`: la usano
+ * questa facciata e la visura delle scuole di una provincia. Riesportata qui, così gli
+ * import esistenti (`scraper/`, guardie) non cambiano.
  */
-export function dominioIstituzionale(recapito?: string | null): string | null {
-  const trovati = [
-    ...(recapito ?? '').toLowerCase().matchAll(/[a-z0-9._%+-]+@((?:[a-z0-9-]+\.)+[a-z]{2,})/g),
-  ]
-    .map((m) => m[1].replace(/\.$/, ''))
-    .filter(hostIstituzionale);
-  return trovati.find((host) => RE_HOST_EDU_IT.test(host)) ?? trovati[0] ?? null;
-}
+export { dominioIstituzionale, homeDaSito } from './hostIstituzionale';
 
-/** Host di servizio o di posta personale: mai la home di un istituto. */
-const HOST_NON_ISTITUZIONALE =
-  /(?:^|\.)(?:istruzione\.it|mim\.gov\.it|gmail\.com|googlemail\.com|google\.com|libero\.it|hotmail\.(?:it|com)|outlook\.(?:it|com)|live\.(?:it|com)|yahoo\.(?:it|com)|tiscali\.it|virgilio\.it|alice\.it|tim\.it|fastwebnet\.it|icloud\.com|me\.com|aol\.com|protonmail\.com|msn\.com|posta\.it|email\.it)$/;
-
-/** Dominio `*.edu.it` (forma preferita: è quella dell'anagrafica MIM). */
-const RE_HOST_EDU_IT = /^(?:[a-z0-9-]+\.)+edu\.it$/;
-
-/** True se l'host dichiarato può essere la home di un istituto. */
-function hostIstituzionale(host: string): boolean {
-  if (!host) return false;
-  if (HOST_NON_ISTITUZIONALE.test(host)) return false;
-  return !ePiattaformaPrivata(`https://${host}`);
-}
-
-/**
- * Home ISTITUZIONALE da un sito dichiarato o da un recapito: resta l'host nudo
- * (senza `www.`), perché la home si compone in un punto solo e un percorso
- * pubblicato dall'anagrafica può essere vecchio.
- *
- * Dal 26/10/2026 non si pretende più `*.edu.it`: l'anagrafica MIM dichiara anche
- * istituti con `.gov.it` o con il proprio dominio storico, e scartarli lasciava
- * senza home (e quindi senza `source_url`) righe di scuole vere. Restano esclusi
- * i domini di SERVIZIO (`istruzione.it`, `mim.gov.it`), le piattaforme private
- * (`piattaformeLink.ts`) e i provider di posta personale.
- */
-export function homeDaSito(sito?: string | null): string | null {
-  const testo = (sito ?? '').trim();
-  const host = hostDaUrl(/^[a-z][a-z0-9+.-]*:\/\//i.test(testo) ? testo : `https://${testo}`);
-  return host && hostIstituzionale(host) ? `https://${host}` : null;
-}
 
 /** Home ufficiale dell'istituto, altrimenti `null`. */
 export function homeUfficiale(scuola: ScuolaCertificata | null | undefined): string | null {
@@ -134,7 +97,7 @@ export function urlVerificabile(url?: string | null): boolean {
 }
 
 /** Riga dell'anagrafica → vista certificata (una sola traduzione dei campi). */
-function certifica(
+export function certificaScuola(
   indice: IndiceAnagrafica,
   scuola: ScuolaAnagrafica,
   codiceRichiesto: string | null
@@ -172,7 +135,7 @@ export function scuolaCertificata(
     province: ricerca.provincia ?? null,
   });
   if (!esito.scuola) return null;
-  return certifica(indice, esito.scuola, esito.patch.school_code ?? null);
+  return certificaScuola(indice, esito.scuola, esito.patch.school_code ?? null);
 }
 
 /**
@@ -196,6 +159,7 @@ export function scuoleDaTesto(
   }
   return [...trovate.values()];
 }
+
 
 /**
  * URL con cui identificare un avviso: quello della fonte se è apribile, altrimenti

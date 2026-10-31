@@ -25,6 +25,12 @@
  *      bando pertinente, il link da pubblicare è QUELLO — il PDF ufficiale, non la
  *      pagina-elenco che lo contiene. Con più PDF pertinenti non si indovina: si
  *      scarta (un archivio non dice quale sia l'interpello).
+ *   3. `ePaginaSenzaRisultati`: la pagina dichiara di essere vuota («Nessun
+ *      risultato», «La ricerca non ha prodotto risultati») e non resta testo
+ *      sufficiente per un elenco. È il guscio di una ricerca interna o di un albo
+ *      che non pubblica nulla: non ha né un bando né un link a cui atterrare.
+ *      Stesse frasi e stessa soglia del discovery (`empty_view`), così le due
+ *      strade non dicono cose diverse sullo stesso HTML.
  *
  * Cosa NON fa: non inventa titoli, non costruisce URL, non legge la rete. Riceve
  * HTML e testi già scaricati e restituisce un giudizio con il motivo leggibile.
@@ -142,4 +148,59 @@ export function documentoUnicoDaContenitore(
   if (!/^https?:\/\//i.test(base)) return null;
   const allegati = allegatiBando(html, base, 3);
   return allegati.length === 1 ? allegati[0].url : null;
+}
+
+/* ------------------- 3 · PAGINE CHE DICHIARANO «NESSUN RISULTATO» ------------------- */
+
+/**
+ * Frasi con cui un elenco dichiara di essere VUOTO. Sono le stesse del discovery
+ * (`scripts/discovery-engine.ts`, `CONFIG.emptyViewPhrases`): il discovery scarta
+ * da sempre questi target come `empty_view`, l'ingestione non aveva la regola e
+ * pubblicava il guscio vuoto come avviso.
+ */
+const FRASI_SENZA_RISULTATI: readonly string[] = [
+  'nessun contenuto da visualizzare',
+  'nessun elemento trovato',
+  'nessun risultato',
+  'non ci sono contenuti',
+  'no content to display',
+  'la ricerca non ha prodotto risultati',
+];
+
+/** Tetto di lettura: oltre non serve guardare (stessa taglia del discovery). */
+const MAX_HTML_VUOTO = 400_000;
+
+/**
+ * Testo leggibile approssimato: via `script`/`style`/commenti, via i tag, entità
+ * minime risolte, spazi compattati. Bastano le regex: qui serve solo a misurare
+ * quanto contenuto resta, non a interpretarlo.
+ */
+function testoLeggibile(html: string): string {
+  return html
+    .slice(0, MAX_HTML_VUOTO)
+    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;|&#39;/gi, '"')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * true = la pagina non porta contenuto: DICHIARA «nessun risultato» e il testo che
+ * resta è troppo corto per essere un elenco (soglia `minCaratteri`, la stessa del
+ * discovery). Le due condizioni insieme evitano il falso positivo opposto: una
+ * pagina che scrive «nessun risultato» dentro la ricerca interna ma pubblica
+ * comunque dieci avvisi è un elenco, non un guscio vuoto.
+ */
+export function ePaginaSenzaRisultati(html?: string | null, minCaratteri = 400): boolean {
+  if (typeof html !== 'string' || html.trim() === '') return false;
+  const testo = testoLeggibile(html).toLowerCase();
+  if (testo.length >= minCaratteri) return false;
+  return FRASI_SENZA_RISULTATI.some((frase) => testo.includes(frase));
 }

@@ -171,11 +171,14 @@ export interface EsitoParacadute<T> {
  * opportunità finché il database ne ha.
  *
  * Quando i match forti non bastano, la coda si completa con le MIGLIORI righe della
- * `scorta` — le opportunità vere che il Radar non ha agganciato, ordinate per punteggio
- * decrescente (a pari punteggio vale l'ordine del database, quindi il taglio è
- * deterministico). Le righe aggiunte arrivano già marcate `ripiego` dal chiamante e la
- * vetrina le dichiara con `ETICHETTA_RIPIEGO` (`src/lib/compatibilita.ts`): nessun
- * riempimento silenzioso.
+ * `scorta` — le opportunità vere che il Radar non ha agganciato. Dal §26.125 l'ordine
+ * della scorta è quello della SCALA del paracadute (`lib/scalaParacadute`): prima il
+ * gradino (`ottime` → `affini` → `ultima-spiaggia` → `non-classificata`), poi il
+ * punteggio decrescente (a pari punteggio vale l'ordine del database, quindi il taglio
+ * è deterministico). Chi non passa `priorita` ottiene l'ordine storico, il solo voto.
+ * Le righe aggiunte arrivano già marcate `ripiego` dal chiamante e la vetrina le
+ * dichiara con `ETICHETTA_RIPIEGO` (`src/lib/compatibilita.ts`): nessun riempimento
+ * silenzioso.
  *
  * Cosa la scorta NON contiene, per costruzione (`bachecaInterpelli`): le righe senza
  * scadenza (§26.71), il contorno che non è un avviso (§26.65), le scuole in blacklist
@@ -187,14 +190,19 @@ export interface EsitoParacadute<T> {
 export function paracaduteCinque<T extends { compatibilita?: number | null }>(
   lista: readonly T[],
   scorta: readonly T[],
-  opts: { minimo?: number } = {},
+  opts: { minimo?: number; priorita?: (voce: T) => number } = {},
 ): EsitoParacadute<T> {
   const minimo = opts.minimo ?? MINIMO_BACHECA;
   if (lista.length >= minimo) return { lista: [...lista], aggiunti: 0, motivo: 'sufficiente' };
   const mancanti = minimo - lista.length;
+  // §26.125 — PRIORITÀ PRIMA DEL PUNTEGGIO: la scorta è già ordinata dalla scala del
+  // paracadute (`lib/scalaParacadute.ORDINE_LIVELLO`: ottime → affini → ultima spiaggia
+  // → fuori scala) e solo DOPO conta il voto. Senza `priorita` l'ordine è quello di
+  // sempre (voto decrescente), quindi chi non la passa non cambia comportamento.
+  const priorita = (voce: T): number => (opts.priorita ? opts.priorita(voce) : 0);
   const aggiunte = scorta
     .map((voce, indice) => ({ voce, indice, punteggio: punteggioNoto(voce) ?? 0 }))
-    .sort((a, b) => b.punteggio - a.punteggio || a.indice - b.indice)
+    .sort((a, b) => priorita(a.voce) - priorita(b.voce) || b.punteggio - a.punteggio || a.indice - b.indice)
     .slice(0, mancanti)
     .map((r) => r.voce);
   return {

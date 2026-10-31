@@ -14,10 +14,16 @@
  *      non si controlla dal vivo. La decisione sul link vive in
  *      `lib/validitaLink.ts` + `presidioLinkIngresso.ts` (§26.104): qui resta solo
  *      il riconoscimento del record, che è un dato del bando, non una politica.
+ *   4. SOLO LAVORO (§26.127) — `motivoBandoCommerciale` (`lib/bandiCommerciali`):
+ *      con l'ampliamento delle scansioni l'albo porta anche gare, forniture,
+ *      alienazioni, pagine morte. Non sono opportunità per una persona, e la
+ *      regola è la STESSA della bacheca: nessuna seconda verità sui falsi
+ *      positivi.
  */
 
 import { eScaduto } from '../lib/scadenza.ts';
 import { emailAvviso } from '../lib/alertInterpello.ts';
+import { motivoBandoCommerciale } from '../lib/bandiCommerciali.ts';
 import { isAdministrativeNoise } from '../lib/noiseFilter.ts';
 import { valutaAttoConcluso } from './attiConclusi.ts';
 import { motivoPaginaContenitore } from './paginaArchivio.ts';
@@ -127,10 +133,10 @@ export function motivoScartoEditoriale(testo?: string | null): string | null {
 
 /**
  * Motivo per cui un avviso NON entra nella bacheca (`null` = ammesso).
- * Ordine: contenuto editoriale → atto concluso → pagina di servizio → rumore
- * amministrativo/informativo → non-opportunità → categoria fuori target →
- * scaduto. Con `daFonteInterpelli` si salta il solo controllo "parola chiave
- * nel titolo".
+ * Ordine: contenuto editoriale → bando che non è lavoro (gara, vendita, pagina
+ * morta) → atto concluso → pagina di servizio → rumore amministrativo/informativo
+ * → non-opportunità → categoria fuori target → scaduto. Con `daFonteInterpelli`
+ * si salta il solo controllo "parola chiave nel titolo".
  */
 export function motivoScartoOpportunita(
   a: CandidatoOpportunita,
@@ -143,6 +149,17 @@ export function motivoScartoOpportunita(
   if (eContenutoEditoriale(testo) && !sembraOpportunita(a.title ?? '')) {
     return 'contenuto editoriale/istituzionale (notizia, non opportunità)';
   }
+  // §26.127 — BANDI CHE NON SONO LAVORO: con l'ampliamento delle scansioni
+  // (100% delle scuole in domanda, hub regionali letti a fondo) l'albo porta
+  // anche gare, forniture, alienazioni, pagine morte. Si scartano PRIMA del
+  // parsing, con la stessa regola che usa la bacheca (`lib/bandiCommerciali`):
+  // un titolo di reclutamento è protetto e non si perde nessun interpello vero.
+  const commerciale = motivoBandoCommerciale({
+    titolo: a.title,
+    testo: a.corpo,
+    classi: a.classCodes,
+  });
+  if (commerciale) return commerciale;
   // §26.115 — ATTO CONCLUSO: graduatoria, esito, nomina, contratto,
   // aggiudicazione, individuazione di una persona. Il messaggio resta quello
   // storico (le guardie lo citano alla lettera); il dettaglio del tipo vive in

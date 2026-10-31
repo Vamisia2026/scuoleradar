@@ -166,7 +166,8 @@ async function main(): Promise<void> {
     `• In bacheca: ${bacheca.lista.length} · senza scadenza: ${bacheca.senzaScadenza} · ` +
       `contorno: ${bacheca.righeNonOpportunita} · blacklist: ${bacheca.esclusiBlacklist} · ` +
       `riempitivi esclusi: ${bacheca.riempitiviEsclusi} · nascosti: ${bacheca.riempitiviNascosti} · ` +
-      `ripieghi: ${bacheca.ripieghiInBacheca} · senza affinità di classe: ${bacheca.senzaAffinitaClasse}`,
+      `ripieghi: ${bacheca.ripieghiInBacheca} · senza affinità di classe: ${bacheca.senzaAffinitaClasse} · ` +
+      `sostegno fuori provincia: ${bacheca.sostegnoFuoriProvincia}`,
   );
 
   // 3. Integrazione fuori zona: query larga SOLO sotto il minimo (§26.111), contato

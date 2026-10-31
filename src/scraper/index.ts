@@ -687,8 +687,18 @@ async function raccogliAvvisiReali(
     const daFonteInterpelli = fonte.tipo === 'aggregatore';
     let tenuti = 0;
     for (const a of estratti) {
+      // §26.124 — LA PAGINA CONTA: la conformità riceve anche l'URL e la scadenza
+      // dichiarata, così la regola dei CONTENITORI (`/la-segreteria-comunica/`,
+      // `/comunicazioni`, `/albo`) e quella della pagina di servizio hanno i dati
+      // per giudicare anche da qui. Prima arrivavano solo titolo e classi: una
+      // pagina d'archivio non poteva essere riconosciuta dal percorso.
       const motivo = motivoScartoOpportunita(
-        { title: a.title, classCodes: a.classCodes },
+        {
+          title: a.title,
+          classCodes: a.classCodes,
+          url: a.link,
+          expirationDate: a.expirationDate,
+        },
         new Date(),
         { daFonteInterpelli },
       );

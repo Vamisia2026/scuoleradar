@@ -10,7 +10,11 @@
 import type { RigaProvaRadar } from '@/lib/provaRadarEngine';
 import { avviaMonitoraggioProva, type MonitoraggioProva } from '@/lib/provaRadar';
 import { supabase } from '@/lib/supabase';
-import { FONTE_RICHIESTA_PROVA, richiediScansioniProvince } from '@/lib/queueRichieste';
+import {
+  FONTE_RICHIESTA_PROVA,
+  richiediDomandaProvince,
+  richiediScansioniProvince,
+} from '@/lib/queueRichieste';
 
 /** Campi di `interpelli` serviti al simulatore. */
 const COLONNE_PROVA =
@@ -76,7 +80,16 @@ export async function leggiInterpelliProva(
  * aspetta il responso della coda. Ritorna le città accettate — le usa il test.
  */
 export async function richiediScansioneProva(provincia: string): Promise<string[]> {
-  return richiediScansioniProvince(supabase, [provincia], FONTE_RICHIESTA_PROVA);
+  // §26.126 — DUE domande, perché servono a due cose diverse: la CITTÀ
+  // (capoluogo della regione) anticipa l'hub USR nella coda dei worker; la
+  // PROVINCIA entra in `province_domanda` e fa approfondire le SUE scuole dal
+  // giro dell'MVP (`scripts/crawl-mvp.ts`). Una `Cuneo` chiesta dall'utente non
+  // deve diventare «Torino» e basta.
+  const [citta] = await Promise.all([
+    richiediScansioniProvince(supabase, [provincia], FONTE_RICHIESTA_PROVA),
+    richiediDomandaProvince(supabase, [provincia], FONTE_RICHIESTA_PROVA),
+  ]);
+  return citta;
 }
 
 /**

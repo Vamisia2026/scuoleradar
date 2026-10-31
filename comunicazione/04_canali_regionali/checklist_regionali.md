@@ -222,6 +222,27 @@
       «Email non disponibile») e link alla fonte ufficiale — che, quando la tabella non linka il
       singolo avviso, è **la tabella USR stessa**. I record già scaduti non arrivano alla card. Guardia:
       `npm run test:scheda-ust`.
+- [ ] **Il link pubblicato è il BANDO, non la pagina che lo ospita** (§26.122, §26.124) — «La
+      segreteria comunica», «Comunicazioni», «Albo online», «Archivio» sono **contenitori**: una voce
+      che punta lì, o che si chiama semplicemente «Interpelli»/«Comunicazioni», **non entra** in
+      bacheca (`paginaArchivio.motivoPaginaContenitore` sulla voce d'albo in
+      `table-reporter.recordDaVoceScuola`, e sul GATE 1 di `src/scraper/index.ts`, che ora riceve
+      anche URL e scadenza). Eccezioni dichiarate: la pagina con **scadenza o classe** è un bando e
+      resta; un link a un **documento** (`*.pdf`) è il bando, non l'involucro; un contenitore che
+      porta **un solo** allegato pertinente viene pubblicato direttamente **sul PDF** (link
+      assoluto, `documentoUnicoDaContenitore` → `allegatoUnico`). Con più PDF non si indovina:
+      l'archivio si scarta. Guardia: `npm run test:pagina-archivio`.
+- [ ] **Una pagina vuota non è una fonte** (§26.124) — se l'albo o la ricerca interna rispondono
+      «Nessun risultato» / «La ricerca non ha prodotto risultati» e non resta testo sufficiente
+      (`paginaArchivio.ePaginaSenzaRisultati`, stesse frasi e soglia del discovery `empty_view`), la
+      pagina **non** produce record né viene promossa in coda. Si conta in `pagineVuote` nel log del
+      deep crawl: è un'informazione, non un errore. Guardia: `npm run test:pagina-archivio`.
+- [ ] **Nessun aggregatore nemmeno in USCITA** (§26.123, §26.124) — il divieto vale a monte
+      (registro, connettore, discovery, pulizia del DB) **e** sull'ultimo miglio: `vetrinaVisibile`
+      (dashboard) esclude le righe con `linkFonte` di un dominio della lista unica e
+      `preparaRigheBoard` (Radar Live) le righe con `source_url` di aggregatore. Una riga storica già
+      salvata non compare in pagina. Guardie: `npm run test:vetrina-bacheca`, `npm run test:board`,
+      `npm run test:pagina-archivio`.
 - [ ] **Prova a occhio, senza aspettare lo scraper** (§26.77) — `npm run dati:demo` (dry-run)
       elenca le **10** righe `demo-*` con l'esito dichiarato: **7 in bacheca** (Argo/Forms/Nuvola
       → home `.edu.it`, avvisi veri, badge **pieni** nei tre stati di scadenza, nome dal
@@ -253,6 +274,24 @@
       badge «Fuori ambito · <provincia>» sulla pill) in **entrambe** le liste: nessuna forzatura silenziosa. Il valore
       salvato resta il **nome** dell'istituto (la sigla è solo l'etichetta del suggerimento).
 
+
+- [ ] **Il giro di una provincia parte dall'ANAGRAFICA, non dalle citazioni** (§26.125) — con
+      `--province=AT` (o `--scuole-provincia`) `table-reporter` semina il deep crawl con
+      `lib/scuoleProvincia.scuoleDellaProvincia`: una voce per istituto, solo sito dichiarato dal MIM
+      (`SITOWEBSCUOLA`, `*.edu.it` preferito), paritarie escluse, PEC mai. Il log deve dire
+      «Scuole della provincia AT: N istituti con sito ufficiale» e, a fine giro, elencare le
+      **«SCUOLE CONTATTATE»** (più le «non raggiunte»). Una provincia con la coda vuota **non** ferma
+      il giro. Guardia: `npm run test:crawl-provincia`.
+- [ ] **L'hub REGIONALE resta dentro il giro di provincia** (§26.125) — il filtro `--province=AT`
+      ammette la provincia richiesta **e** gli hub istituzionali verificati della sua regione
+      (`lib/ambitoProvincia.targetInAmbitoProvincia`): il Piemonte non ha un hub censito su Asti, e
+      senza questa regola l'unica fonte che ne parla restava spenta. Le righe sono comunque filtrate
+      per provincia all'upsert: leggere l'hub non significa pubblicare avvisi di altre province.
+- [ ] **Uno stato `pending` senza padrone è una fonte muta** (§26.125) — i siti seminati da
+      `import-schools-local.ts` restano `pending` finché qualcuno non li promuove: il comando unico è
+      `npm run crawl:provincia -- --province=AT --apply` (o il workflow «Crawl Provincia»), che elenca
+      le scuole, promuove la coda e lancia il crawler con l'output in chiaro. È la risposta operativa
+      alla promessa «Prova il Radar su Asti → il sistema interroga Asti».
 
 ## 5. Verifica prima del merge
 - [ ] `npm run test:opportunita` + `npm run test:interpello-scadenza` — la scuola emittente e la
@@ -351,3 +390,117 @@ sfuggita, **sfuma**; se non la nomina, **non toglie nulla**.
       `Interpello.jollySemantico` (vetrina: **non** database, **non** consegne).
 - [ ] **Guardia**: `npm run test:jolly`, in catena con `test:scoring` e `test:compatibilita:graduata`.
 
+## 8. La SCALA del paracadute (§26.125): tre gradini e un divieto
+
+Le «5 opportunità minime» non si toccano (`MINIMO_BACHECA`): sotto i cinque posti la vetrina si
+completa con le migliori righe della scorta. Cambia **l'ordine** — e c'è una riga che non entra mai.
+
+- [ ] **I tre gradini, in quest'ordine** — `ottime` (stessa provincia **e** stessa classe) →
+      `affini` (stessa provincia + classe affine, **oppure** provincia vicina entro i 60 km + stessa
+      classe) → `ultima-spiaggia` (stessa provincia + sostegno **o** alternativa alla Religione). La
+      regola è una sola, in `lib/scalaParacadute.scalaParacadute`, e l'ordine passa a
+      `paracaduteCinque(..., { priorita })`: prima il gradino, poi il voto.
+- [ ] **DIVIETO: sostegno e Religione mai fuori dalle province scelte** — vale anche per la
+      provincia «solo vicina» e anche quando la vetrina è vuota. La bacheca scarta la riga **prima
+      del punteggio** e la conta in `sostegnoFuoriProvincia`; non entra nemmeno nella scorta. La
+      whitelist delle scuole preferite resta sovrana (scelta esplicita dell'utente).
+- [ ] **Priorità ≠ filtro** — l'unico verdetto di esclusione della scala è il divieto; tutto il resto
+      ordina soltanto. Così la **consegna** (email/Telegram, strict) e il **jolly semantico** (§26.64)
+      non cambiano comportamento: una riga `non-classificata` (per esempio un match pieno del jolly
+      oltre il raggio) resta ammessa e va in coda.
+- [ ] **Chi ha una classe `AD…` propria è un match, non un ripiego** — la classe esatta viene prima
+      del sostegno: il pavimento di 60 resta un suggerimento **extra**, non l'ultima spiaggia.
+- [ ] **Guardie**: `npm run test:scala-paracadute` (gradini, divieto, ordine della scorta, bacheca
+      vera) e `npm run test:sostegno` (pertinenza per ordine di scuola), entrambe in `npm test`.
+
+## 9. Il perimetro dell'MVP e la domanda (§26.126): due densità, una sola verità
+
+L'ingestione non è più «tutto il Paese»: c'è una base nazionale stabile e c'è ciò che gli utenti
+chiedono. La regola vive in `lib/mvpPerimetro` (pura) e lo script è `npm run crawl:mvp`.
+
+- [ ] **Baseline nazionale = 20 capoluoghi di regione + Asti** — sempre letta, a ogni giro
+      (`PROVINCE_BASELINE`). È ciò che tiene viva la copertura del Radar Live: una regione non deve
+      sembrare vuota solo perché nessuno l'ha ancora cercata.
+- [ ] **La domanda accende, non sostituisce** — una provincia cercata in «Prova il Radar» o salvata
+      nel profilo entra in `province_domanda` (`request_province_scan`) e per **7 giorni** legge il
+      **100% delle scuole statali dell'anagrafica MIM** (nessun tetto: `--max-scuole=tutte`, §26.127).
+      Le province senza richieste restano coperte dagli **hub USR regionali**: nessun taglio
+      silenzioso, solo un'intensità diversa.
+- [ ] **Anche un capoluogo sale di regime** — se la ricerca riguarda una provincia della baseline
+      (Torino, Milano, …) quella provincia passa **subito** da `fondo` a `domanda` per 7 giorni: la
+      baseline non è un tetto alla copertura, è il fondo che tiene vivo il Paese.
+- [ ] **Due giri, due densità** — prima le province richieste (`--max-scuole-domanda`, l'anagrafica
+      intera), poi il fondo (`--max-scuole-fondo`, un campione deciso dal termostato). Il log dichiara
+      i due blocchi e dice `tutte le scuole` dove non c'è tetto.
+- [ ] **Promozione solo delle province richieste** (`--apply`) — i target `pending` delle altre non si
+      risvegliano: una provincia non richiesta non deve consumare rete.
+- [ ] **Codici mai inventati** — una richiesta con codice fuori catalogo finisce in `sconosciute` e
+      non entra nel piano; una richiesta scaduta finisce in `scadute` e non accende nulla.
+- [ ] **Guardie**: `npm run test:mvp-perimetro` (perimetro, finestra, dedup, cablaggio RPC/script/
+      workflow), in `npm test`.
+
+
+## 10. Tutti i lavoratori della scuola (§26.126): ATA, segreteria, tecnici
+
+Il Radar non è solo per i docenti. Un bando per collaboratori scolastici, assistenti amministrativi o
+assistenti tecnici è un'opportunità come un interpello: si indicizza, si mostra, si consegna.
+
+- [ ] **Nessuna opportunità ATA scartata a monte** — il gate di qualità non tratta «personale ATA»,
+      «collaboratori scolastici», «assistenti amministrativi/tecnici», «bidelli», «DSGA» come rumore
+      (`noiseFilterAta`): sono indicatori di reclutamento.
+- [ ] **Il codice del profilo c'è sempre** — `ATA-AA` (segreteria), `ATA-AT` (tecnici), `ATA-CS`
+      (collaboratori) entrano in `class_codes`; un bando che dice solo «personale ATA» porta **tutte e
+      tre** le classi, perché è aperto a tutti i profili.
+- [ ] **Consegna reale** — `match_interpelli` e il fallback PostgREST agganciano il profilo ATA con la
+      stessa regola delle classi docenti (classe esatta = 100). Nessuna eccezione, nessun ramo separato.
+- [ ] **Guardia**: `npm run test:profili-ata` (catalogo, riconoscimento, `class_codes`, matching,
+      punteggio, gate di qualità), in `npm test`.
+
+## 11. Il termostato del crawler (§26.127): l'intensità segue il fabbisogno
+
+L'aggressività del giro non è più una costante: la decide il numero di **avvisi attivi** in archivio
+(la stessa popolazione che il Radar Live conta e mostra). La regola vive in `lib/termostatoCrawl`
+(pura), la applica `npm run crawl:mvp`.
+
+- [ ] **Soglia di riferimento: 1.000 avvisi attivi** — è un riferimento di lavoro, **non** un numero da
+      raggiungere: nessuna riga viene creata per «arrivare a 1.000», e il conteggio mostrato in vetrina
+      resta quello vero del database. Il numero **fluttua** perché il crawler aggiunge ciò che le fonti
+      pubblicano e il tempo toglie ciò che scade.
+- [ ] **Tre regimi, una fascia morta** — sotto 1.000 → **carenza** (giro esteso: 20 scuole di fondo per
+      provincia, hub regionali a 80 documenti su 6 pagine); da 1.000 a 1.150 → **equilibrio** (8 · 40 su
+      3 pagine); oltre 1.150 → **saturo** (3 · 25 su 2 pagine). La fascia 1.000→1.150 è l'**isteresi**:
+      senza di essa un avviso in più o in meno cambierebbe il regime a ogni giro.
+- [ ] **La domanda non si tocca mai** — la provincia richiesta resta al **100% dell'anagrafica in ogni
+      regime**: il termostato regola il campione nazionale e la profondità degli hub, mai la copertura di
+      chi sta aspettando («priorità ≠ filtro», §26.126).
+- [ ] **Conteggio assente → equilibrio, e lo si dichiara** — un guasto di rete o una credenziale mancante
+      non fa esplodere il giro né lo ferma: si usano le tarature standard e il log dice «conteggio non
+      disponibile». Mai un numero inventato.
+- [ ] **`--soglia=N` / `--isteresi=N`** — una campagna può fissare un riferimento diverso (validato: un
+      valore rotto torna al default, non a zero).
+- [ ] **Guardia**: `npm run test:termostato-crawl` (regimi, isteresi, nessun taglio del numero, tarature,
+      cablaggio worker → termostato → crawler), in `npm test`.
+
+## 12. Severità sui falsi positivi (§26.127): qualità > quantità
+
+Con l'ampliamento delle scansioni cresce ciò che gli albi pubblicano **accanto** agli interpelli. La
+regola vive in `lib/bandiCommerciali` (pura) e vale **due volte**: nel gate dell'ingestione e nella
+bacheca (un solo giudizio, nessuna seconda verità).
+
+- [ ] **Fuori le gare** — «bando di gara», «procedura aperta», «fornitura», «affidamento del servizio»,
+      «lavori pubblici», «aggiudicazione»: sono opportunità per un **fornitore**, non per una persona.
+- [ ] **Fuori le piattaforme di acquisti** — `MEPA`, `RdO`, «trattativa diretta», «ordine diretto»,
+      «mercato elettronico», «stazione appaltante», «operatore economico», «indagine di mercato».
+- [ ] **Fuori vendite, commerciale e pagine morte** — aste/alienazioni/concessioni, «casa editrice»,
+      promozioni, abbonamenti, e i titoli di servizio (`404`, «pagina non trovata», «cookie policy»,
+      «accessibilità», «area riservata»). Anche le borse di studio: non sono incarichi di lavoro.
+- [ ] **Protezione prima del verdetto** — un titolo che dichiara un **reclutamento** (`interpello`,
+      `supplenza`, `incarico`, `esperto`, `docente`, `ATA`, `DSGA`, `collaboratore scolastico`, `tutor`,
+      `formatore`, `conferimento`, `assunzione`, `messa a disposizione`) o una **classe di concorso**
+      non si scarta **mai**. L'errore ammesso è una riga di troppo, non un interpello perso (§26.47).
+- [ ] **Il corpo si legge solo in testa** — l'oggetto dell'atto sta nei primi caratteri; una pagina che
+      *cita* una gara (menù, avviso correlato) non è una gara.
+- [ ] **Pulizia del database** — `npm run dati:pulisci-contorno` (`scripts/pulisci-non-opportunita.ts`)
+      usa lo stesso giudizio: le righe commerciali già in archivio escono dal conteggio.
+- [ ] **Guardie**: `npm run test:bandi-commerciali` (severità, protezione, limite dichiarato, cablaggio
+      bacheca/ingestione/pulizia), in `npm test`.

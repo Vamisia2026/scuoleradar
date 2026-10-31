@@ -142,7 +142,11 @@ const giudizio = leggi('src/lib/qualitaAvviso.ts');
 check('la bacheca usa il giudizio puro', true, /motivoRigaNonOpportunitaAvviso\(/.test(bacheca));
 check('il segnale istituto passa dal gate dei nomi', true, /scuola: nomeIstitutoPresentabile\(riga\.istituto\)/.test(giudizio));
 check('lo scarto avviene PRIMA del punteggio', true, bacheca.indexOf('motivoRigaNonOpportunitaAvviso(') < bacheca.indexOf('valutaCompatibilita('));
-check('l’esito è nel tipo (log e guardie)', true, /righeNonOpportunita: number/.test(bacheca));
+check(
+  'l’esito è nel tipo (log e guardie)',
+  true,
+  /righeNonOpportunita: number/.test(`${bacheca}\n${leggi('src/lib/bachecaRipiego.ts')}`),
+);
 check('la pulizia del DB usa lo stesso giudizio', true, /motivoRigaNonOpportunitaAvviso\(/.test(leggi('scripts/pulisci-non-opportunita.ts')));
 
 console.log('\n— Le date mancanti non diventano «Invalid Date» —');

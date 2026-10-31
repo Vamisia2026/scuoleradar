@@ -13335,3 +13335,582 @@ che `Fonti selezionate` elenchi **solo hub istituzionali**; opzionale, dry-run d
 `scripts/pulisci-non-opportunita.ts` per le righe nate dagli archivi
 dell'aggregatore prima di oggi; valutare una fonte istituzionale verificata per
 il Trentino-Alto Adige (oggi dichiarato scoperto).
+
+## §26.124 — Pagine-contenitore, pagine vuote e il blocco in uscita (31/10/2026)
+
+**Direttiva del cliente (stessa tornata del §26.123, con una pretesa in più).**
+Oltre a «blocca gli aggregatori, card pulite per le tabelle USR, PDF diretto», il
+cliente ha chiesto che i **falsi positivi totali** spariscano: pagine d'archivio e
+voci di menu che non contengono un interpello mirato con classe **e** scadenza
+(Orvieto-Montecchio, Polovolta), elenchi che restituiscono «Nessun risultato», e
+la promessa che un aggregatore **non possa comparire nel Radar Live** nemmeno se
+una riga è già in database.
+
+### 1. Blocco in USCITA: la cintura oltre al divieto
+
+Il §26.123 aveva chiuso l'ingresso (registro `fontiAttive()`, connettore,
+discovery, pulizia del DB). Restava un buco dichiarativo: una riga **già salvata**
+prima del blocco continuava a esistere e poteva comparire in pagina. Ora la
+regola viene chiamata anche sull'ultimo miglio, con la **stessa lista unica**
+(`lib/dominiIstituzionali.AGGREGATORI_PRIVATI`):
+
+* `lib/vetrinaBacheca.vetrinaVisibile` (dashboard): la riga con `linkFonte` di
+  aggregatore esce dalla vetrina;
+* `lib/liveBoard.preparaRigheBoard` (Radar Live): la riga con `source_url` di
+  aggregatore esce dalla tavola.
+
+Due punti, nessuna copia della lista, nessun rischio di divergenza. La pulizia
+dei dati resta il rimedio definitivo (`clean-and-sync-targets` →
+`deleteInterpelliDaAggregatori`), questa è la cintura che regge nel frattempo.
+
+### 2. Pagine-contenitore e voci di menu: il link deve essere il bando
+
+Il gate dei contenitori (`scraper/paginaArchivio.motivoPaginaContenitore`) c'era
+ed era chiamato dalla conformità, ma **due strade non lo interrogavano**:
+
+* il **deep crawl degli istituti** (`table-reporter.recordDaVoceScuola`): una voce
+  d'albo che puntava a `/la-segreteria-comunica/`, `/albo-online`,
+  `/comunicazioni` — o che si chiamava semplicemente «Interpelli» — diventava un
+  record con `source_url` = la pagina caotica. È esattamente la firma dei falsi
+  positivi segnalati: la parola «interpelli» vive nel **menu**, non in un atto;
+* il **GATE 1** di `scraper/index.ts` passava alla conformità solo `title` e
+  `classCodes`: senza `url` la regola «percorso da archivio» non poteva scattare.
+
+Correzioni: `recordDaVoceScuola` scarta la voce quando
+`motivoPaginaContenitore({ url, titolo, classi })` risponde (con **eccezione
+dichiarata**: se il link è un documento — `*.pdf` — non è un involucro, è il
+bando); il GATE 1 passa anche `url` e `expirationDate`. Con un titolo che dichiara
+il reclutamento (`interpello`, `supplenza`, `conferimento`…) la voce resta: la
+regola non punisce il contenitore in sé, punisce il contenitore **senza scadenza
+e senza classe** pubblicato come se fosse l'opportunità.
+
+### 3. Pagine che dichiarano «Nessun risultato»
+
+Il discovery scarta da sempre i target `empty_view`
+(`scripts/discovery-engine.ts` → `CONFIG.emptyViewPhrases` + soglia 400
+caratteri). L'ingestione non aveva la regola: un albo con la ricerca vuota
+(«Nessun risultato», «La ricerca non ha prodotto risultati») poteva produrre
+record dal nulla. La regola ora è **una funzione pura** —
+`scraper/paginaArchivio.ePaginaSenzaRisultati(html, minCaratteri = 400)`, stesse
+frasi del discovery — ed è chiamata:
+
+* in `deepCrawlScuole.leggiPagineInterpelli`: la pagina non entra in `pagine` e
+  non viene promossa in coda; si conta in `pagineVuote` (campo nuovo dell'esito),
+  **non** fra gli errori — non è una fonte rotta, è una pagina senza contenuto;
+* in `table-reporter` (ciclo delle pagine d'albo): `continue` prima di ogni
+  lettura, contatore riportato nel riepilogo del deep crawl.
+
+Le due condizioni insieme (frase **e** testo corto) evitano il falso positivo
+opposto: una pagina che scrive «nessun risultato» dentro la ricerca interna ma
+pubblica dieci avvisi resta un elenco, e resta.
+
+### 4. Tabelle USR: nessun nuovo codice, la verifica è la prova
+
+Il punto «card pulite, scaduti fuori, fonte ufficiale + email della scuola» era
+chiuso nel §26.123 (recapito dalla gerarchia contatti, `school_pec`,
+`stato_arricchimento`, fallback `target.url`, scaduti filtrati due volte). Qui è
+stato **ri-verificato** con la guardia dedicata `npm run test:scheda-ust` (19
+controlli: riga scaduta fuori, recapito ricostruito dal codice, card con
+classe/scadenza/link/email) senza toccare il codice: nessuna regressione, nessuna
+riscrittura della card.
+
+### Verifiche (31/10/2026)
+
+`npm run typecheck` ✅ 0 · `tsc -p tsconfig.node.json` ✅ 0 · `npm test` ✅ ·
+`npm run test:architettura` ✅ (baseline invariata) · `npm run build` ✅.
+
+Guardie aggiornate: `test:pagina-archivio` (+11 controlli: voce-contenitore nel
+runner, pagina vuota nel deep crawl e nel runner, `pagineVuote`, conformità con
+`url`/`expirationDate`, filtro aggregatori in bacheca e in tavola, più cinque casi
+su `ePaginaSenzaRisultati`), `test:board` (cinque casi di fonte aggregatore /
+istituzionale / assente), `test:vetrina-bacheca` (tre casi di fonte aggregatore).
+
+*File toccati*: `src/scraper/paginaArchivio.ts` (nuova `ePaginaSenzaRisultati`),
+`src/scraper/deepCrawlScuole.ts` (`pagineVuote` + scarto), `src/scraper/index.ts`
+(GATE 1 con URL e scadenza), `src/lib/vetrinaBacheca.ts`, `src/lib/liveBoard.ts`,
+`scripts/table-reporter.ts` (voce-contenitore, pagina vuota, riepilogo),
+`scripts/test-pagina-archivio.ts`, `scripts/test-vetrina-bacheca.ts`,
+`scripts/test-live-board.ts`, `docs/SYSTEM_HANDOVER.md`,
+`comunicazione/04_canali_regionali/checklist_regionali.md`.
+
+**Nota di sessione.** Il cliente chiedeva «elimina i falsi positivi», non «aggiungi
+un filtro in più»: la differenza sta nel punto in cui la riga nasce. Il deep crawl
+degli istituti era l'unica strada dell'ingestione che non passava dalla conformità
+completa, ed è precisamente da lì che arrivavano le pagine d'archivio con la
+parola «interpelli» nel menu. Vale la lezione delle due sessioni precedenti: prima
+di scrivere una regola nuova si cerca quella che esiste già
+(`motivoPaginaContenitore`, `emptyViewPhrases`) e si controlla **chi non la
+chiama**.
+
+**Da fare (operatore).** Ridistribuire `crawler-admin`; al primo run controllare
+nel log del deep crawl `N pagine vuote` (se è alto, gli albi stanno rispondendo
+con la ricerca vuota: è l'informazione, non un errore) e verificare che in
+`interpelli` non compaiano più `source_url` su `/la-segreteria-comunica/`,
+`/albo-online`, `/comunicazioni`. Eseguire una volta
+`scripts/clean-and-sync-targets.ts` (conteggi: «Disattivati N target»,
+«Eliminati N record da aggregatori privati»).
+
+---
+
+## §26.125 — Crawling capillare della provincia e scala del paracadute (31/10/2026)
+
+**Direttiva del cliente (seconda tornata del 31/10/2026), due pretese distinte.**
+
+1. *Crawling*: «il sistema non scansiona i singoli siti delle 52 scuole della
+   provincia di Asti (anagrafica ministeriale): si limita a 5 fonti centrali. Il
+   motore di discovery/exploration è bloccato. Forzane l'ingestione: quando provo
+   il Radar su Asti, il sistema DEVE interrogare i target locali di Asti.»
+2. *Paracadute*: le 5 opportunità minime restano, ma la scala di priorità va
+   ridefinita — ottime (stessa provincia + stessa classe) → affini (stessa
+   provincia + classe affine, **oppure** provincia vicina + stessa classe) →
+   ultima spiaggia (stessa provincia + sostegno/alternativa Religione). Divieto
+   secco: **mai** sostegno in una provincia non scelta.
+
+### 1. Perché le scuole di Asti non venivano lette (tre cause, non una)
+
+Tutte e tre verificate nel codice, nessuna supposta:
+
+* **il deep crawl partiva dalle citazioni, non dall'anagrafica.** In
+  `table-reporter` la mappa `scuoleDaVisitare` si riempiva solo con i codici che
+  le tabelle USR di *quel* giro citavano (`result.scuole`): una provincia con 52
+  istituti ne vedeva leggere due o tre. L'anagrafica serviva a *certificare* il
+  codice citato, non a scoprire gli altri;
+* **il filtro `--province=AT` spegneva l'unico hub che parla di Asti.** Il filtro
+  scartava i target per `discovered_links.province`, e l'USR Piemonte è censito su
+  `TO` (`fontiTerritoriali.ts` lo dichiara: gli elenchi «per ambito» del Piemonte
+  non sono leggibili, la copertura è affidata all'hub USR di Torino). Un giro
+  «solo Asti» leggeva quindi quasi nulla — e le righe di Asti non arrivavano mai;
+* **la coda `pending` non aveva nessuno che la promuovesse.** `import-schools-local.ts`
+  semina i siti delle scuole come `pending` (stato del discovery), mentre
+  `table-reporter` legge solo `active_crawler`: le scuole seminate restavano in
+  attesa per sempre (lo strumento esisteva, `attiva-target-provincia.ts`, ma va
+  lanciato a mano e non conosceva l'anagrafica).
+
+### 2. Cosa è cambiato (una regola per volta, nessun doppione)
+
+* **`lib/ambitoProvincia.ts` (nuovo, puro)** — `targetInAmbitoProvincia`: con un
+  filtro di provincia entrano (a) i target di quella provincia e (b) gli **hub
+  istituzionali verificati della sua REGIONE** (`origine: 'whitelist'` oppure URL
+  presente nel registro, `verificata`). Un elenco regionale pubblica per tutte le
+  sue province: è esattamente il caso Piemonte→Asti. Le righe restano comunque
+  filtrate per provincia all'upsert (§26.119): leggere l'hub non significa
+  scrivere avvisi di altre province. `regioneDiProvincia`/`regioniDelleProvince`
+  usano la mappa unica `data/province.ts`;
+* **`lib/scuoleProvincia.scuoleDellaProvincia` (nuovo, sull'anagrafica MIM)** — le
+  scuole raggiungibili di una provincia: solo SITO DICHIARATO
+  (`SITOWEBSCUOLA`, anche quello comune ai plessi), **una voce per istituto**,
+  `*.edu.it` preferito, dedup per HOME (gli omnicomprensivi condividono il sito),
+  ordine per codice meccanografico, `senzaSito` dichiarato. Le **paritarie**
+  restano fuori di serie (`paritarie: true` le include): un asilo privato non
+  pubblica interpelli per classe di concorso. Il ripiego sul dominio della
+  PEO/PEC — utile al link del tabellone — **non** è una casa da visitare, e i
+  provider di PEC (`legalmail.it`, `pec.it`, `postecert.it`, `arubapec.it`) sono
+  entrati in `HOST_NON_ISTITUZIONALE`;
+* **`table-reporter --scuole-provincia`** — si accende da solo quando c'è
+  `--province=…`, si spegne con `--no-scuole-provincia`. Semina
+  `scuoleDaVisitare` dall'anagrafica **prima** del giro, così il tetto
+  `MAX_SCUOLE_DEEP` non può tagliare fuori la provincia per colpa delle scuole
+  citate. Stampa `Scuola contattata: <codice> — <nome> → <home>` per ogni istituto
+  letto e, a fine giro, il blocco **`SCUOLE CONTATTATE (province: AT)`** con
+  pagine e record per scuola, più le «non raggiunte» (home muta o senza link di
+  albo: si ritentano al giro dopo). Una provincia con la coda vuota **non** ferma
+  il giro: prosegue sul deep crawl;
+* **`scripts/crawl-provincia.ts` + `npm run crawl:provincia` (nuovo)** — un solo
+  comando: elenca le scuole della provincia dall'anagrafica, mostra i target in
+  coda (`pending`/`active_crawler`) e con `--apply` li promuove, poi lancia il
+  crawler della provincia con l'output in chiaro. È il comando che rende vera la
+  promessa «Prova il Radar su Asti → il sistema interroga Asti»: il box è
+  client-side e non può avviare una scansione dal browser, quindi la scansione ha
+  un nome e un pulsante. Workflow manuale dedicato:
+  `.github/workflows/crawl-provincia.yml` (input `provincia`, `apply`, `dry_run`).
+
+### 3. La scala del paracadute (`lib/scalaParacadute.ts`, nuovo puro)
+
+La regola delle 5 opportunità non si tocca: `paracaduteCinque` continua a
+completare la vetrina sotto `MINIMO_BACHECA`. Cambia l'ORDINE e si aggiunge un
+DIVIETO:
+
+| gradino | regola | effetto |
+| --- | --- | --- |
+| `ottime` | stessa provincia + stessa classe | primo posto nella scorta |
+| `affini` | stessa provincia + classe affine **oppure** provincia vicina (60 km) + stessa classe | secondo posto |
+| `ultima-spiaggia` | stessa provincia + sostegno **o** alternativa Religione | ultimo posto utile |
+| `non-classificata` | ammessa dalle altre regole (es. jolly semantico §26.64) ma fuori scala | in coda, non esclusa |
+
+`ammessa: false` esiste per **una sola** combinazione: sostegno/alternativa
+Religione in una provincia che l'utente non ha scelto — che sia «vicina» (entro i
+60 km) o lontana. La bacheca scarta quella riga **prima del punteggio** e la conta
+in `sostegnoFuoriProvincia`; non entra nemmeno nella scorta del paracadute. La
+whitelist delle scuole preferite resta sovrana (scelta esplicita, Modalità 5).
+
+Due invarianti dichiarati: **la classe esatta viene prima del sostegno** (chi ha
+una classe `AD…` propria riceve il sostegno come match, non come ripiego) e
+**tutto ciò che non è il divieto è priorità, non filtro** — così la consegna
+(strict) e il jolly semantico non cambiano comportamento.
+
+L'ordine della scorta passa da `paracaduteCinque(..., { priorita })`
+(`lib/riempitivi.ts`): prima il gradino, poi il voto. Chi non passa `priorita`
+ottiene l'ordine storico (solo voto decrescente) — nessuna regressione per gli
+altri chiamanti. Le righe di ripiego portano il gradino nel campo
+`Interpello.livelloRipiego` (dato, non copy: la card continua a dichiarare
+`ETICHETTA_RIPIEGO`).
+
+### 4. Due difetti trovati per strada (corretti)
+
+`npm run scrape:check` era **rosso da prima** di questa sessione (3 errori, e il
+workflow `scraper.yml` lo esegue senza `continue-on-error`):
+
+* `deepCrawlScuole.ts` leggeva `.url` su `documentoUnicoDaContenitore`, che
+  restituisce una **stringa**: `allegatoUnico` arrivava `undefined` e il percorso
+  «spoonfeeding» del §26.123 non scattava mai. Ora passa l'URL;
+* `articoloPost.ts` e `postElenco.ts`: due selezioni `Cheerio<AnyNode>` assegnate
+  a `Cheerio<Element>` — cast dichiarati, come già fa lo stesso file.
+
+### Verifiche (31/10/2026)
+
+`npm run typecheck` ✅ 0 · `npm run scrape:check` ✅ 0 (era 3 errori) ·
+`npm test` ✅ · `npm run test:architettura` ✅ (baseline invariata) ·
+`npm run build` ✅ · `eslint` sui file toccati ✅.
+
+Guardie nuove, entrambe in `npm test`:
+
+* **`npm run test:scala-paracadute`** — i tre gradini, il divieto (sostegno a
+  Vercelli/Milano mai, nemmeno di ripiego), la classe `AD…` propria che resta un
+  match, l'ordine della scorta con e senza `priorita`, la bacheca vera (entra solo
+  il sostegno di Asti, `sostegnoFuoriProvincia = 2`) e il cablaggio;
+* **`npm run test:crawl-provincia`** — `targetInAmbitoProvincia` (provincia, hub
+  della regione, hub verificato in coda, altra regione, giro nazionale),
+  `scuoleDellaProvincia` su un indice finto (dedup per istituto/HOME, `edu.it`
+  preferito, PEC mai, paritarie escluse, tetto), il cablaggio del runner e del
+  comando unico, e — se i file SCUANAGRAFE sono presenti — la **lista reale delle
+  scuole di Asti** stampata in console (misurata qui: 252 righe d'anagrafica, 24
+  istituti statali con sito dichiarato, 0 senza sito).
+
+Guardie ALLINEATE (stesso cablaggio, file spostati dal gate dimensionale):
+`test:riempitivi-bacheca`, `test:sostegno`, `test:qualita`, `test:pagina-archivio`
+leggono insieme i due file dell'esito (`bachecaInterpelli` + `bachecaRipiego`) e
+verificano che `allegatoUnico` riceva **l'URL** del PDF, non un campo inesistente.
+
+*File toccati*: `src/lib/ambitoProvincia.ts` (nuovo), `src/lib/scalaParacadute.ts`
+(nuovo), `src/lib/scuoleProvincia.ts` (nuovo), `src/lib/bachecaRipiego.ts` (nuovo),
+`src/lib/hostIstituzionale.ts` (nuovo, estratto da `scuoleMaster` insieme ai
+provider di PEC), `src/lib/scuoleMaster.ts` (`certificaScuola` esportata, riesporta
+la regola dell'host), `src/lib/bachecaInterpelli.ts` (divieto + gradino +
+`priorita`), `src/lib/riempitivi.ts` (`priorita`), `src/data/interpelli.ts`
+(`LivelloRipiego`), `src/scraper/deepCrawlScuole.ts`,
+`src/scraper/articoloPost.ts`, `src/scraper/postElenco.ts`,
+`scripts/table-reporter.ts`, `scripts/crawl-provincia.ts` (nuovo),
+`scripts/diag-bacheca.ts`, `scripts/test-scala-paracadute.ts` (nuovo),
+`scripts/test-crawl-provincia.ts` (nuovo), `scripts/test-riempitivi-bacheca.ts`,
+`scripts/test-sostegno-pertinenza.ts`, `scripts/test-qualita-avviso.ts`,
+`scripts/test-pagina-archivio.ts`, `package.json`,
+`.github/workflows/crawl-provincia.yml` (nuovo), `docs/SYSTEM_HANDOVER.md`,
+`comunicazione/04_canali_regionali/checklist_regionali.md`.
+
+**Nota di sessione.** La direttiva sembrava chiedere «più crawling»; la verifica
+ha detto che il crawling c'era ma **partiva dal posto sbagliato** (le citazioni
+dell'USR invece dell'anagrafica) e che il filtro di provincia aveva spento l'hub
+regionale. Vale la lezione delle tre sessioni precedenti: prima di aggiungere un
+motore si guarda **da dove parte** quello che c'è. Sul paracadute la distinzione
+che regge tutto è «priorità ≠ filtro»: la scala ordina, il divieto esclude, e solo
+il sostegno fuori provincia è un divieto.
+
+**Da fare (operatore).** Un giro mirato per la provincia pilota:
+`npm run crawl:provincia -- --province=AT --apply` (oppure il workflow «Crawl
+Provincia» con `provincia=AT`). Nel log si devono vedere «Hub istituzionali della
+regione aggiunti al giro», «Scuole della provincia AT: N istituti con sito
+ufficiale» e il blocco «SCUOLE CONTATTATE»; poi `scripts/diag-bacheca.ts` per il
+conteggio `sostegno fuori provincia`.
+
+
+
+---
+
+## §26.126 — L'MVP DEMAND-DRIVEN E TUTTI I LAVORATORI DELLA SCUOLA
+
+Direttiva del 31/10/2026, in due parti che sembrano lontane e non lo sono: **smettere di
+ingerire tutto il Paese** e **smettere di leggere solo i docenti**. La prima riduce il costo
+del crawling al valore che gli utenti dimostrano; la seconda corregge un buco di prodotto che
+rendeva metà della scuola invisibile al Radar.
+
+### 1. Perimetro: una base nazionale stabile, non un censimento
+
+L'MVP non parte da «tutte le province»: parte dai **20 capoluoghi di regione** (uno per
+regione: è la città su cui è censito l'hub USR che pubblica per tutte le sue province) più
+**Asti**, provincia pilota. Fanno **21 province** — numero verificato dalla guardia e dal log
+del primo giro reale (`PIANO — baseline 21 province … totale 21`, con AN, AO, AQ, AT, BA, BO,
+CA, CB, CZ, FI, GE, MI, NA, PA, PG, PZ, RM, TN, TO, TS, VE). Il perimetro è in
+`lib/mvpPerimetro.PROVINCE_BASELINE`: si calcola dalle due mappe che già esistevano —
+`CAPOLUOGHI_REGIONE` e `TARGET_AGGIUNTIVI` di `lib/scanTargets` — e un capoluogo che il
+catalogo non conoscesse viene **ignorato**, non trasformato in un codice inventato.
+
+Le altre province **non si spengono**: restano coperte dagli hub USR regionali già in coda (il
+giro di fondo). La differenza fra una provincia di baseline e una provincia senza richieste è
+l'**intensità**, non l'esistenza. È la stessa distinzione che regge il paracadute (§26.125):
+«priorità ≠ filtro».
+
+### 2. La domanda reale: `province_domanda` (e perché non bastava la città)
+
+La coda `scan_targets` ha una riga per **città**: una richiesta per «Cuneo» finisce su
+«Torino», perché la scansione è regionale. Va bene per anticipare l'hub, ma non dice **quale
+provincia** è stata chiesta — e la direttiva chiede proprio quello («accende e intensifica la
+scansione su quella specifica provincia»).
+
+La migrazione `20261101120000_province_domanda.sql` aggiunge il registro minimo:
+
+| Oggetto | Regola |
+| --- | --- |
+| `province_domanda` | una riga per codice (`^[A-Z]{2}$`), `richieste`, `ultima_richiesta`, `ultima_fonte`; RLS + `service_role` soltanto |
+| `request_province_scan` | RPC aperta ad `anon`/`authenticated`, **valida** il codice (due lettere), **throttle** 60 minuti, **bumps-only** (contatore, nessun dato) |
+
+La finestra di validità **non** vive nel database: è `GIORNI_DOMANDA = 7` in
+`lib/mvpPerimetro`, lo stesso numero di `GIORNI_MONITORAGGIO_PROVA` (la guardia confronta i due
+valori). Una richiesta scaduta non accende nulla e finisce in `scadute`; un codice fuori
+catalogo non entra nel piano e finisce in `sconosciute`. Nessuna provincia fantasma.
+
+Il browser registra la domanda in **due punti soli**, gli stessi in cui già chiedeva la città:
+«Prova il Radar» (`provaRadarQuery.richiediScansioneProva`, che ora fa le due domande in
+parallelo) e il salvataggio del profilo (`useAnagraficaProfilo`). Restano fire-and-forget e non
+lanciano mai: la coda è un'anticipazione, non una dipendenza del servizio.
+
+### 3. Il giro: `npm run crawl:mvp` (due densità, un comando)
+
+`scripts/crawl-mvp.ts` legge la domanda, costruisce il piano con `pianoScansione`, lo **stampa
+prima di toccare la rete** e poi esegue `table-reporter` due volte:
+
+* **province richieste** → `--max-scuole-domanda` (default **60**: tutte le scuole dichiarate);
+* **province di fondo** → `--max-scuole-fondo` (default **8**: un campione, non sessanta home
+  per regione).
+
+In entrambi i giri passa `--scuole-provincia`: il deep crawl parte dall'**anagrafica MIM**
+(§26.125), non dalle citazioni dell'USR. Con `--apply` promuove i target `pending` **solo delle
+province richieste** (`discovered_links` → `active_crawler`): una provincia non richiesta non si
+risveglia di massa. Il workflow `crawl-mvp.yml` lo esegue ogni giorno alle 03:50 UTC (prima dei
+giri di scansione delle 07:00) e a mano con `solo_piano`, `dry_run`, `province`, `giorni`.
+
+La partnership con `crawl-provincia` resta: quello è il comando **manuale** su una provincia
+(«fammi vedere Asti adesso»), questo è il giro **periodico** che tiene su il Paese e approfondisce
+ciò che è stato chiesto.
+
+
+### 4. Tutti i lavoratori della scuola: i profili ATA
+
+Il difetto era misurabile: `rilevaClassi` (`src/scraper/parser.ts`) riconosceva solo le forme
+`A-12`, `ADEE`, `A042`, `AB25`. Un bando per collaboratori scolastici entrava con
+`class_codes` **vuoto** — firma «GENERALE» — e la RPC `match_interpelli` filtra con
+`class_codes && varianti`: un array vuoto non interseca nulla. Risultato: nel database la riga
+c'era, ma **nessun profilo poteva vederla**. Il personale ATA (segreteria, bidelli, tecnici)
+era fuori dal prodotto per costruzione.
+
+La correzione ha tre gambe, ognuna con una sua guardia:
+
+1. **Riconoscimento** — `lib/profiliAta.codiciAtaDaTesto`: profilo ESPLICITO
+   («collaboratori scolastici», «bidelli», «assistenti amministrativi», «personale di
+   segreteria», «assistenti tecnici») → la sua classe; sola **famiglia ATA** («personale ATA»,
+   «settore ATA», «ATA – a.s. 2026/27») → **tutte e tre** (`ATA-AA`, `ATA-AT`, `ATA-CS`),
+   perché quel bando è aperto a tutti i profili. Nessun falso positivo: «data», «ATAC»,
+   «ATA24» non contengono il token.
+2. **Ingestione** — `rilevaClassi`, `CLASS_CODE_SHAPE`/`CLASS_CODE_HEAD` del table-reporter e
+   **tutti e cinque** i punti in cui si costruisce `class_codes` conoscono il codice; il
+   pre-filtro del rumore ha i suoi indicatori in `lib/noiseFilterAta` (un bando ATA su una
+   pagina che cita una circolare non è «vita scolastica»).
+3. **Consegna** — `normalizzaClasse` e `classe_chiave` lasciano il codice invariato (la
+   conversione riguarda solo «lettere + numero»), quindi RPC e fallback PostgREST agganciano il
+   profilo con la regola di sempre: classe esatta = 100. Nessun ramo separato, nessuna
+   eccezione: il Radar Personale e il Radar Live riflettono anche il personale ATA.
+
+### 5. Verifiche
+
+* `npm run test:profili-ata` (nuova, in `npm test`) — catalogo e UI, riconoscimento
+  (famiglia/esplicito/falsi positivi), `class_codes`, matching e punteggio, gate di qualità;
+* `npm run test:mvp-perimetro` (nuova, in `npm test`) — 21 province di baseline su 20 regioni,
+  finestra di 7 giorni, dedup, richieste scadute e codici sconosciuti, tetti, cablaggio di
+  migrazione/RPC/script/workflow/`package.json`;
+* `npm run typecheck` e `npm run scrape:check` puliti; `npm run test:architettura` a 145
+  violazioni (= baseline, nessuna nuova: `crawl-mvp` è stato diviso in
+  `scripts/lib/domandaProvincia.ts`, `noiseFilter` resta sotto le 250 righe grazie a
+  `noiseFilterAta`); `npm test` verde; `npm run build` verde.
+
+*File toccati*: `src/lib/mvpPerimetro.ts` (nuovo), `src/lib/profiliAta.ts` (nuovo),
+`src/lib/noiseFilterAta.ts` (nuovo), `src/lib/queueRichieste.ts` (domanda per provincia),
+`src/lib/noiseFilter.ts` (indicatori ATA), `src/scraper/parser.ts` (`rilevaClassi` ATA),
+`src/departments/radar/services/provaRadarQuery.ts`,
+`src/contexts/app/useAnagraficaProfilo.ts`, `scripts/table-reporter.ts` (forma del codice +
+cinque punti di `class_codes`), `scripts/crawl-mvp.ts` (nuovo),
+`scripts/lib/domandaProvincia.ts` (nuovo), `scripts/test-profili-ata.ts` (nuovo),
+`scripts/test-mvp-perimetro.ts` (nuovo),
+`supabase/migrations/20261101120000_province_domanda.sql` (nuovo),
+`.github/workflows/crawl-mvp.yml` (nuovo), `package.json`, `docs/SYSTEM_HANDOVER.md`,
+`comunicazione/04_canali_regionali/checklist_regionali.md`.
+
+**Nota di sessione.** Due volte la stessa lezione: prima di aggiungere un motore si guarda
+**dove finisce il dato**, non quanto si scarica. L'MVP non ha bisogno di più crawling — ha
+bisogno che il crawling guardi la domanda (`province_domanda`) e che i **codici** dei bandi
+arrivino fino al filtro che li usa: un'opportunità che entra con `class_codes` vuoto è
+un'opportunità che il prodotto non ha.
+
+**Da fare (operatore).**
+
+1. Applicare la migrazione `20261101120000_province_domanda.sql` su Supabase. Finché non è
+   applicata il giro funziona (baseline) ma la domanda resta invisibile: il log lo dice
+   (`Registro della domanda non leggibile … Applicare …`).
+2. Primo giro reale: `npm run crawl:mvp -- --solo-piano` (misura), poi
+   `npm run crawl:mvp -- --apply` oppure il workflow «Crawl MVP». Nel log si devono vedere
+   `PIANO — baseline 21 province`, due blocchi `Crawler:` (domanda e fondo) e i blocchi
+   `SCUOLE CONTATTATE`.
+3. `npm run diag:bacheca` per verificare che le righe ATA arrivino in vetrina con
+   `ATA-AA`/`ATA-AT`/`ATA-CS` in `class_codes` e non come «GENERALE».
+
+---
+
+## §26.127 — IL CRAWLER A TERMOSTATO E LA SEVERITÀ SUI BANDI CHE NON SONO LAVORO
+
+Direttiva del 31/10/2026, tre parti che rispondono alla stessa domanda («come si riempie il Radar
+Live senza bruciare rete?»): **l'intensità del giro segue il fabbisogno**, **la provincia chiesta si
+legge al 100%**, e **ciò che entra deve essere lavoro**.
+
+### 1. La provincia in domanda non ha più un tetto: 60 → `tutte`
+
+Il §26.126 aveva lasciato un numero: `--max-scuole-domanda=60`. Sessanta scuole su una provincia che
+ne ha trecento è un campione travestito — ed è la provincia che qualcuno sta **aspettando**. Il
+numero è caduto:
+
+| Prima | Ora |
+| --- | --- |
+| `MAX_SCUOLE_DOMANDA = 60` | `TUTTE_LE_SCUOLE` (`'tutte'`), override manuale `--max-scuole-domanda=N` |
+| `table-reporter --max-scuole=60` | `table-reporter --max-scuole=tutte` → `TETTO_NESSUNO = Number.MAX_SAFE_INTEGER` |
+| `tettoScuole(): number` | `tettoScuole(): number \| 'tutte'` (`lib/mvpPerimetro`) |
+
+`'tutte'` è una sentinella **tipizzata**, non un numero magico: nessuno sa quanti istituti abbia una
+provincia finché non la legge, e `0` in `table-reporter` vuol dire un'altra cosa (spegnere il deep
+crawl). Due significati, due valori. Il log stampa `tutte le scuole` dove non c'è tetto
+(`ETICHETTA_MAX_SCUOLE`, `etichettaTetto`).
+
+**La promozione del capoluogo era già scritta e ora è verificata.** `pianoScansione` costruisce
+`domanda` dalle richieste e `tutte = domanda + baseline non richieste`: una ricerca su Torino porta
+Torino in `domanda` (copertura 100% per 7 giorni) **senza** uscire dalla baseline, e il giro di fondo
+non la rilegge una seconda volta. La guardia lo fissa (`test:mvp-perimetro`, sezione 2-bis), non solo
+il commento.
+
+`crawl-provincia.ts` segue la stessa regola: il comando manuale su **una** provincia parte da
+`--max-scuole=tutte` (era «il default del runner», 150).
+
+### 2. Il termostato: soglia 1.000, tre regimi, una fascia morta
+
+Nuovo `src/lib/termostatoCrawl.ts` (**puro**, nessun I/O). L'ingresso è **un numero letto dal
+database**: quante righe di `interpelli` non sono scadute — la stessa popolazione che il Radar Live
+conta e mostra (`expiration_date >= oggi`, `filtroAttivi` del dipartimento Radar). Il conteggio arriva
+da `scripts/lib/domandaProvincia.contaAvvisiAttivi` con `{ count: 'exact', head: true }`: nessuna riga
+trasferita, nessun troncamento a 1.000 righe di PostgREST.
+
+| Regime | Condizione | Scuole di fondo / provincia | Hub regionali (documenti · pagine · giro) |
+| --- | --- | --- | --- |
+| **carenza** | attivi < 1.000 | **20** | 80 · 6 · 4.000 |
+| **equilibrio** | 1.000 ≤ attivi < 1.150 | **8** (default storico §26.101) | 40 · 3 · 2.500 |
+| **saturo** | attivi ≥ 1.150 | **3** | 25 · 2 · 1.500 |
+
+Tre decisioni che valgono più dei numeri:
+
+1. **La soglia non è un obiettivo, è un riferimento.** Nessuna riga viene creata per «arrivare a
+   1.000»: `margine = soglia - attivi` **non si taglia mai** (con 3.421 avvisi vale `-2.421`, e la
+   guardia lo pretende). Il numero in vetrina resta quello vero e **fluttua**, perché il crawler
+   aggiunge ciò che le fonti pubblicano e il tempo toglie ciò che scade. Un conteggio «bloccato a
+   1.000» sarebbe la prova che qualcuno lo sta aggiustando.
+2. **La fascia 1.000 → 1.150 è l'isteresi.** Senza di essa ogni avviso in più o in meno farebbe
+   passare da «esteso» a «ridotto»: il crawler cambierebbe regime a ogni giro invece di leggere.
+3. **La domanda non entra mai nel termostato.** `scuoleDomanda` è `'tutte'` in **tutti e tre** i
+   regimi: si rallenta il campione nazionale e la profondità degli hub, mai la copertura di chi sta
+   aspettando («priorità ≠ filtro», §26.126). In `saturo` il crawler legge **meno scuole di fondo**,
+   non meno scuole della provincia richiesta.
+
+Con il conteggio assente (`null`: credenziali, rete, tabella) si usano le tarature di **equilibrio** e
+il log dichiara «conteggio non disponibile»: un guasto non ferma il giro e non lo fa esplodere. Nessun
+numero inventato.
+
+**Come si applica.** `scripts/crawl-mvp.ts` (ora 205 righe: il mestiere operativo è in
+`scripts/lib/giroMvp.ts`, estratto quando il file ha superato le 300) legge domanda e conteggio in
+parallelo, costruisce le due tarature e le passa ai due giri. La profondità degli hub viaggia con le
+**variabili della politica di sgranatura** (`AMBIENTE_SGRANATURA`: `SGRANATURA_ELENCO`,
+`SGRANATURA_PAGINE_ELENCO`, `SGRANATURA_RUN`), non con una seconda verità sui tetti. `--soglia=N` e
+`--isteresi=N` permettono una campagna con un riferimento diverso (valore rotto → default, mai zero).
+
+
+### 3. Severità: gare, vendite e pagine morte non sono opportunità
+
+Ampliare le scansioni (100% delle scuole, hub letti a fondo) fa crescere anche il **contorno** che gli
+albi pubblicano accanto agli interpelli. Nuovo `src/lib/bandiCommerciali.ts` (**puro**, zero import),
+un solo giudizio usato da **due** porte:
+
+| Porta | Chi | Cosa cambia |
+| --- | --- | --- |
+| Ingresso | `scraper/qualitaOpportunita.motivoScartoOpportunita` | la riga non entra in `interpelli` |
+| Vetrina | `lib/qualitaAvviso.motivoRigaNonOpportunita` | la riga non entra in bacheca (e `pulisci-non-opportunita` la toglie dal DB) |
+
+Sei famiglie di motivo: **gara/appalto**, **piattaforma di acquisti**, **vendita/concessione**,
+**contenuto commerciale**, **pagina morta/voce di servizio**, **borsa di studio/concorso per studenti**.
+
+**La protezione viene prima del verdetto.** Se il TITOLO dichiara un reclutamento (`interpello`,
+`supplenza`, `incarico`, `esperto`, `docente`, `ATA`, `DSGA`, `bidello`, `collaboratore`, `assistente`,
+`tutor`, `formatore`, `conferimento`, `assunzione`, `candidatura`, `messa a disposizione`) o se la riga
+porta una **classe di concorso**, nessuna regola la scarta. Il limite è dichiarato e verificato: «avviso
+di selezione per l'affidamento dell'incarico di progettazione» **resta** (falso negativo: una riga di
+troppo), perché «incarico» è la parola con cui la scuola intitola anche gli interpelli veri. L'errore
+ammesso è nella direzione sicura (§26.47: una riga genuina non si scarta per un dettaglio che non
+capiamo).
+
+Il corpo si legge **solo in testa** (1.500 caratteri; l'oggetto dell'atto sta nei primi 400): una pagina
+che *cita* una gara nel menù non è una gara. Senza corpo — la bacheca ha solo i campi del record — il
+giudizio si ferma al titolo: nessun verdetto su ciò che non si è letto.
+
+### 4. Verifiche
+
+* `npm run test:termostato-crawl` (nuova, in `npm test`) — soglia 1.000 e fascia 150, i tre regimi,
+  `margine` **non tagliato** (`-2.421` con 3.421 avvisi), tarature (fondo 20/8/3, hub 80/40/25,
+  `scuoleDomanda` sempre `'tutte'`), conteggio assente → equilibrio dichiarato, cablaggio worker →
+  termostato → crawler (`head: true`, `--max-scuole=${tetto}`, variabili della sgranatura);
+* `npm run test:bandi-commerciali` (nuova, in `npm test`) — severità (gare, piattaforme, cessioni,
+  commerciale, pagine morte, borse), protezione (un interpello non si perde), limiti dichiarati,
+  cablaggio bacheca/ingestione/pulizia e purezza del modulo;
+* `npm run test:mvp-perimetro` aggiornata — `tettoScuole` con `'tutte'`, sezione 2-bis (un capoluogo
+  chiesto passa a `domanda` e legge il 100%, restando in baseline), cablaggio di `giroMvp`;
+* `npm run test:qualita-avviso`, `npm run test:profili-ata` verdi (nessun falso scarto introdotto);
+* `npm run typecheck` e `npm run scrape:check` puliti; `npm run test:architettura` **145 = baseline**
+  (nessuna violazione nuova: `crawl-mvp` 332 → 205 righe con l'estrazione di `scripts/lib/giroMvp.ts`);
+  `npm test` verde; `npm run build` verde; `eslint` pulito sui 13 file toccati.
+
+Prova a secco sui dati reali (31/10/2026): `npm run crawl:mvp -- --solo-piano` stampa
+`PIANO — baseline 21 province · domanda 0 · totale 21` con `20 scuole` per provincia e
+`TERMOSTATO — carenza: 309 avvisi attivi su 1.000 di riferimento (691 mancanti) — giro esteso: 20
+scuole di fondo, hub a 80 documenti per elenco`. Con `--province=CN` la riga diventa
+`CN Cuneo — domanda · fuori baseline · tutte le scuole`.
+
+*File toccati*: `src/lib/termostatoCrawl.ts` (nuovo), `src/lib/bandiCommerciali.ts` (nuovo),
+`src/lib/mvpPerimetro.ts` (`TUTTE_LE_SCUOLE`, `TettoScuoleProvincia`, `tettoScuole`),
+`src/lib/qualitaAvviso.ts` (bando commerciale prima di tutto), `src/scraper/qualitaOpportunita.ts`
+(stessa regola in ingresso), `scripts/table-reporter.ts` (`--max-scuole=tutte`,
+`ETICHETTA_MAX_SCUOLE`), `scripts/crawl-mvp.ts` (termostato), `scripts/lib/giroMvp.ts` (nuovo),
+`scripts/lib/domandaProvincia.ts` (`contaAvvisiAttivi`), `scripts/crawl-provincia.ts` (default
+`tutte`), `scripts/test-termostato-crawl.ts` (nuovo), `scripts/test-bandi-commerciali.ts` (nuovo),
+`scripts/test-mvp-perimetro.ts`, `package.json`, `docs/SYSTEM_HANDOVER.md`,
+`comunicazione/04_canali_regionali/checklist_regionali.md` (§11 e §12).
+
+**Nota di sessione.** Il termostato sembra un numero e non lo è: è un **rapporto** fra ciò che il
+database contiene e ciò che il crawler spende. Per questo la parte delicata non è la soglia ma il
+divieto di toccare il conteggio: un «1.000» ottenuto aggiustando la vetrina sarebbe una bugia
+misurabile, mentre un «309» che sale a 1.400 in tre giorni è la prova che il giro funziona. E la
+severità sui falsi positivi è la stessa cosa vista dall'altro lato: più si legge, più si deve
+distinguere — senza mai perdere un interpello vero.
+
+**Da fare (operatore).**
+
+1. Applicare la migrazione `20261101120000_province_domanda.sql` su Supabase (resta il primo passo
+   del §26.126): finché non è applicata il giro legge solo la baseline e il log lo dichiara.
+2. `npm run crawl:mvp -- --solo-piano`: si devono vedere il piano, i `tutte le scuole` della domanda
+   e la riga `TERMOSTATO — <regime>: <N> avvisi attivi …`. Con 309 avvisi attivi il regime è
+   **carenza** (giro esteso): è il comportamento atteso, non un errore.
+3. `npm run crawl:mvp -- --apply` (o il workflow «Crawl MVP») quando la migrazione è applicata.
+4. Dopo qualche giro, `npm run diag:bacheca`: il conteggio degli avvisi attivi deve **muoversi** e le
+   righe commerciali (gare, forniture, 404) non devono comparire fra le opportunità.
+5. `npm run dati:pulisci-contorno` per far uscire dall'archivio le righe di contorno già presenti
+   (dry-run prima, `--apply` poi).
+

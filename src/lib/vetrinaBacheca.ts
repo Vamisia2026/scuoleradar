@@ -29,6 +29,11 @@
  */
 import type { Interpello } from '../data/interpelli';
 import { costruisciAvviso } from './alertInterpello';
+// §26.123 — BLOCCO DEGLI AGGREGATORI ANCHE IN USCITA: la regola vale a monte
+// (`fontiAttive`, connettore, discovery) e anche qui, sull'ultimo miglio. Una
+// riga storica già nel database con `source_url` di un aggregatore privato non
+// deve comparire nella bacheca: la lista dei domini è UNA SOLA.
+import { eAggregatorePrivato } from './dominiIstituzionali';
 import { eOpportunitaAperta } from './scadenza';
 
 /** Campi identitari che mancano alla riga (`[]` = la vetrina può mostrarla). */
@@ -59,12 +64,19 @@ export function rigaVetrinaCompleta(riga: Interpello): boolean {
  * dichiarata e non passata, unica regola del tempo, §26.71/§26.100) e presentabili,
  * nell'ordine ricevuto. L'ordinamento resta al chiamante (la pagina ordina per voto
  * e scadenza; il feed conserva l'ordine della bacheca).
+ *
+ * §26.123 — NESSUN AGGREGATORE IN VETRINA: una riga la cui fonte è un aggregatore
+ * privato (`scuolainterpelli.it`, `interpelloweb.it`, …) esce qui, anche se è già
+ * nel database da prima del blocco. Il divieto vive a monte, questa è la cintura.
  */
 export function vetrinaVisibile(
   lista: readonly Interpello[],
   oggi: Date = new Date(),
 ): Interpello[] {
   return lista.filter(
-    (riga) => eOpportunitaAperta(riga.dataScadenza, oggi) && rigaVetrinaCompleta(riga),
+    (riga) =>
+      !eAggregatorePrivato(riga.linkFonte) &&
+      eOpportunitaAperta(riga.dataScadenza, oggi) &&
+      rigaVetrinaCompleta(riga),
   );
 }

@@ -17,6 +17,14 @@
 
 import type { OrdineScuola } from './ordiniMaterie';
 
+/**
+ * GRADINI DEL PARACADUTE (§26.125) — l'ordine di priorità con cui la vetrina
+ * completa i cinque posti. La REGOLA vive in `src/lib/scalaParacadute.ts` (un solo
+ * posto: `scalaParacadute`, `ORDINE_LIVELLO`, `ETICHETTA_LIVELLO`); qui c'è solo la
+ * forma del dato che viaggia con la riga, perché `data/` non dipende da `lib/`.
+ */
+export type LivelloRipiego = 'ottime' | 'affini' | 'ultima-spiaggia' | 'non-classificata';
+
 export interface Interpello {
   id: string;
   titolo: string;
@@ -95,6 +103,16 @@ export interface Interpello {
    * un match, mai una priorità.
    */
   ripiego?: boolean;
+  /**
+   * GRADINO DEL PARACADUTE (§26.125): a che livello della scala è entrata la riga
+   * (`lib/scalaParacadute.ts`). `ottime` = stessa provincia e stessa classe ·
+   * `affini` = stessa provincia con classe affine, o provincia vicina con la stessa
+   * classe · `ultima-spiaggia` = sostegno/alternativa Religione nella PROPRIA
+   * provincia · `non-classificata` = ammessa dalle altre regole ma fuori scala (va
+   * in coda). Presente solo sulle righe di ripiego: la card non lo mostra, serve
+   * all'ordine della scorta, alle guardie e alla diagnostica.
+   */
+  livelloRipiego?: LivelloRipiego;
   /**
    * AMBITO D'INTEGRAZIONE — CAMPO STORICO, NON PIÙ SCRITTO (§26.122).
    *

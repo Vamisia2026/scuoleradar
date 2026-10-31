@@ -160,6 +160,33 @@ check(
 );
 check('liste vuote non rompono il filtro', 0, preparaRigheBoard([]).length);
 
+/* ------- §26.123 — NESSUN AGGREGATORE PRIVATO NEL RADAR LIVE (cintura) ------- */
+
+console.log('\n— Blocco degli aggregatori: la fonte privata non entra in tavola —');
+const senzaOk = ['da-codice', 'da-titolo', 'codici-classe', 'nome-con-coda', 'anagrafica-parziale'];
+/** Le stesse righe con la fonte della riga `ok` sostituita. */
+const conFonte = (url: string | null): typeof RIGHE_BOARD =>
+  RIGHE_BOARD.map((riga) => (riga.id === 'ok' ? { ...riga, source_url: url } : riga));
+for (const dominio of ['scuolainterpelli.it', 'interpelloweb.it', 'www.orizzontescuola.it']) {
+  check(
+    `fonte ${dominio} → la riga esce dalla tavola`,
+    senzaOk,
+    preparaRigheBoard(conFonte(`https://${dominio}/interpello-a022/`)).map((p) => p.riga.id),
+  );
+}
+check(
+  'fonte istituzionale (PDF su dominio della scuola) → la riga resta',
+  ['ok', ...senzaOk],
+  preparaRigheBoard(conFonte('https://www.liceomonti.edu.it/wp-content/uploads/interpello-a022.pdf')).map(
+    (p) => p.riga.id,
+  ),
+);
+check(
+  'fonte assente → nessun falso blocco',
+  ['ok', ...senzaOk],
+  preparaRigheBoard(conFonte(null)).map((p) => p.riga.id),
+);
+
 console.log(errori === 0 ? '\n✅ RADAR LIVE: nessun problema' : `\n❌ RADAR LIVE: ${errori} errore/i`);
 process.exitCode = errori === 0 ? 0 : 1;
 

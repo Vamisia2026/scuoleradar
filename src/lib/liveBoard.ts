@@ -46,6 +46,10 @@
  */
 
 import { eOpportunitaAperta, GIORNI_FINESTRA_SENZA_SCADENZA } from './scadenza.ts';
+// §26.123 — BLOCCO DEGLI AGGREGATORI ANCHE IN USCITA: la lista dei domini privati
+// è UNA SOLA (`dominiIstituzionali`), la stessa usata dal registro fonti, dal
+// connettore e dal discovery. Qui è l'ultimo miglio del Radar Live.
+import { eAggregatorePrivato } from './dominiIstituzionali.ts';
 import { nomeScuolaBoard, nomeScuolaRiga } from './nomeScuolaRiga.ts';
 import { eTitoloSoloData, nomeScuolaDaTitolo } from './titoloBoard.ts';
 import { pulisciTitoloAvviso } from './alertInterpello';
@@ -176,6 +180,12 @@ export function preparaRigheBoard<R extends RigaBoard>(
     // l'opportunità — in bacheca occuperebbe una schermata senza dire niente.
     // La riga resta nel database (e nelle liste interne): qui non entra.
     if (eTitoloSoloData(riga.title)) continue;
+
+    // §26.123 — L'AGGREGATORE NON ENTRA NEL RADAR LIVE. Vale anche per le righe
+    // storiche: una `source_url` di `scuolainterpelli.it`/`interpelloweb.it` (o di
+    // un altro dominio della lista unica) esce dalla tavola, qualunque sia il
+    // contenuto. Il divieto è a monte; questa è la cintura di sicurezza.
+    if (eAggregatorePrivato(riga.source_url)) continue;
 
     const nome = nomeScuolaBoard(riga);
     // GATE STRETTO (§26.59): senza un istituto reale la riga non entra. Non si

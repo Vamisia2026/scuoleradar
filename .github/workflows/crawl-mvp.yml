@@ -1,0 +1,107 @@
+# ============================================================
+# Giro dell'MVP — capoluoghi di regione + Asti, più le province richieste (§26.126)
+#
+# Perché esiste: l'MVP non ingerisce più «tutto il Paese, tutte le scuole». Ogni
+# giro legge una BASE NAZIONALE stabile (i 20 capoluoghi di regione + Asti, così
+# il Radar Live mostra copertura su tutta Italia) e INTENSIFICA le province che
+# gli utenti hanno chiesto davvero (prova del Radar o profilo → `province_domanda`,
+# finestra 7 giorni). Le province senza richieste restano coperte dagli hub USR
+# regionali: nessun taglio silenzioso, solo un'intensità diversa.
+#
+# §26.127 — Il giro ha un TERMOSTATO: conta gli avvisi attivi in archivio (la
+# stessa popolazione che il Radar Live mostra) e sceglie il regime — sotto 1.000
+# «carenza» (giro esteso), fino a 1.150 «equilibrio», sopra «saturo» (rallenta).
+# La provincia richiesta resta al 100% dell'anagrafica in OGNI regime. Il log
+# stampa `TERMOSTATO — <regime>: N avvisi attivi su 1.000 di riferimento`.
+#
+# Secrets richiesti: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+# ============================================================
+name: Crawl MVP (capoluoghi + domanda)
+
+on:
+  schedule:
+    # Ogni giorno alle 03:50 UTC: prima dei giri di scansione (07:00) e dopo la
+    # pulizia degli scaduti (04:00 non ancora partita): la bacheca trova i dati
+    # freschi quando gli utenti aprono.
+    - cron: '50 3 * * *'
+  workflow_dispatch:
+    inputs:
+      province:
+        description: 'Province da chiedere a mano (codici separati da virgola, es. AT,CN)'
+        required: false
+        default: ''
+      giorni:
+        description: 'Finestra della domanda in giorni (default 7)'
+        required: false
+        default: '7'
+      soglia:
+        description: 'Soglia del termostato (avvisi attivi, default 1000)'
+        required: false
+        default: ''
+      max_scuole_fondo:
+        description: 'Scuole di fondo per provincia (vuoto = lo decide il termostato)'
+        required: false
+        default: ''
+      apply:
+        description: 'Promuovi i target pending delle province richieste'
+        type: boolean
+        default: true
+      solo_piano:
+        description: 'Solo il piano (nessun crawler, nessuna scrittura)'
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Nessuna scrittura su interpelli (solo lettura e report)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: crawl-mvp
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    name: Baseline nazionale + domanda
+    runs-on: ubuntu-latest
+    # §26.127 — La provincia richiesta legge il 100% dell'anagrafica: con più
+    # province in domanda lo stesso giro fa più rete di prima. 180 minuti
+    # lasciano spazio al caso peggiore; il termostato riduce il resto.
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Installazione dipendenze
+        run: npm ci
+
+      - name: Validazione TypeScript dello scraper (informativa)
+        continue-on-error: true
+        run: npm run scrape:check
+
+      - name: Giro MVP
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PROVINCE_INPUT: ${{ inputs.province }}
+          GIORNI_INPUT: ${{ inputs.giorni }}
+          SOGLIA_INPUT: ${{ inputs.soglia }}
+          FONDO_INPUT: ${{ inputs.max_scuole_fondo }}
+        run: |
+          ARGS=""
+          if [ -n "$PROVINCE_INPUT" ]; then ARGS="$ARGS --province=$PROVINCE_INPUT"; fi
+          if [ -n "$GIORNI_INPUT" ]; then ARGS="$ARGS --giorni=$GIORNI_INPUT"; fi
+          if [ -n "$SOGLIA_INPUT" ]; then ARGS="$ARGS --soglia=$SOGLIA_INPUT"; fi
+          if [ -n "$FONDO_INPUT" ]; then ARGS="$ARGS --max-scuole-fondo=$FONDO_INPUT"; fi
+          if [ "${{ inputs.apply }}" = "true" ]; then ARGS="$ARGS --apply"; fi
+          if [ "${{ inputs.solo_piano }}" = "true" ]; then ARGS="$ARGS --solo-piano"; fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+          echo "Comando: npm run crawl:mvp -- $ARGS"
+          npm run crawl:mvp -- $ARGS

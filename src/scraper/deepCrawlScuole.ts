@@ -31,7 +31,11 @@
 import { allegatiDaGuscio } from './allegatiBando.ts';
 import { urlGuscio } from './guscioPagina.ts';
 import { linkInterpelliScuola } from './linkScuola.ts';
-import { motivoPaginaContenitore, documentoUnicoDaContenitore } from './paginaArchivio.ts';
+import {
+  documentoUnicoDaContenitore,
+  ePaginaSenzaRisultati,
+  motivoPaginaContenitore,
+} from './paginaArchivio.ts';
 
 /** Esito del download di una pagina (forma minima di `fetch`). */
 export interface PaginaScaricata {
@@ -71,6 +75,13 @@ export interface EsitoLetturaScuola {
   linkTrovati: number;
   /** §26.115 — allegati di bando trovati nel guscio della home (0 se nessuno). */
   allegatiTrovati: number;
+  /**
+   * §26.124 — pagine SCARTATE perché dichiarano di essere vuote («Nessun
+   * risultato»): un albo che non pubblica nulla non è una fonte e non produce
+   * voci. Si contano a parte dagli errori: non è una fonte rotta, è una pagina
+   * senza contenuto.
+   */
+  pagineVuote: number;
   errori: string[];
 }
 
@@ -92,6 +103,7 @@ export async function leggiPagineInterpelli(
     pagine: [],
     linkTrovati: 0,
     allegatiTrovati: 0,
+    pagineVuote: 0,
     errori: [],
   };
   if (!scuola.home) {
@@ -136,12 +148,19 @@ export async function leggiPagineInterpelli(
             `guscio ${dentro}: non HTML (${interna.contentType || 'content-type assente'})`
           );
         } else {
-          esito.pagine.push({ url: dentro, html: interna.html });
-          candidati = linkInterpelliScuola(
-            interna.html,
-            dentro,
-            Math.max(0, maxPagine - 1)
-          );
+          // §26.124 — PAGINA VUOTA: la ricerca interna o l'albo che non pubblica
+          // nulla («Nessun risultato») non è una fonte: non entra in `pagine` e non
+          // produce voci. Non è un errore (la fonte risponde), è un guscio.
+          if (ePaginaSenzaRisultati(interna.html)) {
+            esito.pagineVuote += 1;
+          } else {
+            esito.pagine.push({ url: dentro, html: interna.html });
+            candidati = linkInterpelliScuola(
+              interna.html,
+              dentro,
+              Math.max(0, maxPagine - 1)
+            );
+          }
         }
       } catch (err) {
         esito.errori.push(`guscio ${dentro}: ${messaggio(err)}`);
@@ -177,6 +196,13 @@ export async function leggiPagineInterpelli(
         continue;
       }
       if (!pagina.contentType.includes('html')) continue;
+      // §26.124 — PAGINA VUOTA: si scarta QUI, prima di ogni lettura: un elenco
+      // che dice «Nessun risultato» non ha voci da estrarre e non deve diventare
+      // un avviso (né un albo in coda: non c'è niente da promuovere).
+      if (ePaginaSenzaRisultati(pagina.html)) {
+        esito.pagineVuote += 1;
+        continue;
+      }
       // §26.122 — CONTENITORE CON UN SOLO BANDO DENTRO: «La segreteria comunica»,
       // «Comunicazioni», «Archivio» sono involucri. Se il contenitore porta UN SOLO
       // allegato di bando pertinente, la pagina si legge per gli allegati e il link
@@ -191,7 +217,10 @@ export async function leggiPagineInterpelli(
           url: candidato.url,
           html: pagina.html,
           soloAllegati: true,
-          allegatoUnico: documento.url,
+          // §26.123 — `documentoUnicoDaContenitore` restituisce l'URL del PDF (stringa):
+          // fino al §26.125 qui si leggeva `.url` su una stringa, quindi il campo
+          // arrivava `undefined` e il percorso «spoonfeeding» non scattava mai.
+          allegatoUnico: documento,
         });
         esito.allegatiTrovati += 1;
         continue;

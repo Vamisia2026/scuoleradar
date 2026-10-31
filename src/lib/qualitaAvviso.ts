@@ -30,6 +30,7 @@
  * Guardia: `npm run test:qualita-avviso`.
  */
 import { nomeIstitutoPresentabile } from './nomeIstituto';
+import { motivoBandoCommerciale } from './bandiCommerciali';
 
 /**
  * Parole che dichiarano un LAVORO possibile (radici, non forme piene: la fonte
@@ -107,9 +108,19 @@ export function dichiaraOpportunita(testo?: string | null): boolean {
  *     tabella delle classi aperte, non un avviso (§26.65);
  *   · `'nessuna-traccia-di-opportunita'` → voce di menu, titolo di sezione o atto
  *     senza contenuto: nessuna parola operativa, nessuna classe riconosciuta,
- *     nessun istituto presentabile.
+ *     nessun istituto presentabile;
+ *   · i motivi di `lib/bandiCommerciali` (§26.127) → gara/appalto, procedura su
+ *     piattaforma di acquisti, vendita/concessione, contenuto commerciale, pagina
+ *     morta, borsa di studio: non sono opportunità per una persona.
  */
 export function motivoRigaNonOpportunita(riga: RigaFeed): string | null {
+  // §26.127 — PRIMA di tutto il bando che non è lavoro. Con l'ampliamento delle
+  // scansioni (100% delle scuole in domanda, hub letti in profondità) cresce ciò
+  // che gli albi pubblicano accanto agli interpelli: una gara o una pagina morta
+  // non deve arrivare in vetrina solo perché cita una scuola. La protezione è
+  // nel modulo: un titolo di reclutamento (o una classe) non si scarta mai.
+  const commerciale = motivoBandoCommerciale({ titolo: riga.titolo, classi: riga.classi });
+  if (commerciale) return commerciale;
   if (eDumpDiCodici(riga.titolo)) return 'titolo-dump-di-codici';
   const dichiarata = dichiaraOpportunita(`${riga.titolo ?? ''} ${riga.materia ?? ''}`);
   if (dichiarata) return null;

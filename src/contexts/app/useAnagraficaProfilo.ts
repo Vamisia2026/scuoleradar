@@ -9,7 +9,7 @@ import { useCallback, type Dispatch, type SetStateAction } from 'react';
 import { getModuliScaricati } from '@/data/moduli';
 import { normalizzaClassi } from '@/lib/matchingEngine';
 import { supabase } from '@/lib/supabase';
-import { FONTE_RICHIESTA_PREFERENZE, richiediScansioniProvince } from '@/lib/queueRichieste';
+import { FONTE_RICHIESTA_PREFERENZE, richiediDomandaProvince, richiediScansioniProvince } from '@/lib/queueRichieste';
 import type { Preferenze, User } from './types';
 
 /** Dati anagrafici raccolti dal mini-onboarding (nome/cognome obbligatori). */
@@ -150,6 +150,8 @@ export function useAnagraficaProfilo({
         // Al più una richiesta per città del seed, poi riassorbite dal throttle
         // server-side: salvare due volte di fila non martella la coda.
         void richiediScansioniProvince(supabase, dati.provinceCodici, FONTE_RICHIESTA_PREFERENZE);
+        // §26.126 — il segnale che accende l'approfondimento su QUELLA provincia.
+        void richiediDomandaProvince(supabase, dati.provinceCodici, FONTE_RICHIESTA_PREFERENZE);
       }
     },
     [preferenze, user],
