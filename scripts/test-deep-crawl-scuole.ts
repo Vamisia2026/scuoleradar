@@ -193,7 +193,17 @@ const reporter = leggi('scripts/table-reporter.ts');
 check('deep crawl nel runner', true, /deepCrawlScuole\(/.test(reporter));
 check('tetto per istituto', true, /MAX_SCUOLE_DEEP/.test(reporter));
 check('chiamata dopo il giro sui target', true, /await deepCrawlScuole\(scuoleDaVisitare\);/.test(reporter));
-check('allegati PDF letti nel deep crawl', true, /linkAllegatiInterpello\(/.test(reporter));
+check('allegati PDF letti nel deep crawl', true, /allegatiBando\(pagina\.html/.test(reporter));
+// §26.128 — gli allegati si scelgono per PERTINENZA (`allegatiBando` applica i
+// PESI di §26.115), non in ordine di pagina: l'elenco grezzo non deve tornare.
+check(
+  'allegati ordinati per pertinenza, non per ordine di pagina',
+  [false, true],
+  [
+    /linkAllegatiInterpello\(pagina\.html/.test(reporter),
+    /allegatiBando\(pagina\.html, pagina\.url, MAX_ALLEGATI_PAGINA\)/.test(reporter),
+  ],
+);
 check('albo verificato promosso in coda', true, /promuoviPaginaAlbo\(/.test(reporter));
 check('promozione come active_crawler', true, /active_crawler/.test(reporter));
 

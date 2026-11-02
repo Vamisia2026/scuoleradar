@@ -116,6 +116,7 @@ import { GIORNI_ORIZZONTE_INGESTIONE } from '../src/lib/scadenza.ts';
 // Pre-filtro semantico condiviso col discovery engine: atti di gara, circolari
 // per le famiglie e burocrazia del personale si scartano PRIMA del parsing.
 import { isAdministrativeNoise } from '../src/lib/noiseFilter.ts';
+import { scegliContenitore } from '../src/scraper/contenitoreAvviso.ts';
 // Lettura euristica universale (§26.84): layout e voci della pagina così come
 // li vede un lettore che non conosce il portale — il segnale di quarantena per
 // le sorgenti che nessun parser specifico spiega.
@@ -156,19 +157,33 @@ import { scuoleDellaProvincia } from '../src/lib/scuoleProvincia.ts';
 // scolastici», «assistenti amministrativi/tecnici» non hanno la forma «lettere +
 // cifre», quindi senza questa lettura la riga nasceva con `class_codes` vuoto e
 // nessun profilo poteva agganciarla (il Radar copriva solo i docenti).
-import { codiciAtaDaTesto } from '../src/lib/profiliAta.ts';
-// §26.94, §26.96 — la scadenza DICHIARATA nel testo dell'avviso si legge con
-// `campiDocumento`, che a sua volta usa `lib/scadenzaTesto` (etichetta
-// obbligatoria): quando la tabella o l'elenco non la riportano, la si cerca nel
-// corpo del documento prima di scartare una riga valida come «senza scadenza».
-import { testo as testoHtml } from '../src/lib/universalHtml.ts';
+// §26.128 — I CINQUE CALL SITE usano il nome `classiAtaDaTesto`, che non è mai
+// stato importato: il file importava solo `codiciAtaDaTesto` e ogni costruzione
+// di record lanciava `ReferenceError: classiAtaDaTesto is not defined` (i record
+// non nascevano e il giro restava a zero senza dire perché). Qui il nome atteso
+// è un alias dichiarato della stessa funzione: nessuna regola nuova, e
+// `npm run test:profili-ata` continua a contare cinque punti di aggancio.
+import {
+  codiciAtaDaTesto,
+  codiciAtaDaTesto as classiAtaDaTesto,
+} from '../src/lib/profiliAta.ts';
+// §26.94, §26.96 — la scadenza DICHIARATA nel testo dell'avviso si legge con le
+// regole di `lib/scadenzaTesto` (etichetta obbligatoria): quando la tabella o
+// l'elenco non la riportano, la si cerca nel corpo del documento prima di
+// scartare una riga valida come «senza scadenza».
 // §26.102 — la pagina successiva di un elenco si legge in `lib/paginaSuccessiva`
 // (estratto dal lettore HTML per la soglia dei 250 righe): qui si segue.
 import { urlPaginaSuccessiva } from '../src/lib/paginaSuccessiva.ts';
 // §26.94 — deep crawl degli istituti: dalla scuola certificata alla sua HOME
 // ufficiale, poi ai link «Interpelli / Albo» che la scuola pubblica davvero.
 import { leggiPagineInterpelli } from '../src/scraper/deepCrawlScuole.ts';
-import { linkAllegatiInterpello } from '../src/scraper/linkScuola.ts';
+// §26.115 — allegato → `titoloDaAllegato` (testo del link o nome del file
+// ripulito: mai una parola inventata) e §26.128 — `allegatiBando`, che ORDINA
+// gli allegati per PERTINENZA (bando > avviso/interpello/supplenza > domanda >
+// allegato): un albo mette nello stesso elenco il bando e la circolare per le
+// famiglie, e l'ordine di pagina non è l'ordine di importanza. Il modulo riusa
+// `linkAllegatiInterpello` (stesso istituto, mai aggregatori terzi).
+import { allegatiBando, titoloDaAllegato } from '../src/scraper/allegatiBando.ts';
 // §26.124 — PAGINE-CONTENITORE, VOCI DI MENU E PAGINE VUOTE: la stessa regola
 // dell'ingestione `src/scraper/index.ts`. Una voce d'albo che punta a
 // `/la-segreteria-comunica/`, `/albo-online`, `/comunicazioni` (o che si chiama
@@ -199,8 +214,6 @@ import {
   intestazioneDaDocumento,
   titoloBandoDaDocumento,
 } from '../src/scraper/datiBando.ts';
-// §26.115 — allegato → titolo leggibile (testo del link o nome del file ripulito).
-import { titoloDaAllegato } from '../src/scraper/allegatiBando.ts';
 // §26.115 — RECAPITI dal codice meccanografico (modello Liguria): PEO e PEC
 // ufficiali dell'istituto entrano nella riga, così la candidatura ha un
 // destinatario senza aprire il PDF. Convenzione MIM, mai un indirizzo inventato.
@@ -217,6 +230,17 @@ import { piattaformaScolastica } from '../src/lib/piattaformeLink.ts';
 // `/ToUnicode`) delle prime pagine. Senza questo, «senza scadenza» è un limite
 // del lettore, non un dato che manca.
 import { MAX_BYTE_PDF, estraiTestoPdf } from '../src/scraper/pdfTesto.ts';
+// §26.128 — DIAGNOSTICA DEI PDF: ogni documento aperto finisce in UN secchio
+// (illeggibile · senza scadenza per causa · passata · oltre orizzonte · valida)
+// e i secchi sommano al totale. Prima il riepilogo diceva «1.131 aperti, 16 con
+// scadenza» e non si poteva sapere se il problema fosse il testo, il contorno o
+// la data. Purezza e cause vivono in `lib/diagnosticaPdf` (§26.118 per i motivi).
+import {
+  nuovoContatorePdf,
+  registraPdf,
+  righeRiepilogoPdf,
+  type ContatorePdf,
+} from '../src/lib/diagnosticaPdf.ts';
 // Lettura PROFONDA delle tabelle non mappabili + gate semantico stretto
 // (`scraper/tabellaUst.ts`): scioperi, assemblee, avvisi chiusi, graduatorie e
 // righe senza scadenza dichiarata non diventano opportunità.
@@ -474,8 +498,14 @@ const APPROFONDIMENTO_TIMEOUT_MS = 10_000;
 let approfondimentiTarget = MAX_APPROFONDIMENTI_RUN;
 let approfondimentiScuole = MAX_APPROFONDIMENTI_SCUOLE_RUN;
 
-/** §26.95 — allegati PDF aperti nel giro: letti, con testo, con scadenza. */
-const statisticaPdf = { aperti: 0, conTesto: 0, conScadenza: 0 };
+/**
+ * §26.95 · §26.128 — allegati PDF aperti nel giro. Dal 31/10/2026 il contatore
+ * non dice solo «quanti»: `lib/diagnosticaPdf` mette ogni documento in un
+ * secchio (`illeggibile`, `senza scadenza` con la causa, `passata`, oltre
+ * orizzonte, `valida`) e i secchi sommano al totale, così un giro che apre mille
+ * PDF e non produce righe dice PER CHÉ.
+ */
+const statisticaPdf: ContatorePdf = nuovoContatorePdf();
 
 // `--dry-run` (o `DRY_RUN=1`): esegue fetch ed estrazione e stampa i record
 // trovati, senza scrivere su Supabase. Serve a validare una correzione di
@@ -948,6 +978,21 @@ function rowIsSemanticNoise(fullRowText: string, etichetta: string): boolean {
     );
   }
   return true;
+}
+
+/**
+ * §26.130 — Il TITOLO di una voce d'elenco è rumore? È l'unico testo che esiste
+ * PRIMA di aprire l'avviso (una voce non ha ancora né riga né corpo), ed è la
+ * stessa domanda che `rowIsSemanticNoise` fa a una riga di tabella: un titolo
+ * vuoto non è un'opportunità, e «Sciopero 30 ottobre 2026 – promemoria» non lo è
+ * nemmeno lui. Fino al 2026-11-01 questo giudizio si applicava solo alle righe:
+ * né l'elenco adattivo né la sgranatura lo chiedevano, e su CT è così entrata in
+ * bacheca una circolare di sciopero con una scadenza inventata.
+ */
+function titoloVoceERumore(titolo: string): boolean {
+  const normalizzato = normalize(titolo);
+  if (!normalizzato) return true;
+  return rowIsSemanticNoise(normalizzato, normalizzato);
 }
 
 /**
@@ -1815,6 +1860,8 @@ interface EsitoAdattivo {
   oltreOrizzonte: number;
   voci: number;
   senzaScadenza: number;
+  /** §26.130 — voci il cui TITOLO è rumore: contate a parte, mai ingerite. */
+  rumore: number;
 }
 
 /**
@@ -1843,6 +1890,10 @@ function recordDaVoceAdattiva(
   // §26.96 — classi lette DENTRO il documento quando l'elenco non le dichiara.
   classiDocumento: string[] = [],
 ): InterpelloRecord | null {
+  // §26.130 — ultima porta prima della scrittura: la voce arriva anche dalla
+  // sgranatura, che il titolo non lo aveva mai giudicato. Qui il giudizio è uno
+  // solo per tutti i percorsi.
+  if (titoloVoceERumore(voce.title)) return null;
   const defaultProvince = (target.province || CONFIG.fallbackProvince).toUpperCase();
   const daCodice =
     voce.schoolCode && isLikelyMechCode(voce.schoolCode) ? voce.schoolCode : null;
@@ -1900,7 +1951,7 @@ function recordsDaElencoAdattivo(
   universale: UniversalExtractionResult | undefined,
   target: DiscoveredLink
 ): EsitoAdattivo {
-  const esito: EsitoAdattivo = { records: [], oltreOrizzonte: 0, voci: 0, senzaScadenza: 0 };
+  const esito: EsitoAdattivo = { records: [], oltreOrizzonte: 0, voci: 0, senzaScadenza: 0, rumore: 0 };
   if (!universale?.success || universale.items.length === 0) return esito;
 
   const anagrafica = caricaAnagrafica();
@@ -1908,6 +1959,12 @@ function recordsDaElencoAdattivo(
 
   for (const voce of universale.items) {
     esito.voci += 1;
+    // §26.130 — il TITOLO decide prima della data: una circolare di sciopero non
+    // è «senza scadenza», è fuori tema, e va contata per quello che è.
+    if (titoloVoceERumore(voce.title)) {
+      esito.rumore += 1;
+      continue;
+    }
     const deadline = voce.expirationDate ?? null;
     if (!deadline) {
       esito.senzaScadenza += 1;
@@ -1926,7 +1983,7 @@ function recordsDaElencoAdattivo(
   if (esito.voci > 0) {
     console.log(
       `[table-reporter] Elenco adattivo (${universale.layoutDetected}): ${esito.voci} voci → ` +
-        `${esito.records.length} record (senza scadenza: ${esito.senzaScadenza}, ` +
+        `${esito.records.length} record (rumore: ${esito.rumore}, senza scadenza: ${esito.senzaScadenza}, ` +
         `oltre orizzonte: ${esito.oltreOrizzonte}).`
     );
   }
@@ -2061,12 +2118,14 @@ async function leggiAvvisoCompleto(
         }
       }
     }
-    // Il contenuto dell'avviso, non il menu del sito: se c'è un contenitore
-    // semantico si legge quello, altrimenti la pagina intera.
-    const $ = cheerio.load(html);
-    const contenuto = $('article, main, .entry-content, .avviso, #content, .contenuto').first();
-    const frammento = contenuto.length > 0 ? contenuto.html() ?? html : html;
-    const testoAvviso = testoHtml(frammento.slice(0, 400_000));
+    // §26.130 — Il contenuto dell'avviso, non il menu del sito. La lista di
+    // selettori è una PRIORITÀ (`src/scraper/contenitoreAvviso.ts`): scritta come
+    // `$('article, main, …').first()` non sceglie l'atto, sceglie il primo
+    // elemento nell'ordine del documento — e su un sito scolastico WordPress è il
+    // `<main>`, che avvolge anche la colonna «ultime circolari». Misurato il
+    // 2026-11-01: la circolare «Sciopero 30 ottobre 2026» di vergaviagrande.edu.it
+    // prendeva la scadenza 2026-12-07 dal titolo di un'altra circolare.
+    const testoAvviso = scegliContenitore(html.slice(0, 400_000)).testo;
     // §26.96 + §26.115 — i campi si leggono con la STESSA regola del PDF: classi,
     // scadenza, intestazione, ore e requisiti dal documento; scuola CITATA nel
     // corpo con il codice meccanografico.
@@ -2111,25 +2170,38 @@ async function leggiAvvisoPdf(
     pec: [],
   };
   const dichiarata = Number(response.headers.get('content-length') ?? 0);
-  if (Number.isFinite(dichiarata) && dichiarata > MAX_BYTE_PDF) return vuoto;
+  if (Number.isFinite(dichiarata) && dichiarata > MAX_BYTE_PDF) {
+    statisticaPdf.oltreTetto += 1;
+    return vuoto;
+  }
   const buffer = new Uint8Array(await response.arrayBuffer());
-  if (buffer.byteLength === 0 || buffer.byteLength > MAX_BYTE_PDF) return vuoto;
-  statisticaPdf.aperti += 1;
+  if (buffer.byteLength === 0 || buffer.byteLength > MAX_BYTE_PDF) {
+    statisticaPdf.oltreTetto += 1;
+    return vuoto;
+  }
   const esito = estraiTestoPdf(buffer);
-  if (!esito.testo) return vuoto;
-  statisticaPdf.conTesto += 1;
   // §26.96 + §26.115 — i campi del documento (classi, codice, provincia,
   // scadenza, recapiti) più intestazione, ore e requisiti: UNA regola sola, la
   // stessa dell'HTML (`datiBandoDaTesto` → `campiDocumento`).
-  const campi = datiBandoDaTesto(esito.testo);
-  const deadline = campi.scadenza;
-  if (deadline) statisticaPdf.conScadenza += 1;
+  const campi = esito.testo ? datiBandoDaTesto(esito.testo) : null;
+  const deadline = campi?.scadenza ?? null;
+  const titolo = esito.testo ? intestazioneDaDocumento(esito.testo) : null;
+  // §26.128 — DIAGNOSI, prima di ogni gate del runner: il documento è APERTO, e
+  // il secchio si decide qui. Senza questo, «1.131 aperti / 16 con scadenza»
+  // lasciava indistinguibili il PDF illeggibile, la circolare e la data passata.
+  registraPdf(statisticaPdf, {
+    testo: esito.testo,
+    deadline,
+    titolo,
+    url: response.url || null,
+  });
+  if (!campi) return vuoto;
   return {
     deadline,
     scuole: scuoleDaTesto(caricaAnagrafica(), esito.testo, provincia ?? null),
     classi: campi.classi,
     letto: true,
-    titolo: intestazioneDaDocumento(esito.testo),
+    titolo,
     ore: campi.ore,
     requisiti: campi.requisiti,
     email: campi.recapiti.email,
@@ -2198,13 +2270,24 @@ async function sgranaDocumentoAvviso(
     } catch {
       continue;
     }
-    if (byte.byteLength === 0 || byte.byteLength > MAX_BYTE_PDF) continue;
+    if (byte.byteLength === 0 || byte.byteLength > MAX_BYTE_PDF) {
+      statisticaPdf.oltreTetto += 1;
+      continue;
+    }
     const pdf = estraiTestoPdf(byte);
+    const righe = pdf.testo ? righeTabellaInterpelli(pdf.testo) : [];
+    // §26.128 — anche il documento TABELLARE entra nel contatore: il secchio si
+    // decide sul primo termine dichiarato dalle righe, e un PDF senza testo è
+    // `illeggibile` (prima spariva dal conto e sembrava «zero righe»).
+    registraPdf(statisticaPdf, {
+      testo: pdf.testo,
+      deadline: righe.find((riga) => riga.deadline)?.deadline ?? null,
+      titolo: null,
+      url: documento,
+    });
     if (!pdf.testo) continue;
-    statisticaPdf.aperti += 1;
-    statisticaPdf.conTesto += 1;
 
-    for (const riga of righeTabellaInterpelli(pdf.testo)) {
+    for (const riga of righe) {
       esito.righe += 1;
       if (!riga.deadline) continue;
       esito.conTermine += 1;
@@ -2226,7 +2309,8 @@ async function sgranaDocumentoAvviso(
       if (record) esito.records.push(record);
     }
   }
-  if (esito.conTermine > 0) statisticaPdf.conScadenza += 1;
+  // §26.128 — `conScadenza` lo conta `registraPdf` (primo termine delle righe):
+  // una sola scrittura del numero, altrimenti il secchio e il totale divergono.
   return esito;
 }
 
@@ -2248,6 +2332,8 @@ async function approfondisciVociSenzaScadenza(
   daCorpoScuola: number;
   oltreOrizzonte: number;
   righeTabella: number;
+  /** §26.130 — avvisi mai aperti: il TITOLO dichiarava un atto, non un reclutamento. */
+  rumore: number;
 }> {
   const esito = {
     records: [],
@@ -2256,6 +2342,7 @@ async function approfondisciVociSenzaScadenza(
     daCorpoScuola: 0,
     oltreOrizzonte: 0,
     righeTabella: 0,
+    rumore: 0,
   } as {
     records: InterpelloRecord[];
     richieste: number;
@@ -2263,6 +2350,7 @@ async function approfondisciVociSenzaScadenza(
     daCorpoScuola: number;
     oltreOrizzonte: number;
     righeTabella: number;
+    rumore: number;
   };
   if (!universale?.success) return esito;
   // §26.101 — SGRANATURA: le voci dell'elenco che non dichiarano la scadenza si
@@ -2305,6 +2393,15 @@ async function approfondisciVociSenzaScadenza(
           `le voci non lette restano al giro successivo.`,
       );
       break;
+    }
+    // §26.130 — se il TITOLO dell'avviso è un atto o vita scolastica, non si
+    // scarica nemmeno: questa è la voce che su CT è costata una riga inventata
+    // («Sciopero 30 ottobre 2026 – promemoria» → scadenza 2026-12-07). Il
+    // contatore della richiesta si legge DOPO il gate: un titolo di rumore non
+    // entra in «documenti letti» (§26.130 — misura onesta, non omaggio al gate).
+    if (titoloVoceERumore(voce.title)) {
+      esito.rumore += 1;
+      continue;
     }
     esito.richieste += 1;
     // §26.101 — prima il DOCUMENTO dell'avviso: se è un PDF tabellare, ogni riga
@@ -2351,12 +2448,16 @@ async function approfondisciVociSenzaScadenza(
     if (record) esito.records.push(record);
   }
 
-  if (esito.richieste > 0) {
+  // §26.130 — la riga si stampa anche quando NESSUN documento è stato letto ma ci
+  // sono titoli di rumore: «0 documenti letti, 4 titoli di rumore» è il conto che
+  // spiega perché una pagina non ha prodotto nulla (senza, il giro sembra rotto).
+  if (esito.richieste > 0 || esito.rumore > 0) {
     console.log(
       `[table-reporter] Sgranatura (${apribili.length} avvisi apribili, finestra ${finestra.da}-${finestra.a}): ` +
         `${esito.richieste} documenti letti → ${esito.trovate} termini dichiarati, ` +
         `${esito.righeTabella} righe di tabella, ${esito.records.length} record ` +
-        `(${esito.daCorpoScuola} con scuola dal corpo) · riserva del giro: ${approfondimentiTarget}.`
+        `(${esito.daCorpoScuola} con scuola dal corpo, ${esito.rumore} titoli di rumore non aperti) · ` +
+        `riserva del giro: ${approfondimentiTarget}.`
     );
   }
   return esito;
@@ -3084,6 +3185,21 @@ const MAX_APPROFONDIMENTI_SCUOLA = Math.max(1, LIMITI.documentiPerIstituto);
 /** Allegati PDF letti da una pagina d'albo quando l'elenco non dà voci. */
 const MAX_ALLEGATI_PAGINA = 4;
 /**
+ * §26.128 — RISERVA PER I DOCUMENTI. Il budget di un istituto era UN contatore
+ * solo: il ciclo delle VOCI (senza filtro di titolo) lo spendeva per primo e gli
+ * allegati — dove vive il bando vero — trovavano zero. Metà del budget resta
+ * riservata ai PDF: nessuna richiesta in più (il tetto totale non cambia), solo
+ * l'ordine con cui si spende. Con `documentiPerIstituto` = 10: 5 voci, 5 PDF.
+ */
+const MAX_APPROFONDIMENTI_ALLEGATI_SCUOLA = Math.max(
+  1,
+  Math.ceil(MAX_APPROFONDIMENTI_SCUOLA / 2),
+);
+const MAX_APPROFONDIMENTI_VOCI_SCUOLA = Math.max(
+  0,
+  MAX_APPROFONDIMENTI_SCUOLA - MAX_APPROFONDIMENTI_ALLEGATI_SCUOLA,
+);
+/**
  * Albi nuovi iscritti in coda per giro: senza tetto un solo giro può aggiungere
  * centinaia di URL e il giro successivo diventa ingestibile. 120 copre gli
  * istituti che il deep crawl visita davvero.
@@ -3389,7 +3505,9 @@ async function deepCrawlScuole(scuole: Map<string, string>): Promise<void> {
               interpelliPagina += 1;
             }
             let deadline = voce.expirationDate ?? null;
-            if (!deadline && approfondimentiScuola < MAX_APPROFONDIMENTI_SCUOLA) {
+            // §26.128 — il ramo delle VOCI spende solo la sua metà del budget: la
+            // riserva dei PDF non si tocca da qui (prima se la mangiava tutta).
+            if (!deadline && approfondimentiScuola < MAX_APPROFONDIMENTI_VOCI_SCUOLA) {
               approfondimentiScuola += 1;
               deadline = await scadenzaDaCorpoAvviso(voce.directUrl, 'scuola');
             }
@@ -3400,7 +3518,8 @@ async function deepCrawlScuole(scuole: Map<string, string>): Promise<void> {
         }
       }
       // §26.95 — albo che elenca SOLO file: l'elenco non dà voci, ma i PDF sono
-      // documenti veri. Se ne leggono al massimo due, col termine dentro.
+      // documenti veri. Se ne leggono al massimo `MAX_ALLEGATI_PAGINA`, col
+      // termine dentro.
       // §26.115 — il documento si legge INTERO (non solo la data): classe, ore e
       // intestazione diventano i campi della riga e l'atterraggio è il PDF.
       if (interpelliPagina === 0) {
@@ -3408,9 +3527,13 @@ async function deepCrawlScuole(scuole: Map<string, string>): Promise<void> {
         // del contenitore/guscio (`allegatoUnico`), si usa QUELL'indirizzo:
         // niente secondo scan dei link e nessun rischio di atterrare
         // sull'elenco invece che sul documento ufficiale.
+        // §26.128 — PRIMA IL PERTINENTE: `allegatiBando` riusa i PESI di §26.115
+        // (`bando` 4 > `avviso`/`interpello`/`supplenza` 3 > `domanda` 2 >
+        // `allegato` 1), scarta gli aggregatori terzi e legge fino a 12 link per
+        // scegliere i 4 giusti: l'ordine di pagina non è l'ordine di importanza.
         const allegati = pagina.allegatoUnico
           ? [{ url: pagina.allegatoUnico, testo: '', punteggio: 0 }]
-          : linkAllegatiInterpello(pagina.html, pagina.url, MAX_ALLEGATI_PAGINA);
+          : allegatiBando(pagina.html, pagina.url, MAX_ALLEGATI_PAGINA);
         for (const allegato of allegati) {
           if (approfondimentiScuola >= MAX_APPROFONDIMENTI_SCUOLA) break;
           approfondimentiScuola += 1;
@@ -4294,13 +4417,12 @@ async function runTableReporter(): Promise<void> {
   console.log(`  Errori: ${errorCount}`);
   console.log(`  Target disattivati (no tabella): ${disqualifiedCount}`);
   console.log(`  Record totali processati: ${totalExtracted}`);
-  // §26.95 — trasparenza: quanti allegati PDF sono stati APERTI e quanti hanno
-  // dichiarato un termine. Un numero basso qui spiega un «senza scadenza» alto.
-  if (statisticaPdf.aperti > 0) {
-    console.log(
-      `  PDF aperti: ${statisticaPdf.aperti} · con testo: ${statisticaPdf.conTesto} · ` +
-        `con scadenza dichiarata: ${statisticaPdf.conScadenza}`,
-    );
+  // §26.95 · §26.128 — trasparenza sui PDF: non più «quanti», ma «perché». Le
+  // righe arrivano da `lib/diagnosticaPdf` (secchi che sommano al totale):
+  // un giro che apre mille documenti e non produce righe dice qui se il problema
+  // è il testo (illeggibile), il contorno (atto/archivio/indice) o la data.
+  for (const riga of righeRiepilogoPdf(statisticaPdf)) {
+    console.log(`  ${riga}`);
   }
   // §26.118 — censimento delle voci senza scadenza (solo con il flag).
   if (CENSIMENTO) stampaCensimento();

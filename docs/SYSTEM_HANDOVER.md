@@ -13914,3 +13914,394 @@ distinguere — senza mai perdere un interpello vero.
 5. `npm run dati:pulisci-contorno` per far uscire dall'archivio le righe di contorno già presenti
    (dry-run prima, `--apply` poi).
 
+## §26.128 — MILLE PDF APERTI, ZERO RECORD: IL CONTATORE ORA DICE PERCHÉ
+
+Il giro di fondo del 31/10/2026 chiudeva con una riga sola:
+
+```
+PDF aperti: 1131 · con testo: 1130 · con scadenza dichiarata: 16
+```
+
+Tre numeri veri e una domanda senza risposta: **perché 1.115 documenti leggibili non hanno prodotto
+una riga?** Le cause possibili erano tre, e il log non le distingueva — il documento non è leggibile
+(scansione, CID senza `/ToUnicode`, viewer), il documento è leggibile ma non è un interpello
+(graduatoria, circolare, gara), il documento è un interpello e la data c'è ma è passata. Diagnosticare
+significava scegliere fra tre interventi **incompatibili**: allargare le regex, filtrare i file, alzare
+i budget. Nessuno dei tre si poteva fare alla cieca.
+
+### 1. Ogni PDF in un secchio solo — `src/lib/diagnosticaPdf.ts` (nuovo, puro, 251 righe)
+
+| Secchio | Quando | Perché è un secchio a sé |
+| --- | --- | --- |
+| `illeggibile` | meno di `MINIMO_LETTERE` (40) lettere **o** densità alfabetica < 0,35 | un testo di byte CID non è un documento letto: chiamarlo «senza scadenza» nasconde un difetto del **lettore** |
+| `senza_scadenza` | leggibile e nessuna data qualificata | porta la **causa** di §26.118 (`a_revoca`, `indice`, `amministrativo`, `archivio`, `data_passata`, `non_dichiarata`) |
+| `passata` | il termine dichiarato è prima di oggi | la data c'era: è finita |
+| `oltre_orizzonte` | il termine supera `GIORNI_ORIZZONTE_INGESTIONE` (365) | refuso d'anno o fine incarico (§26.114), non un termine |
+| `valida` | leggibile, termine dentro l'anno | il documento basta a nascere riga (titolo e codice meccanografico restano i gate del **runner**) |
+
+Nessuna regola nuova: è `causaSenzaScadenza` (§26.118) applicata al testo del documento — la stessa
+funzione del censimento delle voci d'elenco — più la stessa soglia di orizzonte dell'ingestione. Un
+solo modulo decide, così lo stesso PDF riceve sempre lo stesso verdetto.
+
+**Il contatore è un vincolo, non un elenco di numeri.** `ContatorePdf` tiene `aperti`, `oltreTetto`
+(file scartati per dimensione **prima** della lettura), `leggibili`/`illeggibili`,
+`passate`/`oltreOrizzonte`/`valide` e `motivi` (le sei cause) in modo che:
+
+* `aperti = leggibili + illeggibili`
+* `conScadenza = valide + passate + oltreOrizzonte`
+* `aperti − conScadenza − illeggibili = Σ motivi`
+
+La guardia (`npm run test:diagnostica-pdf`, 37 controlli) verifica le tre uguaglianze su un giro
+sintetico di cinque PDF: se un giorno qualcuno aggiunge un secchio senza aggiornare i totali, il test
+si rompe.
+
+**La causa si legge sull'INTESTAZIONE, non sul corpo** (`CARATTERI_ESTRATTO = 200`). Un avviso vero
+cita «graduatoria», «decreto» o «circolare» a metà pagina: classificando l'intero documento,
+`archivio` si sarebbe mangiato quasi ogni PDF e il censimento non avrebbe distinto più niente. La
+domanda a cui risponde la causa è «che atto è», e a quella risponde l'intestazione
+(`intestazioneDaDocumento`); il testo serve alla **leggibilità**, non all'etichetta. La guardia ha i
+due casi speculari: la stessa parola in testa decide, la stessa parola in coda no.
+
+### 2. Il riepilogo che si può leggere
+
+Al posto della riga unica, tre righe che si sommano:
+
+```
+PDF aperti: 1131 · leggibili: N · illeggibili: M · non aperti per dimensione: K
+PDF con scadenza dichiarata: 16 · valide: V · passate: P · oltre 365 giorni: O
+PDF senza scadenza: S → fino a revoca a · indice di classi b · atto amministrativo c ·
+  archivio/atto d · data già passata e · senza alcun segnale f
+```
+
+`righeRiepilogoPdf` restituisce `[]` quando il giro non ha aperto PDF, quindi i giri d'elenco non
+stampano righe vuote. `oltreTetto` è contato anche quando `aperti` è zero: un giro che scarta tutto
+per dimensione non deve sembrare un giro senza PDF.
+
+### 3. Il budget dei PDF non si spende più per le circolari
+
+Due modifiche nel deep crawl di `scripts/table-reporter.ts`, nessuna richiesta in più (il tetto per
+istituto non cambia), solo l'ordine con cui si spende.
+
+**(a) Gli allegati si scelgono per PERTINENZA.** Il ramo degli allegati usava
+`linkAllegatiInterpello(html, url, 4)`: i **primi quattro in ordine di pagina**. Un albo pubblica nello
+stesso elenco il bando e la circolare per le famiglie, e l'ordine di pagina non è l'ordine di
+importanza. Ora usa `allegatiBando(html, url, 4)`, che applica i **PESI di §26.115** (`bando` 4 >
+`avviso`/`interpello`/`supplenza` 3 > `domanda`/`requisiti` 2 > `allegato` 1), legge fino a 12 link per
+sceglierne 4 e scarta gli aggregatori terzi. Nessun peso nuovo, nessuna euristica nuova.
+
+**(b) Metà budget è riservata ai documenti.** `MAX_APPROFONDIMENTI_SCUOLA` è un contatore solo, e il
+ciclo delle **voci** (senza filtro di titolo) lo spendeva per primo: quando toccava agli allegati — dove
+vive il bando vero — la riserva era a zero. Nascono
+`MAX_APPROFONDIMENTI_ALLEGATI_SCUOLA = ceil(totale / 2)` (la riserva) e
+`MAX_APPROFONDIMENTI_VOCI_SCUOLA = totale − riserva` (il tetto del ciclo delle voci). Con
+`documentiPerIstituto` = 10: **5 voci, 5 PDF**. Il ramo degli allegati continua a fermarsi al tetto
+globale, quindi il totale delle richieste è identico a prima.
+
+**Limite dichiarato.** Il ramo degli allegati gira solo quando la pagina non ha dato **voci**
+d'interpello (`interpelliPagina === 0`): una pagina con un «Interpelli» di menu non apre i PDF. È il
+prossimo passo, e ora la diagnosi dirà se serve — prima sarebbe stato un raddoppio di rete alla cieca.
+
+### 4. Il difetto che il typecheck mirato ha trovato (e che vale più del resto)
+
+`scripts/` non è coperto da nessun `tsconfig` del repository (`typecheck` guarda solo `src`,
+`scrape:check` solo `src/scraper`): un errore di **riferimento** lì dentro non lo vede nessuno. Con un
+`tsconfig` temporaneo puntato su `scripts/table-reporter.ts` sono usciti subito cinque
+`TS2304: Cannot find name 'classiAtaDaTesto'`: il file importava `codiciAtaDaTesto`
+(`src/lib/profiliAta.ts`) e **chiamava un nome mai importato** in cinque punti — fra cui
+`recordDaVoceScuola`, cioè la funzione che costruisce **ogni** record. In esecuzione: `ReferenceError`
+alla prima riga utile, catturata dal `try/catch` della pagina, quindi **zero record** e nessuna traccia
+nel riepilogo dei PDF. La correzione è un alias dichiarato (una riga):
+
+```ts
+import { codiciAtaDaTesto, codiciAtaDaTesto as classiAtaDaTesto } from '../src/lib/profiliAta.ts';
+```
+
+Nessuna regola nuova: `test:profili-ata` continuava a contare cinque punti di aggancio **senza che
+nessuno di essi potesse funzionare**, ed è il motivo per cui una guardia testuale non sostituisce un
+typecheck.
+
+**Verifiche.** `npm run typecheck` pulito; `npm test` **verde** (compresa la nuova
+`test:diagnostica-pdf`, 37 controlli); `npm run test:architettura` **145 = baseline** (nessuna
+violazione nuova: il modulo nuovo sta sotto il tetto di 250 righe del gate); `npm run build`
+verde; `eslint` pulito sui 5 file toccati. Il typecheck mirato su `scripts/table-reporter.ts` resta con
+i soli due errori **preesistenti** di `cheerio.Element` (artefatto della configurazione: quel file non è
+in nessun progetto del repository).
+
+*File toccati*: `src/lib/diagnosticaPdf.ts` (nuovo), `src/lib/__tests__/diagnosticaPdf.test.ts`
+(nuovo), `scripts/table-reporter.ts` (diagnosi in `leggiAvvisoPdf` e nel documento tabellare,
+riepilogo, `allegatiBando`, riserva di budget, alias ATA), `scripts/test-deep-crawl-scuole.ts` e
+`scripts/test-pagina-archivio.ts` (guardie allineate alla nuova regola), `package.json`,
+`docs/SYSTEM_HANDOVER.md`. Rimossi dalla radice `_tmp_index.ts` e `_tmp_parser.ts` (duplicati di
+`src/scraper/index.ts` e `parser.ts`, inquinavano le ricerche testuali).
+
+**Nota di sessione.** La lezione è che «0 record» non era una diagnosi: era l'assenza di una diagnosi.
+Tre numeri su mille documenti sembrano un verdetto e invece sono un'ombra — e la prima cosa da
+costruire non era un filtro migliore ma un contatore che si potesse sommare. La seconda lezione è più
+scomoda: il difetto che spiegava il silenzio (**un nome mai importato**) non stava in una regola di
+prodotto, stava in un file che nessuno compilava. Le guardie testuali leggono il testo; un compilatore
+legge i **nomi**.
+
+**Da fare (operatore).**
+
+1. `npm run crawl:mvp -- --province=<sigla> --max-scuole=2 --dry-run` con `DEBUG=1`: la nuova riga
+   `PDF aperti: … · leggibili: … · illeggibili: …` deve avere i secchi che **sommano**, e
+   «leggibili» dovrebbe stare sopra il 90%. Se `illeggibili` è alto, il problema è `pdfTesto`
+   (CMap/`/ToUnicode`), non le regex: nessun allargamento di regola prima di quel numero.
+2. Guardare `PDF senza scadenza: … → senza alcun segnale N`: è l'unica fascia che merita una lettura a
+   mano. Con `npm run diag:senza-scadenza` il censimento delle voci d'elenco dà il confronto.
+3. Solo dopo, e solo con i numeri in mano: estendere `RE_SCADENZA` di `lib/scadenzaTesto` alle forme
+   che `pdfDeterminist` già conosce (§26.94) — un intervento alla volta, con la guardia
+   `test:scadenza-testo` aggiornata.
+4. Aprire il ramo degli allegati anche alle pagine con voci di menu solo se il punto 1 mostra PDF
+   validi che il ciclo non tocca: è rete, e va decisa con il contatore davanti.
+
+---
+
+## §26.129 — LA CODA SPIEGATA, E IL PDF CHE ARRIVA A PEZZI (Catania, 31/10/2026)
+
+**Il caso.** La prima cliente ufficiale (Floriana Taiella, provincia **CT**, profilo **Sostegno**)
+apriva una bacheca vuota mentre la «Linea Rossa» del pannello Admin mostrava una coda di **15.561**
+pagine «da guardare». Due domande, due misure: *perché la coda è così lunga* e *perché i PDF aperti
+non producono record*.
+
+### 1. La coda: un seme senza padrone, non worker bloccati
+
+Nuovo `npm run diag:coda` (`scripts/diag-coda.ts`, sola lettura, paginato): scompone
+`discovered_links` per stato, profondità, età, host e provincia.
+
+| Misura (31/10/2026) | Valore |
+|---|---|
+| `pending` | **15.561** |
+| di cui `depth 0` (seme `import-schools-local.ts`, 09/10) | **14.120** |
+| di cui `depth 1` (figli recenti, 28/10–01/11) | 1.441 |
+| `pending` fuori whitelist (`dominiIstituzionali`) | **6.068** (5.620 del seme) |
+| `pending` «mai lette davvero» (`last_scanned_at` = `created_at`) | 15.561 |
+| `idle` · `error_internal` · `error_timeout` (worker) | 0 · 0 · 218 |
+| `disabled` · `parked_low_score` · `disqualified_noise` | 1.414 · 262 · 19 |
+
+Verdetto: **nessun worker bloccato** (0 `idle`, 0 `error_internal`), **nessun accumulo della
+sgranatura** (i `depth 1` sono tutti degli ultimi cinque giorni), **nessun timeout che spieghi il
+numero**. Il 90% della coda è il **seme delle home di scuola** del 09/10, mai promosso, più 6.068
+righe su domini che la whitelist §26.109 non ammette — quindi **destinate a non produrre mai un
+record**. La risposta operativa esiste ed è §26.125: `npm run crawl:provincia -- --province=CT
+--apply` promuove le righe della provincia ad `active_crawler` e le legge. Fatto in questa sessione
+su CT (362 righe `pending`, 325 del seme): è il primo giro che le tocca.
+
+Seconda scoperta: **`last_scanned_at` non distingue letto da mai letto** — la colonna ha un default
+all'inserimento, quindi un seme mai aperto sembra «scansionato 20 giorni fa». La diagnosi misura
+`|last_scanned_at − created_at| < 120 s` invece di fidarsi della colonna (e il numero «mai tentati 0»
+della prima versione dello script era una bugia dello schema, non un dato).
+
+### 2. Il PDF: la data c'era, era spezzata in tre righe
+
+Il giro mirato `table-reporter --province=CT --max-scuole=2 --dry-run` (prima della correzione):
+
+```
+PDF aperti: 144 · leggibili: 131 · illeggibili: 13 · non aperti per dimensione: 0
+PDF con scadenza dichiarata: 2 · valide: 0 · passate: 2 · oltre 365 giorni: 0
+PDF senza scadenza: 129 → … senza alcun segnale 124
+```
+
+Quindi: **il 91% dei documenti si legge** (`illeggibili` 13, non un problema di CMap) e **il 96% di
+quelli senza termine non ha «alcun segnale»** — la fascia che §26.128 aveva isolato per la lettura a
+mano. Letti a mano, i documenti veri (bando A040 dell'IT «G. Marconi – L. Pilla» di Campobasso,
+timbrato PadES) dicono:
+
+> «… entro e non oltre le ore **1 0 :00 del 05/11 /2026** .»
+
+La frase c'era; il **testo estratto** no: `estraiTestoPdf` produceva **1.729 righe, lunghezza media 4
+caratteri, 1.588 righe sotto i 6 caratteri** —
+
+```
+"ISTI\nT\nU\nT\nO\nT\nEC\nN\nICO\n…\nore 1\n0\n:00 del\n05/11\n/2026\n"
+```
+
+La causa è nel motore (`pdfContenuto.ts`): ogni `Td`/`TD`/`Tm`/`BT`/`ET` emetteva un `\n`. I PDF di
+Word (poi timbrati) scrivono il testo in **1.033 blocchi `BT … Tm … TJ … ET`**, uno per frammento:
+un `\n` per operatore trasforma ogni parola in una colonna e ogni data in tre righe — quindi
+`RE_DATA` non trovava nulla e il documento finiva in «senza alcun segnale», con il termine sotto gli
+occhi.
+
+### 3. Il rimedio (una regola sola, dove sta il significato)
+
+* `pdfContenuto.ts` — nuovo `separatore(operatore, ultimi, ultimoY)`: per `Td`/`TD` conta la **`ty`**
+  (salto verticale → riga nuova, passo orizzontale → spazio), per `Tm` conta la **`y`** rispetto
+  all'ultima vista, e `BT`/`ET` — che sono delimitatori di oggetto, non di riga — emettono **uno
+  spazio**. Gli operandi numerici si leggono nel ciclo principale (servono a `Td`/`TD`/`Tm`).
+* `pdfTesto.ts` — in `normalizza`, le **cifre spezzate dai run** si ricuciono: prima cifra-cifra
+  («A0 4 0» → «A040», «1 0» → «10»), poi cifra-separatore («05/11 /2026» → «05/11/2026»,
+  «10 :00» → «10:00»). Nella prosa uno spazio fra due cifre non esiste; la regola vale **solo**
+  nell'estrazione PDF, non nel testo HTML.
+
+### 4. La misura dopo
+
+Stesso documento: **1.729 righe → 79 righe** (lunghezza media 4 → 79 caratteri), e la frase diventa
+leggibile per intero —
+
+> «entro e non oltre le ore 10:00 del 05/11/2026. La domanda dovrà essere inviata esclusivamente
+> all'indirizzo PEO cbis02700b@istruzione.it …»
+
+`scadenzaDaTesto` → **2026-11-05**; tornano anche il codice di classe (`A040`) e il codice
+meccanografico (`CBIS02700B`), che erano spezzati allo stesso modo. Sul campione reale della
+categoria «interpelli nazionali» del USR Sicilia: **10 PDF aperti → 6 con scadenza** (prima 1 su 31
+nel giro completo). Nel giro CT la riga nuova passa da *2 con scadenza* a **4**, e i «senza alcun
+segnale» da 124 a **122**: il resto dei documenti aperti in quel giro sono moduli e avvisi senza
+termine, non bandi.
+
+**Guardia.** `scripts/test-pdf-testo.ts` §4-bis costruisce il caso vero (sei blocchi `BT … Tm … Tj …
+ET` con la data a pezzi) e fissa quattro asserzioni: cifre ricucite, scadenza `2026-11-05`, un salto
+verticale resta una riga nuova, e i blocchi `BT`/`ET` **non** inventano righe.
+
+### 5. Quello che resta (dichiarato)
+
+* Il giro CT produce **1 record**: gli hub USR citano gli istituti, ma `recordDaVoceScuola` pretende
+  il link sul sito della scuola (§26.124) — ed è giusto così. La bacheca di Floriana si riempie con
+  il **deep crawl degli albi delle scuole CT**, non con le pagine dell'USR: è il giro che questa
+  sessione lancia (`crawl:provincia --province=CT --apply`, 100% dell'anagrafica MIM).
+* `sgranaDocumentoAvviso` conta i termini **solo dalle righe di tabella**: il termine «di documento»
+  (un bando in PDF che dichiara la scadenza senza tabella) resta non sfruttato. Con i numeri nuovi
+  vale la pena, ma è un intervento a sé: prima questo, poi quello.
+* 13/144 PDF restano `illeggibili` (scansioni senza testo): non è una regex, è OCR — fuori perimetro.
+
+*File toccati*: `src/scraper/pdfContenuto.ts`, `src/scraper/pdfTesto.ts`,
+`scripts/test-pdf-testo.ts`, `scripts/diag-coda.ts` (nuovo), `package.json` (`diag:coda`),
+`docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`.
+
+**Nota di sessione.** La coda «anomala» non era un guasto: era un **seme senza padrone** che nessun
+comando promuoveva, più seimila righe che la whitelist non ammette — e il pannello le contava come
+lavoro. Il difetto vero era un altro e stava un livello sotto: non la regola che decide se una data è
+una scadenza, ma il **testo** su cui quella regola lavora. La lezione è che «senza alcun segnale» non
+significa «il documento non lo dice»: significa che stiamo leggendo male. Prima di allargare una
+regex si guarda il testo estratto — e si guarda **riga per riga**, perché 1.729 righe da quattro
+caratteri sono un dato, non un fastidio.
+## §26.130 — LA BACHECA CON UNA RIGA SOLA: IL CONTENITORE DELL'ATTO E IL TITOLO CHE NESSUNO GIUDICAVA (Catania, 01/11/2026)
+
+**Il caso.** Dopo il giro §26.129 la bacheca della prima cliente (Floriana, **CT**, Sostegno)
+mostrava **una sola** riga viva: «**Sciopero 30 ottobre 2026 – promemoria**», con scadenza
+**07/12/2026**. Due cose non tornavano: uno sciopero non è un'opportunità di lavoro, e quella
+circolare non dichiara alcun termine. La riga era **inventata due volte**.
+
+### 1. Il contenitore: una lista di priorità che non era una lista
+
+Il lettore dell'avviso sceglieva così:
+
+```ts
+$('article, main, .entry-content, .avviso, #content, .contenuto').first()
+```
+
+Sembra una priorità, è un'**unica espressione**: cheerio restituisce il primo elemento
+nell'**ordine del documento**, e su un sito scolastico WordPress quell'elemento è il `<main>`,
+che *avvolge* anche la colonna «ultime circolari». Misura sulla pagina vera
+(`vergaviagrande.edu.it`, circolare «Sciopero 30 ottobre 2026 – promemoria»):
+
+| Testo letto | `scadenzaDaTesto` |
+|---|---|
+| pagina intera / `<main>` | **2026-12-07** ← il titolo di un'**altra** circolare nella colonna laterale («… chiusura uffici 02 novembre e **07 dicembre 2026**») |
+| `<article>` | **`null`** ← la risposta giusta: quell'atto non dichiara un termine |
+
+Quindi la data non era sbagliata: era **di un altro documento**, e la bacheca la trattava come
+un'opportunità con scadenza. Una scadenza inventata non è un difetto estetico: rende la riga
+«viva», la mette in vetrina e consuma la fiducia dell'unica persona che la guarda.
+
+### 2. Il titolo: l'unico testo disponibile prima di aprire l'avviso
+
+Il secondo difetto è nel pre-filtro del rumore. `rowIsSemanticNoise` giudicava **le righe di
+tabella** e il corpo della pagina, mai il **titolo di una voce d'elenco** — che è l'unica cosa
+che esiste prima del `fetch`. Così una voce d'elenco intitolata «Sciopero 30 ottobre 2026 –
+promemoria» passava indenne, veniva aperta, e il difetto (1) le fabbricava la scadenza.
+
+### 3. Il rimedio (due regole sole, nel punto in cui il significato esiste)
+
+* **`src/scraper/contenitoreAvviso.ts`** (nuovo, puro, 77 righe). `SELETTORI_CONTENITORE` è una
+  **lista ordinata** (`article` → `.avviso` → `.entry-content` → `main` → `.contenuto` →
+  `#content`) e `scegliContenitore(html)` la percorre con un **ciclo**: vince il primo che
+  contiene almeno `MINIMO_TESTO_CONTENITORE` (120) caratteri; menu, `nav`, `footer` e `aside` si
+  rimuovono **prima** di leggere; nessun candidato adeguato → si legge la pagina intera (come
+  prima, ma dichiarato). La soglia esiste perché una card «Condividi» non è un atto.
+* **`titoloVoceERumore(titolo)`** in `scripts/table-reporter.ts`, delegato a
+  `noiseFilter.isAdministrativeNoise(titolo, titolo)`: la **stessa** domanda che si fa a una riga
+  di tabella, applicata al titolo. È innestato in **tutti e tre** i percorsi di scrittura:
+  `recordDaVoceAdattiva` (ritorna `null`), `recordsDaElencoAdattivo` (conta `esito.rumore`),
+  `approfondisciVociSenzaScadenza` (**non scarica nemmeno** la pagina). Un titolo di rumore costa
+  quindi **zero richieste HTTP**, e viene contato a parte: non è un «senza scadenza», e i due
+  numeri non si confondono più nei log.
+
+Le righe di log lo dicono in chiaro:
+
+```
+[table-reporter] Elenco adattivo (link_list): 5 voci → 0 record (rumore: 2, senza scadenza: 3, oltre orizzonte: 0).
+[table-reporter] Sgranatura (5 avvisi apribili, finestra 0-5): 5 documenti letti → 0 termini dichiarati, 0 righe di tabella, 0 record (0 con scuola dal corpo, 2 titoli di rumore non aperti) · riserva del giro: 2479.
+```
+
+Due dettagli del contatore, perché la misura non menta:
+
+* nella sgranatura `esito.richieste` si incrementa **dopo** il gate: un titolo di rumore non entra in
+  «documenti letti» (prima sarebbe stato contato come pagina aperta pur senza `fetch`);
+* la riga di misura si stampa anche quando **nessun** documento è stato letto ma ci sono titoli di
+  rumore: «0 documenti letti, 3 titoli di rumore» è il conto che spiega una pagina che non ha
+  prodotto nulla — senza, il giro sembra rotto.
+
+**Le righe già scritte.** `scripts/pulisci-rumore.ts` (`npm run dati:pulisci-rumore`, DRY-RUN di
+default, `--apply`): applica **la stessa** `isAdministrativeNoise(titolo, titolo)` alle righe in
+`interpelli` (il titolo fa da corpo, perché prima del `fetch` non c'è altro testo: è la condizione in
+cui la riga è nata). Un piano oltre il **20%** di scarti si dichiara **sospetto** e non tocca nulla
+senza `--forza`; le cancellazioni viaggiano a lotti di 500. Guardia `npm run test:pulizia-rumore`
+(in `npm test`).
+
+### 4. La misura
+
+**(a) Giro di verifica su Catania.** `crawl-provincia --province=CT --dry-run --max-scuole=10`: **330
+target**, **115 elenchi** adattivi esaminati, **20 titoli di rumore** respinti prima del `fetch` (11
+elenchi con almeno uno), **108 sgranature** con **720 documenti letti** e **20 titoli di rumore mai
+aperti** (11 sgranature). Le circolari che restano in lavorazione dichiarano il termine **dentro il
+proprio `<article>`** e, quando non lo dichiarano, valgono `null`: **nessun termine inventato**. La
+pagina di `vergaviagrande.edu.it` che aveva generato la riga, riletta con `scegliContenitore`, non
+produce alcun termine (sezione 1 della guardia, sulla pagina vera).
+
+**(b) Le righe già in tabella.** `dati:pulisci-rumore` in DRY-RUN su **720 righe**: **6** titoli di
+rumore (0,8%), ognuno con la sua `reason` — lo sciopero di CT, uno «Scuola in Ospedale», due
+«Formazione Scuola-Lavoro», un «corsi di formazione», una «Mappa del sito». Dopo `--apply`: **714**
+righe reali, **0** rumore; il controllo puntuale su CT restituisce **0 righe** (prima: la sola riga
+inventata). Catania resta **vuota**: quei target non pubblicano interpelli, e una bacheca vuota è la
+verità — l'alternativa era una data presa da un altro documento.
+
+**Guardia.** `scripts/test-contenitore-avviso.ts` (`npm run test:contenitore-avviso`, in `npm test`),
+**33 asserzioni** in quattro sezioni: (1) la pagina CT vera — contenitore `article`, colonna
+laterale e piede fuori, `null` come termine, e la **dimostrazione** che la pagina intera inventa
+`2026-12-07`; (2) priorità, soglia dei 120 caratteri, ripieghi, HTML vuoto, spazi normalizzati;
+(3) cinque titoli di rumore e cinque titoli di opportunità (Sostegno e ADSS compresi), più il caso
+dichiarato del titolo che nomina uno sciopero; (4) le tre porte di scrittura contengono davvero il
+pre-filtro, il gate precede il contatore delle richieste, e la vecchia lista-ordine non è più nel
+codice.
+
+### 5. Quello che resta (dichiarato)
+
+* Un **titolo** che dichiara sciopero è rumore anche se contiene «interpello» (regola 1 del
+  modulo, la stessa delle righe): un interpello che *parla* di sciopero nel **corpo** resta, ma il
+  corpo qui non esiste ancora. È un compromesso scritto, non una svista.
+* `sciopero`/`assemblea` sono segnali **soft** solo nel corpo della pagina: se in futuro un albo
+  pubblicasse «Interpello A022 – sospensione delle lezioni per sciopero» come titolo di una voce
+  vera, si vedrà nel contatore `rumore` (che ora è visibile) e non in una bacheca vuota.
+* `dati:pulisci-rumore` è **manuale**: non è in catena con `pulisci-scaduti`, così nessuna
+  esecuzione automatica cancella righe senza che qualcuno abbia letto i motivi. Il gate
+  all'ingresso resta la sola difesa attiva.
+* La **coda di CT** aveva 320 target `active_crawler` e 0 `pending`: il giro per provincia legge i
+  target dall'anagrafica e non dalla coda, quindi la bacheca vuota non dipende da quello — ma
+  finché nessun crawler riscrive lo stato, il consumatore della coda non riprende quei target.
+  È un lavoro separato, non una conseguenza di §26.130.
+
+*File toccati*: `src/scraper/contenitoreAvviso.ts` (nuovo), `scripts/pulisci-rumore.ts` (nuovo),
+`scripts/test-contenitore-avviso.ts` (nuovo), `scripts/test-pulizia-rumore.ts` (nuovo),
+`scripts/table-reporter.ts` (rimozione della lista-ordine in `leggiAvvisoCompleto`,
+`titoloVoceERumore` nelle tre porte di scrittura, contatori `rumore` e ordine del contatore
+`richieste`), `package.json` (`test:contenitore-avviso`, `test:pulizia-rumore`,
+`dati:pulisci-rumore`, catena `npm test`), `docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`.
+
+**Nota di sessione.** Il difetto non era «una regex che sbaglia una data»: erano **due scelte
+implicite** — un selettore scritto come se fosse una priorità e un filtro applicato a tutto tranne
+che al testo che si aveva in mano. La lezione operativa è che un `.first()` su una lista di
+selettori **non è un ordine**, e che il rumore va giudicato **al primo testo disponibile** (il
+titolo), non quando il danno è già stato fatto. E che un contatore onesto («2 titoli di rumore non
+aperti») vale più di un totale: senza quel numero, un giro che scarta il 40% delle voci sembra un
+giro che non trova nulla.
+

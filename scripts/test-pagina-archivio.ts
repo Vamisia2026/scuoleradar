@@ -166,7 +166,7 @@ const reporter = leggi('scripts/table-reporter.ts');
 check(
   'il runner usa l’URL già risolto invece di ri-scandire i link',
   true,
-  /pagina\.allegatoUnico[\s\S]{0,200}linkAllegatiInterpello/.test(reporter),
+  /pagina\.allegatoUnico[\s\S]{0,400}allegatiBando\(pagina\.html/.test(reporter),
 );
 
 // §26.124 — IL RUNNER APPLICA LE STESSE REGOLE ALLE VOCI D'ALBO: una voce che

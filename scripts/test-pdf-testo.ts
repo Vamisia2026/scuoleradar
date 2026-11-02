@@ -1,17 +1,11 @@
 /**
  * TEST — LETTURA DEL TESTO PDF (`src/scraper/pdfTesto.ts`, `pdfStruttura.ts`).
- *
- * Perché serve: il 26/10/2026 la misura diceva **1.300 voci senza scadenza** e
- * la maggioranza erano allegati PDF. Questa guardia fissa il contratto di
- * §26.95 su PDF COSTRUITI QUI (nessuna rete, nessun file di produzione):
- *   1. stringa letterale `( … )` → testo leggibile;
- *   2. stream `FlateDecode` → decompresso;
- *   3. font Identity-H + `/ToUnicode` → i CID diventano lettere;
- *   4. `TJ` con crenature → le parole non si incollano;
- *   5. data di PUBBLICAZIONE → nessuna scadenza inventata;
- *   6. PDF rotto, vuoto o scansionato → nessuna eccezione, solo il motivo;
- *   7. il runner USA il lettore (import + promozione albo in coda).
- *
+ * Perché serve: il 26/10/2026 la misura diceva **1.300 voci senza scadenza** e la
+ * maggioranza erano allegati PDF. Questa guardia fissa il contratto di §26.95 su
+ * PDF COSTRUITI QUI (nessuna rete, nessun file di produzione): stringa letterale,
+ * stream `FlateDecode`, font Identity-H + `/ToUnicode`, crenature `TJ`, data di
+ * PUBBLICAZIONE (nessuna scadenza inventata), PDF rotto o scansionato senza
+ * eccezioni, e il runner che USA il lettore (import + promozione albo in coda).
  * Uso: npm run test:pdf-testo  (incluso in `npm test`)
  */
 import { readFileSync } from 'node:fs';
@@ -162,6 +156,32 @@ check(
   estraiTestoPdf(pdfCrenature).testo.includes('Termine presentazione'),
 );
 check('escape letto come data', '2026-11-12', scadenzaDaPdf(pdfCrenature));
+
+/* ------- 4-bis) run di testo separati da Tm: la data resta una data ------- */
+
+console.log('\n— 4-bis. §26.129: PDF a run separati (Word + timbro PadES) —');
+// Il caso REALE del bando A040 di Campobasso: ogni frammento ha il suo blocco
+// `BT … Tm … Tj … ET` e la data arriva a pezzi («05/11» + «/2026», «1» + «0» +
+// «:00»). Prima di §26.129 l'estrazione produceva 1.729 righe da 4 caratteri.
+const aRun = encoder.encode(
+  [
+    'BT /F1 11 Tf 1 0 0 1 50 700 Tm (entro e non oltre le ore 1) Tj ET',
+    'BT /F1 11 Tf 1 0 0 1 54 700 Tm (0) Tj ET',
+    'BT /F1 11 Tf 1 0 0 1 60 700 Tm (:00 del) Tj ET',
+    'BT /F1 11 Tf 1 0 0 1 70 700 Tm (05/11) Tj ET',
+    'BT /F1 11 Tf 1 0 0 1 82 700 Tm (/2026) Tj ET',
+    'BT /F1 11 Tf 1 0 0 1 50 688 Tm (seconda riga) Tj ET',
+  ].join('\n'),
+);
+const esitoRun = estraiTestoPdf(pdfUnaPagina(aRun, '<< >>', FONT_TYPE1));
+check(
+  'le cifre spezzate si ricuciono',
+  true,
+  esitoRun.testo.includes('entro e non oltre le ore 10:00 del 05/11/2026'),
+);
+check('scadenza da run separati', '2026-11-05', scadenzaDaPdf(pdfUnaPagina(aRun, '<< >>', FONT_TYPE1)));
+check('un salto verticale resta una riga nuova', true, esitoRun.testo.includes('\nseconda riga'));
+check('i blocchi BT/ET non inventano righe', 2, esitoRun.testo.split('\n').length);
 
 /* --------------- 5) una PUBBLICAZIONE non è una scadenza ---------------- */
 

@@ -124,6 +124,13 @@ function normalizza(testo: string): string {
   }
   return visibile
     .replace(/[ \t\u00a0]+/g, ' ')
+    // §26.129 — LE CIFRE SPEZZATE DAI RUN. Nei PDF di Word i run sono così corti
+    // che un numero arriva a pezzi: «A0 4 0», «ore 1 0 :00», «05/11 /2026». Nella
+    // prosa uno spazio fra due cifre non esiste, quindi qui si ricuce: prima
+    // cifra-cifra, poi cifra-separatore (`.` `:` `/` `,` `-`). Misurato sul bando
+    // A040 di Campobasso: il termine c'era, ma `RE_DATA` non poteva leggerlo.
+    .replace(/(\d) (?=\d)/g, '$1')
+    .replace(/(\d) (?=[.:/,-])/g, '$1')
     .replace(/ *\n */g, '\n')
     .replace(/\n{2,}/g, '\n')
     .trim()

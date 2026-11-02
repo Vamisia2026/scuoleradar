@@ -28,12 +28,10 @@ import * as dotenv from 'dotenv';
 import type { Interpello } from '../src/data/interpelli.ts';
 import type { OrdineScuola } from '../src/data/ordiniMaterie.ts';
 import { province } from '../src/data/province.ts';
-import {
-  integraAmbiti,
-  provinceDellaRegione,
-  regioneDi,
-  type AmbitoBacheca,
-} from '../src/lib/ambitoBacheca.ts';
+// §26.122 — `ambitoBacheca` (allargamento a regione/Italia) è stato ELIMINATO: il
+// feed non esce più dalle province del profilo, quindi la diagnosi non importa più
+// `integraAmbiti`. La provincia → regione resta la mappa unica `ambitoProvincia`.
+import { regioneDiProvincia } from '../src/lib/ambitoProvincia.ts';
 import { bachecaInterpelli } from '../src/lib/bachecaInterpelli.ts';
 import { getFeedInterpelli } from '../src/lib/matchingEngine.ts';
 import { normalizzaProvincia, provinceDiRicerca } from '../src/lib/prossimitaGeografica.ts';
@@ -117,7 +115,7 @@ function vetrinaDiPagina(lista: readonly Interpello[]): Interpello[] {
 }
 
 async function main(): Promise<void> {
-  const regione = regioneDi(CODICE);
+  const regione = regioneDiProvincia(CODICE);
   const zona = provinceDiRicerca([CODICE]);
   console.log(`\n=== BACHECA DI ${nomeProvincia(CODICE)} (${CODICE}) ===`);
   console.log(
@@ -185,34 +183,19 @@ async function main(): Promise<void> {
       `${motiviGate.size > 0 ? ` — ${[...motiviGate.entries()].map(([c, n]) => `${c}: ${n}`).join(' · ')}` : ''})`,
   );
 
-  let finale: (Interpello & { ambito?: AmbitoBacheca | null })[] = visibili;
+  // §26.122 — NESSUN ALLARGAMENTO. Fino al 30/10/2026, sotto i cinque posti, questa
+  // diagnosi rifaceva la query larga e integrava regione e Italia (`ambitoBacheca`,
+  // poi eliminato): le «cinque opportunità» di Asti erano avvisi di Vercelli. La
+  // regola è revocata e il feed non allarga più: qui si misura ciò che l'utente
+  // vede davvero — la bacheca delle PROPRIE province — e, se è vuota, lo si dice.
+  const finale: Interpello[] = visibili;
   if (visibili.length < MINIMO) {
-    const larga =
-      (await getFeedInterpelli(client, {
-        ...(SENZA_CLASSI ? {} : { classi: classiProfilo }),
-        limit: RIGHE_FEED,
-      })) ?? [];
-    const inBacheca = new Set(bacheca.lista.map((i) => i.id));
-    const fuori = larga.filter(
-      (i) =>
-        !inBacheca.has(i.id) &&
-        eOpportunitaConScadenza(i.dataScadenza) &&
-        rigaVetrinaCompleta(i),
-    );
-    const perimetro = provinceDellaRegione([CODICE]);
-    const regionali = fuori.filter((i) => perimetro.has(normalizzaProvincia(i.provinciaCodice)));
-    const nazionali = fuori.filter((i) => !perimetro.has(normalizzaProvincia(i.provinciaCodice)));
-    const esito = integraAmbiti(visibili, { regionali, nazionali }, { minimo: MINIMO });
-    finale = esito.lista.map((i) =>
-      i.ambito === 'provincia' ? i : { ...i, compatibilita: 0, ripiego: false },
-    );
-    console.log(`\n— 2. Integrazione fuori zona (query larga ${SENZA_CLASSI ? 'SENZA' : 'con'} classi) —`);
     console.log(
-      `• Righe lette: ${larga.length} · candidabili fuori bacheca: ${fuori.length} · ` +
-        `regione: ${regionali.length} · Italia: ${nazionali.length}`,
+      `\n— 2. Sotto il minimo (${visibili.length}/${MINIMO}) —`,
     );
     console.log(
-      `• Aggiunte: ${esito.aggiunti} (regione ${esito.daRegione} · Italia ${esito.daNazionale}) · motivo: ${esito.motivo}`,
+      '• La ricerca NON si allarga fuori provincia (§26.122): la pagina dichiara ' +
+        '«nessuna opportunità nelle tue province» e la strada per allargare è la preferenza, non il ripiego.',
     );
   }
 
@@ -224,10 +207,9 @@ async function main(): Promise<void> {
     console.log('  ⚠ bacheca VUOTA: nessuna riga ha passato i gate.');
   }
   vetrina.forEach((riga, indice) => {
-    const ambito = riga.ambito && riga.ambito !== 'provincia' ? ` · ambito ${riga.ambito}` : '';
     console.log(
       `  ${indice + 1}. [${riga.dataScadenza}] ${riga.provinciaCodice} · ${riga.istituto.slice(0, 46)}` +
-        ` · voto ${riga.compatibilita}%${ambito}`,
+        ` · voto ${riga.compatibilita}%`,
     );
     console.log(`     ${riga.titolo.slice(0, 110)}`);
   });
