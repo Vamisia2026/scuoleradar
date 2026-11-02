@@ -35,6 +35,8 @@ import * as dotenv from 'dotenv';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { STATO_ATTIVO, STATO_PENDING, aggiornaStato, type RigaCoda } from './lib/codaTargets.ts';
 import { TUTTE_LE_SCUOLE, type TettoScuoleProvincia } from '../src/lib/mvpPerimetro.ts';
+// §26.131 — perimetro stretto: AT + CT (+ whitelist). Fuori perimetro si rifiuta.
+import { eProvinciaPerimetro, messaggioFuoriPerimetro } from '../src/lib/perimetroIngestione.ts';
 import { provinciaDaCodice } from '../src/lib/scanTargets.ts';
 import { regioneDiProvincia } from '../src/lib/ambitoProvincia.ts';
 import { caricaAnagrafica } from '../src/lib/anagraficaIndice.ts';
@@ -76,6 +78,16 @@ if (!/^[A-Z]{2}$/.test(PROVINCIA)) {
 const voce = provinciaDaCodice(PROVINCIA);
 if (!voce) {
   console.error(`[crawl-provincia] «${PROVINCIA}» non è una provincia del catalogo.`);
+  process.exit(1);
+}
+
+// §26.131 — PERIMETRO STRETTO. Questo comando è la porta «una provincia, un
+// comando»: se la provincia non è nel perimetro (AT, CT) si ferma QUI, prima di
+// toccare anagrafica, coda e rete. Un crawler che parte su una provincia fuori
+// perimetro produce righe che la porta del runner (`table-reporter.loadTargets`)
+// scarterebbe comunque: meglio dirlo subito, con il nome del file da cambiare.
+if (!eProvinciaPerimetro(PROVINCIA)) {
+  console.error(`[crawl-provincia] ${messaggioFuoriPerimetro(PROVINCIA)}`);
   process.exit(1);
 }
 

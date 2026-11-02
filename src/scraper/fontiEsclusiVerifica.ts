@@ -32,6 +32,15 @@ const IFRAME =
   '(0 avvisi, 0 post). Gli elenchi leggibili sono le pagine per provincia dello stesso portale ' +
   '(`provincia.php`, in `fontiTerritoriali.ts`).';
 
+const P404_02 =
+  'HTTP 404 alla verifica del 2026-11-02: la pagina non esiste su questa sede USP. ' +
+  'L’elenco vero è l’archivio di categoria `personale-docente/reclutamento-docenti` ' +
+  '(in `fontiTerritoriali.ts`): nessuna URL inventata.';
+const REDIRECT_02 =
+  'HTTP 200 con REDIRECT a UN SINGOLO articolo di un’altra provincia alla verifica del ' +
+  '2026-11-02: non è un elenco. L’archivio di categoria `personale-docente/reclutamento-docenti` ' +
+  'della stessa sede è in `fontiTerritoriali.ts` ed è quello interrogato.';
+
 // Motivi dell'AGGIORNAMENTO 2026-10-25 (stessa forma dei precedenti, data esplicita):
 // le URL restano nel registro per rendere ricontrollabile la copertura mancante.
 const P404_25 =
@@ -146,6 +155,9 @@ export const HUB_ESCLUSI_VERIFICA: [string, string, string, string[], string, st
   ['mim-sicilia-caltanissetta', 'MIM Sicilia — Caltanissetta (404)', 'https://www.mim.gov.it/web/caltanissetta', ['Sicilia'], 'CL', P404_25],
   ['mim-sicilia-agrigento', 'MIM Sicilia — Agrigento (404)', 'https://www.mim.gov.it/web/agrigento', ['Sicilia'], 'AG', P404_25],
   ['mim-sicilia-enna', 'MIM Sicilia — Enna (404)', 'https://www.mim.gov.it/web/enna', ['Sicilia'], 'EN', P404_25],
+  // Le pagine «interpelli» delle sedi USP siciliane: NON sono elenchi (§26.134)
+  ['rg-interpelli', 'USP Ragusa — Interpelli (404)', 'https://rg.usr.sicilia.it/interpelli/', ['Sicilia'], 'RG', P404_02],
+  ['sr-interpelli', 'USP Siracusa — Interpelli (redirect a un articolo)', 'https://sr.usr.sicilia.it/interpelli/', ['Sicilia'], 'SR', REDIRECT_02],
 
   // Toscana: anche Massa-Carrara è senza e-portfolio (le altre nove erano già qui)
   ['mim-toscana-massa', 'MIM Toscana — Massa-Carrara (404)', 'https://www.mim.gov.it/web/massa-carrara', ['Toscana'], 'MS', P404_25],

@@ -39,7 +39,6 @@ import { MINIMO_BACHECA } from '../src/lib/riempitivi.ts';
 import { eOpportunitaConScadenza } from '../src/lib/scadenza.ts';
 import {
   campiMancantiVetrina,
-  rigaVetrinaCompleta,
   vetrinaVisibile,
 } from '../src/lib/vetrinaBacheca.ts';
 
@@ -142,11 +141,17 @@ async function main(): Promise<void> {
   const poolZona = (await getFeedInterpelli(client, { province: zona, limit: RIGHE_FEED })) ?? [];
   const candidabiliZona = poolZona.filter((i) => eOpportunitaConScadenza(i.dataScadenza));
   const classi = (argomento('classi') ?? '').split(',').map((c) => c.trim()).filter(Boolean);
-  const classiProfilo = classi.length > 0 ? classi : classiDalPool(poolZona);
+  // §26.131 — `--senza-classi`: profilo SENZA classi, cioè la geografia da sola.
+  // Separa due cause di una vetrina corta che il conteggio unico confonde: «in zona
+  // non c'è nessuna riga» e «ci sono righe, ma le classi non agganciano nulla».
+  // Non è il profilo di un utente reale: è una misura, e come tale va letta.
+  const classiProfilo = SENZA_CLASSI ? [] : classi.length > 0 ? classi : classiDalPool(poolZona);
   console.log(
     `• Pool di zona senza filtro classi: ${poolZona.length} righe, ${candidabiliZona.length} entro l'orizzonte dei 15 giorni`,
   );
-  console.log(`• Classi del profilo di prova: ${classiProfilo.join(', ') || 'nessuna'}`);
+  console.log(
+    `• Classi del profilo di prova: ${SENZA_CLASSI ? 'NESSUNA (--senza-classi: misura geografica)' : classiProfilo.join(', ') || 'nessuna'}`,
+  );
 
 
   // 2. Feed della bacheca: stessi criteri dell'hook (zona + classi del piano).
@@ -165,7 +170,8 @@ async function main(): Promise<void> {
       `contorno: ${bacheca.righeNonOpportunita} · blacklist: ${bacheca.esclusiBlacklist} · ` +
       `riempitivi esclusi: ${bacheca.riempitiviEsclusi} · nascosti: ${bacheca.riempitiviNascosti} · ` +
       `ripieghi: ${bacheca.ripieghiInBacheca} · senza affinità di classe: ${bacheca.senzaAffinitaClasse} · ` +
-      `sostegno fuori provincia: ${bacheca.sostegnoFuoriProvincia}`,
+      `sostegno fuori provincia: ${bacheca.sostegnoFuoriProvincia} · ` +
+      `sostegno ambiguo scartato: ${bacheca.sostegnoAmbiguoScartato}`,
   );
 
   // 3. Integrazione fuori zona: query larga SOLO sotto il minimo (§26.111), contato

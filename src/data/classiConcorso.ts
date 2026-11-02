@@ -1,4 +1,7 @@
 import { materie as catalogoMaterie, type OrdineScuola } from './ordiniMaterie.ts';
+// §26.131 — il riconoscimento del sostegno vive nel classificatore a tre stati
+// (`src/lib/classificatoreSostegno.ts`): qui si espongono solo i nomi storici.
+import { avvisoDiSostegnoCerto, eCodiceSostegno } from '../lib/classificatoreSostegno.ts';
 
 export interface RequisitoCfu {
   ambito: string;
@@ -834,8 +837,7 @@ export const classiByMateria = (materiaId: string): ClasseConcorso[] =>
  * helper sono la fonte unica della distinzione, usata da matching, digest e UI.
  */
 
-/**
- * Codici di sostegno del CATALOGO dell'app: ADAA (infanzia), ADEE (primaria),
+/** Codici di sostegno del CATALOGO dell'app: ADAA (infanzia), ADEE (primaria),
  * ADMM (secondaria di I grado), ADSS (secondaria di II grado).
  */
 export const codiciSostegno: string[] = classiConcorso
@@ -843,44 +845,35 @@ export const codiciSostegno: string[] = classiConcorso
   .map((c) => c.codice);
 
 /**
- * Forma di TUTTI i codici sostegno pubblicati dagli uffici scolastici: la sigla
- * canonica del catalogo + le varianti numeriche usate dalle fonti (`AD24`, …).
- * In Italia ogni classe di sostegno inizia per `AD`, quindi il pattern è chiuso.
- */
-const RE_CODICE_SOSTEGNO = /^AD(?:[A-Z]{2,3}|\d{2})$/;
-
-/**
  * True se il codice è una classe di concorso di SOSTEGNO (ADAA, ADEE, ADMM, ADSS,
- * AD24, …). Falso per le classi disciplinari (A-22, A-25, B-02, AAAA, EEEE…).
+ * AD01…AD04, AD0D, AD24, …). Falso per le classi disciplinari (A-22, A-25, B-02,
+ * AAAA, EEEE…).
+ *
+ * §26.131 — il riconoscimento NON vive più qui: `eCodiceSostegno` è la forma
+ * dichiarata nel classificatore a tre stati, e questa funzione la espone con il
+ * nome storico per non rompere matching, UI e test.
  */
 export function isCodiceSostegno(codice?: string | null): boolean {
-  const c = (codice ?? '').trim().toUpperCase().replace(/\s+/g, '');
-  if (!c) return false;
-  return RE_CODICE_SOSTEGNO.test(c) || codiciSostegno.includes(c);
+  return eCodiceSostegno(codice);
 }
 
 /**
- * Parole chiave che dichiarano il SOSTEGNO nel titolo/oggetto o nella materia
- * inferita dallo scraper. NB: "inclusione" è volutamente ESCLUSA perché troppo
- * generica (compare in bandi PNRR/progetti didattici non di sostegno e
- * taglierebbe opportunità legittime a chi non ha aderito).
- */
-const RE_TESTO_SOSTEGNO = /\bsostegn|\b(?:adaa|adee|admm|adss)\b|\bad24\b/i;
-
-/**
- * True se l'avviso è un avviso di SOSTEGNO: basta un codice sostegno rilevato nel
- * testo (`classi`) oppure un riferimento esplicito nel titolo ("Interpello
- * sostegno") / nella materia inferita ("Sostegno"). Serve a NON confondere un
- * interpello di sostegno con un interpello disciplinare che cita le stesse classi
- * di concorso (falso positivo storico: docente di tedesco → interpelli ADEE).
+ * True SOLO se l'avviso è un avviso di SOSTEGNO dichiarato: un codice sostegno
+ * fra le classi (o nel titolo) oppure la parola *sostegno* accompagnata da un
+ * marcatore di reclutamento (interpello/supplenza/disponibilità/avviso).
+ *
+ * §26.131 — prima bastava la sottostringa: «piano di sostegno didattico» e
+ * «progetto sostegno» diventavano cattedre. Ora la prosa senza marcatore è
+ * `ambiguo` e questa porta resta chiusa. Serve a NON confondere un interpello di
+ * sostegno con un interpello disciplinare che cita le stesse classi di concorso
+ * (falso positivo storico: docente di tedesco → interpelli ADEE).
  */
 export function eAvvisoSostegno(
   classi?: readonly string[] | null,
   titolo?: string | null,
   materia?: string | null,
 ): boolean {
-  if ((classi ?? []).some((c) => isCodiceSostegno(c))) return true;
-  return RE_TESTO_SOSTEGNO.test(`${titolo ?? ''} ${materia ?? ''}`);
+  return avvisoDiSostegnoCerto({ classi, titolo, materia });
 }
 
 /**

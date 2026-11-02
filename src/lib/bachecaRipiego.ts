@@ -42,6 +42,13 @@ export interface EsitoBacheca {
    */
   sostegnoFuoriProvincia: number;
   /**
+   * Righe scartate perché parlano di sostegno senza dichiarare un RECLUTAMENTO
+   * (§26.131: «piano di sostegno didattico», «progetto sostegno», «misure di
+   * sostegno agli alunni»). Il terzo stato del classificatore non è una cattedra:
+   * non entra in bacheca e non entra nella scorta. Lo scarto è contato, mai silenzioso.
+   */
+  sostegnoAmbiguoScartato: number;
+  /**
    * Righe entrate con il PARACADUTE «5 osso-da-mordere» (§26.106): la vetrina era sotto
    * `MINIMO_BACHECA` e la coda è stata completata dalla scorta. Sono dichiarate `ripiego`.
    */

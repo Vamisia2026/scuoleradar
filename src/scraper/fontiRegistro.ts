@@ -60,8 +60,11 @@ export const HUB_ATTIVI: [string, string, string, string[], string][] = [
   ['pugliausr-docenti', 'USR Puglia — Reclutamento docenti (Bari)', 'http://www.pugliausr.gov.it/index.php/docenti/reclutamento', ['Puglia'], 'BA'],
   ['pugliausr-ata', 'USR Puglia — Reclutamento personale ATA (Bari)', 'http://www.pugliausr.gov.it/index.php/ata/reclutamento', ['Puglia'], 'BA'],
   ['istruzione-calabria-concorsi', 'USR Calabria — Concorsi e graduatorie (Catanzaro)', 'https://www.istruzione.calabria.it/concorsi-e-graduatorie/', ['Calabria'], 'CZ'],
-  ['usr-sicilia-interpelli', 'USR Sicilia — Interpelli (Palermo)', 'https://www.usr.sicilia.it/interpelli/', ['Sicilia'], 'PA'],
-  ['usr-sicilia-reclutamento', 'USR Sicilia — Reclutamento (Palermo)', 'https://www.usr.sicilia.it/aree-tematiche/reclutamento/', ['Sicilia'], 'PA'],
+  // §26.132 (02/11/2026) — SICILIA: le due voci che stavano qui puntavano a pagine
+  // che NON sono elenchi. Restano registrate e spente, con il motivo misurato;
+  // gli archivi di categoria verificati sono in `fontiTerritoriali.ts`.
+  // ['usr-sicilia-interpelli', …]  → `https://www.usr.sicilia.it/interpelli/`
+  // ['usr-sicilia-reclutamento', …] → `https://www.usr.sicilia.it/aree-tematiche/reclutamento/`
   ['mim-usr-sardegna', 'USR Sardegna — Home e avvisi (Cagliari)', 'https://www.mim.gov.it/web/usr-sardegna', ['Sardegna'], 'CA'],
   ['mim-usr-marche-concorsi', 'USR Marche — Concorsi personale scuola (Ancona)', 'https://www.mim.gov.it/web/miur-usr-marche/concorsi-personale-scuola', ['Marche'], 'AN'],
   ['mim-abruzzo-concorsi', 'USR Abruzzo — Concorsi scuola (L’Aquila)', 'https://www.mim.gov.it/web/abruzzo/concorsi-scuola', ['Abruzzo'], 'AQ'],
@@ -111,6 +114,30 @@ export const HUB_ESCLUSI: [string, string, string, string[], string, string][] =
     'TN',
     'Fonte NON verificata: sistema scolastico provinciale (Province autonome) con portali ' +
       'separati; la copertura resta garantita dall’aggregatore nazionale.',
+  ],
+  [
+    'usr-sicilia-interpelli',
+    'USR Sicilia — Interpelli (Palermo)',
+    'https://www.usr.sicilia.it/interpelli/',
+    ['Sicilia'],
+    'PA',
+    'HTTP 200 ma NON è un elenco: il portale risponde con un redirect interno a UN ' +
+      'articolo di un’altra provincia (`/interpelli/` → `/interpelli-nazionali-per-supplenza-' +
+      'cdc-a040-e-a033-s-maria-c-v-ce/`, misurato il 2026-11-02). Una fonte così può produrre ' +
+      'al massimo una riga di un’altra provincia, mai di CT. Gli elenchi veri sono gli archivi ' +
+      'di categoria del blocco 2026-11-02 in `fontiTerritoriali.ts`.',
+  ],
+  [
+    'usr-sicilia-reclutamento',
+    'USR Sicilia — Reclutamento (Palermo)',
+    'https://www.usr.sicilia.it/aree-tematiche/reclutamento/',
+    ['Sicilia'],
+    'PA',
+    'HTTP 200 ma è un INDICE DI DOWNLOAD per classe di concorso, non un elenco di avvisi: ' +
+      'le 150 righe della tabella linkano `/download/…/a005`, `/download/…/a007` (allegati per ' +
+      'classe) e nessuna dichiara una scadenza. Alla lettura del 2026-11-02 il target contava ' +
+      '150 scarti «scadenza non dichiarata» e apriva documenti che non sono interpelli. ' +
+      'L’archivio degli avvisi della stessa area è nel blocco 2026-11-02.',
   ],
 ];
 

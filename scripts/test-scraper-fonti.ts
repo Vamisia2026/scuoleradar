@@ -27,7 +27,7 @@ import {
   regioneDiProvincia,
 } from '../src/scraper/fonti.ts';
 import { eAggregatorePrivato } from '../src/lib/dominiIstituzionali.ts';
-import { DATA_VERIFICA_AGGIORNATI, DATA_VERIFICA_TERRITORI } from '../src/scraper/fontiTerritoriali.ts';
+import { DATA_VERIFICA_AGGIORNATI, DATA_VERIFICA_SICILIA, DATA_VERIFICA_TERRITORI } from '../src/scraper/fontiTerritoriali.ts';
 import { DATA_VERIFICA_WHITELIST } from '../src/scraper/fontiWhitelist2610.ts';
 import {
   CAPOLUOGHI_PRINCIPALI,
@@ -49,7 +49,7 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
 
 /** Blocchi di verifica HTTP dichiarati dal registro (le date sono contratti). */
 const DATE_VERIFICA = new Set([
-  DATA_VERIFICA_FONTI, DATA_VERIFICA_TERRITORI, DATA_VERIFICA_AGGIORNATI, DATA_VERIFICA_WHITELIST,
+  DATA_VERIFICA_FONTI, DATA_VERIFICA_TERRITORI, DATA_VERIFICA_AGGIORNATI, DATA_VERIFICA_WHITELIST, DATA_VERIFICA_SICILIA,
 ]);
 
 console.log('— A. Igiene del registro fonti —');
@@ -68,7 +68,7 @@ check(
   FONTI_INTERPELLI.filter((f) => !f.attiva && (!f.note || f.note.length < 20 || f.verificata !== null)).map((f) => f.id),
 );
 check(
-  'fonti attive: verifica datata (blocchi 2026-09-28 / 2026-10-23 / 2026-10-25 / 2026-10-26)',
+  'fonti attive: verifica datata (blocchi 2026-09-28 / 2026-10-23 / 2026-10-25 / 2026-10-26 / 2026-11-02)',
   [],
   fontiAttive().filter((f) => !DATE_VERIFICA.has(f.verificata ?? '')).map((f) => f.id),
 );

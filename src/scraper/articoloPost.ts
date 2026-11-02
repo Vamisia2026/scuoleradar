@@ -7,7 +7,8 @@
  *   · `corpo`   → testo dell'articolo, senza menu, briciole, sidebar e widget;
  *   · `titolo`  → intestazione vera del post (`h1`), non il `<title>` del sito;
  *   · `dataPubblicazione` → `<meta article:published_time>`, `<time datetime>`,
- *     etichetta «pubblicato il …» o la data con il giorno della settimana
+ *     il Dublin Core dei temi degli Uffici Scolastici (`DC.date`), l'etichetta
+ *     «pubblicato il …» o la data con il giorno della settimana
  *     («Venerdì, 23 ottobre 2026» — formato degli e-portfolio Liferay del MIM);
  *   · `allegati`→ i documenti linkati nell'articolo (bando, tabella, domanda):
  *     sono i link candidati preferiti dal parser e dall'arricchimento contatti.
@@ -106,6 +107,13 @@ function dataDellArticolo($: cheerio.CheerioAPI, corpo: string): string | null {
   const daMeta =
     normalizzaData($('meta[property="article:published_time"]').first().attr('content')) ??
     normalizzaData($('meta[itemprop="datePublished"]').first().attr('content')) ??
+    // §26.133 — i temi WordPress degli Uffici Scolastici (USP Catania) dichiarano
+    // la data SOLO in Dublin Core, in due grafie (`DC.date` e `DC.Date`): senza
+    // queste righe la pagina risultava non datata e il termine stimato di una
+    // disponibilità non aveva un punto di partenza da cui contare.
+    normalizzaData($('meta[name="DC.date"]').first().attr('content')) ??
+    normalizzaData($('meta[name="DC.Date"]').first().attr('content')) ??
+    normalizzaData($('meta[name="dcterms.date"]').first().attr('content')) ??
     normalizzaData($('time[datetime]').first().attr('datetime'));
   if (daMeta) return daMeta;
 
@@ -183,3 +191,15 @@ export function estraiContenutoArticolo(
     allegati,
   };
 }
+
+/**
+ * SOLO la data di pubblicazione di una pagina (§26.133). Serve a chi legge un
+ * documento per stimare un termine — non a pubblicare un post: la usa il giro
+ * degli interpelli quando incontra una tabella di disponibilità senza scadenza.
+ * `null` se la pagina non la dichiara: nessuna data dedotta dal contenuto.
+ */
+export function dataPubblicazioneArticolo(html: string): string | null {
+  if (typeof html !== 'string' || html.trim() === '') return null;
+  return dataDellArticolo(cheerio.load(html), '');
+}
+

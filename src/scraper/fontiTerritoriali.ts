@@ -28,6 +28,18 @@ export const DATA_VERIFICA_TERRITORI = '2026-10-23';
 export const DATA_VERIFICA_AGGIORNATI = '2026-10-25';
 
 /**
+ * Data della verifica del blocco SICILIA (§26.132, 2026-11-02).
+ *
+ * Perché un blocco nuovo invece di correggere il registro: gli ARCHIVI di
+ * categoria dell'USP di Catania e dell'USR Sicilia sono stati aperti uno per
+ * uno il 02/11/2026 (HTTP 200 + voci di reclutamento con il documento
+ * dell'atto), mentre le voci del registro che puntavano alle stesse aree
+ * rispondevano con un redirect a un SINGOLO articolo. La data per voce evita di
+ * riscrivere le date già dichiarate dagli altri blocchi.
+ */
+export const DATA_VERIFICA_SICILIA = '2026-11-02';
+
+/**
  * Elenchi di interpelli degli Uffici Territoriali (provincia per provincia).
  * Il sesto elemento (OPZIONALE) è la data di verifica della singola voce:
  * assente = `DATA_VERIFICA_TERRITORI`, così blocchi verificati in giorni diversi
@@ -131,4 +143,48 @@ export const HUB_TERRITORIALI: [string, string, string, string[], string, string
 
   // Sardegna: quarto territorio (Oristano) accanto a Cagliari, Nuoro e Sassari
   ['or-reclutamento', 'ATP Oristano — Reclutamento e interpelli (Oristano)', 'https://www.mim.gov.it/web/oristano/reclutamento', ['Sardegna'], 'OR', DATA_VERIFICA_AGGIORNATI],
+
+  // ── AGGIORNAMENTO 2026-11-02 (§26.132): SICILIA — gli archivi che pubblicano per CT ──
+  // MISURA, PRIMA DELLE URL. Le pagine «aree-tematiche/interpelli» dell'USP di
+  // Catania elencano voci vere (18 allegati, 8 con «sostegno»), ma le 10 scadenze
+  // dichiarate vanno dal 20/02/2026 al 26/05/2026: sono tutte passate. Gli avvisi
+  // in corso — «posti comuni e di SOSTEGNO … a.s. 2026/27 GAE e GPS I e II fascia»
+  // — vivono negli ARCHIVI di categoria, dove ogni voce è un articolo con i PDF
+  // dell'atto (6 PDF, 0 ZIP sull'avviso P.6 del 20/10/2026, che l'elenco-landing
+  // non mostra affatto). Un elenco che si svuota a settembre non è una fonte: lo
+  // è l'archivio che resta.
+  ['ct-reclutamento-docenti', 'USP Catania — Archivio reclutamento docenti (Catania)', 'https://ct.usr.sicilia.it/category/personale-scuola/personale-docente/reclutamento-docenti/', ['Sicilia'], 'CT', DATA_VERIFICA_SICILIA],
+  ['ct-interpelli-archivio', 'USP Catania — Archivio interpelli (Catania)', 'https://ct.usr.sicilia.it/category/aree-tematiche/interpelli/', ['Sicilia'], 'CT', DATA_VERIFICA_SICILIA],
+
+  // ── AGGIORNAMENTO 2026-11-02 (§26.134): LE ALTRE SEI SEDI PROVINCIALI ──
+  // MISURA, PRIMA DELLE URL. Ogni sede USP della Sicilia ha un archivio di
+  // categoria «personale-docente/reclutamento-docenti», e in quell'archivio ci
+  // sono gli INTERPELLI con la scadenza dichiarata nel titolo. Verifica HTTP del
+  // 02/11/2026 (voci d'articolo = link interni con testo, navigazione esclusa):
+  //
+  //   AG    200 · 26 voci · 2 «interpello» · 6 «sostegno»
+  //   CL-EN 200 · 33 voci · 9 «interpello» · 2 «sostegno»
+  //   ME    200 · 28 voci · 0 «interpello» · 1 «sostegno»
+  //   RG    200 · 23 voci · 5 «interpello» · 2 «sostegno»
+  //   SR    200 · 29 voci · 7 «interpello» · 4 «sostegno»
+  //   TP    200 · 29 voci · 1 «interpello» · 1 «sostegno»
+  //
+  // Palermo (USR) è l'unica che NON ha questo archivio: `…/reclutamento-docenti/`
+  // risponde 404 in entrambe le forme, e l'elenco dell'USR resta quello di
+  // `category/aree-tematiche/reclutamento/` (già registrato sopra). Le pagine
+  // «interpelli» delle singole sedi non bastano: `rg`/`sr` `/interpelli/`
+  // rispondono 404 e redirect a UN articolo (vedi `fontiEsclusiVerifica.ts`).
+  ['ag-reclutamento-docenti', 'USP Agrigento — Archivio reclutamento docenti (Agrigento)', 'https://ag.usr.sicilia.it/category/personale-scuola/personale-docente/reclutamento-docenti/', ['Sicilia'], 'AG', DATA_VERIFICA_SICILIA],
+  ['cl-en-reclutamento-docenti', 'USP Caltanissetta/Enna — Archivio reclutamento docenti (Caltanissetta)', 'https://cl-en.usr.sicilia.it/category/personale-scuola/personale-docente/reclutamento-docenti/', ['Sicilia'], 'CL', DATA_VERIFICA_SICILIA],
+  ['me-reclutamento-docenti', 'USP Messina — Archivio reclutamento docenti (Messina)', 'https://me.usr.sicilia.it/category/personale-scuola/personale-docente/reclutamento-docenti/', ['Sicilia'], 'ME', DATA_VERIFICA_SICILIA],
+  ['rg-reclutamento-docenti', 'USP Ragusa — Archivio reclutamento docenti (Ragusa)', 'https://rg.usr.sicilia.it/category/personale-scuola/personale-docente/reclutamento-docenti/', ['Sicilia'], 'RG', DATA_VERIFICA_SICILIA],
+  ['sr-reclutamento-docenti', 'USP Siracusa — Archivio reclutamento docenti (Siracusa)', 'https://sr.usr.sicilia.it/category/personale-scuola/personale-docente/reclutamento-docenti/', ['Sicilia'], 'SR', DATA_VERIFICA_SICILIA],
+  ['tp-reclutamento-docenti', 'USP Trapani — Archivio reclutamento docenti (Trapani)', 'https://tp.usr.sicilia.it/category/personale-scuola/personale-docente/reclutamento-docenti/', ['Sicilia'], 'TP', DATA_VERIFICA_SICILIA],
+  // USR Sicilia: l'archivio della categoria «reclutamento» (10 avvisi per pagina:
+  // scorrimento, INR, albo commissioni, accreditamento tirocini a.s. 2026/27)
+  // prende il posto di `/interpelli/`, che risponde con un redirect a UN articolo
+  // di un'altra provincia, e di `/aree-tematiche/reclutamento/`, che è un indice
+  // di download per classe di concorso (150 righe, link `/download/…/a005`),
+  // non un elenco di avvisi: la sua lettura finiva in «150 scarti senza scadenza».
+  ['pa-reclutamento-archivio', 'USR Sicilia — Archivio reclutamento e interpelli (Palermo)', 'https://www.usr.sicilia.it/category/aree-tematiche/reclutamento/', ['Sicilia'], 'PA', DATA_VERIFICA_SICILIA],
 ];

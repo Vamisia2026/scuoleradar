@@ -41,6 +41,7 @@ import {
   type EsitoBacheca,
 } from './bachecaRipiego';
 import { valutaCompatibilita, type ProfiloModali } from './compatibilitaGraduata';
+import { sostegnoAmbiguo } from './classificatoreSostegno';
 import { giudizioScuole } from './filtriScuole';
 import { avvisoCompatibileConProfilo, avvisoDiSostegno, profiloAderisceSostegno } from './matchingEngine';
 import { classeVicina } from './punteggioClasse';
@@ -92,6 +93,8 @@ export function bachecaInterpelli(
   let senzaAffinitaClasse = 0;
   /** §26.125 — righe fermate dal DIVIETO della scala (sostegno fuori provincia). */
   let sostegnoFuoriProvincia = 0;
+  /** §26.131 — righe che parlano di sostegno senza dichiarare un reclutamento. */
+  let sostegnoAmbiguoScartato = 0;
 
   for (const i of fonti) {
     // §26.71 — REGOLA FERREA: senza una scadenza dichiarata e non ancora passata la
@@ -114,13 +117,23 @@ export function bachecaInterpelli(
       continue;
     }
 
+    const avviso = avvisoDaInterpello(i);
+    // §26.131 — TERZO STATO DEL SOSTEGNO: la riga PARLA di sostegno ma non dichiara
+    // un reclutamento («piano di sostegno didattico», «progetto sostegno», «misure di
+    // sostegno agli alunni»). Non è una cattedra: esce qui, prima del punteggio, e
+    // non entra nemmeno nella scorta del paracadute. Il confine lo decide il
+    // classificatore a tre stati, non un `contains('sostegno')` sparso nei consumatori.
+    if (sostegnoAmbiguo(avviso)) {
+      sostegnoAmbiguoScartato += 1;
+      continue;
+    }
+
     const scuole = giudizioScuole(profilo, i);
     if (scuole.escluso) {
       esclusiBlacklist += 1;
       continue;
     }
 
-    const avviso = avvisoDaInterpello(i);
     // §26.125 — SCALA DEL PARACADUTE: il DIVIETO viene prima di ogni punteggio.
     // Sostegno o alternativa alla Religione in una provincia che l'utente non ha
     // scelto: la riga non entra e non finisce nemmeno nella scorta. La whitelist
@@ -225,5 +238,6 @@ export function bachecaInterpelli(
     ripieghiInBacheca: paracadute.aggiunti,
     senzaAffinitaClasse,
     sostegnoFuoriProvincia,
+    sostegnoAmbiguoScartato,
   };
 }

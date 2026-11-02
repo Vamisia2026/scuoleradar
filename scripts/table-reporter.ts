@@ -108,6 +108,11 @@ import * as crypto from 'crypto';
 // («Taranto», «Reggio Calabria»): il codice e la regione si leggono dal
 // catalogo condiviso, senza tabelle duplicate nello script.
 import { provinciaDaCitta, provinciaDaCodice } from '../src/lib/scanTargets.ts';
+// §26.131 — PERIMETRO STRETTO: il giro lavora AT + CT più la whitelist ufficiale.
+import { descrizionePerimetro, eProvinciaPerimetro } from '../src/lib/perimetroIngestione.ts';
+// §26.131 — AREA SOSTEGNO: la classificazione a tre stati (`certo`/`ambiguo`/
+// `nessuno`) è l'unica fonte di verità sulla materia «Sostegno».
+import { classificaSostegno } from '../src/lib/classificatoreSostegno.ts';
 // FIX v13 — l'orizzonte della scadenza è UNO solo, ma non è quello della vetrina:
 // l'ingestione conserva la data DICHIARATA dalla fonte entro un anno
 // (`GIORNI_ORIZZONTE_INGESTIONE`, §26.114) — feed e matching continuano a
@@ -202,7 +207,18 @@ import {
 // §26.101 — la tabella dentro il documento dell'avviso: una riga per scuola
 // (codice, classe, scadenza, link dell'avviso). È il modo in cui gli Uffici
 // Territoriali pubblicano davvero: un post e un PDF con N istituti dentro.
-import { righeTabellaInterpelli } from '../src/scraper/tabellaInterpelliPdf.ts';
+// §26.133 — `righeDisponibilita` è l'altra forma dello stesso documento: la
+// tabella di DISPONIBILITÀ (istituti e classi, nessun termine), che con la
+// grammatica dell'interpello non produceva nemmeno una riga.
+import {
+  righeDisponibilita,
+  righeTabellaInterpelli,
+  type RigaDisponibilita,
+} from '../src/scraper/tabellaInterpelliPdf.ts';
+// §26.133 — la data di PUBBLICAZIONE di una pagina (Dublin Core compreso):
+// è l'unico punto di partenza ammesso per stimare il termine di una disponibilità
+// che non ne dichiara uno.
+import { dataPubblicazioneArticolo } from '../src/scraper/articoloPost.ts';
 // §26.96 — i cinque campi che il DOCUMENTO dichiara (classi, codice, provincia,
 // scadenza, recapiti): la pagina-elenco spesso non li ha. Da §26.115 la facciata
 // è `datiBandoDaTesto`, che aggiunge intestazione, ore e requisiti e delega qui.
@@ -268,6 +284,8 @@ import { accodaInterpelli } from '../src/lib/notificationQueue.ts';
 import {
   ETICHETTA_CAUSA as ETICHETTA_CENSIMENTO,
   causaSenzaScadenza,
+  eDisponibilitaSenzaTermine,
+  scadenzaStimata,
   titoloCandidabile,
   type CausaSenzaScadenza,
 } from '../src/lib/motivoSenzaScadenza.ts';
@@ -394,6 +412,16 @@ function provinciaCorrisponde(codice: string | null | undefined): boolean {
 // whitelist (`src/scraper/fonti.ts`), deduplicati per URL. Ignora `--regioni`.
 const NAZIONALE =
   process.argv.includes('--nazionale') || process.env.NATIONALE === '1';
+
+// `--tutte-le-province` (o `TUTTE_LE_PROVINCE=1`): RIAPRE il giro largo.
+//
+// §26.131 — dal 02/11/2026 il crawler ha un PERIMETRO STRETTO: le province di
+// `PROVINCE_PERIMETRO` (AT, CT) più le fonti ufficiali in whitelist. Un target di
+// Cuneo non si visita più, nemmeno con `--nazionale`. Questo interruttore esiste
+// per la DIAGNOSI (capire se una fonte manca per il perimetro o per il parser) e
+// per un eventuale ritorno al giro nazionale: si accende a mano, non è il default.
+const TUTTE_LE_PROVINCE =
+  process.argv.includes('--tutte-le-province') || process.env.TUTTE_LE_PROVINCE === '1';
 
 // `--max-per-regione=N` (o `MAX_PER_REGIONE=N`): campione per la verifica
 // nazionale — N target per regione, 0 = tutti. Serve a provare il giro su tutto
@@ -2240,12 +2268,23 @@ async function sgranaDocumentoAvviso(
   voce: ExtractedInterpello,
   anagrafica: ReturnType<typeof caricaAnagrafica>,
   visti: Set<string>,
-): Promise<{ records: InterpelloRecord[]; righe: number; conTermine: number }> {
-  const esito = { records: [] as InterpelloRecord[], righe: 0, conTermine: 0 };
+  /** §26.133 — data di pubblicazione già nota della pagina dell'avviso. */
+  pubblicazioneNota?: string | null,
+): Promise<{
+  records: InterpelloRecord[];
+  righe: number;
+  conTermine: number;
+  /** §26.133 — record nati da una tabella di disponibilità (termine stimato). */
+  disponibilita: number;
+}> {
+  const esito = { records: [] as InterpelloRecord[], righe: 0, conTermine: 0, disponibilita: 0 };
   const url = (voce.directUrl ?? '').trim();
   if (!/^https?:\/\//i.test(url) || approfondimentiTarget <= 0) return esito;
 
   let documenti: string[];
+  // §26.133 — la pagina che OSPITA il documento dichiara quando è stata
+  // pubblicata: è la data da cui si conta il termine stimato (mai «oggi»).
+  let pubblicazionePagina: string | null = null;
   if (eFileDocumento(url)) {
     documenti = [url];
   } else {
@@ -2254,6 +2293,7 @@ async function sgranaDocumentoAvviso(
       const pagina = await scaricaPaginaLeggera(url);
       if (pagina.status >= 400 || !pagina.contentType.includes('html')) return esito;
       documenti = urlDocumentoInHtml(pagina.html, url, MAX_DOCUMENTI_AVVISO);
+      pubblicazionePagina = dataPubblicazioneArticolo(pagina.html);
     } catch {
       return esito;
     }
@@ -2276,16 +2316,44 @@ async function sgranaDocumentoAvviso(
     }
     const pdf = estraiTestoPdf(byte);
     const righe = pdf.testo ? righeTabellaInterpelli(pdf.testo) : [];
+    // §26.133 — nessuna riga d'interpello: il documento può essere una TABELLA DI
+    // DISPONIBILITÀ (istituti, classi, nessun termine). Si legge solo quando
+    // l'avviso stesso si dichiara una disponibilità: su un interpello con termine
+    // scaduto la stima sarebbe una proroga inventata.
+    const disponibilita =
+      pdf.testo && righe.length === 0 && eDisponibilitaSenzaTermine({ titolo: voce.title })
+        ? righeDisponibilita(pdf.testo)
+        : [];
+    const stima =
+      disponibilita.length > 0
+        ? scadenzaStimata(pubblicazioneNota ?? pubblicazionePagina ?? voce.publicationDate ?? null)
+        : null;
     // §26.128 — anche il documento TABELLARE entra nel contatore: il secchio si
     // decide sul primo termine dichiarato dalle righe, e un PDF senza testo è
     // `illeggibile` (prima spariva dal conto e sembrava «zero righe»).
     registraPdf(statisticaPdf, {
       testo: pdf.testo,
-      deadline: righe.find((riga) => riga.deadline)?.deadline ?? null,
+      deadline: righe.find((riga) => riga.deadline)?.deadline ?? stima ?? null,
       titolo: null,
       url: documento,
     });
     if (!pdf.testo) continue;
+
+    if (disponibilita.length > 0) {
+      // Senza la data di pubblicazione non c'è un punto di partenza: la stima non
+      // si fa e le righe restano senza termine, esattamente come prima (§26.133).
+      if (!stima) continue;
+      if (isExpired(stima) || !entroOrizzonte(stima)) continue;
+      for (const riga of disponibilita) {
+        const scuola = scuolaCertificata(anagrafica, { codice: riga.schoolCode });
+        if (!scuola) continue;
+        const record = recordDaDisponibilita(riga, stima, scuola, documento, visti);
+        if (!record) continue;
+        esito.disponibilita += 1;
+        esito.records.push(record);
+      }
+      continue;
+    }
 
     for (const riga of righe) {
       esito.righe += 1;
@@ -2315,6 +2383,66 @@ async function sgranaDocumentoAvviso(
 }
 
 /**
+ * §26.133 — una riga di DISPONIBILITÀ → record con termine STIMATO.
+ *
+ * Perché non passa da `recordDaVoceScuola`: quello pretende che il link sia un
+ * avviso della scuola stessa, e una tabella di disponibilità non porta un link
+ * per istituto — il documento è dell'Ufficio Scolastico che pubblica la lista. La
+ * scuola resta certificata sull'anagrafica (`schools_master`, come sempre: se il
+ * codice non esiste la riga non entra) e il link è il documento ufficiale che la
+ * contiene. Il titolo dice «termine stimato»: la stima si vede, non si nasconde.
+ */
+function recordDaDisponibilita(
+  riga: RigaDisponibilita,
+  stima: string,
+  scuola: ScuolaCertificata,
+  documento: string,
+  visti: Set<string>,
+): InterpelloRecord | null {
+  const schoolCode = scuola.codice ?? riga.schoolCode;
+  if (!isLikelyMechCode(schoolCode)) return null;
+  const province = schoolCode.slice(0, 2).toUpperCase();
+  const schoolName = scuola.nome ?? (riga.schoolName || `Istituto ${schoolCode}`);
+  const materia = [riga.classCode, riga.subject].filter(Boolean).join(' ');
+  const title = normalize(`Disponibilità ${materia} — ${schoolName} (termine stimato)`);
+  if (title.length < 8 || !RE_TITOLO_INTERPELLO.test(title)) return null;
+  const hashId = generateHashId(province, schoolCode, title, documento);
+  if (visti.has(hashId)) return null;
+  visti.add(hashId);
+  const caselle = emailDaCodiceMeccanografico(schoolCode);
+  const contatto = scegliContatto([
+    { email: scuola.email, provenienza: 'anagrafica' },
+    { email: caselle?.peo, provenienza: 'convenzione', derivato: true },
+    { email: caselle?.pec, provenienza: 'convenzione', derivato: true },
+  ]);
+  const contactEmail = contatto && contatto.natura !== 'esterno' ? contatto.email : null;
+  const schoolPec = scuola.pec ?? caselle?.pec ?? null;
+  return {
+    hash_id: hashId,
+    title,
+    school_name: schoolName,
+    school_code: schoolCode,
+    province,
+    region: provinciaDaCodice(province)?.regione ?? null,
+    class_code: riga.classCode,
+    class_codes: classiArray(riga.classCode),
+    subject: riga.subject,
+    deadline: stima,
+    expiration_date: aExpirationDate(stima),
+    source_url: documento,
+    contact_email: contactEmail,
+    school_pec: schoolPec,
+    stato_arricchimento: statoArricchimento({
+      school_name: schoolName,
+      school_code: schoolCode,
+      contact_email: contactEmail,
+      school_pec: schoolPec,
+    }),
+  };
+}
+
+
+/**
  * Recupera la scadenza dal corpo delle voci che non la dichiarano e le
  * converte in record. Tetti: `MAX_APPROFONDIMENTI_TARGET` (`perElenco`) per
  * pagina, `MAX_APPROFONDIMENTI_RUN` (`perGiro`) per giro — è rete, non parsing.
@@ -2332,6 +2460,8 @@ async function approfondisciVociSenzaScadenza(
   daCorpoScuola: number;
   oltreOrizzonte: number;
   righeTabella: number;
+  /** §26.133 — record nati da una tabella di disponibilità (termine stimato). */
+  disponibilita: number;
   /** §26.130 — avvisi mai aperti: il TITOLO dichiarava un atto, non un reclutamento. */
   rumore: number;
 }> {
@@ -2342,6 +2472,7 @@ async function approfondisciVociSenzaScadenza(
     daCorpoScuola: 0,
     oltreOrizzonte: 0,
     righeTabella: 0,
+    disponibilita: 0,
     rumore: 0,
   } as {
     records: InterpelloRecord[];
@@ -2409,6 +2540,7 @@ async function approfondisciVociSenzaScadenza(
     // la tabella non c'è si prova la lettura «un termine per pagina».
     const daDocumento = await sgranaDocumentoAvviso(voce, anagrafica, visti);
     esito.righeTabella += daDocumento.righe;
+    esito.disponibilita += daDocumento.disponibilita;
     if (daDocumento.records.length > 0) {
       esito.records.push(...daDocumento.records);
       continue;
@@ -2456,7 +2588,8 @@ async function approfondisciVociSenzaScadenza(
       `[table-reporter] Sgranatura (${apribili.length} avvisi apribili, finestra ${finestra.da}-${finestra.a}): ` +
         `${esito.richieste} documenti letti → ${esito.trovate} termini dichiarati, ` +
         `${esito.righeTabella} righe di tabella, ${esito.records.length} record ` +
-        `(${esito.daCorpoScuola} con scuola dal corpo, ${esito.rumore} titoli di rumore non aperti) · ` +
+        `(${esito.daCorpoScuola} con scuola dal corpo, ${esito.disponibilita} da disponibilità a termine stimato, ` +
+        `${esito.rumore} titoli di rumore non aperti) · ` +
         `riserva del giro: ${approfondimentiTarget}.`
     );
   }
@@ -2890,7 +3023,14 @@ function extractSubjectAndClass(text: string): {
   let subject = 'Non specificata';
   const t = text.toLowerCase();
 
-  if (t.includes('sostegno')) subject = 'Sostegno';
+  // §26.131 — AREA SOSTEGNO A TRE STATI (non più un booleano). Prima qui bastava
+  // la sottostringa «sostegno» per scrivere `materia: 'Sostegno'` — e la materia,
+  // per il classificatore, è una prova di reclutamento: un progetto «inclusione e
+  // sostegno» diventava un'opportunità di sostegno che nessuno aveva pubblicato.
+  // Ora la materia si scrive SOLO quando la classificazione è `certo` (codice AD…
+  // oppure prosa con marcatore di reclutamento); un `ambiguo` resta `Non
+  // specificata`, cioè un avviso normale, mai una riga di sostegno in bacheca.
+  if (classificaSostegno({ titolo: text }).esito === 'certo') subject = 'Sostegno';
   else if (t.includes('inglese')) subject = 'Inglese';
   else if (t.includes('matematica')) subject = 'Matematica';
   else if (t.includes('italiano')) subject = 'Italiano';
@@ -3079,10 +3219,29 @@ async function loadTargets(): Promise<DiscoveredLink[]> {
     verificata: CHIAVI_WHITELIST.has(chiaveUrl(row.url)),
   }));
 
-  // Giro nazionale: la coda del DB si prende TUTTA, senza filtro di regione.
-  if (NAZIONALE || REGIONI_FILTRO.length === 0) return rows;
+  // §26.131 — LA PORTA DEL PERIMETRO. Il filtro sta QUI, non nei singoli
+  // chiamanti: qualunque sia il comando (`--regioni`, `--province`, `--nazionale`),
+  // dal database entrano solo i target delle province del perimetro e le fonti
+  // ufficiali in whitelist. Un target fuori perimetro viene DICHIARATO (quanti e
+  // perché), mai scartato in silenzio: uno scarto muto sembra un crawler rotto.
+  const inPerimetro = TUTTE_LE_PROVINCE
+    ? rows
+    : rows.filter(
+        (row) => eProvinciaPerimetro(row.province) || CHIAVI_WHITELIST.has(chiaveUrl(row.url)),
+      );
+  if (!TUTTE_LE_PROVINCE) {
+    const fuori = rows.length - inPerimetro.length;
+    console.log(
+      `[table-reporter] Perimetro ${descrizionePerimetro()}: ${inPerimetro.length} target in ` +
+        `perimetro, ${fuori} fuori perimetro esclusi` +
+        (fuori > 0 ? ' (diagnosi: --tutte-le-province).' : '.'),
+    );
+  }
 
-  return rows.filter((row) => regioneCorrisponde(row.region));
+  // Giro nazionale: la coda del DB si prende TUTTA, senza filtro di regione.
+  if (NAZIONALE || REGIONI_FILTRO.length === 0) return inPerimetro;
+
+  return inPerimetro.filter((row) => regioneCorrisponde(row.region));
 }
 
 /**
@@ -3124,6 +3283,34 @@ function limitaPerRegione(targets: DiscoveredLink[]): DiscoveredLink[] {
     `[table-reporter] Campione: max ${MAX_PER_REGIONE} target per regione (${out.length}/${targets.length}).`
   );
   return out;
+}
+
+/**
+ * §26.132 — LE FONTI VERIFICATE VENGONO PRIMA (whitelist prioritaria).
+ *
+ * Perché: fino al 02/11/2026 gli hub della whitelist entravano in coda con
+ * `unisciTarget`, cioè DOPO le righe del database. Il giro su Catania del
+ * 02/11/2026 lo dimostra: 332 target in elenco, 119 esaminati (il processo si è
+ * fermato) e `ct.usr.sicilia.it` — l'unico ente che pubblica gli interpelli di
+ * quella provincia — mai raggiunto, pur essendo la fonte più importante del
+ * perimetro. Con i target verificati in testa, un giro interrotto ha comunque
+ * letto le fonti ufficiali.
+ *
+ * L'ordine è STABILE: prima le fonti ufficiali (in coda `origine: 'whitelist'`
+ * oppure URL canonica della whitelist), poi il resto nell'ordine di arrivo.
+ * Nessun target viene aggiunto o tolto — è solo una priorità.
+ */
+function primaLeFontiVerificate(targets: DiscoveredLink[]): DiscoveredLink[] {
+  const verificate: DiscoveredLink[] = [];
+  const resto: DiscoveredLink[] = [];
+  for (const target of targets) {
+    if (target.origine === 'whitelist' || CHIAVI_WHITELIST.has(chiaveUrl(target.url))) {
+      verificate.push(target);
+    } else {
+      resto.push(target);
+    }
+  }
+  return [...verificate, ...resto];
 }
 
 /**
@@ -4200,7 +4387,9 @@ async function runTableReporter(): Promise<void> {
     targets = uniti;
   }
 
-  targets = limitaPerRegione(targets);
+  // §26.132 — le fonti verificate passano davanti PRIMA del campionamento: se il
+  // tetto per regione taglia, non deve tagliare l'ente ufficiale.
+  targets = limitaPerRegione(primaLeFontiVerificate(targets));
 
   // GIRO MIRATO PER PROVINCIA (§26.119 · §26.125): `--province=AT` legge i target
   // della provincia richiesta **più gli hub istituzionali della sua regione**. Fino al
@@ -4224,6 +4413,23 @@ async function runTableReporter(): Promise<void> {
       `[table-reporter] Filtro province attivo: ${PROVINCE_FILTRO.join(', ')} — ` +
         `${targets.length}/${prima} target (hub regionali verificati inclusi)`,
     );
+  }
+
+  // §26.132 — ORDINE DI LETTURA: le fonti ufficiali del perimetro (USP/USR della
+  // whitelist) si leggono per PRIME. Un giro che si interrompe — o che spende il
+  // budget di rete sulle scuole — ha comunque interrogato l'ente che pubblica gli
+  // interpelli, non l'ultima scuola paritaria dell'elenco.
+  {
+    const ufficiali = targets.filter(
+      (target) => target.origine === 'whitelist' || CHIAVI_WHITELIST.has(chiaveUrl(target.url)),
+    ).length;
+    targets = primaLeFontiVerificate(targets);
+    if (ufficiali > 0) {
+      console.log(
+        `[table-reporter] Priorità fonti ufficiali: ${ufficiali} target verificati in testa ` +
+          '(whitelist USR/USP prima della coda).',
+      );
+    }
   }
 
   if (targets.length === 0) {

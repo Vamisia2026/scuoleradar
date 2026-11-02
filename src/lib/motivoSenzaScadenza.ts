@@ -108,3 +108,91 @@ export function causaSenzaScadenza(
 export function titoloCandidabile(voce: VoceDaClassificare): boolean {
   return RE_CANDIDABILE.test(compatto(voce.titolo));
 }
+
+/* ---------------------------------------------------------------------------
+ * §26.133 — LA DISPONIBILITÀ CHE NON DICHIARA UN TERMINE (Catania, 02/11/2026)
+ * ---------------------------------------------------------------------------
+ * Alcune fonti non pubblicano un interpello per scuola: pubblicano una TABELLA
+ * DI DISPONIBILITÀ. L'avviso P.6 dell'USP di Catania del 20/10/2026 — «posti
+ * comuni e di SOSTEGNO … a.s. 2026/27» — elenca **59 istituti** con le cattedre
+ * libere e **nessun termine**: la lista vale finché l'Ufficio non pubblica la
+ * successiva. Letta con la regola ferrea (§26.71) era una riga «senza scadenza»,
+ * quindi fuori da ogni superficie: la disponibilità più concreta che esista —
+ * la cattedra c'è, oggi — restava invisibile.
+ *
+ * Qui sta l'unica convenzione ammessa, e i suoi due limiti:
+ *   · il termine è STIMATO e dichiarato tale nella riga («termine stimato»);
+ *   · la stima parte dalla data di PUBBLICAZIONE dell'avviso, mai dalla data in
+ *     cui lo si legge: una stima che scivola in avanti a ogni giro non è una
+ *     stima, è una data inventata che si rinnova;
+ *   · se la pagina non dichiara QUANDO è stata pubblicata, non si stima nulla
+ *     (`scadenzaStimata` → `null`) e la voce resta senza termine, come prima.
+ */
+
+/**
+ * Giorni di validità PRESUNTA di una disponibilità senza termine, contati dalla
+ * pubblicazione. Trenta e non sette: gli Uffici ripubblicano la lista (P.4, P.5,
+ * P.6…) con cadenza quasi settimanale — un termine di sette giorni renderebbe
+ * invisibile la lista ancora in corso — e oltre il mese si tratterebbe di una
+ * graduatoria esaurita, non di una disponibilità.
+ */
+export const GIORNI_SCADENZA_STIMATA = 30;
+
+/**
+ * La fonte dichiara una DISPONIBILITÀ (e non un interpello con un termine).
+ * Niente `\b` finale: in JavaScript `à` NON è un carattere di parola, quindi
+ * `\bdisponibilit[aà]\b` non trova mai «disponibilità» seguito da uno spazio —
+ * l'ha pagato la prima stesura di questa regola (A del test, 02/11/2026).
+ */
+const RE_DISPONIBILITA = /\bdisponibilit[aà](?![a-zà-ÿ])/i;
+
+/** La disponibilità è FINITA: su un atto esaurito o revocato non si stima nulla. */
+const RE_CHIUSA = /\besaurit|\brevocat[ae]|\bchius[ao]\b|\bannullat[ao]\b|\bsospes[ao]\b/i;
+
+/**
+ * True se la voce è una DISPONIBILITÀ senza termine dichiarato — la sola fascia
+ * a cui si applica la stima (§26.133). Tre condizioni, nell'ordine: la fonte si
+ * dichiara «disponibilità», non è un atto chiuso e non è un atto amministrativo
+ * (il pre-filtro semantico di sempre decide, §26.91).
+ *
+ * Nota: qui NON si usa `causaSenzaScadenza`, e la ragione è nei dati — il titolo
+ * vero di questi avvisi contiene «anno scolastico 2026/2027», che la causa
+ * `archivio` legge come anno passato. Per una disponibilità dell'anno in corso è
+ * l'anno di VALIDITÀ, non un'etichetta di archivio.
+ */
+export function eDisponibilitaSenzaTermine(voce: VoceDaClassificare): boolean {
+  const testo = compatto(`${voce.titolo ?? ''} ${voce.testo ?? ''}`);
+  if (!RE_DISPONIBILITA.test(testo)) return false;
+  if (RE_CHIUSA.test(testo)) return false;
+  return !isAdministrativeNoise(testo, compatto(voce.titolo)).isNoise;
+}
+
+/**
+ * Termine STIMATO di una disponibilità: `pubblicazione + giorni`, in ISO.
+ * `null` quando la pubblicazione non è dichiarata o non è una data vera — la
+ * stima non si inventa un punto di partenza (nessun «oggi», nessun orologio).
+ */
+export function scadenzaStimata(
+  pubblicazione?: string | null,
+  giorni: number = GIORNI_SCADENZA_STIMATA,
+): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec((pubblicazione ?? '').trim());
+  if (!m) return null;
+  const anno = Number(m[1]);
+  const mese = Number(m[2]);
+  const giorno = Number(m[3]);
+  const base = Date.UTC(anno, mese - 1, giorno);
+  const controllo = new Date(base);
+  if (
+    !Number.isFinite(base) ||
+    controllo.getUTCFullYear() !== anno ||
+    controllo.getUTCMonth() !== mese - 1 ||
+    controllo.getUTCDate() !== giorno
+  ) {
+    return null;
+  }
+  const passi = Number.isFinite(giorni) ? Math.max(0, Math.floor(giorni)) : GIORNI_SCADENZA_STIMATA;
+  const data = new Date(base + passi * 86_400_000);
+  const due = (n: number): string => String(n).padStart(2, '0');
+  return `${data.getUTCFullYear()}-${due(data.getUTCMonth() + 1)}-${due(data.getUTCDate())}`;
+}

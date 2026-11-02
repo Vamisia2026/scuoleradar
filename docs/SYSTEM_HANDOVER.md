@@ -14305,3 +14305,746 @@ titolo), non quando il danno è già stato fatto. E che un contatore onesto («2
 aperti») vale più di un totale: senza quel numero, un giro che scarta il 40% delle voci sembra un
 giro che non trova nulla.
 
+
+## §26.131 — IL PERIMETRO STRETTO (AT + CT) E IL SOSTEGNO A TRE STATI (Catania, 02/11/2026)
+
+**Il problema, in due frasi.** Il crawler leggeva l'Italia intera: 18.402 righe in coda, di cui
+**17.800 di province che nessuno avrebbe mai guardato**, e un giro su Catania non produceva una
+bacheca di Catania. E il sostegno era una **domanda binaria**: «il testo contiene *sostegn*?» →
+sì/no. Un progetto «inclusione e sostegno» e un interpello «posto di sostegno» finivano nello
+stesso secchio, e la materia così scritta valeva, nel classificatore, come prova di reclutamento:
+il falso positivo si auto-confermava.
+
+### 1. Il perimetro: due province, una whitelist, tre porte che lo fanno rispettare
+
+`src/lib/perimetroIngestione.ts` (nuovo, puro) dichiara **`PROVINCE_PERIMETRO = ['AT', 'CT']`** con
+`eProvinciaPerimetro`, `fuoriPerimetro`, `nomeProvinciaPerimetro`, `descrizionePerimetro` e
+`messaggioFuoriPerimetro`: un solo posto in cui il perimetro esiste, e un messaggio che dice **dove**
+si cambia (non «provincia non ammessa», ma il file da modificare).
+
+Il perimetro entra in **tre porte**, ognuna con la sua ragione:
+
+* **`table-reporter.loadTargets`** — la porta del runner. Un target la cui provincia non è nel
+  perimetro passa solo se il suo URL canonico è in whitelist: le fonti ufficiali (USR, USP, MIM)
+  restano leggibili perché pubblicano *per* tutte le province. I target esclusi vengono **contati e
+  dichiarati**, mai scartati in silenzio. `--tutte-le-province` riapre la porta per la diagnosi, ed
+  è l'unico modo per riaprirla: nessuna variabile d'ambiente, nessun default implicito.
+* **`scripts/crawl-provincia.ts`** — la porta del comando manuale. Si ferma **prima** di anagrafica,
+  coda e rete: un crawler che parte fuori perimetro produce righe che il runner scarterebbe
+  comunque, quindi il rifiuto arriva subito (`--province=TO` → messaggio e `exit 1`).
+* **`scripts/reset-coda-perimetro.ts`** — la porta della storia: quello che era già dentro.
+
+### 2. Il sostegno: tre stati, il codice prima della prosa
+
+`src/lib/classificatoreSostegno.ts` (nuovo, puro) risponde con **tre** esiti, non con un booleano:
+
+| esito | quando | conseguenza |
+| --- | --- | --- |
+| `certo` | c'è un **codice** `AD…` (classi o testo) **oppure** la prosa dichiara il sostegno **e** contiene un marcatore di reclutamento (`interpell-`, `supplen-`, `disponibilit-`, `avvis-`) | è area sostegno: entra in bacheca, nel matching e nella materia della riga |
+| `ambiguo` | la prosa parla di sostegno **senza** marcatore di reclutamento (progetti, PNRR, inclusione) | **non** è area sostegno e **non** diventa `materia: 'Sostegno'` |
+| `nessuno` | nessun segnale | il classificatore non aggiunge giudizi |
+
+La tabella codice→ordine è **chiusa** e dichiarata: `ADAA`/`AD0D` → infanzia, `ADEE` → primaria,
+`ADMM` → secondaria di I grado, `ADSS`/`AD01`–`AD04` → secondaria di II grado. Un codice `AD…`
+**fuori tabella** (per esempio `AD24`, che le fonti usano davvero) resta `certo` con `ordine: null`:
+un codice che la fonte ha pubblicato non si butta via solo perché il catalogo non lo conosce —
+si dice che non si sa l'ordine.
+
+`src/data/classiConcorso.ts` **delega** invece di duplicare: `isCodiceSostegno` → `eCodiceSostegno`
+e `eAvvisoSostegno` → `avvisoDiSostegnoCerto`, con la regex e la logica in un posto solo. La prova
+che la delega è reale (e non una copia che si allontana) è nella guardia: *se le due porte
+divergono, la guardia cade*.
+
+L'ingestione usa la stessa porta nel punto in cui il significato nasce: `extractSubjectAndClass`
+(`scripts/table-reporter.ts`) scriveva `materia: 'Sostegno'` con la sola sottostringa; ora la scrive
+**solo se la classificazione è `certo`**. Un `ambiguo` resta `Non specificata`: la riga è un avviso
+normale, mai un'opportunità di sostegno che nessuno ha pubblicato.
+
+### 3. Il reset: la coda non si eredita, si dichiara
+
+`scripts/reset-coda-perimetro.ts` + `scripts/lib/resetPerimetro.ts` + `scripts/lib/resetAltreTabelle.ts`
+(`npm run reset:coda:perimetro`), tre passaggi contati, default **misura** e `--apply` come firma:
+
+1. **`discovered_links`** — cancella i target fuori perimetro e riporta a `pending` quelli del
+   perimetro che un motore aveva parcheggiato (`error_*`, `not_found`, `empty_view`, `parked_*`,
+   `disqualified_noise`). `blacklisted` e `disabled` **non** si toccano: sono giudizi, non incidenti;
+2. **`scan_targets`** — tiene solo le città del perimetro, le rimette `idle` con lock libero e
+   `next_run_at = now()`, e **inserisce** quella che manca (il perimetro è una promessa, non quello
+   che il database ricorda);
+3. **`source_health`** — toglie la quarantena alle fonti del perimetro: la finestra è di 60 giorni e
+   aspettarla significherebbe tenere muta per due mesi una fonte che magari ha solo cambiato
+   impaginazione. Se è ancora rotta, le regole la isolano di nuovo.
+
+**La misura del 02/11/2026** (`--apply` eseguito; è lo stato **subito dopo** il reset — lo
+stato dopo il giro di Catania è nella tabella del §5):
+
+| tabella | prima | dopo |
+| --- | --- | --- |
+| `discovered_links` | 18.402 righe (15.199 `pending`, 1.444 `disabled`, 549 `active_crawler`, …) | **602** righe: 457 `active_crawler`, 85 `pending`, 51 `disabled`, 9 `expanded` |
+| | 17.800 fuori perimetro | **cancellate** (per provincia o perché l'URL non è in whitelist) |
+| | 85 del perimetro parcheggiate | riportate a `pending` |
+| `scan_targets` | 21 città | **1** del perimetro (Asti) + **Catania inserita**; 20 città cancellate |
+| `source_health` | 247 fonti del perimetro in quarantena o con fallimenti | **riabilitate** (`is_quarantined = false`, contatori a zero) |
+
+Nessuna riga è stata cancellata senza un numero che la nominasse: ogni passaggio stampa *quante* e
+*quali*.
+
+### 4. La porta della BACHECA: il terzo stato non entra, e lo dice
+
+Riconoscere `ambiguo` nell'ingestione non bastava. Una riga «Piano di sostegno didattico»
+può avere una classe che aggancia il profilo: sarebbe entrata in vetrina **lo stesso**,
+per una strada diversa da quella del sostegno. Perciò la decisione è stata portata dove
+l'utente la incontra: `src/lib/bachecaInterpelli.ts` importa `sostegnoAmbiguo` e scarta la
+riga **subito dopo il gate «è un avviso?»**, prima del punteggio, della blacklist e del
+paracadute — quindi un `ambiguo` non entra **né in bacheca né nella scorta**. Lo scarto è
+contato in `EsitoBacheca.sostegnoAmbiguoScartato` (`src/lib/bachecaRipiego.ts`) e stampato
+da `scripts/diag-bacheca.ts`: uno scarto che non si vede è indistinguibile da un dato che
+manca. La guardia `test:sostegno:classificatore` §10 verifica tre cose: che la chiamata
+esista, che avvenga **prima** di `valutaCompatibilita`, e che il conto sia dichiarato
+nell'esito e restituito.
+
+### 5. Il giro vero su Catania: 119 target letti, **0 record**
+
+Il collaudo non è una simulazione. `npx tsx scripts/crawl-provincia.ts --province=CT
+--max-scuole=4 --apply` è stato eseguito davvero (log in `%TEMP%\crawl-ct.log`, 601 righe):
+
+| misura | valore |
+| --- | --- |
+| target di Catania esaminati | **119** |
+| host che non rispondono (`fetch failed`) | **39** (+2 timeout) |
+| elenchi letti che non dichiarano alcuna scadenza | **32** |
+| record validi estratti | **0** |
+| `interpelli` con `province='CT'` (dopo il giro) | **0** |
+| `interpelli` con `province='AT'` | **5** (di cui **1** con `subject` di sostegno) |
+| `interpelli` in Italia | **703** |
+
+Cioè: **il perimetro ora è rispettato** (nessun rifiuto, nessuna riga di altre province
+scritta), ma **Catania non pubblica termini** nelle pagine che il crawler sa leggere. La
+diagnostica dice lo stesso dal lato della bacheca: `npm run diag:bacheca --
+--provincia=CT --senza-classi` → *«Avvisi attivi nella ZONA (CT, SR): 0 · pool 0 righe ·
+vetrina 0/5»*, con `sostegno ambiguo scartato: 0`. Non c'è nulla da classificare: il
+classificatore non è il collo di bottiglia, l'estrazione lo è.
+
+Lo stato della coda dopo il giro (misurato, non stimato) — `discovered_links` **602** righe:
+`active_crawler` 503, `disabled` 51, `disqualified_noise` 31, `expanded` 9, `pending` 8;
+per provincia **AT 67 · CT 373**, e le altre province presenti sono le **fonti ufficiali in
+whitelist** (USR/USP/MIM: pubblicano *per* tutte le province, ed è esattamente il caso che
+la whitelist esiste per coprire). `scan_targets`: **2** righe (Asti, Catania).
+`source_health`: 765 righe, **4** in quarantena — le stesse che il giro ha trovato morte,
+ri-isolate dalle regole ordinarie: la riabilitazione del reset non è una grazia permanente.
+
+**Che cosa manca, detto senza girarci intorno.** Per portare un avviso di Catania in
+bacheca serve una delle tre cose, e nessuna è «cambiare il classificatore»: (a) le pagine
+degli istituti catanesi che dichiarano un termine vanno raggiunte — 39 host non
+rispondono dalla macchina di sviluppo e 32 elenchi non dichiarano scadenze, quindi il
+problema è a monte della classificazione; (b) l'albo pretorio/amministrazione trasparente
+di quegli istituti va aggiunto come target quando espone «Interpelli» in una tabella con
+data; (c) l'USP di Catania, che è già in whitelist, va puntato con un target dedicato
+(come fu fatto per l'USP di Asti in §26.119, che produsse le uniche 5 righe AT).
+
+### 6. Verifiche
+
+`typecheck` ✅ 0 · `test:architettura` ✅ 812 file · **145 = baseline** (nessuna nuova) ·
+`npm test` ✅ exit 0 (catena di **141** comandi, 115 banner di guardia) ·
+`eslint` ✅ 0 su tutti i file toccati (incluso `diag-bacheca.ts`, dove sono stati chiusi
+due debiti preesistenti: l'import inutilizzato `rigaVetrinaCompleta` e il flag
+`--senza-classi`, che era dichiarato e mai usato — ora è una misura vera).
+
+Guardie eseguite una per una: `test:sostegno:classificatore` (nuova, 10 sezioni),
+`test:perimetro` (nuova, 5 sezioni: contratto del perimetro **e** cablaggio delle tre
+porte), `test:sostegno` (pertinenza), `test:sostegno:preferenza`, `test:scala-paracadute`,
+`test:ambito-bacheca`, `test:vetrina-bacheca`, `test:riempitivi-bacheca`,
+`test:filtri-scuole`.
+
+**File toccati.** Nuovi: `src/lib/classificatoreSostegno.ts`, `src/lib/perimetroIngestione.ts`,
+`scripts/reset-coda-perimetro.ts`, `scripts/lib/resetPerimetro.ts`,
+`scripts/lib/resetAltreTabelle.ts`, `scripts/test-classificatore-sostegno.ts`,
+`scripts/test-perimetro-ingestione.ts`.
+Modificati: `src/lib/bachecaInterpelli.ts` (gate `ambiguo`), `src/lib/bachecaRipiego.ts`
+(conto nuovo), `src/data/classiConcorso.ts` (delega), `scripts/table-reporter.ts` (perimetro
++ materia a tre stati), `scripts/crawl-provincia.ts` (perimetro), `scripts/diag-bacheca.ts`
+(conto nuovo + `--senza-classi`), `package.json` (`test:sostegno:classificatore`,
+`test:perimetro`, `reset:coda:perimetro`), `docs/SYSTEM_HANDOVER.md`,
+`docs/DEPARTMENT_MAP.md`. **Nessun file di dipartimento toccato.**
+
+**Nota di sessione.** Due lezioni. La prima: un perimetro scritto in **tre** posti è un
+perimetro, un perimetro scritto in un posto solo è un commento — il crawler manuale e lo
+script di reset sono porte tanto quanto il runner, e la whitelist delle fonti ufficiali
+non è un'eccezione, è la ragione per cui il perimetro non chiude fuori la fonte che
+pubblica *per* tutti. La seconda: un classificatore a tre stati è utile solo se il terzo
+stato **ha un consumatore**. `sostegnoAmbiguo` esisteva già ed era chiamato da nessuno:
+il gate in bacheca e il conto nell'esito sono ciò che trasforma un tipo in un
+comportamento — e il fatto che la misura su Catania dia **0** righe ovunque è la prova
+che i numeri di questa sessione non sono stati aggiustati per far tornare il racconto.
+
+## §26.132 — LA MAPPATURA DELLE FONTI, GLI ARCHIVI DI CATANIA E LA PRIORITÀ DELLE FONTI UFFICIALI (Catania, 02/11/2026)
+
+**La richiesta, in una frase.** «Aggiungi l'USP di Catania e la sezione interpelli/decreti
+dell'USR Sicilia, senza creare file nuovi, e facci vedere i primi record reali di sostegno.»
+La risposta onesta comincia dalla mappatura: **l'USP di Catania era già in whitelist** e non
+è mai stato letto. Il difetto non era una fonte mancante, era **l'ordine di lettura**.
+
+### 1. Dove vivono davvero le fonti (mappatura, prima di toccare il codice)
+
+Nessun file nuovo: il registro esiste già ed è diviso per blocchi di verifica.
+
+| file | righe | cosa contiene |
+| --- | --- | --- |
+| `src/scraper/fontiTipi.ts` | 36 | la forma (`FonteInterpelli`, `TipoFonte`): tipi puri, nessuna logica |
+| `src/scraper/fonti.ts` | 227 | costruzione del registro, `fontiAttive()`, `fontiPerProvincia`, `hubDellaRegione`, tetti (`MAX_HUB_PER_REGIONE`, `MAX_FONTI_PER_RUN`) |
+| `src/scraper/fontiRegistro.ts` | 141 | USR dei capoluoghi (`HUB_ATTIVI`, verifica 2026-09-28) + `HUB_ESCLUSI` con il motivo |
+| `src/scraper/fontiTerritoriali.ts` | 200 | elenchi per PROVINCIA, con **data di verifica per voce** (`HUB_TERRITORIALI`) |
+| `src/scraper/fontiWhitelist2610.ts` | 217 | blocco 26/10/2026 (83 attive, 28 spente) con `RIEPILOGO_WHITELIST_2610` |
+| `src/scraper/fontiEsclusiVerifica.ts` · `fontiEsclusiWhitelist2610.ts` · `fontiAggregatori.ts` | 151 · 84 · 53 | le URL **non** attive, ognuna con il motivo; aggregatori privati spenti (§26.123) |
+| `src/scraper/fontiCopertura.ts` | 73 | copertura dichiarata (regioni/province/capoluoghi) |
+| `src/scraper/whitelistTargets.ts` | 163 | il registro diventa **lista di target** (`targetWhitelist`, `chiaveElenco`, `riepilogoWhitelist`) |
+| `scripts/sync-targets-whitelist.ts` · `verifica-fonti-scraper.ts` · `test-whitelist-targets.ts` · `test-scraper-fonti.ts` | — | seminatore in coda · verifica HTTP dal vivo · due guardie (contratto + igiene) |
+
+**Quindi**: per aggiungere una fonte si scrive **una tupla** in `fontiRegistro.ts` o in
+`fontiTerritoriali.ts`. Non serve un file nuovo, non serve toccare `whitelistTargets.ts`.
+
+### 2. Il difetto misurato: la fonte più importante era in fondo alla lista
+
+`ct.usr.sicilia.it` era già attivo (blocco 26/10, `w26-ct-interpelli`), e con `--province=CT`
+il merge degli hub regionali lo aggiungeva al giro — **in coda**, perché `unisciTarget(db,
+whitelist)` mette prima le righe del database. Prova nel log del giro del 02/11/2026:
+**332 target in elenco, 119 esaminati** (il processo si è fermato) e `ct.usr.sicilia.it`
+**mai raggiunto**; le uniche fonti Sicilia lette erano tre pagine dell'USR a Palermo.
+
+Rimedio, in `scripts/table-reporter.ts`: `primaLeFontiVerificate(targets)` — ordine **stabile**
+(fonti ufficiali: `origine === 'whitelist'` oppure URL canonica in `CHIAVI_WHITELIST`, poi il
+resto). Applicato **due volte**: prima di `limitaPerRegione` (così un tetto per regione non
+taglia l'ente ufficiale) e dopo il merge degli hub di provincia. È una priorità, non un
+filtro: nessun target viene aggiunto o tolto. Il runner lo dichiara nel log: *«Priorità fonti
+ufficiali: N target verificati in testa»*.
+
+### 3. Due voci Sicilia che NON erano elenchi (spostate in `HUB_ESCLUSI`)
+
+| voce | che cosa risponde davvero (02/11/2026) | esito |
+| --- | --- | --- |
+| `usr-sicilia-interpelli` — `https://www.usr.sicilia.it/interpelli/` | HTTP 200 ma **redirect a un solo articolo** di un'altra provincia (`/interpelli-nazionali-per-supplenza-cdc-a040-e-a033-s-maria-c-v-ce/`) | registrata e **spenta**, con il motivo |
+| `usr-sicilia-reclutamento` — `https://www.usr.sicilia.it/aree-tematiche/reclutamento/` | HTTP 200 ma è un **indice di download per classe di concorso**: 150 righe che linkano `/download/…/a005`, `/download/…/a007`; nessuna scadenza (il giro contava «150 scarti senza scadenza») | registrata e **spenta**, con il motivo |
+
+Un registro che tiene attive pagine così non è «prudente»: è un giro che apre documenti che
+non sono interpelli. La copertura Sicilia resta (PA ha la home, la pagina `personale-scuola`
+e l'archivio nuovo).
+
+### 4. Il blocco nuovo: 2026-11-02, tre fonti, in un file che esisteva
+
+In `src/scraper/fontiTerritoriali.ts` (data per voce, `DATA_VERIFICA_SICILIA`):
+
+| id | etichetta | URL | scopo |
+| --- | --- | --- | --- |
+| `ct-reclutamento-docenti` | USP Catania — Archivio reclutamento docenti | `https://ct.usr.sicilia.it/category/personale-scuola/personale-docente/reclutamento-docenti/` | **l'aggregatore che conta**: 10 avvisi TD a.s. 2026/27, «posti comuni e di **sostegno** … GAE e GPS I e II fascia», ognuno con i documenti dell'atto |
+| `ct-interpelli-archivio` | USP Catania — Archivio interpelli | `https://ct.usr.sicilia.it/category/aree-tematiche/interpelli/` | archivio di categoria (9 post): interpelli DSGA e supplenze, con il documento |
+| `pa-reclutamento-archivio` | USR Sicilia — Archivio reclutamento e interpelli | `https://www.usr.sicilia.it/category/aree-tematiche/reclutamento/` | l'elenco **vero** dell'USR (scorrimento, INR, albo commissioni, accreditamento tirocini a.s. 2026/27) |
+
+Perché gli archivi e non le pagine-elenco: `ct.usr.sicilia.it/aree-tematiche/interpelli/`
+elenca 18 allegati (8 con «sostegno») ma le sue **10 scadenze dichiarate vanno dal 20/02/2026
+al 26/05/2026**, tutte passate; l'avviso P.6 del **20/10/2026** (a.s. 2026/27) su quella
+pagina **non c'è**. Un elenco che si svuota a settembre non è una fonte; lo è l'archivio che
+resta e che pagina.
+
+Guardia aggiornata (contratto, non numero): `scripts/test-scraper-fonti.ts` accetta i blocchi
+di verifica HTTP dichiarati — aggiunto `DATA_VERIFICA_SICILIA`. Le soglie delle altre guardie
+(`test:whitelist`) sono espresse come «almeno N» e restano verdi: 301 voci nel registro, 83
+attive del blocco 26/10 invariate, whitelist dei target **156 → 157** (‑2 spente, +3 archivi).
+
+### 5. Il giro mirato: gli archivi si leggono per primi, i record non ci sono
+
+```
+npx tsx scripts/table-reporter.ts --province=CT --max-per-regione=1 \
+  --no-scuole-provincia --no-deep --dry-run
+```
+
+13 target (2 righe di coda + 11 hub Sicilia della whitelist), **i tre archivi in posizione
+2-4** invece che in fondo, e il log che lo dichiara: *«Priorità fonti ufficiali: 12 target
+verificati in testa (whitelist USR/USP prima della coda)»* — l'unico escluso è la riga sporca
+`info@istitutosavoia.it`. Esito, per target:
+
+| target | voci | senza scadenza | documenti letti | termini dichiarati | record |
+| --- | --- | --- | --- | --- | --- |
+| `usr.sicilia.it/category/…/interpelli-nazionali-contratti-a-tempo-determinato-docenti/` | 11 | 11 | 11 | 1 | 0 |
+| **`ct…/reclutamento-docenti/`** | 10 | 10 | 10 | **0** | 0 |
+| **`ct…/category/aree-tematiche/interpelli/`** | 9 | 3 | 3 | **0** | 0 |
+| **`usr.sicilia.it/category/aree-tematiche/reclutamento/`** | 11 | 9 | 9 | 2 | 0 |
+| `ct…/aree-tematiche/interpelli/` (landing, blocco 26/10) | 1 | 0 | — | — | 0 |
+| `ag…/personale-docente/interpelli/` | 2 | 1 | 1 | 1 | **1** (Agrigento, `A43`, 2027-06-30, `AGIS02300R`) |
+
+Riepilogo del giro: **13 target, 12 successi, 1 errore, 1 record**; 45 PDF aperti, 43
+leggibili, **42 senza alcun segnale di scadenza** (4 «archivio/atto»). L'unico record è di
+**Agrigento**: con `--province=CT` l'upsert lo scarterebbe (il filtro provincia è sul record,
+§26.119) — quindi per Catania il conto resta **0**.
+
+**Perché zero, e non è il classificatore.** Ho aperto a mano il PDF dell'avviso P.6:
+`estraiTestoPdf` legge **907 KB di testo** (non è una scansione) — ed è una *tabella di
+disponibilità*: codice scuola, classe, ore (`CTAA8AK00B … ADAA - SOSTEGNO SCUOLA INFANZIA`,
+`CTAA806004 IC CARLO LEVI - MANIACE … ADAA`, `ADEE`). Il **sostegno c'è**, il **termine no**:
+quell'avviso non dichiara una scadenza, e una riga senza termine non entra in bacheca (regola
+del progetto: nessuna data inventata, §26.118). È la conclusione del §26.131, ora provata sul
+pezzo: a Catania manca **la data**, non il riconoscimento del sostegno.
+
+### 6. Un difetto dei dati che il giro ha fatto emergere
+
+Fra i target della coda c'è `https://info@istitutosavoia.it/` — una URL con l'indirizzo email
+al posto dell'host. `fetch` la rifiuta (*«Request cannot be constructed from a URL that
+includes credentials»*) e il giro chiude con **exit 2** per 1 errore. Non è un guasto del
+parser: è una riga sporca nata dalla scoperta. Non è stata toccata in questa sessione (è
+pulizia della coda, non delle fonti) — resta dichiarata qui perché spiega l'exit code.
+
+### 7. Verifiche
+
+`typecheck` ✅ 0 · `test:architettura` ✅ **812 file**, 145 violazioni = **baseline** (nessuna
+nuova) · `test:scraper:fonti` ✅ 0 errori (301 voci, date di verifica nel contratto) ·
+`test:whitelist` ✅ exit 0 (83/28 del blocco 26/10 invariati) · `test:perimetro` ✅ exit 0 ·
+`npm test` ✅ exit 0 (catena completa, nessun comando rosso) · `eslint` ✅ 0 sui 4 file
+toccati · giro reale in `--dry-run` ✅ 13 target, 12 successi, cause dichiarate.
+
+**File toccati.** `src/scraper/fontiTerritoriali.ts` (blocco `DATA_VERIFICA_SICILIA` + 3
+fonti), `src/scraper/fontiRegistro.ts` (2 voci Sicilia spente con motivo in `HUB_ESCLUSI`),
+`scripts/table-reporter.ts` (`primaLeFontiVerificate` + priorità nel giro),
+`scripts/test-scraper-fonti.ts` (blocco di verifica dichiarato), `docs/SYSTEM_HANDOVER.md`,
+`docs/DEPARTMENT_MAP.md`. **Nessun file nuovo, nessun file di dipartimento toccato.**
+
+**Nota di sessione.** La lezione di oggi è che «la fonte manca» e «la fonte è in fondo alla
+lista» producono lo **stesso** numero — zero — e si distinguono solo leggendo il log: 332
+target in elenco, 119 esaminati, e il nome dell'USP di Catania assente dalle righe
+`Esamino:`. La seconda lezione è che un archivio di categoria è una fonte migliore di una
+pagina-elenco: la pagina si svuota, l'archivio pagina e resta — e l'avviso del 20/10/2026 che
+la pagina non mostra, l'archivio lo pubblica.
+
+## §26.133 — LA DISPONIBILITÀ SENZA TERMINE: LA STIMA CHE SI DICHIARA (Catania, 02/11/2026)
+
+**La richiesta, in una frase.** «L'avviso di Catania elenca 128 istituti con il sostegno
+libero e non produce una riga: fallo arrivare in bacheca.» Il §26.132 aveva già provato che a
+Catania mancava **la data**, non il sostegno. Qui si scioglie il nodo: una lista di
+disponibilità **vale finché l'Ufficio non pubblica la successiva**, e questo è un termine — solo
+che non è scritto. La regola ferrea (§26.71: nessuna opportunità senza scadenza) resta intatta
+perché la stima **si dichiara**, non si nasconde.
+
+### 1. Il documento, letto com'è
+
+`estraiTestoPdf` sul P.6 del 20/10/2026 (`disponibilita-di-ogni-ordine-e-grado-per-stipula-di-contratti-a-t-d-a-s-2026-27.pdf`,
+907 KB, 16.364 caratteri) restituisce la tabella **cella per cella**, una cella per riga:
+
+```
+CTAA8AK00B I.C. MASCALI AA
+ADAA - SOSTEGNO SCUOLA
+INFANZIA - SOSTEGNO 00000012.50
+```
+
+Con `righeTabellaInterpelli` (grammatica dell'interpello: codice + classe + **scadenza**)
+il risultato è **0 righe**: il codice c'è, la classe c'è, la data no. Da qui il lettore nuovo
+`righeDisponibilita` in `src/scraper/tabellaInterpelliPdf.ts` (`RigaDisponibilita`:
+`schoolCode`, `schoolName`, `classCode`, `subject`), che il reporter usa **solo** quando
+`righeTabellaInterpelli` non trova nulla **e** l'avviso si dichiara una disponibilità
+(`eDisponibilitaSenzaTermine`). Su un interpello con termine scaduto la stima sarebbe una
+proroga inventata.
+
+### 2. Tre difetti veri, trovati misurando (non leggendo)
+
+| difetto | come si vedeva | rimedio |
+| --- | --- | --- |
+| **`CAPPUCCINI-DE` è una denominazione, non una scuola** | l'ancora larga `[A-Z]{2}[A-Z0-9]{8}` accettava una parola di dieci lettere maiuscole: nasceva la scuola `CAPPUCCINI` | gate `RE_CODICE_MECCANOGRAFICO`: provincia + tipo + **cinque caratteri con almeno una cifra** + controllo |
+| **il codice della riga DOPPIA finisce in coda alla riga dei valori** | `… PRIMARIA - SOSTEGNO 00000012.50 CTAA806004`: il confine del record non è l'a-capo | il lettore segmenta **sul codice, ovunque nel testo** (`RE_CODICE_OVUNQUE`), non a inizio riga |
+| **`\b` dopo una vocale accentata non esiste** | `/\bdisponibilit[aà]\b/i` non trovava **mai** «disponibilità »: `à` non è carattere di parola, quindi il confine finale non c'è. La guardia ha bocciato la prima stesura della regola | `/\bdisponibilit[aà](?![a-zà-ÿ])/i` |
+
+Il terzo è il più insidioso: la funzione restituiva `false` **sempre**, e un `false` non fa
+rumore — nessun log, nessuno scarto contato. L'ha trovato la guardia, non il giro.
+
+### 3. La stima: pubblicazione + 30 giorni, e nient'altro
+
+`scadenzaStimata(pubblicazione, giorni = GIORNI_SCADENZA_STIMATA)` — **30 giorni**, non 7: gli
+Uffici ripubblicano la lista (P.4, P.5, P.6…) con cadenza quasi settimanale, e un termine di
+sette giorni renderebbe invisibile la lista ancora in corso.
+
+· **Punto di partenza: la PUBBLICAZIONE dell'avviso.** Mai «oggi»: una stima che scivola in
+avanti a ogni giro non è una stima, è una data inventata che si rinnova. La data si legge dalla
+pagina dell'articolo — `dataPubblicazioneArticolo` ora riconosce anche il **Dublin Core**
+(`DC.date`, `DC.Date`, `dcterms.date`), che è l'unico modo in cui i temi WordPress degli USP
+la dichiarano.
+· **Nessuna pubblicazione → nessuna stima** (`null`): la riga resta senza termine, come prima.
+· **Atto chiuso → nessuna stima**: `esaurita`, `revocata`, `chiusa`, `annullata`, `sospesa`
+(`RE_CHIUSA`) spengono la convenzione.
+· La stima **si vede nel titolo**: «Disponibilità ADAA SOSTEGNO SCUOLA INFANZIA — IC GABELLI
+MISTERBIANCO **(termine stimato)**» e si vede nel log (`… da disponibilità a termine stimato`).
+
+### 4. Le misure, end-to-end, sulle pagine vere (02/11/2026)
+
+Sonda dal vivo sull'archivio `ct.usr.sicilia.it/category/personale-scuola/personale-docente/reclutamento-docenti/`
+(HTTP 200, 187.498 caratteri, 58 link candidati navigazione inclusa): gli avvisi di
+disponibilità, letti con la stessa catena del reporter — pagina → data → documento → testo →
+righe → stima.
+
+| avviso | pubblicazione | PDF | `righeTabellaInterpelli` | `righeDisponibilita` | classi | termine stimato |
+| --- | --- | --- | --- | --- | --- | --- |
+| **P.6** `…posti comuni e di sostegno… p-6` | **2026-10-20** (Dublin Core) | 907 KB · 16.364 caratteri | **0** | **128** (128 istituti distinti) | `ADAA`, `ADEE` | **2026-11-19** |
+| P.5 `…disponibilita-di-ogni-ordine-e-grado…202627-5` | 2026-10-09 | 117 KB · 3.292 caratteri | 0 | 11 | `ADEE`, `EEEM`, `ADMM`, `AM12`, `A009`, `A040`, `A050`, `ADSS` | 2026-11-08 |
+| «turno 7 sedi assegnate» (controllo negativo) | 2026-10-20 | 223 KB | 0 | 0 — `eDisponibilitaSenzaTermine` = **false** | — | nessuna stima |
+
+Il primo avviso dichiara **128 istituti e 128 righe** (una riga per istituto): è il documento
+intero, non la prima pagina. Il controllo negativo è la parte che conta: **un atto che non si
+chiama disponibilità non riceve una stima**, e il lettore non viene nemmeno interrogato.
+
+### 5. Le due porte, e la conseguenza dichiarata
+
+| porta | regola | esito sulla riga stimata (2026-11-19) |
+| --- | --- | --- |
+| **bacheca pubblica** «Radar Live» (`filtroAttivi`: `expiration_date.gte.<oggi>`, §26.100: nessun tetto in avanti) | scadenza dichiarata e non passata | **entra** · oltre i 15 giorni porta la banda «Scadenza lontana» |
+| **feed personale / matching** (`eOpportunitaConScadenza`, orizzonte 15 giorni) | «cosa posso candidare adesso» | **non entra nei primi 15 giorni** di vita della stima: ci entra dal sedicesimo |
+
+Non è un difetto da correggere nella stima (a 15 giorni la stima sarebbe una proroga corta, e la
+lista resterebbe invisibile proprio mentre è più fresca): è una conseguenza da **dichiarare**.
+Chi cerca «disponibilità a Catania» la vede sul tabellone, che è la superficie che risponde a
+«cosa è aperto oggi».
+
+### 6. La guardia: `npm run test:disponibilita` (in `npm test`)
+
+`scripts/test-disponibilita.ts` — **27 asserzioni**, nessuna rete (l'estratto del PDF di Catania
+è nel test, il resto è sintetico): tre righe vere lette con codice, classe e materia, la materia
+che non ripete l'intestazione di colonna (`ADEE - SOSTEGNO SCUOLA` + `PRIMARIA - SOSTEGNO` →
+`SOSTEGNO SCUOLA PRIMARIA`), il nome spezzato su due righe che si ricompone, il codice accodato
+che non sporca la riga precedente, la parola di dieci lettere che non diventa una scuola, la
+tabella d'interpello che resta a 0 (la ragione per cui il lettore esiste), i sei casi di
+`scadenzaStimata` (30 giorni, ISO con orario, `null` senza data, `null` su `2026-02-30`), i
+quattro di `eDisponibilitaSenzaTermine` (apertura sì; `esaurita` no; interpello no; determina
+no) e i quattro di `dataPubblicazioneArticolo` (`DC.date`, `DC.Date` in forma italiana, nessuna
+data, catena completa fino al 19/11/2026).
+
+### 7. Verifiche
+
+`npm run test:disponibilita` ✅ 27/27 · `typecheck` ✅ 0 · `npm run test:motivo-senza-scadenza`
+✅ (la regola nuova non sposta le cause già classificate) · `npm run test:scraper:fonti` ✅ ·
+`npm run test:architettura` ✅ nessuna violazione nuova (il lettore resta dentro le 300 righe) ·
+`eslint` ✅ 0 sui file toccati · sonda end-to-end dal vivo ✅ (tabella §4).
+
+**File toccati.** `src/scraper/tabellaInterpelliPdf.ts` (lettore `righeDisponibilita` +
+`RE_CODICE_MECCANOGRAFICO` + segmentazione sul codice), `src/lib/motivoSenzaScadenza.ts`
+(§26.133: `GIORNI_SCADENZA_STIMATA`, `eDisponibilitaSenzaTermine`, `scadenzaStimata`, e la
+correzione del `\b` accentato), `src/scraper/articoloPost.ts` (Dublin Core in
+`dataPubblicazioneArticolo`), `scripts/table-reporter.ts` (`sgranaDocumentoAvviso` usa il lettore
+nuovo, `recordDaDisponibilita`, contatore `disponibilita` nel riepilogo), `package.json`
+(`test:disponibilita`), `scripts/test-disponibilita.ts` (**nuovo**, la guardia; unico file nuovo
+della sessione), `docs/SYSTEM_HANDOVER.md`. **Nessun file di dipartimento toccato.**
+
+**Nota di sessione.** La lezione è che **un `false` silenzioso costa più di un errore**: la
+regola della disponibilità è rimasta spenta per un `\b` messo dopo una `à`, e nessun contatore
+poteva accorgersene — solo un'asserzione che dice *«questa stringa deve dare `true`»*. La seconda
+lezione è che il confine di un record non è quasi mai l'a-capo: in un PDF estratto cella per
+cella il confine è **il dato** (il codice meccanografico), e chi segmenta sulle righe inventa
+scuole con nomi come `CAPPUCCINI`.
+
+
+
+## §26.134 — LA SICILIA INTERA: L'ARCHIVIO CHE C'È OVUNQUE TRANNE A PALERMO (Catania, 02/11/2026)
+
+**La richiesta, in una frase.** «Il radar deve leggere la Sicilia, non solo Catania.» Il §26.132
+aveva aperto tre fonti (Catania due volte, l'USR di Palermo una) lasciando fuori **sei sedi
+provinciali**. Qui si chiudono, e si chiudono con una misura: la stessa forma di URL esiste su
+**sette sedi su otto**, e la sola che non ce l'ha è proprio quella regionale.
+
+### 1. La misura, prima delle URL
+
+Sonda HTTP del 02/11/2026 su tutte le sedi USP (voci d'articolo = link interni con testo,
+navigazione esclusa; il conto «interpello»/«sostegno» è sul testo delle voci). Le due forme di
+percorso sono state provate entrambe: `…/reclutamento-docenti/` e
+`category/personale-scuola/personale-docente/reclutamento-docenti/`.
+
+| sede | host | `…/reclutamento-docenti/` | `…/category/…/reclutamento-docenti/` | voci · «interpello» · «sostegno» |
+| --- | --- | --- | --- | --- |
+| Agrigento | `ag.usr.sicilia.it` | 200 | **200** | 26 · 2 · 6 |
+| Caltanissetta/Enna | `cl-en.usr.sicilia.it` | 200 | **200** | 33 · 9 · 2 |
+| Catania | `ct.usr.sicilia.it` | 200 (già in registro) | 200 | 26 · 0 · 5 |
+| Messina | `me.usr.sicilia.it` | 200 | **200** | 28 · 0 · 1 |
+| Palermo (USR) | `www.usr.sicilia.it` | **404** | **404** | — (l'elenco è `aree-tematiche/reclutamento/`) |
+| Ragusa | `rg.usr.sicilia.it` | 200 | **200** | 23 · 5 · 2 |
+| Siracusa | `sr.usr.sicilia.it` | 200 | **200** | 29 · 7 · 4 |
+| Trapani | `tp.usr.sicilia.it` | 200 | **200** | 29 · 1 · 1 |
+
+Due letture che valgono più della tabella:
+
+1. **La forma con `category/` è sempre la più ricca** (26 vs 22 a Catania, 33 vs 32 a CL-EN): è
+   l'archivio paginato, l'altra è la pagina di sezione. Si registra la prima.
+2. **Palermo non ha l'archivio**: `reclutamento-docenti` risponde 404 in entrambe le forme. L'USR
+   pubblica su `category/aree-tematiche/reclutamento/`, già in registro dal §26.132 con il motivo
+   dichiarato (indice di download per classe di concorso). Non è una mancanza da colmare con una
+
+### 2. Le sei tuple, e le due voci che restano spente
+
+Sei righe in `fontiTerritoriali.ts`, blocco `DATA_VERIFICA_SICILIA` (02/11/2026), `regione=Sicilia`
+e capoluogo dichiarato: `ag-`, `cl-en-`, `me-`, `rg-`, `sr-`, `tp-reclutamento-docenti`. Effetto
+misurato sul registro: **da 303 a 309 voci**, fonti attive e whitelist dei target **da 157 a 163**,
+Sicilia attiva **da 12 a 18** — con URL uniche (la guardia conta
+`new Set(url).size === FONTI_INTERPELLI.length`) e id unici.
+
+Restano **spente, con il motivo**, le due pagine «interpelli» che sembravano la scorciatoia e non
+lo sono (motivi nuovi `P404_02` e `REDIRECT_02` in `fontiEsclusiVerifica.ts`):
+
+| URL | cosa risponde | perché non è una fonte |
+| --- | --- | --- |
+| `rg.usr.sicilia.it/interpelli/` | **404** | la pagina non esiste; l'elenco vero è l'archivio di categoria |
+| `sr.usr.sicilia.it/interpelli/` | 200 con **redirect a UN articolo** di un'altra provincia | non è un elenco: una riga sola non è una bacheca |
+
+### 3. Il budget non è cambiato, e la copertura nemmeno
+
+`MAX_HUB_PER_REGIONE` resta **10**: con 18 hub siciliani un run non li legge tutti, e non deve —
+`hubDellaRegione` mette **prima** gli hub della provincia in lavorazione e fa ruotare gli altri sul
+giorno UTC. Verificato sulla rotazione di oggi: **10 hub su 18, 0 URL ripetute**, e ogni sede è
+prima scelta della propria provincia (`fontiPerProvincia('RG')` → `hub-rg-reclutamento-docenti` in
+testa, idem AG/CL/ME/SR/TP). La rotazione è copertura, non rinuncia: nell'arco dei giorni tutte le
+sedi vengono interrogate.
+
+**Limite dichiarato, non nascosto:** la sede **CL-EN copre due province** ma il registro ammette un
+solo `capoluogo`, ed è `CL`; per **Enna** l'archivio arriva quindi dalla rotazione, non come prima
+scelta. E **Messina** ha 0 voci con la parola «interpello» su 28: si registra lo stesso, perché la
+parola nel titolo non è la condizione d'ingresso (lo è la scadenza) e un archivio vuoto oggi è un
+archivio pieno domani — il contrario (non registrare per non fare una figura) è la scommessa che ha
+tenuto fuori Catania per una settimana (§26.132).
+
+   URL inventata: è un **modello editoriale diverso**, e il registro lo dice.
+
+
+
+### 4. Verifiche
+
+| comando | esito |
+| --- | --- |
+| `npm run test:scraper:fonti` | ✅ **0 errori** — id e URL unici su 309 voci, selezione per provincia e per run senza duplicati |
+| `npm run test:whitelist` | ✅ 163 target, tutti in whitelist |
+| `npm run test:scraper:attivi` · `npm run test:perimetro` | ✅ |
+| `npm run typecheck` | ✅ 0 |
+| `npm run test:architettura` | ✅ nessuna violazione nuova |
+| **`npm test`** | ✅ **exit 0** (5.401 righe di log, `test:disponibilita` inclusa) |
+| `npm run test:disponibilita` · `test:motivo-senza-scadenza` · `test:sgranatura` · `test:pdf-testo` | ✅ 0 |
+| `npm run build` | ✅ |
+| `eslint` sui file toccati | ✅ 0 |
+
+Sonda di registro (temporanea, cancellata): `registro 309 · attive 163 · Sicilia 18 · whitelist 163
+con 163 chiavi uniche · rotazione Sicilia 10/18 · URL ripetute 0`.
+
+**File toccati.** `src/scraper/fontiTerritoriali.ts` (sei tuple + il blocco di misura),
+`src/scraper/fontiEsclusiVerifica.ts` (motivi `P404_02`/`REDIRECT_02` e le due voci spente),
+`docs/SYSTEM_HANDOVER.md`, `docs/DEPARTMENT_MAP.md`. **Nessun file nuovo, nessun dipartimento
+toccato**, nessuna migrazione.
+
+### 5. La semina in coda, eseguita (02/11/2026)
+
+`npm run targets:whitelist` (dry-run) → **163 fonti · 18 regioni · 84 province · 153 già in coda ·
+10 da inserire**, poi `--apply` → `[coda] + 10 target inseriti (pending)` e `--apply --attiva` →
+`[coda] ~ 10 target → active_crawler`. Verifica in `discovered_links` (sola lettura): **20 righe
+siciliane, tutte `active_crawler`**, `pending` totale **18 → 8** (le 8 restanti non sono siciliane e
+preesistevano). Le 10 inserite sono le sole che il registro dichiarava mancanti: i 6 archivi
+provinciali nuovi, i 2 archivi di Catania del §26.132 (mai seminati), l'archivio dell'USR e
+`verona.istruzioneveneto.gov.it/?s=interpelli`. Nessuna URL scritta a mano: le ha prese dal registro.
+
+**Residuo dichiarato, non corretto qui.** Due URL che il registro ora dichiara **inutilizzabili**
+sono ancora `active_crawler` in coda da una semina precedente, e il seminatore non le tocca (non
+sono più in whitelist, quindi non rientrano né fra i «presenti» né fra i «da spegnere»):
+`www.usr.sicilia.it/interpelli/` (redirect a un articolo) e `www.usr.sicilia.it/aree-tematiche/reclutamento/`
+(indice di download, senza `category/`). Non le spegne `--disabilita-morti` (il DNS risolve: il
+dominio esiste, è la pagina a non essere un elenco): vanno portate a `disabled` a mano, ed è una
+decisione di stato — non l'ha presa questo script e non l'ha presa questa sessione.
+
+
+**Nota di sessione.** La tentazione era cercare la pagina «interpelli» di ogni sede — la parola della
+richiesta. Le sedi non ce l'hanno: hanno **un archivio di categoria identico**, perché il tema
+WordPress è lo stesso. La regola che ha pagato è stata **misurare la stessa URL su tutti gli host
+prima di scriverne una**, e accettare il risultato asimmetrico (sette su otto) invece di forzare
+l'ottava: Palermo non è «rotta», pubblica in un altro modo, e il registro sa dirlo. La seconda
+lezione è che una rotazione non è un tetto: con `MAX_HUB_PER_REGIONE = 10` e 18 hub, chi legge la
+bacheca di Ragusa trova Ragusa in testa **sempre**, e le altre sedici arrivano nei giorni
+successivi — un run corto che copre tutto il mese vale più di un run lungo che copre sempre gli
+stessi tre.
+
+## §26.135 — Il primo giro nazionale con la Sicilia in coda (02/11/2026)
+
+### 1. Cosa è stato eseguito
+
+`npm run ingest:nazionale:apply` (`tsx scripts/table-reporter.ts --nazionale`) su **513 target**:
+i 511 della coda `active_crawler` più i 163 hub di whitelist deduplicati per URL (2 esclusi dal
+filtro di perimetro AT+CT). Durata ≈ 25 minuti, log su file (`Start-Process` + redirect): un giro
+`--nazionale` non sta in un comando interattivo, e qui lo stdout si svuota.
+
+### 2. Esito dichiarato dal runner
+
+| voce | valore |
+|---|---|
+| Target elaborati | **513** |
+| Successi · Errori | **331** · **182** |
+| Target disattivati (no tabella) | **42** |
+| Record totali processati | **157** |
+| PDF aperti · leggibili · illeggibili · non aperti per dimensione | 640 · 613 · 27 · 2 |
+| PDF con scadenza dichiarata · valide · passate | 35 · 15 · 20 |
+| Deep crawl | 109 istituti su 109 (tetto 150) · 65 siti · 126 pagine · 3 record · 3 nuovi · 25 errori |
+| Albi verificati in coda | 15 nuovi · 0 riattivati · 2 già attivi |
+
+**Sicilia, whitelist (18 hub):** 18 target → **66 record** · 0 oltre l'orizzonte · 241 voci senza
+scadenza · 2 con scuola dal corpo · **0 errori**. **SICILIA, perimetro scuole di Catania (304
+target):** 0 record · 611 voci senza scadenza · **162 errori** (`rete=149 · altro=5 · http_4xx=5 ·
+timeout=2 · http_5xx=1`).
+
+### 3. Effetti sul database (misurati, non stimati)
+
+* `interpelli`: **784 → 912** (+128 su 157 processati: 29 erano già presenti, `upsert` con
+  `ignoreDuplicates` su `hash_id`); vivi **293 → 421**.
+* **Sicilia nel `perRegione`: da assente a 68 righe** (62 CT · 6 RG) — la regione non compariva
+  affatto prima di questo giro. Contando per **provincia** le righe CT erano **65**: **3** di esse
+  (due `.docx` e un `.zip` del hub `ct.usr.sicilia.it`) hanno `region` **NULLA** e cadono in `N/D`,
+  non in «Sicilia» — misurato nel §26.136 §3.
+* **Catania: 62 righe, tutte da avvisi di disponibilità con scadenza STIMATA** («termine stimato»,
+  §26.133), da **2 documenti**: **51 righe con `2026-11-19`** (pubblicazione 2026-10-20 + 30) e **11
+  con `2026-11-08`** (pubblicazione 2026-10-09 + 30) — classi 53 ADEE + 9 altre (AM12 2 · ADSS 2 ·
+  EEEM 1 · ADMM 1 · A009 1 · A040 1 · A050 1). Coda notifiche: **62/62 nuove voci READY**.
+  La scadenza **stimata** è la sola: nessuna delle 62 righe nasce da un termine dichiarato dalla
+  fonte (misura del §26.136, che corregge l'«expiration_date dichiarata» scritto qui in prima stesura).
+* `discovered_links`: `active_crawler` **513 → 486**, `disqualified_noise` **31 → 80** (i 42 «no
+  tabella» più quelli già classificati). **Nessuno dei 18 hub siciliani** è stato spento: il log non
+  contiene una riga `disattivato`/`Errore` che li riguardi, e la coda li conferma `active_crawler`.
+
+### 4. Limiti dichiarati
+
+* **182 errori, 162 dei quali sono i siti delle singole scuole del perimetro CT**, quasi tutti
+  `fetch failed` (149): è la rete di 300 plessi, non la whitelist. Nessuna riga inventata per
+  compensare.
+* **5.662 voci senza scadenza dichiarata** in tutta Italia: la regola §26.75 resta intatta — si
+  registra ciò che la fonte dichiara, e non si promuove un avviso senza termine solo per fare numero.
+* **Delta non riprodotto su §26.133.** Il P.6 misurava **128 righe**; oggi i due PDF di disponibilità
+  in archivio ne valgono **62**. Non è un guasto del lettore: i 27 documenti della finestra sono stati
+  letti tutti e il contatore dichiara «62 record da disponibilità a termine stimato». È un **avviso
+  diverso** (sezione ADAA assente nei due PDF odierni), e la differenza resta **da riconciliare** con
+  una misura sui due PDF, non con una stima. Rimisurato al secondo giro (§26.136): il hub CT
+  restituisce **62 anche al passaggio indipendente successivo**, quindi il numero è deterministico —
+  quello che manca è *quale* documento porti le altre 66 righe.
+* **Difetto cosmetico noto, non corretto qui:** in 2 righe su 62 il titolo porta residui di
+  intestazione («SOSTEGNO DELLA», «01000000 Codice Scuola Denominazione») mentre `school_name` e
+  `school_code` sono corretti — il descrittore viene dalla cella «classe», che in quelle righe
+  ingloba l'intestazione della tabella. Nessun match falsato (la classe è giusta) e nessuna riga
+  persa: è da sistemare in `righeDisponibilita`, non qui.
+
+### 5. Nota di sessione
+
+Il giro ha confermato la tesi del §26.134 in modo noioso, che è il modo migliore: le sei sedi
+provinciali non hanno dato errori, la regione è comparsa nel `perRegione` dopo un solo run, e i
+record di Catania sono arrivati dall'avviso di disponibilità — cioè dal caso limite costruito ieri,
+non dal caso facile. Il numero che conta non è 912 ma **68**: prima di oggi la Sicilia valeva zero
+righe, e nessun test lo diceva perché nessun test guardava il database. Le due cose da non
+dimenticare: la prima è che **64 dei 182 errori non sono errori del codice** ma plessi con la rete
+giù, e vanno letti come tale; la seconda è che una misura di ieri (128) non è una promessa per oggi
+(62) finché non si riaprono i due PDF e si conta — ed è esattamente il tipo di numero che, se non
+riconciliato, diventa una bugia comoda.
+
+## §26.136 — Il giro di Catania, e la bacheca che mostra 7 di 62 (02/11/2026)
+
+### 1. Cosa è stato eseguito
+
+`npm run crawl:provincia -- --province=CT --apply` (pid 11836, ≈40 minuti, log su file): le tre fasi
+di §26.125 in fila — anagrafica MIM (**227 istituti CT con sito**), coda, crawler — più i **18 hub di
+whitelist** della regione e 3 target `N/D`: **248 target** in tutto. È il giro «provincia per
+provincia» dopo quello nazionale del §26.135, per rispondere a una domanda sola: *adesso che la coda
+è attiva, quante opportunità vede un docente di Catania?*
+
+### 2. Esito dichiarato dal runner
+
+| voce | valore |
+|---|---|
+| Target elaborati | **248** (227 scuole CT · 18 hub · 3 N/D) |
+| Successi · Errori | **121** · **127** (`rete=118 · http_4xx=5 · altro=3 · timeout=1`) |
+| Target disattivati (no tabella) | **2** |
+| Record processati | **67** — CT **62** · RG 4 · AG 1 |
+| Record dalle **scuole** (227 target) | **0** |
+| Deep crawl | **131 siti** · 272 pagine · **1 record · 1 nuovo** · 47 errori · 0 senza sito |
+| Albi verificati in coda | **11 nuovi · 2 riattivati · 5 già attivi** |
+| PDF | 514 aperti · 468 leggibili · 46 illeggibili · 4 non aperti per dimensione |
+| Scuole non raggiunte | **68**, elencate per codice: «la home non ha risposto o non ha link di albo» |
+
+I 127 errori sono **118 di rete**: i plessi di Catania rispondono a singhiozzo, e il reporter li elenca
+per codice meccanografico invece di tacerli. **Le 227 scuole di Catania producono 0 record**: non
+perché non pubblichino, ma perché la loro bacheca è un albo in PDF senza termini dichiarati
+(senza scadenza: 611) — la mole di §26.133 arriva dagli **avvisi di disponibilità del hub USP**, non
+dalle scuole.
+
+### 3. Effetti sul database (misurati)
+
+* `interpelli`: **912 → 913** (+1) · vivi **421 → 422** · **Sicilia 68 → 69**.
+* **CT: 65 → 66 righe.** Attenzione al conteggio, perché il «62» del §26.135 **non era la provincia**:
+  le righe con `province = 'CT'` erano già **65**, ma **3** di esse (i due `.docx` e il `.zip` del hub
+  USR, create dal giro nazionale alle 16:51) hanno **`region` NULLA** e cadono nel secchio **`N/D`** di
+  `perRegione` — non in «Sicilia». Misura: `region` **Sicilia 63 · nulla 3**; host **`ct.usr.sicilia.it`
+  65 · `vincimascalucia.edu.it` 1**. Il giro di oggi aggiunge quindi **una sola riga** (la graduatoria
+  del §6), non quattro.
+* Nessun doppione creato dal secondo giro: **0** coppie (scuola, titolo) ripetute — l'`upsert` su
+  `hash_id` ha riconosciuto tutte le 62 righe di disponibilità del §26.135.
+* `discovered_links`: `active_crawler` **486 → 497** (+11 albi nuovi promossi, 2 riattivati).
+* `notification_queue`: **vuota** al controllo (`db:stato` → `{}`), mentre il §26.135 ne misurava
+  **62 voci `READY`**. La consegna è `npm run notifiche:processa` e porta la voce a `NOTIFIED`
+  (terminale, **non** cancellazione): una tabella vuota non è quindi l'esito della consegna vista da
+  qui, ed è una condizione già incontrata una volta e registrata come «consumo esterno/cron»
+  (`SYSTEM_HANDOVER` §26.94, nota sulla coda vuota al controllo). **Non verificabile da questa sessione**
+  se le 62 voci siano state consegnate o ripulite: dichiarato, non dedotto.
+* **Caveat di lettura del `perRegione`**: conta per `region`, non per `province`. Le righe senza
+  regione valorizzata finiscono nel secchio **`N/D`** (448 voci), che non significa «fuori dall'Italia»
+  ma «riga senza `region`»: chi legge `db:stato` per sapere «quanti avvisi ha la Sicilia» deve sapere
+  che **3 righe CT** non sono in quella riga di tabella.
+
+### 4. Il numero che conta: 66 in database, 11 in finestra, **7 in pagina**
+
+| scadenza | righe | origine | dentro i 15 giorni? |
+|---|---|---|---|
+| `2026-11-08` | **11** | disponibilità, pub. 2026-10-09 + 30 | **sì** |
+| `2026-11-19` | **51** | disponibilità, pub. 2026-10-20 + 30 | **no** (17 giorni) |
+| `2026-12-31` | 1 | deep crawl: *graduatoria* PNRR, non un interpello | no |
+| `2027-01-31` | 1 | III interpello DSGA (titolo = testo del link, link `.zip`) | no |
+| nessuna | 2 | modello `.docx` DSGA (stessa URL, due titoli) | no |
+
+`npm run diag:bacheca --provincia=CT`: **422** avvisi attivi in Italia · **64** attivi in zona (CT+SR)
+· **11** nel pool entro l'orizzonte · **7 VISIBILI** in pagina (voto 98-100%, scadenza 2026-11-08),
+vetrina **7/5** ✅. Dopo il giro: **una riga in più in DB e zero opportunità visibili in più**. Non è un
+fallimento del crawler — è la finestra di candidatura, e vale la pena scriverlo una volta per tutte.
+
+### 5. Il limite che nessuno aveva dichiarato: una lista stimata a 30 giorni è invisibile al feed per i primi 15
+
+`scadenzaStimata(pubblicazione, 30)` (§26.133) incontra l'orizzonte di **15 giorni** di feed e
+matching (§26.82): una disponibilità stimata a 30 giorni entra nella finestra **solo nei suoi ultimi
+15 giorni**. Le **51 righe del 2026-11-19** diventano eleggibili dal **04/11/2026** (04/11 + 15 =
+19/11). La vetrina pubblica non ha tetto in avanti (§26.100), feed e matching sì: per questo la
+bacheca personale dice **7** mentre il database ne contiene **62**.
+
+**Non l'ho toccato.** È una regola di prodotto scritta (§26.82 e checklist in
+`comunicazione/04_canali_regionali/`), e cambiarla cambia ciò che un docente vede e riceve per
+notifica. Ma il caso si ripete a **ogni** lista di disponibilità: le due strade possibili sono una
+stima più corta (15 giorni, coerente con la finestra) oppure l'ammissione delle «disponibilità in
+corso» al feed a prescindere dal termine stimato. Va deciso, non scoperto.
+
+### 6. Quattro righe CT che non sono disponibilità — tutte di qualità bassa (dichiarate, non corrette)
+
+1. **`Interpello timbro DECRETO PUBBLICAZIONE GRADUATORIA PROVVISORIA …`** (scad. 2026-12-31) —
+   `vincimascalucia.edu.it`, PDF di **pubblicazione di graduatoria** PNRR (esperti/tutor): non è un
+   interpello e il titolo è il **nome del file**. L'ha accettata il **deep crawl**: è l'«1 record · 1
+   nuovo» della tabella qui sopra.
+2. **`Clicca qui per l'avviso e il modello di presentazione delle candidature`** (scad. 2027-01-31) —
+   terzo interpello DSGA: il titolo è il **testo del link** e `source_url` è un **`.zip`**, quindi chi
+   clicca scarica un archivio invece di aprire un avviso.
+3. **`All_1_Modello_A_Incarico-DSGA-2026_27`**, **due righe identiche** senza scadenza: stesso `.docx`,
+   titoli diversi solo per il suffisso «24.98 KB 10-09-2026» che una delle due si porta dentro
+   (`hash_id` diverso → due righe; il controllo per contenuto non le unisce).
+
+Tutte e quattro nascono dai target `www.usr.sicilia.it` / `ct.usr.sicilia.it` che il registro dichiara
+**inutilizzabili** ma che restano `active_crawler` — il residuo preesistente registrato nel §26.134.
+Tre di esse (i due `.docx` e il `.zip`) sono anche **senza `region`**: entrano nel secchio `N/D` di
+`perRegione` e non nella riga «Sicilia», che è il motivo per cui il conteggio regionale non le mostra.
+Oggi valgono **4 righe su 66, zero utili**. Non le ho rimosse: la pulizia è una decisione di stato
+(`db:sanifica` / spegnimento dei due target), non un effetto collaterale del giro.
+
+### 7. Nota di sessione
+
+Il giro andava fatto perché serviva un numero, e il numero è **7**: sette opportunità visibili a un
+docente di Catania con classi ADEE/ADSS/AM12, su 62 righe seminate e 66 in tabella. La differenza non è
+un difetto da riparare in fretta — è **aritmetica di due regole** che nessuno aveva messo una accanto
+all'altra: la stima a 30 giorni e la finestra a 15. Il resto del giro ha confermato cose noiose e
+preziose: le 62 righe del giro precedente sono state riconosciute una per una (`0` doppioni), le 227
+scuole di Catania non producono nulla perché il loro albo non dichiara termini, e 118 errori sono
+semplicemente siti che non rispondono. Il crawler ha fatto il suo mestiere; la domanda aperta è di
+prodotto, e sta scritta nel §5 perché sia decisa con gli occhi aperti: **una lista di disponibilità
+stimata a 30 giorni passa metà della sua vita invisibile al feed.** Il primo giorno utile per
+verificarlo è il **4 novembre**, quando le 51 righe dovrebbero entrare in finestra da sole.
+
