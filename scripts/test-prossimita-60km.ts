@@ -4,7 +4,8 @@
  * Verifica la regola di prodotto:
  *
  *   1. provincia SELEZIONATA = 100%;
- *   2. provincia entro il RAGGIO di 60 km = **grossa penalità** (75 · 60 · 45);
+ *   2. provincia entro il RAGGIO di 60 km **dalla PRINCIPALE** = **grossa
+ *      penalità** (75 · 60 · 45); le secondarie NON allargano il raggio (§26.139);
  *   3. oltre i 60 km = **esclusione d'ufficio** (né bacheca né punteggio);
  *   4. la CONSEGNA (email/Telegram, digest) resta STRICT: senza l'opzione della
  *      bacheca vale solo la provincia selezionata.
@@ -59,6 +60,40 @@ check('Milano è FUORI dal raggio di Asti', false, daAsti.includes('MI'));
 check('ordine per distanza: prima la più vicina', 'AL', daAsti[0]);
 check('province da cercare = proprie + entro il raggio', ['AT', 'AL', 'TO', 'VC'], provinceDiRicerca(['AT']));
 check('nessuna provincia nel profilo → ricerca senza vincolo', [], provinceDiRicerca([]));
+
+/* -------- 2b) IL RAGGIO PARTE DALLA PRINCIPALE, LE SECONDARIE SONO STRETTE -------- */
+
+console.log('\n— §26.139. Raggio dalla PRINCIPALE: le secondarie non portano province terze —');
+// Alessandria è la principale (32 km da Asti): il suo raggio prende AT, VC, PV, NO.
+// Torino sta a 46 km da AT ma a 76 da AL: entrava SOLO perché il raggio veniva
+// misurato anche sulla secondaria. Ora non entra più.
+check('AT vicina alla principale AL', true, provinceEntroRaggio(['AL']).includes('AT'));
+check(
+  'le secondarie non allargano la ricerca',
+  ['AL', 'AT', 'VC', 'PV', 'NO'],
+  provinceDiRicerca(['AL', 'AT']),
+);
+check('Torino (vicina solo alla secondaria) resta FUORI', false, provinceDiRicerca(['AL', 'AT']).includes('TO'));
+check(
+  'con AT principale, Torino rientra (46 km dalla principale)',
+  true,
+  provinceDiRicerca(['AT', 'AL']).includes('TO'),
+);
+check(
+  'il raggio si misura dalla principale: 76 km da AL → esclusa',
+  'fuori',
+  punteggioProvincia(['AL', 'AT'], 'TO', { limitrofe: true }).stato,
+);
+check(
+  'la stessa secondaria resta ammessa come provincia propria',
+  'propria',
+  punteggioProvincia(['AL', 'AT'], 'AT', { limitrofe: true }).stato,
+);
+check(
+  'e la provincia vicina alla principale continua a entrare',
+  'vicina',
+  punteggioProvincia(['AL', 'AT'], 'VC', { limitrofe: true }).stato,
+);
 
 /* -------------------------- 3) PUNTEGGIO PER FASCE ------------------------- */
 

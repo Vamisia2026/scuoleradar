@@ -10,10 +10,13 @@
  *
  * Tuple: [id, etichetta, url, regioni, capoluogo].
  * Le URL NON verificabili sono in `fontiEsclusiVerifica.ts` con il motivo.
- * Criterio (non solo HTTP 200): una pagina è fonte solo se le sue voci portano a
- * un documento/pagina dell'interpello. Gli elenchi pieni ma senza link — il modulo
- * «per ambito» del Piemonte — restano esclusi: un avviso senza URL ufficiale non
- * è verificabile.
+ * Criterio (non solo HTTP 200): una pagina è fonte se le sue voci portano a un
+ * documento/pagina dell'interpello OPPURE se la RIGA dichiara da sola l'atto —
+ * codice meccanografico, classe di concorso, stato e scadenza — e la pagina è
+ * l'URL ufficiale di quell'elenco (tabelle dense, §26.123). Restano esclusi gli
+ * elenchi che non offrono nessun link e nessuna data: una pagina resa solo da JavaScript
+ * (Nuvola) o un albo senza termine di candidatura non sono leggibili, e fingersi
+ * di averli letti sarebbe copertura finta.
  *
  * Nota sul volume: gli hub territoriali sono molti più del budget di rete di
  * un run. La SELEZIONE (quali interrogare ora) sta in `fonti.ts`
@@ -40,6 +43,25 @@ export const DATA_VERIFICA_AGGIORNATI = '2026-10-25';
 export const DATA_VERIFICA_SICILIA = '2026-11-02';
 
 /**
+ * Data della verifica del blocco PIEMONTE (2026-11-03, §26.137).
+ *
+ * CAMBIO DI CRITERIO rispetto al 2026-10-23: gli elenchi «per ambito» dell'USP
+ * (`ric_interpello_ambito_<prov>.php`) non hanno link per voce, ma sono TABELLE
+ * DENSE con le etichette di colonna in chiaro — «Codice meccanografico Istituo
+ * Scolastico*», «Classe di concorso*», «Stato interpello*», «Data Scadenza
+ * Interpello*». Il lettore profondo di `tabellaUst.ts` (§26.123) legge le CELLE,
+ * quindi la riga descrive l'atto per intero e la pagina dell'USP è il suo URL
+ * ufficiale: la fonte è verificabile senza inventare nessun indirizzo. Il
+ * criterio del 23/10 («niente link per voce = esclusa») reggeva finché il lettore
+ * non sapeva leggere le tabelle dense; oggi lo sa, e il Piemonte è la regione con
+ * più interpelli dichiarati d'Italia.
+ */
+export const DATA_VERIFICA_PIEMONTE_03 = '2026-11-03';
+
+/** Data della verifica del blocco PUGLIA (2026-11-03, §26.137): albo dell'UST Foggia. */
+export const DATA_VERIFICA_PUGLIA_03 = '2026-11-03';
+
+/**
  * Elenchi di interpelli degli Uffici Territoriali (provincia per provincia).
  * Il sesto elemento (OPZIONALE) è la data di verifica della singola voce:
  * assente = `DATA_VERIFICA_TERRITORI`, così blocchi verificati in giorni diversi
@@ -57,12 +79,45 @@ export const HUB_TERRITORIALI: [string, string, string, string[], string, string
   ['er-ra-supplenze', 'USP Ravenna — Supplenze da esaurimento graduatorie (Ravenna)', 'https://ra.istruzioneer.gov.it/conferimento-supplenze-per-esaurimento-graduatorie-di-istituto/', ['Emilia-Romagna'], 'RA'],
   ['er-re-interpelli', 'USP Reggio Emilia — Interpelli docenti (Reggio Emilia)', 'https://re.istruzioneer.gov.it/category/docenti/interpello/', ['Emilia-Romagna'], 'RE'],
 
-  // ── Piemonte: gli elenchi per AMBITO non sono leggibili ──
-  // `ric_interpello_ambito_<prov>.php` è la pagina di un MODULO di ricerca: HTTP
-  // 200 e tabelle piene (1419 righe a TO, 315 ad AL), ma nessuna riga contiene un
-  // link (0 `<a href>`): senza l'URL del singolo interpello l'avviso non è
-  // verificabile, quindi le 8 URL sono in `fontiEsclusiVerifica.ts`. La copertura
-  // del Piemonte resta affidata agli hub USR di Torino (`fontiRegistro.ts`).
+  // ── PIEMONTE: gli otto elenchi «per ambito» SONO una fonte (2026-11-03, §26.137) ──
+  // CAMBIO DI CRITERIO. Fino al 23/10 queste URL erano escluse perché «nessuna riga
+  // contiene un link»: vero (0 `<a href>` su 207 righe ad Asti), ma irrilevante ora
+  // che la riga si legge per CELLE. Ogni `<tr>` dichiara codice meccanografico,
+  // denominazione, classe di concorso, tipo cattedra, durata, data interpello, stato
+  // e «Data Scadenza Interpello»: l'atto è descritto, e la pagina dell'USP è il suo
+  // URL ufficiale. MISURA del 03/11/2026 (UA browser, 8/8 HTTP 200) — righe totali /
+  // righe «aperto» / scadenze entro i 15 giorni / righe che passano anche il segnale
+  // di insegnamento:
+  //   TO 1545/50/26/20 · CN 715/80/18/17 · NO 402/17/17/13 · AL 339/9/7/5
+  //   BI 312/180/0/0 · VB 252/139/0/0 · VC 221/136/0/0 · AT 207/4/1/1
+  // BI, VB e VC dichiarano come scadenza la FINE DELL'INCARICO (30/04/2027): il gate
+  // li scarta per finestra ed è il comportamento voluto (§26.82). Restano registrati
+  // perché sono l'unico elenco ufficiale di quelle province, e il giorno in cui la
+  // colonna porta un termine di candidatura la riga passa senza toccare il codice.
+  // L'edizione `interpello2025/` serve uno SNAPSHOT della stessa tabella (stessi
+  // conteggi di righe, stati fermi: NO 204 «aperto» contro 17) e resta esclusa in
+  // `fontiEsclusiVerifica.ts`.
+  ['pi-at-ambito', 'USP Asti — Interpelli per ambito (Asti)', 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_at.php', ['Piemonte'], 'AT', DATA_VERIFICA_PIEMONTE_03],
+  ['pi-al-ambito', 'USP Alessandria — Interpelli per ambito (Alessandria)', 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_al.php', ['Piemonte'], 'AL', DATA_VERIFICA_PIEMONTE_03],
+  ['pi-bi-ambito', 'USP Biella — Interpelli per ambito (Biella)', 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_bi.php', ['Piemonte'], 'BI', DATA_VERIFICA_PIEMONTE_03],
+  ['pi-cn-ambito', 'USP Cuneo — Interpelli per ambito (Cuneo)', 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_cn.php', ['Piemonte'], 'CN', DATA_VERIFICA_PIEMONTE_03],
+  ['pi-no-ambito', 'USP Novara — Interpelli per ambito (Novara)', 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_no.php', ['Piemonte'], 'NO', DATA_VERIFICA_PIEMONTE_03],
+  ['pi-to-ambito', 'USP Torino — Interpelli per ambito (Torino)', 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_to.php', ['Piemonte'], 'TO', DATA_VERIFICA_PIEMONTE_03],
+  ['pi-vb-ambito', 'USP Verbania — Interpelli per ambito (Verbania)', 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_vb.php', ['Piemonte'], 'VB', DATA_VERIFICA_PIEMONTE_03],
+  ['pi-vc-ambito', 'USP Vercelli — Interpelli per ambito (Vercelli)', 'https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_vc.php', ['Piemonte'], 'VC', DATA_VERIFICA_PIEMONTE_03],
+
+  // ── SCUOLE DI ASTI (2026-11-03): le due che pubblicano davvero gli interpelli ──
+  // Gli istituti comprensivi della provincia non hanno un elenco: 4 siti aperti uno
+  // per uno, e solo due contengono avvisi veri (i PDF datati nel nome del file).
+  //   IIS Giobert          «Interpelli Docenti» — 2 voci, PDF `Interpello AS12.pdf`
+  //                        con la data nel titolo («Interpello AS12 — 14/10/2026»)
+  //   IC Castell'Alfero    «Interpelli» — `Interpello-n.1_ADAA-…-fino-al-30_06_2027.pdf`
+  //   IC S. Damiano        9 link, tutti di condivisione social: 0 avvisi (escluso)
+  //   IC Villanova d'Asti  2 link, 0 avvisi (escluso)
+  // Zero candidabili oggi (l'avviso del Giobert scadeva il 14/10), ma è l'unico
+  // canale con cui una scuola di Asti pubblica un interpello di istituto.
+  ['asti-giobert-interpelli', 'IIS G.A. Giobert Asti — Interpelli docenti (Asti)', 'https://www.giobert.it/iisgiobert/?page_id=5473', ['Piemonte'], 'AT', DATA_VERIFICA_PIEMONTE_03],
+  ['asti-castellalfero-interpelli', 'IC Castell’Alfero — Interpelli (Asti)', 'https://iccastellalfero.edu.it/mad/', ['Piemonte'], 'AT', DATA_VERIFICA_PIEMONTE_03],
 
   // ── Liguria: motore di interpelli per provincia (4 province) ──
   // URL SENZA parametro d'anno (`&as=2026%2F2027`): la pagina rende l'a.s. in
@@ -187,4 +242,12 @@ export const HUB_TERRITORIALI: [string, string, string, string[], string, string
   // di download per classe di concorso (150 righe, link `/download/…/a005`),
   // non un elenco di avvisi: la sua lettura finiva in «150 scarti senza scadenza».
   ['pa-reclutamento-archivio', 'USR Sicilia — Archivio reclutamento e interpelli (Palermo)', 'https://www.usr.sicilia.it/category/aree-tematiche/reclutamento/', ['Sicilia'], 'PA', DATA_VERIFICA_SICILIA],
+
+  // ── PUGLIA (2026-11-03, §26.137): l'albo pretorio dell'UST di Foggia ──
+  // L'archivio di categoria `albo-pretorio` è l'unico elenco datato dell'UST: 19 voci
+  // con «interpell» nel testo, e il termine di candidatura sta nel TITOLO della voce
+  // («… fino al 15/11/2026», «dal 3-11-2026 al 30-06-2027»). Il resto dell'albo
+  // (decreti, verbali, PN 21-27, bandi per esperti) lo scarta il gate: rumore
+  // amministrativo oppure nessun segnale di insegnamento.
+  ['fg-albo-pretorio', 'UST Foggia — Albo pretorio (Foggia)', 'https://www.ustfoggia.it/category/albo-pretorio/', ['Puglia'], 'FG', DATA_VERIFICA_PUGLIA_03],
 ];

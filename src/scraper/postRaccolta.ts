@@ -52,6 +52,11 @@ export interface ContestoPostElenco {
   source: string;
   /** Data di pubblicazione dichiarata dalla voce d'indice, se nota. */
   dataPubblicazione?: string | null;
+  /**
+   * Data di riferimento della CLASSIFICAZIONE delle date (§26.139): assente =
+   * calendario locale (produzione), dichiarata = guardia deterministica.
+   */
+  oggi?: string | Date;
 }
 
 /**
@@ -121,6 +126,7 @@ export async function espandiPostInAvvisi(
       source: ctx.source,
       corpo,
       dataPubblicazione: contenuto.dataPubblicazione ?? p.dataPubblicazione ?? ctx.dataPubblicazione ?? null,
+      oggi: ctx.oggi,
     });
     if (hashVisti.has(avviso.hashId)) continue;
     hashVisti.add(avviso.hashId);

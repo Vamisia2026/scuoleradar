@@ -11,13 +11,19 @@
  *   4. le date impossibili (31 febbraio, mese 13, anno 1800) non esistono;
  *   5. il termine scritto nei metadati del link (title, aria-label, nome file)
  *      vale, ma un permalink WordPress no;
- *   6. modulo PURO, compatto e in catena (`npm test`).
+ *   6. la NATURA della data trovata (§26.139): già passata = pubblicazione,
+ *      oltre i 90 giorni / coda d'anno = «Disponibilità aperta / Fine contratto»
+ *      — mai un termine perentorio per forza, mai una riga da buttare;
+ *   7. modulo PURO, compatto e in catena (`npm test`).
  *
  * Uso: npm run test:scadenza-testo  (incluso in `npm test`)
  */
 import { readFileSync } from 'node:fs';
 import {
+  classificaDateAvviso,
   dateNelTesto,
+  eCodaAnnoScolastico,
+  giorniTra,
   scadenzaDaMetadati,
   scadenzaDaTesto,
 } from '../scadenzaTesto.ts';
@@ -136,9 +142,60 @@ check(
 );
 check('metadati vuoti', null, scadenzaDaMetadati({}));
 
-/* --------------------------- 5) PUREZZA E CATENA -------------------------- */
+/* ------- 5) LA NATURA DELLA DATA: pubblicazione, termine, fine contratto ------- */
 
-console.log('\n— 5. Modulo puro, compatto e in catena —');
+console.log('\n— 5. §26.139. Che cosa è davvero la data trovata —');
+// Riferimento dichiarato: le asserzioni non dipendono dal giorno in cui girano.
+const OGGI = '2026-11-03';
+const passata = classificaDateAvviso({ scadenza: '2026-10-31', oggi: OGGI });
+check('data passata → publishedAt', '2026-10-31', passata.publishedAt);
+check('data passata → nessuna scadenza perentoria', null, passata.expirationDate);
+check('data passata → natura', 'pubblicazione', passata.natura);
+check(
+  'pubblicazione già nota: non la si sovrascrive',
+  '2026-10-01',
+  classificaDateAvviso({ scadenza: '2026-10-31', pubblicazione: '2026-10-01', oggi: OGGI }).publishedAt,
+);
+const inColonna = classificaDateAvviso({ scadenza: '2026-10-31', esplicita: true, oggi: OGGI });
+check('data in colonna già passata: resta la scadenza', '2026-10-31', inColonna.expirationDate);
+check('data in colonna già passata: natura', 'termine_scaduto', inColonna.natura);
+
+const vicina = classificaDateAvviso({ scadenza: '2026-11-12', oggi: OGGI });
+check('termine ravvicinato: natura', 'termine_candidatura', vicina.natura);
+check('termine ravvicinato: giorni', 9, vicina.giorni);
+
+for (const coda of ['2027-04-30', '2027-06-30', '2027-08-31']) {
+  const lontana = classificaDateAvviso({ scadenza: coda, oggi: OGGI });
+  check(`${coda}: la data RESTA (non si scarta)`, coda, lontana.expirationDate);
+  check(`${coda}: natura`, 'disponibilita_aperta', lontana.natura);
+  check(
+    `${coda}: etichetta`,
+    'Disponibilità aperta / Fine contratto',
+    lontana.etichetta,
+  );
+}
+check(
+  'coda d’anno a 46 giorni = fine contratto',
+  'disponibilita_aperta',
+  classificaDateAvviso({ scadenza: '2027-06-30', oggi: '2027-05-15' }).natura,
+);
+check(
+  'coda d’anno entro il mese = termine di candidatura',
+  'termine_candidatura',
+  classificaDateAvviso({ scadenza: '2027-06-30', oggi: '2027-06-10' }).natura,
+);
+check('oltre i 90 giorni = fine contratto', 'disponibilita_aperta', classificaDateAvviso({ scadenza: '2027-03-15', oggi: OGGI }).natura);
+const senzaData = classificaDateAvviso({ oggi: OGGI });
+check('nessuna data: natura', 'nessuna', senzaData.natura);
+check('nessuna data: etichetta', 'Nessun termine dichiarato', senzaData.etichetta);
+check('giorni fra due date', 31, giorniTra('2026-11-03', '2026-12-04'));
+check('giorni su data illeggibile', null, giorniTra('2026-11-03', 'domani'));
+check('coda d’anno riconosciuta', true, eCodaAnnoScolastico('2027-08-31'));
+check('una data ordinaria non è coda d’anno', false, eCodaAnnoScolastico('2026-11-12'));
+
+/* --------------------------- 6) PUREZZA E CATENA -------------------------- */
+
+console.log('\n— 6. Modulo puro, compatto e in catena —');
 const sorgente = leggi('src/lib/scadenzaTesto.ts');
 check('nessuna rete o database', false, /fetch\s*\(|axios|openai|anthropic|supabase/i.test(sorgente));
 check('nessuna dipendenza esterna', false, /from '[^.]/i.test(sorgente));

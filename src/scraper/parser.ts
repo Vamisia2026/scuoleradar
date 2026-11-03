@@ -13,6 +13,11 @@
  *     alla scadenza (nessuna inversione). La scadenza è estratta solo quando il
  *     testo la dichiara (parole chiave tipo "scadenza"/"entro"/"termine") oppure
  *     calcolata da un termine relativo ("entro N giorni dalla pubblicazione").
+ *     Le due date passano poi dal CLASSIFICATORE unico (§26.139,
+ *     `lib/scadenzaTesto.classificaDateAvviso`): una data già passata è la
+ *     PUBBLICAZIONE, una data oltre i 90 giorni è `disponibilita_aperta`
+ *     («Disponibilità aperta / Fine contratto») — mai un termine perentorio per
+ *     forza.
  *   - l'hash_id SHA-256 univoco (provincia|titolo|data) per l'upsert anti-duplicati
  *
  * Non dipende dalla rete né da Supabase: è testabile in isolamento.
@@ -25,6 +30,7 @@ import { eUrlAvvisoDiretto } from '../lib/alertInterpello.ts';
 import { risolviEmailUfficialeScuola } from '../lib/emailScuola.ts';
 import { nomeIstitutoPresentabile } from '../lib/nomeIstituto.ts';
 import { eDominioIstituzionale, type OpzioniDominio } from '../lib/dominiIstituzionali.ts';
+import { classificaDateAvviso, type NaturaTermine } from '../lib/scadenzaTesto.ts';
 import { portaliUfficiali } from './portaliUfficiali.ts';
 import { scuolaDaRiga } from './scuolaDaRiga.ts';
 
@@ -58,6 +64,13 @@ export interface InterpelloInput {
   schoolName?: string | null;
   /** Codice meccanografico della scuola (se disponibile) */
   schoolCode?: string | null;
+  /**
+   * Data di riferimento per la CLASSIFICAZIONE delle date (§26.139): «oggi» in
+   * ISO (`2026-11-03`) o come `Date`. Assente = data di calendario locale. Serve
+   * alle guardie per restare deterministiche: stesso avviso + stesso riferimento
+   * = stesso esito, senza dipendere dal giorno in cui gira il test.
+   */
+  oggi?: string | Date;
 }
 
 export interface InterpelloParsato {
@@ -69,6 +82,13 @@ export interface InterpelloParsato {
   publishedAt: string | null;
   /** Data di SCADENZA reale (ISO YYYY-MM-DD): dichiarata nel bando o calcolata, altrimenti null */
   expirationDate: string | null;
+  /**
+   * Che cosa è la data trovata (§26.139): `pubblicazione` (era già passata: è
+   * l'atto, non un termine), `termine_candidatura`, `termine_scaduto` (data
+   * dichiarata in colonna e già passata) o `disponibilita_aperta` (oltre i 90
+   * giorni / coda d'anno = «Disponibilità aperta / Fine contratto»).
+   */
+  naturaScadenza?: NaturaTermine;
   /** SHA256 di `provincia|titolo|data` — chiave anti-duplicato */
   hashId: string;
   source: string;
@@ -1109,15 +1129,31 @@ export function parseInterpello(input: InterpelloInput): InterpelloParsato {
 
   // Data di PUBBLICAZIONE: prima un valore esplicito (intestazione/<time>), poi il
   // contesto ("pubblicato il …"). La pubblicazione non è MAI usata come scadenza.
-  const publishedAt =
-    normalizzaData(input.dataPubblicazione) ??
-    estraiDataPubblicazioneDaContesto(testoCompleto);
+  const pubblicazione =
+    normalizzaData(input.dataPubblicazione) ?? estraiDataPubblicazioneDaContesto(testoCompleto);
 
-  // SCADENZA reale: un hint esplicito, oppure una data dichiarata nel bando, oppure
-  // un termine relativo calcolato dalla pubblicazione. Altrimenti null (no inversioni).
-  const expirationDate =
-    normalizzaData(input.dataNota) ??
-    estraiDataScadenza(testoCompleto, publishedAt);
+  // SCADENZA grezza: un hint esplicito (colonna della fonte), oppure una data
+  // dichiarata nel bando, oppure un termine relativo calcolato dalla
+  // pubblicazione. Altrimenti null (no inversioni).
+  const dataNota = normalizzaData(input.dataNota);
+  const scadenzaGrezza = dataNota ?? estraiDataScadenza(testoCompleto, pubblicazione);
+
+  // CLASSIFICAZIONE (§26.139). La data trovata non è automaticamente un termine
+  // perentorio:
+  //  · se è GIÀ PASSATA la si legge come `published_at` («31 ottobre» in testa
+  //    all'atto, non una scadenza scaduta) — salvo che la fonte la dichiari in
+  //    colonna (`dataNota`), perché allora non la reinterpretiamo;
+  //  · se sta oltre i 90 giorni o su una coda d'anno resta una scadenza, ma con
+  //    natura `disponibilita_aperta` («Disponibilità aperta / Fine contratto»):
+  //    non è un termine imminente e non è una riga da buttare.
+  const date = classificaDateAvviso({
+    scadenza: scadenzaGrezza,
+    pubblicazione,
+    esplicita: dataNota !== null,
+    oggi: input.oggi,
+  });
+  const publishedAt = date.publishedAt;
+  const expirationDate = date.expirationDate;
 
   // Codice meccanografico della scuola: dal campo esplicito, altrimenti estratto
   // dal testo o dai LINK candidati (le pagine di riepilogo/"Stampa" lo riportano
@@ -1209,8 +1245,11 @@ export function parseInterpello(input: InterpelloInput): InterpelloParsato {
     classCodes,
     publishedAt,
     expirationDate,
-    // L'hash resta ancorato alla provincia della FONTE: identità stabile nel tempo.
-    hashId: generaHashId(input.provincia, input.title, expirationDate),
+    naturaScadenza: date.natura,
+    // L'hash resta ancorato alla provincia della FONTE e alla DATA TROVATA (non
+    // alla sua classificazione): identità stabile — se domani la stessa data
+    // passa da «termine» a «pubblicazione», la riga è la stessa, non un doppione.
+    hashId: generaHashId(input.provincia, input.title, scadenzaGrezza),
     source: input.source,
     schoolName: intestatario,
     schoolCode: codiceScuola,

@@ -20,6 +20,10 @@
  *    `2026-11-12`, `12 novembre 2026`) e il 31 febbraio non esiste;
  *  · PURO: nessuna rete, nessun LLM, nessuna dipendenza. Stesso testo = stessa
  *    data. Guardia: `npm run test:scadenza-testo` (incluso in `npm test`).
+ *  · la data trovata ha una NATURA dichiarata (`classificaDateAvviso`, §26.139):
+ *    se è già passata è la PUBBLICAZIONE, se sta oltre i 90 giorni è
+ *    «Disponibilità aperta / Fine contratto» — mai un termine perentorio per
+ *    forza, mai una riga da buttare.
  */
 
 const MESI: Readonly<Record<string, number>> = {
@@ -151,4 +155,94 @@ export function scadenzaDaMetadati(meta: MetadatiVoce): string | null {
   return m[1]
     ? isoDa(Number(m[3]), Number(m[2]), Number(m[1]))
     : isoDa(Number(m[4]), Number(m[5]), Number(m[6]));
+}
+
+/* ------- NATURA DI UNA DATA: pubblicazione, termine, fine contratto (§26.139) ------- */
+
+/**
+ * Oltre questo numero di giorni una data non è più la finestra di una
+ * candidatura: è la FINE di un incarico (30/04, 30/06, 31/08) o la disponibilità
+ * che la scuola tiene aperta — non una soglia di colore (quella vive in
+ * `lib/scadenzaSemaforo`).
+ */
+export const GIORNI_FINE_CONTRATTO = 90;
+
+/** Code d'anno che nei contratti scolastici vogliono dire «fine incarico». */
+const CODE_FINE_ANNO: ReadonlySet<string> = new Set(['04-30', '06-30', '07-31', '08-31']);
+
+/** Che cosa è DAVVERO la data trovata in un avviso. */
+export type NaturaTermine =
+  | 'nessuna' | 'pubblicazione' | 'termine_candidatura' | 'termine_scaduto' | 'disponibilita_aperta';
+
+/** Etichetta leggibile di ogni natura (UI, log, censimenti). */
+export const ETICHETTA_NATURA: Readonly<Record<NaturaTermine, string>> = {
+  nessuna: 'Nessun termine dichiarato',
+  pubblicazione: 'Data di pubblicazione',
+  termine_candidatura: 'Termine di candidatura',
+  termine_scaduto: 'Termine già scaduto',
+  disponibilita_aperta: 'Disponibilità aperta / Fine contratto',
+};
+
+/** Solo la parte DATA di un valore ISO (`2026-10-31T08:00` → `2026-10-31`). */
+function parteData(valore?: string | null): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec((valore ?? '').trim());
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+}
+/** Data di calendario LOCALE: mai un giorno spostato dal fuso orario. */
+function calendario(d: Date): string {
+  const due = (n: number): string => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${due(d.getMonth() + 1)}-${due(d.getDate())}`;
+}
+/** Giorni di calendario fra due date (`b − a`); `null` se una non è leggibile. */
+export function giorniTra(a?: string | null, b?: string | null): number | null {
+  const da = parteData(a);
+  const al = parteData(b);
+  if (!da || !al) return null;
+  return Math.round((Date.parse(`${al}T00:00:00Z`) - Date.parse(`${da}T00:00:00Z`)) / 86_400_000);
+}
+
+/** True se la data è una CODA D'ANNO («30/04», «30/06», «31/07», «31/08»). */
+export function eCodaAnnoScolastico(iso?: string | null): boolean {
+  const data = parteData(iso);
+  return data !== null && CODE_FINE_ANNO.has(data.slice(5));
+}
+
+/** Le due date di un avviso, ciascuna con la sua natura. */
+export interface DateAvviso {
+  publishedAt: string | null;
+  expirationDate: string | null;
+  natura: NaturaTermine;
+  etichetta: string;
+  giorni: number | null;
+}
+
+/**
+ * CLASSIFICA le date di un avviso, con una regola sola (§26.139):
+ *  · data già PASSATA e non dichiarata in colonna → è la PUBBLICAZIONE, non una
+ *    scadenza perentoria: `expirationDate` torna `null` e la riga non nasce
+ *    «scaduta» per una data che parlava d'altro («31 ottobre» in testa all'atto);
+ *  · data in COLONNA (`esplicita`) già passata → resta la scadenza, natura
+ *    `termine_scaduto`: la fonte l'ha dichiarata, non la reinterpretiamo;
+ *  · oltre `GIORNI_FINE_CONTRATTO` o su una coda d'anno oltre il mese →
+ *    `disponibilita_aperta` («Disponibilità aperta / Fine contratto»), mai una
+ *    riga da buttare; altrimenti → `termine_candidatura`.
+ */
+export function classificaDateAvviso(
+  date: { scadenza?: string | null; pubblicazione?: string | null; esplicita?: boolean; oggi?: string | Date },
+): DateAvviso {
+  const pubblicazione = parteData(date.pubblicazione);
+  const scadenza = parteData(date.scadenza);
+  if (!scadenza) {
+    return { publishedAt: pubblicazione, expirationDate: null, natura: 'nessuna', etichetta: ETICHETTA_NATURA.nessuna, giorni: null };
+  }
+  const oggi = date.oggi instanceof Date ? calendario(date.oggi) : parteData(date.oggi);
+  const giorni = giorniTra(oggi ?? calendario(new Date()), scadenza);
+  const passata = giorni !== null && giorni < 0;
+  if (passata && date.esplicita !== true) {
+    return { publishedAt: pubblicazione ?? scadenza, expirationDate: null, natura: 'pubblicazione', etichetta: ETICHETTA_NATURA.pubblicazione, giorni };
+  }
+  const lontana =
+    !passata && giorni !== null && (giorni > GIORNI_FINE_CONTRATTO || (giorni > 30 && eCodaAnnoScolastico(scadenza)));
+  const natura: NaturaTermine = passata ? 'termine_scaduto' : lontana ? 'disponibilita_aperta' : 'termine_candidatura';
+  return { publishedAt: pubblicazione, expirationDate: scadenza, natura, etichetta: ETICHETTA_NATURA[natura], giorni };
 }

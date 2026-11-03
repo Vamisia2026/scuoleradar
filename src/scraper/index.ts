@@ -201,8 +201,17 @@ async function ottieniProvinceAttive(env: Env, supabase: SupabaseClient | null):
  * Estrae gli avvisi da una pagina HTML usando cheerio.
  * Selettore di esempio: ogni avviso è un link che contiene parole chiave
  * (interpell, avviso, supplenz, bando) oppure sta dentro una riga di lista.
+ *
+ * `opts.oggi` è la data di riferimento della CLASSIFICAZIONE delle date
+ * (§26.139): assente = calendario locale (produzione), dichiarata = guardia
+ * deterministica (`scripts/test-elenchi.ts`).
  */
-export function parseAvvisi(html: string, provincia: string, source: string): AvvisoRilevato[] {
+export function parseAvvisi(
+  html: string,
+  provincia: string,
+  source: string,
+  opts: { oggi?: string | Date } = {},
+): AvvisoRilevato[] {
   const $ = cheerio.load(html);
   const risultati: AvvisoRilevato[] = [];
 
@@ -274,6 +283,7 @@ export function parseAvvisi(html: string, provincia: string, source: string): Av
         provincia,
         source,
         corpo,
+        oggi: opts.oggi,
       }),
     );
   });
@@ -328,7 +338,12 @@ export function parsePostInterpelli(
   postHtml: string,
   provincia: string,
   source: string,
-  opts: { richiedeProvinciaRilevata?: boolean; stats?: { senzaProvincia: number } } = {},
+  opts: {
+    richiedeProvinciaRilevata?: boolean;
+    stats?: { senzaProvincia: number };
+    /** Data di riferimento della classificazione delle date (§26.139). */
+    oggi?: string | Date;
+  } = {},
 ): AvvisoRilevato[] {
   const $ = cheerio.load(postHtml);
   const contenuto = $('.entry-content, article, .post-content, main').first();
@@ -420,6 +435,7 @@ export function parsePostInterpelli(
         source,
         corpo: `${cittaCorrente} ${testoBlocco} ${emailBlocco.join(' ')}`,
         dataPubblicazione,
+        oggi: opts.oggi,
       }),
     );
   });

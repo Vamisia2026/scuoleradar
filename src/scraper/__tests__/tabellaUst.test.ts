@@ -120,6 +120,44 @@ check(
   leggiRigheTabellaUst(cheerio.load(PAGINA_SENZA_DATA), BASE)[0]?.data ?? null,
 );
 
+/* ------------- 3b) Tabella DENSA senza link: la riga basta (§26.137) ------------- */
+
+console.log('\n— 3b. Riga delle tabelle «per ambito» dell’USP (Piemonte) —');
+/**
+ * RIGA REALE dell'USP di Asti: nessun link, ma ogni cella dice l'atto (codice,
+ * classe di concorso, stato, scadenza) e il posto è nominato dall'ORDINE DI SCUOLA —
+ * «EEEE - PRIMARIA» — che senza `infanzia|primaria|secondaria` nel segnale veniva
+ * scartato come «non è un interpello di supplenza».
+ */
+const rigaAmbito = (codice: string, posto: string, stato: string, scadenza: string): string =>
+  `<tr><td>${codice}</td><td>ISTITUTO COMPRENSIVO 4</td><td>${posto}</td><td>Interna</td><td>Diurno</td>` +
+  `<td>Disponibile fino a 10 giorni</td><td>30/10/2026</td>` +
+  `<td><input type="hidden" name="progr" value="3887"></td><td>${stato}</td><td>${scadenza}</td></tr>`;
+/** Intestazioni reali (l'ultima è quella che il gate usa come «scadenza dichiarata»). */
+const INTESTAZIONI_AMBITO = [
+  'Codice meccanografico Istituo Scolastico*', 'Denominazione Istituo Scolastico*', 'Classe di concorso*',
+  'Tipo Cattedra*', 'Corso*', 'Durata Supplenza*', 'Data Interpello*', 'Interpello*', 'Stato interpello*',
+  'Data Scadenza Interpello*',
+];
+const PAGINA_AMBITO = `<table border="1"><thead><tr>${INTESTAZIONI_AMBITO.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${
+  [
+    rigaAmbito('ATIC81900L', 'AAAA - INFANZIA', 'aperto', '30/04/2027'),
+    rigaAmbito('ATEE00500R', 'EEEE - PRIMARIA', 'aperto', '05/11/2026'),
+    rigaAmbito('ATIC81300N', 'ADEE - SOSTEGNO SCUOLA PRIMARIA', 'chiuso', '20/11/2026'),
+  ].join('')
+}</tbody></table>`;
+const esitiAmbito = leggiTabellaUst(cheerio.load(PAGINA_AMBITO), BASE, { oggi: new Date(2026, 10, 3) });
+check('ambito: tre righe-dati (intestazione esclusa)', 3, esitiAmbito.length);
+check('ambito: codice meccanografico dalla riga', 'ATIC81900L', esitiAmbito[0]?.codice ?? null);
+check('ambito: scadenza dalla colonna «Data Scadenza Interpello»', '2027-04-30', esitiAmbito[0]?.data ?? null);
+check('ambito: la fine dell’incarico esce dalla finestra di 15 giorni', ['scartato', 'scadenza oltre la finestra di 15 giorni'], [
+  esitiAmbito[0]?.stato,
+  esitiAmbito[0]?.motivo,
+]);
+check('ambito: «EEEE - PRIMARIA» è un posto (segnale di ordine di scuola)', 'candidabile', esitiAmbito[1]?.stato);
+check('ambito: senza link la riga resta candidabile', null, esitiAmbito[1]?.link ?? null);
+check('ambito: stato «chiuso» dichiarato nella tabella', 'avviso chiuso/revocato', esitiAmbito[2]?.motivo);
+
 /* ------------------- 4) IL GATE, NELL’ORDINE DICHIARATO ----------------- */
 
 console.log('\n— 4. Il gate: un motivo per ogni scarto —');

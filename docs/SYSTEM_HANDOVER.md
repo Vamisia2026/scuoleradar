@@ -15048,3 +15048,313 @@ prodotto, e sta scritta nel §5 perché sia decisa con gli occhi aperti: **una l
 stimata a 30 giorni passa metà della sua vita invisibile al feed.** Il primo giorno utile per
 verificarlo è il **4 novembre**, quando le 51 righe dovrebbero entrare in finestra da sole.
 
+
+## §26.137 — Il Piemonte si legge per righe: 8 elenchi «per ambito», 2 scuole di Asti, 1 albo (03/11/2026)
+
+**La richiesta, in una frase.** «Gli elenchi ufficiali del Piemonte, le due scuole di Asti che
+pubblicano davvero interpelli e l'albo dell'UST di Foggia devono entrare nel registro come fonti
+verificabili — e il criterio di verifica non può più essere "serve un link per voce".»
+
+### 1. Il cambio di criterio: la riga è autosufficiente
+
+Il 23/10/2026 gli otto moduli «per ambito» dell'USP del Piemonte erano stati **esclusi** con una
+regola sola: *nessun `<a href>` per voce → avviso non verificabile*. La regola era scritta per gli
+elenchi di avvisi (dove la riga è solo un titolo e il documento è il link). Le tabelle USP non sono
+quella forma: ogni `<tr>` porta **codice meccanografico, denominazione, classe di concorso, tipo
+cattedra, corso, durata, data interpello, stato e «Data Scadenza Interpello»**. Il lettore profondo
+di `tabellaUst.ts` (§26.123) legge le **celle**, non i link: la riga descrive l'atto e la fonte è
+verificabile anche senza un URL di dettaglio.
+
+Il criterio nuovo, scritto nell'intestazione di `fontiTerritoriali.ts`: **una riga/cella che
+descrive l'atto (chi, quale posto, fino a quando, in che stato) è una fonte verificabile**; il link
+serve solo quando la riga è un titolo nudo. Le otto edizioni 2025/26 restano in
+`fontiEsclusiVerifica.ts` come **snapshot** (id rinominati `pi-<prov>-ambito-2025`) perché la
+pagina è la stessa ma con gli stati **fermi**: Novara dichiara **204** righe «aperto» contro le **17**
+dell'edizione corrente.
+
+### 2. Le misure, provincia per provincia (2026-11-03, UA Chrome/124)
+
+| Provincia | righe | «aperto» | in finestra 15 gg | con segnale di insegnamento |
+|---|---|---|---|---|
+| TO | 1545 | 50 | 26 | 20 |
+| CN | 715 | 80 | 18 | 17 |
+| NO | 402 | 17 | 17 | 13 |
+| AL | 339 | 9 | 7 | 5 |
+| BI | 312 | 180 | **0** | **0** |
+| VB | 252 | 139 | **0** | **0** |
+| VC | 221 | 136 | **0** | **0** |
+| AT | 207 | 4 | 1 | 1 |
+
+Otto URL su otto **HTTP 200** (`interpello2026/ric_interpello_ambito_<prov>.php`). Biella, Verbania e
+Vercelli dichiarano come «scadenza» la **fine dell'incarico** (30/04/2027): il gate le scarta per
+finestra (§26.82) e questo è **voluto** — restano registrate perché sono comunque l'**unico elenco
+ufficiale** di quelle province, e la loro resa è zero per una ragione dichiarata, non per un errore.
+
+### 3. Il segnale che mancava: l'ordine di scuola
+
+Prima misura con il codice vero: **zero candidabili** anche dove le date erano in finestra. Il
+motivo era nel gate: `RE_SEGNALE_INSEGNAMENTO` (`tabellaUst.ts`) chiedeva interpello/supplenza/
+sostegno/docente/ATA/classe di concorso, mentre l'USP nomina il posto con l'**ordine di scuola** —
+`AAAA - INFANZIA`, `EEEE - PRIMARIA`, `ADEE - SOSTEGNO SCUOLA PRIMARIA`. Aggiunti `infanzia`,
+`primaria`, `secondaria`: sono il posto più frequente d'Italia e venivano scartati come «non è un
+interpello di supplenza». Rimisura live con `leggiTabellaUst`, data di riferimento 2026-11-03:
+**AT 199 righe → 1 candidabile · TO 1510 → 11 · CN 689 → 13**. Il test `npm run test:tabella-ust`
+ha un blocco nuovo («3b. Riga delle tabelle per ambito») che fissa: tre righe lette, codice dalla
+riga, scadenza dalla colonna giusta, fine incarico scartata per finestra, `EEEE - PRIMARIA`
+candidabile, riga **senza link** ammessa, stato «chiuso» scartato.
+
+### 4. Asti: due scuole su cinque, e le altre tre dette per nome
+
+* **IIS G. A. Giobert** — `?page_id=5473` «Interpelli Docenti», 2 voci, PDF con la data nel nome del
+  file (`Interpello AS12.pdf`). Zero candidabili oggi (l'avviso scadeva il 14/10) ma è l'unica
+  secondaria di Asti con una pagina di interpelli vera.
+* **IC Castell'Alfero** — `iccastellalfero.edu.it/mad/`, avvisi con data nel nome file. In coda
+  risultava già seminato dalla discovery **senza metadati** (region/province/domain): il sync li
+  ripara.
+* **IC S. Damiano e IC Villanova** — pagina «Interpelli» con **zero avvisi** (9 e 2 link, tutti di
+  condivisione social o menu): escluse con il motivo, non «spente in silenzio».
+* **Nuvola (madisoft)** — quattro URL aperte una per una (3 interpelli + 1 bacheca): le tre pagine
+  di interpelli rispondono **200 con 1,2 KB** di guscio React (`<div id="interpelli-react-root">`),
+  la bacheca rende **330 KB** con una tabella vera (103 righe «Oggetto | Data pubblicazione |
+  Registro») ma la data di colonna è quella di **pubblicazione**; il termine sta solo dentro
+  l'oggetto. Servirebbe un renderer o un endpoint JSON pubblico, che non risulta documentato:
+  **escluse e documentate**, non finte.
+
+### 5. Foggia: l'albo pretorio, dove la scadenza sta nel titolo
+
+`ustfoggia.it/category/albo-pretorio/` è una lista di avvisi reali e il termine è **nel titolo**
+(«… fino al 15/11/2026»), non in una cella: il lettore dei titoli lo trova, il gate lo accetta come
+data dichiarata. È la copertura Puglia che mancava dopo i 404 delle sedi MIM (§26.89).
+
+### 6. Codice, gate e coda
+
+`fontiTerritoriali.ts` — **11 voci attive** (8 «per ambito» 2026 + 2 scuole di Asti + albo Foggia),
+con `DATA_VERIFICA_PIEMONTE_03` / `DATA_VERIFICA_PUGLIA_03` = `2026-11-03`;
+`fontiEsclusiVerifica.ts` — snapshot 2025/26 rinominato e **7 esclusioni nuove** (4 Nuvola, 2
+comprensivi di Asti, la pagina di ricerca dell'e-portfolio di Como, che risponde 200 con **zero
+risultati** nell'HTML). `scripts/test-scraper-fonti.ts` ha sostituito il vecchio contratto («gli 8
+moduli restano esclusi») con quello nuovo: 8 attivi con capoluogo, nessuna fonte attiva sullo
+snapshot 2025/26, 2 scuole di Asti attive, albo di Foggia attivo, 4 URL Nuvola tutte spente con
+motivo. Esiti: `test:scraper:fonti` **0 errori**, `test:whitelist` ✅, `test:ambito-bacheca` ✅,
+`test:architettura` ✅ (baseline +3 `W-DIM`, conteggi del gate: `fontiTerritoriali.ts` 254,
+`tabellaUst.test.ts` 285, `test-scraper-fonti.ts` 275 righe — tutte **sotto** il tetto di 300), `npm test` ✅, `build` ✅,
+lint pulito sui file toccati.
+
+Coda Supabase: `targets:whitelist --apply --attiva` → **174 target** in `discovered_links`, **9
+inseriti** e **promossi `active_crawler`** (7 moduli «per ambito» nuovi — AT era già presente —, il
+Giobert, l'albo di Foggia), **1 riparato** nei metadati (Castell'Alfero). Nessun target spento.
+
+### 7. Limite noto, dichiarato
+
+Almeno una riga del Piemonte porta un codice meccanografico in **formato alfanumerico nuovo**
+(`TOIC8BD00X`): `estraiCodiceMeccanograficoDaTesto` non lo riconosce e la riga esce con `codice: ND`
+(la scuola resta leggibile nel titolo). Non l'ho corretto qui: il riconoscimento dei codici è di
+`src/lib/emailScuola.ts`, condiviso con l'ingestione di tutti i dipartimenti, e va misurato su un
+campione prima di allargare la regex.
+
+### 8. Nota di sessione
+
+Il valore di questa sessione non è il numero di fonti aggiunte (11), è il **criterio**: per due
+settimane il Piemonte è rimasto fuori per una regola giusta applicata a una forma sbagliata. Le
+tabelle dense non sono elenchi di link: sono **righe che dicono tutto**, e il lettore per celle le
+legge. Il secondo insegnamento è che il gate può essere più cieco della fonte: 1500 righe lette nel
+Torinese e **zero** candidabili non era un problema di pagina, era `infanzia` che mancava in una
+regex. Le tre province con la scadenza a fine incarico restano a resa zero, e va bene così — purché
+sia scritto, invece di sembrare un guasto. La domanda aperta è Nuvola: tre gusci React su cinque
+scuole di Asti, e la bacheca che pubblica la data di pubblicazione al posto del termine. Se un
+endpoint JSON esiste, è la prossima sessione a trovarlo; fino ad allora quelle quattro URL sono
+registrate spente con il motivo, non spacciate per copertura.
+
+## §26.138 — Le sonde di discovery: due aggregatori che dicono dove guardare (03/11/2026)
+
+**La richiesta, in una frase.** «Asti, il Piemonte e le fonti delle scuole polo devono essere in
+whitelist; ScuolaGo e Docenti.it entrano come *sorgenti di sonda per la discovery rapida*, senza
+pubblicare interpelli in bacheca.»
+
+### 1. Cosa c'era già dentro (e non è stato riscritto)
+
+Le 11 voci attive del §26.137 sono tutte al loro posto, verificate una per una: gli **8 elenchi «per
+ambito»** dell'USP del Piemonte (`interpello2026/ric_interpello_ambito_{at,al,bi,cn,no,to,vb,vc}.php`),
+le **2 scuole di Asti** che pubblicano avvisi veri (Giobert, Castell'Alfero) e l'**albo pretorio
+dell'UST di Foggia**. Nessuna di queste URL è stata duplicata o riscritta: la richiesta le elencava,
+il registro le aveva già.
+
+### 2. Le sei URL segnalate e rimisurate (03/11/2026, UA Chrome/124)
+
+| URL segnalata | HTTP | misura | esito |
+|---|---|---|---|
+| `icsandamiano.edu.it/servizio/interpelli/` | 200 | 1,23 MB · 154 link · **0 link a PDF** · 0 date utili | **esclusa** (`NOVOCI_03`) |
+| `icvillanovasti.edu.it/interpelli-i-c-villanova-dasti/` | 200 | 1,22 MB · 144 link · 14 «interpell» di menu · 0 link a PDF, 0 date | **esclusa** (`NOVOCI_03`) |
+| `nuvola.madisoft.it/interpelli/ATIC82000R/ata` e `/docenti` | 200 | **1.276 byte** · 0 link · `interpelli-react-root` | **esclusa** (`NUVOLA_JS_03`) |
+| `nuvola.madisoft.it/bacheca-digitale/…/ATIC81200T/…` | 200 | 330 KB · 40 date = **pubblicazione** | **esclusa** (`NUVOLA_BACHECA_03`) |
+| `mim.gov.it/web/como/ricerca?r=interpelli&scope=this-site` | 200 | 50 KB · 41 link di navigazione · **0 risultati** | **esclusa** (`RICERCA_03`) |
+| `giobert.it` · `iccastellalfero.edu.it/mad/` · `ustfoggia.it/category/albo-pretorio/` | 200 | già attive dal §26.137 | invariate |
+
+Il risultato onesto della verifica è **zero fonti attive nuove**: la seconda scuola di Asti su Nuvola
+(`ATIC82000R`) è lo stesso guscio React delle altre, i due comprensivi continuano a non avere un solo
+avviso in pagina, e il parametro `&scope=this-site` non cambia niente nella ricerca di Como (l'elenco
+lo costruisce il client). Le **3 registrazioni nuove** stanno in `fontiEsclusiVerifica.ts` — due Nuvola
+e la variante di Como — e i motivi di S. Damiano/Villanova sono stati riscritti con la ri-misura del
+giorno, così il numero si può smentire da solo.
+
+
+### 3. Le sonde: `SONDE_DISCOVERY` in `fontiAggregatori.ts`
+
+Qui la richiesta aveva ragione, e la forma è quella che serve: i due portali **non** elencano le stesse
+cose.
+
+| sonda | URL per Asti | misura | cosa dà davvero |
+|---|---|---|---|
+| `scuolago.it` | `/interpelli/asti` | 200 · 65 KB · «Nessun interpello aperto oggi, negli ultimi 30 giorni 8» · date 30 ott → 8 nov, 30 set → 30 apr 2027 | **codici meccanografici**: ATIC817001 (IC 2), ATIC811002 (S. Damiano), ATIC809002 (Rocchetta Tanaro), ATIC815009 (Quattro Valli) |
+| `docenti.it` | `/interpelli/interpelli-asti.html` | 200 · 128 KB · 10 schede `article.interpelli-feed-card` **tutte `is-expired`** (0 «Aperto») · Torino identico (127 KB) | **nome istituto + classe di concorso + «Scadenza» in `<time datetime>` ISO** (es. `2026-11-03T09:30`) |
+
+Da qui l'oggetto `SondaDiscovery` (id, etichetta, `template` con `{provincia}`, `verificata`, `note`
+con la misura) e tre funzioni pure: `slugProvincia` (nome ISTAT → `l-aquila`, `forli-cesena`,
+`verbano-cusio-ossola`), `urlSonda`, `sondePerProvincia`. Le regole sono scritte nell'intestazione e
+verificate da un test, non affidate alla buona volontà:
+
+1. **una sonda non è una fonte**: non entra in `FONTI_INTERPELLI`, quindi non finisce né in
+   `fontiAttive()` né in `targetWhitelist()` — nessun target da crawler, nessuna riga in bacheca;
+2. **l'host è in `AGGREGATORI_PRIVATI`** (`scuolago.it` è stato **aggiunto**, `docenti.it` c'era già):
+   `valutaDominio()` respinge un link di sonda, il discovery non lo espande e `clean-and-sync-targets`
+   rimuove le righe già in tabella con quel dominio;
+3. **data e misura dichiarate**: se la pagina cambia forma, il numero vecchio la smentisce.
+
+Consumatore in chiaro: `npm run fonti:verifica` stampa il blocco «Sonde di discovery» con righe/codici
+per la provincia campione (`AT`), e quell'esito **non** entra nella soglia di fallimento delle fonti.
+
+**Limite dichiarato.** La sonda produce *indizi* (scuola, codice, termine), non atti: il salto
+indizio → documento ufficiale richiede l'anagrafica «codice meccanografico → sito della scuola», che
+vive fuori da questo modulo. `docenti.it` non espone il codice nella scheda; `scuolago.it` non ha un
+link per riga — stessa forma delle tabelle USP, ma qui la riga **non** è un atto, perché il portale è
+un terzo e non c'è nessun URL ufficiale da citare. Per questo restano sonde e non fonti.
+
+
+### 4. Codice e verifiche
+
+Nessun file nuovo, come richiesto:
+
+* `src/lib/dominiIstituzionali.ts` — `scuolago.it` in `AGGREGATORI_PRIVATI` (130 righe);
+* `src/scraper/fontiAggregatori.ts` — `SONDE_DISCOVERY` + `slugProvincia`/`urlSonda`/`sondePerProvincia`
+  (56 → 175 righe);
+* `src/scraper/fontiEsclusiVerifica.ts` — 3 esclusioni nuove e 2 motivi ri-misurati (227 → 238 righe);
+* `scripts/test-whitelist-targets.ts` — nuovo blocco «4. Sonde di discovery»: 12 asserzioni (189 → 229);
+* `scripts/verifica-fonti-scraper.ts` — sonda dal vivo, fuori dalla soglia (97 → 147);
+* `scripts/test-scraper-fonti.ts` — contratto Nuvola aggiornato: **6** URL verificate e tutte spente
+  (274 righe, conteggio invariato).
+
+Esiti: `tsc` **0**, `npm test` **0**, `build` **0** (18,93 s), `test:scraper:fonti` **0 errori**,
+`test:whitelist` ✅, `test:architettura` ✅ (813 file, 148 violazioni = baseline, **nessuna nuova**),
+`eslint` **0** sui 6 file toccati.
+
+### 5. Coda Supabase
+
+`npm run targets:whitelist -- --apply --attiva` → **174 target** già presenti, **0 da inserire**,
+**0 da riparare**, **0 `pending`**: la coda era già allineata dal §26.137. È il risultato coerente con
+il punto 2 — nessuna fonte attiva nuova significa nessun target nuovo — e le due sonde, per costruzione,
+non possono comparire in `discovered_links`.
+
+### 6. Nota di sessione
+
+La richiesta sembrava «aggiungi quindici URL»; la verifica dice «zero fonti attive nuove e due
+segnalatori utili». La parte preziosa non è il conteggio: è che la sonda ha trovato una forma di
+informazione che il registro non aveva — **il codice meccanografico di chi ha un avviso** — senza
+intaccare la regola che tiene pulita la bacheca. Un registro che sa dire *no* con un numero accanto
+(«1.276 byte, 0 link», «154 link, 0 avvisi») è più utile di uno che dice *sì* con una speranza. La
+prossima sessione ha un compito già scritto: l'anagrafica codice → sito, per trasformare l'indizio in
+documento ufficiale.
+
+## §26.139 — Il raggio parte dalla provincia principale, e la data dice cosa è (03/11/2026)
+
+**La richiesta, in una frase.** «I 60 km si misurano dalla provincia principale, non da tutte
+quelle selezionate; e una data non è per forza una scadenza: se è già passata è la data di
+pubblicazione, se sta oltre i 90 giorni (o su una coda d'anno) è "Disponibilità aperta / Fine
+contratto" e resta in bacheca.»
+
+### 1. Il raggio dalla PRINCIPALE (e perché le secondarie restano strette)
+
+`lib/prossimitaGeografica.ts` misurava la distanza dal **più vicino** dei codici del profilo:
+bastava una secondaria per far entrare una provincia terza che l'utente non aveva mai scelto.
+Ora il centro di gravità è uno solo — `provinciaPrincipale()` di `lib/provinceRadar.ts`, cioè la
+prima provincia del profilo:
+
+* un profilo **`AL + AT`** non porta più in casa **Torino**: TO sta a 46 km da AT ma a **76 km da
+  AL** (la principale) → `fuori`, esclusa d'ufficio;
+* la secondaria resta ammessa come **provincia propria** (`punteggioProvincia` → `propria`, 100%)
+  e continua a portare la sua **contenutistica** (materie, classi, scuole): non è un secondo
+  raggio, è una scelta dell'utente;
+* chi vuole il raggio attorno a entrambe le province le mette entrambe — e basta invertirle
+  (`AT + AL`) perché TO rientri: 46 km dalla principale. La regola è asimmetrica **per disegno**,
+  non per svista.
+
+Le tre funzioni (`provinceEntroRaggio`, `provinceDiRicerca`, `punteggioProvincia`) leggono lo
+stesso centro, quindi bacheca, punteggio e consegna non possono divergere.
+
+### 2. La natura di una data: pubblicazione, termine, fine contratto
+
+Il parser riceveva una data e la trattava sempre come scadenza perentoria. Nasceva un doppio
+errore: un avviso pubblicato il 31/10 con «termine 31/10» finiva in bacheca come *scaduto* (riga
+inutile), e un termine al 30/06/2027 veniva letto come urgenza del giorno.
+
+La regola vive in **un solo posto**, `lib/scadenzaTesto.ts` → `classificaDateAvviso`, e il parser
+la applica (`naturaScadenza`):
+
+| situazione | `published_at` | `expiration_date` | natura |
+|---|---|---|---|
+| data già passata, non dichiarata in colonna | la data | `null` | `pubblicazione` |
+| data già passata ma **dichiarata** dalla fonte (colonna «Scadenza») | — | la data | `termine_scaduto` |
+| oltre **90 giorni** (`GIORNI_FINE_CONTRATTO`) | — | la data | `disponibilita_aperta` |
+| coda d'anno (giu–ago) oltre il mese, anche sotto i 90 giorni | — | la data | `disponibilita_aperta` |
+| termine ravvicinato | — | la data | `termine_candidatura` |
+
+Due garanzie che tengono in piedi il resto:
+
+1. **la data non si butta mai**: `disponibilita_aperta` è una riga di bacheca, non uno scarto — è
+   la stessa scelta del §26.133 (disponibilità senza termine), qui con un'etichetta dichiarata
+   (`ETICHETTA_NATURA` → «Disponibilità aperta / Fine contratto»);
+2. **l'identità non dipende dalla classificazione**: `hashId` continua a usare la data **grezza**
+   (`scadenzaGrezza`), così un avviso che oggi è «termine» e domani diventa «scaduto» non genera un
+   secondo record.
+
+### 3. Determinismo: «oggi» si dichiara
+
+Un classificatore che legge il calendario locale rende le guardie **datate**: il 3 novembre 2026
+mezza suite sarebbe diventata rossa (e lo è stata, in questa sessione: 6 asserzioni di
+`test-elenchi` + 1 di `test-post-elenco`). La correzione non è stata allentare la regola, ma
+iniettare il riferimento:
+
+* `parseInterpello` accetta `oggi?: string | Date` (§26.139) — assente = calendario locale;
+* lo stesso parametro attraversa le tre porte che il crawler usa davvero:
+  `parseAvvisi(…, { oggi })`, `espandiElencoInAvvisi(…, { oggi })`, `espandiPostInAvvisi(…, { oggi })`;
+* le guardie dichiarano la data (`RIFERIMENTO = '2026-09-01'` in `test-elenchi`,
+  `'2026-10-20'` in `test-post-elenco`, `{ oggi: '2026-09-14' }` / `'2026-11-03'` in
+  `test-parser-date`): stesso avviso + stesso riferimento = stesso esito, oggi come fra un anno.
+
+### 4. Codice e verifiche
+
+* `src/lib/prossimitaGeografica.ts` — raggio dalla principale (208 righe);
+* `src/lib/scadenzaTesto.ts` — `GIORNI_FINE_CONTRATTO`, `NaturaTermine`, `ETICHETTA_NATURA`,
+  `classificaDateAvviso` (248 righe, dentro il limite di 250);
+* `src/scraper/parser.ts` — `oggi?`, `naturaScadenza?`, classificazione unica (1.260 righe);
+* `src/scraper/index.ts` — `oggi` su `parseAvvisi` e `parsePostInterpelli` (1.917 righe);
+* `src/scraper/elenchi.ts` (240) e `src/scraper/postRaccolta.ts` (143) — `oggi` nel contesto;
+* guardie: `test-prossimita-60km.ts` (+8 asserzioni sul raggio dalla principale),
+  `test-parser-date.ts`, `src/lib/__tests__/scadenzaTesto.test.ts` (nuovo blocco «5. natura della
+  data»), `test-elenchi.ts` e `test-post-elenco.ts` (riferimento dichiarato).
+
+Esiti: `tsc` **0**, `eslint` **0** sugli 11 file toccati, `test:prossimita` ✅,
+`test:parser:date` ✅, `test:scadenza-testo` ✅, `test:elenchi` ✅, `test:scraper:post` ✅,
+`test:perimetro` ✅, `build` ✅ (8,30 s), `test:architettura` ✅ (813 file, 148 = baseline,
+**nessuna nuova**). Suite condivisa (`scripts/test-*.ts` + `src/lib/__tests__`): **154 file, 9
+falliti, tutti preesistenti e fuori perimetro** — 5 per alias `@/…` non risolto sotto `tsx`, 3 di
+`notizie` per dati più vecchi di 7 giorni, 1 per `TELEGRAM_BOT_TOKEN` assente nel `.env`.
+
+### 5. Nota di sessione
+
+Due regole diverse, un solo difetto comune: **una misura che non dichiarava il proprio centro**.
+La distanza non diceva *da dove*, e la data non diceva *che cosa è*. La correzione utile non è
+stata aggiungere un caso speciale, ma togliere l'ambiguità: un centro di gravità solo (la
+principale), una natura dichiarata per ogni data. E, poiché la natura dipende dal calendario, il
+calendario ora si passa: una guardia che invecchia non protegge nessuno — «scadenza della voce
+estratta: atteso 30/09/2026, ottenuto null» era la regola giusta che accusava un test scritto ieri.
+

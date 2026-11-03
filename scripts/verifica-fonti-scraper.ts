@@ -14,6 +14,7 @@
  */
 import axios from 'axios';
 import { fontiAttive, type FonteInterpelli } from '../src/scraper/fonti.ts';
+import { sondePerProvincia } from '../src/scraper/fontiAggregatori.ts';
 import { capoluoghiScoperti, regioniCoperte, regioniScoperte, sintesiCopertura } from '../src/scraper/fontiCopertura.ts';
 import { scopriSezioniReclutamento } from '../src/scraper/hub.ts';
 
@@ -49,6 +50,40 @@ async function prova(fonte: FonteInterpelli): Promise<EsitoFonte> {
     };
   } catch (err) {
     return { fonte, stato: `ERR ${(err as Error).message.slice(0, 60)}`, titolo: '', segnali: 0, sezioni: [] };
+  }
+}
+
+/**
+ * SONDE DI DISCOVERY (§26.138). Non sono fonti: l'esito NON entra nella soglia
+ * qui sotto e non può far fallire la verifica. Serve a sapere, senza aprire un
+ * browser, se il segnalatore di turno risponde e che forma ha (righe con un
+ * indizio, codici meccanografici): il documento ufficiale si prende altrove.
+ */
+const SONDA_ESEMPIO = 'AT';
+
+interface EsitoSonda {
+  stato: number | string;
+  titolo: string;
+  indizi: number;
+  codici: string[];
+}
+
+async function provaSonda(url: string): Promise<EsitoSonda> {
+  try {
+    const res = await axios.get<string>(url, {
+      timeout: 25_000,
+      maxRedirects: 5,
+      validateStatus: (s: number) => s < 500,
+      responseType: 'text',
+      headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml', 'Accept-Language': 'it-IT,it;q=0.9' },
+    });
+    const html = String(res.data ?? '');
+    const titolo = (html.match(/<title[^>]*>([\s\S]{0,90}?)<\/title>/i)?.[1] ?? '').replace(/\s+/g, ' ').trim();
+    const indizi = (html.match(/interpelli-feed-card|class="scu"/g) ?? []).length;
+    const codici = [...new Set(html.match(/AT[A-Z]{2}\d{6}/g) ?? [])];
+    return { stato: res.status, titolo, indizi, codici };
+  } catch (err) {
+    return { stato: `ERR ${(err as Error).message.slice(0, 60)}`, titolo: '', indizi: 0, codici: [] };
   }
 }
 
@@ -92,6 +127,21 @@ async function main(): Promise<void> {
     return;
   }
   console.log(`✅ VERIFICA FONTI: registro coerente (${ko} fallimenti entro la soglia di ${soglia}).`);
+
+  console.log('\n━━ Sonde di discovery (aggregatori privati: segnalano, non pubblicano) ━━');
+  for (const { sonda, url } of sondePerProvincia(SONDA_ESEMPIO)) {
+    const esitoSonda = await provaSonda(url);
+    console.log(`${String(esitoSonda.stato).padEnd(6)} ${sonda.id} → ${url}`);
+    console.log(
+      `       ${esitoSonda.indizi} righe con indizio · ${esitoSonda.codici.length} codici` +
+        `${esitoSonda.codici.length > 0 ? ` (${esitoSonda.codici.slice(0, 4).join(', ')})` : ''}` +
+        ` · ${esitoSonda.titolo.slice(0, 55) || '—'}`,
+    );
+  }
+  console.log(
+    '• Nota: un host di sonda sta in `AGGREGATORI_PRIVATI` — le sue righe non entrano in bacheca; ' +
+      'la sonda dice solo QUALI scuole hanno un avviso (e con quale codice).',
+  );
 }
 
 void main();

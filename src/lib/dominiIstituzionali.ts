@@ -45,6 +45,12 @@ export const AGGREGATORI_PRIVATI: readonly string[] = [
   'orizzontescuola.it',
   'tecnicadellascuola.it',
   'docenti.it',
+  // §26.138 — `scuolago.it` entra qui per la stessa ragione degli altri: è un
+  // portale terzo che elenca interpelli altrui. Le sue pagine provinciali sono
+  // utili SOLO come SONDA di discovery (`scraper/fontiAggregatori.ts`): dicono
+  // quali scuole hanno un avviso, non sono l'avviso. Nessuna riga con questo host
+  // può essere pubblicata in bacheca, e il crawler non lo espande.
+  'scuolago.it',
   'studenti.it',
   'skuola.net',
   'ilsussidiario.net',

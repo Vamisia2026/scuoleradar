@@ -5,11 +5,25 @@
  * misurati sulla DISTANZA in linea d'aria fra i capoluoghi.
  *
  *   1. provincia SELEZIONATA      → `PUNTEGGIO_PROVINCIA_PROPRIA` (100);
- *   2. provincia entro il RAGGIO  → `RAGGIO_PROVINCIA_KM` (60 km): la bacheca la
- *      mostra dichiarando lo scostamento, con una **grossa penalità** che cresce
- *      con la distanza (25 · 40 · 55 punti → 75 · 60 · 45);
+ *   2. provincia entro il RAGGIO  → `RAGGIO_PROVINCIA_KM` (60 km) **dalla sola
+ *      provincia PRINCIPALE**: la bacheca la mostra dichiarando lo scostamento,
+ *      con una **grossa penalità** che cresce con la distanza (25 · 40 · 55 punti
+ *      → 75 · 60 · 45);
  *   3. provincia OLTRE il raggio  → **esclusione d'ufficio**: Milano resta fuori
  *      per chi cerca Asti e non l'ha selezionata.
+ *
+ * IL RAGGIO PARTE DALLA PRINCIPALE, LE SECONDARIE RESTANO STRETTE (§26.139,
+ * direttiva 03/11/2026). Fino a oggi la distanza si misurava dal **più vicino**
+ * dei codici selezionati, quindi anche una provincia SECONDARIA allargava la
+ * ricerca: un profilo «AL + AT» vedeva gli avvisi entro 60 km da AT — Torino
+ * (46 km da AT, 76 da AL), Verbania, e in generale province TERZE che l'utente
+ * non aveva mai scelto. La regola ora è asimmetrica, ed è quella chiesta:
+ *   · la **principale** (la prima selezionata, `lib/provinceRadar`) porta il
+ *     raggio — Alessandria a 32 km da Asti entra anche senza AL in selezione,
+ *     perché è la zona di lavoro quotidiana;
+ *   · le **secondarie** sono una scelta di contenuto («voglio vedere anche gli
+ *     avvisi di AL»), non un secondo centro di gravità: si vedono gli avvisi
+ *     della provincia selezionata e basta, nessuna espansione cieca.
  *
  * CHI APPLICA COSA. La **bacheca** (`bachecaInterpelli` via `valutaCompatibilita`)
  * cerca anche le province entro il raggio e le penalizza; la **consegna**
@@ -21,6 +35,7 @@
  * è riesportata dal motore: nessuna copia del confronto.
  */
 import { coordinateProvince, type CoordinataProvincia } from '../data/provinceCoordinate';
+import { provinciaPrincipale } from './provinceRadar';
 
 /** Raggio (km) entro cui una provincia non selezionata resta «vicina». */
 export const RAGGIO_PROVINCIA_KM = 60;
@@ -71,21 +86,27 @@ export function distanzaKm(a?: string | null, b?: string | null): number | null 
 }
 
 /**
- * Province ENTRO il raggio (km, capoluogo↔capoluogo), escluse le selezionate.
- * Ordinata per distanza crescente (a pari distanza, per codice): l'ordine è
- * deterministico e leggibile nelle guardie.
+ * Province ENTRO il raggio (km, capoluogo↔capoluogo) misurato sulla **sola
+ * provincia PRINCIPALE**, escluse quelle già selezionate. Ordinata per distanza
+ * crescente (a pari distanza, per codice): l'ordine è deterministico e leggibile
+ * nelle guardie.
+ *
+ * Perché solo dalla principale (§26.139): una secondaria non è un secondo centro
+ * di gravità. Misurando il raggio da ognuna, un profilo «AL + AT» si portava in
+ * casa Torino (46 km da AT ma 76 da AL) — una provincia terza mai scelta.
  */
 export function provinceEntroRaggio(
   selezionate: readonly string[] | null | undefined,
   raggioKm: number = RAGGIO_PROVINCIA_KM,
 ): string[] {
-  const scelte = (selezionate ?? []).map(normalizzaProvincia).filter(Boolean);
-  if (scelte.length === 0) return [];
+  const scelte = [...new Set((selezionate ?? []).map(normalizzaProvincia).filter(Boolean))];
+  const principale = provinciaPrincipale(scelte);
+  if (!principale) return [];
   const vicine: { codice: string; km: number }[] = [];
   for (const codice of Object.keys(coordinateProvince)) {
     if (scelte.includes(codice)) continue;
-    const km = Math.min(...scelte.map((s) => distanzaKm(s, codice) ?? Number.POSITIVE_INFINITY));
-    if (km <= raggioKm) vicine.push({ codice, km });
+    const km = distanzaKm(principale, codice);
+    if (km !== null && km <= raggioKm) vicine.push({ codice, km });
   }
   return vicine
     .sort((a, b) => a.km - b.km || a.codice.localeCompare(b.codice))
@@ -93,9 +114,10 @@ export function provinceEntroRaggio(
 }
 
 /**
- * Province da CERCARE nella bacheca: le proprie + quelle entro il raggio dei 60 km.
- * Lista VUOTA se il profilo non ha province: senza selezione la ricerca non ha
- * vincolo geografico e non c'è nulla da allargare.
+ * Province da CERCARE nella bacheca: le proprie + quelle entro il raggio dei 60
+ * km dalla PRINCIPALE (§26.139). Lista VUOTA se il profilo non ha province:
+ * senza selezione la ricerca non ha vincolo geografico e non c'è nulla da
+ * allargare.
  */
 export function provinceDiRicerca(
   selezionate: readonly string[] | null | undefined,
@@ -129,6 +151,10 @@ export function penalitaDistanza(km: number): number {
  * Giudizio geografico di un'opportunità (Modalità 4 — Provincia).
  * `opts.limitrofe` (bacheca) ammette le province entro il raggio con la relativa
  * penalità; senza di essa vale SOLO la provincia selezionata (consegna strict).
+ *
+ * Il raggio si misura dalla **provincia principale** (§26.139): una secondaria
+ * non porta in casa le province terze che le stanno intorno, mentre la
+ * principale continua a farlo.
  */
 export function punteggioProvincia(
   selezionate: readonly string[] | null | undefined,
@@ -136,36 +162,33 @@ export function punteggioProvincia(
   opts: { limitrofe?: boolean; raggioKm?: number } = {},
 ): EsitoProvincia {
   const scelte = (selezionate ?? []).map(normalizzaProvincia).filter(Boolean);
-  if (scelte.length === 0) return { stato: 'non-applicabile' };
+  const principale = provinciaPrincipale(scelte);
+  if (!principale) return { stato: 'non-applicabile' };
   const avviso = normalizzaProvincia(provinciaAvviso);
   if (!avviso) return { stato: 'fuori', km: null, motivo: 'provincia dell’avviso non indicata' };
   if (scelte.includes(avviso)) {
     return { stato: 'propria', punteggio: PUNTEGGIO_PROVINCIA_PROPRIA, km: 0 };
   }
   if (opts.limitrofe !== true) {
-    return { stato: 'fuori', km: distanzaKm(scelte[0], avviso), motivo: 'fuori dalle tue province' };
+    return { stato: 'fuori', km: distanzaKm(principale, avviso), motivo: 'fuori dalle tue province' };
   }
   const raggio = opts.raggioKm ?? RAGGIO_PROVINCIA_KM;
-  const piuVicina = scelte
-    .map((s) => ({ codice: s, km: distanzaKm(s, avviso) }))
-    .filter((v): v is { codice: string; km: number } => v.km !== null)
-    .sort((a, b) => a.km - b.km || a.codice.localeCompare(b.codice))[0];
-  if (!piuVicina) {
+  const km = distanzaKm(principale, avviso);
+  if (km === null) {
     return { stato: 'fuori', km: null, motivo: 'provincia dell’avviso non riconosciuta' };
   }
-  if (piuVicina.km > raggio) {
+  if (km > raggio) {
     return {
       stato: 'fuori',
-      km: piuVicina.km,
-      motivo: `oltre il raggio di ${raggio} km (${piuVicina.km} km da ${piuVicina.codice})`,
+      km,
+      motivo: `oltre il raggio di ${raggio} km (${km} km da ${principale})`,
     };
   }
-  const km = piuVicina.km;
   return {
     stato: 'vicina',
     km,
     punteggio: PUNTEGGIO_PROVINCIA_PROPRIA - penalitaDistanza(km),
-    motivo: `provincia vicina: ${piuVicina.codice} → ${avviso} (${km} km)`,
+    motivo: `provincia vicina: ${principale} → ${avviso} (${km} km)`,
   };
 }
 

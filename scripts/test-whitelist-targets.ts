@@ -22,6 +22,8 @@ import {
   targetWhitelist,
 } from '../src/scraper/whitelistTargets.ts';
 import { ALIAS_SCARTATI, RIEPILOGO_WHITELIST_2610 } from '../src/scraper/fontiWhitelist2610.ts';
+import { SONDE_DISCOVERY, slugProvincia, sondePerProvincia, urlSonda } from '../src/scraper/fontiAggregatori.ts';
+import { eAggregatorePrivato, valutaDominio } from '../src/lib/dominiIstituzionali.ts';
 
 declare const process: { exitCode?: number };
 
@@ -180,6 +182,44 @@ check('npm: il giro standard riattiva', true, /--riattiva/.test(pkg.scripts['tar
 const discoveryWf = leggi('.github/workflows/discovery.yml');
 check('npm: scoperta dei target', true, 'scopri:target' in pkg.scripts);
 check('workflow di scoperta giornaliero', true, /cron: '0 9 \* \* \*'/.test(discoveryWf) && /--max-target=/.test(discoveryWf));
+
+/* ------- G · SONDE DI DISCOVERY (§26.138): segnalano, NON pubblicano ------- */
+
+console.log('\n— 4. Sonde di discovery: fuori dal registro e fuori dalla coda —');
+const sonda = (id: string) => SONDE_DISCOVERY.find((s) => s.id === id);
+const hostSonda = (s: { template: string }): string =>
+  new URL(s.template).hostname.replace(/^www\./, '').toLowerCase();
+check('due sonde dichiarate (docenti.it, scuolago.it)', ['sonda-docenti-it', 'sonda-scuolago'], SONDE_DISCOVERY.map((s) => s.id).sort());
+check('ogni sonda ha un template con {provincia}', [], SONDE_DISCOVERY.filter((s) => !s.template.includes('{provincia}')).map((s) => s.id));
+check(
+  'ogni sonda dichiara data ISO e misura (≥ 80 caratteri)',
+  [],
+  SONDE_DISCOVERY.filter((s) => !/^\d{4}-\d{2}-\d{2}$/.test(s.verificata) || s.note.length < 80).map((s) => s.id),
+);
+check('host delle sonde in `AGGREGATORI_PRIVATI`', [], SONDE_DISCOVERY.filter((s) => !eAggregatorePrivato(s.template)).map((s) => s.id));
+check(
+  '`valutaDominio` respinge un link di sonda (mai in bacheca)',
+  [],
+  SONDE_DISCOVERY.filter((s) => valutaDominio(s.template.replace('{provincia}', 'asti')).ammesso).map((s) => s.id),
+);
+check(
+  'nessuna sonda nel registro delle fonti',
+  [],
+  FONTI_INTERPELLI.filter((f) => SONDE_DISCOVERY.some((s) => f.url.toLowerCase().includes(hostSonda(s)))).map((f) => f.id),
+);
+check(
+  'nessuna sonda nella whitelist della coda (nessun target da crawler)',
+  [],
+  targetWhitelist(FONTI_INTERPELLI).filter((t) => SONDE_DISCOVERY.some((s) => t.domain.endsWith(hostSonda(s)))).map((t) => t.url),
+);
+// Le due URL qui sotto sono quelle MISURATE il 03/11/2026, non due stringhe scelte a mano.
+check('URL misurata su Asti (scuolago.it)', 'https://scuolago.it/interpelli/asti', urlSonda(sonda('sonda-scuolago')!, 'AT'));
+check('URL misurata su Asti (docenti.it)', 'https://www.docenti.it/interpelli/interpelli-asti.html', urlSonda(sonda('sonda-docenti-it')!, 'asti'));
+check('slug delle province composte', ['l-aquila', 'forli-cesena', 'verbano-cusio-ossola'], [
+  slugProvincia("L'Aquila"), slugProvincia('FC'), slugProvincia('VB'),
+]);
+check('provincia sconosciuta: nessuna URL inventata', null, urlSonda(sonda('sonda-scuolago')!, '   '));
+check('sonde per provincia: 2 URL per Torino', 2, sondePerProvincia('TO').length);
 
 console.log(
   errori === 0

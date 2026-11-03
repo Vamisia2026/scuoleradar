@@ -33,6 +33,10 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
 
 const INDEX_URL = 'https://usrlombardia.istruzione.it/elenco-interpelli-2026/';
 
+// Data di riferimento DICHIARATA (§26.139): i frammenti scadono a settembre/ottobre 2026
+// e il classificatore deve leggerli come «termine di candidatura», non come «data passata».
+const RIFERIMENTO = '2026-09-01';
+
 /** Elenco in stile USR: tabella con una voce per riga + lista + rumore di nav. */
 const ELENCO = `
 <html>
@@ -102,16 +106,8 @@ const voci = estraiVociElenco(ELENCO, INDEX_URL);
 check('una voce per avviso elencato (3)', 3, voci.length);
 check('nessuna voce punta alla pagina indice', [], voci.filter((v) => v.url === INDEX_URL));
 check('URL assoluti (relativi risolti)', true, voci.every((v) => /^https:\/\//.test(v.url)));
-check(
-  'PDF scelto come link della voce',
-  true,
-  voci.every((v) => v.url.endsWith('.pdf')),
-);
-check(
-  'nessun link di rumore (privacy/facebook/pagina 2)',
-  [],
-  voci.filter((v) => /privacy|facebook|page\/2/.test(v.url)),
-);
+check('PDF scelto come link della voce', true, voci.every((v) => v.url.endsWith('.pdf')));
+check('nessun link di rumore (privacy/facebook/pagina 2)', [], voci.filter((v) => /privacy|facebook|page\/2/.test(v.url)));
 check('titoli descrittivi', true, voci.every((v) => v.titolo.length >= 12));
 check('titoli distinti', 3, new Set(voci.map((v) => v.titolo)).size);
 
@@ -120,14 +116,11 @@ const avvisi = espandiElencoInAvvisi(ELENCO, {
   baseUrl: INDEX_URL,
   provincia: 'MI',
   source: INDEX_URL,
+  oggi: RIFERIMENTO,
 });
 const perTitolo = (re: RegExp) => avvisi.find((a) => re.test(a.title));
 check('un avviso per voce (3)', 3, avvisi.length);
-check(
-  'province valide (codice a 2 lettere)',
-  true,
-  avvisi.every((a) => /^[A-Z]{2}$/.test(a.province)),
-);
+check('province valide (codice a 2 lettere)', true, avvisi.every((a) => /^[A-Z]{2}$/.test(a.province)));
 check('provincia REALE dedotta dal testo (Milano → MI)', 'MI', perTitolo(/milano/i)?.province ?? null);
 check(
   'ogni avviso ha il PROPRIO link (mai la lista master)',
@@ -170,6 +163,7 @@ check(
 const avvisiCarte = espandiElencoInAvvisi(ELENCO_A_CARTE, {
   baseUrl: urlCarte,
   provincia: 'MI',
+  oggi: RIFERIMENTO,
 });
 check('due avvisi indipendenti', 2, avvisiCarte.length);
 check(
@@ -198,6 +192,7 @@ check('pagina indice riconosciuta', true, ePaginaElenco(TABELLA_UMBRIA, URL_UMBR
 const avvisiUmbria = espandiElencoInAvvisi(TABELLA_UMBRIA, {
   baseUrl: URL_UMBRIA,
   provincia: 'PG',
+  oggi: RIFERIMENTO,
 });
 check('un avviso per riga (2)', 2, avvisiUmbria.length);
 check('scadenza dalla colonna, non la pubblicazione', '2026-10-20', avvisiUmbria[0]?.expirationDate ?? null);
@@ -218,6 +213,7 @@ check('scadenza dalla colonna «Scadenza»', true, /Scadenza: 18\/10\/2026/.test
 const avvisiLiguria = espandiElencoInAvvisi(GRIGLIA_ARIA, {
   baseUrl: URL_LIGURIA,
   provincia: 'GE',
+  oggi: RIFERIMENTO,
 });
 check('un avviso per riga ARIA (3)', 3, avvisiLiguria.length);
 check('scadenza della prima riga', '2026-10-18', avvisiLiguria[0]?.expirationDate ?? null);
@@ -225,7 +221,7 @@ check('titolo dell’avviso senza il glifo dell’icona', false, /▤/.test(avvi
 check('nessun avviso punta alla griglia', true, !avvisiLiguria.some((a) => a.link === URL_LIGURIA));
 
 console.log('\n— Percorso del CRAWLER (parseAvvisi): testata, menu e footer esclusi —');
-const avvisiCrawler = parseAvvisi(TABELLA_UMBRIA, 'PG', URL_UMBRIA);
+const avvisiCrawler = parseAvvisi(TABELLA_UMBRIA, 'PG', URL_UMBRIA, { oggi: RIFERIMENTO });
 check('un avviso per riga-dati (2)', 2, avvisiCrawler.length);
 const linkRumoreCrawler = avvisiCrawler.filter((a) => /pon-pn|contatti|privacy|index\.php/.test(a.link ?? ''));
 check('nessun avviso da menu, footer o testata', [], linkRumoreCrawler);
@@ -233,7 +229,7 @@ check('scadenza qualificata dall’etichetta di colonna', '2026-10-20', avvisiCr
 // Portale provinciale: testata in un semplice `<div>` (site-brand) e menu in un
 // `<nav>` senza `<header>`; la riga «Graduatoria ATA», atto informativo senza
 // parola chiave, resta fuori (sembraOpportunita / GATE 1).
-const avvisiLiguriaCrawler = parseAvvisi(GRIGLIA_ARIA, 'GE', URL_LIGURIA);
+const avvisiLiguriaCrawler = parseAvvisi(GRIGLIA_ARIA, 'GE', URL_LIGURIA, { oggi: RIFERIMENTO });
 check('griglia ARIA: un avviso per riga di opportunità (2)', 2, avvisiLiguriaCrawler.length);
 const linkRumore = avvisiLiguriaCrawler.filter((a) => /index\.php|provincia\.php/.test(a.link ?? ''));
 check('griglia ARIA: nessun avviso da testata o menu', [], linkRumore);

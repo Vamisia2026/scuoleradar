@@ -27,7 +27,13 @@ import {
   regioneDiProvincia,
 } from '../src/scraper/fonti.ts';
 import { eAggregatorePrivato } from '../src/lib/dominiIstituzionali.ts';
-import { DATA_VERIFICA_AGGIORNATI, DATA_VERIFICA_SICILIA, DATA_VERIFICA_TERRITORI } from '../src/scraper/fontiTerritoriali.ts';
+import {
+  DATA_VERIFICA_AGGIORNATI,
+  DATA_VERIFICA_PIEMONTE_03,
+  DATA_VERIFICA_PUGLIA_03,
+  DATA_VERIFICA_SICILIA,
+  DATA_VERIFICA_TERRITORI,
+} from '../src/scraper/fontiTerritoriali.ts';
 import { DATA_VERIFICA_WHITELIST } from '../src/scraper/fontiWhitelist2610.ts';
 import {
   CAPOLUOGHI_PRINCIPALI,
@@ -50,6 +56,7 @@ function check(nome: string, atteso: unknown, ottenuto: unknown): void {
 /** Blocchi di verifica HTTP dichiarati dal registro (le date sono contratti). */
 const DATE_VERIFICA = new Set([
   DATA_VERIFICA_FONTI, DATA_VERIFICA_TERRITORI, DATA_VERIFICA_AGGIORNATI, DATA_VERIFICA_WHITELIST, DATA_VERIFICA_SICILIA,
+  DATA_VERIFICA_PIEMONTE_03, DATA_VERIFICA_PUGLIA_03,
 ]);
 
 console.log('— A. Igiene del registro fonti —');
@@ -68,7 +75,7 @@ check(
   FONTI_INTERPELLI.filter((f) => !f.attiva && (!f.note || f.note.length < 20 || f.verificata !== null)).map((f) => f.id),
 );
 check(
-  'fonti attive: verifica datata (blocchi 2026-09-28 / 2026-10-23 / 2026-10-25 / 2026-10-26 / 2026-11-02)',
+  'fonti attive: verifica datata (blocchi 2026-09-28 / 2026-10-23 / 2026-10-25 / 2026-10-26 / 2026-11-02 / 2026-11-03)',
   [],
   fontiAttive().filter((f) => !DATE_VERIFICA.has(f.verificata ?? '')).map((f) => f.id),
 );
@@ -104,8 +111,7 @@ check('capoluoghi principali scoperti', [], capoluoghiScoperti());
 check('ogni capoluogo principale ha almeno una fonte attiva', [], CAPOLUOGHI_PRINCIPALI.filter((c) => fontiPerCapoluogo(c.provincia).length === 0).map((c) => c.nome));
 check('Torino/Milano/Genova/Bologna/Firenze/Roma/Napoli coperti', true, ['TO', 'MI', 'GE', 'BO', 'FI', 'RM', 'NA'].every((p) => fontiPerCapoluogo(p).length > 0));
 // Blocco territoriale (§26.89) + aggiornamento 2026-10-25 + whitelist 2026-10-26:
-// in Liguria le fonti sono le pagine per provincia (URL senza anno); il modulo
-// «per ambito» del Piemonte resta escluso (righe senza link).
+// in Liguria le fonti sono le pagine per provincia (URL senza anno).
 const liguriaAttive = fontiAttive().filter((f) => f.regioni.includes('Liguria') && /provincia\.php/.test(f.url));
 check('Liguria: le 4 province hanno un elenco attivo', ['GE', 'IM', 'SP', 'SV'], [
   ...new Set(liguriaAttive.map((f) => f.capoluogo ?? '')),
@@ -114,8 +120,29 @@ check('Liguria: nessuna fonte legata a un anno scolastico', [], liguriaAttive.fi
 // La home del portale NON è una fonte: le sue righe sono i quattro indici provinciali, non interpelli.
 // §26.97 — la whitelist 26/10/2026 la riproponeva: resta fuori (in `ALIAS_SCARTATI`), con la stessa regola.
 check('Liguria: la home del portale non è una fonte', [], FONTI_INTERPELLI.filter((f) => /servizi\.istruzioneliguria\.gov\.it\/?$/.test(f.url)).map((f) => f.id));
-check('Piemonte: il modulo «per ambito» resta escluso', 0, fontiAttive().filter((f) => /ric_interpello_ambito/.test(f.url)).length);
-check('Piemonte: gli esclusi del modulo dichiarano il motivo', [], FONTI_INTERPELLI.filter((f) => /ric_interpello_ambito/.test(f.url) && (!f.note || f.note.length < 40)).map((f) => f.id));
+check('Piemonte: gli 8 elenchi «per ambito» 2026 sono attivi', ['AL', 'AT', 'BI', 'CN', 'NO', 'TO', 'VB', 'VC'], [
+  ...new Set(fontiAttive().filter((f) => /interpello2026\/ric_interpello_ambito_/.test(f.url)).map((f) => f.capoluogo ?? '')),
+].sort());
+check('Piemonte: nessuna fonte attiva punta allo snapshot 2025/26', [], fontiAttive().filter((f) => /interpello2025\//.test(f.url)).map((f) => f.id));
+check('Piemonte: lo snapshot 2025/26 resta registrato SPENTO e con il motivo', [], FONTI_INTERPELLI.filter(
+  (f) => /interpello2025\//.test(f.url) && (f.attiva || (f.note ?? '').length < 40),
+).map((f) => f.id));
+check('Piemonte: 8 voci dello snapshot 2025/26', 8, FONTI_INTERPELLI.filter((f) => /interpello2025\//.test(f.url)).length);
+
+/* Aggiornamento 2026-11-03 (§26.137): Asti, Foggia e le fonti «viste ma non leggibili». */
+const attiva = (id: string): boolean => FONTI_INTERPELLI.some((f) => f.id === id && f.attiva);
+check('Asti: le due scuole che pubblicano interpelli sono attive', [true, true], [
+  attiva('hub-asti-giobert-interpelli'), attiva('hub-asti-castellalfero-interpelli'),
+]);
+check('Puglia: l’albo pretorio dell’UST di Foggia è attivo', true, attiva('hub-fg-albo-pretorio'));
+const nuvola = FONTI_INTERPELLI.filter((f) => /nuvola\.madisoft\.it/.test(f.url));
+check('Nuvola: 6 URL verificate e TUTTE spente (JS / data di pubblicazione)', [6, 0], [
+  nuvola.length, nuvola.filter((f) => f.attiva).length,
+]);
+check('Nuvola: ogni esclusione dichiara il motivo', [], nuvola.filter((f) => (f.note ?? '').length < 40).map((f) => f.id));
+check('Asti: i comprensivi senza avvisi restano spenti con il motivo', [], FONTI_INTERPELLI.filter(
+  (f) => /(?:sandamiano|villanovasti)\.edu\.it/.test(f.url) && (f.attiva || (f.note ?? '').length < 40),
+).map((f) => f.id));
 
 /* Aggiornamento 2026-10-25: territori prima scoperti e ora con un elenco verificato. */
 const provinceAttive = (regione: string) => [...new Set(fontiAttive().filter((f) => f.regioni.includes(regione) && f.capoluogo).map((f) => f.capoluogo ?? ''))];

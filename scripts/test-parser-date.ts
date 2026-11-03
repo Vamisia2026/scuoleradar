@@ -5,6 +5,12 @@
  * assegnata alla SCADENZA, e che la scadenza reale sia estratta (parole chiave)
  * o calcolata (termine relativo) separatamente, senza inversioni.
  *
+ * §26.139: verifica anche il CLASSIFICATORE unico delle date
+ * (`lib/scadenzaTesto.classificaDateAvviso`) — una data già passata è la
+ * PUBBLICAZIONE, una data oltre i 90 giorni / su una coda d'anno è
+ * «Disponibilità aperta / Fine contratto» e resta in bacheca. Le guardie passano
+ * un «oggi» DICHIARATO: stesso avviso, stesso esito, in qualunque giorno.
+ *
  * Esecuzione:
  *   npm run test:parser:date
  */
@@ -91,10 +97,14 @@ check(
 );
 
 console.log('\n— Nessuna inversione: la prima data (pubblicazione) NON è la scadenza —');
+// Riferimento FISSO (§26.139): con il classificatore delle date l'esito dipende da
+// «oggi», quindi la guardia gli passa un giorno dichiarato — deterministica.
+const RIFERIMENTO = { oggi: '2026-09-14' };
 const conPubblicazione = parseInterpello(
   avviso('Interpello supplenza A-026 — Liceo scientifico, Milano', {
     dataPubblicazione: '2026-09-12',
     corpo: 'Scadenza: 15/09/2026. Si richiede titolo di accesso valido.',
+    ...RIFERIMENTO,
   }),
 );
 check('publishedAt = data intestazione', '2026-09-12', conPubblicazione.publishedAt);
@@ -104,6 +114,7 @@ const soloPubblicazione = parseInterpello(
   avviso('Interpello supplenza A-026 Matematica', {
     dataPubblicazione: '2026-09-12',
     corpo: 'Si richiede titolo di accesso valido e disponibilità immediata.',
+    ...RIFERIMENTO,
   }),
 );
 check('senza scadenza dichiarata: publishedAt valorizzato', '2026-09-12', soloPubblicazione.publishedAt);
@@ -112,6 +123,7 @@ check('senza scadenza dichiarata: expirationDate = null', null, soloPubblicazion
 const contestoCompleto = parseInterpello(
   avviso('Interpello A-026', {
     corpo: 'Pubblicato il 12/09/2026. Scadenza: 15/09/2026.',
+    ...RIFERIMENTO,
   }),
 );
 check('"pubblicato il 12/09 + scadenza 15/09": publishedAt', '2026-09-12', contestoCompleto.publishedAt);
@@ -122,13 +134,55 @@ const relativa = parseInterpello(
   avviso('Interpello supplenza A-026', {
     dataPubblicazione: '2026-09-10',
     corpo: 'Le istanze devono pervenire entro 7 giorni dalla pubblicazione del presente avviso.',
+    ...RIFERIMENTO,
   }),
 );
 check('publicazione 10/09 + "entro 7 giorni" → 17/09', '2026-09-17', relativa.expirationDate);
 
 console.log('\n— Hint esplicito (dataNota) —');
-const conHint = parseInterpello(avviso('Interpello A-026', { dataNota: 'Scadenza 2026-09-30' }));
+const conHint = parseInterpello(avviso('Interpello A-026', { dataNota: 'Scadenza 2026-09-30', ...RIFERIMENTO }));
 check('dataNota esplicita vince sulla scadenza', '2026-09-30', conHint.expirationDate);
+
+/* ------------- 5) DISCREZIONALITÀ DELLE DATE: passato e fine contratto ------------- */
+
+console.log('\n— §26.139. Una data già passata è la PUBBLICAZIONE, non una scadenza —');
+const passata = parseInterpello(
+  avviso('Interpello A-026 Matematica — Liceo Majorana', {
+    corpo: 'Avviso del 31/10/2026. Termine per la presentazione delle domande: 31/10/2026.',
+    oggi: '2026-11-03',
+  }),
+);
+check('data passata → publishedAt', '2026-10-31', passata.publishedAt);
+check('data passata → nessuna scadenza perentoria', null, passata.expirationDate);
+check('e la natura dichiara che è una pubblicazione', 'pubblicazione', passata.naturaScadenza);
+
+const passataInColonna = parseInterpello(
+  avviso('Interpello A-026', { dataNota: '2026-10-31', oggi: '2026-11-03' }),
+);
+check(
+  'data passata DICHIARATA in colonna: resta la scadenza (la fonte l’ha dichiarata)',
+  '2026-10-31',
+  passataInColonna.expirationDate,
+);
+check('con natura «termine scaduto»', 'termine_scaduto', passataInColonna.naturaScadenza);
+
+console.log('\n— §26.139. Oltre i 90 giorni / coda d’anno: «Disponibilità aperta / Fine contratto» —');
+for (const [data, atteso] of [
+  ['2027-04-30', 'disponibilita_aperta'],
+  ['2027-06-30', 'disponibilita_aperta'],
+  ['2027-08-31', 'disponibilita_aperta'],
+] as const) {
+  const lontana = parseInterpello(
+    avviso('Interpello A-026', { corpo: `Disponibilità fino al ${data}.`, dataNota: data, oggi: '2026-11-03' }),
+  );
+  check(`${data}: la data resta in bacheca`, data, lontana.expirationDate);
+  check(`${data}: natura`, atteso, lontana.naturaScadenza);
+}
+const imminente = parseInterpello(
+  avviso('Interpello A-026', { corpo: 'Domande entro il 12/11/2026.', oggi: '2026-11-03' }),
+);
+check('termine ravvicinato: natura', 'termine_candidatura', imminente.naturaScadenza);
+check('termine ravvicinato: la data resta', '2026-11-12', imminente.expirationDate);
 
 console.log('\n──────────────────────────────────────────────────────────');
 if (falliti === 0) {

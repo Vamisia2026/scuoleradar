@@ -23,10 +23,17 @@ const P404 =
   'dominio per il territorio). Il MIM pubblica gli avvisi altrove: nessuna URL inventata.';
 const P503 =
   'HTTP 503 (manutenzione) alla verifica del 2026-10-23: sito non servibile. Da riverificare.';
-const PTABELLA =
-  'HTTP 200 con tabelle piene ma NESSUN link per voce (modulo di ricerca «per ambito»): ' +
-  'la riga descrive l’interpello, non rimanda al documento ufficiale. Senza URL specifico ' +
-  'l’avviso non è verificabile, quindi la fonte resta esclusa.';
+// §26.137 — il criterio «tabella senza link per voce = esclusa» del 2026-10-23 è
+// SUPERATO: le tabelle dense si leggono per celle (`tabellaUst.ts`), quindi
+// l'edizione corrente degli elenchi «per ambito» del Piemonte è una fonte attiva
+// (`fontiTerritoriali.ts`). Resta qui l'edizione 2025/26, che serve uno SNAPSHOT.
+const AMBITO_25 =
+  'Snapshot degli elenchi «per ambito» dell’edizione 2025/26: STESSA tabella ' +
+  'dell’elenco attivo (identico numero di righe) ma con gli stati FERMI — Novara ' +
+  'dichiara 204 righe «aperto» contro le 17 dell’edizione corrente — e date in forma ' +
+  'ISO. La fonte attiva è la tupla `interpello2026/` in `fontiTerritoriali.ts`: questa ' +
+  'resta spenta per non interrogare due volte la stessa tabella e per non importare ' +
+  'stati vecchi.';
 const IFRAME =
   'Pagina-ponte con un <iframe> verso il portale dei servizi: nell’HTML non c’è nessuna voce ' +
   '(0 avvisi, 0 post). Gli elenchi leggibili sono le pagine per provincia dello stesso portale ' +
@@ -53,6 +60,32 @@ const NOELENCO_25 =
   'Nessun elenco leggibile alla verifica del 2026-10-25: la pagina rende solo menu e singoli avvisi ' +
   'sparsi, senza una lista di interpelli con link alla voce. Il territorio resta scoperto e dichiarato.';
 
+// Motivi della verifica del 2026-11-03 (§26.137): Nuvola (madisoft), gli istituti di
+// Asti senza avvisi e la pagina di ricerca dell'e-portfolio MIM di Como.
+const NUVOLA_JS_03 =
+  'HTTP 200 con 1,2 KB di HTML e NESSUN contenuto: la pagina è un guscio React ' +
+  '(`<div id="interpelli-react-root" data-codice-cliente="…">`) che si riempie solo con ' +
+  'JavaScript. Gli interpelli della scuola esistono, ma un fetch non li legge: dichiarare ' +
+  'attiva questa fonte darebbe zero righe e una copertura finta. Servirebbe un renderer ' +
+  '(mai introdotto) o un endpoint JSON pubblico, che non risulta documentato.';
+const NUVOLA_BACHECA_03 =
+  'HTTP 200 con una tabella vera (103 righe: «Oggetto | Data pubblicazione su bacheca | ' +
+  'Registro») ma senza il TERMINE di candidatura: la data di colonna è quella di ' +
+  'PUBBLICAZIONE, e il termine compare solo dentro l’oggetto («… DAL 03.11.2026 AL ' +
+  '06.12.2026»). Il gate esige la scadenza dichiarata (§26.82): resa zero, quindi resta ' +
+  'esclusa e ricontrollabile invece di entrare in bacheca con la data sbagliata.';
+const NOVOCI_03 =
+  'Pagina «Interpelli» della scuola senza NESSUN avviso alla verifica del 2026-11-03: solo ' +
+  'link di condivisione social, menu e contatti. Ri-misurata lo stesso giorno: 154 link su ' +
+  'S. Damiano e 144 su Villanova, nessuno verso un avviso (0 link a PDF, 0 date di scadenza). ' +
+  'Non è un elenco: la scuola resta scoperta e dichiarata finché non pubblica gli avvisi in una ' +
+  'pagina leggibile (le altre due scuole di Asti con avvisi veri sono in `fontiTerritoriali.ts`).';
+const RICERCA_03 =
+  'Pagina di RICERCA dell’e-portfolio MIM (`/web/como/ricerca?r=interpelli`): HTTP 200 e ' +
+  'zero risultati nell’HTML — la lista la costruisce il client. Provata anche la variante con ' +
+  '`&scope=this-site` (2026-11-03): 50 KB, 41 link tutti di navigazione, 0 voci d’avviso. Non ' +
+  'è un elenco e non ha voci da leggere: per Como la copertura resta affidata agli hub verificati.';
+
 /** Hub e portali territoriali esclusi dal fetch, con il motivo della verifica. */
 export const HUB_ESCLUSI_VERIFICA: [string, string, string, string[], string, string][] = [
   // ── Toscana: gli e-portfolio MIM dei territori non esistono (404) ──
@@ -70,15 +103,19 @@ export const HUB_ESCLUSI_VERIFICA: [string, string, string, string[], string, st
   ['vda-scuole-home', 'USR Valle d’Aosta — Portale scuole (Aosta)', 'https://www.scuole.vda.it/', ["Valle d'Aosta"], 'AO', P503],
   ['vda-scuole-interpelli', 'USR Valle d’Aosta — Interpelli (Aosta)', 'https://scuole.vda.it/interpelli', ["Valle d'Aosta"], 'AO', P503],
 
-  // ── Piemonte: elenchi «per ambito» senza link per voce (2026-10-23) ──
-  ['pi-to-ambito', 'USP Torino — Ricerca interpelli per ambito (Torino)', 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_to.php', ['Piemonte'], 'TO', PTABELLA],
-  ['pi-al-ambito', 'USP Alessandria — Ricerca interpelli per ambito (Alessandria)', 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_al.php', ['Piemonte'], 'AL', PTABELLA],
-  ['pi-at-ambito', 'USP Asti — Ricerca interpelli per ambito (Asti)', 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_at.php', ['Piemonte'], 'AT', PTABELLA],
-  ['pi-bi-ambito', 'USP Biella — Ricerca interpelli per ambito (Biella)', 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_bi.php', ['Piemonte'], 'BI', PTABELLA],
-  ['pi-cn-ambito', 'USP Cuneo — Ricerca interpelli per ambito (Cuneo)', 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_cn.php', ['Piemonte'], 'CN', PTABELLA],
-  ['pi-no-ambito', 'USP Novara — Ricerca interpelli per ambito (Novara)', 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_no.php', ['Piemonte'], 'NO', PTABELLA],
-  ['pi-vb-ambito', 'USP Verbania — Ricerca interpelli per ambito (Verbania)', 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_vb.php', ['Piemonte'], 'VB', PTABELLA],
-  ['pi-vc-ambito', 'USP Vercelli — Ricerca interpelli per ambito (Vercelli)', 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_vc.php', ['Piemonte'], 'VC', PTABELLA],
+  // ── Piemonte: edizione 2025/26 degli elenchi «per ambito» (snapshot, 2026-11-03) ──
+  // §26.137 — il criterio del 2026-10-23 («tabella senza link per voce = esclusa») è
+  // superato: la tabella si legge per CELLE. L'elenco ATTIVO è lo stesso modulo in
+  // `interpello2026/` (`fontiTerritoriali.ts`); qui resta l'edizione 2025/26, con gli
+  // stessi conteggi di righe ma gli stati fermi.
+  ['pi-to-ambito-2025', 'USP Torino — Interpelli per ambito 2025/26 (Torino)', 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_to.php', ['Piemonte'], 'TO', AMBITO_25],
+  ['pi-al-ambito-2025', 'USP Alessandria — Interpelli per ambito 2025/26 (Alessandria)', 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_al.php', ['Piemonte'], 'AL', AMBITO_25],
+  ['pi-at-ambito-2025', 'USP Asti — Interpelli per ambito 2025/26 (Asti)', 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_at.php', ['Piemonte'], 'AT', AMBITO_25],
+  ['pi-bi-ambito-2025', 'USP Biella — Interpelli per ambito 2025/26 (Biella)', 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_bi.php', ['Piemonte'], 'BI', AMBITO_25],
+  ['pi-cn-ambito-2025', 'USP Cuneo — Interpelli per ambito 2025/26 (Cuneo)', 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_cn.php', ['Piemonte'], 'CN', AMBITO_25],
+  ['pi-no-ambito-2025', 'USP Novara — Interpelli per ambito 2025/26 (Novara)', 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_no.php', ['Piemonte'], 'NO', AMBITO_25],
+  ['pi-vb-ambito-2025', 'USP Verbania — Interpelli per ambito 2025/26 (Verbania)', 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_vb.php', ['Piemonte'], 'VB', AMBITO_25],
+  ['pi-vc-ambito-2025', 'USP Vercelli — Interpelli per ambito 2025/26 (Vercelli)', 'https://servizi.istruzionepiemonte.it/interpello2025/ric_interpello_ambito_vc.php', ['Piemonte'], 'VC', AMBITO_25],
 
   // ── Liguria: pagina-ponte del portale istituzionale (2026-10-23) ──
   ['istruzioneliguria-interpelli', 'USR Liguria — Interpelli e comunicati (Genova)', 'https://www.istruzioneliguria.gov.it/pagine/interpelli-e-comunicati', ['Liguria'], 'GE', IFRAME],
@@ -176,4 +213,25 @@ export const HUB_ESCLUSI_VERIFICA: [string, string, string, string[], string, st
 
   // Veneto: Belluno non espone una pagina-elenco (solo avvisi sparsi nel portale)
   ['bl-categoria-interpelli', 'USP Belluno — Categoria interpelli (Belluno)', 'https://belluno.istruzioneveneto.gov.it/category/interpelli/', ['Veneto'], 'BL', NOELENCO_25],
+
+  // ── AGGIORNAMENTO 2026-11-03 (§26.137): NUVOLA, ISTITUTI DI ASTI, RICERCA MIM ──
+  // Otto URL aperte una per una. Nuvola risponde 200 ma è JS (1,2 KB di guscio React);
+  // la bacheca digitale rende una tabella vera con la data di PUBBLICAZIONE; i due
+  // comprensivi di Asti non hanno nessun avviso; la «ricerca» di Como non ha risultati
+  // nell'HTML. Nessuna produce righe candidabili: registrate spente, con il motivo.
+  ['nv-atic81800r-ata', 'Nuvola — Interpelli ATA (ATIC81800R)', 'https://nuvola.madisoft.it/interpelli/ATIC81800R/ata', ['Piemonte'], 'AT', NUVOLA_JS_03],
+  ['nv-atic81800r-docenti', 'Nuvola — Interpelli docenti (ATIC81800R)', 'https://nuvola.madisoft.it/interpelli/ATIC81800R/docenti', ['Piemonte'], 'AT', NUVOLA_JS_03],
+  ['nv-atee00500r-ata', 'Nuvola — Interpelli ATA (ATEE00500R)', 'https://nuvola.madisoft.it/interpelli/ATEE00500R/ata', ['Piemonte'], 'AT', NUVOLA_JS_03],
+  ['nv-atic81200t-bacheca', 'Nuvola — Bacheca digitale (ATIC81200T)', 'https://nuvola.madisoft.it/bacheca-digitale/bacheca/ATIC81200T/7/IN_PUBBLICAZIONE/0/show?isBachecaPubblica=1', ['Piemonte'], 'AT', NUVOLA_BACHECA_03],
+  ['asti-sandamiano-interpelli', 'IC S. Damiano d’Asti — Interpelli (Asti)', 'https://icsandamiano.edu.it/servizio/interpelli/', ['Piemonte'], 'AT', NOVOCI_03],
+  ['asti-villanova-interpelli', 'IC Villanova d’Asti — Interpelli (Asti)', 'https://icvillanovasti.edu.it/interpelli-i-c-villanova-dasti/', ['Piemonte'], 'AT', NOVOCI_03],
+  ['como-ricerca-interpelli', 'MIM Como — Ricerca interpelli (Como)', 'https://www.mim.gov.it/web/como/ricerca?r=interpelli', ['Lombardia'], 'CO', RICERCA_03],
+  // ── AGGIORNAMENTO 2026-11-03 (§26.138): altre TRE URL aperte una per una ──
+  // Seconda passata dello stesso giorno sulle segnalazioni rimaste: la seconda
+  // scuola di Asti su Nuvola (`ATIC82000R`, IC 5) e la variante con
+  // `&scope=this-site` della ricerca di Como. Esito identico: gusci React e
+  // pagine di navigazione, zero voci. Registrate, spente, ricontrollabili.
+  ['nv-atic82000r-ata', 'Nuvola — Interpelli ATA (ATIC82000R)', 'https://nuvola.madisoft.it/interpelli/ATIC82000R/ata', ['Piemonte'], 'AT', NUVOLA_JS_03],
+  ['nv-atic82000r-docenti', 'Nuvola — Interpelli docenti (ATIC82000R)', 'https://nuvola.madisoft.it/interpelli/ATIC82000R/docenti', ['Piemonte'], 'AT', NUVOLA_JS_03],
+  ['como-ricerca-interpelli-scope', 'MIM Como — Ricerca interpelli con scope sul sito (Como)', 'https://www.mim.gov.it/web/como/ricerca?r=interpelli&scope=this-site', ['Lombardia'], 'CO', RICERCA_03],
 ];

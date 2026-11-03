@@ -36,6 +36,13 @@ import {
   WP_ELENCO,
 } from './fixtures/postElencoHtml.ts';
 
+/**
+ * Data di riferimento DICHIARATA (§26.139): i frammenti dichiarano un termine al
+ * 26/10/2026 — con il calendario locale, passata quella data, la guardia
+ * leggerebbe «pubblicazione» invece di «termine di candidatura».
+ */
+const RIFERIMENTO = '2026-10-20';
+
 
 let errori = 0;
 function check(nome: string, atteso: unknown, ottenuto: unknown): void {
@@ -132,7 +139,7 @@ const articoloDelPost = (titolo: string, data: string): string => `
 
 const avvisiWp = await espandiPostInAvvisi(
   WP_ELENCO,
-  { baseUrl: WP_BASE, provincia: 'FE', source: WP_BASE },
+  { baseUrl: WP_BASE, provincia: 'FE', source: WP_BASE, oggi: RIFERIMENTO },
   {
     max: 5,
     scarica: async (url) => {
@@ -161,7 +168,7 @@ check(
 
 const avvisiFeed = await espandiPostInAvvisi(
   FEED,
-  { baseUrl: FEED_BASE, provincia: 'MO', source: FEED_BASE },
+  { baseUrl: FEED_BASE, provincia: 'MO', source: FEED_BASE, oggi: RIFERIMENTO },
   {
     max: 5,
     scarica: async (url) => {
@@ -176,7 +183,7 @@ check('feed: link delle voci, mai il feed', [], avvisiFeed.avvisi.filter((a) => 
 
 const senzaRete = await espandiPostInAvvisi(
   WP_ELENCO,
-  { baseUrl: WP_BASE, provincia: 'FE', source: WP_BASE },
+  { baseUrl: WP_BASE, provincia: 'FE', source: WP_BASE, oggi: RIFERIMENTO },
   {
     max: 5,
     scarica: async () => {
@@ -196,7 +203,7 @@ console.log('\n— H. Pagine che NON sono indici di post —');
 check('articolo singolo non è un indice', false, ePaginaPostElenco(ARTICOLO_WP, WP_BASE));
 const nessuno = await espandiPostInAvvisi(
   ARTICOLO_WP,
-  { baseUrl: WP_BASE, provincia: 'FE', source: WP_BASE },
+  { baseUrl: WP_BASE, provincia: 'FE', source: WP_BASE, oggi: RIFERIMENTO },
   { max: 5, scarica: async () => ARTICOLO_WP },
 );
 check('articolo: nessuna espansione', 'nessuno', nessuno.tipo);
@@ -207,7 +214,7 @@ check('la sezione Joomla è una pagina indice', true, eUrlIndicePortale(AREZZO_B
 check('la pagina è riconosciuta come indice di post', true, ePaginaPostElenco(AREZZO_INDICE, AREZZO_BASE));
 const avvisiArezzo = await espandiPostInAvvisi(
   AREZZO_INDICE,
-  { baseUrl: AREZZO_BASE, provincia: 'AR', source: AREZZO_BASE },
+  { baseUrl: AREZZO_BASE, provincia: 'AR', source: AREZZO_BASE, oggi: RIFERIMENTO },
   {
     max: 5,
     scarica: async () =>

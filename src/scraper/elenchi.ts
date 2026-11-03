@@ -206,6 +206,11 @@ export function espandiElencoInAvvisi(
     provincia: string;
     source?: string;
     dataPubblicazione?: string | null;
+    /**
+     * Data di riferimento della CLASSIFICAZIONE delle date (§26.139): assente =
+     * calendario locale (produzione), dichiarata = guardia deterministica.
+     */
+    oggi?: string | Date;
   },
   opts: { max?: number } = {},
 ): InterpelloParsato[] {
@@ -224,6 +229,7 @@ export function espandiElencoInAvvisi(
       // della riga: è la parola chiave che qualifica la data come scadenza.
       corpo: voce.suggerimenti ? `${voce.suggerimenti} · ${voce.contesto}` : voce.contesto,
       dataPubblicazione: ctx.dataPubblicazione ?? null,
+      oggi: ctx.oggi,
     });
     if (hashVisti.has(avviso.hashId)) continue;
     hashVisti.add(avviso.hashId);

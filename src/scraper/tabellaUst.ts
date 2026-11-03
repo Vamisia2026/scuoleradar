@@ -23,7 +23,8 @@
  *   4. non scaduta, e dentro la finestra di `GIORNI_ORIZZONTE_OPPORTUNITA` (15
  *      giorni): oltre, la «data» è quasi sempre la fine dell'incarico;
  *   5. segnale di INSEGNAMENTO (interpello, supplenza, sostegno, classe di
- *      concorso, posto, docente, ATA): un elenco di graduatorie non passa.
+ *      concorso, posto, docente, ATA, ordine di scuola): un elenco di graduatorie
+ *      non passa.
  *
  * Il link della riga è scelto con una preferenza esplicita: prima un documento o
  * una pagina non di piattaforma (`lib/piattaformeLink.ts`), MAI un login Argo /
@@ -74,9 +75,17 @@ export type EsitoRigaUst = RigaTabellaUst & {
 const RE_STATO_CHIUSO =
   /\b(?:chius[oaie]|conclus[oaie]|scadut[oaie]|revocat[oaie]|annullat[oaie]|cancellat[oaie]|sospes[oaie]|non\s+pi[uù]\s+(?:attivo|disponibile))\b/i;
 
-/** Segnale di INSEGNAMENTO: senza questo la riga è un elenco, non un interpello. */
+/**
+ * Segnale di INSEGNAMENTO: senza questo la riga è un elenco, non un interpello.
+ *
+ * Dal 2026-11-03 (§26.137) valgono anche gli ORDINI DI SCUOLA — `infanzia`,
+ * `primaria`, `secondaria`. Nelle tabelle «per ambito» dell'USP del Piemonte il
+ * posto è nominato solo così («AAAA - INFANZIA», «EEEE - PRIMARIA»): non è una
+ * classe di concorso, quindi senza questo segnale il posto più frequente d'Italia
+ * veniva scartato come «non è un interpello di supplenza».
+ */
 const RE_SEGNALE_INSEGNAMENTO =
-  /\b(?:interpell\w*|supplenz\w*|supplente|sostegno|docente|insegnante|ATA|collaborator[ei]\s+scolastic[oi]|posto\s+(?:intero|di\s+sostegno)|class[ei]\s+di\s+concorso|graduator\w*\s+di\s+istituto)\b/i;
+  /\b(?:interpell\w*|supplenz\w*|supplente|sostegno|docente|insegnante|ATA|collaborator[ei]\s+scolastic[oi]|posto\s+(?:intero|di\s+sostegno)|class[ei]\s+di\s+concorso|graduator\w*\s+di\s+istituto|infanzia|primaria|secondaria)\b/i;
 
 /** Opzioni del gate: la data di riferimento si passa SEMPRE nei test. */
 export interface OpzioniGateUst {
