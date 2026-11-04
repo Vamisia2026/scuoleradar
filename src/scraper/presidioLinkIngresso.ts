@@ -21,10 +21,15 @@
  *      sia morto e l'upsert è `ignoreDuplicates`, cioè irreversibile — il link
  *      specifico resta e la decisione (con nuovo tentativo) la prende la pulizia.
  *      Un `404`/`410` invece è una prova: home ufficiale se nota, altrimenti fuori.
+ *   3. §26.140 — LA DESTINAZIONE VIENE PRIMA DELL'ESITO: una home dell'istituto o
+ *      una pagina indice/contenitore non è un avviso e non entra mai (`200`,
+ *      timeout o `403` non cambiano nulla). La regola è `eUrlAvvisoSpecifico`
+ *      (`lib/validitaLink.ts`), la stessa che pubblica la bacheca.
  */
 
 import {
   decidiPubblicazione,
+  eUrlAvvisoSpecifico,
   statoLink,
   urlPubblicabile,
   type EsitoPingLink,
@@ -98,7 +103,12 @@ export function valutaIngressoPerLink(
   // Timeout/DNS/TLS/5xx: nessuna prova di morte, e in ingresso la scelta è
   // irreversibile (upsert con `ignoreDuplicates`). Il link specifico resta; se è
   // davvero morto lo dirà la pulizia dati, che può riprovare e sostituire la home.
-  if (stato === 'instabile' && urlPubblicabile(link)) {
+  //
+  // §26.140 — «instabile» NON vale per una home o un contenitore: lì l'esito non
+  // c'entra, l'URL non è un avviso e non entrerà mai in bacheca
+  // (`eUrlAvvisoSpecifico`). Senza questa condizione un timeout sulla home
+  // dell'istituto la salverebbe come se fosse il bando (`polovolta.edu.it`).
+  if (stato === 'instabile' && eUrlAvvisoSpecifico(link)) {
     return {
       accetta: true,
       link,

@@ -49,7 +49,15 @@ const PESI_ALLEGATO: ReadonlyArray<{ re: RegExp; peso: number }> = [
   { re: /\bavvis[oi]\b/i, peso: 3 },
   { re: /\binterpell/i, peso: 3 },
   { re: /\bsupplenz/i, peso: 3 },
+  // §26.141 — il documento del reclutamento che non si chiama «bando»: MAD e
+  // messa a disposizione (docenti), profili ATA (collaboratori, assistenti, DSGA).
+  { re: /\bmad\b|messa\s+a\s+disposizione/i, peso: 3 },
+  {
+    re: /personale\s+ata|collaborator[ei]\s+scolastic|assistent[ei]\s+(?:amministrativ|tecnic)|\bdsga\b/i,
+    peso: 3,
+  },
   { re: /\bdomand[ae]\b|\brequisit/i, peso: 2 },
+  { re: /\bconcors/i, peso: 2 },
   { re: /\ballegat/i, peso: 1 },
 ];
 

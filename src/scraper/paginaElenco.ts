@@ -14,12 +14,20 @@
  * resta in `elenchi.ts`, dove si contano le voci: qui solo i due indizi testuali.
  */
 
-/** Percorsi tipici di una pagina INDICE/ELENCO. */
+/**
+ * Percorsi tipici di una pagina INDICE/ELENCO.
+ *
+ * §26.141 — con `concors`, `trasparen` e `personale` l'elenco riconosce anche
+ * **Amministrazione Trasparente → Bandi di concorso** e le pagine del personale
+ * (ATA): erano indici veri che l'euristica non vedeva, e finivano in bacheca come
+ * se fossero l'avviso.
+ */
 const RE_PATH_ELENCO =
-  /(elenco|elenchi|indice|lista|liste|avvisi|interpelli|bandi|graduator|albo|pubblicazion|circolari|comunicazioni|scadenze|notizie)/i;
+  /(elenco|elenchi|indice|lista|liste|avvisi|interpelli|bandi|concors|graduator|albo|pubblicazion|circolari|comunicazioni|scadenze|notizie|trasparen|personale)/i;
 
 /** Titoli tipici di una pagina INDICE. */
-const RE_TITOLO_ELENCO = /(elenco|elenchi|indice|lista|tutti gli|avvisi pubblicati|graduatorie|scadenze)/i;
+const RE_TITOLO_ELENCO =
+  /(elenco|elenchi|indice|lista|tutti gli|avvisi pubblicati|graduatorie|scadenze|bandi di concorso|amministrazione trasparente)/i;
 
 /** True se l'URL "sembra" una pagina indice/elenco (euristica sul percorso). */
 export function eUrlElenco(url?: string | null): boolean {

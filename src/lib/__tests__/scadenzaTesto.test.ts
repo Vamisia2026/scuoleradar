@@ -14,7 +14,9 @@
  *   6. la NATURA della data trovata (§26.139): già passata = pubblicazione,
  *      oltre i 90 giorni / coda d'anno = «Disponibilità aperta / Fine contratto»
  *      — mai un termine perentorio per forza, mai una riga da buttare;
- *   7. modulo PURO, compatto e in catena (`npm test`).
+ *   7. il termine PRESUNTO di un atto d'albo (§26.142) è una data con una natura
+ *      dichiarata, e tace dove la fonte un termine ce l'ha;
+ *   8. modulo PURO, compatto e in catena (`npm test`).
  *
  * Uso: npm run test:scadenza-testo  (incluso in `npm test`)
  */
@@ -192,6 +194,30 @@ check('giorni fra due date', 31, giorniTra('2026-11-03', '2026-12-04'));
 check('giorni su data illeggibile', null, giorniTra('2026-11-03', 'domani'));
 check('coda d’anno riconosciuta', true, eCodaAnnoScolastico('2027-08-31'));
 check('una data ordinaria non è coda d’anno', false, eCodaAnnoScolastico('2026-11-12'));
+
+/* ------------- 5-bis) IL TERMINE PRESUNTO (§26.142) --------------- */
+
+console.log('\n— 5-bis. Un termine PRESUNTO è una data, non un silenzio (§26.142) —');
+const presunto = classificaDateAvviso({
+  pubblicazione: '2026-11-01',
+  oggi: OGGI,
+  presunzione: '2026-11-08',
+});
+check('il termine presunto diventa la data della riga', '2026-11-08', presunto.expirationDate);
+check('la sua natura è dichiarata', 'disponibilita_aperta', presunto.natura);
+check('con l’etichetta di sempre', 'Disponibilità aperta / Fine contratto', presunto.etichetta);
+check('i giorni si contano dal riferimento', 5, presunto.giorni);
+check('la pubblicazione resta quella della fonte', '2026-11-01', presunto.publishedAt);
+const conTermine = classificaDateAvviso({
+  scadenza: '2026-11-12',
+  oggi: OGGI,
+  presunzione: '2026-11-08',
+});
+check('dove la fonte dichiara un termine, la presunzione tace', '2026-11-12', conTermine.expirationDate);
+check('e la natura resta quella del termine', 'termine_candidatura', conTermine.natura);
+const senzaPresunzione = classificaDateAvviso({ pubblicazione: '2026-11-01', oggi: OGGI });
+check('senza presunzione la riga resta senza termine', null, senzaPresunzione.expirationDate);
+check('natura «nessuna»', 'nessuna', senzaPresunzione.natura);
 
 /* --------------------------- 6) PUREZZA E CATENA -------------------------- */
 

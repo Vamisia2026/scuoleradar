@@ -80,6 +80,7 @@ import {
 import { ePaginaPostElenco } from './postElenco.ts';
 import { eFeedDocumento } from './postFeed.ts';
 import { espandiPostInAvvisi } from './postRaccolta.ts';
+import { allegatiBando, titoloDaAllegato } from './allegatiBando.ts';
 import { datiRiga, titoloVoce } from './righeTabella.ts';
 import { eUrlArticolo, eUrlHome } from './paginaElenco.ts';
 import { eUrlIndicePortale } from '../lib/urlAvviso.ts';
@@ -760,6 +761,14 @@ async function raccogliAvvisiReali(
  *      e-portfolio Liferay del MIM): `postRaccolta.ts` legge OGNI post, così il
  *      parser vede titolo, testo, data e allegati dell'articolo, non la riga
  *      di un elenco (`SCRAPER_POST_MAX`, default 8 post per indice).
+ *
+ * §26.141 — LE PAGINE CHE SI ESPANDONO SONO DI PIÙ. Il riconoscimento non si limita
+ * a `/interpelli/` e `/mad/`: `paginaElenco.eUrlElenco` vede anche l'**Albo
+ * Pretorio**, **Amministrazione Trasparente → Bandi di concorso/Avvisi** e le
+ * pagine del **personale** (ATA), mentre il deep crawl delle scuole le trova nella
+ * home (`linkScuola.linkInterpelliScuola`, §26.94). Se la pagina non è né tabella
+ * né elenco di post, si legge la TERZA famiglia — il contenitore di atti
+ * (`avvisiDaContenitore`, §26.140) — e ogni PDF diventa un avviso a sé.
  */
 async function espandiElenchi(
   avvisi: AvvisoRilevato[],
@@ -777,6 +786,8 @@ async function espandiElenchi(
   postLetti: number;
   /** Pagine d'elenco lette OLTRE la prima (§26.103): consumo di rete extra. */
   pagineExtra: number;
+  /** §26.140 — pagine-contenitore espanse nei loro singoli atti (PDF). */
+  pagineAtti: number;
 }> {
   const out: AvvisoRilevato[] = [];
   const indiciScartati: string[] = [];
@@ -785,6 +796,8 @@ async function espandiElenchi(
   let elenchiPost = 0;
   let postLetti = 0;
   let pagineExtra = 0;
+  /** §26.140 — pagine-contenitore espanse nei loro singoli atti (PDF). */
+  let pagineAtti = 0;
   let fetchEffettuati = 0;
 
   for (const a of avvisi) {
@@ -886,31 +899,56 @@ async function espandiElenchi(
       // ELENCHI DI POST (§26.88): WordPress/Elementor e e-portfolio Liferay del MIM.
       // La pagina non è una tabella ma un elenco di ARTICOLI (o un feed RSS):
       // ogni post diventa un avviso con il testo dell'articolo e i suoi allegati.
-      if (!eFeedDocumento(letta.html) && !ePaginaPostElenco(letta.html, letta.url)) continue;
-      const esito = await espandiPostInAvvisi(
-        letta.html,
-        {
-          baseUrl: letta.url,
-          provincia: a.province,
-          source: letta.url,
-          dataPubblicazione: a.publishedAt ?? null,
-        },
-        { max: maxPost, scarica: scaricaPagina },
-      );
-      if (esito.avvisi.length === 0) continue;
-      paginePost += 1;
-      postLetti += esito.postLetti;
-      if (esito.indiciScartati > 0) {
-        // Voci dell'elenco che erano a loro volta una pagina indice: scartate.
-        console.warn(
-          `    · ${esito.indiciScartati} voce/i dell'indice erano indici: scartate (${letta.url})`,
+      if (eFeedDocumento(letta.html) || ePaginaPostElenco(letta.html, letta.url)) {
+        const esito = await espandiPostInAvvisi(
+          letta.html,
+          {
+            baseUrl: letta.url,
+            provincia: a.province,
+            source: letta.url,
+            dataPubblicazione: a.publishedAt ?? null,
+          },
+          { max: maxPost, scarica: scaricaPagina },
         );
+        if (esito.avvisi.length > 0) {
+          paginePost += 1;
+          postLetti += esito.postLetti;
+          if (esito.indiciScartati > 0) {
+            // Voci dell'elenco che erano a loro volta una pagina indice: scartate.
+            console.warn(
+              `    · ${esito.indiciScartati} voce/i dell'indice erano indici: scartate (${letta.url})`,
+            );
+          }
+          for (const voce of esito.avvisi) {
+            const chiave = (voce.link ?? '').trim();
+            if (!chiave || linkVisti.has(chiave)) continue;
+            linkVisti.add(chiave);
+            vociPagina.push(voce);
+          }
+          continue;
+        }
       }
-      for (const voce of esito.avvisi) {
-        const chiave = (voce.link ?? '').trim();
-        if (!chiave || linkVisti.has(chiave)) continue;
-        linkVisti.add(chiave);
-        vociPagina.push(voce);
+
+      // CONTENITORI DI ATTI (§26.140): la pagina non è una tabella e non è un
+      // elenco di post, ma una SEZIONE che elenca gli atti in PDF — l'«interpello
+      // nazionale» di un istituto, gli albi «per ambito», la pagina di servizio
+      // che tiene i bandi in colonna. Si pubblicano gli ATTI (uno per documento,
+      // con il proprio link); il contenitore non entra MAI in bacheca, nemmeno
+      // quando è l'unica cosa che la pagina offre.
+      const atti = avvisiDaContenitore(letta.html, {
+        url: letta.url,
+        provincia: a.province,
+        dataPubblicazione: a.publishedAt ?? null,
+        max: maxPost,
+      });
+      if (atti.length > 0) {
+        pagineAtti += 1;
+        for (const voce of atti) {
+          const chiave = (voce.link ?? '').trim();
+          if (!chiave || linkVisti.has(chiave)) continue;
+          linkVisti.add(chiave);
+          vociPagina.push(voce);
+        }
       }
     }
 
@@ -929,6 +967,12 @@ async function espandiElenchi(
     indiciEspansi += 1;
     if (paginePost > 0) elenchiPost += 1;
     vociCreate += vociPagina.length;
+    if (pagineAtti > 0) {
+      console.log(
+        `  ✓ ${link} → contenitore di atti espanso (${pagineAtti} pagina/e di documenti): ` +
+          `${vociPagina.length} atti individuali, il contenitore non entra in bacheca`,
+      );
+    }
     if (catena.extra > 0) {
       console.log(
         `  ✓ ${link} → elenco su ${catena.pagine.length} pagine ` +
@@ -940,7 +984,57 @@ async function espandiElenchi(
     continue;
   }
 
-  return { avvisi: out, indiciEspansi, vociCreate, indiciScartati, elenchiPost, postLetti, pagineExtra };
+  return {
+    avvisi: out,
+    indiciEspansi,
+    vociCreate,
+    indiciScartati,
+    elenchiPost,
+    postLetti,
+    pagineExtra,
+    pagineAtti,
+  };
+}
+
+/**
+ * §26.140 — DAL CONTENITORE AI SUOI ATTI.
+ *
+ * Perché esiste: una sezione che elenca gli atti non è un atto. L'istituto
+ * pubblica l'«interpello nazionale» come pagina di servizio
+ * (`…/servizio/interpello-nazionale/`) che tiene i PDF in colonna; l'USR
+ * pubblica l'albo «per ambito». In quei casi non c'è né una tabella (`elenchi.ts`)
+ * né un elenco di articoli (`postRaccolta.ts`): le voci sono i DOCUMENTI, e senza
+ * questa lettura la pagina sarebbe finita in bacheca come se fosse il bando.
+ *
+ * La regola di pertinenza è quella di sempre (`allegatiBando`: stesso istituto,
+ * mai aggregatori terzi, il testo del link o il nome del file deve parlare di
+ * interpello/supplenza/avviso). Il titolo viene dal link o dal nome del file
+ * (`titoloDaAllegato`): nessuna parola inventata. Zero atti pertinenti → `[]`, e
+ * il chiamante scarta il contenitore.
+ */
+function avvisiDaContenitore(
+  html: string,
+  ctx: { url: string; provincia: string; dataPubblicazione?: string | null; max: number },
+): InterpelloParsato[] {
+  const atti: InterpelloParsato[] = [];
+  const visti = new Set<string>();
+  for (const allegato of allegatiBando(html, ctx.url, Math.max(1, ctx.max))) {
+    if (visti.has(allegato.url)) continue;
+    visti.add(allegato.url);
+    const titolo = titoloDaAllegato(allegato.testo, allegato.url);
+    atti.push(
+      parseInterpello({
+        title: titolo.slice(0, 300),
+        link: allegato.url,
+        linkCandidati: [allegato.url],
+        provincia: ctx.provincia,
+        source: ctx.url,
+        corpo: [allegato.testo, titolo].filter((t) => t && t.trim() !== '').join(' · '),
+        dataPubblicazione: ctx.dataPubblicazione ?? null,
+      }),
+    );
+  }
+  return atti;
 }
 
 /* ------------------- Nessun seed di test nella pipeline ------------------- */
@@ -1449,6 +1543,11 @@ async function main(provinceOverride?: string[]) {
   if (elenchi.pagineExtra > 0) {
     console.log(
       `• Elenchi su più pagine (§26.103): ${elenchi.pagineExtra} pagine lette oltre la prima`,
+    );
+  }
+  if (elenchi.pagineAtti > 0) {
+    console.log(
+      `• Contenitori di atti (§26.140): ${elenchi.pagineAtti} pagina/e espansa/e nei singoli PDF — il contenitore non entra in bacheca`,
     );
   }
   trovati = elenchi.avvisi;

@@ -6,9 +6,13 @@
  * motivo del fallimento — e questo modulo decide. La guardia fissa:
  *   1. la CLASSIFICAZIONE degli esiti, compresi i casi in cui un 4xx NON significa
  *      «pagina sparita» (401/403/405/429: il server rifiuta i client automatici);
- *   2. la DECISIONE: avviso, home ufficiale `.edu.it`, oppure riga fuori;
- *   3. il principio «non controllato ≠ morto»: senza esito la riga resta;
- *   4. il cablaggio in `npm test`.
+ *   2. la DECISIONE: avviso, home ufficiale `.edu.it` (solo quando l'avviso è
+ *      sparito), oppure riga fuori;
+ *   3. §26.140 — il FILTRO RIGIDO ANTI-HOMEPAGE: una home dell'istituto, una
+ *      sezione di albo/interpelli, un archivio o un contenitore per ambito non
+ *      sono avvisi e non entrano MAI, nemmeno se rispondono `200`;
+ *   4. il principio «non controllato ≠ morto»: senza esito la riga resta;
+ *   5. il cablaggio in `npm test`.
  *
  * Uso: npm run test:validita-link  (incluso in `npm test`)
  */
@@ -104,9 +108,75 @@ check(
   decidiPubblicazione({ link: AVVISO, esito: { status: 404 }, home: 'https://gmail.com' }).azione,
 );
 check(
-  'il link è GIÀ la home ufficiale → resta (niente di meglio da pubblicare)',
-  { azione: 'tieni', stato: 'assente', url: HOME },
+  'il link è la HOME dell’istituto → riga fuori (una home non è un bando)',
+  { azione: 'scarta', stato: 'assente', url: null },
   scelta(decidiPubblicazione({ link: HOME, esito: { status: 404 }, home: 'www.iccarducci.edu.it' })),
+);
+
+/* -------- 2-bis) §26.140 — FILTRO RIGIDO ANTI-HOMEPAGE -------- */
+
+console.log('\n— 2-bis. Home e contenitori non sono avvisi (nemmeno se rispondono 200) —');
+const SCARTATA = { azione: 'scarta', url: null };
+const soloEsito = (d: ReturnType<typeof decidiPubblicazione>) => ({ azione: d.azione, url: d.url });
+check(
+  'home dell’istituto che risponde 200 → riga fuori',
+  SCARTATA,
+  soloEsito(decidiPubblicazione({ link: 'https://www.polovolta.edu.it/', esito: { status: 200 } })),
+);
+check(
+  'home senza barra finale → riga fuori',
+  SCARTATA,
+  soloEsito(
+    decidiPubblicazione({ link: 'https://istitutocomprensivoperugia3.edu.it', esito: { status: 200 } }),
+  ),
+);
+check(
+  'sezione «Interpelli» di un istituto → riga fuori (è un elenco)',
+  SCARTATA,
+  soloEsito(decidiPubblicazione({ link: 'https://www.liceo.edu.it/interpelli/', esito: { status: 200 } })),
+);
+check(
+  'contenitore per ambito (`/servizio/interpello-nazionale/`) → riga fuori',
+  SCARTATA,
+  soloEsito(
+    decidiPubblicazione({
+      link: 'https://www.omnicomprensivoorsiniamelia.edu.it/servizio/interpello-nazionale/',
+      esito: { status: 200 },
+    }),
+  ),
+);
+check(
+  'home non controllata → riga fuori lo stesso (la destinazione non dipende dal server)',
+  SCARTATA,
+  soloEsito(decidiPubblicazione({ link: 'https://www.liceo.edu.it/' })),
+);
+check(
+  'home di un istituto con timeout → riga fuori, non «instabile ma tenuta»',
+  SCARTATA,
+  soloEsito(
+    decidiPubblicazione({
+      link: 'https://www.liceo.edu.it/',
+      esito: { status: null, errore: 'timeout' },
+      home: 'www.liceo.edu.it',
+    }),
+  ),
+);
+check(
+  'il motivo dichiara che è una home/indice',
+  true,
+  /home o pagina indice/.test(
+    decidiPubblicazione({ link: 'https://www.liceo.edu.it/', esito: { status: 200 } }).motivo,
+  ),
+);
+check(
+  'l’avviso SPECIFICO resta anche quando la home è nota',
+  { azione: 'tieni', url: AVVISO },
+  soloEsito(decidiPubblicazione({ link: AVVISO, esito: { status: 200 }, home: 'www.iccarducci.edu.it' })),
+);
+check(
+  'un avviso con id nella query non è una home',
+  { azione: 'tieni', url: 'https://www.liceo.edu.it/?p=1234' },
+  soloEsito(decidiPubblicazione({ link: 'https://www.liceo.edu.it/?p=1234', esito: { status: 200 } })),
 );
 check('link assente → riga fuori', 'scarta', decidiPubblicazione({}).azione);
 check(
@@ -143,7 +213,7 @@ check(
 
 console.log(
   errori === 0
-    ? '\n✅ VALIDITÀ LINK: si pubblica solo ciò che risponde — o la home ufficiale della scuola.'
+    ? '\n✅ VALIDITÀ LINK: solo avvisi specifici (mai home o indici); se l’avviso sparisce, la home ufficiale della scuola.'
     : `\n❌ VALIDITÀ LINK: ${errori} errore/i`,
 );
 process.exitCode = errori === 0 ? 0 : 1;

@@ -193,10 +193,14 @@ check('una modale, un modulo (puro e testabile)', true, moduli.every((f) => legg
 // LIVELLO SECONDARIO — dal modulo puro al tipo, alla bacheca, alla card: un solo filo.
 const datiInterpello = leggi('src/data/interpelli.ts');
 check('tipo: il campo della competenza che ha sfumato il voto', true, /competenzaSecondaria\?: string \| null/.test(datiInterpello));
+// §26.141 — la forma della riga (e quindi il campo del secondo livello) vive in
+// `bachecaRipiego`, estratto da `bachecaInterpelli` per il tetto di 250 righe: la
+// guardia legge i due file, il cablaggio resta uno solo.
+const bachecaConRipiego = `${bacheca}\n${leggi('src/lib/bachecaRipiego.ts')}`;
 check(
   'bacheca: la sfumatura della valutazione diventa `competenzaSecondaria`',
   true,
-  /competenzaSecondaria: valutazione\.competenzaSecondaria\?\.etichetta \?\? null/.test(bacheca),
+  /competenzaSecondaria: valutazione\.competenzaSecondaria\?\.etichetta \?\? null/.test(bachecaConRipiego),
 );
 check(
   'bacheca: la pertinenza resta quella PRIMARIA del motore (le competenze non aprono la bacheca)',

@@ -15358,3 +15358,369 @@ principale), una natura dichiarata per ogni data. E, poiché la natura dipende d
 calendario ora si passa: una guardia che invecchia non protegge nessuno — «scadenza della voce
 estratta: atteso 30/09/2026, ottenuto null» era la regola giusta che accusava un test scritto ieri.
 
+
+
+## §26.140 — Il PDF si apre in una scheda nuova, e la home non è un avviso (03/11/2026)
+
+**La richiesta, in due righe.** «Il documento deve aprirsi nel lettore PDF del browser, in una
+scheda nuova, senza scaricarsi da solo sul disco; e in bacheca non devono più comparire le home
+degli istituti — `polovolta.edu.it`, `istitutocomprensivoperugia3.edu.it` — né i contenitori che
+elencano gli atti (`…/servizio/interpello-nazionale/`): quelli si espandono nei singoli PDF.»
+
+### 1. Nuova scheda: dove il documento veniva *scaricato*
+
+Due punti della piattaforma non rispettavano la regola, e nessuno dei due era nella bacheca:
+
+* **`components/documenti/MieiDocumenti.tsx`** — il bottone «Apri» di ogni documento personale
+  aveva `download={d.nome}`: il browser **salvava** il file sul disco invece di mostrarlo. L'attributo
+  è stato rimosso; ora c'è `target="_blank"` + `rel="noopener noreferrer"` e l'icona `ExternalLink`
+  (prima `Download`, che diceva la cosa sbagliata). Un PDF si apre nel lettore integrato; il salvataggio
+  resta una scelta dell'utente, non un effetto collaterale del click.
+* **`pages/interpello/helpers.ts`** — `reindirizzaAllaFonte` (l'atterraggio dei deep link delle
+  notifiche su `/interpello/:id`) navigava con `window.location.replace(link)`: la pagina di
+  ScuoleRadar spariva e, se la fonte era un PDF «attachment», restava un file in «Download». Ora
+  apre una **scheda nuova** (`window.open(link, '_blank')` + `scheda.opener = null`) e la scheda
+  dell'utente resta dov'era. Se il browser blocca il popup (`null`) si ricade sulla navigazione
+  diretta: meglio la strada di prima che nessuna strada.
+
+Verificate e già conformi (nessuna modifica): `RigaBoard.tsx` (l'intera riga apre con
+`window.open(urlFonte, '_blank', 'noopener,noreferrer')` e i due `<a>` hanno `target`/`rel`, badge
+**PDF** compreso), `InterpelloAzioni.tsx` (il link «Apri il bando ufficiale (PDF)»),
+`InterpelloDettaglioModal.tsx`, `SchedaAvviso.tsx`, `ReindirizzamentoAllaFonte.tsx`.
+
+### 2. Filtro rigido anti-homepage: la destinazione viene *prima* dell'esito HTTP
+
+Il difetto non era il ping: era che una home che risponde `200` passava come «link raggiungibile».
+`lib/validitaLink.ts` ora ha una regola sola, `eUrlAvvisoSpecifico(url)` = link `http(s)`
+pubblicabile **e** non `eUrlIndicePortale(url)` (la regola condivisa di `lib/urlAvviso.ts`), e
+`decidiPubblicazione` la applica **prima** di guardare l'esito:
+
+| URL della riga | prima | ora |
+|---|---|---|
+| `https://www.polovolta.edu.it/` (200) | `tieni` come «avviso» | **`scarta`** — home dell'istituto |
+| `…/interpelli/` (elenco) | `tieni` | **`scarta`** — sezione indice |
+| `…/servizio/interpello-nazionale/` (contenitore) | `tieni` | **`scarta`** — contenitore per ambito |
+| `…/albo/avviso-4711` (200) | `tieni` | `tieni` — avviso specifico |
+| `…/albo/avviso-1.pdf` (404 + home nota) | `home-istituzionale` | `home-istituzionale` (§26.104, invariato) |
+
+Lo stesso gate vale in **ingresso** (`scraper/presidioLinkIngresso.ts`): lo scorciatoio
+«`instabile` = nessuna prova di morte, quindi la riga resta» ora richiede `eUrlAvvisoSpecifico`,
+altrimenti un timeout sulla home dell'istituto la salverebbe come se fosse il bando. Il confine è
+dichiarato: **la sostituzione con la home per un avviso sparito resta** (è un altro caso, ed è
+etichettata `sito-scuola` sul tabellone); ciò che non entra più è la riga la cui *fonte dichiarata*
+è una home o un indice.
+
+Nel **parser** (`scraper/parser.ts` → `scegliUrlFonte`) la stessa regola si aggiunge al filtro di
+specificità già esistente (`eUrlAvvisoDiretto`): un contenitore non è mai la «fonte ufficiale»,
+esattamente come non lo erano la home dell'ente e gli elenchi regionali.
+
+
+### 3. Il contenitore si espande nei suoi atti (mai salvato com'è)
+
+Prima di questa sessione `…/servizio/interpello-nazionale/` **non** veniva riconosciuto come
+contenitore: l'ultimo segmento era `interpello-nazionale` e la parola `nazionale` non stava nel
+vocabolario delle sezioni (`PAROLE_SEZIONE`, `lib/urlAvviso.ts`). Risultato: la pagina di servizio
+entrava in bacheca come se fosse il bando, con un click che apriva un elenco di PDF.
+
+Due correzioni, entrambe nella regola condivisa:
+
+1. `lib/urlAvviso.ts` — il vocabolario delle sezioni comprende ora anche l'**ambito territoriale**
+   (`nazionale`, `regionale`, `provinciale`, `territoriale`, `interregionale`, `ambito`, con i
+   plurali): una sezione dichiarata *per ambito* è un contenitore, non un avviso;
+2. `scraper/index.ts` → `espandiElenchi` — terza famiglia di indice, dopo le tabelle (`elenchi.ts`)
+   e gli elenchi di post (`postRaccolta.ts`): **contenitore di atti**. Se la pagina non è né una
+   tabella né un elenco di articoli, si leggono i suoi documenti con `allegatiBando`
+   (`scraper/allegatiBando.ts`: stesso istituto, mai aggregatori terzi, il testo o il nome del file
+   deve parlare di interpello/supplenza/avviso) e ogni PDF diventa un avviso con il **proprio**
+   link e il titolo del link o del file (`titoloDaAllegato`). Zero atti pertinenti → il contenitore
+   resta fuori (era la regola di prima: meglio una riga in meno che un link a un elenco).
+
+Collaudo con la pagina-tipo dell'istituto Orsini-Amelia (tre link: due PDF pertinenti, un portale
+Argo): `indice? true` · due atti estratti · `A-022` e `ATA-*` riconosciute dal parser · due
+`hash_id` distinti · Argo escluso · **contenitore `scarta`**. Nuovo contatore nel report del giro:
+`Contenitori di atti (§26.140): N pagina/e espansa/e nei singoli PDF`.
+
+### 4. Codice e verifiche
+
+* `src/lib/urlAvviso.ts` — vocabolo «per ambito» + nota §26.140 nel modulo;
+* `src/lib/validitaLink.ts` — `eUrlAvvisoSpecifico`, gate anti-homepage in `decidiPubblicazione`
+  (via `eLaHomeUfficiale`, ora inutile e rimossa);
+* `src/scraper/presidioLinkIngresso.ts` — `instabile` non salva una home/indice;
+* `src/scraper/parser.ts` — `scegliUrlFonte` esclude i contenitori;
+* `src/scraper/index.ts` — `avvisiDaContenitore` + terza famiglia in `espandiElenchi` + log;
+* `src/components/documenti/MieiDocumenti.tsx` — «Apri» in nuova scheda, senza `download`;
+* `src/pages/interpello/helpers.ts` — `reindirizzaAllaFonte` in nuova scheda (fallback diretto);
+* guardie: `src/lib/__tests__/validitaLink.test.ts` (blocco «2-bis — filtro anti-homepage», 9
+  asserzioni), `src/lib/__tests__/urlAvviso.test.ts` (contenitore per ambito + 3 controlli di
+  cablaggio), `scripts/test-gate-link-ingresso.ts` (blocco «2-bis», 5 asserzioni, e il caso
+  «il link È una home → riga fuori» che sostituisce la vecchia aspettativa),
+  `scripts/test-scraper-attivi.ts` (URL di prova ora specifico `…/albo/avviso-4711`: un link che
+  finisce su una parola di sezione non è più pubblicabile + 2 asserzioni §26.140).
+
+Esiti: `npm run typecheck` **0**, `tsc -p tsconfig.scraper.json` **0**, `eslint` **0** sugli 11 file
+toccati, `npm test` **✅** (catena completa), `npm run test:architettura` ✅ (813 file, **148 =
+baseline, nessuna nuova**), `npm run build` ✅ (40,10 s).
+
+### 5. Nota di sessione
+
+Due difetti che sembravano opposti erano lo stesso errore: **un URL dichiarava una cosa e ne faceva
+un'altra**. `download` dichiarava «apri» e salvava; una home dichiarava «avviso ufficiale» e apriva
+la facciata di un istituto; un contenitore dichiarava «bando» e apriva un elenco di PDF. La
+correzione non è stata aggiungere eccezioni per i tre casi, ma riportare la destinazione al centro:
+prima *dove porta* (avviso specifico, documento, contenitore), poi *se risponde*. Il ping non può
+promuovere una home a bando, e un elenco non può diventare un'opportunità solo perché il server ha
+risposto `200`.
+
+## §26.141 — «Trovare è più importante che scartare»: gradi affini, serbatoio e lessico reale (03/11/2026)
+
+**La richiesta, in due righe.** «Allarghiamo le maglie: se cerco A-24 estendi il match ai titoli e agli
+ordini affini (A-25, EEEE con lingua) con uno score proporzionale 85-70 senza scartarli; includi ATA e
+sostegno della provincia come opportunità di paracadute (50-60%); se i match esatti sono meno di tre la
+bacheca lo dice con garbo. E nel crawler allarga il dizionario (`supplenza`, `MAD`, “ricerca personale”,
+“avviso pubblico”, `collaboratore scolastico`, `assistente amministrativo`, `esperto esterno`) e ispeziona
+anche Albo Pretorio e Amministrazione Trasparente → Bandi di concorso, tenendo stretto il filtro del
+rumore inutile (scioperi, consigli di classe, menu mensa, circolari alunni, organi collegiali).»
+
+### 1. Il grado affine: si allarga il perimetro, non si abbassa la soglia
+
+Nuovo modulo **puro** `src/lib/gradiAffini.ts` (`gradoAffine`). Un ponte VERO fra la riga e il profilo,
+con un pavimento proporzionale che non scavalca mai la regola di §26.120 (un match da 85 in su non entra
+di qui: è già in bacheca e non viene declassato).
+
+| Ponte fra profilo e avviso | Punteggio | Caso tipico |
+|---|---|---|
+| materia coperta dalle classi / stesse aree | **82** | «EEEE · primaria, lingua inglese» per chi ha `A-24` |
+| aree AFFINI (ponte curato) | **76** | famiglie disciplinari che si parlano |
+| aree CONTAMINATE (si toccano e basta) | **72** | teatro ↔ letteratura |
+| avviso senza classe, ordine pari o adiacente | **70** | «Avviso per il conferimento di supplenza» |
+
+Tre confini dichiarati, perché la generosità non è credulità: un'ALTRA materia nello stesso ordine resta
+fuori (la «classe estranea» di §26.120), un ordine non adiacente (infanzia per la secondaria) resta fuori,
+un profilo senza `ordini` dichiarati non ha grado (non si inventa il dato che manca). Il grado non apre una
+strada all'esclusione: **alza solo il pavimento** del punteggio (`Math.max(valutazione.punteggio, grado)`),
+quindi chi non arriva a 70 finisce nella scorta del paracadute, non nel cestino.
+
+### 2. Il serbatoio di default: ATA 52 · sostegno d'altro ordine 58
+
+Sempre in `gradiAffini.ts`, `voceSerbatoio`. Sono le opportunità di **paracadute** che garantiscono una
+bacheca mai vuota: personale ATA (`ATA-CS`, `ATA-AA`, `ATA-AT`; prosa riconosciuta da
+`lib/profiliAta.dichiaraPersonaleAta`, §26.126 — nessuna copia delle regex) e sostegno di un ALTRO ordine di
+scuola. Regole: provincia dell'avviso fra le **proprie** (`propria`, non «vicina»: un paracadute a 60 km non
+serve), nessuna classe in comune (altrimenti è un match), e per il sostegno solo ciò che il motore NON
+ammette già (se lo ammette è il suggerimento extra a 60, e resta il suo).
+
+Il serbatoio **non entra mai in bacheca come merito**: la pipeline lo mette nella sola `scorta` e il
+paracadute «5 osso-da-mordere» (§26.106) lo porta in vetrina — marcato `ripiego`, gradino
+`ultima-spiaggia` — solo quando la vetrina resta corta. Il divieto di §26.125 (sostegno fuori dalle
+province scelte) resta intatto: il serbatoio non lo scavalca.
+
+### 3. La bacheca scarsa lo dice (sotto i 3 match pieni)
+
+`bachecaScarsa` (stessa casa) conta i match **pieni** — `compatibilita ≥ 70` e non di ripiego — e sotto
+`MINIMO_MATCH_PIENI` (3) la vetrina mostra, sopra le card, la frase unica
+`CONSIGLIO_BACHECA_SCARSA`: «Ecco le opportunità disponibili oggi nelle tue province. Suggerimento: puoi
+allargare la ricerca nel tuo profilo per intercettare più bandi.» La lista vuota NON è «scarsa»: ha il suo
+stato dedicato (§26.122). Il copy vive nel modulo, non nel JSX, così la guardia lo può leggere.
+
+### 4. Il lessico delle fonti, e i target che non si chiamano «interpelli»
+
+| Dove | Cosa entra |
+|---|---|
+| `scraper/parser.sembraOpportunita` | `supplenza/supplenze`, `MAD`, «messa a disposizione», «ricerca di personale», «avviso pubblico», `concors`, «esperto esterno» + gli indicatori ATA **specifici** (`noiseFilterAta`) |
+| `scraper/parser.rilevaCategoriaAvviso` | nuova categoria **`Personale ATA`** (dopo interpelli, prima di esperti: un interpello che cita l'ATA resta un interpello) e `MAD` dentro `Interpello / Supplenza` |
+| `scraper/qualitaOpportunita.CATEGORIE_AMMESSE` | `Personale ATA` è una categoria AMMESSA: senza questo, il bando ATA sarebbe scartato come «Altro» |
+| `scraper/linkScuola` | il link della home è candidato anche per `concors`, `trasparen`, `amministrazione`, `personale`, `assistent`, `collaborator`, `\bmad\b` (fasce: interpelli 2 · albo/ATA 1 · altro 0) |
+| `scraper/paginaElenco` | `eUrlElenco` riconosce **Albo Pretorio**, **Amministrazione Trasparente → Bandi di concorso** e le pagine del personale: sono indici, si espandono (`espandiElenchi`, terza famiglia «contenitore di atti» §26.140) |
+| `scraper/allegatiBando` | un PDF che dice `MAD`, «messa a disposizione», «personale ATA», collaboratori/assistenti/DSGA o «concorso» è un allegato di bando |
+| `lib/noiseFilter` | tre indicatori positivi nuovi, in un modulo sorello (`noiseFilterReclutamento.ts`) per non sfondare le 250 righe |
+
+**Il filtro del rumore resta stretto, e il confine è scritto**: «concorso» NON entra fra gli indicatori
+positivi — in una scuola è anche quello degli alunni (poesie, fotografia) e salverebbe una circolare per le
+famiglie. Scioperi, elezioni degli organi collegiali e circolari restano fuori dal pre-filtro; «consigli di
+classe» e «menu mensa» cadono al gate della pertinenza (nessuna parola di reclutamento → non sono
+opportunità).
+
+### 5. Codice e verifiche
+
+* `src/lib/gradiAffini.ts` (**nuovo**, puro) — `gradoAffine` (82 · 76 · 72 · 70), `voceSerbatoio` (ATA 52 ·
+  sostegno 58), `eAvvisoAta`, `bachecaScarsa` + `CONSIGLIO_BACHECA_SCARSA` · `MINIMO_MATCH_PIENI`;
+* `src/lib/bachecaInterpelli.ts` — i due giudizi PRIMA della porta d'ingresso (la aprono) e, per la
+  decisione della riga, una sola chiamata a `esitoRiga` (resta sotto le 250 righe del gate strutturale);
+* `src/lib/bachecaRipiego.ts` — la FORMA della riga: `rigaInBacheca` (§26.63 · §26.64), `candidatoSerbatoio`
+  (§26.141, sempre `ultima-spiaggia`) e `esitoRiga` (serbatoio → scorta · escluso → fuori · riempitivo non
+  pertinente → scorta col gradino · altrimenti bacheca col pavimento del grado). `EsitoBacheca` dichiara
+  `affiniInBacheca` e `serbatoioInScorta`: niente scarti silenziosi;
+* `src/pages/dashboard/components/ElencoOpportunita.tsx` — la frase della bacheca scarsa (copy dal modulo);
+* `src/lib/noiseFilterReclutamento.ts` (**nuovo**, puro) + `noiseFilter.ts` che lo diffonde;
+* `src/scraper/parser.ts`, `paginaElenco.ts`, `linkScuola.ts`, `allegatiBando.ts`, `qualitaOpportunita.ts`,
+  `index.ts` — lessico e target come da tabella del punto 4;
+* guardie nuove: `npm run test:gradi-affini` (matching: confini, pipeline, copy, purezza) e
+  `npm run test:lessico-ingestione` (dizionario, categoria ATA, rumore invariato, target albo/trasparenza);
+  entrambe in catena con `npm test`;
+* guardie aggiornate (la riga vive ora in `bachecaRipiego`: leggono i due file, il cablaggio resta uno):
+  `scripts/test-filtri-scuole.ts`, `test-riempitivi-bacheca.ts`, `test-scoring-due-livelli.ts`,
+  `test-compatibilita-graduata.ts`, `test-jolly-semantico.ts`, `test-scraper-attivi.ts` (categoria
+  `Personale ATA` ammessa), `src/lib/__tests__/noiseFilterSindacale.test.ts` (soglia righe del pre-filtro).
+
+Esiti: `npm run typecheck` **0**, `tsc -p tsconfig.scraper.json` **0**, `eslint` **0** sui 20 file toccati,
+`npm test` **✅** (catena completa, 161,8 s), `npm run test:architettura` ✅ (817 file, **148 = baseline,
+nessuna nuova**), `npm run build` ✅.
+
+### 6. Nota di sessione
+
+La generosità rischia due cose opposte: la bacheca vuota e la bacheca piena di nulla. La soluzione non è
+stata abbassare la soglia (70 resta la soglia) né gonfiare la vetrina: è stata distinguere **merito** e
+**riserva**. Il grado affine dice «questa riga non è la tua cattedra, ma non è rumore» e si dichiara nel
+motivo; il serbatoio dice «questa è un'opportunità di paracadute» e non entra mai per merito — ci arriva con
+il paracadute, marcata `ripiego`. Così «trovare è più importante che scartare» non diventa «mostrare tutto»:
+è la stessa bacheca onesta di prima, con una rete sotto.
+
+### 7. Verifica sul campo — Asti e Catania (04/11/2026)
+
+Il giorno dopo il cablaggio, due giri veri — `npm run crawl:provincia -- --province=AT --apply` e lo stesso
+su `CT` — e la stessa pipeline della bacheca eseguita sui dati appena scritti (profilo di prova: `A-24`,
+secondaria di II grado, **solo** la provincia del giro; lettura di `interpelli` paginata a 1.000 righe).
+
+| | **AT (Asti)** | **CT (Catania)** |
+|---|---|---|
+| Target esaminati · scuole contattate | 38 · 22 (su 26 in elenco; anagrafica 24 con sito, 58 pagine lette) | 125 · **142** (su 211 in elenco; anagrafica 155 con sito, 395 pagine lette) |
+| Record estratti dal crawler | **173** (hub Piemonte) | **84** (79 hub USR CT · 4 hub RG respinti dal filtro provincia · 1 IC Mirabella) |
+| PDF aperti (leggibili) · senza scadenza | 134 (120) · 119 (104 senza alcun segnale) | 497 (450) · 407 (341 senza alcun segnale) |
+| Target in errore · siti non letti · target disattivati | 0 · 2 · 2 | 1 (`http_4xx`) · 50 · 6 (il comando chiude con codice 2) |
+| Righe **nuove** in `interpelli` (dedupe `hash_id`) | **12** | **18** |
+| Righe della provincia in tabella · con scadenza valida | 19 · **2** | 86 · **63** |
+| Canale §26.141: grado affine (di cui vive) | 3 (2) | 2 (1) |
+| Canale §26.141: serbatoio ATA/sostegno (di cui vive) | 10 (0) | **71 (54)** |
+| Bacheca erogata (match pieni + ripieghi) | 2 (2 + 0) | 5 (**1** + 4) |
+| Scarti dichiarati | `senzaScadenza` 17 | `senzaScadenza` 23 · `senzaAffinitaClasse` 6 · `riempitiviEsclusi` 2 |
+
+Cinque letture — l'ultima è una correzione già individuata:
+
+1. **CT è il caso che giustifica il §26.141.** Per un `A-24` la provincia ha **1** match pieno: senza il
+   serbatoio la bacheca sarebbe quasi vuota, con il serbatoio 54 voci viventi (sostegno d'altro ordine 58)
+   entrano nella **scorta** e il paracadute ne mostra 4 su 5 — tutte marcate `ripiego`, col punteggio del
+   serbatoio, mai spacciate per match. La riserva non ha scavalcato niente: il divieto di §26.125 (sostegno
+   fuori dalle proprie province) è rimasto a **0** scarti perché nessuna riga lo ha violato.
+2. **AT dice l'altra metà della verità: il collo di bottiglia non è il matching, è la SCADENZA.** 19 righe in
+   tabella, **17 senza una `expiration_date` valida**: la pipeline le scarta a monte (§26.71) e la vetrina
+   resta a 2 righe, entrambe `affiniInBacheca` (senza classe, secondaria II: 78 del motore, pavimento 70) —
+   cioè righe che senza il grado affine non sarebbero mai entrate. Nessuno dei 10 avvisi ATA/sostegno di AT
+   ha una scadenza: il serbatoio, lì, non ha nulla da pescare.
+3. **L'idempotenza tiene.** 173 record estratti su AT hanno prodotto **12** righe nuove; 84 su CT ne hanno
+   prodotte **18**: il resto era già in tabella (`upsert … ignoreDuplicates` su `hash_id`). Il lessico nuovo
+   non ha gonfiato la banca dati con doppioni.
+4. **Da correggere (segnalato, non corretto qui).** Fra le righe erogate da CT c'è *«Interpello 52. Personale
+   Docente e A.T.A. Permessi retribuiti per…»* a 78: è un **atto amministrativo** (permessi del personale),
+   non un reclutamento. Entra perché non ha classe e il grado affine apre la porta dell'ordine vicino:
+   `lib/noiseFilter` non conosce «permessi retribuiti». Il posto della correzione è l'indicatore di rumore
+   (con la sua guardia), non la soglia — il §26.141 resta com'è.
+5. **Come si legge `affiniInBacheca`.** Conta le righe in bacheca **dove il grado è stato decisivo** (la porta
+   d'ingresso: il grado esiste solo quando la classe non fa match), non «il pavimento ha alzato il voto»: le
+   due righe di AT a 78 hanno il voto del motore *sopra* il pavimento di 70, ma senza il grado non sarebbero
+   in vetrina. La guardia `test:gradi-affini` lo fissa (`esitoRiga` con 88 contro pavimento 70 → `affine`).
+
+Esiti della sessione di verifica: `npm run typecheck` **0**, `eslint` **0**, `npm run test:architettura` ✅
+(**148 = baseline**, `test-gradi-affini.ts` riportato a 247 righe), `npm test` ✅, `npm run test:gradi-affini`
+✅ (nuova asserzione sul conto degli affini). Nessuna migrazione, nessuna scrittura di schema: i due giri
+hanno scritto solo `interpelli` / `discovered_links` / `notification_queue` delle province in perimetro.
+
+## §26.142 — L'atto d'albo senza termine non si butta, l'atto interno non entra (03/11/2026)
+
+**Le due richieste, in una frase.** «Un avviso che viene da un Albo Pretorio o da una sezione di
+reclutamento e non dichiara un termine non si scarta: se la pubblicazione è degli ultimi sette giorni,
+il termine si presume a sette giorni da lì.» E, l'altra metà: «permessi retribuiti, diritto allo studio
+150 ore, riconoscimento dei servizi, proclamazione degli eletti non sono reclutamenti: si silenzino.»
+
+Sono due facce dello stesso difetto misurato nei due giri di provincia del §26.141: **AT butta 17 righe
+su 19 perché non hanno una `expiration_date`** (il collo di bottiglia non è il matching, è la data), e
+**CT fa entrare un atto amministrativo** — *«Interpello 52. Personale Docente e A.T.A. Permessi
+retribuiti per…»*, erogato a 78 — perché senza classe di concorso il grado affine apre la porta
+dell'ordine vicino e `noiseFilter` non conosce «permessi retribuiti».
+
+### 1. La presunzione di validità: chi decide cosa, e perché in tre posti
+
+La regola è una sola e ha **tre responsabilità separate**, ognuna nel modulo che la sa:
+
+| dove | cosa decide | perché lì |
+|---|---|---|
+| `src/scraper/parser.ts` | **SE** presumere: `daAlboOSezioneReclutamento(...)` (l'URL dice albo/sezione di reclutamento?) + `scadenzaPresuntaAlbo(pubblicazione, oggi)` (finestra di 7 giorni) | l'ingestione è l'unico strato che sa **da dove arriva** la voce (fonte, elenco, allegati) |
+| `src/lib/scadenzaTesto.ts` | **CHE COSA È** la data presunta: `presunzione` → `expirationDate` + natura `disponibilita_aperta` | il classificatore unico delle date (§26.139) resta l'unico punto che assegna una natura |
+| `src/lib/motivoSenzaScadenza.ts` | **l'aritmetica** della stima: `scadenzaStimata(pubblicazione, giorni)` (§26.133) | la stessa funzione che stimava le disponibilità: nessuna seconda implementazione di «pubblicazione + N» |
+
+La politica non vive nei moduli puri per una ragione **misurata, non estetica**: `scadenzaTesto.ts` è a
+248 righe (tetto di guardia 250) e `motivoSenzaScadenza.ts` a 198 (tetto 200, `test-motivo-senza-scadenza`
+lo asserisce). Tetti che si rispettano compattando la prosa, non spostando il limite: qui la prosa è stata
+compattata e la regola nuova è entrata **senza sfondare nessuno dei due**.
+
+La finestra, dichiarata in `GIORNI_PRESUNZIONE_ALBO = 7` (parser), vale **solo** dentro tre condizioni:
+
+1. la **pubblicazione è nota**: si parte dalla data della fonte, mai dalla data in cui si legge — una
+   presunzione che scivola in avanti a ogni giro non è una presunzione, è una data inventata (§26.133);
+2. la pubblicazione **non è nel futuro** (una data avanti è un termine, non un'affissione);
+3. la pubblicazione è **dentro la finestra**: un atto affisso otto giorni fa non è «appena uscito».
+
+E due precedenze, perché la fonte non si corregge:
+
+* se il testo/la colonna **dichiarano** un termine, `presunzione` non viene nemmeno guardata
+  (`classificaDateAvviso` la ignora quando `scadenza` esiste): la presunzione parla solo del silenzio;
+* **l'identità non cambia**: `hashId` continua a usare la sola `scadenzaGrezza`, che quando si presume è
+  `null`. La stessa voce non produce un secondo record, e il ledger anti-duplicato resta ancorato alla
+  fonte — il test lo fissa confrontando l'hash di un avviso presunto con quello di un avviso vecchio
+  dello stesso titolo.
+
+| situazione | `expiration_date` | natura |
+|---|---|---|
+| atto d'albo senza termine, pubblicato **ieri** | la pubblicazione **+ 7** (presunta) | `disponibilita_aperta` |
+| atto d'albo senza termine, pubblicato **13 giorni fa** | `null` (nessuna presunzione) | `nessuna` |
+| fuori da un albo / sezione di reclutamento | `null` | `nessuna` |
+| la fonte **dichiara** il termine | la data dichiarata | `termine_candidatura` (o le altre) |
+
+### 2. Il rumore che si stringe: gli atti interni hanno una porta che nessun titolo apre
+
+I quattro segnali nuovi (`permessi retribuiti`, `diritto allo studio|150 ore`,
+`riconoscimento (dei) servizi`, `proclamazione (degli) eletti`) sono marcati `hard: true` **e**
+`interna: true` — un campo nuovo di `noiseFilterTipi.ts`, con una semantica precisa:
+
+* **nel TITOLO** un atto interno è rumore **sempre**, anche se il titolo dice «Interpello»: in
+  quell'atto «Interpello 52» è il **numero d'atto** dell'albo, non una ricerca di persone. È il caso CT,
+  e nessun `STRONG_RECRUITMENT_INDICATORS` lo salva;
+* **nel CORPO** vale come `hard`: un bando vero che cita di sfuggita «permessi retribuiti per il diritto
+  allo studio» nel testo resta (titolo specifico + indicatore forte), perché un diritto del personale in
+  servizio non deve far perdere un incarico da assegnare.
+
+La distinzione è deliberata: la regola esistente «il TITOLO è l'atto» funzionava per gare e determine,
+ma si arrendeva davanti a un titolo che conteneva la parola «interpello». Ora l'atto interno ha una
+categoria propria.
+
+### 3. Codice e verifiche
+
+* `src/scraper/parser.ts` — `GIORNI_PRESUNZIONE_ALBO`, `daAlboOSezioneReclutamento`, `scadenzaPresuntaAlbo`,
+  `dataLocale`, e `presunzione` nella chiamata al classificatore (1.369 righe, debito `E-DIM` già in baseline);
+* `src/lib/scadenzaTesto.ts` — `presunzione` in `classificaDateAvviso` (248 righe, dentro il tetto di 250:
+  intestazione compattata per far spazio alla regola);
+* `src/lib/noiseFilter.ts` — il gruppo «ATTI AMMINISTRATIVI INTERNI» e la precedenza `interna` (244 righe);
+* `src/lib/noiseFilterTipi.ts` — `interna?: boolean`, con la sua documentazione;
+* guardie: `src/lib/__tests__/scadenzaTesto.test.ts` (blocco «5-bis. Il termine presunto», 10 asserzioni),
+  `scripts/test-disponibilita.ts` (sezione 7: finestra, origine, futuro, data impossibile, 9 asserzioni),
+  `scripts/test-parser-date.ts` (sezione §26.142: end-to-end + hash invariato, 8 asserzioni),
+  `scripts/test-lessico-ingestione.ts` (sezione 3: i quattro atti interni silenziati + il bando che li cita
+  nel corpo che resta, 5 asserzioni).
+
+Esiti: `npm run typecheck` **0**, `eslint` **0** sugli 8 file toccati, `npm run test:scadenza-testo` ✅,
+`test:disponibilita` ✅, `test:parser:date` ✅, `test:lessico-ingestione` ✅, `test:noise-filter` ✅,
+`npm run test:architettura` ✅ (817 file, **148 = baseline**, nessuna nuova, nessuna eccezione da rimuovere),
+`npm test` ✅, `npm run build` ✅.
+
+### 4. Nota di sessione
+
+Le due richieste sembravano opposte — «non scartare» e «scarta di più» — e invece sono la stessa
+disciplina applicata a due lati: **la data presunta si dichiara** (con la sua natura e la sua finestra,
+mai spacciata per un termine della fonte) e **l'atto che non assume nessuno si nomina** (permessi, 150
+ore, servizi, eletti) invece di essere respinto per una parola o accettato per un numero d'atto. Il
+dettaglio che rende la cosa onesta è quello che non si vede: l'hash non si muove, quindi la presunzione
+non crea righe nuove — cambia l'etichetta del tempo, non l'identità dell'avviso.
+
+
+
+
+

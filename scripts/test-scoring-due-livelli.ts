@@ -205,7 +205,7 @@ check('tipo: il campo del livello secondario è `competenzaSecondaria`', true, /
 check(
   'bacheca: porta la competenza riconosciuta sulla riga',
   true,
-  /competenzaSecondaria: valutazione\.competenzaSecondaria\?\.etichetta \?\? null/.test(bacheca),
+  /competenzaSecondaria: valutazione\.competenzaSecondaria\?\.etichetta \?\? null/.test(`${bacheca}\n${leggi('src/lib/bachecaRipiego.ts')}`),
 );
 check('bacheca: la porta d’ingresso NON usa le competenze (non creano l’opportunità)', true, !/punteggioCompetenze\(/.test(bacheca));
 check(

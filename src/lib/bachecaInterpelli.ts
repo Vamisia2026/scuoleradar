@@ -16,6 +16,8 @@
  *      l'interesse dichiarato per intero apre l'opportunità anche fuori dalle proprie
  *      province. Un match PARZIALE no. Chi non passa questa porta NON entra nemmeno nella
  *      scorta del paracadute (§26.120): la geografia non sostituisce l'affinità di classe;
+ *   3-bis. **gradi affini e serbatoio (§26.141)**: 82 · 76 · 72 · 70 come PAVIMENTO del
+ *      ponte (mai un match) e ATA/sostegno 52 · 58 nella SOLA scorta come paracadute;
  *   4. **punteggio**: media ponderata delle preferenze primarie + jolly semantico
  *      (`valutaCompatibilita`, §26.64), col motivo leggibile e la competenza riconosciuta;
  *   5. **esclusione secca dei riempitivi NON pertinenti** (§26.60): sotto la soglia arancio
@@ -37,16 +39,17 @@ import type { Interpello } from '../data/interpelli';
 import type { OrdineScuola } from '../data/ordiniMaterie';
 import {
   avvisoDaInterpello,
-  candidatoRipiego,
+  esitoRiga,
   type EsitoBacheca,
 } from './bachecaRipiego';
 import { valutaCompatibilita, type ProfiloModali } from './compatibilitaGraduata';
 import { sostegnoAmbiguo } from './classificatoreSostegno';
 import { giudizioScuole } from './filtriScuole';
+import { gradoAffine, voceSerbatoio } from './gradiAffini';
 import { avvisoCompatibileConProfilo, avvisoDiSostegno, profiloAderisceSostegno } from './matchingEngine';
 import { classeVicina } from './punteggioClasse';
 import { motivoRigaNonOpportunitaAvviso } from './qualitaAvviso';
-import { limitaRiempitivi, paracaduteCinque, riempitivoNonPertinente } from './riempitivi';
+import { limitaRiempitivi, paracaduteCinque } from './riempitivi';
 import { ORDINE_LIVELLO, scalaParacadute } from './scalaParacadute';
 import { eOpportunitaConScadenza } from './scadenza';
 
@@ -95,6 +98,10 @@ export function bachecaInterpelli(
   let sostegnoFuoriProvincia = 0;
   /** §26.131 — righe che parlano di sostegno senza dichiarare un reclutamento. */
   let sostegnoAmbiguoScartato = 0;
+  /** §26.141 — righe entrate in bacheca grazie a un GRADO AFFINE (82 · 72). */
+  let affiniInBacheca = 0;
+  /** §26.141 — voci del SERBATOIO DI DEFAULT (ATA · sostegno d'altro ordine) in scorta. */
+  let serbatoioInScorta = 0;
 
   for (const i of fonti) {
     // §26.71 — REGOLA FERREA: senza una scadenza dichiarata e non ancora passata la
@@ -143,6 +150,12 @@ export function bachecaInterpelli(
       sostegnoFuoriProvincia += 1;
       continue;
     }
+    // §26.141 — GRADI AFFINI E SERBATOIO: la generosità è una RISERVA, non un match.
+    // Si valutano PRIMA della porta d'ingresso perché sono loro ad aprirla quando il
+    // motore dice no e la classe non arriva a «stessa area»: senza di loro la riga
+    // usciva e basta. La whitelist resta sovrana (scelta esplicita dell'utente).
+    const grado = scuole.preferita ? null : gradoAffine(profilo, avviso);
+    const serbatoio = scuole.preferita ? null : voceSerbatoio(profilo, avviso);
     // PRIMA la valutazione: porta il verdetto del jolly semantico (§26.64), che può far
     // entrare d'ufficio un match PIENO fuori dalle proprie province (i vincoli geografici
     // secondari non escludono più) e quindi aprire anche la porta d'ingresso.
@@ -166,7 +179,10 @@ export function bachecaInterpelli(
     // sfuma un punteggio che le preferenze hanno già deciso, e non crea l'opportunità.
     if (!scuole.preferita) {
       const inRadar = confermato || classeVicina(profilo, avviso) || jollyPieno;
-      if (!inRadar) {
+      // §26.141 — la porta si apre anche al GRADO AFFINE e al SERBATOIO: la riga non
+      // è pertinente, ma non si butta più via (era il canale per cui due terzi del
+      // database non arrivavano mai a un profilo di una sola classe).
+      if (!inRadar && grado === null && serbatoio === null) {
         // §26.120 — NIENTE SCORTA PER CHI NON HA AFFINITÀ DI CLASSE. Fino al
         // 30/10/2026 questa riga finiva nella scorta del paracadute «5» e tornava
         // in vetrina come ripiego: era il canale da cui entravano le «cinque
@@ -179,42 +195,28 @@ export function bachecaInterpelli(
         continue;
       }
     }
-    if (valutazione.escluso) continue;
-    // `0` = nessuna modale applicabile: si conserva il valore dal DB.
-    if (valutazione.punteggio === 0) {
-      inBacheca.push(i);
-      continue;
-    }
-    // §26.60 — ESCLUSIONE SECCA: sotto il 70% e senza pertinenza del Radar la voce è un
-    // falso positivo, non un riempitivo da dosare: fuori, senza quote e senza cap. La
-    // pertinenza è PRIMARIA (§26.63: le competenze non la stabiliscono — sfumano soltanto).
-    // Le scuole preferite restano (scelta esplicita dell'utente, Modalità 5).
-    if (
-      riempitivoNonPertinente(
-        { compatibilita: valutazione.punteggio },
-        { pertinente: pertinenzaMotore, forzata: scuole.preferita },
-      )
-    ) {
-      riempitiviEsclusi += 1;
-      // SCORTA (§26.106): la riga ha passato le porte d'ingresso ed è solo «poco
-      // pertinente»: è esattamente la migliore candidata a completare la vetrina.
-      // §26.125 — con il suo gradino: la coda si ordina per scala, non per voto.
-      scorta.push(candidatoRipiego(i, valutazione, scala.livello));
-      continue;
-    }
-    if (scuole.preferita) forzate += 1;
-    inBacheca.push({
-      ...i,
-      compatibilita: valutazione.punteggio,
-      motivoCompatibilita: valutazione.motivi.join(' · ') || undefined,
-      scuolaPreferita: scuole.preferita,
-      // LIVELLO SECONDARIO (§26.63): la competenza del profilo che ha SFUMATO il punteggio
-      // (`null` = nessuna competenza trovata: il voto è tutto delle preferenze primarie).
-      competenzaSecondaria: valutazione.competenzaSecondaria?.etichetta ?? null,
-      // JOLLY SEMANTICO (§26.64): la competenza riconosciuta PER INTERO, che ha garantito il
-      // pavimento d'eccellenza o l'ingresso d'ufficio fuori dalle proprie province.
-      jollySemantico: valutazione.jollySemantico,
+    // §26.60 · §26.106 · §26.141 — la DECISIONE della riga vive in un solo posto
+    // (`esitoRiga`): serbatoio → scorta, escluso → fuori, riempitivo non pertinente →
+    // scorta col gradino, altrimenti bacheca col pavimento del grado affine.
+    const esito = esitoRiga(i, valutazione, {
+      punteggioGrado: grado?.punteggio ?? null,
+      gradoEtichetta: grado?.etichetta,
+      serbatoio,
+      pertinente: pertinenzaMotore,
+      forzata: scuole.preferita,
+      livelloScala: scala.livello,
     });
+    if (esito.esito === 'fuori') continue;
+    if (esito.esito === 'bacheca') {
+      if (scuole.preferita) forzate += 1;
+      if (esito.affine) affiniInBacheca += 1;
+      inBacheca.push(esito.riga);
+      continue;
+    }
+    // SCORTA (§26.106 · §26.125): ripiego dichiarato, mai una card spacciata per match.
+    if (serbatoio !== null) serbatoioInScorta += 1;
+    else riempitiviEsclusi += 1;
+    scorta.push(esito.riga);
   }
 
   const cap = limitaRiempitivi(inBacheca, { proteggi: (v) => v.scuolaPreferita === true });
@@ -239,5 +241,7 @@ export function bachecaInterpelli(
     senzaAffinitaClasse,
     sostegnoFuoriProvincia,
     sostegnoAmbiguoScartato,
+    affiniInBacheca,
+    serbatoioInScorta,
   };
 }

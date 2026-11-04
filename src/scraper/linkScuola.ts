@@ -39,9 +39,19 @@ export interface AllegatoPdf {
   testo: string;
 }
 
-/** Parole che indicano la sezione in cui un istituto pubblica gli interpelli. */
+/**
+ * Parole che indicano la sezione in cui un istituto pubblica gli interpelli.
+ *
+ * §26.141 — AMPLIAMENTO DEI TARGET. Non solo `/interpelli/` e `/mad/`: il
+ * reclutamento vive anche nell'**Albo Pretorio** e in **Amministrazione
+ * Trasparente → Bandi di concorso / Avvisi**, e per il personale non docente in
+ * pagine che dicono solo «personale», «assistenti», «collaboratori». Il link è un
+ * CANDIDATO: a decidere resta `eUrlIndicePortale`, l'espansione degli elenchi e il
+ * gate di qualità, mentre `RE_LINK_ESCLUSO` continua a tenere fuori login, social,
+ * registro e pagine di servizio.
+ */
 const RE_LINK_INTERPELLI =
-  /interpell|supplenz|messa\s+a\s+disposizione|incaric|disponibilit|albo|avvis|graduator|band[oi]|selezion/i;
+  /interpell|supplenz|messa\s+a\s+disposizione|\bmad\b|incaric|disponibilit|albo|avvis|graduator|band[oi]|concors|selezion|trasparen|amministrazione|personale|assistent|collaborator/i;
 
 /** Link di servizio che non portano mai a un avviso. */
 const RE_LINK_ESCLUSO =
@@ -76,11 +86,19 @@ function stessaCasa(url: URL, base: URL): boolean {
   return host === hostBase || host.endsWith(`.${hostBase}`) || hostBase.endsWith(`.${host}`);
 }
 
-/** Punteggio del link: 2 = interpelli/supplenze, 1 = albo/avvisi, 0 = altro. */
+/** Punteggio del link: 2 = interpelli/supplenze, 1 = albo/avvisi/ATA, 0 = altro. */
 function punteggioLink(testoLink: string, url: string): number {
   const insieme = `${testoLink} ${url}`;
-  if (/interpell|supplenz|messa\s+a\s+disposizione|incaric|disponibilit/i.test(insieme)) return 2;
-  if (/albo|avvis|graduator|band[oi]|selezion/i.test(insieme)) return 1;
+  if (/interpell|supplenz|messa\s+a\s+disposizione|\bmad\b|incaric|disponibilit/i.test(insieme)) return 2;
+  // §26.141 — albo, bandi, amministrazione trasparente e personale ATA: il
+  // reclutamento che non si chiama «interpello» resta un candidato di prima fascia.
+  if (
+    /albo|avvis|graduator|band[oi]|selezion|concors|amministrazione|trasparen|personale|assistent|collaborator/i.test(
+      insieme,
+    )
+  ) {
+    return 1;
+  }
   return 0;
 }
 

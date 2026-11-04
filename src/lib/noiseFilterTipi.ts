@@ -27,4 +27,12 @@ export interface NoisePattern {
   hard?: boolean;
   /** Pagina INFORMATIVA: salva solo con titolo SPECIFICO + finestra (§26.82). */
   informativa?: boolean;
+  /**
+   * ATTO INTERNO (§26.142): permessi retribuiti, diritto allo studio 150 ore,
+   * riconoscimento dei servizi, proclamazione degli eletti. Sono diritti e
+   * adempimenti del personale **già in servizio**: non ingaggiano nessuno, quindi
+   * nel TITOLO non li salva nessun indicatore (il titolo È l'atto). Nel CORPO
+   * valgono come `hard`: un bando vero può citarli di sfuggita.
+   */
+  interna?: boolean;
 }

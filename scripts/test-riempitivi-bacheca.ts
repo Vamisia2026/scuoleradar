@@ -194,11 +194,14 @@ check(
   /senzaAffinitaClasse \+= 1/.test(bacheca),
 );
 check('bacheca: le scuole preferite non sono riempitivi', true, /proteggi:/.test(bacheca));
+// §26.141 — la decisione della riga (esclusione secca compresa) vive in `bachecaRipiego`:
+// la guardia legge i due file, l'ordine «esclusione prima del cap» resta verificato.
+const ripiegoDecisione = leggi('src/lib/bachecaRipiego.ts');
 check(
   'bacheca: esclusione secca dei non pertinenti, A MONTE del cap (§26.60)',
   true,
-  /riempitivoNonPertinente\(/.test(bacheca) &&
-    bacheca.indexOf('riempitivoNonPertinente(') < bacheca.indexOf('limitaRiempitivi('),
+  /riempitivoNonPertinente\(/.test(ripiegoDecisione) &&
+    bacheca.indexOf('esitoRiga(') < bacheca.indexOf('limitaRiempitivi('),
 );
 check(
   'bacheca: il conto degli esclusi è dichiarato, mai silenzioso',

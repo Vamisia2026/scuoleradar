@@ -40,16 +40,37 @@ export function daNotices(r: {
 }
 
 /**
- * Reindirizza IMMEDIATAMENTE alla fonte ufficiale ESTERNA dell'avviso, quando
- * esiste un URL http(s) valido e NON interno alla piattaforma. È il comportamento
- * richiesto dai deep link delle notifiche: nessuna scheda interna intermedia,
- * nessun "Avviso non più disponibile" quando la pagina istituzionale è nota, e
- * nessun rimbalzo su ScuoleRadar (la scheda interna non è mai una "fonte").
- * Ritorna `true` se il redirect è stato avviato.
+ * Apre IMMEDIATAMENTE la fonte ufficiale ESTERNA dell'avviso, quando esiste un
+ * URL http(s) valido e NON interno alla piattaforma. È il comportamento richiesto
+ * dai deep link delle notifiche: nessuna scheda interna intermedia, nessun
+ * «Avviso non più disponibile» quando la pagina istituzionale è nota, e nessun
+ * rimbalzo su ScuoleRadar (la scheda interna non è mai una «fonte»).
+ *
+ * §26.140 — IN UNA NUOVA SCHEDA. Prima si navigava nella scheda corrente
+ * (`window.location.replace`): quando la fonte è un PDF servito come allegato, il
+ * browser lo SCARICAVA sul disco e la pagina di ScuoleRadar spariva — l'utente
+ * perdeva il contesto e si ritrovava un file in «Download». Ora il documento si
+ * apre in una scheda nuova (il lettore PDF integrato lo mostra, il download
+ * automatico non è più l'unica strada) e si resta sulla propria scheda. Se il
+ * browser blocca l'apertura del popup (`window.open` → `null`), si ricade sulla
+ * navigazione diretta: meglio la vecchia strada di nessuna strada.
+ *
+ * Ritorna `true` se l'apertura è stata avviata.
  */
 export function reindirizzaAllaFonte(interpello: Interpello): boolean {
   const link = urlEsterna(interpello.linkFonte);
   if (!link) return false;
+  try {
+    // `noopener` passato come TERZO argomento farebbe tornare `null` anche a
+    // scheda aperta (spec HTML): si apre normalmente e si azzera l'opener a mano.
+    const scheda = window.open(link, '_blank');
+    if (scheda) {
+      scheda.opener = null;
+      return true;
+    }
+  } catch {
+    // popup bloccato: si prova la navigazione diretta, come prima del fix.
+  }
   try {
     window.location.replace(link);
   } catch {

@@ -11,6 +11,10 @@
  * «Disponibilità aperta / Fine contratto» e resta in bacheca. Le guardie passano
  * un «oggi» DICHIARATO: stesso avviso, stesso esito, in qualunque giorno.
  *
+ * §26.142: verifica la PRESUNZIONE di validità di un atto d'albo senza termine —
+ * sette giorni dalla pubblicazione, solo dentro la finestra dei sette giorni e
+ * solo per un albo / una sezione di reclutamento; con l'hash ancorato alla fonte.
+ *
  * Esecuzione:
  *   npm run test:parser:date
  */
@@ -183,6 +187,49 @@ const imminente = parseInterpello(
 );
 check('termine ravvicinato: natura', 'termine_candidatura', imminente.naturaScadenza);
 check('termine ravvicinato: la data resta', '2026-11-12', imminente.expirationDate);
+
+console.log('\n— §26.142. Atto d’albo senza termine: la settimana PRESUNTA —');
+const albo = parseInterpello(
+  avviso('Avviso di selezione per il conferimento di incarichi — A.S. 2026/2027', {
+    link: 'https://www.istituto.edu.it/albo-pretorio/avviso-4711',
+    dataPubblicazione: '2026-11-01',
+    corpo: 'Si pubblica il presente avviso. Non è indicata alcuna data nel testo.',
+    oggi: '2026-11-03',
+  }),
+);
+check('la riga NON si scarta: il termine è presunto', '2026-11-08', albo.expirationDate);
+check('con la natura dichiarata', 'disponibilita_aperta', albo.naturaScadenza);
+check('la pubblicazione resta quella della fonte', '2026-11-01', albo.publishedAt);
+const alboVecchio = parseInterpello(
+  avviso('Avviso di selezione per il conferimento di incarichi — A.S. 2026/2027', {
+    link: 'https://www.istituto.edu.it/albo-pretorio/avviso-4700',
+    dataPubblicazione: '2026-10-20',
+    oggi: '2026-11-03',
+  }),
+);
+check('pubblicato tredici giorni prima: nessuna presunzione', null, alboVecchio.expirationDate);
+check('e la natura dice che la fonte non ha parlato', 'nessuna', alboVecchio.naturaScadenza);
+check(
+  'l’identità resta ancorata alla FONTE (hash invariato)',
+  alboVecchio.hashId,
+  albo.hashId,
+);
+const fuoriAlbo = parseInterpello(
+  avviso('Avviso di selezione per il conferimento di incarichi — A.S. 2026/2027', {
+    link: 'https://www.istituto.edu.it/notizie/2026/11/01/avviso-4712',
+    dataPubblicazione: '2026-11-01',
+    oggi: '2026-11-03',
+  }),
+);
+check('fuori da un albo non si presume nulla', null, fuoriAlbo.expirationDate);
+const alboConTermine = parseInterpello(
+  avviso('Avviso di selezione — A.S. 2026/2027', {
+    link: 'https://www.istituto.edu.it/albo-pretorio/avviso-4713',
+    corpo: 'Domande entro il 12/11/2026.',
+    oggi: '2026-11-03',
+  }),
+);
+check('se la fonte dichiara il termine, la presunzione tace', '2026-11-12', alboConTermine.expirationDate);
 
 console.log('\n──────────────────────────────────────────────────────────');
 if (falliti === 0) {

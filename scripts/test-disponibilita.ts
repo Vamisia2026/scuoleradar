@@ -15,6 +15,10 @@
  *      pubblicazione non c'è non si stima nulla (nessun «oggi», nessun rinnovo);
  *   3. la stima vale solo per una DISPONIBILITÀ aperta, mai per un atto chiuso.
  *
+ * §26.142 — la cugina stretta di questa stima: un atto d'albo (o di una sezione
+ * di reclutamento) che non dichiara un termine presume **sette** giorni dalla
+ * pubblicazione, e solo se la pubblicazione è degli ultimi sette giorni.
+ *
  * Uso: npm run test:disponibilita  (incluso in `npm test`)
  */
 import { righeDisponibilita, righeTabellaInterpelli } from '../src/scraper/tabellaInterpelliPdf.ts';
@@ -24,6 +28,11 @@ import {
   scadenzaStimata,
 } from '../src/lib/motivoSenzaScadenza.ts';
 import { dataPubblicazioneArticolo } from '../src/scraper/articoloPost.ts';
+import {
+  GIORNI_PRESUNZIONE_ALBO,
+  daAlboOSezioneReclutamento,
+  scadenzaPresuntaAlbo,
+} from '../src/scraper/parser.ts';
 
 declare const process: { exitCode?: number };
 
@@ -137,6 +146,34 @@ check(
   '2026-11-19',
   scadenzaStimata(dataPubblicazioneArticolo(HTML_DC)),
 );
+
+/* ------- 7) LA PRESUNZIONE DI VALIDITÀ DELL'ATTO D'ALBO (§26.142) ----------- */
+console.log('\n— 7. Un atto d’albo senza termine: la settimana presunta (§26.142) —');
+check('la finestra presunta è di sette giorni', 7, GIORNI_PRESUNZIONE_ALBO);
+check(
+  'un albo pretorio è un albo',
+  true,
+  daAlboOSezioneReclutamento('https://www.istituto.edu.it/albo-pretorio/'),
+);
+check(
+  'una sezione di interpelli è una sezione di reclutamento',
+  true,
+  daAlboOSezioneReclutamento('', 'https://www.usp.it/index.php/interpelli'),
+);
+check(
+  'la home di una scuola non lo è',
+  false,
+  daAlboOSezioneReclutamento('https://www.istituto.edu.it/'),
+);
+check('pubblicato ieri → termine fra sei giorni', '2026-11-09', scadenzaPresuntaAlbo('2026-11-02', '2026-11-03'));
+check('pubblicato otto giorni fa → nessuna presunzione', null, scadenzaPresuntaAlbo('2026-10-26', '2026-11-03'));
+check('senza pubblicazione non si presume nulla', null, scadenzaPresuntaAlbo(null, '2026-11-03'));
+check(
+  'una data nel futuro è un termine, non un’affissione',
+  null,
+  scadenzaPresuntaAlbo('2026-11-12', '2026-11-03'),
+);
+check('una data inesistente non è una data', null, scadenzaPresuntaAlbo('2026-02-30', '2026-11-03'));
 
 console.log(`\n${errori === 0 ? '✅' : '❌'} DISPONIBILITÀ A TERMINE STIMATO: ${errori} errore/i`);
 if (errori > 0) process.exitCode = 1;

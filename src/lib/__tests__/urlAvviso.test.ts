@@ -77,6 +77,18 @@ tabella([
     'https://usrfvg.gov.it/it/home/menu/uffici/ufficio-territoriale-di-udine/Interpelli/',
     true,
   ],
+  // §26.140 — la sezione «per ambito» di un istituto è un contenitore di atti:
+  // il 03/11/2026 questo URL veniva salvato come se fosse il bando.
+  [
+    'Istituto Orsini-Amelia — interpello nazionale (pagina di servizio)',
+    'https://www.omnicomprensivoorsiniamelia.edu.it/servizio/interpello-nazionale/',
+    true,
+  ],
+  [
+    'Istituto — interpelli regionali',
+    'https://www.iccomprensivo.edu.it/servizio/interpelli-regionali/',
+    true,
+  ],
 ]);
 
 /* ------------ 2) GLI AVVISI VERI RESTANO SPECIFICI (no falsi positivi) ------------ */
@@ -172,6 +184,24 @@ check(
   'espansione dei post: scarta le voci che sono indici',
   true,
   /from '\.\.\/lib\/urlAvviso\.ts'/.test(espansione) && /eUrlIndicePortale\(p\.url\)/.test(espansione),
+);
+// §26.140 — un contenitore di atti si espande nei suoi PDF, non si pubblica.
+check(
+  'contenitori di atti: si espandono nei singoli PDF',
+  true,
+  /allegatiBando\(/.test(scrape) && /titoloDaAllegato\(/.test(scrape) && /avvisiDaContenitore\(/.test(scrape),
+);
+const parserSorgente = leggi('src/scraper/parser.ts');
+check(
+  'parser: il contenitore non diventa mai la fonte dell’avviso',
+  true,
+  /from '\.\.\/lib\/urlAvviso\.ts'/.test(parserSorgente) && /eUrlIndicePortale\(c\)/.test(parserSorgente),
+);
+const validitaLink = leggi('src/lib/validitaLink.ts');
+check(
+  'validazione del link: la home/indice non si pubblica (regola condivisa)',
+  true,
+  /from '\.\/urlAvviso'/.test(validitaLink) && /eUrlAvvisoSpecifico\(link\)/.test(validitaLink),
 );
 check('nessuna seconda tabella di sezioni nel tabellone', false, linkFonte.includes('PAROLE_SEZIONE'));
 check('il modulo non importa nulla (regola pura e condivisibile)', false, /^import /m.test(leggi(MODULO)));

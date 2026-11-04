@@ -25,10 +25,11 @@
  *
  * Presentazione pura: dati, stato di apertura e azioni arrivano dal contenitore.
  */
-import { SlidersHorizontal } from 'lucide-react';
+import { Lightbulb, SlidersHorizontal } from 'lucide-react';
 import { Accordion } from '@/components/Accordion';
 import { InterpelloCard } from '@/components/InterpelloCard';
 import { stileMatch } from '@/lib/compatibilita';
+import { CONSIGLIO_BACHECA_SCARSA, bachecaScarsa } from '@/lib/gradiAffini';
 import { classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import type { Interpello } from '@/data/interpelli';
@@ -124,6 +125,15 @@ export function ElencoOpportunita({
           </div>
         ) : (
           <div className="animate-fade-in space-y-3">
+            {/* §26.141 — BACHECA SCARSA: sotto i 3 match pieni la vetrina lo dice con
+                una frase rassicurante e una strada (allargare il profilo). Non si
+                gonfia l'elenco e non si abbassa il merito: si spiega il contesto. */}
+            {bachecaScarsa(lista) && (
+              <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
+                <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span>{CONSIGLIO_BACHECA_SCARSA}</span>
+              </p>
+            )}
             {fuoriAmbito > 0 && (
               <p className="rounded-xl border border-primary-100 bg-primary-50 px-3 py-2 text-[11px] leading-relaxed text-primary-600">
                 {fuoriAmbito === 1 ? 'Una riga arriva' : `${fuoriAmbito} righe arrivano`} da

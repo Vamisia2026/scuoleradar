@@ -90,6 +90,9 @@ export const CATEGORIE_AMMESSE = [
   'PON',
   'POR',
   'Bando / Avviso',
+  // §26.141 — il personale non docente è una categoria ammessa a sé: un bando per
+  // collaboratori scolastici o assistenti amministrativi non è un «Altro».
+  'Personale ATA',
 ] as const;
 
 /** True se la categoria rilevata è una procedura di reclutamento ammessa. */

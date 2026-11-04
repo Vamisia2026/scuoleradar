@@ -224,7 +224,9 @@ check('il jolly riusa la rilevazione: nessuna rilettura del testo', true,
 const bacheca = leggi('src/lib/bachecaInterpelli.ts');
 check('bacheca: il match PIENO È una conferma di pertinenza', true, /jollyPieno = valutazione\.jollySemantico !== null/.test(bacheca));
 check('bacheca: apre il jolly, non la sfumatura', true, /classeVicina\(profilo, avviso\) \|\| jollyPieno/.test(bacheca));
-check('bacheca: la competenza riconosciuta viaggia sulla riga', true, /jollySemantico: valutazione\.jollySemantico/.test(bacheca));
+// §26.141 — la forma della riga vive in `bachecaRipiego` (split per il tetto di 250
+// righe): la guardia legge i due file, il cablaggio resta uno solo.
+check('bacheca: la competenza riconosciuta viaggia sulla riga', true, /jollySemantico: valutazione\.jollySemantico/.test(`${bacheca}\n${leggi('src/lib/bachecaRipiego.ts')}`));
 check('tipo: `Interpello.jollySemantico` dichiarato', true, /jollySemantico\?: string \| null/.test(leggi('src/data/interpelli.ts')));
 const vista = (f: string): boolean => /ETICHETTA_JOLLY_SEMANTICO/.test(leggi(f)) && /descrizioneJollySemantico\(jollySemantico, banda\.punteggio\)/.test(leggi(f));
 check('card e modale: etichetta + tooltip del jolly', true, vista('src/components/InterpelloCard.tsx') && vista('src/components/InterpelloDettaglioModal.tsx'));

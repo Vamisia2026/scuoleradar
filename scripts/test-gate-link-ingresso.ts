@@ -10,6 +10,9 @@
  * Verifiche:
  *   · matrice completa dei 5 stati (ok, bloccato, assente, instabile, non controllato);
  *   · `404`/`410` → home ufficiale se nota, altrimenti fuori;
+ *   · §26.140 — home dell'istituto, sezioni/indici e contenitori per ambito non
+ *     entrano MAI (né con `200`, né con timeout): la destinazione viene prima
+ *     dell'esito HTTP;
  *   · timeout/5xx → link specifico mantenuto (upsert `ignoreDuplicates`: irreversibile);
  *   · record strutturati mai pingati; link non `http(s)` mai pubblicati;
  *   · cablaggio: la pipeline usa `verificaLinkInLotti` e non ha più un ping proprio.
@@ -64,14 +67,48 @@ check('404 + home → si pubblica la home', { accetta: true, link: HOME, stato: 
 check('410 + home → si pubblica la home', { accetta: true, link: HOME, stato: 'assente', sostituito: true }, v(AVVISO, { status: 410 }, HOME));
 check('404 senza home → riga fuori', { accetta: false, link: null, stato: 'assente', sostituito: false }, v(AVVISO, { status: 404 }));
 check(
-  '404 sul link che È già la home → resta (niente di meglio)',
-  { accetta: true, link: `${HOME}/`, stato: 'assente', sostituito: false },
+  'il link È una home → riga fuori (filtro anti-homepage, §26.140)',
+  { accetta: false, link: null, stato: 'assente', sostituito: false },
   v({ ...AVVISO, link: `${HOME}/` }, { status: 404 }, HOME),
 );
 check(
   'home dichiarata non `.edu.it` → non è una home ufficiale',
   { accetta: false, link: null, stato: 'assente', sostituito: false },
   v(AVVISO, { status: 404 }, 'https://www.liceomanzoni.it'),
+);
+
+/* ----------- 2-bis · §26.140: home e contenitori non sono avvisi ----------- */
+
+console.log('\n— 2-bis. Filtro anti-homepage: la destinazione viene prima dell’esito —');
+/** Verdetto atteso per una riga che non entra (ordine dei campi come `v`). */
+const fuori = (stato: string) => ({ accetta: false, link: null, stato, sostituito: false });
+check(
+  'home dell’istituto che risponde 200 → riga fuori',
+  fuori('ok'),
+  v({ ...AVVISO, link: 'https://www.polovolta.edu.it/' }, { status: 200 }),
+);
+check(
+  'home dell’istituto con timeout → riga fuori (non «instabile, quindi tenuta»)',
+  fuori('instabile'),
+  v({ ...AVVISO, link: 'https://istitutocomprensivoperugia3.edu.it' }, { status: null, errore: 'timeout' }, HOME),
+);
+check(
+  'sezione «Interpelli» di un istituto (elenco) → riga fuori',
+  fuori('ok'),
+  v({ ...AVVISO, link: 'https://www.liceomanzoni.edu.it/interpelli/' }, { status: 200 }),
+);
+check(
+  'contenitore per ambito (`/servizio/interpello-nazionale/`) → riga fuori',
+  fuori('ok'),
+  v(
+    { ...AVVISO, link: 'https://www.omnicomprensivoorsiniamelia.edu.it/servizio/interpello-nazionale/' },
+    { status: 200 },
+  ),
+);
+check(
+  'l’avviso SPECIFICO supera il filtro anche se il server non risponde',
+  { accetta: true, link: AVVISO.link, stato: 'instabile', sostituito: false },
+  v(AVVISO, { status: null, errore: 'dns' }, HOME),
 );
 
 

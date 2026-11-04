@@ -77,6 +77,56 @@
       Una pagina indice si **espande** nei suoi post; se non si espande, **non si
       pubblica** (mai una riga con «Scadenza n/d» che apre un elenco). Guardie:
       `npm run test:url-avviso`, `npm run test:scraper:post`.
+- [ ] **§26.140 (03/11/2026) — la home non è un avviso, il contenitore nemmeno.**
+      Un URL che è la home dell'istituto (`polovolta.edu.it`), una sezione
+      (`/interpelli/`) o un contenitore *per ambito*
+      (`…/servizio/interpello-nazionale/`) **non entra in bacheca**, nemmeno se
+      risponde `200`: la destinazione viene prima dell'esito HTTP
+      (`eUrlAvvisoSpecifico` in `src/lib/validitaLink.ts`, usata anche dal
+      presidio d'ingresso). Un contenitore si **espande nei singoli atti PDF**
+      (`espandiElenchi`, `allegatiBando`); se non si espande, la riga resta fuori.
+      Guardie: `npm run test:validita-link`, `npm run test:gate-link-ingresso`,
+      `npm run test:scraper:attivi`, `npm run test:url-avviso`.
+- [ ] Il click su una fonte esterna (avviso, bando PDF, documento) si apre in una
+      **nuova scheda** (`target="_blank"` + `rel="noopener noreferrer"`, mai
+      `download`): il PDF va nel lettore integrato del browser, non sul disco.
+ - [ ] **§26.141 (03/11/2026) — «trovare è più importante che scartare»: si allarga
+       la ricerca, NON si abbassa il merito.** La soglia di qualità resta 70; ciò che
+       cambia è che una riga con un **grado affine** non viene più buttata via:
+       · l'avviso NON è la propria classe ma la materia o il grado di scuola si toccano
+         (es. `EEEE` primaria con lingua inglese per chi ha `A-24`) → pavimento
+         proporzionale **82 · 76 · 72 · 70** (`src/lib/gradiAffini.ts`), dichiarato nel
+         motivo della card («grado affine: …»), mai spacciato per match;
+       · un'altra materia nello stesso ordine e un ordine non adiacente restano FUORI
+         (§26.120 non è revocata);
+       · **serbatoio di paracadute**: i bandi per **personale ATA** (`ATA-CS`/`ATA-AA`/
+         `ATA-AT`) e per il **sostegno di un altro ordine** nella propria provincia
+         valgono **52** e **58** e vivono **solo nella scorta**: entrano in vetrina con
+         il paracadute «5», marcati `ripiego`, solo se la bacheca resta corta. Mai come
+         merito, mai fuori dalle province scelte.
+ - [ ] **Bacheca scarsa**: sotto **3** match pieni la vetrina mostra la frase unica
+       `CONSIGLIO_BACHECA_SCARSA` («Ecco le opportunità disponibili oggi nelle tue
+       province. Suggerimento: puoi allargare la ricerca nel tuo profilo per
+       intercettare più bandi.»). Il copy vive nel modulo, non nel JSX; la lista vuota
+       ha il suo stato dedicato (§26.122).
+ - [ ] **Lessico dell'ingestione (§26.141)**: il dizionario comprende `supplenza/e`,
+       `MAD`, «messa a disposizione», «ricerca di personale», «avviso pubblico»,
+       «esperto esterno», «collaboratore scolastico», «assistente amministrativo»; i
+       target includono **Albo Pretorio** e **Amministrazione Trasparente → Bandi di
+       concorso / Avvisi**. Il filtro del rumore resta **stretto**: scioperi, consigli
+       di classe, menu mensa, circolari alunni ed elezioni degli organi collegiali
+       restano fuori (e «concorso» NON è un indicatore positivo: è anche quello degli
+       alunni). Guardia: `npm run test:gradi-affini`.
+ - [ ] **Atto d'albo senza termine (§26.142)**: un avviso che viene da un **Albo
+       Pretorio** o da una sezione di reclutamento e non dichiara un termine **non si
+       scarta**: se la pubblicazione è degli ultimi **7 giorni**, il termine è
+       **presunto** a 7 giorni da lì (natura «Disponibilità aperta / Fine contratto»),
+       e l'`hash_id` resta ancorato alla fonte (nessun doppione). Restano invece fuori
+       gli **atti interni** — «permessi retribuiti», «diritto allo studio 150 ore»,
+       «riconoscimento dei servizi», «proclamazione degli eletti» — **anche** quando il
+       titolo dice «interpello»: è il numero d'atto, non una ricerca di persone.
+       Guardie: `npm run test:disponibilita` · `test:parser:date` · `test:lessico-ingestione`.
+
 - [ ] Etichette di fonte (uniche, mai varianti):
       · messaggi **personali** (email/Telegram/alert) → `Guarda la fonte ufficiale`;
       · post dei **canali pubblici** → `🔗 Leggi la Fonte Ufficiale` (mai URL in chiaro).

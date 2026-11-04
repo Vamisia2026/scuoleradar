@@ -25,12 +25,15 @@
 
 import { createHash } from 'node:crypto';
 import { province } from '../data/province.ts';
-import { codiciAtaDaTesto } from '../lib/profiliAta.ts';
+import { codiciAtaDaTesto, dichiaraPersonaleAta } from '../lib/profiliAta.ts';
+import { INDICATORI_ATA } from '../lib/noiseFilterAta.ts';
 import { eUrlAvvisoDiretto } from '../lib/alertInterpello.ts';
+import { eUrlIndicePortale } from '../lib/urlAvviso.ts';
 import { risolviEmailUfficialeScuola } from '../lib/emailScuola.ts';
 import { nomeIstitutoPresentabile } from '../lib/nomeIstituto.ts';
 import { eDominioIstituzionale, type OpzioniDominio } from '../lib/dominiIstituzionali.ts';
-import { classificaDateAvviso, type NaturaTermine } from '../lib/scadenzaTesto.ts';
+import { classificaDateAvviso, giorniTra, type NaturaTermine } from '../lib/scadenzaTesto.ts';
+import { scadenzaStimata } from '../lib/motivoSenzaScadenza.ts';
 import { portaliUfficiali } from './portaliUfficiali.ts';
 import { scuolaDaRiga } from './scuolaDaRiga.ts';
 
@@ -514,6 +517,12 @@ export function eUrlDocumento(url?: string | null): boolean {
  * generica — e, se la provincia del record era quella della FONTE (pagina
  * regionale), poteva portare l'utente su un'altra regione (es. Torino →
  * Emilia-Romagna). Il link deve essere SEMPRE quello dell'avviso specifico.
+ *
+ * ⛔ §26.140 — VIETATO ANCHE IL CONTENITORE: una pagina indice (`/interpelli/`,
+ * `/servizio/interpello-nazionale/`, un archivio, una ricerca — `eUrlIndicePortale`,
+ * `lib/urlAvviso.ts`) elenca gli atti ma non è l'atto. Non viene mai scelta come
+ * fonte: la pagina si ESPANDE nei singoli PDF (`espandiElenchi`,
+ * `scraper/index.ts`) e, se non si espande, la riga non entra.
  */
 export function scegliUrlFonte(
   candidati: Array<string | null | undefined>,
@@ -524,7 +533,7 @@ export function scegliUrlFonte(
   );
   // Solo URL di AVVISI SPECIFICI: home dell'ente, pagine di elenco/ricerca e
   // archivi regionali non sono mai la "fonte ufficiale" di un avviso.
-  const diretti = validi.filter((c) => eUrlAvvisoDiretto(c));
+  const diretti = validi.filter((c) => eUrlAvvisoDiretto(c) && !eUrlIndicePortale(c));
 
   const documento = diretti.find((c) => eUrlDocumento(c));
   if (documento) return documento;
@@ -614,20 +623,33 @@ const RE_POSTO_SUPPLENZA =
 
 /**
  * Categoria dell'opportunità rilevata dal testo (copre tutte le tipologie
- * gestite dallo scraper): Interpelli/Supplenze, PON, POR, PNRR e bandi per
- * esperti (ricerca esperti / selezione esperti).
+ * gestite dallo scraper): Interpelli/Supplenze, PNRR, PON, POR, bandi per
+ * esperti (ricerca esperti / selezione esperti) e — dal §26.141 — i bandi del
+ * personale ATA, che fino a qui finivano nell'«Altro» pur essendo metà della
+ * scuola.
  */
 export function rilevaCategoriaAvviso(testo: string): string {
   const t = testo.toLowerCase();
-  // Priorità per specificità: PNRR > PON > POR > Esperti > Interpelli > Bandi.
+  // Priorità per specificità: PNRR > PON > POR > ATA > Esperti > Interpelli > Bandi.
   // Copre sia gli acronimi (PNRR / PON / POR) sia le denominazioni complete
   // (Next Generation EU, Programma Operativo Nazionale/Regionale, FSE, FESR).
   if (/\bpnrr\b|next generation eu|missione 4/.test(t)) return 'PNRR';
   if (/\bpon\b|programma operativo nazionale|\bfse\b/.test(t)) return 'PON';
   if (/\bpor\b|programma operativo regionale|\bfesr\b/.test(t)) return 'POR';
+  // Il docente ha la precedenza: un interpello che cita il personale ATA nel testo
+  // resta un interpello (il classificatore ATA guarda l'intero testo, §26.126).
+  if (/interpell|supplenz/.test(t) || /\bmad\b|messa a disposizione/.test(t) || RE_POSTO_SUPPLENZA.test(t)) {
+    return 'Interpello / Supplenza';
+  }
+  // §26.141 — il personale non docente è una categoria, non un «Altro»: la verità
+  // sui profili ATA è una sola (`lib/profiliAta`, §26.126).
+  if (dichiaraPersonaleAta(testo)) return 'Personale ATA';
   if (/espert|reclutamento/.test(t)) return 'Bando Esperti';
-  if (/interpell|supplenz/.test(t) || RE_POSTO_SUPPLENZA.test(t)) return 'Interpello / Supplenza';
-  if (/bando|avviso|pubblicazione|selezione|incarico|procedura|manifestazione di interesse/.test(t)) {
+  if (
+    /bando|avviso|pubblicazione|selezione|incarico|procedura|manifestazione di interesse|ricerca (?:di )?personale/.test(
+      t,
+    )
+  ) {
     return 'Bando / Avviso';
   }
   return 'Altro';
@@ -638,16 +660,29 @@ export function rilevaCategoriaAvviso(testo: string): string {
  * Copre TUTTE le tipologie gestite dallo scraper: interpelli/supplenze, bandi,
  * avvisi, pubblicazioni, selezioni di esperti (ricerca esperti / selezione
  * esperti) e i fondi PON / POR / PNRR (es. "Bando per esperto esterno PNRR").
+ *
+ * §26.141 — IL LESSICO DELLE FONTI, non il nostro: gli istituti pubblicano il
+ * reclutamento con parole che il filtro non conosceva (`supplenza`, `MAD`, «messa
+ * a disposizione», «ricerca di personale», «avviso pubblico», «esperto esterno») e
+ * per il personale non docente (`collaboratore scolastico`, `assistente
+ * amministrativo`, `personale ATA`). Un bando vero che non si chiama «interpello»
+ * usciva dal perimetro: ora entra (la pertinenza la decide il matching, §26.141).
  */
 export function sembraOpportunita(contesto: string): boolean {
   // Copre TUTTE le tipologie gestite: interpelli/supplenze (anche nella forma
   // delle righe provinciali, `RE_POSTO_SUPPLENZA`), bandi/avvisi, selezioni di
   // esperti (ricerca esperti / reclutamento esperti) e i fondi PON / POR /
   // PNRR, anche con le denominazioni estese (FSE, FESR, Programma Operativo,
-  // Next Generation EU).
+  // Next Generation EU). Il personale ATA passa dalla sua unica verità (§26.126).
+  // §26.141 — il lessico delle fonti. Per il personale ATA si usano gli indicatori
+  // SPECIFICI (`noiseFilterAta.ts`: «personale ATA», collaboratori scolastici,
+  // assistenti amministrativi/tecnici, bidelli, DSGA): la parola «ATA» da sola
+  // compare anche in «Graduatoria ATA» e nelle intestazioni di ruolo, e non è una
+  // prova che la riga sia un reclutamento.
   return (
     RE_POSTO_SUPPLENZA.test(contesto) ||
-    /interpell|supplenz|avviso|bando|pubblicazione|selezione|espert|pnrr|next generation eu|pon\b|por\b|fse\b|fesr\b|programma operativo|fondi strutturali|incarico|procedura|manifestazione di interesse|finanziamento/i.test(
+    INDICATORI_ATA.some((re) => re.test(contesto)) ||
+    /interpell|supplenz|avviso|bando|pubblicazione|selezione|espert|pnrr|next generation eu|pon\b|por\b|fse\b|fesr\b|programma operativo|fondi strutturali|incarico|procedura|manifestazione di interesse|finanziamento|\bmad\b|messa a disposizione|ricerca (?:di )?personale|avvis[oi] pubblic[oi]|concors|esperto esterno/i.test(
       contesto,
     )
   );
@@ -1108,6 +1143,64 @@ export function estraiEnteEmittente(
   return null;
 }
 
+/* ------------- §26.142 — PRESUNZIONE DI VALIDITÀ DELL'ATTO D'ALBO ------------- */
+
+/**
+ * Giorni di validità PRESUNTA di un atto d'albo che non dichiara un termine:
+ * l'affissione ordinaria di un avviso dura una settimana.
+ */
+export const GIORNI_PRESUNZIONE_ALBO = 7;
+
+/**
+ * True se la voce proviene da un **Albo Pretorio** o da una **sezione di
+ * reclutamento / interpelli**: le case in cui la scuola pubblica gli atti che
+ * assumono personale. Si guarda l'URL (elenco, dettaglio, allegato): è l'unico
+ * indizio disponibile prima di leggere il testo.
+ */
+const RE_FONTE_ALBO =
+  /albo|pretori|interpell|supplenz|reclutament|disposizion|disponibilit|band[oi]|concors|personale|selezion/i;
+
+/** True se almeno uno degli URL dichiara un albo o una sezione di reclutamento. */
+export function daAlboOSezioneReclutamento(...urls: (string | null | undefined)[]): boolean {
+  return urls.some((url) => RE_FONTE_ALBO.test((url ?? '').toLowerCase()));
+}
+
+/** Data di calendario LOCALE in ISO: «oggi» non slitta per il fuso (§26.139). */
+function dataLocale(oggi?: string | Date): string {
+  if (typeof oggi === 'string') return validaIso(oggi.trim()) ?? oggi.trim().slice(0, 10);
+  const d = oggi instanceof Date ? oggi : new Date();
+  return `${d.getFullYear()}-${pad(String(d.getMonth() + 1))}-${pad(String(d.getDate()))}`;
+}
+
+/**
+ * Termine PRESUNTO di un atto d'albo senza termine dichiarato (§26.142): la
+ * pubblicazione più `GIORNI_PRESUNZIONE_ALBO` giorni.
+ *
+ * `null` — nessuna presunzione — fuori da queste condizioni, tutte dichiarate:
+ *   · la pubblicazione è NOTA: la presunzione parte dalla data della fonte, mai
+ *     dalla data in cui si legge (la stessa regola di §26.133 — una stima che
+ *     scivola in avanti a ogni giro non è una stima, è una data inventata);
+ *   · la pubblicazione non è nel FUTURO: una data avanti è un termine, non
+ *     un'affissione;
+ *   · la pubblicazione è DENTRO la finestra: un atto affisso otto giorni fa non è
+ *     «appena uscito», e la sua finestra è già chiusa o non dichiarata.
+ *
+ * La politica vive qui — nell'ingestione, che sa DA DOVE arriva la voce — e non
+ * nei moduli puri, che sono alla soglia dei 250 righe del gate strutturale:
+ * `lib/scadenzaTesto` decide la NATURA di una data, `lib/motivoSenzaScadenza` la
+ * stima delle disponibilità (§26.133), qui si decide SE presumere.
+ */
+export function scadenzaPresuntaAlbo(
+  pubblicazione?: string | null,
+  oggi?: string | Date,
+): string | null {
+  const base = validaIso((pubblicazione ?? '').trim());
+  if (!base) return null;
+  const giorni = giorniTra(base, dataLocale(oggi));
+  if (giorni === null || !Number.isFinite(giorni) || giorni < 0 || giorni > GIORNI_PRESUNZIONE_ALBO) return null;
+  return scadenzaStimata(base, GIORNI_PRESUNZIONE_ALBO);
+}
+
 /* ------------------------------- Parser ------------------------------- */
 
 /**
@@ -1138,6 +1231,21 @@ export function parseInterpello(input: InterpelloInput): InterpelloParsato {
   const dataNota = normalizzaData(input.dataNota);
   const scadenzaGrezza = dataNota ?? estraiDataScadenza(testoCompleto, pubblicazione);
 
+  // PRESUNZIONE DI VALIDITÀ (§26.142). Un atto d'albo — o di una sezione di
+  // reclutamento/interpelli — che NON dichiara un termine non si scarta: se la
+  // PUBBLICAZIONE (dichiarata dalla fonte, mai «oggi») è degli ultimi
+  // `GIORNI_PRESUNZIONE_ALBO` giorni, il termine presunto (7 giorni da lì) diventa
+  // la data della riga — e il classificatore lo applica solo dove la fonte non ha
+  // dichiarato nulla. Nel ledger anti-duplicato non cambia NIENTE: `hashId` resta
+  // ancorato alla sola data GREZZA, quindi la stessa voce non genera un doppione.
+  const presunta = daAlboOSezioneReclutamento(
+    input.link,
+    input.source,
+    ...(input.linkCandidati ?? []),
+  )
+    ? scadenzaPresuntaAlbo(pubblicazione, input.oggi)
+    : null;
+
   // CLASSIFICAZIONE (§26.139). La data trovata non è automaticamente un termine
   // perentorio:
   //  · se è GIÀ PASSATA la si legge come `published_at` («31 ottobre» in testa
@@ -1151,6 +1259,7 @@ export function parseInterpello(input: InterpelloInput): InterpelloParsato {
     pubblicazione,
     esplicita: dataNota !== null,
     oggi: input.oggi,
+    presunzione: presunta,
   });
   const publishedAt = date.publishedAt;
   const expirationDate = date.expirationDate;

@@ -138,7 +138,7 @@ check('card: il match resta accanto quando è buono', true, /banda\.visibile && 
 check('modale: stessa etichetta della card', true, /ETICHETTA_SCUOLA_PREFERITA/.test(modale) && /descrizioneScuolaPreferita\(/.test(modale));
 check('bacheca: giudizio scuole applicato', true, /giudizioScuole\(/.test(bacheca));
 check('bacheca: whitelist → inclusione d’ufficio nel punteggio', true, /forzata: scuole\.preferita/.test(bacheca));
-check('bacheca: il flag resta sull’avviso', true, /scuolaPreferita: scuole\.preferita/.test(bacheca));
+check('bacheca: il flag resta sull’avviso', true, /scuolaPreferita: opts\.scuolaPreferita/.test(leggi('src/lib/bachecaRipiego.ts')) && /forzata: scuole\.preferita/.test(bacheca));
 check('bacheca: il cap dei riempitivi protegge le preferite', true, /proteggi: \(v\) => v\.scuolaPreferita === true/.test(bacheca));
 check('card e modale leggono lo stesso helper puro', true, /scuolaPreferita\(preferenze\.favoriteSchools/.test(card) && /scuolaPreferita\(preferenze\.favoriteSchools/.test(modale));
 

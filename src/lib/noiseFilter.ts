@@ -3,32 +3,27 @@
  *
  * L'albo scolastico pubblica anche ciò che NON è un'opportunità di lavoro. Qui
  * vive il giudizio MINIMO che lo scarta prima del parsing:
- *
- *   1. **Il TITOLO è l'atto.** Un «avviso di selezione» nel corpo non trasforma
- *      una determina in un interpello (stessa regola dello scoring, §26.72).
- *   2. **Gare e previdenza sono bloccanti** (`hard`): `CIG`, `CUP`, determine,
+ *   1. **Il TITOLO è l'atto**: un «avviso di selezione» nel corpo non trasforma
+ *      una determina in un interpello (§26.72), e un atto INTERNO nel titolo non
+ *      si salva con nessun indicatore (§26.142);
+ *   2. **gare e previdenza sono bloccanti** (`hard`): `CIG`, `CUP`, determine,
  *      forniture, MEPA, quiescenza, TFR/TFS scartano anche una gara B2B
- *      intitolata «avviso di selezione»; li salva solo un indicatore SPECIFICO
- *      nel titolo.
- *   3. **Il rumore di vita scolastica** (soft: circolari, viaggi, orari,
- *      assemblee) si salva con un qualsiasi `RECRUITMENT_INDICATORS`.
- *   4. **Le pagine informative non sono avvisi** (§26.82): «scuola in ospedale»,
- *      «formazione scuola-lavoro», «PCTO», «corsi di formazione», «progetti» e
- *      gli elenchi statici di scuole restano fuori a meno che il TITOLO dichiari
- *      un reclutamento specifico **e** il testo dica ENTRO QUANDO candidarsi.
- *      Una pagina che parla di un progetto non è un bando solo perché il menu
- *      del sito contiene la parola «interpelli».
+ *      intitolata «avviso di selezione» — li salva solo un indicatore SPECIFICO;
+ *   3. **il rumore di vita scolastica** (soft: circolari, viaggi, orari,
+ *      assemblee) si salva con un qualsiasi `RECRUITMENT_INDICATORS`;
+ *   4. **le pagine informative non sono avvisi** (§26.82): «scuola in ospedale»,
+ *      «PCTO», «corsi di formazione», elenchi statici di scuole — restano fuori
+ *      senza titolo specifico **e** finestra di candidatura.
  *
  * Un testo senza segnali NON è giudicato qui: decide lo scoring a valle. Zero
- * dipendenze ESTERNE: le regex viaggiano in due moduli sorelli puri — i tipi
- * (`noiseFilterTipi.ts`) e la vita sindacale (`noiseFilterSindacale.ts`, §26.91)
- * — così questo file resta sotto la soglia di attenzione dei 250 righe
- * (`npm run test:architettura`). Regex precompilate, lavoro limitato a
- * `MAX_SCAN_CHARS`: la stessa verità per `discovery-engine`, `table-reporter`,
- * ingestion e guardia (`npm run test:noise-filter`, in `npm test`).
+ * dipendenze ESTERNE: le regex viaggiano in moduli sorelli puri (tipi, vita
+ * sindacale §26.91, lessico reale §26.141, profili ATA §26.126), così questo file
+ * resta sotto la soglia dei 250 righe; stessa verità per `discovery-engine`,
+ * `table-reporter`, ingestion e guardia (`npm run test:noise-filter`).
  */
 import { PATTERN_VITA_SINDACALE } from './noiseFilterSindacale.ts';
 import { INDICATORI_ATA } from './noiseFilterAta.ts';
+import { INDICATORI_RECLUTAMENTO } from './noiseFilterReclutamento.ts';
 import type { NoisePattern, NoiseVerdict } from './noiseFilterTipi.ts';
 
 /** I tipi restano importabili da qui: la superficie pubblica non cambia. */
@@ -37,10 +32,8 @@ export type { NoisePattern, NoiseVerdict } from './noiseFilterTipi.ts';
 /** Quanti caratteri si analizzano: oltre, si legge una pagina, non l'atto. */
 const MAX_SCAN_CHARS = 20_000;
 
-/**
- * Segnali NEGATIVI ancorati alle forme reali degli atti: niente «gara», «bando»
- * o «selezione» da soli (sono anche parole di un interpello).
- */
+/** Segnali NEGATIVI ancorati alle forme reali degli atti: niente «gara», «bando»
+ * o «selezione» da soli (sono anche parole di un interpello). */
 export const ADMIN_NOISE_PATTERNS: readonly NoisePattern[] = [
   // --- Appalti, forniture, finanza (bloccanti) ---
   { re: /\bCIG\b/, reason: 'CIG (codice identificativo di gara)', hard: true },
@@ -73,6 +66,17 @@ export const ADMIN_NOISE_PATTERNS: readonly NoisePattern[] = [
   { re: /trattamento\s+di\s+fine\s+rapporto/i, reason: 'trattamento di fine rapporto', hard: true },
   { re: /\bTFR\b/, reason: 'TFR', hard: true },
   { re: /\bTFS\b/, reason: 'TFS', hard: true },
+
+  // --- ATTI AMMINISTRATIVI INTERNI: non ingaggiano nessuno (§26.142) ---
+  // Il caso vero (CT, 03/11/2026): «Interpello 52. Personale Docente e A.T.A.
+  // Permessi retribuiti per…» — un atto sui permessi del personale, entrato in
+  // bacheca come reclutamento perché senza classe il grado affine apriva la
+  // porta dell'ordine vicino. `interna`: nel TITOLO non lo salva nessun
+  // indicatore — «Interpello» è il numero d'atto, non una ricerca di persone.
+  { re: /permessi\s+retribuiti/i, reason: 'permessi retribuiti (atto interno)', hard: true, interna: true },
+  { re: /diritto\s+allo\s+studio|\b150\s+ore\b/i, reason: 'diritto allo studio 150 ore (atto interno)', hard: true, interna: true },
+  { re: /riconoscimento\s+(?:dei\s+)?servizi/i, reason: 'riconoscimento dei servizi (atto interno)', hard: true, interna: true },
+  { re: /proclamazione\s+(?:degli\s+)?eletti/i, reason: 'proclamazione degli eletti (atto interno)', hard: true, interna: true },
 
   // --- Contenuto INFORMATIVO/ISTITUZIONALE (§26.82) ---
   // Non sono atti amministrativi ma PAGINE che parlano di scuola: restano SOLO
@@ -112,11 +116,8 @@ export const ADMIN_NOISE_PATTERNS: readonly NoisePattern[] = [
   },
 ];
 
-/**
- * Indicatori POSITIVI di reclutamento: senza almeno uno di questi una voce che
- * porta un segnale negativo non passa. Sono radici, non forme piene: le fonti
- * scrivono «interpello/interpelli», «supplenza/supplenze», «disponibilità».
- */
+/** Indicatori POSITIVI (radici, non forme piene): senza almeno uno di questi una
+ * voce che porta un segnale negativo non passa. */
 export const RECRUITMENT_INDICATORS: readonly RegExp[] = [
   /\binterpell/i,
   /\bsupplenz/i,
@@ -128,16 +129,16 @@ export const RECRUITMENT_INDICATORS: readonly RegExp[] = [
   /attribuzione\s+(?:di\s+)?cattedr/i,
   /post[oi]\s+vacant/i,
   /avvis[oi]\s+(?:di\s+|per\s+la\s+)?selezion/i,
+  // §26.141 — il lessico reale del reclutamento, in un modulo sorello: qui NON
+  // entra «concorso» (è anche quello degli alunni) e la maglia del rumore resta.
+  ...INDICATORI_RECLUTAMENTO,
   // §26.126 — i profili del personale ATA (`noiseFilterAta.ts`).
   ...INDICATORI_ATA,
 ];
 
-/**
- * Sottoinsieme SPECIFICO di `RECRUITMENT_INDICATORS`, usato nel titolo per
- * salvare una pagina che cita un atto di gara: «Interpelli», «Supplenze»,
- * «Classe di concorso», «MAD». Esclude i generici («avviso di selezione»,
- * «candidatura», «disponibilità») che compaiono anche nelle gare B2B.
- */
+/** Sottoinsieme SPECIFICO di `RECRUITMENT_INDICATORS`, usato nel TITOLO per salvare
+ * una pagina che cita un atto di gara («Interpelli», «Supplenze», «MAD»). Esclude i
+ * generici («avviso di selezione», «disponibilità») che compaiono nelle gare B2B. */
 export const STRONG_RECRUITMENT_INDICATORS: readonly RegExp[] = [
   /\binterpell/i,
   /\bsupplenz/i,
@@ -148,12 +149,9 @@ export const STRONG_RECRUITMENT_INDICATORS: readonly RegExp[] = [
   /post[oi]\s+vacant/i,
 ];
 
-/**
- * Finestra di CANDIDATURA dichiarata («entro il 30/10/2026», «entro e non oltre
- * il 05/11/2026», «termine di presentazione delle domande», «domanda entro 10
- * giorni»): è l'unica prova che una pagina informativa contenga un bando vero e
- * non il racconto di un'attività già in corso (§26.82).
- */
+/** Finestra di CANDIDATURA dichiarata («entro il 30/10/2026», «termine di
+ * presentazione delle domande»): è l'unica prova che una pagina informativa
+ * contenga un bando vero e non il racconto di un'attività in corso (§26.82). */
 const FINESTRA_CANDIDATURA: readonly RegExp[] = [
   /\bentro\s+(?:e\s+non\s+oltre\s+)?(?:il|le)\s+\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}/i,
   /\bnon\s+oltre\s+(?:il|le)\s+\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}/i,
@@ -199,7 +197,8 @@ export function hasRecruitmentIndicator(testo: string): boolean {
 
 /**
  * Decide se una voce è rumore amministrativo e va scartata PRIMA del parsing:
- *   1. rumore nel TITOLO (atto amministrativo) → sempre rumore;
+ *   1. rumore nel TITOLO (atto amministrativo) → sempre rumore, e un atto
+ *      INTERNO (§26.142) non lo salva nessun indicatore;
  *   2. nessun rumore (né in titolo né in testo) → non giudicata qui;
  *   3. pagina INFORMATIVA → resta SOLO con titolo di reclutamento SPECIFICO **e**
  *      finestra di candidatura (prima bastava «interpello» nel menu del sito);
@@ -215,8 +214,9 @@ export function isAdministrativeNoise(text: string, title: string): NoiseVerdict
   const rumoreTitolo = primoRumore(titolo);
   // Un atto amministrativo nel TITOLO è sempre rumore. Un segnale INFORMATIVO nel
   // titolo no: «Interpello … progetto PCTO» è un bando vero, e lo decide il
-  // gradino 3 con la finestra di candidatura.
-  if (rumoreTitolo && !rumoreTitolo.informativa) {
+  // gradino 3 con la finestra di candidatura. Un atto INTERNO (§26.142) cade qui
+  // anche quando il titolo dice «Interpello»: quello è il numero d'atto.
+  if (rumoreTitolo?.interna || (rumoreTitolo && !rumoreTitolo.informativa)) {
     return { isNoise: true, reason: rumoreTitolo.reason };
   }
 
@@ -234,7 +234,7 @@ export function isAdministrativeNoise(text: string, title: string): NoiseVerdict
         };
   }
 
-  if (rumoreCorpo.hard) {
+  if (rumoreCorpo.hard || rumoreCorpo.interna) {
     const salvoDaTitolo = STRONG_RECRUITMENT_INDICATORS.some((re) => re.test(titolo));
     return salvoDaTitolo ? { isNoise: false } : { isNoise: true, reason: rumoreCorpo.reason };
   }

@@ -1,29 +1,20 @@
 /**
- * ScuoleRadar.it — LA SCADENZA CHE IL TESTO DICHIARA (§26.94).
+ * ScuoleRadar.it — LA SCADENZA CHE IL TESTO DICHIARA (§26.94) E LA SUA NATURA.
  *
- * Perché esiste: metà delle fonti non ha una colonna «Scadenza». Il termine è
- * scritto nella frase dell'avviso — «Le domande vanno presentate **entro le ore
- * 12:00 del 12/11/2026**», «termine per la presentazione delle domande
- * **12/11/2026**», «non oltre il **12/11/2026**» — oppure nel nome del file
- * (`...scadenza-12-11-2026.pdf`) o nel `title` dell'ancora. Il lettore tabellare
- * scartava quelle righe come «senza scadenza» e l'elenco adattivo non le
- * contava: opportunità vere perse per un'etichetta mancante, non per un dato
- * assente.
+ * Metà delle fonti non ha una colonna «Scadenza»: il termine sta nella frase
+ * («entro le ore 12:00 del 12/11/2026», «non oltre il …»), nel nome del file o nel
+ * `title` dell'ancora. Qui si legge SOLO quando una parola di TERMINE qualifica la
+ * data («scadenza», «entro», «termine», «a pena di esclusione»); se la qualifica
+ * più vicina è di PUBBLICAZIONE («pubblicato il», «prot. n.», «affisso») la data è
+ * l'atto, non il termine. Le date italiane si leggono davvero e il 31 febbraio non
+ * esiste. La data trovata ha una NATURA dichiarata (`classificaDateAvviso`,
+ * §26.139): già passata = PUBBLICAZIONE, oltre i 90 giorni / coda d'anno =
+ * «Disponibilità aperta / Fine contratto»; da §26.142 un atto d'albo che non
+ * dichiara un termine riceve un termine PRESUNTO — mai un termine perentorio per
+ * forza, mai una riga da buttare.
  *
- * REGOLE DICHIARATE (le stesse di §26.75 e `parser.ts`)
- *  · Si accetta una data SOLO se una parola di TERMINE la qualifica: «scadenza»,
- *    «entro», «non oltre», «termine», «chiusura», «presentazione delle domande»,
- *    «a pena di esclusione». Una data nuda non è mai una scadenza;
- *  · se la qualifica più vicina è di PUBBLICAZIONE («pubblicato il», «prot. n.»,
- *    «affisso», «inserito») la data si scarta: è l'atto, non il termine;
- *  · le date italiane si leggono davvero (`12/11/2026`, `12-11-2026`,
- *    `2026-11-12`, `12 novembre 2026`) e il 31 febbraio non esiste;
- *  · PURO: nessuna rete, nessun LLM, nessuna dipendenza. Stesso testo = stessa
- *    data. Guardia: `npm run test:scadenza-testo` (incluso in `npm test`).
- *  · la data trovata ha una NATURA dichiarata (`classificaDateAvviso`, §26.139):
- *    se è già passata è la PUBBLICAZIONE, se sta oltre i 90 giorni è
- *    «Disponibilità aperta / Fine contratto» — mai un termine perentorio per
- *    forza, mai una riga da buttare.
+ * PURO: nessuna rete, nessun LLM, nessuna dipendenza. Stesso testo = stessa data.
+ * Guardia: `npm run test:scadenza-testo` (incluso in `npm test`).
  */
 
 const MESI: Readonly<Record<string, number>> = {
@@ -225,18 +216,27 @@ export interface DateAvviso {
  *    `termine_scaduto`: la fonte l'ha dichiarata, non la reinterpretiamo;
  *  · oltre `GIORNI_FINE_CONTRATTO` o su una coda d'anno oltre il mese →
  *    `disponibilita_aperta` («Disponibilità aperta / Fine contratto»), mai una
- *    riga da buttare; altrimenti → `termine_candidatura`.
+ *    riga da buttare; altrimenti → `termine_candidatura`;
+ *  · `presunzione` (§26.142): dove la fonte NON dichiara un termine, il termine
+ *    PRESUNTO deciso dalla politica d'albo diventa la data della riga, con la
+ *    stessa natura `disponibilita_aperta` — la fonte non ha parlato, non si tace.
  */
 export function classificaDateAvviso(
-  date: { scadenza?: string | null; pubblicazione?: string | null; esplicita?: boolean; oggi?: string | Date },
+  date: { scadenza?: string | null; pubblicazione?: string | null; esplicita?: boolean; oggi?: string | Date; presunzione?: string | null },
 ): DateAvviso {
   const pubblicazione = parteData(date.pubblicazione);
   const scadenza = parteData(date.scadenza);
+  const oggi = date.oggi instanceof Date ? calendario(date.oggi) : parteData(date.oggi);
+  const riferimento = oggi ?? calendario(new Date());
+  // §26.142 — il termine presunto vale SOLO dove la fonte non ne dichiara uno.
+  const presunta = scadenza ? null : parteData(date.presunzione);
+  if (presunta) {
+    return { publishedAt: pubblicazione, expirationDate: presunta, natura: 'disponibilita_aperta', etichetta: ETICHETTA_NATURA.disponibilita_aperta, giorni: giorniTra(riferimento, presunta) };
+  }
   if (!scadenza) {
     return { publishedAt: pubblicazione, expirationDate: null, natura: 'nessuna', etichetta: ETICHETTA_NATURA.nessuna, giorni: null };
   }
-  const oggi = date.oggi instanceof Date ? calendario(date.oggi) : parteData(date.oggi);
-  const giorni = giorniTra(oggi ?? calendario(new Date()), scadenza);
+  const giorni = giorniTra(riferimento, scadenza);
   const passata = giorni !== null && giorni < 0;
   if (passata && date.esplicita !== true) {
     return { publishedAt: pubblicazione ?? scadenza, expirationDate: null, natura: 'pubblicazione', etichetta: ETICHETTA_NATURA.pubblicazione, giorni };

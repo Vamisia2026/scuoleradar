@@ -34,6 +34,15 @@
  * positivo toglierebbe dalla bacheca un avviso vero (danno peggiore di un
  * falso negativo). Le prove stanno in `src/lib/__tests__/urlAvviso.test.ts`
  * sui cinque portali reali.
+ *
+ * §26.140 — ANCHE LE SEZIONI «PER AMBITO» SONO CONTENITORI. Gli istituti
+ * pubblicano il reclutamento come pagina di SERVIZIO che elenca gli atti per
+ * ambito (nazionale, regionale, provinciale):
+ * `omnicomprensivoorsiniamelia.edu.it/servizio/interpello-nazionale/`. Quella
+ * pagina non è un bando — è l'indice che li contiene — e lo dicono le parole
+ * dell'ultimo segmento (`interpello-nazionale`): senza di esse l'URL veniva
+ * salvato come se fosse l'avviso. Il modulo dichiara «indice» e l'ingestione
+ * espande la pagina nei singoli PDF/atti (`espandiElenchi`, `scraper/index.ts`).
  */
 
 /** Estensioni di un DOCUMENTO: il bando vive nel file, non nella pagina indice. */
@@ -74,6 +83,11 @@ const PAROLE_SEZIONE: ReadonlySet<string> = new Set([
   'uffici', 'ufficio', 'servizi', 'servizio', 'aree', 'area', 'sezioni', 'sezione',
   'amministrazione', 'trasparente', 'trasparenza', 'documenti', 'documento',
   'modulistica', 'scadenze', 'scadenza', 'menu', 'home',
+  // §26.140 — la sezione dichiarata per AMBITO è un CONTENITORE di bandi, non un
+  // bando: `omnicomprensivoorsiniamelia.edu.it/servizio/interpello-nazionale/`
+  // (Orsini-Amelia, TR) elenca gli atti nazionali e va espanso nei singoli PDF.
+  'nazionale', 'nazionali', 'regionale', 'regionali', 'provinciale', 'provinciali',
+  'territoriale', 'territoriali', 'interregionale', 'interregionali', 'ambito', 'ambiti',
 ]);
 
 /** Connettivi ammessi dentro uno slug di sezione (`interpelli-e-supplenze`). */

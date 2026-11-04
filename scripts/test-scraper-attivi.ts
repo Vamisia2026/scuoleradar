@@ -64,12 +64,13 @@ check(
 
 console.log('\n— B. Solo procedure di reclutamento ammesse —');
 check(
-  'categorie ammesse: interpelli, esperti, PNRR, PON, POR, avvisi',
-  ['Interpello / Supplenza', 'Bando Esperti', 'PNRR', 'PON', 'POR', 'Bando / Avviso'],
+  'categorie ammesse: interpelli, esperti, PNRR, PON, POR, avvisi, personale ATA',
+  ['Interpello / Supplenza', 'Bando Esperti', 'PNRR', 'PON', 'POR', 'Bando / Avviso', 'Personale ATA'],
   [...CATEGORIE_AMMESSE],
 );
 check('interpello ammesso', true, eCategoriaAmmessa('Interpello / Supplenza'));
 check('esperti ammessi', true, eCategoriaAmmessa('Bando Esperti'));
+check('personale ATA ammesso (§26.141)', true, eCategoriaAmmessa('Personale ATA'));
 check('categoria "Altro" NON ammessa', false, eCategoriaAmmessa('Altro'));
 check(
   'fondi senza procedura di reclutamento → fuori target',
@@ -167,7 +168,10 @@ const STRUTTURATO = {
 };
 const INCOMPLETO = {
   title: 'Avviso generico di reclutamento',
-  link: 'https://www.liceomanzoni.edu.it/interpelli/avviso',
+  // §26.140 — l'URL deve essere quello di un avviso SPECIFICO: un id nell'ultimo
+  // segmento (`avviso-4711`). Un link che finisce su una parola di sezione
+  // (`…/interpelli/avviso`) è una pagina indice e non entra più in bacheca.
+  link: 'https://www.liceomanzoni.edu.it/albo/avviso-4711',
   classCodes: [],
   materia: null,
   contactEmail: null,
@@ -201,6 +205,16 @@ check(
   'timeout → link mantenuto (upsert irreversibile: nessuna prova di morte)',
   `ok|${INCOMPLETO.link}|instabile`,
   v(INCOMPLETO, { status: null, errore: 'timeout' }, HOME),
+);
+// §26.140 — il filtro anti-homepage: la destinazione viene prima dell'esito.
+check('home dell’istituto → riga fuori, anche con 200', 'fuori|null|ok', v({ ...INCOMPLETO, link: `${HOME}/` }, { status: 200 }));
+check(
+  'contenitore per ambito → riga fuori (si espande nei suoi PDF)',
+  'fuori|null|ok',
+  v(
+    { ...INCOMPLETO, link: 'https://www.omnicomprensivoorsiniamelia.edu.it/servizio/interpello-nazionale/' },
+    { status: 200 },
+  ),
 );
 check('record strutturato → NON si pinga', false, daControllareInIngresso(STRUTTURATO));
 check('record incompleto con link http → si pinga', true, daControllareInIngresso(INCOMPLETO));
