@@ -203,7 +203,7 @@ check('tre match pieni → non è scarsa', false, bachecaScarsa([riga(100), riga
 check('i ripieghi non contano come match pieni', true, bachecaScarsa([riga(100), riga(52, true), riga(58, true)]));
 check('sotto soglia non conta', true, bachecaScarsa([riga(100), riga(65), riga(69)]));
 check('la soglia è tre, dichiarata', 3, MINIMO_MATCH_PIENI);
-check('il consiglio nomina le tue province e la strada', true, /province/.test(CONSIGLIO_BACHECA_SCARSA) && /profilo/.test(CONSIGLIO_BACHECA_SCARSA));
+check('il consiglio è il copy esatto della direttiva 03/11/2026', 'Le opportunità che abbiamo trovato per te oggi. Allarga la ricerca per intercettare più opportunità.', CONSIGLIO_BACHECA_SCARSA);
 
 /* --------------------- 6) CABLAGGIO: UN SOLO METRO ------------------------ */
 

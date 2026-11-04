@@ -68,7 +68,8 @@ export function useInterpelliFeed(
   tetti?: { province: number; classi: number } | null,
 ): FeedInterpelli {
   // Fonte degli interpelli (FASE 3 — Matching Engine):
-  // 1. tabella `interpelli` filtrata per province/classi del profilo,
+  // 1. tabella `interpelli` filtrata per PROVINCE (il perimetro; la classe non è più
+  //    una porta nella query: la decisione si somma in `bachecaInterpelli`, §26.143),
   // 2. fallback sulla tabella legacy `notices`,
   // 3. se non c'è nessun avviso attivo → feed VUOTO (nessun dato dimostrativo:
   //    `interpelli` in `src/data/interpelli.ts` è intenzionalmente `[]`).
@@ -100,10 +101,18 @@ export function useInterpelliFeed(
     let attivo = true;
     (async () => {
       try {
-        // Matching Engine: province (proprie + entro il raggio) e classi del profilo
+        // Matching Engine — FILTRI IN UNIONE, NON IN INTERSEZIONE (direttiva 03/11/2026):
+        // qui viaggia SOLO il perimetro geografico (province proprie + raggio di 60 km).
+        // La classe NON si filtra nella query: `match_interpelli` intersecava provincia ∩
+        // `class_codes` e scartava a monte ogni avviso con i codici mancanti — il bando
+        // «per supplenza» senza codice, quello che nomina solo la materia, la competenza o
+        // la parola chiave — cioè proprio le righe che la bacheca pura sa valutare IN
+        // UNIONE (classe esatta, classe vicina, materia coperta, competenza, grado affine).
+        // La decisione resta in `bachecaInterpelli`, riga per riga: nessuna regola
+        // duplicata, nessuna preferenza che agisce da filtro AND.
         const feed = await getFeedInterpelli(supabase, {
           province: provinceRicerca,
-          classi: classiAttive,
+          classi: [],
           limit: RIGHE_FEED,
         });
         if (!attivo) return;
@@ -156,7 +165,7 @@ export function useInterpelliFeed(
     return () => {
       attivo = false;
     };
-  }, [provinceRicerca, classiAttive]);
+  }, [provinceRicerca]);
 
   /**
    * BACHECA DEL PROFILO (pura): porta d'ingresso PRIMARIA, voto a due livelli

@@ -15724,3 +15724,82 @@ non crea righe nuove — cambia l'etichetta del tempo, non l'identità dell'avvi
 
 
 
+
+## §26.143 — La pertinenza si SOMMA, e la percentuale non è un allarme (03/11/2026)
+
+La direttiva del 03/11/2026 ha due facce e una sola idea: **la bacheca deve mostrare le opportunità
+pertinenti e deve farlo senza spaventare**. Il filtro lavorava a intersezione (provincia ∩ classe già
+nel database, poi i metadati secondari riga per riga); il badge di affinità lavorava a semaforo
+(giallo, rosso, grigio). Ora i segnali si sommano e il colore informa.
+
+### 1. La porta non è più una serratura: da AND a OR
+
+`getFeedInterpelli` riceveva `classi: classiAttive` e la RPC `match_interpelli` intersecava
+`province ∩ class_codes`. Un avviso che nominava solo la materia, la competenza o la parola chiave —
+cioè il tipico bando «per supplenza» senza codice — veniva scartato **a monte**, prima che la bacheca
+pura potesse valutarlo. Da oggi nella query viaggia solo il perimetro geografico (`province` proprie +
+raggio dei 60 km, §26.139) e la decisione resta dove è sempre stata: `bachecaInterpelli`, riga per
+riga, in UNIONE — classe esatta, classe vicina, materia coperta, competenza, grado affine (§26.141) e
+serbatoio dichiarato. Nessuna regola duplicata nel feed, nessuna preferenza che agisce da filtro.
+
+Il merito non si abbassa: l'avviso con una classe **estranea** resta fuori (`test-gradi-affini`, «classe
+estranea → bacheca vuota»), mentre l'avviso **senza codici** entra con il gradino che si è guadagnato
+— è la nuova asserzione di `test-ambito-bacheca` (sezione 5), che chiude il buco alla radice.
+
+Resta UN gate, ed è dichiarato: quello **identitario** della vetrina (§26.119 — Provincia + Ordine +
+Classe/Materia, `rigaVetrinaCompleta` in `src/lib/vetrinaBacheca.ts`). Non è un AND sul merito: è la
+condizione perché la card possa dire *di che cosa* parla. La conseguenza è che una riga senza alcun
+codice **e** senza materia viene valutata dalla bacheca (e paga il gradino che si merita) ma non
+compare a schermo. Se la direttiva vorrà anche quelle, la modifica è una sola funzione più le sue
+quattro asserzioni in `scripts/test-vetrina-bacheca.ts`.
+
+### 2. La pillola azzurrino soft su OGNI riga
+
+`CLASSI` in `src/lib/compatibilita.ts` è la palette unica del badge: sfondo `#EEF6FB` (`primary-50`)
+per tutte le fasce, testo/bordo blu `#2B6F9E` (`primary-500`), verde `#1FA055` (`accent-500`)
+riservato ai match alti (≥ 80). Niente ambra, niente rosso, niente `slate`: **l'urgenza resta al solo
+semaforo della scadenza** (`lib/scadenzaSemaforo.ts`), che è l'unico rosso legittimo della pagina.
+Il rosso del match — che non esisteva già più come tinta dal §26.120 — ora non esiste nemmeno come
+fascia neutra «di scarto».
+
+`visibile` passa da `livello !== 'sotto-soglia'` a `p > 0`: la percentuale si mostra **sempre**, anche
+sotto i 60 e anche sulle righe di ripiego, e l'etichetta sotto soglia è `${p}% · affinità` (prima
+«· extra»): un'affinità parziale dichiarata, non un extra concesso. Sopra i 60 resta `% Compatibile`.
+`COLORI_MATCH` (vetrina «Opportunità mappate») segue la stessa palette, così il pallino e la pillola
+non raccontano due storie diverse.
+
+### 3. Il copy del box informativo
+
+`CONSIGLIO_BACHECA_SCARSA` (`src/lib/gradiAffini.ts`, unica fonte del testo, letta dalla guardia) ora
+dice: «Le opportunità che abbiamo trovato per te oggi. Allarga la ricerca per intercettare più
+opportunità.» Il box ha smesso l'ambra: `primary-50`/`primary-200`/`primary-700` con la lampadina in
+`primary-500`, perché anche il suggerimento è un'informazione, non un avviso.
+
+### 4. Codice e verifiche
+
+* `src/lib/compatibilita.ts` — `CLASSI` azzurrino soft, `visibile: p > 0`, `etichettaCompatibilita`
+  (`% · affinità` sotto soglia), `COLORI_MATCH` allineata (247 righe, dentro il tetto di 250:
+  intestazioni compattate per far spazio alla palette);
+* `src/contexts/app/useInterpelliFeed.ts` — la query non passa più le classi (198 righe);
+* `src/pages/dashboard/components/ElencoOpportunita.tsx` — la pillola (`match.className`) sostituisce
+  pallino + testo neutro, box informativo in azzurrino (175 righe);
+* `src/lib/gradiAffini.ts` — il copy nuovo di `CONSIGLIO_BACHECA_SCARSA` (248 righe);
+* guardie: `scripts/test-ambito-bacheca.ts` (sezione 5 «unione, non intersezione»: query senza classi,
+  bacheca che riceve le classi per VOTARE, avviso senza codici che entra — 4 asserzioni),
+  `scripts/test-compatibilita-punteggio.ts` (banda 45/59/60, pillola soft, `COLORI_MATCH`, vetrina),
+  `scripts/test-gradi-affini.ts` (il copy esatto della direttiva).
+
+Esiti: `npm run typecheck` **0**, `eslint` **0** sui 7 file toccati, `npm test` ✅ (incluse
+`test:ambito-bacheca`, `test:compatibilita-punteggio`, `test:gradi-affini`),
+`npm run test:architettura` ✅ (817 file, **148 = baseline**, nessuna nuova), `npm run build` ✅.
+
+### 5. Nota di sessione
+
+La lezione è la stessa del §26.141, spostata di un metro: **la severità va messa nel merito, non
+nell'ingresso**. Un filtro AND nel database non è «più preciso»: è una riga che non arriva mai e di cui
+nessuno può dire se era pertinente, perché nessuno l'ha letta. Sommare i segnali e lasciare la
+decisione in un punto solo costa qualche riga in più nel feed e restituisce una bacheca che sa
+spiegarsi. Il colore, dal canto suo, non deve fare il lavoro della paura: l'azzurrino dice «questa è
+l'affinità», il semaforo dice «questa scade domani», e nessuna delle due informazioni ruba il posto
+all'altra.
+

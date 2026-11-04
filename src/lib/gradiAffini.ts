@@ -67,11 +67,12 @@ export const PUNTEGGIO_SERBATOIO_ATA = 52;
 export const MINIMO_MATCH_PIENI = 3;
 
 /**
- * La frase della bacheca scarsa. Non promette nulla e non si scusa: dice cosa c'è
- * (le opportunità delle tue province) e cosa si può fare (allargare la ricerca).
+ * La frase della bacheca scarsa (copy ESATTO della direttiva 03/11/2026). Non promette
+ * nulla e non si scusa: dice cosa c'è (le opportunità trovate oggi) e cosa si può fare
+ * (allargare la ricerca). Il testo vive qui, non nel JSX, così la guardia lo legge.
  */
 export const CONSIGLIO_BACHECA_SCARSA =
-  'Ecco le opportunità disponibili oggi nelle tue province. Suggerimento: puoi allargare la ricerca nel tuo profilo per intercettare più bandi.';
+  'Le opportunità che abbiamo trovato per te oggi. Allarga la ricerca per intercettare più opportunità.';
 
 /** Come si è guadagnata la riga il suo gradino. */
 export type TipoGradoAffine = 'materia' | 'ponte' | 'ordine';

@@ -76,11 +76,12 @@ check(
 );
 check('100: palette verde (accent)', true, /accent/.test(bandaCompatibilita(100).className));
 check('70: palette BLU del brand, non arancio (§26.122)', true, /primary/.test(bandaCompatibilita(70).className));
-check('60: «60% · extra»', '60% · extra', bandaCompatibilita(60).etichetta);
-check('60: badge NEUTRO, non rosso (§26.120)', true, /slate/.test(bandaCompatibilita(60).className));
+check('60: «60% Compatibile» — il voto resta un voto, non una condanna', '60% Compatibile', bandaCompatibilita(60).etichetta);
+check('60: pillola AZZURRINO SOFT (#EEF6FB + blu #2B6F9E), mai rossa', true, /bg-primary-50/.test(bandaCompatibilita(60).className) && /text-primary-500/.test(bandaCompatibilita(60).className));
+check('45: «45% · affinità» — la percentuale bassa è un’affinità, non un extra', '45% · affinità', bandaCompatibilita(45).etichetta);
 check('60: descrizione «suggerimento extra»', true, /[Ee]xtra/.test(bandaCompatibilita(60).descrizione));
-check('59: badge NON visibile', false, bandaCompatibilita(59).visibile);
-check('0: badge NON visibile', false, bandaCompatibilita(0).visibile);
+check('59: percentuale VISIBILE anche sotto soglia (direttiva 03/11/2026)', true, bandaCompatibilita(59).visibile);
+check('0: nessun punteggio → nessun badge', false, bandaCompatibilita(0).visibile);
 check('punteggio fuori scala (140) → 100', 100, bandaCompatibilita(140).punteggio);
 
 /* --------------------------- 2) PUNTEGGIO ---------------------------------- */
@@ -151,10 +152,14 @@ check('70% → match MEDIO (la fascia media parte dalla soglia arancio)', 'medio
 check('60% → match BASSO (§26.120: il suggerimento extra non è «medio»)', 'basso', livelloMatch(60));
 check('59% → match BASSO', 'basso', livelloMatch(59));
 check('punteggio corrotto → match BASSO (mai un NaN in pagina)', 'basso', livelloMatch(Number.NaN));
-check('verde #1FA055 = gradino 500 della palette (accent)', '#1FA055', COLORI_MATCH.alto.hex);
-check('giallo #E2B33C = gradino 500 della palette (warning)', '#E2B33C', COLORI_MATCH.medio.hex);
-check('la fascia bassa è NEUTRA (#94A3B8, slate-400): niente rosso del match', '#94A3B8', COLORI_MATCH.basso.hex);
-check('la fascia bassa usa il token Tailwind `slate-400`', 'slate-400', COLORI_MATCH.basso.token);
+check('verde #1FA055 = gradino 500 della palette (accent): solo il match ALTO', '#1FA055', COLORI_MATCH.alto.hex);
+check('la fascia MEDIA è BLU #2B6F9E (primary-500): niente giallo d’allarme', '#2B6F9E', COLORI_MATCH.medio.hex);
+check('la fascia bassa è BLU #2B6F9E: niente rosso del match (§26.120)', '#2B6F9E', COLORI_MATCH.basso.hex);
+check('la fascia bassa usa il token Tailwind `primary-500`', 'primary-500', COLORI_MATCH.basso.token);
+const classiMatch = Object.values(COLORI_MATCH).map((c) => c.className);
+check('tutte le pillole hanno lo sfondo azzurrino `#EEF6FB` (primary-50)', [], classiMatch.filter((c) => !/bg-primary-50/.test(c)));
+check('nessun rosso/ambra/slate fra le percentuali (direttiva 03/11/2026)', [], classiMatch.filter((c) => /error|warning|amber|slate|red-/.test(c)));
+check('la vetrina stampa «etichetta · percentuale» su OGNI riga', true, leggi('src/pages/dashboard/components/ElencoOpportunita.tsx').includes('{match.etichetta} · {match.punteggio}%'));
 check('nessun `error-*` fra i colori del match (§26.120)', [], Object.values(COLORI_MATCH).map((c) => c.className).filter((c) => /error/.test(c)));
 const tailwind = leggi('tailwind.config.js');
 check(

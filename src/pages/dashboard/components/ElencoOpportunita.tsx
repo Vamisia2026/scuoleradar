@@ -8,10 +8,13 @@
  * corso · ardesia per scaduto/assente/fuori finestra, §26.89). Per gli utenti
  * Base l'accordion resta bloccato: badge «🔒 PRO» e click che apre la vetrina.
  *
- * UNA SOLA TINTA PER RIGA (§26.120). La riga dell'accordion dichiara il MATCH col
- * colore condiviso di `lib/compatibilita.stileMatch` — verde #1FA055 (≥ 80),
- * giallo #E2B33C (70-79), neutro < 70 — e una riga entrata dal paracadute «5
- * osso-da-mordere» mostra l'etichetta trasparente «Opportunità di ripiego nel DB».
+ * UNA SOLA PILLOLA PER RIGA, AZZURRINO SOFT (direttiva 03/11/2026). La riga
+ * dell'accordion dichiara il MATCH — e la PERCENTUALE, sempre, anche quando è bassa
+ * o di ripiego — con la pillola condivisa di `lib/compatibilita.stileMatch`: sfondo
+ * `#EEF6FB`, testo/bordo `#2B6F9E`, verde `#1FA055` per i match alti (≥ 80). Nessun
+ * rosso, nessun giallo d'allarme: la tinta dice l'affinità, non un pericolo. Una
+ * riga entrata dal paracadute «5 osso-da-mordere» mostra l'etichetta trasparente
+ * «Opportunità di ripiego nel DB».
  * La SCADENZA non viene più ripetuta qui: la dichiara la card, con il semaforo
  * unico dell'applicazione. Prima questa riga sommava un secondo badge a tinta
  * piena — rosso quando mancavano 24 ore — sopra una card che mostrava già il
@@ -126,11 +129,12 @@ export function ElencoOpportunita({
         ) : (
           <div className="animate-fade-in space-y-3">
             {/* §26.141 — BACHECA SCARSA: sotto i 3 match pieni la vetrina lo dice con
-                una frase rassicurante e una strada (allargare il profilo). Non si
-                gonfia l'elenco e non si abbassa il merito: si spiega il contesto. */}
+                la frase unica `CONSIGLIO_BACHECA_SCARSA` (copy della direttiva
+                03/11/2026) in azzurrino soft: nessun giallo d'allarme. Non si gonfia
+                l'elenco e non si abbassa il merito: si spiega il contesto. */}
             {bachecaScarsa(lista) && (
-              <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
-                <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              <p className="flex items-start gap-2 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-[11px] leading-relaxed text-primary-700">
+                <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary-500" aria-hidden />
                 <span>{CONSIGLIO_BACHECA_SCARSA}</span>
               </p>
             )}
@@ -143,9 +147,9 @@ export function ElencoOpportunita({
               </p>
             )}
             {lista.map((i) => {
-              // COLOR CODING DEL MATCH (§26.106 · §26.120): UNA sola tinta per riga,
-              // verde ≥ 80 · giallo 70-79 · neutra < 70 (< 70 = riga di ripiego, si
-              // dichiara con l'etichetta trasparente, non con un allarme).
+              // PILLOLA DEL MATCH, AZZURRINO SOFT (§26.106 · §26.120 · direttiva
+              // 03/11/2026): la percentuale si mostra SEMPRE — anche sulle righe basse
+              // o di ripiego — con la tinta condivisa di `stileMatch`: niente rosso.
               const match = stileMatch(i.compatibilita, { ripiego: i.ripiego === true });
               return (
                 <div
@@ -155,9 +159,8 @@ export function ElencoOpportunita({
                   <div className="flex items-center justify-between gap-2 border-b border-primary-100 px-3 py-1.5">
                     <span
                       title={match.descrizione}
-                      className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-primary-500"
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${match.className}`}
                     >
-                      <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${match.className}`} />
                       {match.etichetta} · {match.punteggio}%
                     </span>
                   </div>

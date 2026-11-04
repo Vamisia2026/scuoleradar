@@ -116,6 +116,38 @@ check(
   /non allarga la ricerca fuori dalle province/i.test(elenco),
 );
 
+/* ------------------- 5) UNIONE, NON INTERSEZIONE (03/11/2026) ------------------- */
+
+console.log('\n— 5. La classe non è una porta: si somma, non si interseca —');
+check('la query del feed NON filtra per classe', true, /classi: \[\]/.test(feed));
+check(
+  'la query non passa le classi (era l’AND a monte)',
+  false,
+  /getFeedInterpelli\(supabase, \{[^}]*classiAttive/.test(feed),
+);
+check(
+  'ma la bacheca riceve le classi del profilo: servono a VOTARE, non a escludere',
+  true,
+  /bachecaInterpelli\(fontiInterpelli, \{[\s\S]*?classi: classiAttive/.test(feed),
+);
+
+const senzaCodici = avviso({
+  id: 'a2',
+  titolo: 'Supplenza di matematica - scuola secondaria di II grado',
+  classeCodice: null,
+  classiCodes: [],
+});
+const unione = bachecaInterpelli([senzaCodici], {
+  ordini: ['secondaria2'],
+  classi: ['A-24'],
+  province: ['AT'],
+});
+check(
+  'l’avviso senza codici classe entra lo stesso (affinità d’ordine, non buco)',
+  true,
+  unione.lista.some((r) => r.id === 'a2'),
+);
+
 console.log('\n' + '─'.repeat(70));
 if (errori === 0) {
   console.log('✅ AMBITO BACHECA: solo le province scelte, e zero è una risposta dichiarata.');
