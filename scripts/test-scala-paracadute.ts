@@ -1,15 +1,19 @@
 /**
- * GUARDIA — LA SCALA DEL PARACADUTE (§26.125).
+ * GUARDIA — IL PERIMETRO E LA SCALA DEI RAPPORTI (§26.125 → §26.144).
  * -----------------------------------------------------------------------------------
- * PERCHÉ ESISTE. La direttiva del 31/10/2026 chiede due cose insieme:
- *   1. le «5 opportunità minime» restano (la vetrina non deve restare vuota);
- *   2. l'ordine non è più il voto: prima la stessa provincia con la stessa classe,
- *      poi le affini, e SOLO alla fine il sostegno — che però non esce MAI dalle
- *      province scelte («sostegno a Vercelli» per chi ha scelto Asti è il falso
- *      positivo da eliminare, non un ripiego).
+ * PERCHÉ ESISTE. La direttiva del 04/11/2026 ha spostato il confine: l'unico sbarramento
+ * rigido della bacheca è la GEOGRAFIA — province scelte + raggio dei 60 km — e tutto ciò
+ * che sta dentro entra (cascata generosa, §26.144). Il vecchio divieto «sostegno mai fuori
+ * dalle province scelte» era più severo della geografia: un sostegno a Vercelli per chi ha
+ * scelto Asti veniva scartato anche se Vercelli è a 50 km. Oggi Vercelli è perimetro.
  *
- * Questa guardia fissa il modulo puro (`lib/scalaParacadute`), l'ordine della
- * scorta (`paracaduteCinque` con `priorita`) e il cablaggio nella bacheca.
+ * Questa guardia fissa:
+ *   1. i tre gradini della scala (`ottime` → `affini` → `ultima-spiaggia`);
+ *   2. il PERIMETRO: dentro si entra (anche col sostegno), fuori no;
+ *   3. l'ordine della scorta (`paracaduteCinque` con `priorita`), che resta un'utilità
+ *      pura: la cascata non ha più una scorta da pescare;
+ *   4. il cablaggio: la bacheca passa dalla scala per il perimetro e dalla cascata per
+ *      il merito.
  *
  * Esecuzione: `npm run test:scala-paracadute` (inclusa in `npm test`).
  */
@@ -102,9 +106,9 @@ check('e non scambia una scuola per un bando', false, alternativaReligione({
   titolo: 'Interpello A-26',
 }));
 
-/* ------------------------ 2) IL DIVIETO (non negoziabile) ----------------- */
+/* --------------------- 2) IL PERIMETRO (non negoziabile) ------------------ */
 
-console.log('\n— 4. DIVIETO: sostegno fuori dalle province scelte, mai —');
+console.log('\n— 4. PERIMETRO: province scelte + raggio dei 60 km — dentro si entra —');
 const sostegnoVercelli = scalaParacadute(profilo, {
   province: 'VC',
   classi: ['ADSS'],
@@ -112,21 +116,29 @@ const sostegnoVercelli = scalaParacadute(profilo, {
   titolo: 'Interpello sostegno',
   ordine: 'secondaria2',
 });
-check('sostegno a Vercelli → NON ammesso', false, sostegnoVercelli.ammessa);
-check('anche se la provincia è solo «vicina»', 'vicina', sostegnoVercelli.provincia);
-check('motivo dichiarato', true, /fuori dalle province scelte/.test(sostegnoVercelli.motivo));
+check('sostegno a Vercelli (50 km) → ammesso, è perimetro', true, sostegnoVercelli.ammessa);
+check('e la provincia resta dichiarata «vicina»', 'vicina', sostegnoVercelli.provincia);
+check('il gradino è quello del sostegno', 'ultima-spiaggia', sostegnoVercelli.livello);
 const sostegnoMilano = scalaParacadute(profilo, {
   province: 'MI',
   classi: ['ADSS'],
   materia: 'Sostegno',
   ordine: 'secondaria2',
 });
-check('sostegno a Milano → NON ammesso', false, sostegnoMilano.ammessa);
-check('ammessaDallaScala espone lo stesso verdetto', false, ammessaDallaScala(profilo, {
+check('sostegno a Milano (fuori raggio) → NON ammesso', false, sostegnoMilano.ammessa);
+check('e il motivo lo dichiara', true, /fuori dal perimetro/.test(sostegnoMilano.motivo));
+check('ammessaDallaScala espone lo stesso verdetto (dentro)', true, ammessaDallaScala(profilo, {
   province: 'VC',
   classi: ['ADSS'],
   materia: 'Sostegno',
 }));
+check('…e fuori', false, ammessaDallaScala(profilo, {
+  province: 'MI',
+  classi: ['ADSS'],
+  materia: 'Sostegno',
+}));
+const disciplinareVercelli = scalaParacadute(profilo, { province: 'VC', classi: ['A-26'] });
+check('una classe estranea nella provincia vicina resta nel perimetro', true, disciplinareVercelli.ammessa);
 
 console.log('\n— 5. Chi ha una classe AD… propria è un match, non un ripiego —');
 const adProprio = scalaParacadute(
@@ -167,7 +179,7 @@ check(
 
 /* --------------------------- 4) LA BACHECA VERA -------------------------- */
 
-console.log('\n— 7. Bacheca: il sostegno di Vercelli non entra, nemmeno di ripiego —');
+console.log('\n— 7. Bacheca: il perimetro è la geografia — Asti e Vercelli entrano, Milano no —');
 const sostegno = (id: string, provinciaCodice: string, provinciaNome: string) =>
   avviso({
     id,
@@ -183,23 +195,23 @@ const esito = bachecaInterpelli(
   [sostegno('sostegno-at', 'AT', 'Asti'), sostegno('sostegno-vc', 'VC', 'Vercelli'), sostegno('sostegno-mi', 'MI', 'Milano')],
   profilo,
 );
-check('entra SOLO il sostegno di Asti', ['sostegno-at'], esito.lista.map((r) => r.id));
-check('ed è dichiarato ripiego', true, esito.lista[0]?.ripiego === true);
-check('col suo gradino', 'ultima-spiaggia', esito.lista[0]?.livelloRipiego);
-check('Vercelli e Milano contati a parte (divieto)', 2, esito.sostegnoFuoriProvincia);
+check('entrano Asti e Vercelli (perimetro), non Milano', ['sostegno-at', 'sostegno-vc'], esito.lista.map((r) => r.id));
+check('nell’ordine scelto sono MERITO, non ripiego', 90, esito.lista[0]?.compatibilita);
+check('la provincia vicina vale 86', 86, esito.lista[1]?.compatibilita);
+check('nessun ripiego: la scorta non esiste più', 0, esito.lista.filter((r) => r.ripiego === true).length);
+check('Milano è contata fuori perimetro', 1, esito.fuoriPerimetro);
 
-console.log('\n— 8. Cablaggio: la bacheca usa la scala e il suo ordine —');
+console.log('\n— 8. Cablaggio: perimetro dalla scala, merito dalla cascata —');
 const bacheca = leggi('src/lib/bachecaInterpelli.ts');
-// §26.125 — il contratto dell'esito e la riga di ripiego vivono in `bachecaRipiego`
-// (estratto per il tetto di 250 righe): la guardia legge i DUE file, il cablaggio
-// resta uno solo.
+// §26.144 — il contratto dell'esito e la riga vivono in `bachecaRipiego` (estratto per il
+// tetto di 250 righe): la guardia legge i DUE file, il cablaggio resta uno solo.
 const ripiego = leggi('src/lib/bachecaRipiego.ts');
-const bachecaConRipiego = `${bacheca}\n${ripiego}`;
+const bachecaConEsito = `${bacheca}\n${ripiego}`;
 check('la scala è importata', true, /from '\.\/scalaParacadute'/.test(bacheca));
-check('il divieto è applicato prima del punteggio', true, /if \(!scuole\.preferita && !scala\.ammessa\)/.test(bacheca));
-check('la scorta porta il gradino', true, /livelloRipiego: livello/.test(bachecaConRipiego));
-check('il paracadute ordina per gradino', true, /priorita: \(voce\) => ORDINE_LIVELLO/.test(bacheca));
-check('il conto del divieto è dichiarato nell’esito', true, /sostegnoFuoriProvincia: number/.test(bachecaConRipiego));
+check('il perimetro è applicato prima del punteggio', true, /if \(!scala\.ammessa && !scuole\.preferita && !jollyPieno\)/.test(bacheca));
+check('il merito passa dalla cascata', true, /voceCascata\(profilo, avviso, scala\.provincia\)/.test(bacheca));
+check('il paracadute non è più cablato', false, /paracaduteCinque\(/.test(bacheca));
+check('il conto del perimetro è dichiarato nell’esito', true, /fuoriPerimetro: number/.test(bachecaConEsito));
 
 const pkg = leggi('package.json');
 check('guardia dedicata in package.json', true, /"test:scala-paracadute": "tsx scripts\/test-scala-paracadute\.ts"/.test(pkg));
@@ -207,7 +219,7 @@ check('guardia nella catena di `npm test`', true, /test-scala-paracadute\.ts/.te
 
 console.log('\n' + '─'.repeat(70));
 if (errori === 0) {
-  console.log('✅ SCALA DEL PARACADUTE: tre gradini, sostegno mai fuori provincia, ordine dichiarato.');
+  console.log('✅ PERIMETRO E SCALA: dentro si entra (anche col sostegno), fuori no, e il merito è dichiarato.');
 } else {
   console.log(`❌ SCALA DEL PARACADUTE: ${errori} controllo/i fallito/i`);
   process.exitCode = 1;

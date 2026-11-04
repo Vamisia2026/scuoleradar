@@ -84,7 +84,7 @@ const vuota = bachecaInterpelli([fuoriProvincia], {
   province: ['AT'],
 });
 check('la bacheca è vuota', 0, vuota.lista.length);
-check('nessuna riga di ripiego fuori provincia', 0, vuota.ripieghiInBacheca);
+check('nessuna riga fuori perimetro (l’unico sbarramento)', 1, vuota.fuoriPerimetro);
 
 console.log('\n— 3. Controllo positivo: scegliendo Milano la stessa riga entra —');
 const conMilano = bachecaInterpelli([fuoriProvincia], {

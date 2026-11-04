@@ -208,11 +208,8 @@ check(
   /competenzaSecondaria: valutazione\.competenzaSecondaria\?\.etichetta \?\? null/.test(`${bacheca}\n${leggi('src/lib/bachecaRipiego.ts')}`),
 );
 check('bacheca: la porta d’ingresso NON usa le competenze (non creano l’opportunità)', true, !/punteggioCompetenze\(/.test(bacheca));
-check(
-  'bacheca: la pertinenza resta quella primaria del motore',
-  true,
-  /const pertinenzaMotore =/.test(bacheca) && /avvisoCompatibileConProfilo\(profilo, avviso/.test(bacheca),
-);
+// §26.144 — chi ha classi passa dalla cascata; il profilo di sole competenze resta al motore.
+check('bacheca: la pertinenza resta quella primaria del motore', true, /voce\.fascia === 'motore'/.test(bacheca) && /avvisoCompatibileConProfilo\(profilo, avviso/.test(bacheca));
 check('graduata: il motore resta la base del punteggio', true, /punteggioCompatibilita\(/.test(graduata));
 check(
   'graduata: la sfumatura arriva DOPO la media ponderata primaria',

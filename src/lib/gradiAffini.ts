@@ -11,19 +11,16 @@
  * Fuori restano i casi che restano fuori per una ragione: un'altra materia nello
  * stesso ordine (la «classe estranea» di §26.120), un ordine non adiacente, e il
  * sostegno/ATA che hanno il loro canale. Il grado NON esclude: alza solo il
- * PAVIMENTO del punteggio (chi sta sotto 70 finisce nella scorta, non fuori), e un
- * match già da 85 in su non viene declassato.
+ * PAVIMENTO del punteggio, e un match già da 85 in su non viene declassato.
  *
- * ── 2. SERBATOIO DI DEFAULT (`voceSerbatoio`) — 58 · 52 ────────────────────
- * Personale ATA e sostegno di un ALTRO ordine, **nelle province scelte**: le
- * opportunità di paracadute che garantiscono una bacheca mai vuota. Non entrano mai
- * come merito — la bacheca le mette SOLO nella scorta e il paracadute «5»
- * (§26.106) le porta in vetrina, dichiarate `ripiego`. Non scavalcano il divieto di
- * §26.125 (sostegno fuori dalle province scelte) e non sostituiscono un match vero.
- *
- * ── 3. BACHECA SCARSA (`bachecaScarsa`) ───────────────────────────────────
+ * ── 2. BACHECA SCARSA (`bachecaScarsa`) ───────────────────────────────────
  * Sotto `MINIMO_MATCH_PIENI` (3) opportunità di qualità la vetrina NON si gonfia: lo
  * dice all'utente con una frase rassicurante e una strada (allargare il profilo).
+ *
+ * Il SERBATOIO DI DEFAULT (ATA 52 · sostegno d'altro ordine 58) è uscito da qui il
+ * 04/11/2026: non è più un paracadute da pescare quando la vetrina è corta, è un CANALE
+ * della cascata generosa che entra D'UFFICIO in bacheca (§26.144, `lib/cascataGenerosa`).
+ * La scala dei gradi (82 · 76 · 72 · 70) resta la stessa e la riusa anche la tolleranza.
  *
  * Nessun database, nessuna rete: si prova senza browser.
  * Guardia: `npm run test:gradi-affini` (inclusa in `npm test`).
@@ -36,8 +33,6 @@ import {
   materiaCompatibileConClassi,
   normalizzaClassi,
   ordineAvviso,
-  profiloAderisceSostegno,
-  sostegnoPertinente,
   type AvvisoCompatibilita,
   type ProfiloCompatibilita,
 } from './matchingEngine';
@@ -48,7 +43,6 @@ import {
   punteggioClasse,
 } from './punteggioClasse';
 import { dichiaraPersonaleAta, eCodiceAta } from './profiliAta';
-import { punteggioProvincia } from './prossimitaGeografica';
 
 /** Gradi affini: materia coperta dalle proprie classi (o aree che si toccano). */
 export const PUNTEGGIO_GRADO_AFFINE_MATERIA = 82;
@@ -58,10 +52,6 @@ export const PUNTEGGIO_GRADO_AFFINE_PONTE = 76;
 export const PUNTEGGIO_GRADO_AFFINE_AREA = 72;
 /** Gradi affini: nessuna classe nell'avviso, ordine di scuola vicino al proprio. */
 export const PUNTEGGIO_GRADO_AFFINE_ORDINE = 70;
-/** Serbatoio: sostegno di un altro ordine di scuola, nella propria provincia. */
-export const PUNTEGGIO_SERBATOIO_SOSTEGNO = 58;
-/** Serbatoio: personale ATA (collaboratori, assistenti, DSGA), nella propria provincia. */
-export const PUNTEGGIO_SERBATOIO_ATA = 52;
 
 /** Sotto questo numero di match «pieni» la vetrina si dichiara scarsa. */
 export const MINIMO_MATCH_PIENI = 3;
@@ -81,16 +71,6 @@ export type TipoGradoAffine = 'materia' | 'ponte' | 'ordine';
 export interface GradoAffine {
   punteggio: number;
   tipo: TipoGradoAffine;
-  etichetta: string;
-}
-
-/** Serbatoio ammesso: profili non docenti (ATA) o sostegno d'altro ordine. */
-export type TipoSerbatoio = 'ata' | 'sostegno';
-
-/** Voce del serbatoio di default: punteggio di paracadute + motivo leggibile. */
-export interface VoceSerbatoio {
-  punteggio: number;
-  tipo: TipoSerbatoio;
   etichetta: string;
 }
 
@@ -178,45 +158,6 @@ export function gradoAffine(
       punteggio: PUNTEGGIO_GRADO_AFFINE_ORDINE,
       tipo: 'ordine',
       etichetta: 'grado affine: nessuna classe indicata, ordine di scuola vicino al tuo',
-    };
-  }
-  return null;
-}
-
-/**
- * SERBATOIO DI DEFAULT dell'avviso (`null` = non è una voce di paracadute).
- *
- * Regole dichiarate: il profilo ha delle classi, la provincia dell'avviso è una
- * delle SUE (non «vicina»: un paracadute a sessanta chilometri non serve), non
- * c'è una classe in comune e — per il sostegno — il motore non lo ammette già
- * (se lo ammette è un suggerimento extra a 60, e resta il suo).
- */
-export function voceSerbatoio(
-  profilo: ProfiloCompatibilita,
-  avviso: AvvisoCompatibilita,
-): VoceSerbatoio | null {
-  const classiProfilo = normalizzaClassi(profilo.classi);
-  if (classiProfilo.length === 0) return null;
-  if (punteggioProvincia(profilo.province, avviso.province).stato !== 'propria') return null;
-
-  const classiAvviso = normalizzaClassi(avviso.classi);
-  if (classiAvviso.some((codice) => classiProfilo.includes(codice))) return null;
-
-  if (avvisoDiSostegno(avviso)) {
-    if (profiloAderisceSostegno(profilo)) return null;
-    if (sostegnoPertinente(profilo, avviso)) return null;
-    return {
-      punteggio: PUNTEGGIO_SERBATOIO_SOSTEGNO,
-      tipo: 'sostegno',
-      etichetta: 'sostegno di un altro ordine di scuola, nella tua provincia (paracadute)',
-    };
-  }
-
-  if (eAvvisoAta(avviso)) {
-    return {
-      punteggio: PUNTEGGIO_SERBATOIO_ATA,
-      tipo: 'ata',
-      etichetta: 'bando per personale ATA, nella tua provincia (paracadute)',
     };
   }
   return null;

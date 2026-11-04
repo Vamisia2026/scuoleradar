@@ -168,9 +168,9 @@ export function useInterpelliFeed(
   }, [provinceRicerca]);
 
   /**
-   * BACHECA DEL PROFILO (pura): porta d'ingresso PRIMARIA, voto a due livelli
-   * (§26.63), whitelist/blacklist scuole, cap dinamico dei riempitivi e
-   * paracadute «5» che pesca dalla scorta dell'area (§26.106).
+   * BACHECA DEL PROFILO (pura): perimetro geografico (province + raggio dei 60 km) e
+   * cascata generosa — merito, tolleranza, riserva (§26.144). Whitelist/blacklist scuole
+   * restano sovrane; nessun cap e nessun paracadute: la vetrina non ha code da pescare.
    */
   const bacheca = useMemo<Interpello[]>(() => {
     if (!preferenze.onboarded) return [];

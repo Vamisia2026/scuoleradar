@@ -168,9 +168,9 @@ async function main(): Promise<void> {
   console.log(
     `• In bacheca: ${bacheca.lista.length} · senza scadenza: ${bacheca.senzaScadenza} · ` +
       `contorno: ${bacheca.righeNonOpportunita} · blacklist: ${bacheca.esclusiBlacklist} · ` +
-      `riempitivi esclusi: ${bacheca.riempitiviEsclusi} · nascosti: ${bacheca.riempitiviNascosti} · ` +
-      `ripieghi: ${bacheca.ripieghiInBacheca} · senza affinità di classe: ${bacheca.senzaAffinitaClasse} · ` +
-      `sostegno fuori provincia: ${bacheca.sostegnoFuoriProvincia} · ` +
+      `merito: ${bacheca.meritoInBacheca} · tolleranza: ${bacheca.tolleranzaInBacheca} · ` +
+      `riserve: ${bacheca.riserveInBacheca} · senza affinità: ${bacheca.senzaAffinitaClasse} · ` +
+      `fuori perimetro: ${bacheca.fuoriPerimetro} · ` +
       `sostegno ambiguo scartato: ${bacheca.sostegnoAmbiguoScartato}`,
   );
 

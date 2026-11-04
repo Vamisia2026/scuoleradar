@@ -223,7 +223,7 @@ check('il jolly riusa la rilevazione: nessuna rilettura del testo', true,
   /punteggioCompetenze\(/.test(jolly) && !/areeDi\(|areeInComune\(|ponteTraAree\(|tokenCompetenza\(|paroleNelTitolo\(/.test(jolly));
 const bacheca = leggi('src/lib/bachecaInterpelli.ts');
 check('bacheca: il match PIENO È una conferma di pertinenza', true, /jollyPieno = valutazione\.jollySemantico !== null/.test(bacheca));
-check('bacheca: apre il jolly, non la sfumatura', true, /classeVicina\(profilo, avviso\) \|\| jollyPieno/.test(bacheca));
+check('bacheca: apre il jolly, non la sfumatura', true, /!jollyPieno/.test(bacheca) && /jollyPieno \|\| avvisoCompatibileConProfilo/.test(bacheca));
 // §26.141 — la forma della riga vive in `bachecaRipiego` (split per il tetto di 250
 // righe): la guardia legge i due file, il cablaggio resta uno solo.
 check('bacheca: la competenza riconosciuta viaggia sulla riga', true, /jollySemantico: valutazione\.jollySemantico/.test(`${bacheca}\n${leggi('src/lib/bachecaRipiego.ts')}`));

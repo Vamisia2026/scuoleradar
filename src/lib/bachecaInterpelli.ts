@@ -1,58 +1,48 @@
 /**
  * ScuoleRadar.it — BACHECA INTERPELLI (modulo PURO): dal feed del DB alla lista mostrata.
  *
- * Una sola pipeline, in quest'ordine:
- *   1. **opportunità con scadenza** (`eOpportunitaConScadenza`, §26.71): senza una
- *      `expiration_date` dichiarata e non passata la riga NON entra (archivi, regolamenti,
- *      indici di classi). Lo scarto è contato (`senzaScadenza`), mai silenzioso;
- *   1-bis. **la riga è un avviso?** (`motivoRigaNonOpportunita`, §26.65): titoli di sezione,
- *      voci di menu, indici di classi («A041 | B017»), numeri di protocollo **non entrano**.
- *      Lo scarto è dichiarato (`righeNonOpportunita`);
- *   2. **Modalità 5 — Filtri Avanzati Scuole**: blacklist → scartato; whitelist → incluso
- *      d'ufficio (saltando gli altri criteri) e marcato `scuolaPreferita`;
- *   3. **porta d'ingresso (§26.63 · §26.64)**: decidono le PREFERENZE PRIMARIE — il motore
- *      conferma l'avviso (`avvisoCompatibileConProfilo`, province entro il raggio) oppure
- *      la classe è almeno «stessa area» (85) — oppure un match PIENO del jolly semantico:
- *      l'interesse dichiarato per intero apre l'opportunità anche fuori dalle proprie
- *      province. Un match PARZIALE no. Chi non passa questa porta NON entra nemmeno nella
- *      scorta del paracadute (§26.120): la geografia non sostituisce l'affinità di classe;
- *   3-bis. **gradi affini e serbatoio (§26.141)**: 82 · 76 · 72 · 70 come PAVIMENTO del
- *      ponte (mai un match) e ATA/sostegno 52 · 58 nella SOLA scorta come paracadute;
- *   4. **punteggio**: media ponderata delle preferenze primarie + jolly semantico
- *      (`valutaCompatibilita`, §26.64), col motivo leggibile e la competenza riconosciuta;
- *   5. **esclusione secca dei riempitivi NON pertinenti** (§26.60): sotto la soglia arancio
- *      (70%) e senza conferma per classe o match PIENO — tipicamente il suggerimento EXTRA
- *      del sostegno (§26.45) — **non entra**: nessun cap, nessuna quota;
- *   6. **cap dinamico dei riempitivi** (`limitaRiempitivi`) sui soli riempitivi PERTINENTI;
- *   7. **paracadute «5 osso-da-mordere»** (§26.106): sotto i 5 risultati la coda si completa
- *      con le MIGLIORI righe della scorta — avvisi veri con affinità di CLASSE (§26.120) —
- *      marcate `ripiego` e dichiarate in vetrina;
- *   7-bis. **scala del paracadute** (§26.125): le righe di ripiego entrano secondo il
- *      gradino (`ottime` → `affini` → `ultima-spiaggia` → `non-classificata`, vedi
- *      `lib/scalaParacadute`) e il **sostegno/alternativa Religione in una provincia non
- *      scelta è escluso sempre**: non è una priorità, è un divieto.
+ * «BUTTADENTRO» (direttiva 04/11/2026, §26.144). Fino al 03/11/2026 questa era una pipeline
+ * di GATEKEEPER: una catena di porte (classe esatta o vicina, conferma del motore, grado
+ * affine, serbatoio) decideva l'INGRESSO, e chi non passava una porta non entrava — nemmeno
+ * per essere guardato. Oggi la logica è rovesciata: **un solo sbarramento rigido, la
+ * geografia**, e tutto il resto è una CASCATA di erogazione (`lib/cascataGenerosa`).
+ *
+ *   1. **opportunità con scadenza** (`eOpportunitaConScadenza`, §26.71) e **riga che è
+ *      davvero un avviso** (`motivoRigaNonOpportunita`, §26.65): restano — scartano il
+ *      contorno (archivi, indici di classi, voci di menu), non il merito;
+ *   1-bis. **sostegno ambiguo** (§26.131): un «piano di sostegno didattico» non è una
+ *      cattedra e non entra, nemmeno come riserva;
+ *   2. **Modalità 5 — filtri scuole**: la blacklist oscura; la whitelist include d'ufficio
+ *      (salta sbarramento e cascata) e marca `scuolaPreferita`;
+ *   3. **PERIMETRO GEOGRAFICO** (`scalaParacadute`, §26.125 · §26.139): province scelte +
+ *      raggio dei 60 km. **È l'unico sbarramento rigido**: fuori perimetro la riga non entra,
+ *      dentro il perimetro entra (l'unica eccezione resta il match PIENO del jolly semantico,
+ *      §26.64, che apre d'ufficio oltre il raggio);
+ *   4. **CASCATA** (`voceCascata`): sostegno/alternativa/ATA entrano d'ufficio — merito 90/86
+ *      nell'ordine scelto, riserva 58/56 (ATA 52/50) in un altro ordine; l'insegnamento entra
+ *      con la classe agganciata (≥ 85, merito), col grado affine o col ponte disciplinare
+ *      (tolleranza 82 · 76 · 72 · 70). **L'unico scarto di merito** è l'incompatibilità
+ *      semantica evidente (Musica vs Spagnolo): due temi noti che non si toccano;
+ *   5. **punteggio**: `max(voto del motore, pavimento della cascata)`. Il voto a due livelli
+ *      (§26.63 · §26.64) resta com'è; la cascata non lo abbassa mai, rialza solo ciò che il
+ *      motore non sapeva leggere. Nessun cap e nessun paracadute: non c'è più una coda di
+ *      «riempitivi» da dosare né una vetrina da riempire — la cascata garantisce la densità
+ *      e la scarsità la dichiara la pagina (§26.141, `bachecaScarsa`).
  *
  * Perché è un modulo PURO e non codice dentro l'hook: la stessa logica serve a guardie e
  * verifiche senza React, e `useInterpelliFeed` resta un contenitore di stato e fetch.
  */
 import type { Interpello } from '../data/interpelli';
 import type { OrdineScuola } from '../data/ordiniMaterie';
-import {
-  avvisoDaInterpello,
-  esitoRiga,
-  type EsitoBacheca,
-} from './bachecaRipiego';
-import { valutaCompatibilita, type ProfiloModali } from './compatibilitaGraduata';
+import { avvisoDaInterpello, rigaInBacheca, type EsitoBacheca } from './bachecaRipiego';
+import { voceCascata } from './cascataGenerosa';
 import { sostegnoAmbiguo } from './classificatoreSostegno';
+import { valutaCompatibilita, type ProfiloModali } from './compatibilitaGraduata';
 import { giudizioScuole } from './filtriScuole';
-import { gradoAffine, voceSerbatoio } from './gradiAffini';
-import { avvisoCompatibileConProfilo, avvisoDiSostegno, profiloAderisceSostegno } from './matchingEngine';
-import { classeVicina } from './punteggioClasse';
+import { avvisoCompatibileConProfilo } from './matchingEngine';
 import { motivoRigaNonOpportunitaAvviso } from './qualitaAvviso';
-import { limitaRiempitivi, paracaduteCinque } from './riempitivi';
-import { ORDINE_LIVELLO, scalaParacadute } from './scalaParacadute';
+import { scalaParacadute } from './scalaParacadute';
 import { eOpportunitaConScadenza } from './scadenza';
-
 
 /** Profilo completo della bacheca: criteri del Radar + liste scuole. */
 export interface ProfiloBacheca extends ProfiloModali {
@@ -69,14 +59,14 @@ export interface ProfiloBacheca extends ProfiloModali {
 }
 
 /**
- * L'ESITO della pipeline (`EsitoBacheca`, conti per log e guardie) e la RIGA DI
- * RIPIEGO vivono in `lib/bachecaRipiego.ts` dal §26.125: qui si riesportano, così
- * chi legge la bacheca trova il contratto dove l'ha sempre trovato.
+ * L'ESITO della pipeline (`EsitoBacheca`, conti per log e guardie) e la RIGA DI BACHECA
+ * vivono in `lib/bachecaRipiego.ts`: qui si riesporta il tipo, così chi legge la bacheca
+ * trova il contratto dove l'ha sempre trovato.
  */
 export type { EsitoBacheca } from './bachecaRipiego';
 
 /**
- * Pipeline della bacheca: filtra, valuta e limita gli interpelli del feed.
+ * Pipeline della bacheca: valuta e filtra gli interpelli del feed.
  * Nessuna mutazione dell'input; l'ordine ricevuto è conservato (l'ordinamento
  * per compatibilità è responsabilità della dashboard).
  */
@@ -84,164 +74,123 @@ export function bachecaInterpelli(
   fonti: readonly Interpello[],
   profilo: ProfiloBacheca,
 ): EsitoBacheca {
-  const inBacheca: Interpello[] = [];
-  // SCORTA del paracadute «5 osso-da-mordere» (§26.106): le opportunità VERE che il Radar
-  // non aggancia, pronte a completare la vetrina se resta sotto i 5 risultati.
-  const scorta: Interpello[] = [];
+  const lista: Interpello[] = [];
   let righeNonOpportunita = 0;
   let senzaScadenza = 0;
   let esclusiBlacklist = 0;
   let forzate = 0;
-  let riempitiviEsclusi = 0;
+  /** §26.144 — l'unico scarto di merito: due temi noti che non si toccano. */
   let senzaAffinitaClasse = 0;
-  /** §26.125 — righe fermate dal DIVIETO della scala (sostegno fuori provincia). */
-  let sostegnoFuoriProvincia = 0;
+  /** §26.144 — righe fuori dal perimetro: province scelte + raggio dei 60 km. */
+  let fuoriPerimetro = 0;
   /** §26.131 — righe che parlano di sostegno senza dichiarare un reclutamento. */
   let sostegnoAmbiguoScartato = 0;
-  /** §26.141 — righe entrate in bacheca grazie a un GRADO AFFINE (82 · 72). */
-  let affiniInBacheca = 0;
-  /** §26.141 — voci del SERBATOIO DI DEFAULT (ATA · sostegno d'altro ordine) in scorta. */
-  let serbatoioInScorta = 0;
+  /** §26.144 — righe entrate per MERITO (sostegno/ATA nell'ordine scelto, classe ≥ 85). */
+  let meritoInBacheca = 0;
+  /** §26.144 — righe entrate per TOLLERANZA (grado affine o ponte disciplinare). */
+  let tolleranzaInBacheca = 0;
+  /** §26.144 — righe entrate di RISERVA (sostegno/ATA d'altro ordine, classe ignota). */
+  let riserveInBacheca = 0;
 
   for (const i of fonti) {
-    // §26.71 — REGOLA FERREA: senza una scadenza dichiarata e non ancora passata la
-    // riga NON è un'opportunità. Prima di ogni punteggio e di ogni porta d'ingresso:
-    // le pagine di archivio e gli indici di classi di concorso non devono né entrare
-    // né consumare quota. Lo scarto è contato, mai silenzioso.
+    // §26.71 — REGOLA FERREA: senza una scadenza dichiarata e non ancora passata la riga
+    // NON è un'opportunità. Prima di ogni punteggio e di ogni porta d'ingresso: le pagine
+    // di archivio e gli indici di classi non devono né entrare né consumare quota.
     if (!eOpportunitaConScadenza(i.dataScadenza)) {
       senzaScadenza += 1;
       continue;
     }
-    // §26.65 — la riga è un AVVISO? Le voci di contorno (titoli di sezione, indici
-    // di classi, numeri di protocollo) escono PRIMA di ogni punteggio: senza questo
-    // filtro entravano in bacheca con punteggi piatti e finivano nei suggerimenti
-    // del campo scuola. Lo scarto è contato, mai silenzioso.
-    // Il segnale «istituto» vale solo se il nome è PRESENTABILE (§26.59): una
-    // stringa grezza che la fonte usa come titolo di sezione («Presentazione»,
-    // «A041 | B017») non è un istituto, e non tiene in vita una riga di contorno.
+    // §26.65 — la riga è un AVVISO? Le voci di contorno (titoli di sezione, indici di
+    // classi, numeri di protocollo) escono PRIMA di ogni punteggio: senza questo filtro
+    // entravano in bacheca con punteggi piatti e finivano nei suggerimenti del campo scuola.
     if (motivoRigaNonOpportunitaAvviso(i) !== null) {
       righeNonOpportunita += 1;
       continue;
     }
 
     const avviso = avvisoDaInterpello(i);
-    // §26.131 — TERZO STATO DEL SOSTEGNO: la riga PARLA di sostegno ma non dichiara
-    // un reclutamento («piano di sostegno didattico», «progetto sostegno», «misure di
-    // sostegno agli alunni»). Non è una cattedra: esce qui, prima del punteggio, e
-    // non entra nemmeno nella scorta del paracadute. Il confine lo decide il
-    // classificatore a tre stati, non un `contains('sostegno')` sparso nei consumatori.
+    // §26.131 — TERZO STATO DEL SOSTEGNO: la riga parla di sostegno ma non dichiara un
+    // reclutamento («piano di sostegno didattico», «progetto sostegno»). Non è una
+    // cattedra: esce qui, prima del punteggio, e non entra nemmeno di riserva.
     if (sostegnoAmbiguo(avviso)) {
       sostegnoAmbiguoScartato += 1;
       continue;
     }
 
+    // MODALITÀ 5 — la blacklist oscura, la whitelist include d'ufficio.
     const scuole = giudizioScuole(profilo, i);
     if (scuole.escluso) {
       esclusiBlacklist += 1;
       continue;
     }
 
-    // §26.125 — SCALA DEL PARACADUTE: il DIVIETO viene prima di ogni punteggio.
-    // Sostegno o alternativa alla Religione in una provincia che l'utente non ha
-    // scelto: la riga non entra e non finisce nemmeno nella scorta. La whitelist
-    // delle scuole preferite resta sovrana (scelta esplicita, Modalità 5).
+    // §26.144 — PERIMETRO GEOGRAFICO: province scelte + raggio dei 60 km. È l'unico
+    // sbarramento rigido della bacheca; `scala.provincia` alimenta la cascata (propria,
+    // vicina, non-applicabile) e `scala.ammessa` è il verdetto secco. Il match PIENO del
+    // jolly semantico (§26.64) resta l'unica apertura oltre il raggio, com'era.
     const scala = scalaParacadute(profilo, avviso);
-    if (!scuole.preferita && !scala.ammessa) {
-      sostegnoFuoriProvincia += 1;
-      continue;
-    }
-    // §26.141 — GRADI AFFINI E SERBATOIO: la generosità è una RISERVA, non un match.
-    // Si valutano PRIMA della porta d'ingresso perché sono loro ad aprirla quando il
-    // motore dice no e la classe non arriva a «stessa area»: senza di loro la riga
-    // usciva e basta. La whitelist resta sovrana (scelta esplicita dell'utente).
-    const grado = scuole.preferita ? null : gradoAffine(profilo, avviso);
-    const serbatoio = scuole.preferita ? null : voceSerbatoio(profilo, avviso);
-    // PRIMA la valutazione: porta il verdetto del jolly semantico (§26.64), che può far
-    // entrare d'ufficio un match PIENO fuori dalle proprie province (i vincoli geografici
-    // secondari non escludono più) e quindi aprire anche la porta d'ingresso.
     const valutazione = valutaCompatibilita(profilo, avviso, {
       provinceLimitrofe: true,
       forzata: scuole.preferita,
     });
-    // La CONFERMA del motore (§26.54) e la PERTINENZA del Radar (§26.60) non sono la
-    // stessa cosa: la conferma include l'inclusione d'ufficio dell'area sostegno, che
-    // resta un suggerimento EXTRA (`profiloAderisceSostegno` = l'utente ha una classe
-    // AD… propria), mentre per la pertinenza serve una conferma per CLASSE. Un match
-    // PIENO del jolly (§26.64) È una conferma: l'utente ha dichiarato di saperci lavorare.
     const jollyPieno = valutazione.jollySemantico !== null;
-    const confermato = avvisoCompatibileConProfilo(profilo, avviso, { provinceLimitrofe: true }).ok;
-    const pertinenzaMotore =
-      jollyPieno ||
-      (confermato && !(avvisoDiSostegno(avviso) && !profiloAderisceSostegno(profilo)));
-    // PORTA D'INGRESSO (§26.63 · §26.64): entrano gli avvisi che le preferenze PRIMARIE
-    // agganciano — conferma del motore, oppure classe almeno «stessa area» (85) — e quelli
-    // che un match PIENO del jolly ha aperto. Una competenza PARZIALE non apre la bacheca:
-    // sfuma un punteggio che le preferenze hanno già deciso, e non crea l'opportunità.
-    if (!scuole.preferita) {
-      const inRadar = confermato || classeVicina(profilo, avviso) || jollyPieno;
-      // §26.141 — la porta si apre anche al GRADO AFFINE e al SERBATOIO: la riga non
-      // è pertinente, ma non si butta più via (era il canale per cui due terzi del
-      // database non arrivavano mai a un profilo di una sola classe).
-      if (!inRadar && grado === null && serbatoio === null) {
-        // §26.120 — NIENTE SCORTA PER CHI NON HA AFFINITÀ DI CLASSE. Fino al
-        // 30/10/2026 questa riga finiva nella scorta del paracadute «5» e tornava
-        // in vetrina come ripiego: era il canale da cui entravano le «cinque
-        // opportunità al 60%» che non c'entravano nulla con il profilo (§26.60
-        // le escludeva dalla bacheca, il paracadute le ripescava). La geografia
-        // non basta: se la classe non ha alcun rapporto con le proprie, la riga
-        // non entra — né in bacheca né di ripiego. Meglio una vetrina corta e
-        // onesta che cinque card da scartare.
+    if (!scala.ammessa && !scuole.preferita && !jollyPieno) {
+      fuoriPerimetro += 1;
+      continue;
+    }
+
+    // §26.144 — CASCATA: come la riga si guadagna la bacheca (merito · tolleranza · riserva).
+    const voce = voceCascata(profilo, avviso, scala.provincia);
+    if (voce.fascia === 'incompatibile' && !scuole.preferita) {
+      senzaAffinitaClasse += 1;
+      continue;
+    }
+    // Profilo senza classi (solo competenze o parole chiave): la cascata non giudica e
+    // l'ingresso resta quello del motore — conferma per competenza o match pieno del jolly.
+    if (voce.fascia === 'motore' && !scuole.preferita) {
+      const confermato =
+        jollyPieno || avvisoCompatibileConProfilo(profilo, avviso, { provinceLimitrofe: true }).ok;
+      if (!confermato) {
         senzaAffinitaClasse += 1;
         continue;
       }
     }
-    // §26.60 · §26.106 · §26.141 — la DECISIONE della riga vive in un solo posto
-    // (`esitoRiga`): serbatoio → scorta, escluso → fuori, riempitivo non pertinente →
-    // scorta col gradino, altrimenti bacheca col pavimento del grado affine.
-    const esito = esitoRiga(i, valutazione, {
-      punteggioGrado: grado?.punteggio ?? null,
-      gradoEtichetta: grado?.etichetta,
-      serbatoio,
-      pertinente: pertinenzaMotore,
-      forzata: scuole.preferita,
-      livelloScala: scala.livello,
-    });
-    if (esito.esito === 'fuori') continue;
-    if (esito.esito === 'bacheca') {
-      if (scuole.preferita) forzate += 1;
-      if (esito.affine) affiniInBacheca += 1;
-      inBacheca.push(esito.riga);
-      continue;
-    }
-    // SCORTA (§26.106 · §26.125): ripiego dichiarato, mai una card spacciata per match.
-    if (serbatoio !== null) serbatoioInScorta += 1;
-    else riempitiviEsclusi += 1;
-    scorta.push(esito.riga);
+
+    if (scuole.preferita) forzate += 1;
+    if (voce.fascia === 'merito') meritoInBacheca += 1;
+    else if (voce.fascia === 'tolleranza') tolleranzaInBacheca += 1;
+    else if (voce.fascia === 'riserva') riserveInBacheca += 1;
+
+    // RISERVA: il voto è quello dichiarato dalla cascata (50-60). Le modali del motore
+    // misurerebbero qui il «salto» di ordine e la classe estranea, non l'affinità.
+    // MERITO e TOLLERANZA: pavimento della cascata, mai sotto il voto del motore.
+    const punteggio =
+      voce.fascia === 'riserva' ? voce.punteggio : Math.max(valutazione.punteggio, voce.punteggio);
+    // Il tooltip spiega il numero MOSTRATO: se il voto non è quello del motore (o se il
+    // motore aveva escluso la riga) i suoi motivi descriverebbero un altro numero.
+    const motivi = punteggio === valutazione.punteggio && !valutazione.escluso ? undefined : [];
+
+    lista.push(
+      rigaInBacheca(i, valutazione, {
+        punteggio,
+        scuolaPreferita: scuole.preferita,
+        motivoInPiu: voce.etichetta || undefined,
+        motivi,
+      }),
+    );
   }
 
-  const cap = limitaRiempitivi(inBacheca, { proteggi: (v) => v.scuolaPreferita === true });
-  // PARACADUTE «5 OSSO-DA-MORDERE» (§26.106): sotto i cinque risultati la vetrina si
-  // completa con le migliori righe della scorta (già marcate `ripiego`, dichiarate in UI).
-  // Se il database non ha cinque opportunità ammissibili la lista resta corta: il
-  // paracadute non inventa righe e non scavalca il blocco geografico.
-  const paracadute = paracaduteCinque(cap.lista, scorta, {
-    // §26.125 — la vetrina si completa per GRADINO: prima le ottime, poi le affini,
-    // poi il sostegno/Religione della propria provincia, infine il fuori scala.
-    priorita: (voce) => ORDINE_LIVELLO[voce.livelloRipiego ?? 'non-classificata'],
-  });
   return {
-    lista: paracadute.lista,
+    lista,
     righeNonOpportunita,
     senzaScadenza,
     esclusiBlacklist,
     forzate,
-    riempitiviEsclusi,
-    riempitiviNascosti: cap.riempitiviNascosti,
-    ripieghiInBacheca: paracadute.aggiunti,
     senzaAffinitaClasse,
-    sostegnoFuoriProvincia,
+    fuoriPerimetro,
     sostegnoAmbiguoScartato,
-    affiniInBacheca,
-    serbatoioInScorta,
+    meritoInBacheca,
+    tolleranzaInBacheca,
+    riserveInBacheca,
   };
 }

@@ -114,15 +114,21 @@ check('pertinente: resta al pavimento di 60', PUNTEGGIO_EXTRA_SOSTEGNO, pertinen
 check('la competenza non lo promuove', null, pertinente.competenzaSecondaria);
 check('e il jolly tace sul suggerimento extra', null, pertinente.jollySemantico);
 
-console.log('\n— bacheca: la scorta del paracadute non ripesca fuori pertinenza —');
+console.log('\n— bacheca: il sostegno d’altro ordine entra solo dal canale dichiarato —');
 const bacheca = leggi('src/lib/bachecaInterpelli.ts');
 check(
-  'il ramo «non in Radar» non scrive più nella scorta',
+  'il verdetto del motore non è più un’esclusione della bacheca (§26.144)',
   false,
-  /if \(!valutazione\.escluso\) scorta\.push\(candidatoRipiego\(i, valutazione\)\)/.test(bacheca),
+  /if \(valutazione\.escluso\) continue/.test(bacheca),
+);
+check('la geografia resta l’unico sbarramento rigido', true, /!scala\.ammessa/.test(bacheca));
+check(
+  'il sostegno fuori ordine è una RISERVA dichiarata, mai un match',
+  true,
+  /riserveInBacheca \+= 1/.test(bacheca) && !/sostegno.*match/i.test(bacheca.split('CASCATA')[1] ?? ''),
 );
 check('la geografia non sostituisce l’affinità di classe', true, /senzaAffinitaClasse/.test(bacheca));
-// §26.125 — il CONTRATTO dell'esito vive in `bachecaRipiego` (split per il tetto di
+// §26.144 — il CONTRATTO dell'esito vive in `bachecaRipiego` (split per il tetto di
 // 250 righe): la guardia legge i due file, il cablaggio resta uno solo.
 check(
   'il conto è dichiarato nell’esito',

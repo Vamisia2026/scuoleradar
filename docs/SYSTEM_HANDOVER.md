@@ -15803,3 +15803,71 @@ spiegarsi. Il colore, dal canto suo, non deve fare il lavoro della paura: l'azzu
 l'affinità», il semaforo dice «questa scade domani», e nessuna delle due informazioni ruba il posto
 all'altra.
 
+
+## §26.144 — Da «gatekeeper» a «buttadentro»: la cascata generosa (04/11/2026)
+
+La direttiva del 04/11/2026 capovolge il criterio della bacheca: **un solo sbarramento rigido, la
+geografia** (province scelte + raggio dei 60 km), e tutto ciò che è nel perimetro ENTRA. La
+differenza fra le righe non è più «dentro/fuori»: è la **fascia** con cui entrano. Il gatekeeper —
+la catena di porte dove una riga che non convinceva una porta non entrava nemmeno per essere
+guardata — è stato sostituito da una cascata di erogazione, in un solo posto:
+`src/lib/cascataGenerosa.ts` (`voceCascata`, modulo puro, 249 righe).
+
+### 1. Le fasce e i loro numeri
+
+| fascia | chi entra | punteggio |
+| --- | --- | --- |
+| `merito` | sostegno / alternativa alla Religione / ATA nell'ordine di scuola SCELTO | 90 nella provincia · 86 entro il raggio |
+| `merito` | classe agganciata (esatta 100, affine 95, materia coperta 90, stessa area 85) | 85-100 |
+| `tolleranza` | grado affine (§26.141: materia/area 82 · ponte 76 · contaminata 72 · senza classe 70) e ponte disciplinare **anche senza un ordine vicino** | 70-82 |
+| `riserva` | sostegno / alternativa / ATA di un ALTRO ordine, e avvisi con una classe che il catalogo non riconosce | 58 · 56 (ATA 52 · 50) · 60 |
+| `incompatibile` | **l'unico scarto di merito**: due temi riconosciuti che non si toccano (Musica vs Spagnolo) | fuori |
+| `motore` | profilo senza classi (solo competenze e parole chiave): decide la porta del motore | invariata |
+
+Il voto della card è `max(voto del motore, pavimento della cascata)`: un match già misurato non si
+abbassa, si rialza solo ciò che il motore non sapeva leggere. Tutte le fasce visibili stanno nella
+forbice **50-100** e usano la pillola azzurrino soft di `lib/compatibilita`: nessuna riga in bacheca
+porta un contrassegno rosso o di scarto.
+
+### 2. Cosa è cambiato nel codice
+
+* `src/lib/cascataGenerosa.ts` — **nuovo modulo puro**: sostegno/ATA d'ufficio, classe esatta,
+  tolleranza (`ponteTolleranza`, `incompatibilitaSemantica`), riserva, classi ignote;
+* `src/lib/bachecaInterpelli.ts` — riscritto (196 righe, prima 247): perimetro (`scalaParacadute`)
+  → cascata → riga. **Nessun cap dei riempitivi e nessun paracadute**: la cascata non lascia vuoti,
+  quindi non c'è una coda da tagliare né una scorta da pescare;
+* `src/lib/bachecaRipiego.ts` — l'esito (`EsitoBacheca`) e la riga (`rigaInBacheca`, ora con
+  `motivi` sostituibili). Via `esitoRiga`, `candidatoRipiego`, `candidatoSerbatoio`: la decisione
+  vive nella cascata. I campi `ripiego`/`livelloRipiego` restano nel modello per le righe storiche;
+* `src/lib/gradiAffini.ts` — cade il SERBATOIO (`voceSerbatoio`, 58 · 52): non è più un paracadute,
+  è il canale riserva della cascata. Resta il grado affine, che la tolleranza riusa;
+* `src/lib/scalaParacadute.ts` — il **divieto** «sostegno mai fuori dalle province scelte» diventa
+  il **perimetro** (proprie + raggio): un sostegno a Vercelli per chi ha scelto Asti entra, come
+  riserva 56. `ammessa` resta l'unico verdetto di esclusione — e ora è solo geografico;
+* `src/contexts/app/useInterpelliFeed.ts` — il commento dell'hook dice la verità nuova.
+
+### 3. Guardie e verifiche
+
+* guardia nuova `scripts/test-cascata-generosa.ts` (`npm run test:cascata`, in `npm test`): fasce,
+  numeri, forbice 50-100, incompatibilità, cablaggio e purezza del modulo;
+* guardie aggiornate al contratto nuovo: `test-gradi-affini` (cascata al posto del serbatoio),
+  `test-scala-paracadute` (perimetro al posto del divieto), `test-riempitivi-bacheca` (nessun cap e
+  nessun paracadute nella bacheca), `test-sostegno-pertinenza`, `test-filtri-scuole`,
+  `test-ambito-bacheca` (con `fuoriPerimetro`);
+* `scripts/diag-bacheca.ts` stampa i conti nuovi (merito · tolleranza · riserve · fuori perimetro).
+
+Dimensioni dopo il refactoring (tetto di 250 righe del gate strutturale): `cascataGenerosa` 249 ·
+`bachecaInterpelli` 196 · `bachecaRipiego` 105 · `gradiAffini` 189 · `test-cascata-generosa` 176 ·
+`test-gradi-affini` 248. Il saldo della modifica è **negativo**: 399 righe aggiunte, 524 rimosse —
+la cascata ha sostituito più macchine di quante ne abbia introdotte.
+
+### 4. Nota di sessione
+
+La lezione del §26.141 portata a coerenza: **se una regola non serve a scegliere meglio, serve solo
+a non far vedere**. Le porte d'ingresso erano diventate un modo elegante di scartare senza dirlo: il
+sostegno di un altro ordine non era un falso positivo, era un'opportunità in più che nessuno poteva
+valutare perché nessuno la vedeva. Oggi la generosità è dichiarata — fascia, numero, motivo — e
+l'unico scarto che resta è quello che si spiega in una frase: «Musica vs Spagnolo». Le macchine in
+più (cap, paracadute, scorta) non sono state aggiustate: sono sparite, perché senza una coda di
+scarti non avevano più niente da fare.
+

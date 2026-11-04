@@ -173,7 +173,7 @@ const modale = leggi('src/components/InterpelloDettaglioModal.tsx');
 check('feed: delega alla bacheca pura', true, /bachecaInterpelli\(/.test(feed));
 check('feed: cerca anche le province entro il raggio', true, /provinceDiRicerca\(/.test(feed));
 check('bacheca: applica le modali con l’opzione della bacheca', true, /valutaCompatibilita\(/.test(bacheca) && /provinceLimitrofe: true/.test(bacheca));
-check('bacheca: cap dinamico dei riempitivi', true, /limitaRiempitivi\(/.test(bacheca));
+check('bacheca: la cascata mette il pavimento, non un cap (§26.144)', true, /voceCascata\(/.test(bacheca) && /Math\.max\(valutazione\.punteggio, voce\.punteggio\)/.test(bacheca));
 check('graduata: il motore resta la base del punteggio', true, /punteggioCompatibilita\(/.test(graduata));
 check('graduata: una sola media PONDERATA delle modali', true, /mediaPonderata\(/.test(graduata));
 const bandaRe = /bandaCompatibilita\(interpello\.compatibilita, interpello\.motivoCompatibilita\)/;
@@ -205,7 +205,9 @@ check(
 check(
   'bacheca: la pertinenza resta quella PRIMARIA del motore (le competenze non aprono la bacheca)',
   true,
-  /const pertinenzaMotore =/.test(bacheca) && /avvisoCompatibileConProfilo\(profilo, avviso/.test(bacheca),
+  // §26.144 — la classe apre la bacheca con la cascata; il profilo SENZA classi (solo
+  // competenze) resta alla porta del motore: `motore` → conferma per competenza o jolly.
+  /voce\.fascia === 'motore'/.test(bacheca) && /avvisoCompatibileConProfilo\(profilo, avviso/.test(bacheca),
 );
 check(
   'card e modale: etichetta dedicata + tooltip della sfumatura',

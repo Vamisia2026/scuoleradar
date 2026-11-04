@@ -119,8 +119,8 @@ check('il punteggio resta quello delle modali (può essere insufficiente)', true
 check('inclusione contata per log e guardie', 1, esito.forzate);
 
 const senzaWhitelist = bachecaInterpelli([interpello({})], { ...profilo, favoriteSchools: [] });
-check('senza whitelist: classe estranea → NESSUNA card, nessun ripiego (§26.120)', [0, 0, 1],
-  [senzaWhitelist.lista.length, senzaWhitelist.ripieghiInBacheca, senzaWhitelist.senzaAffinitaClasse]);
+check('senza whitelist: classe estranea → NESSUNA card e nessuna riserva (§26.144)', [0, 0, 1],
+  [senzaWhitelist.lista.length, senzaWhitelist.riserveInBacheca, senzaWhitelist.senzaAffinitaClasse]);
 const blacklistEsito = bachecaInterpelli([interpello({})], { ...profilo, ignoredSchools: ['Volta'] });
 check('blacklist: l’avviso è oscurato anche se la scuola è preferita', 0, blacklistEsito.lista.length);
 check('scarto contato per log e guardie', 1, blacklistEsito.esclusiBlacklist);
@@ -139,7 +139,7 @@ check('modale: stessa etichetta della card', true, /ETICHETTA_SCUOLA_PREFERITA/.
 check('bacheca: giudizio scuole applicato', true, /giudizioScuole\(/.test(bacheca));
 check('bacheca: whitelist → inclusione d’ufficio nel punteggio', true, /forzata: scuole\.preferita/.test(bacheca));
 check('bacheca: il flag resta sull’avviso', true, /scuolaPreferita: opts\.scuolaPreferita/.test(leggi('src/lib/bachecaRipiego.ts')) && /forzata: scuole\.preferita/.test(bacheca));
-check('bacheca: il cap dei riempitivi protegge le preferite', true, /proteggi: \(v\) => v\.scuolaPreferita === true/.test(bacheca));
+check('bacheca: la preferita sfugge anche alla cascata (niente esclusione)', true, /=== 'incompatibile' && !scuole\.preferita/.test(bacheca));
 check('card e modale leggono lo stesso helper puro', true, /scuolaPreferita\(preferenze\.favoriteSchools/.test(card) && /scuolaPreferita\(preferenze\.favoriteSchools/.test(modale));
 
 /* ---------------------- 4) AMBITO PROVINCIALE DELLE SCUOLE ---------------- */

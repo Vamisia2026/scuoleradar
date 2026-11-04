@@ -12,9 +12,11 @@
  *      preferite restano comunque;
  *   2. INVARIANTI — il cap non tocca l'ordine, non classifica i punteggi assenti
  *      e non tocca le opportunità di qualità;
- *   3. CABLAGGIO — il feed applica il cap e cerca anche le province limitrofe,
- *      card e modale dichiarano lo scostamento, e la CONSEGNA (notifier/digest)
- *      NON passa `provinceLimitrofe`.
+ *   3. CABLAGGIO — dalla direttiva del 04/11/2026 (§26.144) la bacheca NON usa più il cap
+ *      né il paracadute: la cascata generosa fa entrare d'ufficio tutto ciò che è nel
+ *      perimetro, quindi non c'è una coda di «riempitivi» da dosare. Le due utilità restano
+ *      pure e verificate qui; il feed cerca anche le province limitrofe, card e modale
+ *      dichiarano lo scostamento, e la CONSEGNA (notifier/digest) NON passa `provinceLimitrofe`.
  *
  * Esecuzione: npm run test:riempitivi (incluso in `npm test`)
  */
@@ -171,17 +173,18 @@ check(
   true,
   /provinceDiRicerca\(/.test(feed),
 );
-check('bacheca: cap dinamico dei riempitivi', true, /limitaRiempitivi\(/.test(bacheca));
+check('bacheca: nessun cap dei riempitivi (la cascata non lascia vuoti)', false, /limitaRiempitivi\(/.test(bacheca));
 check(
-  'bacheca: paracadute «5 osso-da-mordere» sulla scorta (§26.106)',
-  true,
-  /paracaduteCinque\(cap\.lista, scorta, \{/.test(bacheca) &&
-    /ripieghiInBacheca: paracadute\.aggiunti/.test(bacheca),
+  'bacheca: nessun paracadute da pescare (§26.144)',
+  false,
+  /paracaduteCinque\(/.test(bacheca),
 );
 check(
-  'bacheca: le righe di ripiego sono dichiarate, mai silenziose',
+  'bacheca: le riserve entrano d’ufficio e sono contate',
   true,
-  /ripiego: true/.test(bachecaConRipiego) && /ripieghiInBacheca: number/.test(bachecaConRipiego),
+  /voceCascata\(profilo, avviso, scala\.provincia\)/.test(bacheca) &&
+    /riserveInBacheca \+= 1/.test(bacheca) &&
+    /riserveInBacheca: number/.test(bachecaConRipiego),
 );
 check(
   'bacheca: la scorta non accoglie righe senza affinità di classe (§26.120)',
@@ -193,20 +196,21 @@ check(
   true,
   /senzaAffinitaClasse \+= 1/.test(bacheca),
 );
-check('bacheca: le scuole preferite non sono riempitivi', true, /proteggi:/.test(bacheca));
-// §26.141 — la decisione della riga (esclusione secca compresa) vive in `bachecaRipiego`:
-// la guardia legge i due file, l'ordine «esclusione prima del cap» resta verificato.
-const ripiegoDecisione = leggi('src/lib/bachecaRipiego.ts');
+check('bacheca: le scuole preferite restano protette (Modalità 5)', true, /scuole\.preferita/.test(bacheca));
+// §26.144 — la DECISIONE (merito · tolleranza · riserva · incompatibile) vive nella cascata:
+// la guardia legge il modulo, così il «chi entra» non è più una catena di porte nel loop.
+const cascataModulo = leggi('src/lib/cascataGenerosa.ts');
 check(
-  'bacheca: esclusione secca dei non pertinenti, A MONTE del cap (§26.60)',
+  'bacheca: la decisione sta nella cascata, non nel loop (§26.144)',
   true,
-  /riempitivoNonPertinente\(/.test(ripiegoDecisione) &&
-    bacheca.indexOf('esitoRiga(') < bacheca.indexOf('limitaRiempitivi('),
+  /fascia === 'incompatibile'/.test(bacheca) &&
+    /normalizzaClassi\(profilo\.classi\)/.test(cascataModulo) &&
+    /gradoAffine\(profilo, avviso\)/.test(cascataModulo),
 );
 check(
-  'bacheca: il conto degli esclusi è dichiarato, mai silenzioso',
+  'bacheca: i conti delle fasce sono dichiarati, mai silenziosi',
   true,
-  /riempitiviEsclusi: number/.test(bachecaConRipiego) && /riempitiviEsclusi \+= 1/.test(bacheca),
+  /meritoInBacheca: number/.test(bachecaConRipiego) && /meritoInBacheca \+= 1/.test(bacheca),
 );
 check('bacheca: province entro il raggio con penalità', true, /provinceLimitrofe: true/.test(bacheca));
 const bandaConMotivo = /bandaCompatibilita\(interpello\.compatibilita, interpello\.motivoCompatibilita\)/;

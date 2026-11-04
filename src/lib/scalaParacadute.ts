@@ -1,28 +1,32 @@
 /**
  * ScuoleRadar.it — LA SCALA DEL PARACADUTE (modulo PURO, §26.125).
  *
- * La regola delle «5 opportunità minime» non si tocca: sotto `MINIMO_BACHECA` la
- * vetrina si completa con le migliori righe ammesse (`riempitivi.paracaduteCinque`).
- * Quello che mancava era l'ORDINE, e un divieto.
+ * La regola delle «5 opportunità minime» ha smesso di servire il 04/11/2026: la cascata
+ * generosa (§26.144) fa entrare d'ufficio tutto ciò che è nel perimetro, quindi la vetrina
+ * non ha più una coda da pescare. Questo modulo resta la SCALA dei rapporti fra un avviso e
+ * un profilo — e soprattutto il PERIMETRO geografico, che la bacheca usa come unico
+ * sbarramento (`ammessa`).
  *
  * LA SCALA (dalla più forte alla più debole)
  *   1. `ottime`            — stessa provincia  + stessa classe;
  *   2. `affini`            — stessa provincia  + classe affine (stessa area / materia
  *                            coperta) OPPURE provincia vicina (entro il raggio dei
  *                            60 km) + stessa classe;
- *   3. `ultima-spiaggia`   — stessa provincia  + SOSTEGNO o alternativa alla Religione:
- *                            il paracadute vero, che resta nella provincia scelta;
+ *   3. `ultima-spiaggia`   — SOSTEGNO o alternativa alla Religione nel perimetro
+ *                            (provincia scelta o entro i 60 km): il canale che la
+ *                            cascata fa entrare d'ufficio come riserva (§26.144);
  *   4. `non-classificata`  — la riga è ammessa dalle altre regole (per esempio un match
  *                            PIENO del jolly semantico, §26.64, che apre d'ufficio oltre
  *                            il raggio) ma non entra in nessuno dei tre gradini: resta
  *                            in vetrina se serve, e va in coda.
  *
- * IL DIVIETO (secco, non negoziabile)
- * Un avviso di **sostegno** o di **alternativa alla Religione** in una provincia che
- * l'utente NON ha scelto non si mostra MAI — nemmeno come ripiego: «sostegno a
- * Vercelli» per chi ha scelto Asti è il falso positivo che la direttiva vieta. Il
- * campo `ammessa` è l'unico verdetto di esclusione di questo modulo; tutto il resto
- * è PRIORITÀ, non filtro, così la consegna e il jolly semantico non cambiano.
+ * IL PERIMETRO (secco, non negoziabile)
+ * L'unico sbarramento rigido è la **geografia** (direttiva 04/11/2026, §26.144): province
+ * scelte + raggio dei 60 km. Fuori da lì l'avviso non entra; dentro, entra sempre — anche il
+ * sostegno o l'alternativa alla Religione di una provincia **vicina**, che fino al 03/11/2026
+ * un divieto più severo della geografia teneva fuori (e che oggi entra come riserva 56, §26.144).
+ * Il campo `ammessa` è l'unico verdetto di esclusione di questo modulo; tutto il resto è
+ * PRIORITÀ, non filtro, così la consegna e il jolly semantico non cambiano.
  *
  * «Provincia vicina» è la definizione che il Radar usa da sempre
  * (`prossimitaGeografica.ts`): capoluoghi entro `RAGGIO_PROVINCIA_KM` (60 km), mai
@@ -50,7 +54,7 @@ export type TipoClasseScala = 'stessa' | 'affine' | 'sostegno' | 'nessuna';
 export interface EsitoScalaParacadute {
   /** Gradino della scala (l'ordine di priorità, mai un'esclusione). */
   livello: LivelloRipiego;
-  /** false SOLO per sostegno/alternativa Religione fuori dalle province scelte. */
+  /** false SOLO fuori dal perimetro (province scelte + raggio dei 60 km). */
   ammessa: boolean;
   /** Dove cade l'avviso rispetto alle province del profilo. */
   provincia: StatoProvinciaScala;
@@ -72,7 +76,7 @@ export const ORDINE_LIVELLO: Record<LivelloRipiego, number> = {
 export const ETICHETTA_LIVELLO: Record<LivelloRipiego, string> = {
   ottime: 'Ottime — stessa provincia e stessa classe',
   affini: 'Affini — stessa provincia (classe affine) o provincia vicina (stessa classe)',
-  'ultima-spiaggia': 'Ultima spiaggia — sostegno o alternativa alla Religione nella tua provincia',
+  'ultima-spiaggia': 'Ultima spiaggia — sostegno o alternativa alla Religione nel tuo perimetro',
   'non-classificata': 'Fuori scala — ammessa dalle altre regole, in coda',
 };
 
@@ -130,8 +134,8 @@ function tipoClasse(
  * Ordine dei giudizi (un solo passaggio, nessuna eccezione nascosta):
  *   · la classe ESATTA viene prima del sostegno: chi ha una classe `AD…` propria
  *     riceve il sostegno come match, non come ultima spiaggia;
- *   · il DIVIETO guarda solo sostegno/Religione e solo la geografia: fuori dalle
- *     province scelte la riga non è ammessa, e `motivo` lo dichiara;
+ *   · il PERIMETRO è la sola esclusione: fuori dalle province scelte e dal raggio dei
+ *     60 km la riga non è ammessa, e `motivo` lo dichiara;
  *   · un profilo senza province non ha vincoli geografici (`non-applicabile`): la
  *     riga resta ammessa, come nel motore.
  */
@@ -146,19 +150,17 @@ export function scalaParacadute(
       ? geo.stato
       : 'non-applicabile';
   const inPropria = provincia === 'propria' || provincia === 'non-applicabile';
+  const inPerimetro = inPropria || provincia === 'vicina';
   const classe = tipoClasse(profilo, avviso);
 
-  // DIVIETO: sostegno/Religione fuori dalle province scelte, mai — nemmeno di ripiego.
-  if (classe === 'sostegno' && !inPropria) {
+  // PERIMETRO: fuori dalle province scelte e dal raggio dei 60 km non si entra — mai.
+  if (!inPerimetro) {
     return {
       livello: 'non-classificata',
       ammessa: false,
       provincia,
       classe,
-      motivo:
-        provincia === 'vicina'
-          ? 'sostegno fuori dalle province scelte (provincia solo vicina)'
-          : 'sostegno fuori dalle province scelte',
+      motivo: 'fuori dal perimetro: province scelte + raggio dei 60 km',
     };
   }
 
@@ -187,7 +189,7 @@ export function scalaParacadute(
       ammessa: true,
       provincia,
       classe,
-      motivo: 'sostegno o alternativa Religione nella tua provincia',
+      motivo: 'sostegno o alternativa Religione nel tuo perimetro',
     };
   }
 
