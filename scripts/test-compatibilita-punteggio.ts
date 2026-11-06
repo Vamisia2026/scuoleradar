@@ -22,17 +22,14 @@
  * Esecuzione: npm run test:compatibilita (incluso in `npm test`)
  */
 import { readFileSync } from 'node:fs';
+import { COLORI_MATCH, ETICHETTA_RIPIEGO, livelloMatch, stileMatch } from '../src/lib/bandaMatch.ts';
 import {
-  COLORI_MATCH,
-  ETICHETTA_RIPIEGO,
   SOGLIA_COMPATIBILITA_ARANCIO,
   SOGLIA_COMPATIBILITA_ROSSO,
   SOGLIA_COMPATIBILITA_VERDE,
   bandaCompatibilita,
   etichettaCompatibilita,
   livelloCompatibilita,
-  livelloMatch,
-  stileMatch,
 } from '../src/lib/compatibilita.ts';
 import {
   PUNTEGGIO_EXTRA_SOSTEGNO,

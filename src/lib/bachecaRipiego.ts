@@ -45,6 +45,12 @@ export interface EsitoBacheca {
    */
   fuoriPerimetro: number;
   /**
+   * §26.148 — righe SBARRATE dal TERZO gradino di ordine (infanzia ↔ secondaria di II grado,
+   * nei due sensi): non sono un voto basso, sono un altro mestiere, e non entrano in bacheca.
+   * Contate, mai silenziose — è la differenza fra «filtrata» e «sparita».
+   */
+  esclusiOrdineEstremo: number;
+  /**
    * Righe scartate perché parlano di sostegno senza dichiarare un RECLUTAMENTO
    * (§26.131: «piano di sostegno didattico», «progetto sostegno»). Il terzo stato del
    * classificatore non è una cattedra: non entra in bacheca.
@@ -56,6 +62,12 @@ export interface EsitoBacheca {
   tolleranzaInBacheca: number;
   /** §26.144 — righe entrate di RISERVA: sostegno/ATA d'altro ordine, classe non riconosciuta. */
   riserveInBacheca: number;
+  /**
+   * §26.145 — righe in bacheca che la DISTANZA DAL PROFILO ha portato sotto la soglia del
+   * fondo (`SOGLIA_FONDO_CONVENTO`): restano — sono nella zona dell'utente — ma la card le
+   * dichiara «Fondo Convento / Ripiego». Contate, non nascoste.
+   */
+  fondoInBacheca: number;
 }
 
 /** Avviso minimo per le modali, derivato dall'interpello della bacheca. */

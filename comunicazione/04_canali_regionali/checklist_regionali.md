@@ -504,3 +504,72 @@ bacheca (un solo giudizio, nessuna seconda verità).
       usa lo stesso giudizio: le righe commerciali già in archivio escono dal conteggio.
 - [ ] **Guardie**: `npm run test:bandi-commerciali` (severità, protezione, limite dichiarato, cablaggio
       bacheca/ingestione/pulizia), in `npm test`.
+
+## 13. Il voto dice la DISTANZA dal profilo (§26.145): la fascia fa entrare, il numero misura
+
+La cascata (§26.144) decide **se** una riga entra; il voto decide **quanto** somiglia. Le due cose
+non si confondono: una riga di riserva entra dichiarata, con un numero che può essere anche basso.
+La distanza vive in `lib/distanzaProfilo` (pura) e si applica in un solo punto, la cascata.
+
+- [ ] **Due gradi di ordine, simmetrici, più uno sbarramento** — stesso ordine 0 · 1 gradino −25% ·
+      2 gradini −55% · **3 gradini = SBARRAMENTO** (la riga non entra: §26.148). Vale nei due sensi
+      (una maestra dell'infanzia che riceve le superiori sbarra le superiori) e mai su ATA, CPIA,
+      serali, PON o dato assente: un'informazione che la fonte non pubblica non è un demerito.
+- [ ] **Posto di sostegno fuori dalle proprie classi: −40%** — chi ha solo classi `A…` non stava
+      cercando il sostegno. L'area resta un'opportunità (§26.45), non la cattedra.
+- [ ] **Bonus di provincia principale: +18, ma solo sotto 70** — è un criterio d'ordine fra righe
+      che il profilo copre; sopra la soglia il merito ha già deciso e il bonus appiattirebbe 82 e 90.
+- [ ] **Penalità MOLTIPLICATIVE, bonus prima** — `58 → +18 = 76 → −40% = 46 → −25% = 34`: un bonus
+      non resuscita una riga che il profilo non copre, e due distanze insieme non si sommano.
+- [ ] **Sotto 20 la card lo dichiara: «Fondo Convento / Ripiego»** — la riga resta (è nella zona
+      dell'utente) ma non si spaccia per un match basso: il tooltip dice il perché.
+- [ ] **Il voto penalizzato non si rialza** — `voce.tetto` blocca il `Math.max` col motore: chi ha
+      abbassato il numero lo ha fatto per un motivo che il motore non misura.
+- [ ] **Guardia**: `npm run test:distanza` (ordini, simmetria, sostegno, bonus e soglia,
+      composizione, fondo, purezza), in `npm test`.
+
+## 14. La freschezza degli albi si DICHIARA in bacheca (§26.146): «non lo so» non è «tutto ok»
+
+Sopra l'elenco delle opportunità c'è un banner che dice quanto sono freschi gli albi. Serve perché
+il silenzio dell'ingestione arriva travestito da mercato fermo: senza banner un crawler fermo
+sembra «meno opportunità», e nessuno va a controllare. Le regole vivono in `lib/telemetriaScansione`
+(**pura**: riceve i numeri e l'orologio, restituisce il banner o `null`).
+
+- [ ] **Ordine delle priorità**: `isolata` (quarantena) → `guasta` (errori o nessun giro) →
+      `in-ritardo` (oltre **48 h**) → `fresca`. Ciò che *toglie* avvisi batte ciò che li rende
+      *vecchi*.
+- [ ] **Un campo non letto è `null`, mai `0`** — e se la Edge tace il banner non appare: nessun
+      verde per un'assenza di notizie.
+- [ ] **`fonti_isolate: null` = «elenco non richiesto»**, non «nessuna fonte isolata».
+- [ ] **Istante nel futuro → 0 ore**, non un errore: gli orologi dei server non sono sincronizzati.
+- [ ] **Il banner appare solo con la sessione** e sta sopra l'elenco: a chi non è loggato non si
+      racconta l'infrastruttura.
+- [ ] **Guardia**: `npm run test:telemetria-scansione` (orologio fermo: silenzio, priorità, soglia
+      47/49 h, singolare/plurale, purezza, cablaggio), in `npm test`.
+
+## 15. C'è una distanza che non si ordina: si SBARRA (§26.148), e le emergenze stanno in fondo
+
+La scala di §13 scontava anche il terzo gradino, e il risultato era una riga all'1-9% in fondo
+alla bacheca: «Sostegno infanzia» per chi cerca le superiori. Un numero piccolissimo non è una
+risposta — è la stessa riga di prima, con la scusa di un voto basso. Dal 06/11/2026 quella riga
+**non si mostra affatto**; la regola vive in `lib/sbarramentoOrdine` (puro) e la bacheca la applica
+contando gli scarti (`esclusiOrdineEstremo`).
+
+- [ ] **Terzo gradino = SBARRAMENTO** — infanzia ↔ secondaria di II grado, nei due sensi: la riga
+      non entra in bacheca, non si conta fra le riserve, non finisce in coda. `punteggio` vale 0 e
+      `escluso` è `true`: non è un match basso, è un altro mestiere.
+- [ ] **Il secondo gradino RESTA** — le Primarie per chi cerca le superiori si scontano (−55%) e si
+      dichiarano «Fondo Convento»: si tollera, non si nasconde.
+- [ ] **Mai sul dato assente** — profilo senza ordini, avviso che non lo dichiara, oppure ordine
+      fuori sequenza (ATA, CPIA, serali, PON): nessuno sbarramento, nessuna distanza inventata.
+- [ ] **Con più ordini scelti vale il più VICINO** — chi ha scelto anche l'infanzia non se la vede
+      sbarrare. La whitelist delle scuole resta l'unica eccezione (l'utente ha chiesto quella scuola).
+- [ ] **Categorie di EMERGENZA: −40%** — ATA, CPIA, serali e PON non scelti dall'utente sono
+      tollerati dentro il perimetro ma stanno in fondo: `52 +18 = 70 → −40% = 42` nella provincia
+      principale, `50 (−0 bonus) → 30` in quella vicina. Chi ha scelto quella tipologia non paga.
+- [ ] **La provincia principale resta il criterio d'ordine** — il bonus di prossimità (+18, sotto 70)
+      rende un ripiego «un po' meno ripiego» dove costa meno spostarsi: non lo salva, lo preferisce.
+- [ ] **Guardia**: `npm run test:distanza` (sbarramento e simmetria, soglia del terzo gradino,
+      emergenze, composizione `58 → 34`, fondo, purezza, cablaggio bacheca), in `npm test`.
+
+

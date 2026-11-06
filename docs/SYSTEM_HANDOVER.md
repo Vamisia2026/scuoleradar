@@ -15871,3 +15871,299 @@ l'unico scarto che resta è quello che si spiega in una frase: «Musica vs Spagn
 più (cap, paracadute, scorta) non sono state aggiustate: sono sparite, perché senza una coda di
 scarti non avevano più niente da fare.
 
+
+## §26.145 — Il numero dice la DISTANZA dal profilo, non la somiglianza (05/11/2026)
+
+> **Superato in parte da §26.148** (06/11/2026): il terzo gradino non si sconta più a −80% — quella
+> riga si **sbarra** — e ATA/CPIA/serali/PON non scelti pagano −40%. La scala 0 · 25 · 55 e il bonus
+> di prossimità restano quelli descritti qui.
+
+La direttiva parte da una misura, non da un'opinione: con un profilo **Lingue + secondaria di II
+grado** la bacheca mostrava «Sostegno infanzia» all'**88-93%**. Non era una valutazione alta: era
+il motore che, misurando ordine, classe e provincia come **modali in media ponderata**, non aveva
+nessuna parola per dire «questo non c'entra». Una modale alta compensa una modale bassa, e un
+docente che non ha mai chiesto il sostegno né l'infanzia riceveva un falso positivo con il timbro
+del match alto.
+
+La correzione vive in un modulo nuovo, `src/lib/distanzaProfilo.ts` (221 righe, **puro**): una volta
+decisa la **fascia** (cascata, §26.144), il **voto** dice quanto la riga somiglia al profilo.
+
+### 1. Tre correzioni, e sono MOLTIPLICATIVE
+
+| correzione | quando | effetto |
+| --- | --- | --- |
+| distanza di ORDINE | `distanzaOrdini` sulla sequenza vera (`SEQUENZA_ORDINI`): 1 · 2 · 3 gradini | −25% · −55% · −80% |
+| tipologia del POSTO | avviso di **sostegno** a chi ha solo classi `A…` (nessuna `AD…`, `profiloAderisceSostegno`) | −40% |
+| BONUS di prossimità | avviso nella **provincia principale** del Radar **e** voto sotto 70 | +18% |
+
+L'ordine delle operazioni è dichiarato perché conta: **prima il bonus, poi le penalità in
+successione moltiplicativa** — `[ordine, posto].reduce((acc, p) => acc * (1 + p / 100))`. Due
+distanze insieme pesano più di una sola, e −40 con −80 non può valere −120. Il caso della
+direttiva: **58 → +18 = 76 → −40% del posto = 46 → −80% dell'ordine = 9**.
+
+Sotto `SOGLIA_FONDO_CONVENTO` (20) la riga è **«Fondo Convento / Ripiego»**: resta in bacheca — è
+nella zona dell'utente — ma dichiarata, con una descrizione che dice il perché. Non è un match
+basso: è una riga che il profilo non copre, e la pillola non la spaccia per altro.
+
+Il bonus non si applica **sopra** `SOGLIA_BONUS_PROVINCIA` (70): 18 punti regalati a un match già
+alto appiattiscono 82 e 90 sullo stesso 100 e la classifica smette di dire il merito. È un criterio
+d'ordine fra righe che il profilo copre, non un salvacondotto per righe che non copre.
+
+### 2. Cosa è cambiato nel codice
+
+* `src/lib/distanzaProfilo.ts` — **nuovo modulo puro**: penalità di ordine e di posto, bonus di
+  prossimità, `applicaDistanza` (bonus → penalità → forbice 1-100), `fondo` e `motivo` per la card;
+* `src/lib/punteggioOrdine.ts` (97 righe) — `distanzaOrdini`: la distanza sulla sequenza reale,
+  `-1` per ciò che è fuori sequenza (ATA, CPIA, serali, PON) **o non dichiarato**: un dato che la
+  fonte non pubblica non è un giudizio, mai un falso negativo;
+* `src/lib/cascataGenerosa.ts` (217 righe, prima 249) — `voceCascata` restituisce anche `penalita`,
+  `fondo` e `tetto`; il voto esce dalla cascata già aggiustato, in un solo punto;
+* `src/lib/bachecaInterpelli.ts` (208) — `voce.tetto` è un **limite**: quando la distanza ha
+  abbassato il voto, il `Math.max` col voto del motore non lo rialza (il motore non misura la
+  distanza di ordine). L'esito conta `fondoInBacheca`;
+* `src/lib/bachecaRipiego.ts` (112) — `fondoInBacheca` nel contratto di `EsitoBacheca`: contate,
+  non nascoste;
+* `src/lib/compatibilita.ts` (193) — `SOGLIA_FONDO_CONVENTO = 20` ed `ETICHETTA_FONDO_CONVENTO`
+  accanto alle soglie di sempre; la **banda del match** esce in `src/lib/bandaMatch.ts` (114):
+  `compatibilita` era al tetto delle 250 righe del gate strutturale, e `stileMatch` sotto soglia
+  restituisce l'etichetta e la descrizione del fondo (letto dal numero, non da un flag).
+
+### 3. Guardie e verifiche
+
+* guardia nuova `scripts/test-distanza-profilo.ts` (`npm run test:distanza`, in `npm test`):
+  ordini 25 · 55 · 80, simmetria, ATA e dato assente = 0, sostegno −40, bonus +18 solo sotto 70,
+  composizione `58 → 9`, soglia del fondo, direttiva, purezza, **un solo punto** di applicazione
+  nella cascata;
+* guardie aggiornate: `test-cascata-generosa` (forbice 1-100, «sotto 50 solo con `penalita > 0`»,
+  `fondo ⇔ punteggio < 20`), `test-gradi-affini` (ATA 52 +18 = 70 · sostegno d'altro ordine = 9 ·
+  sostegno nel proprio ordine 90 −40% = 54), `test-scala-paracadute` (il sostegno entra, ma il
+  voto paga il posto: 90 → 54 in provincia, 86 → 52 nel raggio), `test-compatibilita-punteggio`
+  (import della banda da `lib/bandaMatch`).
+
+Verifiche di questa sessione, da `project/`: `npm run typecheck` · `npm test` (catena intera,
+uscita 0) · `npm run test:architettura` (148 violazioni = baseline, **nessuna nuova**) ·
+`npm run build`. Dimensioni: `distanzaProfilo` 221 · `cascataGenerosa` 217 · `bachecaInterpelli`
+208 · `test-gradi-affini` 249 · `test-distanza-profilo` 187. Saldo sui file ESISTENTI: 219 righe
+aggiunte, 216 rimosse (i moduli nuovi — `distanzaProfilo`, `bandaMatch` — sono file a sé).
+
+### 4. Nota di sessione
+
+Due tentazioni rifiutate. La prima: **sommare** le penalità — comodo e sbagliato, perché due
+distanze insieme non sono la loro somma e un −120 dichiarato non esiste. La seconda: usare il bonus
+di provincia come aggiustamento universale. La regola che resta è una frase sola: **la fascia dice
+perché la riga entra, il voto dice quanto somiglia**. Un numero alto non deve mai essere l'unico
+motivo per cui una riga sembra giusta — e un numero basso non deve far sparire un'opportunità che
+sta nella zona dell'utente: per questo il fondo si dichiara, non si cancella.
+
+
+## §26.146 — In bacheca si vede la FRESCHEZZA degli albi, non solo le opportunità (06/11/2026)
+
+La bacheca era onesta sulle righe e muta sul resto: se il crawler si fermava due giorni, l'utente
+non vedeva un guasto — vedeva **meno opportunità**. È il modo peggiore di sbagliare, perché il
+silenzio dell'ingestione arriva travestito da mercato fermo, e nessuno va a controllare.
+
+Ora sopra l'elenco c'è un banner che risponde a una domanda sola: **quanto sono freschi gli albi
+che stai guardando?**
+
+### 1. Le regole stanno in un modulo PURO
+
+`src/lib/telemetriaScansione.ts` (164 righe) non importa React, non importa Supabase, non chiama
+`fetch`: riceve i numeri e l'orologio (`adesso: Date = new Date()`), restituisce il banner o `null`.
+Così le regole si misurano su un orologio fermo, senza database e senza browser.
+
+Quattro toni, e un **ordine di priorità dichiarato** — prima ciò che *toglie* avvisi, poi ciò che
+li rende *vecchi*:
+
+| tono | quando | cosa dice |
+| --- | --- | --- |
+| `isolata` | una o più fonti in quarantena | «N fonti isolate» — il giro c'è stato ma non ha letto tutto |
+| `guasta` | `in_errore`/`fonti_in_guasto` > 0, **o** nessun giro registrato | «N fonti in errore» / «Scansione non ancora registrata» |
+| `in-ritardo` | ultimo giro oltre **`ORE_PRIMA_DEL_RITARDO` = 48 h** | «Ultima scansione 2 giorni fa» |
+| `fresca` | tutto il resto | «Albi letti di recente» + quante pagine nelle ultime 24 h |
+
+Quarantena e guasti battono il ritardo: un giro vecchio ma completo è meno grave di cinque albi
+isolati, perché il primo è un problema di orologio, il secondo è un buco nei dati.
+
+### 2. La regola che tiene in piedi il resto: «non lo so» ≠ zero
+
+Un campo **non letto** è `null`, mai `0`. Se la Edge non risponde, `leggiTelemetriaCrawler` fallisce
+e il componente **inghiotte l'errore** (`.catch(() => {})`): nessun banner, non un banner verde.
+`fonti_isolate: null` significa «elenco non richiesto», non «nessuna fonte isolata». E un istante
+nel **futuro** vale 0 ore (`oreDa` fa il clamp), non un errore: gli orologi dei server non sono
+sincronizzati, e un `-3 ore fa` in pagina sarebbe un bug visibile all'utente.
+
+Il dettaglio del giro fresco è composto a pezzi e salta ciò che non è stato misurato: niente
+«null pagine», niente «0 in coda» quando la coda non è stata letta.
+
+### 3. Cosa è cambiato nel codice
+
+* `src/lib/telemetriaScansione.ts` — **nuovo modulo puro**: `TonoScansione`, `TelemetriaScansione`,
+  `BannerScansione`, `ORE_PRIMA_DEL_RITARDO`, `oreDa`, `durataLeggibile`, `contoFonti` (il singolare
+  «1 fonte isolata» è copy, non stile) e `bannerScansione`;
+* `src/pages/dashboard/components/BannerTelemetriaScansione.tsx` — **nuovo componente**: legge la
+  telemetria della Edge, `VESTE` per i quattro toni, un solo `catch` che spegne il banner;
+* `src/pages/DashboardPage.tsx` — il banner sta **sopra** `ElencoOpportunita` e appare solo con
+  sessione (`{user && …}`): a chi non è loggato non si racconta l'infrastruttura.
+
+### 4. Guardia e verifiche
+
+`scripts/test-telemetria-scansione.ts` (`npm run test:telemetria-scansione`, in `npm test`) —
+36 verifiche su orologio fermo: silenzio senza telemetria, ordine delle priorità, soglia 47/49 h,
+singolare/plurale, «elenco non letto = nessuna accusa», guasti che vincono sugli isolati, data
+illeggibile = guasto e non «adesso», clamp del futuro, purezza del modulo, cablaggio in bacheca.
+
+Verifiche di questa sessione, da `project/`: `npm run typecheck` · `npm test` (catena intera,
+uscita 0) · `npm run test:architettura` (148 violazioni = baseline, **nessuna nuova**) ·
+`npm run build` · `eslint` sui file toccati.
+
+### 5. Nota di sessione
+
+La tentazione era far dire al banner «tutto ok» quando i numeri mancavano: comodo e disonesto.
+Un'assenza di notizie non è una buona notizia — e in pagina, dove l'utente decide se fidarsi,
+vale doppio.
+
+
+## §26.147 — Primo audit di copertura (Asti): la scoperta funziona, la raccolta no (06/11/2026)
+
+Il matching corretto (§26.145) non serve a niente se gli albi non vengono letti. Serviva uno
+strumento che rispondesse, per **una** provincia, a una domanda sola: le scuole che conosciamo
+producono avvisi, o le stiamo solo sfiorando?
+
+`scripts/diag-copertura-scuole.ts` (246 righe, `npm run diag:copertura`) — **sola lettura**, con
+letture **paginate** (PostgREST tronca a 1.000 righe: un conteggio troncato sembra un dato) —
+incrocia tre tabelle: `interpelli` (ciò che abbiamo), `discovered_links` (ciò che il crawler ha in
+mano, **ogni** stato: anche un `not_found` è una risposta) e `source_health` filtrata sugli host
+della provincia. Il confronto per scuola è per **sottostringa normalizzata** del nome, e il report
+lo dichiara: è una diagnosi, non contabilità.
+
+### 1. Asti, 06/11/2026 — i numeri misurati
+
+| misura | valore |
+| --- | --- |
+| avvisi in archivio / vivi | **21 / 7** |
+| target in coda (host distinti) | **90** (57) |
+| target mai letti | **0** |
+| fonti note della provincia | 44 — di cui **5 in quarantena**, 5 in guasto |
+
+Target per stato: `active_crawler` **50** · `disabled` 11 · `disqualified_noise` 9 ·
+`parked_low_score` 9 · `expanded` 8 · `empty_view` 3.
+
+Le scuole della direttiva:
+
+| scuola | avvisi | target | stato dei target | ultima lettura |
+| --- | --- | --- | --- | --- |
+| Artom | 0 | 5 | 2 `disqualified_noise`, 2 `empty_view`, 1 `expanded` | 3 giorni fa |
+| Monti | 0 | 2 | 2 `active_crawler` | 2 giorni fa |
+| Alfieri | 0 | 2 | 2 `active_crawler` | 2 giorni fa |
+| Castigliano | 0 | 2 | 2 `active_crawler` | **27 giorni fa** |
+| Penna | 0 | **0** | — | **mai** |
+
+### 2. La diagnosi in una riga
+
+**50 target su 90 sono `active_crawler` e la provincia ha 21 avvisi**: la scoperta (§26.125) sta
+lavorando — i link ci sono, sono stati letti, nessuno è «mai letto» — e il collo di bottiglia è a
+valle, nell'**estrazione**: pagine lette che non diventano righe. Non è «ad Asti non pubblicano»:
+è «leggiamo e non capiamo».
+
+Due code diverse, due cause diverse:
+
+* **Artom** — 4 target su 5 sono `disqualified_noise` o `empty_view`: l'albo viene raggiunto e
+  scartato in ingresso. Qui il problema è nella **classificazione** della pagina, non nel crawl;
+* **Penna** — **zero** target: la scuola non è mai entrata nel perimetro della scoperta. È l'unico
+  caso in cui il problema *è* l'albo.
+
+### 3. Due cose da guardare subito (misurate, non sospette)
+
+1. **`servizi.istruzionepiemonte.it` è in quarantena** con errore
+   `classificaDataTesto is not defined` — un `ReferenceError` a runtime, non un sito lento. È
+   l'host da cui arrivano **5 dei 7 avvisi vivi** della provincia: la quarantena spegne la fonte
+   più produttiva di Asti per un errore di codice. (Nel repo non esiste alcun simbolo con quel
+   nome: l'errore viene dal worker **distribuito**, quindi la correzione è un redeploy — o un
+   `reset` della quarantena dopo aver verificato il deploy, mai prima.)
+2. **Gli host in quarantena sono duplicati e malformati** — `wwwi.c.rocchetta.org`,
+   `wwwi.crocchetta.org`, `istitutostatalemon ti.edu.it`: la **chiave** della quarantena non è
+   normalizzata, quindi lo stesso albo conta più volte e il conteggio «5 isolate» non è affidabile
+   finché la chiave non è un host canonico.
+
+**Castigliano** è il caso da tenere d'occhio: `active_crawler`, letto **27 giorni fa**. Non è un
+guasto, è una coda che non torna: il termostato del crawl (§26.127) la sta rimandando.
+
+### 4. Nota di sessione
+
+Lo strumento è nato per **una** provincia e va usato così: `--provincia=AT`, `--top`, `--scuole`,
+`--json`. Ha già cambiato la diagnosi: prima dell'audit «zero avvisi da Asti» si leggeva come albo
+vuoto. Adesso si legge come **estrazione**, e la differenza è tutta nel dove si va a guardare.
+
+
+## §26.148 — C'è una distanza che non si ordina: si SBARRA, e le emergenze stanno in fondo (06/11/2026)
+
+La misura di §26.145 aveva un buco, e Bartolo l'ha nominato senza giri di parole: **«non me la far
+vedere che mi incazzo»**. Un «Sostegno infanzia» a un profilo Lingue/Superiori scendeva a 9% e restava
+in bacheca, con la pillola «Fondo Convento / Ripiego» addosso. Ma un voto piccolissimo **non è una
+risposta**: è la stessa riga di prima con la scusa di un numero basso. Fra l'infanzia e la secondaria
+di II grado non c'è una preferenza da mettere in coda: c'è **un altro mestiere**. La regola cambia
+qui, e il nuovo modulo è `src/lib/sbarramentoOrdine.ts` (puro).
+
+### 1. Le tre regole, una tabella
+
+| regola | quando | effetto |
+| --- | --- | --- |
+| **SBARRAMENTO** | terzo gradino di ordine (`DISTANZA_SBARRAMENTO`): infanzia ↔ secondaria II, **nei due sensi** | la riga **non entra** in bacheca (`escluso`, `punteggio 0`) |
+| **EMERGENZA** | ATA · CPIA · serali · PON **non scelti** dal profilo | −40% (moltiplicativo) |
+| **PROSSIMITÀ** | avviso nella provincia principale **e** voto sotto 70 | +18% (invariato, §26.145) |
+
+La scala degli ordini resta `0 · 25 · 55 · 100` (`PENALITA_PER_GRADO_ORDINE`), ma l'ultimo valore non
+è più uno sconto: **−100% = «non c'è un voto»**, e `applicaDistanza` esce prima di calcolarlo. Il
+secondo gradino (Primarie per chi cerca le superiori) **resta**: −55% e «Fondo Convento» — si tollera,
+non si nasconde.
+
+Le due regole nuove non si applicano mai al **dato assente** (profilo senza ordini, avviso che non
+dichiara l'ordine, ordine fuori sequenza): uno sbarramento è la cosa più cara che questo modulo possa
+fare, e non si paga per un'informazione che la fonte non ha pubblicato. Con più ordini scelti vale il
+più **vicino**: chi ha scelto anche l'infanzia non se la vede sbarrare.
+
+### 2. I conti, perché la classifica resti leggibile
+
+* **Sostegno infanzia** a un profilo Lingue/Superiori/AT: **niente riga** (prima: 9%);
+* **Sostegno medie**: `58 → +18 = 76 → −40% posto → −25% ordine = 34` — ripiego dichiarato, in coda;
+* **Sostegno primarie**: `76 × 0,6 × 0,45 = 21` — pesante, ancora in pagina;
+* **ATA in provincia principale**: `52 → +18 = 70 → −40% = 42`; in provincia vicina, senza bonus:
+  `50 → 30`. È il «ripiego di sopravvivenza»: tollerato, **sotto** ogni merito (≥ 70) e ogni tolleranza
+  (70-82), e più basso dove costa spostarsi;
+* **classe esatta in CPIA**: `100 → 60` — il merito resta, ma sotto il merito del proprio ordine.
+
+### 3. Cosa è cambiato nel codice
+
+* `src/lib/sbarramentoOrdine.ts` — **nuovo modulo puro** (129 righe): `sbarramentoOrdine`,
+  `penalitaEmergenza`, `DISTANZA_SBARRAMENTO`, `PENALITA_EMERGENZA`, `ORDINI_EMERGENZA`. Nato separato
+  perché `distanzaProfilo` era a 220 righe su 250 e perché sono un giudizio diverso: uno **toglie** la
+  riga, l'altro la **sconta**;
+* `src/lib/distanzaProfilo.ts` (247 righe) — scala `0 · 25 · 55 · 100`, `escluso` in `EsitoDistanza`,
+  sbarramento **prima** di ogni calcolo, emergenza nella catena moltiplicativa;
+* `src/lib/cascataGenerosa.ts` (225) — `VoceCascata.escluso`; una voce sbarrata non è un `tetto`;
+* `src/lib/bachecaInterpelli.ts` (217) — le righe sbarrate escono dalla lista e si contano in
+  `esclusiOrdineEstremo` (**contate, mai silenziose**: la differenza fra «filtrata» e «sparita»). La
+  whitelist delle scuole resta l'unica eccezione (§26.144: include d'ufficio);
+* `src/lib/bachecaRipiego.ts` (117) — `esclusiOrdineEstremo` nel contratto di `EsitoBacheca`.
+
+### 4. Guardie e verifiche
+
+* `scripts/test-distanza-profilo.ts` (241 righe, 7 sezioni): scala `0 · 25 · 55 · 100`, sbarramento nei
+  due sensi, secondo gradino che resta, dato assente che non giudica, emergenze (−40, e zero per chi le
+  ha scelte), composizione `58 → 34`, caso della direttiva «infanzia = fuori», purezza di **entrambi** i
+  moduli, cablaggio cascata/bacheca;
+* `test-cascata-generosa` (224) e `test-gradi-affini` (249): riallineati ai nuovi numeri (42 · 31 · 30 ·
+  34 · 33 · 44), `escluso` propagato, contatore nell'esito;
+* verifiche di questa sessione, da `project/`: `npm run typecheck` 0 · `npm test` (catena intera) 0 ·
+  `npm run test:architettura` 148 = baseline, **nessuna nuova** · `npm run build` 0 · `eslint` sui file
+  toccati 0.
+
+### 5. Nota di sessione
+
+La tentazione rifiutata è la più ovvia: **abbassare ancora la penalità** del terzo gradino (da −80 a
+−95) e sperare che il numero basti. Non basta, e non è un problema di taratura: quando una riga è di
+un altro mestiere, qualsiasi numero la lascia in pagina. La regola che resta è in due righe: **la
+fascia dice perché la riga entra, il voto dice quanto somiglia, e quando non somiglia affatto non c'è
+voto — non c'è riga.** E il ripiego legittimo (ATA, CPIA, serali) non si nasconde: paga una penalità
+dichiarata e, se è nella provincia principale, è il primo dei ripieghi.
+

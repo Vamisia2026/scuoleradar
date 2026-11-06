@@ -31,7 +31,7 @@
 import { Lightbulb, SlidersHorizontal } from 'lucide-react';
 import { Accordion } from '@/components/Accordion';
 import { InterpelloCard } from '@/components/InterpelloCard';
-import { stileMatch } from '@/lib/compatibilita';
+import { stileMatch } from '@/lib/bandaMatch';
 import { CONSIGLIO_BACHECA_SCARSA, bachecaScarsa } from '@/lib/gradiAffini';
 import { classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';

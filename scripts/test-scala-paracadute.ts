@@ -196,8 +196,11 @@ const esito = bachecaInterpelli(
   profilo,
 );
 check('entrano Asti e Vercelli (perimetro), non Milano', ['sostegno-at', 'sostegno-vc'], esito.lista.map((r) => r.id));
-check('nell’ordine scelto sono MERITO, non ripiego', 90, esito.lista[0]?.compatibilita);
-check('la provincia vicina vale 86', 86, esito.lista[1]?.compatibilita);
+// §26.145 — la fascia resta `merito` (il sostegno entra d'ufficio), ma il VOTO paga il posto:
+// chi cerca una materia di lingue non sta cercando il sostegno, e la cascata lo dice col −40%
+// di `lib/distanzaProfilo`: 90 → 54 (Asti) · 86 → 52 (Vercelli, provincia vicina).
+check('la fascia resta merito, il voto paga il posto di sostegno: 90 → 54', 54, esito.lista[0]?.compatibilita);
+check('la provincia vicina: 86 → 52 (stesso −40%, nessun bonus fuori dalla principale)', 52, esito.lista[1]?.compatibilita);
 check('nessun ripiego: la scorta non esiste più', 0, esito.lista.filter((r) => r.ripiego === true).length);
 check('Milano è contata fuori perimetro', 1, esito.fuoriPerimetro);
 

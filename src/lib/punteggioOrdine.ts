@@ -16,6 +16,11 @@
  * La sequenza è quella degli ordini scolastici (infanzia → secondaria II). Le
  * tipologie fuori sequenza (CPIA, corsi serali, progetti PON, personale ATA) non
  * hanno un «prima/dopo»: valgono 100 solo se selezionate, altrimenti 70.
+ *
+ * §26.145 — `SEQUENZA_ORDINI` e `distanzaOrdini` sono la FONTE UNICA della
+ * sequenza: le modali qui sopra e le penalità severe della cascata
+ * (`lib/distanzaProfilo`) leggono la stessa scala, così «adiacente» significa la
+ * stessa cosa in tutta l'app.
  */
 import { ordiniScuola, type OrdineScuola } from '../data/ordiniMaterie';
 
@@ -26,8 +31,13 @@ export const PUNTEGGIO_ORDINE_ADIACENTE = 90;
 /** Ordine distante (o tipologia diversa): opportunità generica, non scartata. */
 export const PUNTEGGIO_ORDINE_DISTANTE = 70;
 
-/** Sequenza degli ordini scolastici (dal più basso al più alto). */
-const SEQUENZA: readonly OrdineScuola[] = ['infanzia', 'primaria', 'secondaria1', 'secondaria2'];
+/** Sequenza degli ordini scolastici (dal più basso al più alto): FONTE UNICA (§26.145). */
+export const SEQUENZA_ORDINI: readonly OrdineScuola[] = [
+  'infanzia',
+  'primaria',
+  'secondaria1',
+  'secondaria2',
+];
 
 /** Esito della modale: punteggio + motivo leggibile per il tooltip della card. */
 export interface EsitoOrdine {
@@ -41,11 +51,21 @@ export function etichettaOrdine(ordine?: OrdineScuola | null): string {
   return ordiniScuola.find((o) => o.id === ordine)?.nome ?? ordine;
 }
 
+/**
+ * DISTANZA fra due ordini nella sequenza scolastica (§26.145):
+ * `0` = stesso ordine · `1` = adiacenti · `2` · `3` = agli estremi (infanzia ↔
+ * secondaria II). `-1` = FUORI SEQUENZA (CPIA, serali, PON, ATA) oppure dato
+ * assente: la scala non si applica e non si inventa una distanza.
+ */
+export function distanzaOrdini(a?: OrdineScuola | null, b?: OrdineScuola | null): number {
+  const ia = a ? SEQUENZA_ORDINI.indexOf(a) : -1;
+  const ib = b ? SEQUENZA_ORDINI.indexOf(b) : -1;
+  return ia < 0 || ib < 0 ? -1 : Math.abs(ia - ib);
+}
+
 /** True se i due ordini sono consecutivi nella sequenza scolastica. */
 export function ordiniAdiacenti(a?: OrdineScuola | null, b?: OrdineScuola | null): boolean {
-  const ia = a ? SEQUENZA.indexOf(a) : -1;
-  const ib = b ? SEQUENZA.indexOf(b) : -1;
-  return ia >= 0 && ib >= 0 && Math.abs(ia - ib) === 1;
+  return distanzaOrdini(a, b) === 1;
 }
 
 /**

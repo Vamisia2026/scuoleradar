@@ -2,11 +2,11 @@
  * TEST — GRADI AFFINI E CASCATA GENEROSA (§26.141 · §26.144).
  *
  * «Trovare è più importante che scartare»: ogni generosità è un rischio di falso positivo.
- *   · il GRADO AFFINE è proporzionale (82 · 76 · 72 · 70) e vale solo con un ponte
- *     VERO: materia coperta, area affine/contaminata, oppure avviso senza classe in
- *     un ordine vicino. Un'altra materia nello stesso ordine resta fuori;
- *   · il SERBATOIO (ATA 52 · sostegno d'altro ordine 58) non è più un paracadute: è il
- *     CANALE RISERVA della cascata e entra D'UFFICIO in bacheca (§26.144);
+ *   · il GRADO AFFINE è proporzionale (82 · 76 · 72 · 70) e vale solo con un ponte VERO:
+ *     materia coperta, area affine/contaminata, oppure avviso senza classe in un ordine vicino;
+ *   · il SERBATOIO (ATA 52 · sostegno d'altro ordine 58) è il CANALE RISERVA della cascata e
+ *     entra D'UFFICIO in bacheca (§26.144 · §26.145). §26.148: le emergenze non scelte pagano
+ *     −40%, e l'infanzia per chi cerca le superiori è SBARRATA (non un match basso);
  *   · la bacheca conta ciò che fa e la vetrina scarsa (< 3 match pieni) lo dichiara.
  * Il lessico dell'ingestione (keywords e target) ha la sua guardia: `test-lessico-ingestione.ts`.
  * Uso: npm run test:gradi-affini  (incluso in `npm test`)
@@ -103,11 +103,8 @@ const primariaInglese = avviso({
 });
 // La «stessa area» (85) è già la porta d'ingresso di sempre: il grado non la declassa.
 check('EEEE con lingua inglese → già «stessa area»: il grado non la declassa', null, gradoAffine(PROFILO, datiAvviso(primariaInglese)));
-check(
-  'ed è la classe a dirlo (85, la soglia di §26.120)',
-  PUNTEGGIO_CLASSE_ESATTA - PENALITA_CLASSE_STESSA_AREA,
-  punteggioClasse(PROFILO, datiAvviso(primariaInglese))?.punteggio,
-);
+const stessaArea = PUNTEGGIO_CLASSE_ESATTA - PENALITA_CLASSE_STESSA_AREA;
+check('ed è la classe a dirlo (85, la soglia di §26.120)', stessaArea, punteggioClasse(PROFILO, datiAvviso(primariaInglese))?.punteggio);
 
 const senzaClasse = avviso({
   id: 'noclass',
@@ -141,24 +138,32 @@ check('la stessa classe di concorso non passa dal grado (è già un match)', nul
 
 /* -------------- 3) LA CASCATA: SOSTEGNO · ATA ENTRANO D'UFFICIO ------------- */
 
-console.log('\n— 3. Cascata: sostegno/ATA d’ufficio (ordine scelto 80-100 · altro ordine 50-60) —');
+console.log('\n— 3. Cascata: sostegno/ATA d’ufficio, poi la DISTANZA DAL PROFILO (§26.145) —');
 const ata = avviso({ id: 'ata', titolo: 'Avviso di selezione per collaboratore scolastico', classeCodice: '', classiCodes: [], materia: null, ordine: 'ata' });
-const sostegnoAltroOrdine = avviso({ id: 'sost-inf', titolo: 'Interpello sostegno scuola dell’infanzia', classeCodice: 'ADAA', classiCodes: ['ADAA'], materia: 'Sostegno', ordine: 'infanzia' });
+const sostegnoInfanzia = avviso({ id: 'sost-inf', titolo: 'Interpello sostegno scuola dell’infanzia', classeCodice: 'ADAA', classiCodes: ['ADAA'], materia: 'Sostegno', ordine: 'infanzia' });
+const sostegnoAltroOrdine = avviso({ id: 'sost-med', titolo: 'Interpello sostegno secondaria di I grado', classeCodice: 'ADSS', classiCodes: ['ADSS'], materia: 'Sostegno', ordine: 'secondaria1' });
 const sostegnoProprioOrdine = avviso({ id: 'sost-2', titolo: 'Interpello sostegno secondaria di II grado', classeCodice: 'ADSS', classiCodes: ['ADSS'], materia: 'Sostegno', ordine: 'secondaria2' });
-const cascata = (i: Interpello, provincia: 'propria' | 'vicina' | 'fuori' = 'propria') =>
-  voceCascata(PROFILO, datiAvviso(i), provincia);
+const cascata = (i: Interpello, provincia: 'propria' | 'vicina' | 'fuori' = 'propria') => voceCascata(PROFILO, datiAvviso(i), provincia);
 
 check('collaboratore scolastico → è ATA', true, eAvvisoAta(datiAvviso(ata)));
-check('ATA → riserva 52 (l’ordine ATA non è fra quelli scelti)', PUNTEGGIO_RISERVA_ATA, cascata(ata).punteggio);
+// §26.145 — `lib/distanzaProfilo` cambia i voti che si leggono in pagina: +18 di provincia
+// principale (solo sotto 70), poi la scala dell'ordine, il posto e le emergenze (§26.148),
+// tutti MOLTIPLICATIVI.
+check('i voti di partenza sono quelli dichiarati: 52 · 58 · 90 · 86 · 56', [52, 58, 90, 86, 56], [PUNTEGGIO_RISERVA_ATA, PUNTEGGIO_RISERVA_SOSTEGNO, PUNTEGGIO_MERITO_SOSTEGNO, PUNTEGGIO_MERITO_SOSTEGNO_VICINO, PUNTEGGIO_RISERVA_SOSTEGNO_VICINO]);
+check('ATA → 52 +18 di prossimità, −40% di emergenza = 42 (in fondo, com’è giusto)', 42, cascata(ata).punteggio);
 check('…e la fascia è `riserva`, non un match', 'riserva', cascata(ata).fascia);
-check('sostegno di un altro ordine → riserva 58', PUNTEGGIO_RISERVA_SOSTEGNO, cascata(sostegnoAltroOrdine).punteggio);
-check('sostegno nel PROPRIO ordine → merito 90', PUNTEGGIO_MERITO_SOSTEGNO, cascata(sostegnoProprioOrdine).punteggio);
+check('sostegno alle MEDIE → 58 +18, −40% posto, −25% ordine = 34 (ripiego dichiarato)', 34, cascata(sostegnoAltroOrdine).punteggio);
+check('…e sopra la soglia del fondo: la riga resta, non si spaccia per match', false, cascata(sostegnoAltroOrdine).fondo);
+check('sostegno all’INFANZIA → SBARRATO: non c’è nessun voto da leggere', { escluso: true, punteggio: 0 }, { escluso: cascata(sostegnoInfanzia).escluso, punteggio: cascata(sostegnoInfanzia).punteggio });
+check('sostegno nel PROPRIO ordine → 90 −40% del posto = 54 (merito, ma non la propria cattedra)', 54, cascata(sostegnoProprioOrdine).punteggio);
 check('…e la fascia è `merito`', 'merito', cascata(sostegnoProprioOrdine).fascia);
-check('sostegno nel proprio ordine, provincia vicina → merito 86', PUNTEGGIO_MERITO_SOSTEGNO_VICINO, cascata(sostegnoProprioOrdine, 'vicina').punteggio);
-check('sostegno di un altro ordine, provincia vicina → riserva 56', PUNTEGGIO_RISERVA_SOSTEGNO_VICINO, cascata(sostegnoAltroOrdine, 'vicina').punteggio);
+check('sostegno nel proprio ordine, provincia vicina → 86 −40% = 52', 52, cascata(sostegnoProprioOrdine, 'vicina').punteggio);
+check('sostegno alle medie, provincia vicina → 56 +18, poi le due penalità = 33', 33, cascata(sostegnoAltroOrdine, 'vicina').punteggio);
 check('la classe ESATTA vince sul canale sostegno', PUNTEGGIO_CLASSE_ESATTA, cascata(avviso({})).punteggio);
 check('profilo senza classi → decide il motore (`motore`)', 'motore', voceCascata({ province: ['AT'], classi: [] }, datiAvviso(senzaClasse), 'propria').fascia);
-check('nessuna voce esce dalla forbice dichiarata (50-100)', true, [cascata(ata), cascata(sostegnoAltroOrdine), cascata(sostegnoProprioOrdine)].every((v) => v.punteggio >= 50 && v.punteggio <= 100));
+const voci = [cascata(ata), cascata(sostegnoAltroOrdine), cascata(sostegnoProprioOrdine)];
+check('nessuna voce esce dalla forbice dichiarata (1-100)', true, voci.every((v) => v.punteggio >= 1 && v.punteggio <= 100));
+check('sotto 20 solo con una penalità dichiarata (`penalita > 0`)', true, voci.every((v) => v.punteggio >= 20 || v.penalita > 0));
 check('la scala del perimetro resta quella della geografia', true, scalaParacadute(PROFILO, datiAvviso(ata)).ammessa);
 
 /* ------------------- 4) LA BACHECA VERA: D'UFFICIO, NON IN SCORTA ---------- */
@@ -166,14 +171,18 @@ check('la scala del perimetro resta quella della geografia', true, scalaParacadu
 console.log('\n— 4. Bacheca: la riserva entra, il merito resta, l’estranea resta fuori —');
 const soloAta = bachecaInterpelli([ata], PROFILO);
 check('solo ATA in provincia → entra in bacheca (d’ufficio)', ['ata'], soloAta.lista.map((r) => r.id));
-check('col punteggio della riserva (52)', PUNTEGGIO_RISERVA_ATA, soloAta.lista[0]?.compatibilita);
+check('col voto della riserva più il bonus, meno l’emergenza (52 +18 −40% = 42)', 42, soloAta.lista[0]?.compatibilita);
 check('e non è più un ripiego: la scorta non esiste', undefined, soloAta.lista[0]?.ripiego);
 check('la voce è contata fra le riserve', 1, soloAta.riserveInBacheca);
 
 const soloSostegno = bachecaInterpelli([sostegnoAltroOrdine], PROFILO);
-check('sostegno di un altro ordine → 58 in bacheca', PUNTEGGIO_RISERVA_SOSTEGNO, soloSostegno.lista[0]?.compatibilita);
+check('sostegno alle medie → 34 in bacheca: riserva dichiarata, non un match', 34, soloSostegno.lista[0]?.compatibilita);
 check('e non è un «senza affinità»: non si butta', 0, soloSostegno.senzaAffinitaClasse);
 check('il motivo dichiara l’ingresso d’ufficio', true, /d'ufficio/.test(soloSostegno.lista[0]?.motivoCompatibilita ?? ''));
+
+const sbarraInfanzia = bachecaInterpelli([sostegnoInfanzia], PROFILO);
+check('sostegno all’infanzia → NON entra: la riga non si mostra affatto', 0, sbarraInfanzia.lista.length);
+check('…e lo scarto è contato, non silenzioso', 1, sbarraInfanzia.esclusiOrdineEstremo);
 
 const estranea = bachecaInterpelli([matematica], PROFILO);
 check('classe estranea (matematica per un profilo di lingue) → bacheca vuota', 0, estranea.lista.length);
@@ -204,8 +213,7 @@ check('il consiglio è il copy esatto della direttiva 03/11/2026', 'Le opportuni
 /* --------------------- 6) CABLAGGIO: UN SOLO METRO ------------------------ */
 
 console.log('\n— 6. Cablaggio: un solo metro (bacheca → cascata) —');
-const bacheca = leggi('src/lib/bachecaInterpelli.ts');
-const ripiego = leggi('src/lib/bachecaRipiego.ts');
+const bacheca = leggi('src/lib/bachecaInterpelli.ts'), ripiego = leggi('src/lib/bachecaRipiego.ts');
 const cascataSrc = leggi('src/lib/cascataGenerosa.ts');
 const esito = `${bacheca}\n${ripiego}`;
 check('la bacheca usa la cascata', true, /voceCascata\(profilo, avviso, scala\.provincia\)/.test(bacheca));
@@ -213,11 +221,7 @@ check('e il perimetro geografico come unico sbarramento', true, /scalaParacadute
 check('il grado affine vive nella cascata', true, /gradoAffine\(profilo, avviso\)/.test(cascataSrc));
 check('la decisione non passa più da `esitoRiga`', false, /esitoRiga\(/.test(esito));
 check('nessun cap e nessun paracadute: la cascata non lascia vuoti', false, /paracaduteCinque\(|limitaRiempitivi\(/.test(bacheca));
-check(
-  'i conti della cascata sono dichiarati nell’esito',
-  true,
-  /meritoInBacheca: number/.test(ripiego) && /tolleranzaInBacheca: number/.test(ripiego) && /riserveInBacheca: number/.test(ripiego),
-);
+check('i conti della cascata sono dichiarati nell’esito', true, ['merito', 'tolleranza', 'riserve'].every((k) => new RegExp(`${k}InBacheca: number`).test(ripiego)));
 
 const vetrina = leggi('src/pages/dashboard/components/ElencoOpportunita.tsx');
 check('la vetrina usa il giudizio condiviso', true, /bachecaScarsa\(lista\)/.test(vetrina));
@@ -231,10 +235,7 @@ check('guardia nella catena di `npm test`', true, /scripts\/test-gradi-affini\.t
 
 console.log('\n— 7. Modulo puro, verificabile senza browser —');
 const sorgente = leggi('src/lib/gradiAffini.ts');
-const codice = sorgente
-  .split('\n')
-  .filter((linea) => !linea.trim().startsWith('//') && !linea.trim().startsWith('*'))
-  .join('\n');
+const codice = sorgente.split('\n').filter((linea) => !/^\s*(\/\/|\*)/.test(linea)).join('\n');
 check('nessuna rete', false, /\bfetch\(|axios|supabase/i.test(codice));
 check('nessun node:* (importabile dal browser)', false, /from\s+'node:/i.test(codice));
 check('sotto il tetto di 250 righe', true, sorgente.split('\n').length <= 250);

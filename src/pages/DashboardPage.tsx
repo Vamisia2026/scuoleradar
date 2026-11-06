@@ -12,6 +12,7 @@ import { BenvenutoProRadar, PreferenzeRadar, RadarStatusToggle } from '@/departm
 import { ProFeatureModal } from '@/components/ProFeatureModal';
 import { useApp } from '@/contexts/AppContext';
 import { BannerBozzaOnboarding } from './dashboard/components/BannerBozzaOnboarding';
+import { BannerTelemetriaScansione } from './dashboard/components/BannerTelemetriaScansione';
 import { ElencoOpportunita } from './dashboard/components/ElencoOpportunita';
 import { VetrinaRadarOspiti } from './dashboard/components/VetrinaRadarOspiti';
 import { vetrinaVisibile } from '@/lib/vetrinaBacheca';
@@ -94,6 +95,11 @@ export function DashboardPage() {
 
       {/* Preferenze Radar — impostazioni e filtri del profilo (bacheca unificata) */}
       {user && <PreferenzeRadar />}
+
+      {/* Freschezza degli albi: se l'ultimo giro è vecchio o ha lasciato fonti
+          isolate, va detto PRIMA della bacheca (la bacheca è incompleta, non vuota).
+          Solo con sessione: la Edge `crawler-admin` autorizza `stato` col JWT. */}
+      {user && <BannerTelemetriaScansione />}
 
       {/* Opportunità mappate — accordion console (chiuso di default; paywall modal per Base) */}
       <ElencoOpportunita

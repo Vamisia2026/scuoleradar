@@ -23,11 +23,13 @@
  *      con la classe agganciata (≥ 85, merito), col grado affine o col ponte disciplinare
  *      (tolleranza 82 · 76 · 72 · 70). **L'unico scarto di merito** è l'incompatibilità
  *      semantica evidente (Musica vs Spagnolo): due temi noti che non si toccano;
- *   5. **punteggio**: `max(voto del motore, pavimento della cascata)`. Il voto a due livelli
- *      (§26.63 · §26.64) resta com'è; la cascata non lo abbassa mai, rialza solo ciò che il
- *      motore non sapeva leggere. Nessun cap e nessun paracadute: non c'è più una coda di
- *      «riempitivi» da dosare né una vetrina da riempire — la cascata garantisce la densità
- *      e la scarsità la dichiara la pagina (§26.141, `bachecaScarsa`).
+ *   5. **punteggio**: `max(voto del motore, pavimento della cascata)` — con l'eccezione di
+ *      §26.145: quando la DISTANZA DAL PROFILO (`lib/distanzaProfilo`) ha abbassato il voto
+ *      (`voce.tetto`), quel numero è un limite e il motore non lo rialza. Il voto a due
+ *      livelli (§26.63 · §26.64) resta com'è; la cascata rialza solo ciò che il motore non
+ *      sapeva leggere. Nessun cap e nessun paracadute: non c'è più una coda di «riempitivi»
+ *      da dosare né una vetrina da riempire — la cascata garantisce la densità e la scarsità
+ *      la dichiara la pagina (§26.141, `bachecaScarsa`).
  *
  * Perché è un modulo PURO e non codice dentro l'hook: la stessa logica serve a guardie e
  * verifiche senza React, e `useInterpelliFeed` resta un contenitore di stato e fetch.
@@ -83,6 +85,8 @@ export function bachecaInterpelli(
   let senzaAffinitaClasse = 0;
   /** §26.144 — righe fuori dal perimetro: province scelte + raggio dei 60 km. */
   let fuoriPerimetro = 0;
+  /** §26.148 — righe SBARRATE: terzo gradino di ordine (infanzia ↔ superiori). */
+  let esclusiOrdineEstremo = 0;
   /** §26.131 — righe che parlano di sostegno senza dichiarare un reclutamento. */
   let sostegnoAmbiguoScartato = 0;
   /** §26.144 — righe entrate per MERITO (sostegno/ATA nell'ordine scelto, classe ≥ 85). */
@@ -91,6 +95,8 @@ export function bachecaInterpelli(
   let tolleranzaInBacheca = 0;
   /** §26.144 — righe entrate di RISERVA (sostegno/ATA d'altro ordine, classe ignota). */
   let riserveInBacheca = 0;
+  /** §26.145 — righe sotto la soglia del fondo: restano, ma la card le dichiara. */
+  let fondoInBacheca = 0;
 
   for (const i of fonti) {
     // §26.71 — REGOLA FERREA: senza una scadenza dichiarata e non ancora passata la riga
@@ -141,6 +147,13 @@ export function bachecaInterpelli(
 
     // §26.144 — CASCATA: come la riga si guadagna la bacheca (merito · tolleranza · riserva).
     const voce = voceCascata(profilo, avviso, scala.provincia);
+    // §26.148 — SBARRAMENTO DI ORDINE: al terzo gradino (infanzia ↔ superiori) la riga non è
+    // un match basso, è un altro mestiere: non si mostra, non si conta fra le riserve, non
+    // finisce in coda. La whitelist resta l'unica eccezione (l'utente ha chiesto quella scuola).
+    if (voce.escluso && !scuole.preferita) {
+      esclusiOrdineEstremo += 1;
+      continue;
+    }
     if (voce.fascia === 'incompatibile' && !scuole.preferita) {
       senzaAffinitaClasse += 1;
       continue;
@@ -160,12 +173,18 @@ export function bachecaInterpelli(
     if (voce.fascia === 'merito') meritoInBacheca += 1;
     else if (voce.fascia === 'tolleranza') tolleranzaInBacheca += 1;
     else if (voce.fascia === 'riserva') riserveInBacheca += 1;
+    // §26.145 — la riga resta (è nella zona dell'utente) ma è dichiarata «Fondo Convento».
+    if (voce.fondo) fondoInBacheca += 1;
 
     // RISERVA: il voto è quello dichiarato dalla cascata (50-60). Le modali del motore
     // misurerebbero qui il «salto» di ordine e la classe estranea, non l'affinità.
     // MERITO e TOLLERANZA: pavimento della cascata, mai sotto il voto del motore.
+    // §26.145 — se la DISTANZA DAL PROFILO ha abbassato il voto (`tetto`), quel numero è
+    // un limite: il motore non misura la distanza di ordine, quindi non può rialzarlo.
     const punteggio =
-      voce.fascia === 'riserva' ? voce.punteggio : Math.max(valutazione.punteggio, voce.punteggio);
+      voce.fascia === 'riserva' || voce.tetto
+        ? voce.punteggio
+        : Math.max(valutazione.punteggio, voce.punteggio);
     // Il tooltip spiega il numero MOSTRATO: se il voto non è quello del motore (o se il
     // motore aveva escluso la riga) i suoi motivi descriverebbero un altro numero.
     const motivi = punteggio === valutazione.punteggio && !valutazione.escluso ? undefined : [];
@@ -188,9 +207,11 @@ export function bachecaInterpelli(
     forzate,
     senzaAffinitaClasse,
     fuoriPerimetro,
+    esclusiOrdineEstremo,
     sostegnoAmbiguoScartato,
     meritoInBacheca,
     tolleranzaInBacheca,
     riserveInBacheca,
+    fondoInBacheca,
   };
 }

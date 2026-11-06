@@ -170,7 +170,7 @@ async function main(): Promise<void> {
       `contorno: ${bacheca.righeNonOpportunita} · blacklist: ${bacheca.esclusiBlacklist} · ` +
       `merito: ${bacheca.meritoInBacheca} · tolleranza: ${bacheca.tolleranzaInBacheca} · ` +
       `riserve: ${bacheca.riserveInBacheca} · senza affinità: ${bacheca.senzaAffinitaClasse} · ` +
-      `fuori perimetro: ${bacheca.fuoriPerimetro} · ` +
+      `fuori perimetro: ${bacheca.fuoriPerimetro} · ordine estremo: ${bacheca.esclusiOrdineEstremo} · ` +
       `sostegno ambiguo scartato: ${bacheca.sostegnoAmbiguoScartato}`,
   );
 

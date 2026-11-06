@@ -17,23 +17,20 @@
  *                        (Musica vs Spagnolo). Non è un punteggio basso: è un'assenza di ponte;
  *   5. `motore`        — profilo senza classi (solo competenze): decide la porta del motore.
  *
- * Il voto della card è `max(voto del motore, pavimento della cascata)`: un match già misurato non
- * si abbassa, si rialza solo ciò che il motore non sapeva leggere. La forbice visibile resta
- * 50-100, con la pillola azzurrino soft di `lib/compatibilita`: nessun contrassegno rosso o di
- * scarto in bacheca.
+ * §26.145 — LA DISTANZA DAL PROFILO. La fascia dice PERCHÉ la riga entra; il voto dice QUANTO
+ * somiglia al profilo, e da qui in poi lo dice davvero: `lib/distanzaProfilo` toglie −25% e −55%
+ * per l'ordine di scuola lontano, −40% per un posto di sostegno fuori dalle proprie classi e
+ * −40% alle categorie d'emergenza (ATA, CPIA, serali, PON) non scelte, aggiunge +18% nella
+ * provincia principale e dichiara «Fondo Convento / Ripiego» ciò che finisce sotto 20. Con una
+ * penalità il voto diventa un TETTO (`tetto`): il `max(voto del motore, pavimento)` di
+ * `bachecaInterpelli` non può più rialzarlo. §26.148 — al TERZO gradino di ordine non c'è voto:
+ * la voce esce con `escluso` e la bacheca non la mostra (infanzia per chi cerca le superiori).
  *
  * Modulo PURO: nessuna rete, nessun `node:*`. Guardia: `npm run test:cascata` (in `npm test`).
  */
-import { classeByCodice } from '../data/classiConcorso';
 import type { OrdineScuola } from '../data/ordiniMaterie';
-import { areeDi, areeInComune, ponteTraAree } from './areeDisciplinari';
-import {
-  PUNTEGGIO_GRADO_AFFINE_AREA,
-  PUNTEGGIO_GRADO_AFFINE_MATERIA,
-  PUNTEGGIO_GRADO_AFFINE_PONTE,
-  eAvvisoAta,
-  gradoAffine,
-} from './gradiAffini';
+import { applicaDistanza } from './distanzaProfilo';
+import { eAvvisoAta, gradoAffine } from './gradiAffini';
 import {
   avvisoDiSostegno,
   normalizzaClassi,
@@ -41,6 +38,7 @@ import {
   type AvvisoCompatibilita,
   type ProfiloCompatibilita,
 } from './matchingEngine';
+import { incompatibilitaSemantica, ponteTolleranza } from './ponteDisciplinare';
 import {
   PENALITA_CLASSE_STESSA_AREA,
   PUNTEGGIO_CLASSE_ESATTA,
@@ -48,6 +46,14 @@ import {
   punteggioClasse,
 } from './punteggioClasse';
 import { alternativaReligione, type StatoProvinciaScala } from './scalaParacadute';
+
+/**
+ * Il PONTE DISCIPLINARE vive in `lib/ponteDisciplinare` dallo 05/11/2026 (la cascata era al
+ * tetto delle 250 righe): qui resta il contratto pubblico, così chi legge la cascata trova le
+ * due funzioni dove le ha sempre trovate.
+ */
+export { incompatibilitaSemantica, ponteTolleranza };
+
 /** Sostegno/alternativa nell'ordine scelto: 90 nella provincia, 86 entro il raggio. */
 export const PUNTEGGIO_MERITO_SOSTEGNO = 90;
 export const PUNTEGGIO_MERITO_SOSTEGNO_VICINO = 86;
@@ -73,10 +79,56 @@ export interface VoceCascata {
   punteggio: number;
   /** Motivo scritto nel tooltip della card (`''` = niente da dichiarare). */
   etichetta: string;
+  /** §26.145 — punti percentuali tolti dalla DISTANZA DAL PROFILO (0 = nessuna). */
+  penalita: number;
+  /** §26.145 — punti percentuali aggiunti dal BONUS di provincia principale (0 = nessuno). */
+  bonus: number;
+  /** §26.145 — true = voto sotto la soglia del fondo: la card la dichiara «Fondo Convento». */
+  fondo: boolean;
+  /**
+   * §26.148 — true = SBARRATA: l'ordine è al terzo gradino (infanzia ↔ superiori) e la riga
+   * non entra in bacheca. Non è un voto basso: è un altro mestiere, e `punteggio` vale 0.
+   */
+  escluso: boolean;
+  /**
+   * §26.145 — true = una penalità ha già abbassato il voto: è un TETTO, il motore non
+   * può rialzarlo (`bachecaInterpelli`). Senza questo flag la correzione sarebbe aggirata
+   * dal `max(voto del motore, pavimento)` che tiene alti i match veri.
+   */
+  tetto: boolean;
 }
 /** True se l'avviso cade nella provincia dell'utente (o il profilo non ne dichiara). */
 function inProvincia(provincia: StatoProvinciaScala): boolean {
   return provincia === 'propria' || provincia === 'non-applicabile';
+}
+
+/**
+ * §26.145 — VESTE una voce della cascata con la DISTANZA DAL PROFILO: bonus di prossimità,
+ * penalità di ordine di scuola e di posto di sostegno, soglia del fondo. Un solo punto di
+ * passaggio: nessuna uscita della cascata può «scordarsi» la correzione, e la fascia (il
+ * PERCHÉ la riga entra) resta distinta dal voto (QUANTO somiglia al profilo).
+ */
+function voce(
+  profilo: ProfiloCompatibilita,
+  avviso: AvvisoCompatibilita,
+  fascia: FasciaCascata,
+  canale: CanaleCascata,
+  punteggio: number,
+  etichetta: string,
+): VoceCascata {
+  const distanza = applicaDistanza(punteggio, profilo, avviso);
+  return {
+    fascia,
+    canale,
+    punteggio: distanza.punteggio,
+    penalita: distanza.penalita,
+    bonus: distanza.bonus,
+    fondo: distanza.fondo,
+    escluso: distanza.escluso,
+    // §26.148 — una riga SBARRATA non è un tetto: non c'è voto da difendere, la riga esce.
+    tetto: !distanza.escluso && distanza.penalita > 0,
+    etichetta: [etichetta, distanza.motivo].filter(Boolean).join(' · '),
+  };
 }
 
 /** True se l'ordine dell'avviso è fra quelli SCELTI (profilo senza ordini = nessun vincolo). */
@@ -90,73 +142,13 @@ function ordineScelto(
   return ordine !== null && ordini.includes(ordine);
 }
 
-/** Denominazione + materie di una classe del catalogo (`[]` = codice sconosciuto). */
-function materieDi(codice: string): string[] {
-  const classe = classeByCodice(codice);
-  return classe ? [classe.denominazione, ...classe.materie] : [];
-}
-
-/** Testo su cui si cercano i temi: titolo, materia e classi dell'avviso. */
-function testoAvviso(avviso: AvvisoCompatibilita): string {
-  const classi = (avviso.classi ?? []).flatMap((c) => {
-    const proprie = materieDi(c);
-    return proprie.length > 0 ? proprie : [c];
-  });
-  return [avviso.titolo, avviso.materia, ...classi].filter(Boolean).join(' ');
-}
-
-/** Testo delle PROPRIE classi (denominazioni + materie del catalogo). */
-const testoClassi = (classi: readonly string[]): string => classi.flatMap(materieDi).join(' ');
-
-/**
- * PONTE DISCIPLINARE senza il vincolo dell'ordine di scuola (`null` = nessun ponte): la stessa
- * scala del grado affine (82 area comune · 76 ponte affine · 72 contaminata) applicata anche
- * quando l'avviso non dichiara un ordine vicino. La semantica non si riscrive: si toglie un
- * requisito che non è merito.
- */
-export function ponteTolleranza(
-  profilo: ProfiloCompatibilita,
-  avviso: AvvisoCompatibilita,
-): { punteggio: number; etichetta: string } | null {
-  const areeProfilo = areeDi(testoClassi(normalizzaClassi(profilo.classi)));
-  const areeAvviso = areeDi(testoAvviso(avviso));
-  const comuni = areeInComune(areeProfilo, areeAvviso);
-  if (comuni.length > 0) {
-    return {
-      punteggio: PUNTEGGIO_GRADO_AFFINE_MATERIA,
-      etichetta: `tolleranza ampia: stessa area disciplinare (${comuni.join(', ')})`,
-    };
-  }
-  const ponte = ponteTraAree(areeProfilo, areeAvviso);
-  if (!ponte) return null;
-  return {
-    punteggio: ponte.livello === 'affine' ? PUNTEGGIO_GRADO_AFFINE_PONTE : PUNTEGGIO_GRADO_AFFINE_AREA,
-    etichetta: `tolleranza ampia: area ${ponte.livello} (${ponte.etichetta})`,
-  };
-}
-
-/**
- * INCOMPATIBILITÀ SEMANTICA EVIDENTE — l'unica ragione di scarto di merito. Serve un tema
- * riconosciuto da ENTRAMBE le parti: se il catalogo non sa dire di che cosa parlano le classi
- * dell'avviso (o le proprie), non si giudica e la riga resta (buttadentro). Con due temi noti,
- * nessuna area in comune e nessun ponte, l'avviso parla d'altro: è il caso «Musica vs Spagnolo».
- */
-export function incompatibilitaSemantica(
-  profilo: ProfiloCompatibilita,
-  avviso: AvvisoCompatibilita,
-): boolean {
-  const areeProfilo = areeDi(testoClassi(normalizzaClassi(profilo.classi)));
-  const areeAvviso = areeDi(testoAvviso(avviso));
-  if (areeProfilo.size === 0 || areeAvviso.size === 0) return false;
-  return areeInComune(areeProfilo, areeAvviso).length === 0 && ponteTraAree(areeProfilo, areeAvviso) === null;
-}
-
 /**
  * LA CASCATA: la fascia con cui un avviso GEOGRAFICAMENTE PERTINENTE entra in bacheca.
  *
  * `provincia` arriva già decisa dal perimetro (`lib/scalaParacadute`): qui non si esclude
- * nessuno per geografia — l'unico esito negativo è `incompatibile`, cioè un'assenza di ponte
- * dichiarata. Ordine dei giudizi (uno solo, nessuna eccezione nascosta):
+ * nessuno per geografia. Due soli esiti negativi, tutti dichiarati: `incompatibile` (un'assenza
+ * di ponte, §26.144) e `escluso` (il terzo gradino di ordine, §26.148). Ordine dei giudizi (uno
+ * solo, nessuna eccezione nascosta):
  *
  *   0. **classe ESATTA** — il match pieno vince su tutto: anche un profilo ATA col suo codice
  *      resta al 100, e un avviso di sostegno con una classe `AD…` propria è un match vero;
@@ -178,12 +170,8 @@ export function voceCascata(
   // così chi ha una classe `AD…` propria (o un profilo ATA col suo codice) resta al 100.
   const esatta = classiAvviso.find((codice) => classiProfilo.includes(codice));
   if (esatta) {
-    return {
-      fascia: 'merito',
-      canale: 'classe',
-      punteggio: PUNTEGGIO_CLASSE_ESATTA,
-      etichetta: `classe di concorso: ${etichettaClasse(esatta)}`,
-    };
+    const etichetta = `classe di concorso: ${etichettaClasse(esatta)}`;
+    return voce(profilo, avviso, 'merito', 'classe', PUNTEGGIO_CLASSE_ESATTA, etichetta);
   }
 
   // 1) SOSTEGNO · ALTERNATIVA ALLA RELIGIONE · ATA — d'ufficio, senza classe.
@@ -193,57 +181,45 @@ export function voceCascata(
     const nome = ata ? 'bando per il personale ATA' : 'sostegno / alternativa alla Religione';
     const proprio = inProvincia(provincia);
     if (ordineScelto(profilo, avviso)) {
-      return {
-        fascia: 'merito',
-        canale,
-        punteggio: proprio ? PUNTEGGIO_MERITO_SOSTEGNO : PUNTEGGIO_MERITO_SOSTEGNO_VICINO,
-        etichetta: `${nome}: ordine di scuola che hai scelto`,
-      };
+      const punteggio = proprio ? PUNTEGGIO_MERITO_SOSTEGNO : PUNTEGGIO_MERITO_SOSTEGNO_VICINO;
+      return voce(profilo, avviso, 'merito', canale, punteggio, `${nome}: ordine di scuola che hai scelto`);
     }
     const riserva = ata
       ? proprio ? PUNTEGGIO_RISERVA_ATA : PUNTEGGIO_RISERVA_ATA_VICINO
       : proprio ? PUNTEGGIO_RISERVA_SOSTEGNO : PUNTEGGIO_RISERVA_SOSTEGNO_VICINO;
-    return {
-      fascia: 'riserva',
-      canale,
-      punteggio: riserva,
-      etichetta: `${nome}: entra d'ufficio, fuori dall'ordine di scuola che hai scelto`,
-    };
+    const etichetta = `${nome}: entra d'ufficio, fuori dall'ordine di scuola che hai scelto`;
+    return voce(profilo, avviso, 'riserva', canale, riserva, etichetta);
   }
 
   // 2) PROFILO SENZA CLASSI — solo competenze e parole chiave: decide il motore.
   if (classiProfilo.length === 0) {
-    return { fascia: 'motore', canale: 'nessuno', punteggio: 0, etichetta: '' };
+    return voce(profilo, avviso, 'motore', 'nessuno', 0, '');
   }
 
   // 3) CLASSE AGGANCIATA — esatta, affine, materia coperta o stessa area: è merito.
   const classe = punteggioClasse(profilo, avviso);
   if (classe !== null && classe.punteggio >= SOGLIA_MERITO_CLASSE) {
-    return { fascia: 'merito', canale: 'classe', punteggio: classe.punteggio, etichetta: classe.motivo };
+    return voce(profilo, avviso, 'merito', 'classe', classe.punteggio, classe.motivo);
   }
 
   // 4) GRADO AFFINE — la materia o l'area si toccano e l'ordine di scuola è vicino.
   const grado = gradoAffine(profilo, avviso);
   if (grado) {
-    return { fascia: 'tolleranza', canale: 'affine', punteggio: grado.punteggio, etichetta: grado.etichetta };
+    return voce(profilo, avviso, 'tolleranza', 'affine', grado.punteggio, grado.etichetta);
   }
 
   // 5) PONTE DISCIPLINARE — la stessa area, anche senza un ordine di scuola vicino.
   const ponte = ponteTolleranza(profilo, avviso);
   if (ponte) {
-    return { fascia: 'tolleranza', canale: 'affine', punteggio: ponte.punteggio, etichetta: ponte.etichetta };
+    return voce(profilo, avviso, 'tolleranza', 'affine', ponte.punteggio, ponte.etichetta);
   }
 
   // 7) INCOMPATIBILITÀ EVIDENTE — due temi noti che non si toccano: l'unico scarto.
   if (incompatibilitaSemantica(profilo, avviso)) {
-    return { fascia: 'incompatibile', canale: 'nessuno', punteggio: 0, etichetta: '' };
+    return voce(profilo, avviso, 'incompatibile', 'nessuno', 0, '');
   }
 
   // 6) CLASSE NON RICONOSCIUTA — il catalogo non sa dire di che cosa parla: si tiene.
-  return {
-    fascia: 'riserva',
-    canale: 'classe',
-    punteggio: PUNTEGGIO_RISERVA_CLASSE_IGNOTA,
-    etichetta: 'classe non riconosciuta: entra d’ufficio, da verificare',
-  };
+  const etichetta = 'classe non riconosciuta: entra d’ufficio, da verificare';
+  return voce(profilo, avviso, 'riserva', 'classe', PUNTEGGIO_RISERVA_CLASSE_IGNOTA, etichetta);
 }
