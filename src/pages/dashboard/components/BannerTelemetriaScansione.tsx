@@ -1,12 +1,13 @@
 /**
- * Bacheca · IL RADAR STA LAVORANDO (§26.146 · §26.149 · §26.150).
+ * Bacheca · IL RADAR STA LAVORANDO (§26.146 · §26.149 · §26.150 · §26.151).
  *
  * Perché sopra la bacheca: le opportunità mostrate sono quelle che l'ultimo ciclo di
- * ingestione è riuscito a leggere. Da §26.150 il riquadro non è più un referto con il
- * dettaglio di ciò che manca — è una **prova di lavoro**: quante pagine il radar ha letto
- * nelle ultime 24 ore, quante fonti ha chiuso senza errori, quante opportunità attive ne sono
- * uscite, su quante province, e da quanto ha parlato l'ultimo giro (in minuti o in ore, mai in
- * giorni). Il badge verde `LIVE` con il pallino che pulsa è lo stato; il resto sono i numeri.
+ * ingestione è riuscito a leggere. Da §26.151 il riquadro parla come una persona e non come un
+ * referto — «Ultimo controllo: oggi alle 14:06 · 502 bacheche scolastiche controllate nelle
+ * ultime 24 ore · 478 avvisi scartati perché fuori tema» — e quando il radar riposa lo dice:
+ * il badge `STANDBY` compare di notte, il sabato e la domenica, con la ripresa («domattina alle
+ * 08:00» oppure «lunedì mattina»). Un orario di lavoro non è un guasto, e il banner non deve
+ * far credere il contrario.
  *
  * Le fonti temporaneamente sorde (quarantena, errori per fonte) NON compaiono qui: sono
  * materia del pannello Admin — la Linea Rossa, §26.110 — e in una vetrina che deve dire «sto
@@ -20,12 +21,16 @@
  *
  * §26.149 — LA FRESCHEZZA SI RILEGGE, NON SI SIMULA. L'orologio interno ricalcola ogni mezzo
  * minuto «14 minuti fa» (nessuna chiamata), e lo stato vero si rilegge ogni cinque minuti e al
- * ritorno sulla scheda: il ciclo del worker è orario, quindi il numero mostrato invecchia di
- * minuti, non di giorni. Non esiste alcun percorso che scriva un istante finto al posto di
- * quello letto.
+ * ritorno sulla scheda: il ciclo del worker è orario dentro la finestra feriale, quindi il
+ * numero mostrato invecchia di minuti, non di giorni. Non esiste alcun percorso che scriva un
+ * istante finto al posto di quello letto.
+ *
+ * L'OROLOGIO DEL COMPONENTE NON DECIDE NIENTE. `adesso` viene passato alla lib, che è l'unica
+ * a sapere che ora è in Italia (`finestraScansione`): un browser rimasto su un altro fuso
+ * vede lo stesso standby di un browser ad Asti.
  */
 import { useEffect, useState } from 'react';
-import { Activity, Radar, RefreshCw, ShieldCheck, type LucideIcon } from 'lucide-react';
+import { Activity, Moon, Radar, RefreshCw, ShieldCheck, type LucideIcon } from 'lucide-react';
 import { leggiTelemetriaCrawler, type TelemetriaCrawler } from '@/services/crawlerTelemetry';
 import { bannerScansione, type TonoScansione } from '@/lib/telemetriaScansione';
 
@@ -45,10 +50,18 @@ interface VesteTono {
 }
 
 /**
- * Veste dei quattro toni. Nessun fondo da «errore» e nessuna icona di divieto: il verde è lo
- * stato in diretta, l'azzurro il servizio operativo, l'ambra tenue l'attesa.
+ * Veste dei cinque toni. Nessun fondo da «errore» e nessuna icona di divieto: l'azzurro-verde è
+ * lo stato in diretta, l'azzurro il servizio operativo, l'ambra tenue l'attesa, il grigio la
+ * luna dello standby (il radar riposa, non è guasto).
  */
 const VESTE: Record<TonoScansione, VesteTono> = {
+  standby: {
+    barra: 'border-l-primary-200',
+    icona: 'bg-primary-50 text-primary-400',
+    badge: 'bg-primary-50 text-primary-500',
+    pallino: 'bg-primary-300',
+    Icona: Moon,
+  },
   live: {
     barra: 'border-l-accent-500',
     icona: 'bg-accent-100 text-accent-700',
@@ -151,7 +164,7 @@ export function BannerTelemetriaScansione({ attivo = true, telemetria }: Props) 
           </div>
           <p className="mt-1 text-[11px] leading-relaxed text-primary-600">{banner.dettaglio}</p>
           {banner.misure.length > 0 && (
-            <dl className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <dl className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
               {banner.misure.map((m) => (
                 <div key={m.etichetta} className="rounded-xl bg-primary-50/70 px-2.5 py-1.5">
                   <dt className="text-[9px] font-semibold uppercase tracking-wider text-primary-500">

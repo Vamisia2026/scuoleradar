@@ -197,7 +197,10 @@ check(
 );
 check('feed: delega alla bacheca pura', true, /bachecaInterpelli\(/.test(feed));
 check('bacheca: applica il punteggio delle modali', true, /valutaCompatibilita\(/.test(bacheca));
-check('bacheca: prima la compatibilità, poi la scadenza', true, /const ca = a\.compatibilita \?\? 100;/.test(dashboard));
+// §26.152 — l'ordine vive in `lib/ordineVetrina`: fascia (match vs riempitivo) prima,
+// poi voto e scadenza. I criteri sono nella guardia dedicata `npm run test:ordine-vetrina`.
+check('bacheca: prima la compatibilità, poi la scadenza', true,
+  /ordinaVetrina\(vetrinaVisibile\(interpelliFiltrati\)/.test(dashboard));
 const elencoOpportunita = leggi('src/pages/dashboard/components/ElencoOpportunita.tsx');
 check(
   'vetrina «Opportunità mappate»: colore del match dalla banda condivisa',

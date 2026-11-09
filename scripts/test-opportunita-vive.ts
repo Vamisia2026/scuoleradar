@@ -164,10 +164,16 @@ check(
   true,
   /bachecaInterpelli\(/.test(feed) && /valutaCompatibilita\(/.test(bachecaFeed) && /punteggioCompatibilita\(/.test(graduata),
 );
+// §26.152 — l'ordine non è più un `sort` inline in pagina: vive nel modulo puro
+// `lib/ordineVetrina`, dove la fascia (match vs riempitivo, soglia arancio 70) viene
+// PRIMA di ogni altro criterio. Il sostegno extra vale 60 → riempitivo → in coda.
+const ordineVetrina = leggi('src/lib/ordineVetrina.ts');
 check(
   'bacheca: i match forti prima, il sostegno extra in coda',
   true,
-  /const ca = a\.compatibilita \?\? 100;/.test(dashboard),
+  /ordinaVetrina\(vetrinaVisibile\(interpelliFiltrati\)/.test(dashboard) &&
+    /if \(a\.fascia !== b\.fascia\) return a\.fascia - b\.fascia;/.test(ordineVetrina) &&
+    /SOGLIA_COMPATIBILITA_ARANCIO/.test(ordineVetrina),
 );
 check(
   'guardia dedicata nella catena',

@@ -1,5 +1,5 @@
 # ============================================================
-# Ciclo ORARIO della coda di scansione — il radar non dorme (§26.149)
+# Ciclo ORARIO della coda di scansione — feriali 08:00–17:00 (§26.149 · §26.151)
 #
 # Perché esiste: fino a §26.148 l'unico giro automatico era `scraper.yml`
 # (tre volte al giorno, lun-ven). Il banner della bacheca mostrava quindi
@@ -7,11 +7,31 @@
 # allungava il silenzio — e un numero vecchio, sopra l'elenco, si legge come
 # un errore del sistema. Non era un difetto del copy: era la cadenza.
 #
+# §26.151 — LA CADENZA HA UN ORARIO. Fino a §26.150 questo workflow girava
+# ventiquattro ore su ventiquattro, anche di domenica: consumava quota GitHub
+# e bussava a bacheche che a mezzanotte non pubblicano niente. Da §26.151 il
+# ciclo gira DAL LUNEDÌ AL VENERDÌ, DALLE 08:00 ALLE 17:00 (ora italiana),
+# cioè quando gli uffici scolastici scrivono davvero. Fuori da quella finestra
+# il radar riposa — e il banner lo dice (`standby`, con l'ora della ripresa),
+# invece di far sembrare un orario di lavoro un guasto.
+#
+# COME SI TIENE LA FINESTRA IN ORA ITALIANA. Il cron di GitHub parla UTC e non
+# conosce l'ora legale, quindi: la schedule copre 06:00–15:00 UTC (che in
+# Italia sono le 07:00–16:00 d'inverno e le 08:00–17:00 d'estate) e il job
+# `prepara` scarta i giri fuori finestra leggendo l'ora di Roma
+# (`TZ=Europe/Rome date`). Niente doppio cron inverno/estate: una regola sola,
+# verificata a ogni giro, che si adatta da sé al cambio d'ora.
+#
+# La finestra del banner (`src/lib/finestraScansione.ts`: ORA_APERTURA 8,
+# ORA_CHIUSURA 17, GIORNI_APERTURA 1-5) deve restare identica a questa: la
+# guardia `npm run test:telemetria-scansione` legge questo file e confronta i
+# numeri, così il banner non può dire «standby» sopra un radar che lavora.
+#
 # Cosa fa: un giro della CODA REGIONALE già esistente (`npm run scrape:coda`),
 # che prende in carico i target dovuti (`scan_targets.next_run_at`), li marca
 # con `last_checked_at` e li riconsegna alla coda per il giro successivo.
-# Così la telemetria registra cicli continui, e il banner può dire «ultimo ciclo
-# 14 minuti fa» perché è vero.
+# Così la telemetria registra cicli continui, e il banner può dire «ultimo
+# controllo: oggi alle 14:06» perché è vero.
 #
 # Perché `--loop`: un giro che si chiude sul limite ha lasciato target dovuti,
 # quindi ne fa un altro (con tetto `MAX_GIRI_LOOP`, mai infinito). Il budget per
@@ -23,10 +43,12 @@
 name: Coda di scansione (ciclo orario)
 
 on:
-  # :17 di ogni ora — sfasato rispetto agli altri workflow, così due job non
-  # si contendono lo stesso minuto (GitHub sgrana comunque le schedulle cariche).
+  # :17 dei feriali — sfasato rispetto agli altri workflow, così due job non si
+  # contendono lo stesso minuto. Lo span UTC 6-15 copre la finestra italiana
+  # (08:00–17:00) in entrambi gli orari legale/solare: il gate qui sotto taglia
+  # l'ora di troppo che l'una o l'altra stagione porta con sé.
   schedule:
-    - cron: '17 * * * *'
+    - cron: '17 6-15 * * 1-5'
   workflow_dispatch:
     inputs:
       max:
@@ -40,8 +62,39 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  prepara:
+    name: Finestra di lavoro (ora italiana)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      aperta: ${{ steps.finestra.outputs.aperta }}
+    steps:
+      # Il cron è UTC, il prodotto è italiano: la finestra si decide qui, una
+      # volta sola, e i job pesanti partono solo se è aperta. Un avvio manuale
+      # (`workflow_dispatch`) passa sempre: chi preme il bottone vuole il giro.
+      - name: Calcola la finestra
+        id: finestra
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "aperta=true" >> "$GITHUB_OUTPUT"
+            echo "Avvio manuale: finestra ignorata."
+            exit 0
+          fi
+          giorno=$(TZ=Europe/Rome date +%u)   # 1 = lunedì … 7 = domenica
+          ora=$(TZ=Europe/Rome date +%-H)     # 0-23, ora italiana
+          echo "Ora italiana: giorno $giorno, ore $ora"
+          if [ "$giorno" -le 5 ] && [ "$ora" -ge 8 ] && [ "$ora" -lt 17 ]; then
+            echo "aperta=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "aperta=false" >> "$GITHUB_OUTPUT"
+            echo "Fuori finestra (lun-ven 08:00-17:00): nessun ciclo, il radar riposa."
+          fi
+
   coda:
     name: Un ciclo della coda regionale
+    needs: prepara
+    if: needs.prepara.outputs.aperta == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 50
     # Necessari per committare il LEDGER anti-duplicato (.scuoleradar/).

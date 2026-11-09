@@ -16307,6 +16307,10 @@ l'altra.**
 
 ## §26.150 — Prova di lavoro e perimetro dichiarato (06/11/2026)
 
+> **Superato in parte da §26.151** (09/11/2026): il radar ha una finestra di lavoro (lun–ven
+> 08:00–17:00 italiane) e il banner un tono `standby`; «fonti elaborate» esce dal testo e resta
+> «bacheche scolastiche controllate». Il **perimetro dichiarato** (sezioni 3-5) resta valido.
+
 Due richieste in una sola sessione, e non sono due temi: sono **la stessa domanda** — *perché
 questo numero?* Il banner sopra la bacheca diceva «Radar attivo» con un dettaglio da referto
 (quarantena, errori per fonte) e la bacheca contava 48 opportunità; togliendo tre province dal
@@ -16454,4 +16458,169 @@ lo mostra* — il banner dice quanto ha letto il radar e da quanto tace, la bach
 province sta contando, la riga dice perché è lì.
 
 
+
+## §26.151 — Il radar ha un ORARIO DI LAVORO, e il banner lo dice (09/11/2026)
+
+Il ciclo della coda non gira più ventiquattro ore su ventiquattro: `coda-scansione.yml` parte
+**lun–ven 08:00–17:00 (ora italiana)**, cioè quando gli uffici scolastici pubblicano. Il banner
+sopra la bacheca però non lo sapeva, e la domenica mattina l'unica cosa che poteva dire era
+«nessun controllo da 30 ore» — vero, e inutilmente allarmante: non era un guasto, era un orario
+di lavoro. Questa sessione insegna al banner la differenza, e umanizza il resto del testo.
+
+### 1. La finestra è un modulo puro (`src/lib/finestraScansione.ts`, nuovo · 206)
+
+L'orologio del radar è uscito dalla UI e vive in funzioni **pure** (l'istante arriva come
+argomento, quindi le frasi si misurano su un calendario fermo — venerdì 6 novembre 2026 — e non
+sul giorno in cui gira la CI):
+
+| cosa | come |
+| --- | --- |
+| fuso | `Intl.DateTimeFormat` con `timeZone: 'Europe/Rome'` esplicito (ora legale gestita: +1 inverno, +2 estate). Nessun `NumberFormat`: i numeri si formattano a mano |
+| finestra | `ORA_APERTURA = 8` · `ORA_CHIUSURA = 17` · `GIORNI_APERTURA = [1,2,3,4,5]`; le 17:00 in punto sono già chiuse (l'ultimo giro è quello delle 16:17) |
+| ripartenza | `fraseRipresa`: **«stamattina alle 08:00»** (prima dell'apertura) · **«domattina alle 08:00»** (dopo la chiusura di un feriale) · **«lunedì mattina alle 08:00»** (venerdì sera, sabato, domenica) |
+| istante in parole | `quandoEsatto`: «oggi alle 14:06» · «ieri alle 18:40» · `null` oltre — perché «due giorni fa» è l'unità di misura di un referto, non di un radar (§26.150) |
+
+Il venerdì sera è il caso che rende necessaria `fraseRipresa`: dire «domattina» sarebbe **falso**,
+perché di sabato il radar non lavora.
+
+### 2. Un tono nuovo, davanti a tutti gli altri: `standby`
+
+`TonoScansione` passa da quattro a **cinque** valori — `standby | live | attivo | in-ritardo |
+guasta` — e `standby` si valuta **per primo**: se la finestra è chiusa, l'età dell'ultimo ciclo
+non è una notizia. Badge `STANDBY`, titolo «Radar in standby festivo/notturno», icona luna,
+dettaglio: «Prossima scansione automatica lunedì mattina alle 08:00. Ultimo controllo: oggi alle
+12:00. 412 bacheche scolastiche controllate nelle ultime 24 ore.»
+
+Un guasto resta un guasto **solo** a finestra aperta e con il silenzio che continua. La regola
+in una riga: *il silenzio del radar ha due cause possibili, e il banner deve dire quale*.
+
+### 3. Il resto del testo, umanizzato
+
+* «fonti elaborate» esce dal banner (è un contatore di pipeline): restano **bacheche scolastiche
+  controllate** e **avvisi scartati perché fuori tema** — misure che l'utente può capire;
+* ogni frase ha il suo **singolare** («1 bacheca scolastica controllata», «1 avviso scartato
+  perché fuori tema») e il suo zero dichiarato («nessuna bacheca…», «nessun avviso scartato»);
+* le cifre restano oneste (`almenoCentinaia`: «700+» è il numero vero arrotondato **per difetto**),
+  e un campo non letto resta `null`, mai `0`;
+* il badge verde `LIVE` e i chip numerici non cambiano: cambia la lingua, non la promessa.
+
+### 4. File toccati
+
+* `src/lib/finestraScansione.ts` — **nuovo** (206): fuso, costanti della finestra, `oraItaliana`,
+  `giornoLocale`, `oraEsatta`, `finestraAperta`, `fraseRipresa`, `fraseStandby`, `quandoEsatto`,
+  `TITOLO_STANDBY`;
+* `src/lib/telemetriaScansione.ts` (229 → 225) — `standby` come primo tono, `finestraAperta` e
+  `quandoEsatto` importati dall'orologio, dettaglio «ultimo controllo … bacheche …»;
+* `src/lib/telemetriaScansioneCopy.ts` (130 → 225) — `testiStandby`, `fraseBacheche`,
+  `fraseScartati`, `frasePosizioni`, `almenoCentinaia`, `migliaia`; **rimosse** le frasi su fonti
+  elaborate e quarantena (`fraseQuarantena`, `fraseErrori`, `fraseFonti`, `fraseScansioni`);
+* `src/pages/dashboard/components/BannerTelemetriaScansione.tsx` (171 → 185) — cinque toni
+  vestiti, standby con la luna, `adesso` passato alla lib e aggiornato da un orologio interno;
+* `.github/workflows/coda-scansione.yml` — `cron: '17 6-15 * * 1-5'` (06:00–15:00 UTC = 08:00–17:00
+  italiane nei due fusi) **più** il gate che rilegge l'ora di Roma (`TZ=Europe/Rome date`):
+  `giorno ≤ 5 && ora ≥ 8 && ora < 17`. I job pesanti partono solo con `aperta == 'true'`; un
+  `workflow_dispatch` salta il gate.
+
+### 5. Guardie e verifiche
+
+Le regole sono cresciute oltre il tetto di 300 righe per file (`scripts/check-architettura.ts`),
+quindi la guardia è stata divisa **per materia** e non per comodità:
+
+* `scripts/test-telemetria-scansione.ts` (235) — **stati e orologio**: silenzio, che ora è in
+  Italia, ripresa (venerdì sera ≠ domattina), standby, in diretta, operativo, soglie 1,5/24 h,
+  «mai in giorni», niente referto tecnico;
+* `scripts/test-telemetria-contenuto.ts` — **nuovo** (98): avvio a freddo («si sta avviando», mai
+  «tutto ok»), misure solo se misurate, frasi (migliaia, singolari, «+» per difetto), purezza dei
+  tre moduli (niente React, niente rete, orologio iniettabile, nessun `Intl.NumberFormat`);
+* `scripts/test-telemetria-cablaggio.ts` — **nuovo** (87): banner montato sopra la bacheca e solo
+  con sessione, Edge che tace = nessun banner, cinque toni vestiti, nessuna icona d'allarme — e il
+  **contratto col worker**: lo span UTC del cron (`6-15`) e i giorni (`1-5`) sono quelli dichiarati
+  dalla lib, il gate apre alle 8, chiude alle 17, chiude anche i giorni feriali.
+
+Verifiche di questa sessione, da `project/`: `npm run typecheck` 0 · `npm run test:architettura`
+**148 = baseline, nessuna nuova** · `npm run test:moduli` ✅ · `npm run build` 0 · `eslint` sui file
+toccati 0 errori · le tre guardie telemetria ✅ verdi.
+
+
+
+## §26.152 — L'ORDINE della vetrina: il merito prima, poi la provincia di casa (09/11/2026)
+
+Un profilo con **Asti** come provincia principale apriva la bacheca e trovava in testa **Torino**
+e **Alessandria**: due righe di contorno entrate col raggio dei 60 km (§26.139), un punto di voto
+sopra le righe della provincia scelta — `68` a Torino, `66` ad Asti. Non era un punteggio
+sbagliato: era un **ordine** che non conosceva la differenza fra «la mia zona» e «la zona che il
+raggio ha aggiunto».
+
+### 1. La causa, in una riga
+
+`DashboardPage` ordinava la vetrina con `sort((a, b) => (b.compatibilita ?? 100) - (a.compatibilita
+?? 100))`: il voto, e nient'altro. Con la cascata generosa (§26.144) e il raggio dei 60 km, la
+provincia scelta dall'utente spariva sotto la prima schermata appena due righe distanti un punto
+finivano nell'ordine sbagliato.
+
+### 2. La regola nuova (`src/lib/ordineVetrina.ts`, nuovo · 106)
+
+Modulo **puro** (niente rete, niente orologio, niente React: l'ordine è funzione della sola
+lista), che risponde a tre domande **in quest'ordine**:
+
+| # | domanda | criterio | perché |
+| --- | --- | --- | --- |
+| 1 | quanto vale? | `fascia`: match (`compatibilita` ≥ `SOGLIA_COMPATIBILITA_ARANCIO`, 70) prima, riempitivi (`lib/riempitivi`) dopo | un riempitivo non scavalca mai un match: sarebbe la pagliuzza che copre l'osso |
+| 2 | di chi è la casa? | **fra i riempitivi** la `provinciaCodice === perimetro.principale` viene **prima del voto**; **fra i match** il voto resta davanti e la casa fa da spareggio | quando due righe sono entrambe di contorno, la più vicina è quella che conta; quando sono entrambe pertinenti, il merito non si declassa |
+| 3 | poi? | scadenza più vicina, poi ordine di arrivo | `sort` stabile: due giri della stessa giornata devono dare lo stesso tabellone |
+
+Un voto **assente** resta **neutro** (`100`, fascia match), come in `lib/riempitivi` e come faceva
+`DashboardPage` da sempre: `null` non è zero. La funzione **non muta** l'ingresso (`.map` +
+`.sort` su una copia), perché in React la lista arriva da un contesto condiviso.
+
+Il cablaggio è di una riga: `ordinaVetrina(vetrinaVisibile(interpelliFiltrati), { principale:
+perimetro.principale })` in `DashboardPage`; l'ordinamento inline è stato rimosso, non affiancato.
+Il feed (`useInterpelliFeed`) resta un contenitore di stato e fetch: l'ordine è una scelta di
+**presentazione**, e nessun altro consumatore di `interpelliFiltrati` esiste.
+
+### 3. File toccati
+
+* `src/lib/ordineVetrina.ts` — **nuovo** (106): `ordinaVetrina`, tipi `VoceVetrina` e
+  `OpzioniOrdine`, `soglia` sovrascrivibile (default: soglia arancio);
+* `src/pages/DashboardPage.tsx` (120) — import del modulo, `opportunitaAttive` ordinata con la
+  provincia principale del profilo, commento della regola al posto del vecchio `sort`;
+* nessuna modifica al calcolo del voto, al perimetro o al gate identitario: **cambia solo
+  l'ordine** con cui le righe già ammesse si presentano.
+
+### 4. Guardie e verifiche
+
+* `scripts/test-ordine-vetrina.ts` — **nuovo** (92), guardia dedicata: riempitivo di casa contro
+  riempitivo del raggio (il difetto del 06/11), nessun riempitivo sopra un match vero, fra match
+  vince il voto, a pari voto vince la casa, soglia 69/70, voto ignoto neutro, scadenza e righe
+  senza data in coda, stabilità su due giri, nessuna mutazione dell'ingresso, perimetro di Asti
+  (`AT + TO 46 km + AL 32 km + VC 51 km`) e cablaggio in pagina (modulo usato, provincia passata,
+  nessun `compatibilita ?? 100` rimasto);
+* `scripts/test-ambito-bacheca.ts` (231 → 235) — resta la guardia dell'**ambito** (solo le province
+  scelte, zero è una risposta dichiarata, perimetro dichiarato dalle tre superfici); intestazione
+  aggiornata con il rimando alla guardia sorella;
+* `scripts/test-opportunita-vive.ts` (189) e `scripts/test-compatibilita-punteggio.ts` (247) — due
+  guardie preesistenti che asserivano il vecchio `sort` inline (`const ca = a.compatibilita ?? 100;`):
+  ora verificano il **cablaggio** (`ordinaVetrina(vetrinaVisibile(interpelliFiltrati)…`) e demandano i
+  criteri alla guardia dedicata. Nessun controllo è stato rimosso — è stato spostato dove vive la regola,
+  e la seconda resta sotto il tetto di 250 righe (era a 245 prima dell'aggiornamento);
+* `npm run test:ordine-vetrina` in `package.json` **e** in catena `npm test`; le guardie telemetria
+  sono tre (`test:telemetria-scansione`, `test:telemetria-contenuto`, `test:telemetria-cablaggio`),
+  tutte in catena — la divisione per materia serve a rispettare il tetto di 300 righe per file
+  (`scripts/check-architettura.ts`), non a nascondere controlli.
+
+Verifiche di questa sessione, da `project/`: `npm run typecheck` 0 · `npm run test:architettura`
+**148 = baseline, nessuna nuova** (i quattro file nuovi stanno tutti sotto i 250 di warning) ·
+`npm run test:moduli` ✅ · `npm run build` 0 · `eslint` sui file toccati 0 errori · `test:ordine-vetrina`,
+`test:ambito-bacheca`, `test:telemetria-scansione`, `test:telemetria-contenuto`,
+`test:telemetria-cablaggio` tutti ✅ verdi.
+
+### 5. Nota di sessione
+
+La tentazione era alzare la soglia dei riempitivi, o far sparire Torino e Alessandria dalla
+bacheca. Sarebbe stato sbagliato due volte: il raggio dei 60 km è una **modale dichiarata
+dall'utente** (§26.150), e un avviso di Torino a 46 km è un'opportunità vera — solo **non è la
+prima cosa** che deve vedere chi cerca ad Asti. La regola che resta è la stessa del §26.150, letta
+al contrario: *un numero deve poter essere spiegato dalla superficie che lo mostra* — e qui anche
+una **posizione** deve poterlo essere. Il merito resta il primo criterio, la prossimità non è un
+salvacondotto: è un criterio d'ordine, e vale dove il merito non distingue.
 

@@ -16,6 +16,7 @@ import { BannerTelemetriaScansione } from './dashboard/components/BannerTelemetr
 import { ElencoOpportunita } from './dashboard/components/ElencoOpportunita';
 import { VetrinaRadarOspiti } from './dashboard/components/VetrinaRadarOspiti';
 import { vetrinaVisibile } from '@/lib/vetrinaBacheca';
+import { ordinaVetrina } from '@/lib/ordineVetrina';
 
 export function DashboardPage() {
   const {
@@ -38,21 +39,15 @@ export function DashboardPage() {
     Boolean(user) && Boolean(preferenze.onboarded) && pianoStato === 'pronto' && !hasProAccess;
 
   // Opportunità attive: pulite dalle scadute e dal gate identitario (regola UNICA in
-  // `lib/vetrinaBacheca`, §26.119: la stessa che il feed usa per contare i posti
-  // liberi), poi ordinate per compatibilità e scadenza.
-  const opportunitaAttive = vetrinaVisibile(interpelliFiltrati)
-    // PRIORITÀ: prima i match più forti col profilo (verde → arancio → neutro), poi
-    // la scadenza più vicina. I suggerimenti EXTRA (§26.120: area sostegno nello
-    // stesso ordine di scuola e nella provincia scelta) restano in bacheca ma
-    // finiscono in coda, mai in testa.
-    .sort((a, b) => {
-      const ca = a.compatibilita ?? 100;
-      const cb = b.compatibilita ?? 100;
-      if (cb !== ca) return cb - ca;
-      const ta = a.dataScadenza ? new Date(a.dataScadenza).getTime() : Number.POSITIVE_INFINITY;
-      const tb = b.dataScadenza ? new Date(b.dataScadenza).getTime() : Number.POSITIVE_INFINITY;
-      return ta - tb;
-    });
+  // `lib/vetrinaBacheca`, §26.119: la stessa che il feed usa per contare i posti liberi),
+  // poi ordinate da `lib/ordineVetrina` (§26.152): prima i match del profilo, poi i
+  // riempitivi — e fra i riempitivi vince la PROVINCIA PRINCIPALE, così la zona scelta
+  // dall'utente non sparisce sotto le righe entrate col raggio dei 60 km. I suggerimenti
+  // EXTRA (§26.120: area sostegno nello stesso ordine di scuola e nella provincia scelta)
+  // restano in bacheca ma finiscono in coda, mai in testa.
+  const opportunitaAttive = ordinaVetrina(vetrinaVisibile(interpelliFiltrati), {
+    principale: perimetro.principale,
+  });
 
   // Accordion "Opportunità mappate": chiuso di default (console design) + modal paywall PRO.
   const [opportunitaAperte, setOpportunitaAperte] = useState(false);

@@ -16,6 +16,11 @@
  *   4. il modulo `ambitoBacheca` e la funzione `vetrinaConAmbiti` non esistono
  *      più: nessun codice morto che possa riaccendere l'allargamento.
  *
+ * Dal §26.152 l'ordine della vetrina ha una guardia sua (`scripts/test-ordine-vetrina.ts`):
+ * il merito prima dei riempitivi, e fra i riempitivi la PROVINCIA PRINCIPALE — così la zona
+ * scelta dall'utente non sparisce sotto le righe entrate col raggio dei 60 km.
+ * Qui resta la proprietà che la bacheca deve rispettare: il perimetro di Asti è AT + i vicini.
+ *
  * Uso: npm run test:ambito-bacheca  (incluso in `npm test`)
  */
 import { existsSync, readFileSync } from 'node:fs';
@@ -220,7 +225,6 @@ check(
   true,
   /limitaSelezione\(provinceCodici, maxProvince\)/.test(pannello),
 );
-
 
 console.log('\n' + '─'.repeat(70));
 if (errori === 0) {
