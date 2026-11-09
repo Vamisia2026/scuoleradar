@@ -33,6 +33,7 @@ import { Accordion } from '@/components/Accordion';
 import { InterpelloCard } from '@/components/InterpelloCard';
 import { stileMatch } from '@/lib/bandaMatch';
 import { CONSIGLIO_BACHECA_SCARSA, bachecaScarsa } from '@/lib/gradiAffini';
+import { riassuntoPerimetro, type PerimetroRicerca } from '@/lib/perimetroRicerca';
 import { classeByCodice } from '@/data/classiConcorso';
 import { province } from '@/data/province';
 import type { Interpello } from '@/data/interpelli';
@@ -42,6 +43,11 @@ interface ElencoOpportunitaProps {
   lista: Interpello[];
   /** Totale delle opportunità attive (badge dell'accordion). */
   totale: number;
+  /**
+   * IL PERIMETRO APPLICATO AL CONTEGGIO (§26.150): le province scelte + quelle entro i 60 km
+   * dalla principale, con i chilometri. Il numero qui sopra è spiegato qui sotto.
+   */
+  perimetro: PerimetroRicerca;
   /** Stato dell'accordion (console chiusa di default). */
   accordion: { aperto: boolean; onToggle: () => void };
   /** Accesso PRO: abilita elenco e conteggio, altrimenti badge di blocco. */
@@ -57,6 +63,7 @@ interface ElencoOpportunitaProps {
 export function ElencoOpportunita({
   lista,
   totale,
+  perimetro,
   accordion,
   hasAccessoPro,
   mostraInvitoProfilo,
@@ -83,6 +90,13 @@ export function ElencoOpportunita({
     (i) => i.ambito === 'regione' || i.ambito === 'nazionale',
   ).length;
 
+  // §26.150 — IL PERIMETRO SI DICHIARA. Il conteggio qui sopra dipende da due cose: le
+  // province scelte e il raggio dei 60 km misurato dalla PRINCIPALE. Senza questa riga il
+  // caso che ha aperto la sessione resta inspiegabile: si tolgono tre province, il numero
+  // resta alto (il raggio riammette le vicine) e sembra un filtro rotto. La frase è la stessa
+  // del pannello delle preferenze, costruita dalla stessa funzione (`perimetroRicerca`).
+  const notaPerimetro = perimetro.proprie.length > 0 ? riassuntoPerimetro(perimetro) : null;
+
   return (
       <Accordion
         icona="📡"
@@ -96,6 +110,13 @@ export function ElencoOpportunita({
         }
         aperto={aperto}
         onToggle={onToggle}
+        sommario={
+          notaPerimetro ? (
+            <p className="text-[11px] leading-relaxed text-primary-500">
+              <span className="font-semibold text-primary-600">Perimetro:</span> {notaPerimetro}
+            </p>
+          ) : undefined
+        }
       >
         {mostraInvitoProfilo ? (
           <div className="rounded-xl border border-primary-100 bg-primary-50 px-4 py-3 text-center">
@@ -123,7 +144,7 @@ export function ElencoOpportunita({
               Il Radar non allarga la ricerca fuori dalle province che hai scelto: zero è
               una risposta, non una pagina da riempire. Se vuoi più opportunità aggiungi
               una provincia o una classe di concorso nel profilo, oppure attendi il
-              prossimo giro di scansione (le fonti vengono ricontrollate ogni giorno).
+              prossimo giro di scansione (le fonti vengono ricontrollate ogni ora).
             </p>
           </div>
         ) : (

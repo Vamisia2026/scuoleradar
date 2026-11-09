@@ -40,6 +40,18 @@ export interface TelemetriaCrawler {
   scansionate_24h: number;
   ultima_scansione: string | null;
   /**
+   * §26.149 — IL SEGNALE DI VITA. Il più recente fra run registrata (`scraper_runs`),
+   * coda regionale (`scan_targets.last_checked_at`) e pagine lette
+   * (`discovered_links.last_scanned_at`). Serve al banner perché `ultima_scansione`
+   * da sola può restare indietro mentre il resto della pipeline lavora.
+   * `null` = la Edge (versione precedente) non lo espone.
+   */
+  ultimo_ciclo?: string | null;
+  /** Giri registrati nelle ultime 24 ore (`null` = non letto). */
+  cicli_24h?: number | null;
+  /** Province coperte da almeno una sorgente attiva (`null` = non letto). */
+  province_coperte?: number | null;
+  /**
    * Fonti in quarantena lette da `source_health` (§26.109), con la data
    * dell'isolamento. `null` o assente = la Edge non le ha lette (versione
    * precedente o tabella non raggiungibile): la UI mostra «—», mai uno zero.

@@ -171,7 +171,7 @@ check('feed: delega alla bacheca pura (filtri e punteggio)', true, /bachecaInter
 check(
   'feed: cerca anche le province entro il raggio (limite rigido rimosso)',
   true,
-  /provinceDiRicerca\(/.test(feed),
+  /perimetroRicerca\(provinceAttive\)/.test(feed),
 );
 check('bacheca: nessun cap dei riempitivi (la cascata non lascia vuoti)', false, /limitaRiempitivi\(/.test(bacheca));
 check(

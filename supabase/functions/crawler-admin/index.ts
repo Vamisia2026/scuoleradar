@@ -104,6 +104,18 @@ interface TelemetriaCrawler {
   /** Fonti che stanno fallendo senza essere ancora isolate (`null` = non letto). */
   fonti_in_guasto: number | null;
   ultima_scansione: string | null;
+  /**
+   * §26.149 — IL SEGNALE DI VITA DELLA PIPELINE: il più recente fra l'ultima run
+   * registrata (`scraper_runs.started_at`), l'ultima lettura della coda regionale
+   * (`scan_targets.last_checked_at`) e l'ultima pagina letta. Il banner della bacheca
+   * mostra QUESTO istante: con un solo timestamp il ciclo può sembrare fermo da giorni
+   * mentre il resto del motore lavora.
+   */
+  ultimo_ciclo: string | null;
+  /** Giri registrati nelle ultime 24 ore (`null` = tabella non leggibile). */
+  cicli_24h: number | null;
+  /** Province coperte da almeno una sorgente attiva (`null` = non letto). */
+  province_coperte: number | null;
   ultima_run: { started_at: string; esito: string; trovati: number; nuovi: number; errori: number } | null;
   aggiornato_il: string;
 }
@@ -203,32 +215,82 @@ interface SaluteFonte {
   consecutive_failures: number | null;
 }
 
+/** Il più recente fra più istanti ISO: `null` se nessuno è leggibile. */
+function piuRecente(...istanti: (string | null | undefined)[]): string | null {
+  let migliore: number | null = null;
+  let scelto: string | null = null;
+  for (const iso of istanti) {
+    if (!iso) continue;
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) continue;
+    if (migliore === null || t > migliore) {
+      migliore = t;
+      scelto = iso;
+    }
+  }
+  return scelto;
+}
+
 /** Numeri della coda: le letture sono indipendenti e partono tutte insieme. */
 async function telemetria(sb: ReturnType<typeof createClient>): Promise<TelemetriaCrawler> {
   const oggi = new Date().toISOString().slice(0, 10);
   const ieri = new Date(Date.now() - 86_400_000).toISOString();
-  const [fonti, coda, scartiGrezzi, errori, totali, attivi, scansionate, ultima, run, salute] =
-    await Promise.all([
-      conta(sb, 'discovered_links', { status: 'active_crawler' }),
-      conta(sb, 'discovered_links', { status: 'pending' }),
-      Promise.all(STATI_SCARTATI.map((s) => conta(sb, 'discovered_links', { status: s }))),
-      conta(sb, 'discovered_links', { status: 'error_internal' }),
-      conta(sb, 'interpelli'),
-      sb.from('interpelli').select('*', { count: 'exact', head: true })
-        .gte('expiration_date', `${oggi}T00:00:00+00:00`),
-      sb.from('discovered_links').select('*', { count: 'exact', head: true })
-        .eq('status', 'active_crawler').gte('last_scanned_at', ieri),
-      sb.from('discovered_links').select('last_scanned_at')
-        .not('last_scanned_at', 'is', null).order('last_scanned_at', { ascending: false }).limit(1),
-      sb.from('scraper_runs').select('started_at, esito, trovati, nuovi, errori')
-        .order('started_at', { ascending: false }).limit(1),
-      // `source_health` è di servizio come le altre: la finestra dei 60 giorni resta
-      // nel client puro (`src/lib/sourceQuarantine.ts`), qui si consegnano le righe.
-      sb.from('source_health')
-        .select('source_url, is_quarantined, quarantined_at, quarantine_reason, consecutive_failures'),
-    ]);
+  const [
+    fonti,
+    coda,
+    scartiGrezzi,
+    errori,
+    totali,
+    attivi,
+    scansionate,
+    ultima,
+    run,
+    salute,
+    cicli24,
+    province,
+    codaCiclo,
+  ] = await Promise.all([
+    conta(sb, 'discovered_links', { status: 'active_crawler' }),
+    conta(sb, 'discovered_links', { status: 'pending' }),
+    Promise.all(STATI_SCARTATI.map((s) => conta(sb, 'discovered_links', { status: s }))),
+    conta(sb, 'discovered_links', { status: 'error_internal' }),
+    conta(sb, 'interpelli'),
+    sb.from('interpelli').select('*', { count: 'exact', head: true })
+      .gte('expiration_date', `${oggi}T00:00:00+00:00`),
+    sb.from('discovered_links').select('*', { count: 'exact', head: true })
+      .eq('status', 'active_crawler').gte('last_scanned_at', ieri),
+    sb.from('discovered_links').select('last_scanned_at')
+      .not('last_scanned_at', 'is', null).order('last_scanned_at', { ascending: false }).limit(1),
+    sb.from('scraper_runs').select('started_at, esito, trovati, nuovi, errori')
+      .order('started_at', { ascending: false }).limit(1),
+    // `source_health` è di servizio come le altre: la finestra dei 60 giorni resta
+    // nel client puro (`src/lib/sourceQuarantine.ts`), qui si consegnano le righe.
+    sb.from('source_health')
+      .select('source_url, is_quarantined, quarantined_at, quarantine_reason, consecutive_failures'),
+    // §26.149 — il ciclo orario si vede dai giri registrati nelle ultime 24 ore.
+    sb.from('scraper_runs').select('*', { count: 'exact', head: true }).gte('started_at', ieri),
+    // Copertura: le sorgenti attive dichiarano la provincia (righe poche, valori corti).
+    sb.from('discovered_links').select('province').eq('status', 'active_crawler'),
+    // Segnale di vita della coda regionale (`claim_scan_target`/`finish_scan_target`).
+    sb.from('scan_targets').select('last_checked_at')
+      .not('last_checked_at', 'is', null).order('last_checked_at', { ascending: false }).limit(1),
+  ]);
+
 
   const saluteFonti = salute.error ? null : ((salute.data ?? []) as SaluteFonte[]);
+  const ultimaScansione =
+    ((ultima.data ?? [])[0] as { last_scanned_at?: string } | undefined)?.last_scanned_at ?? null;
+  const ultimaRun = ((run.data ?? [])[0] as TelemetriaCrawler['ultima_run']) ?? null;
+  const codaIstantanea =
+    ((codaCiclo.data ?? [])[0] as { last_checked_at?: string } | undefined)?.last_checked_at ?? null;
+  // Copertura: province distinte fra le sorgenti attive; `null` se la lettura è fallita.
+  const provinceCoperte = province.error
+    ? null
+    : new Set(
+        ((province.data ?? []) as { province?: string | null }[])
+          .map((r) => (r.province ?? '').trim().toUpperCase())
+          .filter((p) => p.length > 0),
+      ).size;
 
   return {
     fonti_whitelist: fonti,
@@ -249,9 +311,13 @@ async function telemetria(sb: ReturnType<typeof createClient>): Promise<Telemetr
         ? null
         : saluteFonti.filter((f) => f.is_quarantined !== true && (f.consecutive_failures ?? 0) > 0)
             .length,
-    ultima_scansione:
-      ((ultima.data ?? [])[0] as { last_scanned_at?: string } | undefined)?.last_scanned_at ?? null,
-    ultima_run: ((run.data ?? [])[0] as TelemetriaCrawler['ultima_run']) ?? null,
+    ultima_scansione: ultimaScansione,
+    // §26.149 — la freschezza è il segnale di vita PIÙ RECENTE, non un solo timestamp:
+    // un giro della coda regionale non tocca `last_scanned_at` e sembrerebbe fermo.
+    ultimo_ciclo: piuRecente(ultimaRun?.started_at, ultimaScansione, codaIstantanea),
+    cicli_24h: cicli24.error ? null : cicli24.count ?? 0,
+    province_coperte: provinceCoperte,
+    ultima_run: ultimaRun,
     aggiornato_il: new Date().toISOString(),
   };
 }

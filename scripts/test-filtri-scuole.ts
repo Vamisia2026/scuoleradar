@@ -226,7 +226,7 @@ check('campo: filtro istantaneo per provincia + testo digitato', true, /cercaScu
 check('campo: ogni lista ha la sua tendina (useId)', true, /useId\(\)/.test(campo));
 check('campo: avviso dell’ambito sotto il campo', true, /<NotaAmbito nome=\{value\}/.test(campo) && /messaggioAmbitoScuola\(ambito\)/.test(campo));
 check('pannello: badge di forzatura sulle pill fuori ambito', true, /ambito\.stato === 'fuori' && <BadgeForzatura/.test(pannello));
-check('radar: ambito calcolato con il raggio dei 60 km', true, /provinceDiRicerca\(provinceCodici\)/.test(radar));
+check('radar: ambito con raggio e STESSO tetto di piano della bacheca', true, /provinceDiRicerca\(limitaSelezione\(provinceCodici, maxProvince\)\)/.test(radar));
 check('radar: suggerimenti limitati all’ambito', true, /suggerimentiScuole\(note, provinceRicerca\)/.test(radar));
 check('radar: i nomi vengono dal gate degli istituti', true, /scuolePresentabili\(interpelliFiltrati\)/.test(radar));
 check('radar: le province del selettore vengono dai suggerimenti', true, /provinceSuggerite\(suggerimenti\)/.test(radar));

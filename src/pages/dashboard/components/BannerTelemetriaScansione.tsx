@@ -1,27 +1,82 @@
 /**
- * Bacheca · BANNER DELLA SCANSIONE (§26.146).
+ * Bacheca · IL RADAR STA LAVORANDO (§26.146 · §26.149 · §26.150).
  *
- * Perché sopra la bacheca: le opportunità mostrate sono quelle che l'ultimo giro di
- * ingestione è riuscito a leggere. Se il giro è vecchio o ha lasciato fonti isolate,
- * l'utente deve saperlo PRIMA di concludere «di bandi non ce ne sono» — è la stessa
- * regola di onestà della pagina (`bachecaScarsa`, §26.141), applicata alla freschezza.
+ * Perché sopra la bacheca: le opportunità mostrate sono quelle che l'ultimo ciclo di
+ * ingestione è riuscito a leggere. Da §26.150 il riquadro non è più un referto con il
+ * dettaglio di ciò che manca — è una **prova di lavoro**: quante pagine il radar ha letto
+ * nelle ultime 24 ore, quante fonti ha chiuso senza errori, quante opportunità attive ne sono
+ * uscite, su quante province, e da quanto ha parlato l'ultimo giro (in minuti o in ore, mai in
+ * giorni). Il badge verde `LIVE` con il pallino che pulsa è lo stato; il resto sono i numeri.
  *
- * Il testo e le priorità vivono in `lib/telemetriaScansione` (puro, con guardia); qui
- * c'è solo la veste e la chiamata alla Edge `crawler-admin`, che è l'unica via per
- * leggere `source_health` (tabella di servizio: il browser non ha i permessi). Se la
- * Edge tace — non deployata, sessione scaduta, rete giù — il banner NON compare: uno
- * stato inventato sarebbe peggio di nessuno stato.
+ * Le fonti temporaneamente sorde (quarantena, errori per fonte) NON compaiono qui: sono
+ * materia del pannello Admin — la Linea Rossa, §26.110 — e in una vetrina che deve dire «sto
+ * lavorando» diventavano un allarme che l'utente leggeva come un errore proprio.
+ *
+ * Il testo e le soglie vivono in `lib/telemetriaScansione` (puro, con guardia); qui c'è la
+ * veste, il polling e la chiamata alla Edge `crawler-admin`, che è l'unica via per leggere la
+ * telemetria di servizio (il browser non ha i permessi su `source_health`). Se la Edge tace —
+ * non deployata, sessione scaduta, rete giù — il banner NON compare: uno stato inventato
+ * sarebbe peggio di nessuno stato.
+ *
+ * §26.149 — LA FRESCHEZZA SI RILEGGE, NON SI SIMULA. L'orologio interno ricalcola ogni mezzo
+ * minuto «14 minuti fa» (nessuna chiamata), e lo stato vero si rilegge ogni cinque minuti e al
+ * ritorno sulla scheda: il ciclo del worker è orario, quindi il numero mostrato invecchia di
+ * minuti, non di giorni. Non esiste alcun percorso che scriva un istante finto al posto di
+ * quello letto.
  */
 import { useEffect, useState } from 'react';
+import { Activity, Radar, RefreshCw, ShieldCheck, type LucideIcon } from 'lucide-react';
 import { leggiTelemetriaCrawler, type TelemetriaCrawler } from '@/services/crawlerTelemetry';
 import { bannerScansione, type TonoScansione } from '@/lib/telemetriaScansione';
 
-/** Veste dei quattro toni: riquadro, icona e colore del testo in un punto solo. */
-const VESTE: Record<TonoScansione, { riquadro: string; icona: string; testo: string }> = {
-  fresca: { riquadro: 'border-emerald-200 bg-emerald-50', icona: '✓', testo: 'text-emerald-800' },
-  'in-ritardo': { riquadro: 'border-amber-200 bg-amber-50', icona: '⏳', testo: 'text-amber-900' },
-  isolata: { riquadro: 'border-amber-300 bg-amber-50', icona: '⛔', testo: 'text-amber-900' },
-  guasta: { riquadro: 'border-rose-200 bg-rose-50', icona: '⚠', testo: 'text-rose-900' },
+/** Ogni quanto si rilegge lo stato (il worker gira ogni ora: cinque minuti bastano). */
+const RILETTURA_MS = 5 * 60 * 1000;
+
+/** Ogni quanto si ricalcola l'età del ciclo senza bussare alla rete. */
+const OROLOGIO_MS = 30 * 1000;
+
+/** Veste di un tono: barra d'accento, pastiglia dell'icona, badge e pallino in un punto solo. */
+interface VesteTono {
+  barra: string;
+  icona: string;
+  badge: string;
+  pallino: string;
+  Icona: LucideIcon;
+}
+
+/**
+ * Veste dei quattro toni. Nessun fondo da «errore» e nessuna icona di divieto: il verde è lo
+ * stato in diretta, l'azzurro il servizio operativo, l'ambra tenue l'attesa.
+ */
+const VESTE: Record<TonoScansione, VesteTono> = {
+  live: {
+    barra: 'border-l-accent-500',
+    icona: 'bg-accent-100 text-accent-700',
+    badge: 'bg-accent-500 text-white',
+    pallino: 'bg-white animate-pulse-soft',
+    Icona: Radar,
+  },
+  attivo: {
+    barra: 'border-l-primary-400',
+    icona: 'bg-primary-100 text-primary-600',
+    badge: 'bg-primary-100 text-primary-700',
+    pallino: 'bg-accent-500',
+    Icona: Activity,
+  },
+  'in-ritardo': {
+    barra: 'border-l-secondary-300',
+    icona: 'bg-secondary-100 text-secondary-700',
+    badge: 'bg-secondary-100 text-secondary-700',
+    pallino: 'bg-secondary-500',
+    Icona: RefreshCw,
+  },
+  guasta: {
+    barra: 'border-l-primary-200',
+    icona: 'bg-primary-50 text-primary-500',
+    badge: 'bg-primary-50 text-primary-600',
+    pallino: 'bg-primary-300',
+    Icona: ShieldCheck,
+  },
 };
 
 interface Props {
@@ -33,40 +88,85 @@ interface Props {
 
 export function BannerTelemetriaScansione({ attivo = true, telemetria }: Props) {
   const [dati, setDati] = useState<TelemetriaCrawler | null>(telemetria ?? null);
+  // «Adesso» è stato locale: invecchiare l'età del ciclo non è una chiamata di rete.
+  const [adesso, setAdesso] = useState(() => new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setAdesso(new Date()), OROLOGIO_MS);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     // Telemetria iniettata dal chiamante: è già la verità, non si sovrascrive.
     if (!attivo || telemetria !== undefined) return;
     let vivo = true;
-    leggiTelemetriaCrawler()
-      .then((t) => {
-        if (vivo) setDati(t);
-      })
-      .catch(() => {
-        // Silenzio deliberato: la telemetria non è un contenuto, è un di più.
-        if (vivo) setDati(null);
-      });
+    const rileggi = (): void => {
+      leggiTelemetriaCrawler()
+        .then((t) => {
+          if (vivo) setDati(t);
+        })
+        .catch(() => {
+          // Silenzio deliberato: la telemetria non è un contenuto, è un di più.
+          if (vivo) setDati(null);
+        });
+    };
+    rileggi();
+    const id = setInterval(() => {
+      // Scheda in secondo piano: nessuna lettura sprecata; la freschezza riparte al focus.
+      if (document.visibilityState !== 'hidden') rileggi();
+    }, RILETTURA_MS);
+    window.addEventListener('focus', rileggi);
     return () => {
       vivo = false;
+      clearInterval(id);
+      window.removeEventListener('focus', rileggi);
     };
   }, [attivo, telemetria]);
 
-  const banner = attivo ? bannerScansione(dati) : null;
+  const banner = attivo ? bannerScansione(dati, adesso) : null;
   if (!banner) return null;
 
-  const veste = VESTE[banner.tono];
+  const { barra, icona, badge, pallino, Icona: IconaStato } = VESTE[banner.tono];
   return (
     <div
       role="status"
-      className={`flex items-start gap-3 rounded-2xl border px-4 py-2.5 ${veste.riquadro}`}
+      className={`rounded-2xl border border-l-4 border-primary-100 bg-white px-4 py-3.5 shadow-card ${barra}`}
     >
-      <span aria-hidden className="text-base leading-none">
-        {veste.icona}
-      </span>
-      <div className="min-w-0">
-        <p className={`text-sm font-semibold ${veste.testo}`}>{banner.titolo}</p>
-        <p className={`mt-0.5 text-[11px] leading-relaxed ${veste.testo}`}>{banner.dettaglio}</p>
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden
+          className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${icona}`}
+        >
+          <IconaStato className="h-[18px] w-[18px]" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${badge}`}
+            >
+              <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${pallino}`} />
+              {banner.badge}
+            </span>
+            <p className="text-sm font-semibold text-primary-800">{banner.titolo}</p>
+          </div>
+          <p className="mt-1 text-[11px] leading-relaxed text-primary-600">{banner.dettaglio}</p>
+          {banner.misure.length > 0 && (
+            <dl className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {banner.misure.map((m) => (
+                <div key={m.etichetta} className="rounded-xl bg-primary-50/70 px-2.5 py-1.5">
+                  <dt className="text-[9px] font-semibold uppercase tracking-wider text-primary-500">
+                    {m.etichetta}
+                  </dt>
+                  <dd className="text-base font-bold leading-tight tabular-nums text-primary-800">
+                    {m.valore}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </div>
       </div>
     </div>
   );
 }
+

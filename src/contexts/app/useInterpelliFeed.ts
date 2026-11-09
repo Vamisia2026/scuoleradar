@@ -29,7 +29,7 @@ import { interpelli, type Interpello } from '@/data/interpelli';
 import { bachecaInterpelli } from '@/lib/bachecaInterpelli';
 import { limitaSelezione } from '@/lib/planLimits';
 import { getFeedInterpelli } from '@/lib/matchingEngine';
-import { provinceDiRicerca } from '@/lib/prossimitaGeografica';
+import { perimetroRicerca, type PerimetroRicerca } from '@/lib/perimetroRicerca';
 import { vetrinaVisibile } from '@/lib/vetrinaBacheca';
 import { supabase } from '@/lib/supabase';
 import { mapNoticiaToInterpello } from './helpers';
@@ -55,6 +55,12 @@ export interface FeedInterpelli {
   origineDati: 'vuoto' | 'supabase';
   /** Avvisi del feed filtrati con le regole del profilo: porta d'ingresso primaria e voto a due livelli (§26.63). */
   interpelliFiltrati: Interpello[];
+  /**
+   * IL PERIMETRO APPLICATO (§26.150): province scelte (già limitate al piano) + quelle entro il
+   * raggio dei 60 km dalla principale, con nomi e chilometri. È l'oggetto su cui è stata fatta
+   * la query, quindi la bacheca può DICHIARARE il numero invece di lasciarlo inspiegato.
+   */
+  perimetro: PerimetroRicerca;
 }
 
 export function useInterpelliFeed(
@@ -90,11 +96,15 @@ export function useInterpelliFeed(
   );
 
   /**
-   * Province da CERCARE: le proprie + quelle entro il raggio dei 60 km
-   * (Modalità 4). La consegna (notifiche/digest) resta strict sulle province
-   * scelte.
+   * IL PERIMETRO DELLA RICERCA (§26.150): le province scelte più quelle entro il raggio dei
+   * 60 km dalla PRINCIPALE, con nomi e chilometri. È lo stesso oggetto che la bacheca
+   * dichiara accanto al conteggio (`riassuntoPerimetro`): la query e la spiegazione nascono
+   * dalla stessa funzione, quindi non possono divergere. La consegna (notifiche/digest)
+   * resta strict sulle province scelte.
    */
-  const provinceRicerca = useMemo(() => provinceDiRicerca(provinceAttive), [provinceAttive]);
+  const perimetro = useMemo(() => perimetroRicerca(provinceAttive), [provinceAttive]);
+  /** Ciò che la query chiede davvero: `perimetro.perimetro` (proprie + raggio). */
+  const provinceRicerca = perimetro.perimetro;
 
   useEffect(() => {
     if (!supabase) return;
@@ -195,5 +205,5 @@ export function useInterpelliFeed(
     return vetrinaVisibile(bacheca);
   }, [preferenze.onboarded, bacheca]);
 
-  return { fontiInterpelli, origineDati, interpelliFiltrati };
+  return { fontiInterpelli, origineDati, interpelliFiltrati, perimetro };
 }

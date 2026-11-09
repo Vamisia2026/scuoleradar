@@ -6,6 +6,7 @@
  */
 import type { Interpello } from '@/data/interpelli';
 import type { OrdineScuola } from '@/data/ordiniMaterie';
+import type { PerimetroRicerca } from '@/lib/perimetroRicerca';
 import type { PianoId } from '@/lib/pricing';
 
 /** Limite notifiche per gli utenti BASE: 3 per ANNO solare (reset annuale via RPC incrementa_notifiche_utente). */
@@ -114,6 +115,12 @@ export interface AppContextValue extends AppState {
   avviaCheckout: (plan: PianoId, promo?: string, quantita?: number) => Promise<{ ok: boolean; errore?: string }>;
   setEsami: (e: Esame[]) => void;
   interpelliFiltrati: Interpello[];
+  /**
+   * Il PERIMETRO geografico applicato al feed (§26.150): province scelte (già limitate al
+   * piano) + quelle entro i 60 km dalla principale, con nomi e chilometri. Serve a dichiarare
+   * accanto al conteggio perché una provincia «tolta» può rientrare per il raggio.
+   */
+  perimetro: PerimetroRicerca;
   origineDati: 'vuoto' | 'supabase';
   loading: boolean;
   /** id dell'utente Supabase Auth con sessione attiva (null = non autenticato). */

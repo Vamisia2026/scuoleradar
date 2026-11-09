@@ -187,14 +187,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
 
   // Feed degli interpelli (Matching Engine): stato, fetch dal DB e filtri del
-  // profilo vivono nell'hook dedicato `./app/useInterpelliFeed`.
-  // I TETTI del piano confermato limitano l'USO della selezione (query + filtri):
-  // le province/classi oltre il tetto restano salvate e si riattivano con PRO.
-  const { origineDati, interpelliFiltrati } = useInterpelliFeed(preferenze, tettiPreferenze);
+  // profilo vivono nell'hook dedicato `./app/useInterpelliFeed`. `perimetro` è ciò
+  // che la query ha davvero chiesto (proprie + raggio di 60 km, §26.150): la bacheca
+  // lo dichiara accanto al conteggio. I TETTI del piano confermato limitano l'USO
+  // della selezione: le province/classi oltre il tetto restano salvate, si riattivano con PRO.
+  const { origineDati, interpelliFiltrati, perimetro } = useInterpelliFeed(preferenze, tettiPreferenze);
 
   /** Trial PRO attivo: piano 'pro' + stato Stripe 'trialing' + scadenza futura. */
-  const trialAttivo =
-    piano === 'pro' && trialScadenza !== null && new Date(trialScadenza).getTime() > Date.now();
+  const trialAttivo = piano === 'pro' && trialScadenza !== null && new Date(trialScadenza).getTime() > Date.now();
 
   /** Regole Radar presenti sul profilo (province + classi/materie), anche se Radar in pausa. */
   const radarConfigurato =
@@ -252,6 +252,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     avviaCheckout,
     setEsami,
     interpelliFiltrati,
+    perimetro,
     origineDati,
     loading,
     supabaseUserId,

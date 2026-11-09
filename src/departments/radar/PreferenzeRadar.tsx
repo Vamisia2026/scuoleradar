@@ -11,7 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { classiConcorso } from '@/data/classiConcorso';
 import type { OrdineScuola } from '@/data/ordiniMaterie';
 import { province } from '@/data/province';
-import { pianoLimits } from '@/lib/planLimits';
+import { limitaSelezione, pianoLimits } from '@/lib/planLimits';
 import { normalizzaClasse, normalizzaClassi } from '@/lib/matchingEngine';
 import { ambitoScuola, suggerimentiScuole } from '@/lib/filtriScuole';
 import { provinceSuggerite, scuolePresentabili } from '@/lib/scuolePresentabili';
@@ -174,7 +174,10 @@ export function PreferenzeRadar() {
    * suggerimenti: non si può scegliere una provincia vuota.
    */
   const scuoleAmbiente = useMemo(() => {
-    const provinceRicerca = provinceDiRicerca(provinceCodici);
+    // §26.150 — LO STESSO PERIMETRO DELLA BACHECA, anche qui: le province oltre il tetto del
+    // piano non sono attive, quindi non devono nemmeno suggerire istituti (prima il pannello
+    // scuole usava l'intera selezione salvata mentre la bacheca ne usava una parte).
+    const provinceRicerca = provinceDiRicerca(limitaSelezione(provinceCodici, maxProvince));
     const note = scuolePresentabili(interpelliFiltrati);
     const suggerimenti = suggerimentiScuole(note, provinceRicerca);
     return {
@@ -183,7 +186,7 @@ export function PreferenzeRadar() {
       provinceSuggerite: provinceSuggerite(suggerimenti),
       verificaAmbito: (nome: string) => ambitoScuola(note, provinceRicerca, nome),
     };
-  }, [provinceCodici, interpelliFiltrati]);
+  }, [provinceCodici, interpelliFiltrati, maxProvince]);
   const classiFiltrate = useMemo(() => {
     let list = classiConcorso;
     if (materiaFilter) list = list.filter((c) => c.materie.includes(materiaFilter));

@@ -528,24 +528,56 @@ La distanza vive in `lib/distanzaProfilo` (pura) e si applica in un solo punto, 
 - [ ] **Guardia**: `npm run test:distanza` (ordini, simmetria, sostegno, bonus e soglia,
       composizione, fondo, purezza), in `npm test`.
 
-## 14. La freschezza degli albi si DICHIARA in bacheca (§26.146): «non lo so» non è «tutto ok»
+## 14. Il radar si mostra AL LAVORO, e il numero della bacheca dichiara il perimetro (§26.146 → §26.150)
 
-Sopra l'elenco delle opportunità c'è un banner che dice quanto sono freschi gli albi. Serve perché
-il silenzio dell'ingestione arriva travestito da mercato fermo: senza banner un crawler fermo
-sembra «meno opportunità», e nessuno va a controllare. Le regole vivono in `lib/telemetriaScansione`
-(**pura**: riceve i numeri e l'orologio, restituisce il banner o `null`).
+Sopra l'elenco delle opportunità c'è un banner che dice quanto ha lavorato il radar che stai
+guardando. Serve perché il silenzio dell'ingestione arriva travestito da mercato fermo: senza banner
+un crawler fermo sembra «meno opportunità», e nessuno va a controllare. Dal 06/11/2026 (§26.150) il
+banner è una **prova di lavoro**, non un referto: pagine lette nelle ultime 24 ore, fonti chiuse
+senza errori, opportunità attive rilevate, copertura — con il badge **verde** `LIVE` e l'età
+dell'ultimo giro **in minuti o in ore, mai in giorni**. Le regole vivono in `lib/telemetriaScansione`
+con il gemello `lib/telemetriaScansioneCopy` (**puri**: ricevono i numeri e l'orologio, restituiscono
+il banner o `null`).
 
-- [ ] **Ordine delle priorità**: `isolata` (quarantena) → `guasta` (errori o nessun giro) →
-      `in-ritardo` (oltre **48 h**) → `fresca`. Ciò che *toglie* avvisi batte ciò che li rende
-      *vecchi*.
-- [ ] **Un campo non letto è `null`, mai `0`** — e se la Edge tace il banner non appare: nessun
-      verde per un'assenza di notizie.
-- [ ] **`fonti_isolate: null` = «elenco non richiesto»**, non «nessuna fonte isolata».
-- [ ] **Istante nel futuro → 0 ore**, non un errore: gli orologi dei server non sono sincronizzati.
+- [ ] **Quattro stati, un solo asse: la freschezza** — `live` (sotto **1,5 h**, badge verde `LIVE`
+      con pallino che pulsa) → `attivo` (entro **24 h**, `OPERATIVO`) → `in-ritardo` (oltre,
+      `IN ATTESA`, «Ultimo giro 30 ore fa») → `guasta` (nessun ciclo leggibile, `IN AVVIO`). Nessun
+      tono è un allarme: card bianca, barra d'accento, nessuna icona di divieto, nessun fondo giallo.
+- [ ] **La cifra in evidenza è una MISURA, non una stima** — «700+» è il numero vero arrotondato per
+      difetto alla centinaia (`almenoCentinaia`): 712 opportunità si dicono «700+», 48 si dice «48».
+      Mai un numero gonfiato per fare scena.
+- [ ] **Le fonti riuscite si contano solo se sono misurati ENTRAMBI i numeri** — `fonti_whitelist −
+      errori`; senza il conto degli errori il chip «Fonti elaborate» non compare, perché «tutte
+      riuscite» non è un'affermazione che possiamo fare.
+- [ ] **Le fonti temporaneamente sorde NON sono materia del banner** — quarantena ed errori per fonte
+      si leggono nel pannello Admin (Linea Rossa, §26.110): nel banner diventavano un allarme che
+      l'utente leggeva come un errore proprio.
+- [ ] **Un campo non letto è `null`, mai `0`** — se la Edge tace il banner non appare: nessun verde
+      per un'assenza di notizie. I chip esistono solo per i numeri misurati (scansioni 24 h, fonti
+      elaborate, avvisi attivi, copertura).
+- [ ] **La freschezza si dice in minuti o in ore, MAI in giorni** — con un ciclo orario «ieri» e «2
+      giorni fa» sono unità sbagliate e suonano come un referto: 50 ore restano «50 ore fa». Se il
+      worker viene spento o sospeso, si riportano indietro **insieme** soglia e copy.
+- [ ] **La freschezza si rilegge, non si simula** — polling ogni 5 minuti, orologio interno ogni 30
+      secondi, rilettura al ritorno sulla scheda. Nessun percorso scrive un istante finto; un istante
+      nel futuro vale 0 ore.
+- [ ] **Il numero della bacheca dichiara il suo PERIMETRO** — accanto al conteggio: «Asti + 60 km:
+      Alessandria 32 km · Torino 46 km · Vercelli 51 km». Togliere una provincia non restringe il
+      perimetro: **cambia il centro** del raggio dei 60 km, che può riammettere le vicine e
+      aggiungerne una mai scelta. Il conto lo dice, invece di sembrare rotto.
+- [ ] **Il perimetro si legge anche dove si sceglie** — sotto le pillole di «Dove vuoi cercare?», con
+      i chilometri dal capoluogo principale, e conta solo le province ATTIVE per il piano (Base = 1):
+      la frase non promette ciò che il feed non interroga.
+- [ ] **Una riga ammessa dal solo raggio lo dichiara** — nel motivo: «provincia vicina: fuori dalle
+      province scelte (32 km da AT)». Una riga vicina non si presenta come match pieno della zona.
 - [ ] **Il banner appare solo con la sessione** e sta sopra l'elenco: a chi non è loggato non si
       racconta l'infrastruttura.
-- [ ] **Guardia**: `npm run test:telemetria-scansione` (orologio fermo: silenzio, priorità, soglia
-      47/49 h, singolare/plurale, purezza, cablaggio), in `npm test`.
+- [ ] **Guardie**: `npm run test:telemetria-scansione` (12 sezioni: silenzio, ciclo in diretta e
+      «1.200+», `ultimo_ciclo` che batte `ultima_scansione`, soglie 1,5 h · 23 h · 25 h, mai giorni,
+      niente referto tecnico, avvio a freddo, date e durate, misure solo se misurate, purezza,
+      cablaggio, worker) e `npm run test:ambito-bacheca` (sezione 6: perimetro dichiarato, chilometri,
+      riga vicina, cablaggio), in `npm test`.
+
 
 ## 15. C'è una distanza che non si ordina: si SBARRA (§26.148), e le emergenze stanno in fondo
 

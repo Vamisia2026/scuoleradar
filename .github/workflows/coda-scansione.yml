@@ -1,0 +1,88 @@
+# ============================================================
+# Ciclo ORARIO della coda di scansione — il radar non dorme (§26.149)
+#
+# Perché esiste: fino a §26.148 l'unico giro automatico era `scraper.yml`
+# (tre volte al giorno, lun-ven). Il banner della bacheca mostrava quindi
+# «ultima scansione 2 giorni fa» ogni volta che un ponte o un weekend
+# allungava il silenzio — e un numero vecchio, sopra l'elenco, si legge come
+# un errore del sistema. Non era un difetto del copy: era la cadenza.
+#
+# Cosa fa: un giro della CODA REGIONALE già esistente (`npm run scrape:coda`),
+# che prende in carico i target dovuti (`scan_targets.next_run_at`), li marca
+# con `last_checked_at` e li riconsegna alla coda per il giro successivo.
+# Così la telemetria registra cicli continui, e il banner può dire «ultimo ciclo
+# 14 minuti fa» perché è vero.
+#
+# Perché `--loop`: un giro che si chiude sul limite ha lasciato target dovuti,
+# quindi ne fa un altro (con tetto `MAX_GIRI_LOOP`, mai infinito). Il budget per
+# giro resta basso (2) perché il worker gira OGNI ORA: meglio tanti giri piccoli
+# che un giro lungo che sfora il timeout e lascia la coda a metà.
+#
+# Secrets richiesti: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+# ============================================================
+name: Coda di scansione (ciclo orario)
+
+on:
+  # :17 di ogni ora — sfasato rispetto agli altri workflow, così due job non
+  # si contendono lo stesso minuto (GitHub sgrana comunque le schedulle cariche).
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      max:
+        description: 'Target presi in carico per giro (default 2)'
+        required: false
+        default: '2'
+
+concurrency:
+  # Un solo ciclo alla volta: un giro successivo non deve pestare i piedi a quello in corso.
+  group: coda-scansione
+  cancel-in-progress: false
+
+jobs:
+  coda:
+    name: Un ciclo della coda regionale
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    # Necessari per committare il LEDGER anti-duplicato (.scuoleradar/).
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Installazione dipendenze
+        run: npm ci
+
+      - name: Validazione TypeScript dello scraper (informativa)
+        continue-on-error: true
+        run: npm run scrape:check
+
+      - name: Ciclo della coda
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # §26.101 — tetti espliciti come nel giro principale: nessun ciclo illimitato.
+          SCRAPER_SCADENZA_MAX: '40'
+          SCRAPER_ELENCHI_MAX: '60'
+          SCRAPER_POST_MAX: '12'
+          SCRAPER_FONTI_MAX: '20'
+        run: |
+          MAX="${{ inputs.max }}"
+          if [ -z "$MAX" ]; then MAX=2; fi
+          echo "Comando: npm run scrape:coda -- --max=$MAX --loop"
+          npm run scrape:coda -- --max="$MAX" --loop
+
+      - name: Commit del LEDGER anti-duplicato (se aggiornato)
+        if: always()
+        shell: bash
+        run: |
+          bash scripts/commit-ledger.sh

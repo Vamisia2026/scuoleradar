@@ -15958,6 +15958,11 @@ sta nella zona dell'utente: per questo il fondo si dichiara, non si cancella.
 
 ## §26.146 — In bacheca si vede la FRESCHEZZA degli albi, non solo le opportunità (06/11/2026)
 
+> **Superato in parte da §26.149** (06/11/2026): l'asse non è più l'allarme ma la freschezza —
+> toni `live`/`attivo`/`in-ritardo`/`guasta`, soglia di fermo **24 h** invece di 48, quarantena
+> dichiarata come *misura* e non come tono. Restano validi e vincolanti il silenzio quando la
+> telemetria manca, «non lo so» ≠ zero e il modulo puro con orologio iniettabile.
+
 La bacheca era onesta sulle righe e muta sul resto: se il crawler si fermava due giorni, l'utente
 non vedeva un guasto — vedeva **meno opportunità**. È il modo peggiore di sbagliare, perché il
 silenzio dell'ingestione arriva travestito da mercato fermo, e nessuno va a controllare.
@@ -16166,4 +16171,287 @@ un altro mestiere, qualsiasi numero la lascia in pagina. La regola che resta è 
 fascia dice perché la riga entra, il voto dice quanto somiglia, e quando non somiglia affatto non c'è
 voto — non c'è riga.** E il ripiego legittimo (ATA, CPIA, serali) non si nasconde: paga una penalità
 dichiarata e, se è nella provincia principale, è il primo dei ripieghi.
+
+
+## §26.149 — Il radar si mostra ACCESO: potenza, copertura, freschezza (06/11/2026)
+
+> **Superato in parte da §26.150**: l'asse della freschezza (soglie, `ultimo_ciclo`, minuti) e il
+> ciclo orario restano validi; il **registro** del banner no. Quarantena ed errori per fonte escono
+> dal testo (restano nel pannello Admin), le cifre diventano una «prova di lavoro» e il numero
+> della bacheca dichiara il proprio perimetro geografico.
+
+
+La richiesta di Bartolo è arrivata guardando la bacheca: **«sembra un errore»**. Il banner di
+§26.146 era onesto ma sbagliava il registro — un `⛔` giallo sopra l'elenco delle opportunità si
+legge come «hai sbagliato qualcosa», non come «il servizio sta lavorando» — e aveva un difetto più
+profondo del colore: la soglia di allarme era **48 h** mentre l'unico giro automatico restava
+`scraper.yml` (tre volte al giorno, lun-ven). Ogni ponte e ogni weekend producevano così «ultima
+scansione 2 giorni fa»: un numero **vero** su una pipeline che dormiva davvero. Il copy non si
+salvava con il copy. Servivano due cose insieme, ed è la ragione per cui stanno nella stessa
+sezione: un banner che dice «LIVE» senza un ciclo orario sarebbe una bugia, e un ciclo orario senza
+banner resterebbe invisibile.
+
+### 1. L'asse nuovo è la freschezza, non l'allarme
+
+Quattro stati, un solo asse (quanto è recente l'ultimo ciclo), e la quarantena che **non è più un
+tono**: è una misura dichiarata dentro il dettaglio e nei chip numerici.
+
+| tono | quando | badge | titolo |
+| --- | --- | --- | --- |
+| `live` | ultimo ciclo sotto `ORE_LIVE` = **1,5 h** | LIVE (pallino che pulsa) | «Radar attivo · N sorgenti in ascolto» |
+| `attivo` | dentro `ORE_PRIMA_DEL_RITARDO` = **24 h** | OPERATIVO | «Radar attivo · copertura su N province» |
+| `in-ritardo` | oltre le 24 h | DA ALLINEARE | «Ciclo fermo da 2 giorni» |
+| `guasta` | nessun ciclo leggibile | IN AVVIO | «Telemetria non ancora registrata» |
+
+Le soglie scendono da 48 a **24 h** perché la cadenza cambia (§4): un giorno intero di silenzio con
+un worker orario non è una finestra fisiologica, è un guasto. `ORE_CADENZA = 1` dichiara nel codice
+la cadenza che il copy promette, e la guardia la verifica.
+
+### 2. `ultimo_ciclo`: il segnale di vita è il più recente, non il più comodo
+
+`last_scanned_at` non basta più: `npm run scrape:coda` prende in carico i target della coda
+regionale e marca `scan_targets.last_checked_at`, **senza toccare** la data delle pagine lette. Con
+un solo timestamp il motore sembrerebbe fermo mentre sta lavorando.
+
+La Edge `crawler-admin` calcola quindi `ultimo_ciclo = piuRecente(ultima_run.started_at,
+ultimaScansione, codaIstantanea)`: tre fonti, il massimo vince, `null` se nessuna è leggibile.
+`ultima_scansione` resta nel contratto come **ripiego** — se in produzione gira ancora la versione
+precedente della Edge, il campo `ultimo_ciclo` non arriva e il banner continua a funzionare con il
+vecchio dato: degradazione, non errore.
+
+Accanto alla freschezza, la Edge espone le due misure che rendono l'idea di potenza: `cicli_24h`
+(righe di `scraper_runs` nelle ultime 24 ore, `null` se la tabella non è leggibile) e
+`province_coperte` (province distinte con almeno un `discovered_links` `active_crawler`).
+
+### 3. I numeri: solo se misurati, e scritti senza ICU
+
+La regola di §26.146 non cambia, viene solo estesa ai campi nuovi: **campo non letto = `null`, mai
+`0`**. `fonti_isolate?.length ?? null` — l'elenco non richiesto non diventa «zero sorgenti in
+quarantena». I chip si aggiungono uno per uno (`compilaMisure`) e la coda a zero non produce un
+chip: è un'assenza, non una misura da mostrare.
+
+`migliaia` è riscritta **senza** `Intl.NumberFormat('it-IT')`: il risultato dipende dai dati ICU
+della macchina, quindi la guardia sarebbe verde in locale e rossa in CI (o il contrario). Un conteggio
+intero non negativo non ha bisogno di un locale: il punto si inserisce con una regex, e si verifica.
+
+
+
+### 4. Il worker orario: `.github/workflows/coda-scansione.yml` (nuovo)
+
+La coda regionale esisteva dal §26.21 ma si muoveva solo a mano. Ora ha un ciclo suo:
+
+* **cron `17 * * * *`** — sfasato dagli altri workflow, così due job non si contendono lo stesso
+  minuto;
+* `npm run scrape:coda -- --max=2 --loop` — due target per giro e, se il giro si chiude sul limite,
+  un altro subito dopo (`MAX_GIRI_LOOP` come tetto, mai infinito). Meglio tanti giri piccoli che un
+  giro lungo che sfora il timeout e lascia la coda a metà;
+* `concurrency: coda-scansione` — un solo ciclo alla volta, `cancel-in-progress: false`;
+* `permissions: contents: write` + `scripts/commit-ledger.sh` in `if: always()` — il ledger
+  anti-duplicato (`.scuoleradar/`) si committa anche quando il giro fallisce;
+* tetti espliciti come nel giro principale (`SCRAPER_*_MAX`, §26.101);
+* secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+
+**Da fare perché sia vero in produzione**: deploy della Edge `crawler-admin` aggiornata e attivazione
+del workflow con i due secrets. Finché non sono fatti, il banner mostra il ripiego
+(`ultima_scansione`) e nessun numero nuovo — non un numero finto.
+
+### 5. Il modulo si è spezzato in due, per responsabilità
+
+`lib/telemetriaScansione` era a **292 righe**, sopra il soft cap di 250 che il gate conta come
+violazione nuova. Invece di comprimere i commenti si è separato il *cosa* dal *quando*:
+
+* `src/lib/telemetriaScansione.ts` (**231**) — toni, soglie, scelta del banner: le regole;
+* `src/lib/telemetriaScansioneCopy.ts` (**81**) — `migliaia`, `fraseQuarantena`, `fraseErrori`,
+  `compilaMisure`, `maiuscola`, `MisuraScansione`: il modo di dire le misure.
+
+Il tipo `MisuraScansione` vive nel gemello ed è ridichiarato dal modulo principale, così il banner
+importa un file solo.
+
+### 6. Cosa è cambiato nel codice
+
+* `src/lib/telemetriaScansione.ts` — toni `live`/`attivo`/`in-ritardo`/`guasta`, `ORE_LIVE`,
+  `ORE_CADENZA`, `ORE_PRIMA_DEL_RITARDO` 24 h, `durataLeggibile` a granularità di minuti,
+  `durataTrascorsa` per i titoli, input `ultimo_ciclo`/`cicli_24h`/`province_coperte`;
+* `src/lib/telemetriaScansioneCopy.ts` — **nuovo**, le frasi e i numeri già formattati;
+* `src/pages/dashboard/components/BannerTelemetriaScansione.tsx` (155) — card **bianca** con bordo
+  d'accento, icona lucide (`Radar`/`Activity`/`RefreshCw`/`ShieldCheck`), badge con pallino, chip
+  numerici, polling **5 min** + orologio **30 s** + rilettura al `focus`, nessuna icona d'allarme;
+* `src/services/crawlerTelemetry.ts` (211) — `ultimo_ciclo?`, `cicli_24h?`, `province_coperte?` nel
+  contratto del client;
+* `supabase/functions/crawler-admin/index.ts` (527, Deno) — `piuRecente()`, lettura `cicli_24h` e
+  `province_coperte`, `ultimo_ciclo` come massimo fra le tre fonti;
+* `.github/workflows/coda-scansione.yml` — **nuovo** (§4).
+
+### 7. Guardie e verifiche
+
+`scripts/test-telemetria-scansione.ts` (247, **12 sezioni · 70 verifiche**, in `npm test`) è stata
+riscritta: silenzio, ciclo in diretta con i chip, `ultimo_ciclo` che batte `ultima_scansione`, soglie
+(1 h · 23 h · 25 h · 50 h), quarantena dichiarata e mai inventata, errori che non cambiano il tono,
+avvio a freddo, date e durate (futuro, data illeggibile, singolari), misure solo se misurate,
+purezza di **entrambi** i moduli, cablaggio in bacheca (sopra `ElencoOpportunita`, polling, focus,
+nessuna icona d'allarme), worker orario e campi della Edge.
+
+Verifiche di questa sessione, da `project/`: `npm run typecheck` 0 · `npm test` (catena intera) 0 ·
+`npm run test:architettura` **148 = baseline, nessuna nuova** · `npm run build` 0 · `eslint` sui file
+toccati 0.
+
+### 8. Nota di sessione
+
+Due tentazioni, opposte e ugualmente comode: **cambiare solo le parole** (togliere «errore» dal copy
+e lasciare la cadenza com'era — il banner sarebbe rimasto sincero su un motore che dorme) e
+**nascondere la quarantena** per avere un banner finalmente pulito (le sorgenti isolate spariscono dal
+testo, e i bandi che mancano diventano un mistero). La regola che resta è in una riga: **il banner
+dice la potenza quando c'è e la miseria quando c'è — quello che non fa mai è dire una cosa per
+l'altra.**
+
+
+## §26.150 — Prova di lavoro e perimetro dichiarato (06/11/2026)
+
+Due richieste in una sola sessione, e non sono due temi: sono **la stessa domanda** — *perché
+questo numero?* Il banner sopra la bacheca diceva «Radar attivo» con un dettaglio da referto
+(quarantena, errori per fonte) e la bacheca contava 48 opportunità; togliendo tre province dal
+profilo il conto scendeva a 33 senza che nessuna superficie spiegasse **quali** province stessero
+ancora contando. Il primo riquadro era marketing mancato, il secondo era un filtro opaco. Qui si
+chiudono entrambi.
+
+### 1. Il banner diventa una prova di lavoro
+
+Il tono resta uno solo — la freschezza (§26.149) — ma il contenuto cambia registro: non più
+«cosa manca», bensì **quanto ha lavorato il radar**.
+
+| tono | quando | badge | titolo |
+| --- | --- | --- | --- |
+| `live` | ultimo ciclo < 1,5 h | **LIVE** (verde, pallino che pulsa) | «Radar in tempo reale · 1.200+ opportunità attive rilevate» |
+| `attivo` | ≤ 24 h | OPERATIVO | «Radar operativo · copertura su N province» |
+| `in-ritardo` | > 24 h | IN ATTESA | «Ultimo giro 30 ore fa» (mai «ieri», mai «giorni») |
+| `guasta` | nessun ciclo | IN AVVIO | «Radar in avvio · primo giro in corso» |
+
+Sotto il titolo, tre misure in fila: **«Ultimo giro 14 minuti fa · 1.284 pagine lette nelle ultime
+24 ore · 512 fonti elaborate con successo»**. Nei chip: `Scansioni 24h`, `Fonti elaborate`,
+`Avvisi attivi`, `Copertura`. La cifra `700+` è `almenoCentinaia`: il numero VERO arrotondato per
+difetto alla centinaia, quindi sempre vero (712 opportunità sono davvero «700 e più»).
+
+`durataLeggibile` non restituisce più `ieri` né `N giorni fa`: con un ciclo orario quei termini
+sono unità di misura sbagliate e suonano come un referto. Un silenzio di 50 ore si legge **«50 ore
+fa»**. È la sola regola del modulo che è stata *rimossa* (il ramo dei giorni), non aggiunta.
+
+### 2. Cosa esce dal banner (e dove va)
+
+Quarantena ed errori per fonte **non compaiono più nel testo**: le fonti temporaneamente sorde
+sono materia del pannello Admin (Linea Rossa, §26.110, `components/CrawlerTelemetry.tsx`), che
+continua a mostrare `fonti_isolate`, motivo e giorni alla riprova. Il banner dice solo quante fonti
+sono state **elaborate con successo**: `fonti_whitelist − errori`, e **solo se entrambi i numeri
+sono stati letti** — se il conto degli errori manca, il chip non compare affatto (mai «tutte
+riuscite» per assenza di dato).
+
+`fraseQuarantena` e `fraseErrori` sono state rimosse da `lib/telemetriaScansioneCopy`: il modulo
+non ha più una frase per ciò che non dice. Il divieto storico resta intatto — un campo non letto è
+`null`, mai `0`.
+
+### 3. L'audit del filtro geografico: **48 → 33 non era un errore**
+
+La segnalazione era precisa: «deseleziono tre province (Torino, Cuneo, Alessandria, resta Asti) e
+il Radar passa da 48 a 33 opportunità invece di filtrare nettamente». Misurato sulle coordinate
+vere dei capoluoghi (`src/data/provinceCoordinate.ts`):
+
+| profilo | principale | perimetro chiesto dalla query |
+| --- | --- | --- |
+| `TO, CN, AL, AT` | TO | **TO, CN, AL, AT** (4) — la secondaria Asti non porta raggio |
+| `AT` (dopo la deselezione) | AT | **AT, AL (32 km), TO (46 km), VC (51 km)** (4) |
+| `AL, AT` | AL | AL, AT, VC (49 km), PV (52 km), NO (60 km) (5) |
+
+La causa non è un conteggio sbagliato: **deselezionare non restringe, cambia il centro**. Con Asti
+come principale il raggio dei 60 km (§26.139) riammette Alessandria e Torino — le due province
+appena tolte — e aggiunge **Vercelli**, mai scelta. Il perimetro resta di quattro province, il conto
+scende solo di ciò che stava fuori (Cuneo, ~90 km da Asti). Tutto corretto per la regola, tutto
+incomprensibile per chi guarda: nessuna superficie diceva *perché*.
+
+Difetti trovati e chiusi in questo giro:
+
+1. **il perimetro era invisibile** — nessuna frase, né in bacheca né nelle preferenze (§4);
+2. **una riga ammessa dal solo raggio si presentava come match pieno** — con la classe esatta la
+   cascata le dà 100 e il motivo parlava solo di «classe di concorso: A-24». Ora ogni riga «vicina»
+   dichiara `provincia vicina: fuori dalle province scelte (32 km da AT)` nel proprio motivo (§4);
+3. **il pannello scuole di `PreferenzeRadar` usava l'intera selezione salvata** mentre la bacheca ne
+   usava solo la parte attiva (tetto di piano: Base = 1 provincia): un utente Base con quattro
+   province riceveva suggerimenti su istituti che il feed non avrebbe mai interrogato. Ora il
+   pannello passa da `limitaSelezione(provinceCodici, maxProvince)` — lo stesso tetto.
+
+Nessuna regola di prodotto è cambiata: la geografia resta l'unico sbarramento rigido e il raggio
+continua a partire dalla **principale**. È cambiato ciò che l'utente può **verificare**.
+
+### 4. Il perimetro si dichiara: `lib/perimetroRicerca`
+
+Nuovo modulo PURO (158 righe) che non riscrive la regola — legge `provinceDiRicerca` — ma la
+**descrive**: nomi, chilometri, ordine.
+
+* `perimetroRicerca(province, { raggioKm })` → `{ principale, principaleNome, proprie, entroRaggio: [{codice, nome, km}], perimetro, raggioKm }`;
+* `frasePerimetro(p)` → «Cerchi in Asti e, entro 60 km da Asti, in Alessandria (32 km), Torino
+  (46 km) e Vercelli (51 km).» — sotto le pillole di «Dove vuoi cercare?», dove si toglie e si
+  aggiunge una provincia;
+* `riassuntoPerimetro(p)` → «Asti + 60 km: Alessandria 32 km · Torino 46 km · Vercelli 51 km» —
+  sotto il conteggio della bacheca, dove il numero 33 deve potersi spiegare in una riga;
+* `provinciaNelPerimetro(p, codice)` → `propria` · `raggio` · `fuori` · `non-applicabile`.
+
+Il feed non ha più una propria copia del perimetro: `useInterpelliFeed` calcola
+`perimetroRicerca(provinceAttive)` e usa `perimetro.perimetro` come filtro della query, restituendo
+l'**oggetto** al contesto (`AppContextValue.perimetro`). La frase mostrata e la query eseguita
+nascono quindi dalla stessa chiamata: non possono divergere per costruzione, e la guardia lo
+verifica (`perimetroRicerca(provinceAttive)` nel feed, `frasePerimetro(perimetro)` nelle preferenze,
+`riassuntoPerimetro` in bacheca).
+
+Il tetto di piano entra **prima** del perimetro (`provinceAttive = limitaSelezione(...)`), così la
+frase non promette province che il piano Base non sta interrogando.
+
+### 5. File toccati
+
+* `src/lib/perimetroRicerca.ts` — **nuovo** (158): `perimetroRicerca`, `frasePerimetro`,
+  `riassuntoPerimetro`, `provinciaNelPerimetro`, tipi `PerimetroRicerca` / `ProvinciaNelRaggio`;
+* `src/lib/telemetriaScansione.ts` (231 → 229) — titoli e dettaglio «prova di lavoro», `durataLeggibile`
+  senza giorni, `fontiElaborate` per le fonti riuscite, input `scansionate_24h`/`fonti_whitelist`;
+* `src/lib/telemetriaScansioneCopy.ts` (81 → 130) — `almenoCentinaia` («700+»), `fraseScansioni`,
+  `fraseFonti`, `fraseGiro`, `compilaMisure` con le quattro etichette nuove; **rimosse**
+  `fraseQuarantena` e `fraseErrori`;
+* `src/pages/dashboard/components/BannerTelemetriaScansione.tsx` (155 → 171) — card bianca con barra
+  d'accento, badge **verde** `LIVE` (accent-500), pastiglia tonda dell'icona, chip numerici in griglia
+  2×2; nessun fondo `warning`/`error`, nessuna icona di divieto, polling 5 min + orologio 30 s + focus;
+* `src/contexts/app/useInterpelliFeed.ts` — il perimetro nasce da `perimetroRicerca(provinceAttive)` ed
+  è esposto nel risultato; `src/contexts/app/types.ts` + `src/contexts/AppContext.tsx` —
+  `AppContextValue.perimetro`;
+* `src/pages/dashboard/components/ElencoOpportunita.tsx` — riga «Perimetro: …» sotto il conteggio;
+* `src/departments/radar/preferenze/PannelloProvince.tsx` — frase del perimetro sotto le pillole;
+  `src/departments/radar/PreferenzeRadar.tsx` — suggerimenti scuole sullo stesso tetto di piano;
+* `src/lib/bachecaInterpelli.ts` (234) — ogni riga ammessa dal raggio dichiara
+  `provincia vicina: fuori dalle province scelte (N km da XX)`.
+
+### 6. Guardie e verifiche
+
+* `scripts/test-telemetria-scansione.ts` (196, **12 sezioni**) riscritta: silenzio, badge LIVE e
+  «1.200+», `ultimo_ciclo` che batte `ultima_scansione`, soglie 1,5/24 h, **mai giorni** (fino a 240
+  ore), **niente referto tecnico** (nessuna quarantena, nessun «hanno risposto male»), fonti riuscite
+  solo con entrambi i numeri, avvio a freddo, date e singolari, misure solo se misurate, purezza di
+  entrambi i moduli (senza `Intl.NumberFormat`), cablaggio (badge verde, nessun fondo d'allarme,
+  polling e focus), worker orario e campi della Edge;
+* `scripts/test-ambito-bacheca.ts` (231) — nuova sezione **6**: perimetro di Asti = `AT, AL 32 km,
+  TO 46 km, VC 51 km`; quattro province = nessun raggio; **da 4 a 1 il perimetro resta di 4** (è il
+  raggio, non un filtro rotto); nessuna provincia entra senza essere dichiarata; la query del feed
+  chiede esattamente il perimetro; Alessandria e Vercelli entrano in bacheca e **la riga dichiara i
+  chilometri**; cablaggio delle tre superfici;
+* guardie riallineate al nuovo perimetro del feed: `test-compatibilita-graduata`,
+  `test-riempitivi-bacheca`, `test-filtri-scuole` (tetto di piano nel pannello scuole).
+
+Verifiche di questa sessione, da `project/`: `npm run typecheck` 0 · `npm test` (catena intera) 0 ·
+`npm run test:architettura` **148 = baseline, nessuna nuova** · `npm run build` 0 (11,48 s) ·
+`eslint` sui file toccati 0 errori.
+
+### 7. Nota di sessione
+
+La tentazione comoda era trattare i due punti come due: cambiare le parole del banner e, per il
+filtro, rispondere «è il raggio dei 60 km, funziona così». La misura dice che è vero — e che era
+comunque un torto: **un filtro che non si può leggere è un filtro che sembra rotto**. La regola che
+resta è in una riga: *ogni numero che l'utente vede deve poter essere spiegato dalla superficie che
+lo mostra* — il banner dice quanto ha letto il radar e da quanto tace, la bacheca dice su quali
+province sta contando, la riga dice perché è lì.
+
+
 

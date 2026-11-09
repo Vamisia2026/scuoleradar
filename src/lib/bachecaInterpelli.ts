@@ -43,6 +43,8 @@ import { valutaCompatibilita, type ProfiloModali } from './compatibilitaGraduata
 import { giudizioScuole } from './filtriScuole';
 import { avvisoCompatibileConProfilo } from './matchingEngine';
 import { motivoRigaNonOpportunitaAvviso } from './qualitaAvviso';
+import { distanzaKm } from './prossimitaGeografica';
+import { provinciaPrincipale } from './provinceRadar';
 import { scalaParacadute } from './scalaParacadute';
 import { eOpportunitaConScadenza } from './scadenza';
 
@@ -97,6 +99,8 @@ export function bachecaInterpelli(
   let riserveInBacheca = 0;
   /** §26.145 — righe sotto la soglia del fondo: restano, ma la card le dichiara. */
   let fondoInBacheca = 0;
+  /** §26.150 — la principale del profilo: centro del raggio che va DICHIARATO sulla riga. */
+  const principale = provinciaPrincipale(profilo.province);
 
   for (const i of fonti) {
     // §26.71 — REGOLA FERREA: senza una scadenza dichiarata e non ancora passata la riga
@@ -189,11 +193,24 @@ export function bachecaInterpelli(
     // motore aveva escluso la riga) i suoi motivi descriverebbero un altro numero.
     const motivi = punteggio === valutazione.punteggio && !valutazione.escluso ? undefined : [];
 
+    // §26.150 — LA RIGA DICHIARA IL PERIMETRO. Una riga ammessa SOLO dal raggio (province
+    // scelte + 60 km) non sta nella zona che l'utente ha scelto e non deve sembrare un match
+    // pieno: il motivo dice che è vicina, fuori dalle province scelte e a quanti chilometri.
+    // È la stessa frase del perimetro dichiarato accanto al conteggio (`lib/perimetroRicerca`),
+    // in forma di tooltip: così il numero della bacheca si può spiegare riga per riga.
+    const kmVicina = scala.provincia === 'vicina' ? distanzaKm(principale, avviso.province) : null;
+    const dichiarazioneArea =
+      scala.provincia === 'vicina'
+        ? kmVicina === null
+          ? 'provincia vicina: fuori dalle province scelte'
+          : `provincia vicina: fuori dalle province scelte (${kmVicina} km da ${principale})`
+        : '';
+
     lista.push(
       rigaInBacheca(i, valutazione, {
         punteggio,
         scuolaPreferita: scuole.preferita,
-        motivoInPiu: voce.etichetta || undefined,
+        motivoInPiu: [voce.etichetta, dichiarazioneArea].filter(Boolean).join(' · ') || undefined,
         motivi,
       }),
     );

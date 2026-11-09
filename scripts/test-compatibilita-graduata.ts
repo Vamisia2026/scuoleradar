@@ -171,7 +171,7 @@ const graduata = leggi('src/lib/compatibilitaGraduata.ts');
 const card = leggi('src/components/InterpelloCard.tsx');
 const modale = leggi('src/components/InterpelloDettaglioModal.tsx');
 check('feed: delega alla bacheca pura', true, /bachecaInterpelli\(/.test(feed));
-check('feed: cerca anche le province entro il raggio', true, /provinceDiRicerca\(/.test(feed));
+check('feed: cerca anche le province entro il raggio', true, /perimetroRicerca\(provinceAttive\)/.test(feed));
 check('bacheca: applica le modali con l’opzione della bacheca', true, /valutaCompatibilita\(/.test(bacheca) && /provinceLimitrofe: true/.test(bacheca));
 check('bacheca: la cascata mette il pavimento, non un cap (§26.144)', true, /voceCascata\(/.test(bacheca) && /Math\.max\(valutazione\.punteggio, voce\.punteggio\)/.test(bacheca));
 check('graduata: il motore resta la base del punteggio', true, /punteggioCompatibilita\(/.test(graduata));

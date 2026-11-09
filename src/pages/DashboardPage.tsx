@@ -21,6 +21,7 @@ export function DashboardPage() {
   const {
     user,
     interpelliFiltrati,
+    perimetro,
     preferenze,
     pianoStato,
     hasProAccess,
@@ -105,6 +106,7 @@ export function DashboardPage() {
       <ElencoOpportunita
         lista={listaOpportunita}
         totale={opportunitaAttive.length}
+        perimetro={perimetro}
         accordion={{ aperto: opportunitaAperte, onToggle: toggleOpportunita }}
         hasAccessoPro={hasProAccess}
         mostraInvitoProfilo={Boolean(user) && !preferenze.onboarded}
