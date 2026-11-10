@@ -453,4 +453,134 @@ export class SartoriaSupabaseClient {
   async dispatch(records: readonly DiscoveryRecord[], signal: AbortSignal): Promise<number> {
     if (records.length === 0) return 0;
 
-    if (this.config.dryRun || !this.supabase
+    if (this.config.dryRun || !this.supabase) {
+      for (const r of records) console.log('[SARTORIA-DRYRUN]', JSON.stringify(r));
+      return records.length;
+    }
+
+    const payloadForSupabase = records.map((r) => ({
+      record_id: r.record_id,
+      region: r.region,
+      province: r.province,
+      matched_keyword: r.keyword,
+      source_url: r.source_url,
+      school_identifier: r.school_identifier,
+      school_name: r.school_name,
+      title: r.title,
+      snippet: r.snippet,
+      discovery_confidence: r.institutional_score,
+      schema_version: r.schema_version,
+    }));
+
+    let dispatched = 0;
+    for (let i = 0; i < payloadForSupabase.length; i += this.config.sartoriaBatchSize) {
+      if (signal.aborted) break;
+      const batch = payloadForSupabase.slice(i, i + this.config.sartoriaBatchSize);
+
+      const { error } = await this.supabase
+        .from('discovered_links')
+        .upsert(batch, { onConflict: 'record_id' });
+
+      if (error) {
+        console.error(`[ERROR] Supabase batch upsert failed | ${error.message} | ${batch.length} records dropped`);
+        continue;
+      }
+      dispatched += batch.length;
+      console.log(`[INFO] Supabase staging batch ok | ${batch.length} records written`);
+    }
+    return dispatched;
+  }
+}
+
+// =============================================================================
+// Config from environment
+// =============================================================================
+
+function loadConfig(): DiscoveryConfig {
+  const int = (name: string, def: number): number => {
+    const raw = process.env[name];
+    if (!raw) return def;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) ? n : def;
+  };
+  const str = (name: string, def: string | null): string | null =>
+    process.env[name] ?? def;
+
+  const maxCellsRaw = process.env.MAX_CELLS;
+  const maxCells = maxCellsRaw ? Number.parseInt(maxCellsRaw, 10) : null;
+
+  return {
+    concurrency: int('CONCURRENCY', 8),
+    requestTimeoutMs: int('REQUEST_TIMEOUT_MS', 15_000),
+    maxRetries: int('MAX_RETRIES', 4),
+    baseBackoffMs: int('BASE_BACKOFF_MS', 500),
+    passThreshold: int('PASS_THRESHOLD', 3),
+    maxCells: maxCells !== null && Number.isFinite(maxCells) ? maxCells : null,
+    supabaseUrl: str('SUPABASE_URL', null),
+    supabaseServiceRoleKey: str('SUPABASE_SERVICE_ROLE_KEY', null),
+    sartoriaBatchSize: int('SARTORIA_BATCH_SIZE', 50),
+    dryRun: (process.env.DRY_RUN ?? 'true').toLowerCase() !== 'false',
+  };
+}
+
+function buildBackend(config: DiscoveryConfig): SearchBackend {
+  const kind = (process.env.SEARCH_BACKEND ?? 'mock').toLowerCase();
+  if (kind === 'http') {
+    const endpoint = process.env.SEARCH_ENDPOINT;
+    const apiKey = process.env.SEARCH_API_KEY ?? '';
+    if (!endpoint) throw new Error('SEARCH_BACKEND=http requires SEARCH_ENDPOINT');
+    return new HttpSearchBackend(endpoint, apiKey, config);
+  }
+  console.log('[INFO] using MockSearchBackend (set SEARCH_BACKEND=http for live)');
+  return new MockSearchBackend();
+}
+
+// =============================================================================
+// Entry point
+// =============================================================================
+
+async function main(): Promise<void> {
+  const config = loadConfig();
+  const shutdown = new AbortController();
+  let sigCount = 0;
+  const onSignal = (sig: string): void => {
+    sigCount++;
+    if (sigCount > 1) { console.error(`[${sig}] second signal — hard exit`); process.exit(130); }
+    console.warn(`[${sig}] received — graceful shutdown requested`);
+    shutdown.abort();
+  };
+  process.on('SIGINT', () => onSignal('SIGINT'));
+  process.on('SIGTERM', () => onSignal('SIGTERM'));
+
+  const backend = buildBackend(config);
+  const orchestrator = new DiscoveryOrchestrator(backend, config);
+
+  console.log(
+    `[INFO] ScuoleRadar discovery start | cells=${orchestrator.totalCells} | ` +
+    `keywords=${SEARCH_KEYWORDS.length} | concurrency=${config.concurrency} | ` +
+    `dry_run=${config.dryRun} | max_cells=${config.maxCells ?? 'all'}`,
+  );
+
+  const startedAt = Date.now();
+  const records = await orchestrator.run(shutdown.signal);
+  const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
+
+  const stats = orchestrator.getStats();
+  const withMim = records.filter((r) => r.school_identifier !== null).length;
+  console.log(
+    `[INFO] discovery done | ${elapsed}s | cells=${stats.cellsProcessed} | ` +
+    `records=${records.length} | with_mim=${withMim} | ` +
+    `rejected_blacklist=${stats.rejectedBlacklist} | ` +
+    `rejected_score=${stats.rejectedInstitutional} | ` +
+    `dupes=${stats.duplicateSkipped} | backend_errors=${stats.backendErrors}`,
+  );
+
+  const sartoria = new SartoriaSupabaseClient(config);
+  const dispatched = await sartoria.dispatch(records, shutdown.signal);
+  console.log(`[INFO] hand-off complete | records written/dispatched=${dispatched}`);
+}
+
+main().catch((err) => {
+  console.error('[FATAL]', err);
+  process.exit(1);
+});
