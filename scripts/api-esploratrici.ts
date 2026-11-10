@@ -4,7 +4,8 @@
  */
 
 import * as crypto from 'node:crypto';
-import { createClient } from '@supabase/supabase-js';
+import { pathToFileURL } from 'node:url';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 // =============================================================================
 // Types
@@ -27,7 +28,7 @@ export interface DiscoveryRecord {
   readonly title: string | null;
   readonly snippet: string | null;
   readonly institutional_score: number;
-  readonly schema_version: '1.2';
+  readonly schema_version: '1.3';
 }
 
 export interface SearchBackend {
@@ -39,6 +40,38 @@ export interface SearchBackend {
   ): Promise<RawSearchResult[]>;
 }
 
+export interface SupabaseColumnMap {
+  readonly record_id: string;
+  readonly region: string;
+  readonly province: string;
+  readonly matched_keyword: string;
+  readonly source_url: string;
+  readonly url_alias: string | null;
+  readonly domain_alias: string | null;
+  readonly school_identifier: string;
+  readonly school_name: string;
+  readonly title: string;
+  readonly snippet: string;
+  readonly discovery_confidence: string;
+  readonly schema_version: string;
+}
+
+const DEFAULT_COLUMN_MAP: SupabaseColumnMap = {
+  record_id: 'record_id',
+  region: 'region',
+  province: 'province',
+  matched_keyword: 'matched_keyword',
+  source_url: 'source_url',
+  url_alias: 'url',
+  domain_alias: 'domain',
+  school_identifier: 'school_identifier',
+  school_name: 'school_name',
+  title: 'title',
+  snippet: 'snippet',
+  discovery_confidence: 'discovery_confidence',
+  schema_version: 'schema_version',
+};
+
 export interface DiscoveryConfig {
   readonly concurrency: number;
   readonly requestTimeoutMs: number;
@@ -48,6 +81,10 @@ export interface DiscoveryConfig {
   readonly maxCells: number | null;
   readonly supabaseUrl: string | null;
   readonly supabaseServiceRoleKey: string | null;
+  readonly supabaseTable: string;
+  readonly supabaseColumnMap: SupabaseColumnMap;
+  readonly verifySchema: boolean;
+  readonly strictSchema: boolean;
   readonly sartoriaBatchSize: number;
   readonly dryRun: boolean;
 }
@@ -80,24 +117,26 @@ const REGION_PROVINCE_MAP: Readonly<Record<string, readonly string[]>> = {
 };
 
 // =============================================================================
-// Configuration — Clean & Focused Keyword Catalog
+// Configuration — 21-Term Clean Keyword Catalog
 // =============================================================================
 
 const SEARCH_KEYWORDS: readonly string[] = [
-  // Interpelli & Chiamate Dirette
-  "Interpello", "Interpelli", "Interpello Chiamata Diretta", "Avviso Interpello Supplenza",
-  // Supplenze Docenti
+  // Interpelli & Chiamate Dirette (3)
+  "Interpello", "Interpelli", "Interpello Chiamata Diretta",
+  // Supplenze Docenti (6)
   "Supplenza", "Supplenze", "Supplenza d'Istituto", "Terza Fascia", "Graduatoria d'Istituto", "Disponibilità Ore Spezzone",
-  // Personale ATA
-  "Ricerca Personale ATA", "Collaboratore Scolastico", "Assistente Amministrativo", "Assistente Tecnico",
-  // PNRR & Esperti
-  "PNRR", "Bando Progetto PNRR", "Esperti PNRR", "Animatore Digitale", "Tutor PNRR", "Esperti Esterni Madrelingua",
-  // Messa a Disposizione
+  // Personale Docente & ATA (6)
+  "Ricerca Personale Docente", "Ricerca Personale ATA", "Collaboratore Scolastico", "Collaboratrici Scolastiche", "Assistente Amministrativo", "Assistente Tecnico",
+  // PNRR & Esperti (4)
+  "PNRR", "Bando Progetto PNRR", "Esperti PNRR", "Animatore Digitale",
+  // Messa a Disposizione (2)
   "MAD", "Messa a Disposizione"
 ];
 
+const EXPECTED_KEYWORD_COUNT = 21;
+
 // =============================================================================
-// Configuration — regexes
+// Configuration — regexes & negative role penalization
 // =============================================================================
 
 interface WeightedPattern { readonly re: RegExp; readonly weight: number }
@@ -125,6 +164,18 @@ const INSTITUTIONAL_PATTERNS: readonly WeightedPattern[] = [
   { re: /\bmessa\s+a\s+disposizione\b/i, weight: 2 },
   { re: /\bchiamata\s+diretta\b/i, weight: 2 },
   { re: /\bMAD\b/, weight: 1 },
+];
+
+const NEGATIVE_PATTERNS: readonly WeightedPattern[] = [
+  { re: /\bcuoc[oi]\b/i, weight: 6 },
+  { re: /\bservizio\s+mensa\b/i, weight: 5 },
+  { re: /\bpsicolog[io]\b/i, weight: 5 },
+  { re: /\bnutrizionist[ae]\b/i, weight: 5 },
+  { re: /\bfisioterapist[ae]\b/i, weight: 5 },
+  { re: /\blogopedist[ae]\b/i, weight: 5 },
+  { re: /\blevatrice|ostetric[ae]\b/i, weight: 5 },
+  { re: /\bpedagogist[ae]\b/i, weight: 4 },
+  { re: /\bmanutenzione\s+impianti\b/i, weight: 4 },
 ];
 
 const BLACKLIST_PATTERNS: readonly RegExp[] = [
@@ -203,6 +254,9 @@ function institutionalScore(title: string | null, snippet: string | null): numbe
   for (const { re, weight } of INSTITUTIONAL_PATTERNS) {
     if (re.test(text)) score += weight;
   }
+  for (const { re, weight } of NEGATIVE_PATTERNS) {
+    if (re.test(text)) score -= weight;
+  }
   if (MIM_CODE_RE.test(text)) score += 10;
   return score;
 }
@@ -273,12 +327,7 @@ export class MockSearchBackend implements SearchBackend {
       {
         url: `https://www.ic-${prov}.edu.it/albo/${slug}`,
         title: `Albo Pretorio — ${query} — ${province}`,
-        snippet: `Istituzione Scolastica di ${province}. Bando di ${query}. Dirigente Scolastico. Protocollo n. 1234.`,
-      },
-      {
-        url: `https://www.liceo-${prov}.net/interpelli/${slug}`,
-        title: `${query} — Liceo ${province}`,
-        snippet: `Avviso di ${query} presso il Liceo di ${province}. Graduatoria d'Istituto. Codice meccanografico RMIC8AB00C.`,
+        snippet: `Istituzione Scolastica di ${province}. Bando di ${query}. Dirigente Scolastico. Protocollo n. 1234. Codice RMIC8AB00C.`,
       },
     ];
   }
@@ -327,6 +376,7 @@ interface DiscoveryStats {
   recordsEmitted: number;
   rejectedBlacklist: number;
   rejectedInstitutional: number;
+  rejectedNegativeRole: number;
   duplicateSkipped: number;
   backendErrors: number;
 }
@@ -336,7 +386,7 @@ export class DiscoveryOrchestrator {
   private readonly stats: DiscoveryStats = {
     cellsProcessed: 0, recordsEmitted: 0,
     rejectedBlacklist: 0, rejectedInstitutional: 0,
-    duplicateSkipped: 0, backendErrors: 0,
+    rejectedNegativeRole: 0, duplicateSkipped: 0, backendErrors: 0,
   };
 
   constructor(
@@ -388,7 +438,13 @@ export class DiscoveryOrchestrator {
       }
       const score = institutionalScore(title, snippet);
       if (score < this.config.passThreshold) {
-        this.stats.rejectedInstitutional++;
+        const text = `${title ?? ''} ${snippet ?? ''}`;
+        const hitNegative = NEGATIVE_PATTERNS.some(({ re }) => re.test(text));
+        if (hitNegative) {
+          this.stats.rejectedNegativeRole++;
+        } else {
+          this.stats.rejectedInstitutional++;
+        }
         continue;
       }
       if (this.seenUrls.has(item.url)) {
@@ -406,7 +462,7 @@ export class DiscoveryOrchestrator {
         school_name: null,
         title, snippet,
         institutional_score: score,
-        schema_version: '1.2',
+        schema_version: '1.3',
       });
     }
     this.stats.recordsEmitted += out.length;
@@ -436,13 +492,16 @@ export class DiscoveryOrchestrator {
 }
 
 // =============================================================================
-// Supabase Persistence Hand-off (Staging)
+// Supabase Persistence Hand-off (Staging) with Schema Preflight
 // =============================================================================
 
 export class SartoriaSupabaseClient {
-  private readonly supabase;
+  private readonly supabase: SupabaseClient | null = null;
+  private tableColumns: ReadonlySet<string> | null = null;
+  private readonly columnMap: SupabaseColumnMap;
 
   constructor(private readonly config: DiscoveryConfig) {
+    this.columnMap = config.supabaseColumnMap;
     if (!config.dryRun && config.supabaseUrl && config.supabaseServiceRoleKey) {
       this.supabase = createClient(config.supabaseUrl, config.supabaseServiceRoleKey, {
         auth: { persistSession: false },
@@ -450,43 +509,116 @@ export class SartoriaSupabaseClient {
     }
   }
 
+  private async probeSchema(signal: AbortSignal): Promise<ReadonlySet<string> | null> {
+    if (!this.supabase || !this.config.verifySchema) return null;
+    try {
+      const url = new URL(`${this.config.supabaseUrl}/rest/v1/`);
+      const resp = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          apikey: this.config.supabaseServiceRoleKey!,
+          Authorization: `Bearer ${this.config.supabaseServiceRoleKey}`,
+          Accept: 'application/openapijson',
+        },
+        signal,
+      });
+      if (!resp.ok) return null;
+      const spec = (await resp.json()) as {
+        paths?: Record<string, { get?: { parameters?: Array<{ name: string; in: string }> } }>;
+      };
+      const pathKey = `/${this.config.supabaseTable}`;
+      const pathObj = spec.paths?.[pathKey];
+      const params = pathObj?.get?.parameters;
+      if (!Array.isArray(params)) return null;
+
+      const cols = new Set<string>();
+      for (const p of params) {
+        if (p.in === 'query') cols.add(p.name);
+      }
+      return cols.size > 0 ? cols : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private toRow(record: DiscoveryRecord): Record<string, unknown> {
+    const m = this.columnMap;
+    const row: Record<string, unknown> = {
+      [m.record_id]: record.record_id,
+      [m.region]: record.region,
+      [m.province]: record.province,
+      [m.matched_keyword]: record.keyword,
+      [m.source_url]: record.source_url,
+      [m.school_identifier]: record.school_identifier,
+      [m.school_name]: record.school_name,
+      [m.title]: record.title,
+      [m.snippet]: record.snippet,
+      [m.discovery_confidence]: record.institutional_score,
+      [m.schema_version]: record.schema_version,
+    };
+    if (m.url_alias && m.url_alias !== m.source_url) {
+      row[m.url_alias] = record.source_url;
+    }
+    if (m.domain_alias) {
+      try {
+        row[m.domain_alias] = new URL(record.source_url).hostname;
+      } catch {
+        row[m.domain_alias] = 'unknown';
+      }
+    }
+    return row;
+  }
+
+  private filterRow(row: Record<string, unknown>, allowed: ReadonlySet<string>): Record<string, unknown> {
+    const filtered: Record<string, unknown> = {};
+    const dropped: string[] = [];
+    for (const [k, v] of Object.entries(row)) {
+      if (allowed.has(k)) {
+        filtered[k] = v;
+      } else {
+        dropped.push(k);
+      }
+    }
+    if (dropped.length > 0 && this.config.strictSchema) {
+      throw new Error(`Strict schema violation: columns [${dropped.join(', ')}] not found in table '${this.config.supabaseTable}'`);
+    }
+    return filtered;
+  }
+
   async dispatch(records: readonly DiscoveryRecord[], signal: AbortSignal): Promise<number> {
     if (records.length === 0) return 0;
 
     if (this.config.dryRun || !this.supabase) {
-      for (const r of records) console.log('[SARTORIA-DRYRUN]', JSON.stringify(r));
+      for (const r of records) console.log('[SARTORIA-DRYRUN]', JSON.stringify(this.toRow(r)));
       return records.length;
     }
 
-    const payloadForSupabase = records.map((r) => ({
-      record_id: r.record_id,
-      region: r.region,
-      province: r.province,
-      matched_keyword: r.keyword,
-      source_url: r.source_url,
-      school_identifier: r.school_identifier,
-      school_name: r.school_name,
-      title: r.title,
-      snippet: r.snippet,
-      discovery_confidence: r.institutional_score,
-      schema_version: r.schema_version,
-    }));
+    if (this.tableColumns === null) {
+      this.tableColumns = await this.probeSchema(signal);
+      if (this.tableColumns) {
+        console.log(`[INFO] Supabase table '${this.config.supabaseTable}' columns: ${[...this.tableColumns].join(', ')}`);
+      }
+    }
+
+    const rows = records.map((r) => {
+      const raw = this.toRow(r);
+      return this.tableColumns ? this.filterRow(raw, this.tableColumns) : raw;
+    });
 
     let dispatched = 0;
-    for (let i = 0; i < payloadForSupabase.length; i += this.config.sartoriaBatchSize) {
+    for (let i = 0; i < rows.length; i += this.config.sartoriaBatchSize) {
       if (signal.aborted) break;
-      const batch = payloadForSupabase.slice(i, i + this.config.sartoriaBatchSize);
+      const batch = rows.slice(i, i + this.config.sartoriaBatchSize);
 
       const { error } = await this.supabase
-        .from('discovered_links')
+        .from(this.config.supabaseTable)
         .upsert(batch, { onConflict: 'record_id' });
 
       if (error) {
-        console.error(`[ERROR] Supabase batch upsert failed | ${error.message} | ${batch.length} records dropped`);
+        console.error(`[ERROR] Supabase upsert failed | ${error.message} | ${batch.length} records dropped`);
         continue;
       }
       dispatched += batch.length;
-      console.log(`[INFO] Supabase staging batch ok | ${batch.length} records written`);
     }
     return dispatched;
   }
@@ -495,6 +627,28 @@ export class SartoriaSupabaseClient {
 // =============================================================================
 // Config from environment
 // =============================================================================
+
+function loadColumnMap(): SupabaseColumnMap {
+  const raw = process.env.SUPABASE_COLUMN_MAP_JSON;
+  if (!raw) return DEFAULT_COLUMN_MAP;
+  try {
+    const parsed = JSON.parse(raw) as Partial<SupabaseColumnMap>;
+    const merged: SupabaseColumnMap = { ...DEFAULT_COLUMN_MAP };
+    for (const key of Object.keys(DEFAULT_COLUMN_MAP) as Array<keyof SupabaseColumnMap>) {
+      const value = parsed[key];
+      if (key === 'url_alias' || key === 'domain_alias') {
+        if (value === null || value === '') merged[key] = null;
+        else if (typeof value === 'string') merged[key] = value;
+        continue;
+      }
+      if (typeof value === 'string' && value.length > 0) merged[key] = value;
+    }
+    return merged;
+  } catch {
+    console.warn('[WARN] SUPABASE_COLUMN_MAP_JSON is not valid JSON — using defaults');
+    return DEFAULT_COLUMN_MAP;
+  }
+}
 
 function loadConfig(): DiscoveryConfig {
   const int = (name: string, def: number): number => {
@@ -505,6 +659,11 @@ function loadConfig(): DiscoveryConfig {
   };
   const str = (name: string, def: string | null): string | null =>
     process.env[name] ?? def;
+  const bool = (name: string, def: boolean): boolean => {
+    const raw = process.env[name];
+    if (raw === undefined) return def;
+    return raw.toLowerCase() === 'true';
+  };
 
   const maxCellsRaw = process.env.MAX_CELLS;
   const maxCells = maxCellsRaw ? Number.parseInt(maxCellsRaw, 10) : null;
@@ -518,6 +677,10 @@ function loadConfig(): DiscoveryConfig {
     maxCells: maxCells !== null && Number.isFinite(maxCells) ? maxCells : null,
     supabaseUrl: str('SUPABASE_URL', null),
     supabaseServiceRoleKey: str('SUPABASE_SERVICE_ROLE_KEY', null),
+    supabaseTable: str('SUPABASE_TABLE', 'discovered_links') ?? 'discovered_links',
+    supabaseColumnMap: loadColumnMap(),
+    verifySchema: bool('VERIFY_SCHEMA', true),
+    strictSchema: bool('STRICT_SCHEMA', false),
     sartoriaBatchSize: int('SARTORIA_BATCH_SIZE', 50),
     dryRun: (process.env.DRY_RUN ?? 'true').toLowerCase() !== 'false',
   };
@@ -552,13 +715,20 @@ async function main(): Promise<void> {
   process.on('SIGINT', () => onSignal('SIGINT'));
   process.on('SIGTERM', () => onSignal('SIGTERM'));
 
+  if (SEARCH_KEYWORDS.length !== EXPECTED_KEYWORD_COUNT) {
+    console.warn(
+      `[WARN] keyword count drift: expected ${EXPECTED_KEYWORD_COUNT}, got ${SEARCH_KEYWORDS.length}`,
+    );
+  }
+
   const backend = buildBackend(config);
   const orchestrator = new DiscoveryOrchestrator(backend, config);
 
   console.log(
     `[INFO] ScuoleRadar discovery start | cells=${orchestrator.totalCells} | ` +
     `keywords=${SEARCH_KEYWORDS.length} | concurrency=${config.concurrency} | ` +
-    `dry_run=${config.dryRun} | max_cells=${config.maxCells ?? 'all'}`,
+    `dry_run=${config.dryRun} | max_cells=${config.maxCells ?? 'all'} | ` +
+    `table=${config.supabaseTable}`,
   );
 
   const startedAt = Date.now();
@@ -572,6 +742,7 @@ async function main(): Promise<void> {
     `records=${records.length} | with_mim=${withMim} | ` +
     `rejected_blacklist=${stats.rejectedBlacklist} | ` +
     `rejected_score=${stats.rejectedInstitutional} | ` +
+    `rejected_negative_role=${stats.rejectedNegativeRole} | ` +
     `dupes=${stats.duplicateSkipped} | backend_errors=${stats.backendErrors}`,
   );
 
@@ -580,7 +751,12 @@ async function main(): Promise<void> {
   console.log(`[INFO] hand-off complete | records written/dispatched=${dispatched}`);
 }
 
-main().catch((err) => {
-  console.error('[FATAL]', err);
-  process.exit(1);
-});
+if (
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  main().catch((err) => {
+    console.error('[FATAL]', err);
+    process.exit(1);
+  });
+}
