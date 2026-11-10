@@ -16461,6 +16461,11 @@ province sta contando, la riga dice perché è lì.
 
 ## §26.151 — Il radar ha un ORARIO DI LAVORO, e il banner lo dice (09/11/2026)
 
+> **Superato in parte da §26.153** (09/11/2026): badge e titoli sono passati al copy di prodotto
+> (`IN STANDBY` · `IN DIRETTA` · `OPERATIVO` · `IN ASCOLTO` · `IN INIZIALIZZAZIONE`) e lo standby non
+> ripete più i conteggi nel dettaglio — le cifre restano nelle misure. Le frasi citate qui sotto sono
+> quelle del §26.151: la finestra, i toni e le soglie descritte restano invece valide.
+
 Il ciclo della coda non gira più ventiquattro ore su ventiquattro: `coda-scansione.yml` parte
 **lun–ven 08:00–17:00 (ora italiana)**, cioè quando gli uffici scolastici pubblicano. Il banner
 sopra la bacheca però non lo sapeva, e la domenica mattina l'unica cosa che poteva dire era
@@ -16623,4 +16628,88 @@ prima cosa** che deve vedere chi cerca ad Asti. La regola che resta è la stessa
 al contrario: *un numero deve poter essere spiegato dalla superficie che lo mostra* — e qui anche
 una **posizione** deve poterlo essere. Il merito resta il primo criterio, la prossimità non è un
 salvacondotto: è un criterio d'ordine, e vale dove il merito non distingue.
+
+
+## §26.153 — Il banner parla la lingua del prodotto: badge e guardie riallineate (09/11/2026)
+
+Il banner della scansione è passato al copy **umano e commerciale** deciso in questa sessione: le
+etichette non descrivono più lo stato interno del worker («AL PRIMO GIRO», «IN ATTESA», «posizioni
+attive») ma dicono all'utente che cosa sta succedendo **per lui**. Cambiano i testi, non la logica:
+toni, soglie (1,5 h · 24 h), finestra lun–ven 08:00–17:00 e misure «solo se misurate» restano
+identici (§26.150 · §26.151).
+
+### 1. I cinque badge
+
+| tono | badge | prima |
+| --- | --- | --- |
+| `standby` | `IN STANDBY` | `STANDBY` |
+| `live` | `IN DIRETTA` | invariato |
+| `attivo` | `OPERATIVO` | invariato |
+| `in-ritardo` | `IN ASCOLTO` | `IN ATTESA` |
+| `guasta` (nessun ciclo) | `IN INIZIALIZZAZIONE` | `AL PRIMO GIRO` |
+
+### 2. Titoli, dettagli e misure
+
+* **avvio** (`guasta` a finestra aperta): titolo «Radar in avvio», dettaglio «Il sistema sta
+  allineando i dati della tua zona. Di seguito trovi le opportunità già disponibili in archivio.» —
+  non promette più l'orario di lavoro (quello lo dice lo standby) e indica **dove guardare subito**;
+* **diretta**: «Scansione completata · 1.200+ posizioni selezionate pronte per te» (oppure
+  «Scansione completata in questo momento» senza posizioni misurate);
+* **operativo**: «Radar in ascolto attivo su 87 province» · «Radar in ascolto sulle bacheche
+  ufficiali» quando la copertura non è letta;
+* **attesa** (`in-ritardo`): titolo «Ultimo controllo: 50 ore fa» (resta in **ore**, mai in giorni) e
+  dettaglio «Monitoriamo costantemente i portali delle scuole negli orari di pubblicazione dei
+  bandi.» — sparisce il doppione delle 08:00–17:00, già detto dallo standby;
+* **standby**: titolo «Radar in pausa programmata», dettaglio con **solo** ripresa e ultimo
+  controllo: le cifre del ciclo chiuso non aggiungono nulla e restano nelle misure;
+* **misure**: «Bacheche controllate» · **«Avvisi scartati per te»** · «Posizioni selezionate»;
+* **frasi** (`telemetriaScansioneCopy`): «1 bacheca scolastica **analizzata** nelle ultime 24 ore»,
+  «1 avviso scartato perché **non pertinente**», «1 posizione **selezionata**». Lo **zero non si
+  dichiara più**: `fraseBacheche(0)` e `fraseScartati(0)` tornano `null` e la riga sparisce, invece di
+  rassicurare con un «nessun avviso scartato» che nessuno aveva misurato.
+
+### 3. Le guardie sono state riallineate, non disattivate
+
+Il restyling ha fatto cadere **13 asserzioni** in `test-telemetria-scansione` e **8** in
+`test-telemetria-contenuto`. Sono state riscritte sul contratto nuovo, e dove il **comportamento** è
+cambiato l'asserzione difende il comportamento nuovo:
+
+| verifica | prima | ora |
+| --- | --- | --- |
+| standby, dettaglio | includeva i conteggi delle bacheche | solo ripresa + ultimo controllo (i conteggi stanno nelle misure) |
+| standby, zero campagne | «Nessun controllo registrato finora.» | frase di ripresa, punto: nessuna frase inventata |
+| avvio, dettaglio | prometteva l'orario di lavoro | promette i dati della zona **e** l'archivio |
+| attesa, dettaglio | citava 08:00–17:00 | cita gli orari di pubblicazione **e** non promette un orario d'ufficio |
+| `fraseBacheche(0)` / `fraseScartati(0)` | «nessuna bacheca…» | `null`: la riga sparisce |
+| misure | «Avvisi scartati» | «Avvisi scartati per te» |
+
+Due controlli **in più** (avvio → dati della zona + archivio; attesa → nessun orario d'ufficio):
+l'aggiornamento non ha tolto copertura.
+
+### 4. File toccati
+
+* `src/lib/telemetriaScansioneCopy.ts` (137) — il nuovo copy; `testiStandby` legge il titolo da
+  `TITOLO_STANDBY` invece di duplicarlo come stringa (l'import era rimasto, il literal no: era
+  l'unico errore `@typescript-eslint/no-unused-vars` della sessione);
+* `src/lib/finestraScansione.ts` (206 → 210) — `TITOLO_STANDBY` = «Radar in pausa programmata»:
+  fonte **unica** del titolo, così la guardia non può inseguire un testo e il banner dirne un altro;
+* `scripts/test-telemetria-scansione.ts` (235 → 240) e `scripts/test-telemetria-contenuto.ts`
+  (98 → 99) — asserzioni riallineate come da tabella sopra;
+* `src/pages/dashboard/components/BannerTelemetriaScansione.tsx` (185) — solo il commento di testa
+  (le etichette visibili arrivano da `banner.badge` / `banner.titolo`: nessun testo cablato in UI).
+
+### 5. Verifiche di sessione
+
+Da `project/`: `npm run typecheck` 0 · `npm run test:architettura` **148 = baseline, nessuna nuova**
+(`test-telemetria-scansione` a 240 righe, sotto il tetto di 250 di warning) · `npm run build` 0 ·
+`eslint` sui cinque file toccati 0 errori · **`npm test` `EXIT=0`** con `test:telemetria-scansione`,
+`test:telemetria-contenuto`, `test:telemetria-cablaggio` verdi.
+
+### 6. Nota di sessione
+
+È cambiato il **tono**, non la **regola**: il banner continua a non inventare (un campo non letto
+resta `null`, un ciclo vecchio non diventa «IN DIRETTA», uno zero non diventa una frase). La
+differenza è che adesso, quando non c'è niente da dire, **non lo dice** — e questa è l'unica forma di
+silenzio che un prodotto può permettersi: quella che non nasconde un guasto, perché il guasto ha
+ancora il suo standby, la sua ripresa e il suo «Radar in avvio».
 

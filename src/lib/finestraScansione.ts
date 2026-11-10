@@ -43,8 +43,12 @@ export const ORA_CHIUSURA = 17;
 /** Giorni aperti (1 = lunedì … 7 = domenica): solo i feriali. */
 export const GIORNI_APERTURA: readonly number[] = [1, 2, 3, 4, 5];
 
-/** Titolo del banner quando la finestra è chiusa (l'orario spiega il silenzio). */
-export const TITOLO_STANDBY = 'Radar in standby festivo/notturno';
+/**
+ * Titolo del banner quando la finestra è chiusa (l'orario spiega il silenzio).
+ * Fonte UNICA del titolo: lo legge `telemetriaScansioneCopy` per lo standby — se cambia
+ * qui, cambia il banner, e la guardia `test-telemetria-scansione` non può restare indietro.
+ */
+export const TITOLO_STANDBY = 'Radar in pausa programmata';
 
 /** Formattatore unico (creato una volta: `formatToParts` a ogni lettura). */
 const FORMATO = new Intl.DateTimeFormat('en-GB', {

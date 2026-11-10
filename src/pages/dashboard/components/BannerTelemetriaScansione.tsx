@@ -3,9 +3,9 @@
  *
  * Perché sopra la bacheca: le opportunità mostrate sono quelle che l'ultimo ciclo di
  * ingestione è riuscito a leggere. Da §26.151 il riquadro parla come una persona e non come un
- * referto — «Ultimo controllo: oggi alle 14:06 · 502 bacheche scolastiche controllate nelle
- * ultime 24 ore · 478 avvisi scartati perché fuori tema» — e quando il radar riposa lo dice:
- * il badge `STANDBY` compare di notte, il sabato e la domenica, con la ripresa («domattina alle
+ * referto — «Ultimo controllo: oggi alle 14:06 · 502 bacheche scolastiche analizzate nelle
+ * ultime 24 ore · 478 avvisi scartati perché non pertinenti» — e quando il radar riposa lo dice:
+ * il badge `IN STANDBY` compare di notte, il sabato e la domenica, con la ripresa («domattina alle
  * 08:00» oppure «lunedì mattina»). Un orario di lavoro non è un guasto, e il banner non deve
  * far credere il contrario.
  *

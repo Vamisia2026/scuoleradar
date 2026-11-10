@@ -5,7 +5,7 @@
  * scolastiche ha controllato nelle 24 ore, quanto rumore ha scartato, quante posizioni ha in
  * archivio. Dal §26.151 non dice più «fonti elaborate» (un contatore di pipeline) e non
  * scambia un orario di lavoro per un guasto: il ciclo gira **lun–ven 08:00–17:00 (ora
- * italiana)** e fuori da lì il badge è `STANDBY`, con l'ora della ripresa.
+ * italiana)** e fuori da lì il badge è `IN STANDBY`, con l'ora della ripresa.
  *
  * Il rischio di un contenuto così è tutto in una parola: INVENTARE. Un «0 avvisi scartati»
  * quando la Edge non ha risposto, un «adesso» quando la data manca, un «IN DIRETTA» su un
@@ -17,7 +17,7 @@
  *   1. SILENZIO — telemetria assente = nessun banner;
  *   2. OROLOGHI — che ora è in Italia, senza chiedere il fuso al browser;
  *   3. RIPRESA — «domattina alle 08:00» ≠ «lunedì mattina»: il venerdì sera conta;
- *   4. STANDBY — finestra chiusa = orario, non guasto (badge, titolo, ripresa);
+ *   4. STANDBY — finestra chiusa = orario, non guasto (badge `IN STANDBY`, titolo, ripresa);
  *   5. IN DIRETTA — badge, posizioni, bacheche, scarti e cifre in evidenza;
  *   6. OPERATIVO — giro recente a finestra aperta, con le province coperte;
  *   7. SOGLIE — live < 1,5 h · attivo ≤ 24 h · in-ritardo oltre · guasta senza ciclo;
@@ -102,16 +102,18 @@ check('lunedì prima delle 8 → stamattina', 'stamattina alle 08:00', fraseRipr
 console.log('\n— 4. Standby: la finestra chiusa è un orario, non un guasto —');
 const notturno = bannerScansione({ ultimo_ciclo: fa(5.5, CHIUSO), scansionate_24h: 412, scarti: 478 }, CHIUSO);
 check('tono', 'standby', notturno?.tono);
-check('badge', 'STANDBY', notturno?.badge);
+check('badge', 'IN STANDBY', notturno?.badge);
 check('titolo: il radar riposa', TITOLO_STANDBY, notturno?.titolo);
+// Le cifre dello standby restano nelle misure: il dettaglio dice solo quando si riparte
+// e che ora era — due bacheche contate in un ciclo chiuso non aggiungono nulla.
 check(
-  'dettaglio: quando riparte, che ora era, quanto si è letto',
-  'Prossima scansione automatica lunedì mattina alle 08:00. Ultimo controllo: oggi alle 12:00. 412 bacheche scolastiche controllate nelle ultime 24 ore.',
+  'dettaglio: quando riparte e che ora era (le cifre stanno nelle misure)',
+  'Prossima scansione automatica lunedì mattina alle 08:00. Ultimo controllo: oggi alle 12:00.',
   notturno?.dettaglio,
 );
 check(
   'senza telemetria lo standby non inventa un controllo',
-  'Prossima scansione automatica lunedì mattina alle 08:00. Nessun controllo registrato finora.',
+  'Prossima scansione automatica lunedì mattina alle 08:00.',
   bannerScansione({}, CHIUSO)?.dettaglio,
 );
 check(
@@ -141,26 +143,26 @@ check('tono', 'live', live?.tono);
 check('badge', 'IN DIRETTA', live?.badge);
 check(
   'titolo: la cifra «prova di lavoro» arrotondata PER DIFETTO',
-  'Il radar ha appena finito un giro · 1.200+ posizioni attive',
+  'Scansione completata · 1.200+ posizioni selezionate pronte per te',
   live?.titolo,
 );
 check(
   'dettaglio: orologio, bacheche, scarti — nient’altro',
-  'Ultimo controllo: 15 minuti fa. 412 bacheche scolastiche controllate nelle ultime 24 ore · 478 avvisi scartati perché fuori tema.',
+  'Ultimo controllo: 15 minuti fa. 412 bacheche scolastiche analizzate nelle ultime 24 ore · 478 avvisi scartati perché non pertinenti.',
   live?.dettaglio,
 );
 check(
   'misure in evidenza, nell’ordine in cui si leggono',
   [
     { etichetta: 'Bacheche controllate', valore: '412' },
-    { etichetta: 'Avvisi scartati', valore: '478' },
+    { etichetta: 'Avvisi scartati per te', valore: '478' },
     { etichetta: 'Posizioni selezionate', valore: '1.200+' },
   ],
   live?.misure,
 );
 check(
   'senza posizioni misurate il titolo non inventa una cifra',
-  'Il radar ha appena finito un giro',
+  'Scansione completata in questo momento',
   bannerScansione({ ultimo_ciclo: fa(0.5) }, ADESSO)?.titolo,
 );
 
@@ -168,10 +170,10 @@ console.log('\n— 6. Giro recente a finestra aperta: il radar è operativo —'
 const attivo = bannerScansione({ ultimo_ciclo: fa(2), province_coperte: 87 }, ADESSO);
 check('2 ore → attivo', 'attivo', attivo?.tono);
 check('badge', 'OPERATIVO', attivo?.badge);
-check('titolo con le province', 'Il radar sta controllando le bacheche di 87 province', attivo?.titolo);
+check('titolo con le province', 'Radar in ascolto attivo su 87 province', attivo?.titolo);
 check(
   'copertura non letta: nessun numero inventato',
-  'Il radar sta controllando le bacheche',
+  'Radar in ascolto sulle bacheche ufficiali',
   bannerScansione({ ultimo_ciclo: fa(2) }, ADESSO)?.titolo,
 );
 
@@ -185,9 +187,12 @@ check('1 ora → live', 'live', bannerScansione({ ultimo_ciclo: fa(1) }, ADESSO)
 check('23 ore → ancora attivo', 'attivo', bannerScansione({ ultimo_ciclo: fa(23) }, ADESSO)?.tono);
 check('25 ore → in ritardo', 'in-ritardo', bannerScansione({ ultimo_ciclo: fa(25) }, ADESSO)?.tono);
 const fermo = bannerScansione({ ultimo_ciclo: fa(50) }, ADESSO);
-check('badge dell’attesa', 'IN ATTESA', fermo?.badge);
-check('50 ore → titolo in ORE, non in giorni', 'Nessun controllo da 50 ore', fermo?.titolo);
-contiene('l’attesa dichiara l’orario di lavoro', true, fermo?.dettaglio, /dal lunedì al venerdì, dalle 08:00 alle 17:00/);
+check('badge dell’attesa', 'IN ASCOLTO', fermo?.badge);
+check('50 ore → titolo in ORE, non in giorni', 'Ultimo controllo: 50 ore fa', fermo?.titolo);
+// L'attesa non è più un referto sul silenzio: dice quando il radar lavora, senza ore di ufficio
+// (la finestra 08:00–17:00 è già nello standby, e ripeterla qui era un doppione).
+contiene('l’attesa dichiara quando il radar lavora', true, fermo?.dettaglio, /negli orari di pubblicazione dei bandi/);
+contiene('e non promette un orario d’ufficio', false, fermo?.dettaglio, /08:00|17:00/);
 
 console.log('\n— 8. La freschezza si dice in minuti o in ore, MAI in giorni —');
 const eta = [0.5, 3, 23, 25, 30, 50, 72, 240].map((ore) => durataLeggibile(ore));

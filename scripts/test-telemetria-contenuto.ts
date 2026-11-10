@@ -8,9 +8,9 @@
  * Questa guardia difende la parte che si può verificare senza contesto (le altre due sono
  * `test-telemetria-scansione` per gli stati e `test-telemetria-cablaggio` per i fili):
  *
- *   1. AVVIO — nessun ciclo leggibile: «si sta avviando», mai «tutto ok»;
+ *   1. AVVIO — nessun ciclo leggibile: badge `IN INIZIALIZZAZIONE`, «Radar in avvio», mai «tutto ok»;
  *   2. MISURE — le misure esistono solo se misurate (mai «0» inventati);
- *   3. FRASI — migliaia all'italiana, singolari, «+» solo per difetto;
+ *   3. FRASI — migliaia all'italiana, singolari, «+» solo per difetto, zero mai dichiarato;
  *   4. MODULI PURI — `telemetriaScansione`, `finestraScansione`, `…Copy`: senza React né rete.
  *
  * Uso: npm run test:telemetria-contenuto  (incluso in `npm test`)
@@ -47,10 +47,11 @@ const fa = (ore: number, adesso: Date = ADESSO): string =>
 console.log('— 1. Nessun ciclo leggibile a finestra aperta: si dice, non si finge —');
 const maiGirato = bannerScansione({ ultima_scansione: null, fonti_isolate: [] }, ADESSO);
 check('tono', 'guasta', maiGirato?.tono);
-check('badge', 'AL PRIMO GIRO', maiGirato?.badge);
-check('titolo', 'Il radar si sta avviando', maiGirato?.titolo);
+check('badge', 'IN INIZIALIZZAZIONE', maiGirato?.badge);
+check('titolo', 'Radar in avvio', maiGirato?.titolo);
 check('data illeggibile = stessa diagnosi', 'guasta', bannerScansione({ ultima_scansione: 'ieri' }, ADESSO)?.tono);
-contiene('e promette l’orario, non un risultato', true, maiGirato?.dettaglio, /dal lunedì al venerdì fra le 08:00 e le 17:00/);
+contiene('e promette i dati della zona e l’archivio, non un orario', true, maiGirato?.dettaglio, /sta allineando i dati della tua zona/);
+contiene('l’avvio dice anche dove guardare subito', true, maiGirato?.dettaglio, /opportunità già disponibili in archivio/);
 
 console.log('\n— 2. Le misure esistono solo se misurate —');
 check(
@@ -68,17 +69,17 @@ check('«700+» su 712', '700+', almenoCentinaia(712));
 check('«1.200+» su 1284', '1.200+', almenoCentinaia(1284));
 check('sotto le 200 unità niente «+»', '48', almenoCentinaia(48));
 check('migliaia con il punto', '1.284', migliaia(1284));
-check('una bacheca (singolare)', '1 bacheca scolastica controllata nelle ultime 24 ore', fraseBacheche(1));
+check('una bacheca (singolare)', '1 bacheca scolastica analizzata nelle ultime 24 ore', fraseBacheche(1));
 check(
-  'zero bacheche è una frase, non una rassicurazione',
-  'nessuna bacheca scolastica controllata nelle ultime 24 ore',
+  'zero bacheche non si dichiara: la riga sparisce, non rassicura',
+  null,
   fraseBacheche(0),
 );
 check('campo assente → nessuna frase', null, fraseBacheche(null));
-check('un avviso scartato (singolare)', '1 avviso scartato perché fuori tema', fraseScartati(1));
-check('nessuno scarto dichiarato', 'nessun avviso scartato', fraseScartati(0));
+check('un avviso scartato (singolare)', '1 avviso scartato perché non pertinente', fraseScartati(1));
+check('nessuno scarto dichiarato: nessuna riga', null, fraseScartati(0));
 check('campo assente → nessuna frase sugli scarti', null, fraseScartati(null));
-check('una posizione attiva (singolare)', '1 posizione attiva', frasePosizioni(1));
+check('una posizione selezionata (singolare)', '1 posizione selezionata', frasePosizioni(1));
 check('campo assente → nessuna frase sulle posizioni', null, frasePosizioni(null));
 
 console.log('\n— 4. I moduli sono puri: nessuna rete, nessun framework —');
