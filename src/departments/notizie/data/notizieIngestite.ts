@@ -155,5 +155,21 @@ export const notizieIngestite: NewsArticle[] = [
     "official_pdf_url": null,
     "relevance_score": 95,
     "published_at": "2026-06-15T00:00:00.000Z"
+  },
+  {
+    "id": "notizia-rilevazione-dati-generali-a-s-2026-2027-scuole-statali-e-non-mim",
+    "title": "Rilevazione \"Dati generali\" A.S. 2026/2027 - scuole statali e non statali e Cpia",
+    "category": "Istruzione Adulti",
+    "deadline_date": null,
+    "summary_points": [
+      "Cosa cambia: Ci sono novità operative sull’organizzazione e sugli adempimenti della vita scolastica: le trovi nella comunicazione.",
+      "Chi riguarda: dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie.",
+      "Cosa devi fare: Le modalità operative e i requisiti sono quelli fissati dal documento ufficiale linkato qui sotto."
+    ],
+    "content_html": "<p>Ci sono novità operative sull’organizzazione e sugli adempimenti della vita scolastica: le trovi nella comunicazione «Rilevazione &quot;Dati generali&quot; A.S. 2026/2027 - scuole statali e non statali e Cpia». Cosa cambia in pratica e a chi serve è spiegato qui sopra; nel <a href=\"https://www.mim.gov.it/web/guest/-/rilevazione-dati-generali-a-s-2026-2027-scuole-statali-e-non-statali-e-cpia\" target=\"_blank\" rel=\"noopener noreferrer\">documento ufficiale</a> trovi condizioni, requisiti e decorrenza.</p>\n    <p>Riguarda dirigenti, docenti, personale ATA (Amministrativo, Tecnico e Ausiliario) e famiglie. Qui trovi le scadenze che impattano su orari, adempimenti e gestione quotidiana: leggerle in anticipo evita di rincorrere le circolari interne all’ultimo minuto.</p>\n    <p>Le modalità operative e i requisiti sono quelli fissati dal documento ufficiale linkato qui sotto. Fonte ufficiale: <a href=\"https://www.mim.gov.it/web/guest/-/rilevazione-dati-generali-a-s-2026-2027-scuole-statali-e-non-statali-e-cpia\" target=\"_blank\" rel=\"noopener noreferrer\">apri l'avviso ufficiale</a>.</p>",
+    "official_source_url": "https://www.mim.gov.it/web/guest/-/rilevazione-dati-generali-a-s-2026-2027-scuole-statali-e-non-statali-e-cpia",
+    "official_pdf_url": null,
+    "relevance_score": 71,
+    "published_at": "2026-11-17T00:00:00.000Z"
   }
 ];
