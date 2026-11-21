@@ -157,6 +157,22 @@ export const notizieIngestite: NewsArticle[] = [
     "published_at": "2026-06-15T00:00:00.000Z"
   },
   {
+    "id": "notizia-noisiamolescuole-pnrr-in-lombardia-due-progetti-per-il-futur-mim",
+    "title": "#NoiSiamoLeScuole: PNRR (Piano Nazionale di Ripresa e Resilienza), in Lombardia due progetti per il futuro, tra tecnologia e sostenibilità",
+    "category": "PNRR",
+    "deadline_date": null,
+    "summary_points": [
+      "Cosa cambia: Ci sono fondi, scadenze e istruzioni da non perdere: è online l’avviso del PNRR (il Piano Nazionale di Ripresa e Resilienza) per la scuola.",
+      "Chi riguarda: scuole, dirigenti, team di progetto e personale coinvolto nei bandi.",
+      "Cosa devi fare: Candidature e rendicontazioni si gestiscono sulle piattaforme dedicate del Ministero. Rispetta rigorosamente i termini del bando."
+    ],
+    "content_html": "<p>Ci sono fondi, scadenze e istruzioni da non perdere: è online l’avviso del PNRR (il Piano Nazionale di Ripresa e Resilienza) per la scuola «#NoiSiamoLeScuole: PNRR (Piano Nazionale di Ripresa e Resilienza), in Lombardia due progetti per il futuro, tra tecnologia e sostenibilità». Cosa cambia in pratica e a chi serve è spiegato qui sopra; nel <a href=\"https://www.mim.gov.it/web/guest/-/-noisiamolescuole-pnrr-in-lombardia-due-progetti-per-il-futuro-tra-tecnologia-e-sostenibilita\" target=\"_blank\" rel=\"noopener noreferrer\">documento ufficiale</a> trovi condizioni, requisiti e decorrenza.</p>\n    <p>Riguarda scuole, dirigenti, team di progetto e personale coinvolto nei bandi. I fondi PNRR sbloccano risorse per digitalizzazione, STEM (Scienza, Tecnologia, Ingegneria e Matematica) e divari territoriali: un termine o un allegato mancato fa perdere il finanziamento assegnato, senza possibilità di recupero.</p>\n    <p>Candidature e rendicontazioni si gestiscono sulle piattaforme dedicate del Ministero. Rispetta rigorosamente i termini del bando. Fonte ufficiale: <a href=\"https://www.mim.gov.it/web/guest/-/-noisiamolescuole-pnrr-in-lombardia-due-progetti-per-il-futuro-tra-tecnologia-e-sostenibilita\" target=\"_blank\" rel=\"noopener noreferrer\">apri l'avviso ufficiale</a>.</p>",
+    "official_source_url": "https://www.mim.gov.it/web/guest/-/-noisiamolescuole-pnrr-in-lombardia-due-progetti-per-il-futuro-tra-tecnologia-e-sostenibilita",
+    "official_pdf_url": null,
+    "relevance_score": 80,
+    "published_at": "2026-11-21T14:24:08.893Z"
+  },
+  {
     "id": "notizia-rilevazione-dati-generali-a-s-2026-2027-scuole-statali-e-non-mim",
     "title": "Rilevazione \"Dati generali\" A.S. 2026/2027 - scuole statali e non statali e Cpia",
     "category": "Istruzione Adulti",
